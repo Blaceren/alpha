@@ -1,0 +1,38 @@
+# --- Dependencies / build output ---
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+.secure/
+
+# --- Databases (never commit) ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+
+# --- User uploads & runtime storage ---
+/storage/
+uploads/
+
+# --- Backups & archives ---
+/backups/
+/.codex-backups/
+*.tgz
+*.tar.gz
+*.bak
+*.bak-*
+
+# --- Logs / temp / tooling ---
+logs/
+*.log
+tmp/
+.DS_Store
+design-memory/

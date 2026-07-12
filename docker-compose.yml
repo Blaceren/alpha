@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:-file:/data/app.db}
+      LOCAL_UPLOADS_DIR: ${LOCAL_UPLOADS_DIR:-storage/uploads}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+    ports:
+      - "8080:3000"
+    volumes:
+      - sqlite-data:/data
+      - uploads-data:/app/storage/uploads
+
+volumes:
+  sqlite-data:
+  uploads-data:
