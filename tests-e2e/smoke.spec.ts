@@ -1,0 +1,50 @@
+import { test, expect } from "@playwright/test";
+
+/**
+ * Phase 1A smoke suite. Boots the shell in mock mode and checks the essentials.
+ * Intentionally small — no full e2e coverage.
+ */
+
+test("no console errors and /today loads with the shell", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") errors.push(msg.text());
+  });
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "Сегодня" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Боковая навигация" })).toBeVisible();
+  await expect(page.getByText("DEMO MODE").first()).toBeVisible();
+
+  expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
+});
+
+test("root redirects to /today", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+});
+
+test("sidebar navigation reaches Users", async ({ page }) => {
+  await page.goto("/today");
+  await page.getByRole("link", { name: "Пользователи" }).click();
+  await expect(page).toHaveURL(/\/users$/);
+  await expect(page.getByRole("heading", { name: "Пользователи" })).toBeVisible();
+});
+
+test("dev-only role switch changes visible sections", async ({ page }) => {
+  await page.goto("/today");
+  // Admin sees Settings.
+  await expect(page.getByRole("link", { name: "Настройки" })).toBeVisible();
+
+  // Switch to read_only via the role switch.
+  await page.getByRole("button", { name: /Роль:/ }).click();
+  await page.getByRole("menuitemradio", { name: "Только просмотр" }).click();
+
+  // Settings should disappear for read_only.
+  await expect(page.getByRole("link", { name: "Настройки" })).toHaveCount(0);
+});
+
+test("unknown route shows the not-found page", async ({ page }) => {
+  await page.goto("/definitely-not-a-route");
+  await expect(page.getByRole("heading", { name: "Страница не найдена" })).toBeVisible();
+});

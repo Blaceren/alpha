@@ -1,0 +1,150 @@
+# ROLE_PERMISSION_MATRIX.md — Alfa Trade Academy CRM
+
+> Phase 0 (обновлено в Phase 0.5) · Матрица ролей и прав. На первой стадии это **mock RBAC** для UI-фильтрации — **не** production-авторизация.
+> Реальный RBAC реализуется в отдельном защищённом API (см. FUTURE_INTEGRATION.md). Frontend fixture не является источником безопасности.
+> Статус: Утверждено (Decision Lock, D-07 финансы, D-11 PII).
+>
+> **Phase 0.5:** зафиксированы финансовые бакеты (D-07) и PII-политика с Reveal-flow (D-11, см. PII_ACCESS_POLICY.md). Финансовая видимость и доступ к PII — **две независимые оси**.
+
+---
+
+## 0. Модель прав
+
+Права выражаются как `(action, scope, dimension)`:
+
+- **Роли:** `crm_admin, crm_manager, retention_manager, mentor, support, moderator, analyst, content_manager, read_only`.
+- **Измерения доступа (dimensions):**
+  1. **View** — базовый просмотр раздела/сущности.
+  2. **Exact financials** — точные суммы (real balance, депозиты, withdrawals). Отдельно от View, т.к. точные финансы видят не все.
+  3. **Edit** — изменение сущностей CRM (tasks/cases/notes/lifecycle override).
+  4. **Assign** — назначение owner/задач/эскалаций.
+  5. **Export** — выгрузка данных.
+  6. **Audit** — доступ к глобальному журналу Audit.
+  7. **Settings** — конфигурация CRM/ролей.
+- **Уровни:** `Full` · `Limited` (только своё/агрегаты/масштабированное) · `None`.
+- **Scope:** `own` (только назначенные пользователю/себе), `team`, `all`.
+
+Финансовая чувствительность: без **Exact financials** пользователь видит суммы как **маскированные диапазоны** (напр. `$100–250`, `funded`, `stale`) либо скрытые, но всегда с freshness-меткой.
+
+---
+
+## 1. Сводная матрица (роль × измерение)
+
+| Роль | View | Exact financials | Edit | Assign | Export | Audit | Settings |
+|---|---|---|---|---|---|---|---|
+| **crm_admin** | Full (all) | Full | Full | Full | Full | Full | Full |
+| **crm_manager** | Full (all) | Full | Full (team) | Full (team) | Limited¹ | Full | Limited² |
+| **retention_manager** | Full (all, кроме moderation-деталей) | Full | Full (own+team retention) | Full (retention) | Limited¹ | Limited³ | None |
+| **mentor** | Limited (learning-контекст) | None | Limited (mentor tasks/cases, reports) | Limited (mentor queue) | None | Limited³ | None |
+| **support** | Limited (support-контекст) | None⁴ | Limited (support cases/tasks/notes) | Limited (support queue) | None | Limited³ | None |
+| **moderator** | Limited (community/moderation) | None | Limited (moderation cases) | Limited (moderation) | None | Limited³ | None |
+| **analyst** | Limited (агрегаты, без операц. действий) | Limited⁵ | None | None | Limited (агрегаты)¹ | Limited³ | None |
+| **content_manager** | Limited (curriculum/content read) | None | Limited (content-related) | None | None | None | None |
+| **read_only** | Limited (разрешённый просмотр) | None | None | None | None | None | None |
+
+Примечания:
+¹ Export — только разрешённые наборы, с audit-логом каждой выгрузки; personal financial exports требуют Exact financials.
+² Settings у manager — управление saved views/справочниками команды, **без** ролевого администрирования.
+³ Audit «Limited» = видит audit-preview по своим пользователям/действиям в User 360, но не глобальный журнал.
+⁴ Support видит финансовый **факт-контекст** (funded/suspended, freshness), но не точные суммы, если нет отдельного гранта.
+⁵ Analyst видит финансы только **агрегированно**; сырые персональные суммы — None.
+
+---
+
+## 2. Права по разделам (роль × раздел)
+
+Легенда: **F** Full · **L** Limited · **–** None.
+
+| Раздел | admin | manager | retention | mentor | support | moderator | analyst | content | read_only |
+|---|---|---|---|---|---|---|---|---|---|
+| Today | F | F | F | L | L | L | L | L | L |
+| Users (list) | F | F | F | L | L | L | L | L | L |
+| User 360 | F | F | F | L(learning) | L(support) | L(mod) | L(agg) | L(content) | L |
+| Segments | F | F | F | – | – | – | L | – | L |
+| Tasks | F | F | F | L | L | L | – | L | – |
+| Cases | F | F | F | L(mentor) | L(support) | L(mod) | – | – | – |
+| Mentor Queue | F | F | L | F | – | – | – | – | – |
+| Support Queue | F | F | L | – | F | – | – | – | – |
+| Financial Ops | F | F | F | – | L(ctx) | – | L(agg) | – | – |
+| Communications | F | F | F | – | L | – | L(agg) | – | – |
+| Automations | F | F | L | – | – | – | L(view) | – | – |
+| Analytics | F | F | L | – | – | – | F | – | L |
+| Audit | F | F | L | L | L | L | L | – | – |
+| Settings | F | L | – | – | – | – | – | – | – |
+
+---
+
+## 3. Детализация по ролям
+
+**crm_admin.** Полный доступ ко всей конфигурации CRM, ролям (mock), audit и всем данным. Единственная роль с Settings=Full. Может видеть точные финансы и всё экспортировать (под audit).
+
+**crm_manager.** Оперативное управление командой: users, tasks, cases, assignments, отчёты и team performance. Полные точные финансы и полный audit для контроля качества. Settings ограничены (views/справочники, не роли).
+
+**retention_manager.** Ядро retention: lifecycle, segments, communications, retention-задачи и кейсы. Точные финансы — да (нужны для checkpoint/grace-решений). Assign в пределах retention. Глобальный audit — нет (только контекстный).
+
+**mentor.** Learning-центрично: reports, mentor queue, история обучения пользователя. Финансовых сумм не видит. Может брать/решать mentor-проверки и создавать mentor-задачи/кейсы. Пользовательские данные — только учебный контекст.
+
+**support.** Support-кейсы, технический контекст, ограниченные пользовательские данные. Финансовый факт-контекст (funded/suspended/freshness) — да; точные суммы — нет. Assign в пределах support-очереди.
+
+**moderator.** Community moderation и moderation-кейсы. Не видит финансы и глубокий учебный/финансовый контекст. Действия — в границах модерации.
+
+**analyst.** Агрегированные данные: funnels, retention, метрики, ограниченные exports. Нет операционных действий (Edit/Assign=None). Персональные точные финансы — нет, только агрегаты.
+
+**content_manager.** Read-контекст curriculum/контента и content-related операции. Не видит финансы и персональные операционные данные пользователей сверх нужного.
+
+**read_only.** Только разрешённый просмотр без изменений, назначений, экспорта, финансовых точных данных и настроек.
+
+---
+
+## 4. Правила для чувствительных данных
+
+### 4.1 Финансовая видимость (DECISIONS D-07)
+
+**Точные суммы** (real balance, депозиты/выводы, net/gross): `crm_admin`, `crm_manager`, `retention_manager`.
+`analyst` — только **агрегированные и псевдонимизированные** данные.
+`mentor`, `support`, `moderator`, `content_manager` — по умолчанию **бакеты**.
+`support` может получить точные значения **только** через отдельный permission + audit.
+
+Бакеты диапазонов:
+
+`below_50 · 50_99 · 100_199 · 200_499 · 500_999 · 1000_2499 · 2500_4999 · 5000_9999 · 10000_plus`
+
+Маскирование выполняется в domain-слое **до** отдачи в UI (тип `MoneyCell` bucket-aware).
+
+### 4.2 Прочие правила
+
+1. **Freshness обязателен.** Любое финансовое значение — с timestamp/freshness; stale помечается независимо от роли.
+2. **Postback secret / сырой playerId** — `RESTRICTED`, недоступны никому в CRM.
+3. **PII / полный email (DECISIONS D-11, PII_ACCESS_POLICY.md):** в списках всегда masked. Полный email в User 360 — `crm_admin`/`crm_manager`/`retention_manager`; `support` — только с отдельным permission; остальные — masked/без identity. Reveal требует явного действия + reason code + audit + авто-скрытия. Финансовая ось и PII-ось проверяются **независимо**.
+4. **Export** персональных финансов — только роли с точными суммами; логируется в Audit.
+5. **Lifecycle/owner override** (Edit/Assign) — только admin/manager/retention в scope; каждое действие → AuditRecord с reasonCode. **Один primary owner на пользователя** (D-08).
+6. **Все изменяющие действия v1 — mock/local**, помечены в UI и в AuditRecord (`mock: true`).
+
+---
+
+## 5. Матрица чувствительных действий (кто может)
+
+| Действие | admin | manager | retention | mentor | support | moderator | analyst | content | read_only |
+|---|---|---|---|---|---|---|---|---|---|
+| Смотреть точный real balance | ✓ | ✓ | ✓ | bucket | bucket | bucket | agg | bucket | – |
+| Reveal полного email (User 360) | ✓ | ✓ | ✓ | – | perm | – | – | – | – |
+| Экспорт персональных финансов | ✓ | ✓ | ✓ | – | – | – | – | – | – |
+| Создать/изменить task | ✓ | ✓ | ✓ | ✓(mentor) | ✓(support) | ✓(mod) | – | ✓(content) | – |
+| Открыть/закрыть case | ✓ | ✓ | ✓ | ✓(mentor) | ✓(support) | ✓(mod) | – | – | – |
+| Назначить owner | ✓ | ✓ | ✓ | – | – | – | – | – | – |
+| Lifecycle manual override | ✓ | ✓ | ✓ | – | – | – | – | – | – |
+| Approve/Reject report | ✓ | ✓ | – | ✓ | – | – | – | – | – |
+| Настроить роли/конфиг (mock) | ✓ | – | – | – | – | – | – | – | – |
+| Смотреть глобальный Audit | ✓ | ✓ | – | – | – | – | – | – | – |
+
+---
+
+## 6. Замечания к реализации (Phase 0)
+
+- Роли и права хранятся как **fixture/enum** во frontend только для демонстрации UI и фильтрации отображения. Это **не** гарантирует безопасность.
+- Domain-слой должен вызывать `assertPermission(role, action, scope)` перед каждой операцией provider'а — сигнатура сохранится при переходе на API, где реальную проверку выполнит backend.
+- Каждая операция `CrmDataProvider` в DATA_PROVIDER_CONTRACT.md имеет поле **permission requirement**, согласованное с этой матрицей.
+
+---
+
+_Связано: DATA_PROVIDER_CONTRACT.md (permission requirement на операциях), CRM_DOMAIN_MODEL.md (sensitivity), FUTURE_INTEGRATION.md (реальный RBAC/authz API)._
