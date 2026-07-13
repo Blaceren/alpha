@@ -125,9 +125,10 @@ model ModuleDefinition {
   checkpointLevel     Int?
   learningObjective   String                     @default("")
   status              CurriculumDefinitionStatus @default(active)
-  curriculumVersion   CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Cascade)
+  curriculumVersion   CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
   levels              LevelDefinition[]
 
+  @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, moduleNumber])
   @@unique([curriculumVersionId, code])
   @@index([curriculumVersionId, firstLevel])
@@ -151,8 +152,8 @@ model LevelDefinition {
   featureUnlockCode       String?
   visibilityRule          Json?
   status                  CurriculumDefinitionStatus @default(active)
-  curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Cascade)
-  module                  ModuleDefinition           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
 
   @@unique([curriculumVersionId, levelNumber])
   @@unique([curriculumVersionId, stableCode])
@@ -165,7 +166,9 @@ model LevelDefinition {
 `curriculumVersionsCreated CurriculumVersion[] @relation("CurriculumVersionCreator")`.
 Это **не меняет таблицу User в SQL** — FK-колонка живёт в CurriculumVersion; V1-данные не затрагиваются.
 
-`contentVersionId` / `assessmentVersionId` — сознательно **отсутствуют** в Phase 1 (см. §4.3): рекомендовано добавить их аддитивной миграцией в Phase 4 вместе с таблицами ContentVersion/AssessmentVersion и настоящими FK.
+`contentVersionId` / `assessmentVersionId` — сознательно **отсутствуют** в Phase 1 (см. §4.3, УТВЕРЖДЕНО в Phase 1B.1): они будут добавлены аддитивной миграцией в Phase 4 вместе с таблицами ContentVersion/AssessmentVersion и настоящими FK.
+
+Реализация Phase 1B.1: составная связь Level→Module по (moduleId, curriculumVersionId) → ModuleDefinition(id, curriculumVersionId) принята Prisma вместе с прямой relation Level→CurriculumVersion (общее поле curriculumVersionId в двух relations допускается), поэтому защита от cross-version mismatch обеспечена на уровне БД без ослабления прямой связи.
 
 ## 3. Таблица полей
 
@@ -188,7 +191,7 @@ model LevelDefinition {
 
 | Поле | Тип | Null/default | Обоснование |
 |---|---|---|---|
-| curriculumVersionId | Int FK | NOT NULL, Cascade | модуль не существует вне версии |
+| curriculumVersionId | Int FK | NOT NULL, Restrict | модуль не существует вне версии; удаление версии блокируется при наличии модулей |
 | moduleNumber | Int | NOT NULL | порядок; unique в версии |
 | code | String | NOT NULL | человекочитаемый код; unique в версии |
 | title / description / learningObjective | String | NOT NULL (`""` default для необязательных текстов) | конвенция «строки не nullable, а пустые» в текстовых описаниях |
@@ -200,8 +203,8 @@ model LevelDefinition {
 
 | Поле | Тип | Null/default | Обоснование |
 |---|---|---|---|
-| curriculumVersionId | Int FK | NOT NULL, Cascade | денормализована сознательно: уникальности и выборки уровня без join через module |
-| moduleId | Int FK | NOT NULL, Cascade | принадлежность модулю |
+| curriculumVersionId | Int FK | NOT NULL, Restrict | денормализована сознательно: уникальности, выборки без join и составная связь с module |
+| moduleId | Int FK (composite c curriculumVersionId) | NOT NULL, Restrict | принадлежность модулю строго той же версии (защита от cross-version mismatch на уровне БД) |
 | levelNumber | Int | NOT NULL | глобальный номер в версии; unique в версии |
 | stableCode | String | NOT NULL | стабильный код уровня; unique в версии (§4.1 — область уникальности) |
 | type | enum(8) | NOT NULL | закрытый набор из спецификации |
@@ -232,13 +235,13 @@ model LevelDefinition {
 | Соответствие уже написанной спецификации | 100 кодов уже перечислены | потребует переписать раздел 12 |
 | Парсинг | префикс+номер+slug | префикс+номер |
 
-Рекомендация (не финальная): `v2.l001.slug` — он уже зафиксирован в утверждённой спецификации на все 100 уровней; отдельный regex не вводить до продуктового решения.
+**РЕШЕНИЕ (утверждено, Phase 1B.1):** формат `v2.l001.<slug>` — lowercase, номер уровня всегда из трёх цифр, slug в lowercase kebab-case (примеры: `v2.l001.pocket-registration`, `v2.l002.tradequest-mechanics`, `v2.l010.balance-checkpoint`). V1 task codes не изменяются. Строгий regex — service/Zod-слоем в следующих этапах; SQLite CHECK для slug не используется.
 
-Уникальность: рекомендуется **compound** `@@unique([curriculumVersionId, stableCode])`, а не глобальная. Причина: stable code обязан сохраняться при клонировании curriculum в новую версию (V3 будет содержать те же `v2.l001.*`-коды уровней) — глобальный unique сломает клонирование. Глобальная непрерывность кода между версиями — семантическое правило (publish-валидация «код не переиспользован для другого смысла»), не DB-констрейнт. Требует подтверждения продуктом.
+**Уникальность (утверждено):** compound `@@unique([curriculumVersionId, stableCode])`. Тот же stableCode разрешено повторно использовать в новой CurriculumVersion (клонирование/преемственность уровней); глобальная преемственность смысла кода — publish-валидация, не DB-констрейнт.
 
 ### 4.2 Status у Module/Level
 
-Спецификация фиксирует lifecycle только для CurriculumVersion. Рекомендуемый минимальный вариант:
+Спецификация фиксирует lifecycle только для CurriculumVersion. **РЕШЕНИЕ (утверждено, Phase 1B.1)** — минимальный вариант:
 
 - **Definitions наследуют lifecycle версии.** Собственного draft/published у Module/Level нет; редактируемость определяется статусом родительской версии (draft → можно, published/archived → нельзя).
 - Собственный status definitions — только `active | disabled`: флаг исключения из маршрута при подготовке черновика (аналог is-enabled), не lifecycle.
@@ -252,12 +255,12 @@ model LevelDefinition {
 Варианты:
 
 - **A. Nullable Int-идентификатор без FK уже сейчас.** Плюс: контракт полей полный. Минус: до Phase 4 колонки могут накопить orphaned-значения; FK потом добавить в SQLite **нельзя** без пересоздания таблицы (ALTER TABLE ADD CONSTRAINT не поддерживается) — Prisma сделает это через table-rebuild-миграцию, что для якорной таблицы curriculum нежелательно.
-- **B. Отложить колонки до соответствующих фаз (рекомендация).** `contentVersionId`, `assessmentVersionId` добавляются в Phase 4 одной аддитивной миграцией вместе с таблицами и настоящими FK (`ALTER TABLE "LevelDefinition" ADD COLUMN ... REFERENCES ...` — SQLite позволяет добавить колонку с REFERENCES при ADD COLUMN). Orphaned-идентификаторы исключены по построению; publish-валидация Phase 4 добавит проверку «каждый lesson имеет published content».
+- **B. Отложить колонки до соответствующих фаз (УТВЕРЖДЕНО, Phase 1B.1).** `contentVersionId`, `assessmentVersionId` добавляются в Phase 4 одной аддитивной миграцией вместе с таблицами и настоящими FK (`ALTER TABLE "LevelDefinition" ADD COLUMN ... REFERENCES ...` — SQLite позволяет добавить колонку с REFERENCES при ADD COLUMN). Orphaned-идентификаторы исключены по построению; publish-валидация Phase 4 добавит проверку «каждый lesson имеет published content».
 - `featureUnlockCode` — оставить строкой уже в Phase 1 (это код, не FK; FeatureDefinition в Phase 6 сошьётся по коду; publish-валидация Phase 6 проверит существование кода).
 
 ### 4.4 createdBy
 
-Текущая User model: `Int @id`, множество обратных relations. Предложение:
+Текущая User model: `Int @id`, множество обратных relations. **РЕШЕНИЕ (утверждено, Phase 1B.1):**
 
 - relation `createdBy User?` c `createdById Int?`, `onDelete: SetNull`, `ON UPDATE CASCADE`;
 - **nullable** — обязательно: system-created версии (migration-скрипты, автоклонирование) не имеют автора-пользователя; удаление администратора не должно рушить историю curriculum;
@@ -265,7 +268,7 @@ model LevelDefinition {
 
 ### 4.5 visibilityRule
 
-Рекомендуемый storage contract: **`Json?` (SQLite JSONB — прецеденты в схеме есть) + строгая Zod-валидация на границе сервиса**.
+**РЕШЕНИЕ (утверждено, Phase 1B.1):** storage contract — **`Json?` (SQLite JSONB — прецеденты в схеме есть) + строгая Zod-валидация на границе сервиса**; в Phase 1 допустимое значение только `null`.
 
 - Не String: без структуры нельзя строго валидировать и эволюционировать.
 - Не отдельная typed-таблица: rule engine в Phase 1 запрещён, таблица — преждевременная сложность.
@@ -295,7 +298,7 @@ Prisma на SQLite не генерирует CHECK-констрейнты, enum'
 | Непрерывность level numbers (1..N без дыр) | — | — | — | ✔ |
 | published immutable | — | — | ✔ guard в каждой mutate-операции (re-read статуса в tx) | n/a |
 | publish только внутренне валидного curriculum | — | — | ✔ tx | ✔ validateCurriculumDraft внутри publish |
-| Удаление published запрещено | — (Cascade технически удалит) | — | ✔ guard: delete разрешён только draft | n/a |
+| Удаление published запрещено | частично ✔ (Restrict блокирует удаление версии при существующих definitions) | — | ✔ guard: delete разрешён только draft, снизу вверх | n/a |
 | V1 tables/данные не изменяются | ✔ (миграция не содержит ALTER V1) | n/a | n/a | n/a |
 
 Явно фиксируем: **immutability, пересечения диапазонов, непрерывность, кросс-ссылки — это service-level и publish-time валидация**; SQLite/Prisma сами это не обеспечат.
@@ -320,7 +323,7 @@ draft ──publish──▶ published ──archive──▶ archived
 - Publish выполняется одной транзакцией: re-read версии → статус строго `draft` → `validateCurriculumDraft` без ошибок → `status=published, publishedAt=now()` → audit. Любая ошибка = rollback, статус не меняется.
 - Archive: одна транзакция, строго `published→archived`, audit; archived-версия остаётся читаемой (история пользователей в Phase 2 будет ссылаться на неё).
 - Никакая операция не изменяет и не удаляет published/archived definitions; клонирование в новый draft — единственный путь эволюции.
-- Delete: только `draft`; Cascade удаляет modules/levels черновика; audit обязателен.
+- Delete: только `draft`; будущий draft-management service удаляет definitions явно снизу вверх (levels → modules → version) в одной транзакции — FK Restrict исключает неявный каскад; audit обязателен. Published и archived версии физически не удаляются.
 
 ## 8. Validation matrix / service boundaries (Phase 1B, проектирование)
 
@@ -373,7 +376,7 @@ CREATE TABLE "ModuleDefinition" (
     "checkpointLevel" INTEGER,
     "learningObjective" TEXT NOT NULL DEFAULT '',
     "status" TEXT NOT NULL DEFAULT 'active',
-    CONSTRAINT "ModuleDefinition_curriculumVersionId_fkey" FOREIGN KEY ("curriculumVersionId") REFERENCES "CurriculumVersion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "ModuleDefinition_curriculumVersionId_fkey" FOREIGN KEY ("curriculumVersionId") REFERENCES "CurriculumVersion" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -395,14 +398,15 @@ CREATE TABLE "LevelDefinition" (
     "featureUnlockCode" TEXT,
     "visibilityRule" JSONB,
     "status" TEXT NOT NULL DEFAULT 'active',
-    CONSTRAINT "LevelDefinition_curriculumVersionId_fkey" FOREIGN KEY ("curriculumVersionId") REFERENCES "CurriculumVersion" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "LevelDefinition_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "ModuleDefinition" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "LevelDefinition_curriculumVersionId_fkey" FOREIGN KEY ("curriculumVersionId") REFERENCES "CurriculumVersion" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "LevelDefinition_moduleId_curriculumVersionId_fkey" FOREIGN KEY ("moduleId", "curriculumVersionId") REFERENCES "ModuleDefinition" ("id", "curriculumVersionId") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- Indexes
 CREATE UNIQUE INDEX "CurriculumVersion_code_versionNumber_key" ON "CurriculumVersion"("code", "versionNumber");
 CREATE INDEX "CurriculumVersion_status_idx" ON "CurriculumVersion"("status");
 CREATE INDEX "CurriculumVersion_createdById_idx" ON "CurriculumVersion"("createdById");
+CREATE UNIQUE INDEX "ModuleDefinition_id_curriculumVersionId_key" ON "ModuleDefinition"("id", "curriculumVersionId");
 CREATE UNIQUE INDEX "ModuleDefinition_curriculumVersionId_moduleNumber_key" ON "ModuleDefinition"("curriculumVersionId", "moduleNumber");
 CREATE UNIQUE INDEX "ModuleDefinition_curriculumVersionId_code_key" ON "ModuleDefinition"("curriculumVersionId", "code");
 CREATE INDEX "ModuleDefinition_curriculumVersionId_firstLevel_idx" ON "ModuleDefinition"("curriculumVersionId", "firstLevel");
@@ -410,13 +414,19 @@ CREATE UNIQUE INDEX "LevelDefinition_curriculumVersionId_levelNumber_key" ON "Le
 CREATE UNIQUE INDEX "LevelDefinition_curriculumVersionId_stableCode_key" ON "LevelDefinition"("curriculumVersionId", "stableCode");
 CREATE INDEX "LevelDefinition_moduleId_idx" ON "LevelDefinition"("moduleId");
 CREATE INDEX "LevelDefinition_curriculumVersionId_type_idx" ON "LevelDefinition"("curriculumVersionId", "type");
+
+-- Manual partial unique index: at most one published CurriculumVersion per curriculum code.
+-- Prisma schema language cannot express partial indexes, so this constraint lives only in
+-- migration SQL and complements the future service-level publish guard. Draft and archived
+-- versions of the same code are intentionally not restricted.
+CREATE UNIQUE INDEX "CurriculumVersion_code_published_key" ON "CurriculumVersion"("code") WHERE "status" = 'published';
 ```
 
-- **onDelete/onUpdate:** version→module/level CASCADE (безопасно: delete разрешён только для draft на service-уровне); createdById SET NULL; всё ON UPDATE CASCADE.
+- **onDelete/onUpdate (утверждено, Phase 1B.1):** version→module/level и module→level — RESTRICT (удаление definitions выполняет только будущий draft-service явной bottom-up транзакцией; неявный каскад исключён); createdById SET NULL; всё ON UPDATE CASCADE.
 - **V1 tables:** ни одна не изменяется (в migration.sql нет ALTER; FK на User живёт в новой таблице).
 - **Forward plan:** одна аддитивная миграция; применяется существующим runner'ом `prisma/migrate.ts` (SQL не содержит `;` внутри литералов — совместим со сплиттером); затем `prisma generate`.
 - **Rollback/compatibility plan:** откат = `DROP TABLE "LevelDefinition"; DROP TABLE "ModuleDefinition"; DROP TABLE "CurriculumVersion";` (обратный порядок FK) + удаление записи из `_prisma_migrations`; поскольку V1 не менялась, приложение после отката идентично текущему. До отката достаточно `npm run db:backup` (существующий скрипт).
-- **SQLite limitations:** нет CHECK от Prisma; enum = TEXT без ограничения БД; ALTER TABLE не умеет ADD CONSTRAINT (поэтому FK закладываются сразу, а future-колонки Phase 4 добавятся через `ADD COLUMN ... REFERENCES`); нет partial/conditional unique (⇒ «один published на code» — сервис); одна запись на файл БД (write-lock) — не проблема для admin-операций.
+- **SQLite limitations:** нет CHECK от Prisma; enum = TEXT без ограничения БД; ALTER TABLE не умеет ADD CONSTRAINT (поэтому FK закладываются сразу, а future-колонки Phase 4 добавятся через `ADD COLUMN ... REFERENCES`); partial unique index не выражается в Prisma schema, но поддерживается SQLite — «один published на code» реализован вручную в migration SQL (+ дублирующая service-проверка в publish); одна запись на файл БД (write-lock) — не проблема для admin-операций.
 - **Пустые V2-таблицы:** ни один V1-код не читает новые таблицы; пустые таблицы не влияют на приложение; Prisma-клиент получает новые типы, не используемые V1-кодом.
 - **Почему V1 runtime продолжит работать:** запросы V1 идут к прежним таблицам с прежними колонками; сериализация ответов не меняется; migrations аддитивны; регрессия — существующие lint/build/withdrawal-regression остаются зелёными.
 - **Порядок будущего применения:** только на отдельной test DB (например, `DATABASE_URL=file:./prisma/phase1-test.db` в изолированной среде Phase 1B), после явного разрешения; live/production DB не затрагиваются. Запрещённые команды: `prisma migrate dev/deploy`, `prisma db push/seed`, `prisma migrate reset` — на live в любом виде.
@@ -429,16 +439,24 @@ CREATE INDEX "LevelDefinition_curriculumVersionId_type_idx" ON "LevelDefinition"
 4. Seed V1 (`prisma/seed.ts`, `seedProgression.ts`) не трогается; V2-таблицы остаются пустыми до Phase 9 (pilot seed).
 5. Существующие проверки (lint, tsc, build, `npm run test:regression:withdrawal`) обязаны оставаться зелёными в Phase 1B — это критерий приёмки.
 
-## 11. Открытые продуктовые решения
+## 11. Продуктовые решения: закрытые и открытые
 
-1. **Формат stableCode**: `v2.l001.slug` (рекомендация; уже в спецификации) vs `v2.level.001` (в доступных документах не найден). Плюс область уникальности: per-version (рекомендация) vs глобальная.
-2. **Семантика CurriculumVersion.code**: идентификатор линии curriculum (рекомендация: `ata-main`, версии внутри) vs уникальный код каждой версии. Влияет на unique-констрейнт.
-3. **Правило «не более одного published на code»** — подтвердить (заложено в publish-валидацию).
-4. **Словарь visibilityRule** (`kind`-значения); в Phase 1 — только null.
-5. **Набор completionMethod для V2** (сейчас: String + Zod-whitelist; кандидаты от V1: manual, report_approval, pocket_postback, balance_check + новые для scenario/final_exam).
-6. **effectiveFrom**: информационное поле или триггер автопубликации/auto-enrollment (рекомендация Phase 1: информационное, nullable).
-7. **archived**: допустим ли archive из draft и возможен ли un-archive (рекомендация: нет и нет).
-8. **contentVersionId/assessmentVersionId**: подтвердить отложенное добавление в Phase 4 (§4.3, вариант B).
+Закрыто в Phase 1B.1:
+
+1. ~~Формат stableCode~~ — **утверждено**: `v2.l001.<slug>`, lowercase, три цифры номера, kebab-case slug; уникальность per-version; повторное использование кода в новой версии разрешено (§4.1, V2_PRODUCT_DECISIONS.md §8).
+2. ~~Правило «не более одного published на code»~~ — **утверждено и реализовано**: partial unique index в миграции + будущая service-проверка publish. Семантика code как линии curriculum этим зафиксирована.
+3. ~~Статусы Module/Level~~ — **утверждено**: active|disabled, lifecycle наследуется от версии (§4.2).
+4. ~~contentVersionId/assessmentVersionId~~ — **утверждено**: отложены до Phase 4 (§4.3, вариант B); featureUnlockCode — nullable String без FK до Phase 6.
+5. ~~createdBy~~ — **утверждено**: nullable, SetNull, system-created = null (§4.4).
+6. ~~visibilityRule~~ — **утверждено**: Json?, в Phase 1 только null, без rule engine (§4.5).
+7. ~~Delete behavior~~ — **утверждено**: Restrict вместо Cascade; удаление только явным draft-service снизу вверх (§9).
+
+Остаются открытыми:
+
+8. **Словарь visibilityRule** (`kind`-значения) — до соответствующего этапа.
+9. **Набор completionMethod для V2** (String + Zod-whitelist; кандидаты от V1: manual, report_approval, pocket_postback, balance_check + новые для scenario/final_exam).
+10. **effectiveFrom**: информационное поле или триггер автопубликации/auto-enrollment (рекомендация: информационное, nullable).
+11. **archived**: допустим ли archive из draft и возможен ли un-archive (рекомендация: нет и нет).
 
 ## 12. Phase 1B — один небольшой кодовый этап
 

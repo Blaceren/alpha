@@ -67,6 +67,17 @@
 - Требуется отдельное атомарное решение: idempotency каждого запроса, атомарное соблюдение `perUserLimit`, защита от параллельных redemption, поддержка лимитов больше одного.
 - Promocode race не исправляется «первой попавшейся уникальностью»; дизайн — отдельной задачей.
 
+## 8. Level stableCode format (утверждено, Phase 1B.1)
+
+- Формат stableCode уровня: `v2.l001.<slug>`.
+- Всё в lowercase; номер уровня — всегда три цифры; slug — lowercase kebab-case.
+- Примеры: `v2.l001.pocket-registration`, `v2.l002.tradequest-mechanics`, `v2.l010.balance-checkpoint`.
+- stableCode уникален внутри CurriculumVersion (compound unique в БД).
+- Тот же stableCode разрешено повторно использовать в новой CurriculumVersion (преемственность уровня между версиями).
+- V1 task codes (`lvl_01_*` … `lvl_16_*`) не изменяются.
+- Строгая regex-валидация формата выполняется service/Zod-слоем (Phase 1B.2+); сложный SQLite CHECK для slug не используется.
+- Для одного curriculum code одновременно существует не более одной published-версии: обеспечено partial unique index в миграции + будущей service-проверкой publish.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

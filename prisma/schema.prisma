@@ -106,53 +106,54 @@ enum TesterFeedbackStatus {
 }
 
 model User {
-  id                Int                 @id @default(autoincrement())
-  email             String              @unique
-  pendingEmail      String?             @unique
-  pendingEmailRequestedAt DateTime?
-  referralCode      String              @unique @default(cuid())
-  passwordHash      String              @default("")
-  role              UserRole            @default(user)
-  status            UserStatus          @default(active)
-  name              String
-  level             Int                 @default(1)
-  xp                Int                 @default(0)
-  currentTask       String?
-  emailVerifiedAt   DateTime?
-  leaderboardExcluded Boolean           @default(false)
-  selectedAchievementId Int?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  notificationSettings NotificationSettings?
-  invitedReferrals  Referral[]          @relation("InviterReferrals")
-  invitedByReferral Referral?           @relation("InvitedReferral")
-  taskProgress      UserTaskProgress[]
-  rewards           UserReward[]
-  checkpoint        Checkpoint?
-  exchangeAccount   ExchangeAccount?
-  chatMessages      ChatMessage[]
-  supportDialogs    SupportDialog[]  @relation("SupportDialogOwner")
-  assignedSupportDialogs SupportDialog[] @relation("SupportDialogAssignee")
-  supportMessages   SupportMessage[] @relation("SupportMessageSender")
-  crmUserCohorts    CrmUserCohort[]
-  auditLogs         AuditLog[]
-  taskReports       TaskReport[] @relation("TaskReportOwner")
-  reviewedTaskReports TaskReport[] @relation("TaskReportReviewer")
-  notifications     Notification[]
-  fileAssets        FileAsset[]
-  testerFeedback    TesterFeedback[] @relation("TesterFeedbackAuthor")
-  resolvedFeedback  TesterFeedback[] @relation("TesterFeedbackResolver")
-  emailVerificationTokens EmailVerificationToken[]
-  dailyRewards      DailyLoginReward[]
-  promocodeRedemptions PromocodeRedemption[]
-  achievements      UserAchievement[]
-  mentorDialogs     MentorChatDialog[] @relation("MentorChatOwner")
-  assignedMentorDialogs MentorChatDialog[] @relation("MentorChatAssignee")
-  mentorMessages    MentorChatMessage[] @relation("MentorMessageSender")
-  channelMentorAssignments MentorChannelAssignment[]
+  id                          Int                          @id @default(autoincrement())
+  email                       String                       @unique
+  pendingEmail                String?                      @unique
+  pendingEmailRequestedAt     DateTime?
+  referralCode                String                       @unique @default(cuid())
+  passwordHash                String                       @default("")
+  role                        UserRole                     @default(user)
+  status                      UserStatus                   @default(active)
+  name                        String
+  level                       Int                          @default(1)
+  xp                          Int                          @default(0)
+  currentTask                 String?
+  emailVerifiedAt             DateTime?
+  leaderboardExcluded         Boolean                      @default(false)
+  selectedAchievementId       Int?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  notificationSettings        NotificationSettings?
+  invitedReferrals            Referral[]                   @relation("InviterReferrals")
+  invitedByReferral           Referral?                    @relation("InvitedReferral")
+  taskProgress                UserTaskProgress[]
+  rewards                     UserReward[]
+  checkpoint                  Checkpoint?
+  exchangeAccount             ExchangeAccount?
+  chatMessages                ChatMessage[]
+  supportDialogs              SupportDialog[]              @relation("SupportDialogOwner")
+  assignedSupportDialogs      SupportDialog[]              @relation("SupportDialogAssignee")
+  supportMessages             SupportMessage[]             @relation("SupportMessageSender")
+  crmUserCohorts              CrmUserCohort[]
+  auditLogs                   AuditLog[]
+  taskReports                 TaskReport[]                 @relation("TaskReportOwner")
+  reviewedTaskReports         TaskReport[]                 @relation("TaskReportReviewer")
+  notifications               Notification[]
+  fileAssets                  FileAsset[]
+  testerFeedback              TesterFeedback[]             @relation("TesterFeedbackAuthor")
+  resolvedFeedback            TesterFeedback[]             @relation("TesterFeedbackResolver")
+  emailVerificationTokens     EmailVerificationToken[]
+  dailyRewards                DailyLoginReward[]
+  promocodeRedemptions        PromocodeRedemption[]
+  achievements                UserAchievement[]
+  mentorDialogs               MentorChatDialog[]           @relation("MentorChatOwner")
+  assignedMentorDialogs       MentorChatDialog[]           @relation("MentorChatAssignee")
+  mentorMessages              MentorChatMessage[]          @relation("MentorMessageSender")
+  channelMentorAssignments    MentorChannelAssignment[]
   channelModeratorAssignments ModeratorChannelAssignment[]
-  chatMutes         ChatMute[]
-  xpEvents          XpEvent[]
+  chatMutes                   ChatMute[]
+  xpEvents                    XpEvent[]
+  curriculumVersionsCreated   CurriculumVersion[]          @relation("CurriculumVersionCreator")
 }
 
 model XpEvent {
@@ -169,13 +170,13 @@ model XpEvent {
 }
 
 model EmailVerificationToken {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
@@ -190,22 +191,22 @@ model Level {
 }
 
 model Task {
-  id           Int                @id @default(autoincrement())
-  code         String?            @unique
-  stepNumber   Int                @unique
-  title        String
-  description  String
-  rewardType   String
-  actionLabel  String
-  xpReward     Int                @default(0)
-  isCheckpoint Boolean            @default(false)
-  requiresReport Boolean          @default(false)
-  kind         String             @default("lesson")
-  completionMethod String         @default("manual")
+  id               Int                @id @default(autoincrement())
+  code             String?            @unique
+  stepNumber       Int                @unique
+  title            String
+  description      String
+  rewardType       String
+  actionLabel      String
+  xpReward         Int                @default(0)
+  isCheckpoint     Boolean            @default(false)
+  requiresReport   Boolean            @default(false)
+  kind             String             @default("lesson")
+  completionMethod String             @default("manual")
   balanceThreshold Float?
-  createdAt    DateTime           @default(now())
-  progress     UserTaskProgress[]
-  reports      TaskReport[]
+  createdAt        DateTime           @default(now())
+  progress         UserTaskProgress[]
+  reports          TaskReport[]
 }
 
 model TaskReport {
@@ -257,38 +258,38 @@ model Reward {
 }
 
 model UserReward {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   userId     Int
   rewardId   Int
   status     String
   receivedAt DateTime?
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reward     Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward     Reward    @relation(fields: [rewardId], references: [id], onDelete: Cascade)
 
   @@unique([userId, rewardId])
 }
 
 model Referral {
-  id            Int      @id @default(autoincrement())
-  inviterUserId Int
-  invitedUserId Int      @unique
-  xpEarned      Int      @default(0)
-  invitedXpEarned Int    @default(0)
-  bonusGrantedAt DateTime?
-  createdAt     DateTime @default(now())
-  inviter       User     @relation("InviterReferrals", fields: [inviterUserId], references: [id], onDelete: Cascade)
-  invited       User     @relation("InvitedReferral", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  id              Int       @id @default(autoincrement())
+  inviterUserId   Int
+  invitedUserId   Int       @unique
+  xpEarned        Int       @default(0)
+  invitedXpEarned Int       @default(0)
+  bonusGrantedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  inviter         User      @relation("InviterReferrals", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  invited         User      @relation("InvitedReferral", fields: [invitedUserId], references: [id], onDelete: Cascade)
 }
 
 model ReferralBonusConfig {
-  id             Int      @id @default(autoincrement())
-  slug           String   @unique
-  inviterXp      Int      @default(100)
-  invitedXp      Int      @default(50)
-  secondLevelXp  Int      @default(0)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  slug          String   @unique
+  inviterXp     Int      @default(100)
+  invitedXp     Int      @default(50)
+  secondLevelXp Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model NotificationSettings {
@@ -382,25 +383,25 @@ model ExchangeAccount {
 }
 
 model PostbackEvent {
-  id                Int             @id @default(autoincrement())
-  exchangeAccountId Int?
-  externalEventId   String?         @unique
-  type              String
-  eventType         String          @default("")
+  id                  Int              @id @default(autoincrement())
+  exchangeAccountId   Int?
+  externalEventId     String?          @unique
+  type                String
+  eventType           String           @default("")
   normalizedEventType String?
-  externalAccountId String?
-  traderId          String?
-  clickId           String?
-  amount            Float?
-  currency          String?
-  status            String
-  rawPayload        String
-  payload           Json?
-  attribution       Json?
-  rejectionReason   String?
-  processedAt       DateTime?
-  createdAt         DateTime        @default(now())
-  exchangeAccount   ExchangeAccount? @relation(fields: [exchangeAccountId], references: [id], onDelete: Cascade)
+  externalAccountId   String?
+  traderId            String?
+  clickId             String?
+  amount              Float?
+  currency            String?
+  status              String
+  rawPayload          String
+  payload             Json?
+  attribution         Json?
+  rejectionReason     String?
+  processedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  exchangeAccount     ExchangeAccount? @relation(fields: [exchangeAccountId], references: [id], onDelete: Cascade)
 }
 
 model Cohort {
@@ -431,62 +432,62 @@ model CrmUserCohort {
 }
 
 model NewsPost {
-  id          Int      @id @default(autoincrement())
-  slug        String   @unique
-  title       String
-  excerpt     String
-  content     String
-  category    String
-  author      String
+  id            Int        @id @default(autoincrement())
+  slug          String     @unique
+  title         String
+  excerpt       String
+  content       String
+  category      String
+  author        String
   coverImageUrl String?
-  mediaUrl    String?
-  mediaType   String?
-  status      NewsStatus @default(published)
-  publishedAt DateTime
-  createdAt   DateTime @default(now())
+  mediaUrl      String?
+  mediaType     String?
+  status        NewsStatus @default(published)
+  publishedAt   DateTime
+  createdAt     DateTime   @default(now())
 }
 
 model ChatMessage {
-  id        Int      @id @default(autoincrement())
-  channelId Int?
-  userId    Int?
-  userName  String
-  userLevel Int
-  userRank  String
-  role      String
-  message   String
-  isHidden  Boolean  @default(false)
+  id               Int          @id @default(autoincrement())
+  channelId        Int?
+  userId           Int?
+  userName         String
+  userLevel        Int
+  userRank         String
+  role             String
+  message          String
+  isHidden         Boolean      @default(false)
   achievementTitle String?
-  createdAt DateTime @default(now())
-  channel   ChatChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now())
+  channel          ChatChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  user             User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model ChatChannel {
-  id                 Int      @id @default(autoincrement())
-  slug               String   @unique
-  title              String
-  description        String
-  requiredLevel      Int?
-  requiredCheckpoint String?
-  requiredAchievement String?
-  isLockedVisible    Boolean  @default(true)
-  isActive           Boolean  @default(true)
-  retentionDays      Int      @default(3)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  messages           ChatMessage[]
-  mentorAssignments  MentorChannelAssignment[]
+  id                   Int                          @id @default(autoincrement())
+  slug                 String                       @unique
+  title                String
+  description          String
+  requiredLevel        Int?
+  requiredCheckpoint   String?
+  requiredAchievement  String?
+  isLockedVisible      Boolean                      @default(true)
+  isActive             Boolean                      @default(true)
+  retentionDays        Int                          @default(3)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  messages             ChatMessage[]
+  mentorAssignments    MentorChannelAssignment[]
   moderatorAssignments ModeratorChannelAssignment[]
 
   @@index([isActive, requiredLevel])
 }
 
 model MentorChannelAssignment {
-  id        Int      @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   channelId Int
   mentorId  Int
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
   channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   mentor    User        @relation(fields: [mentorId], references: [id], onDelete: Cascade)
 
@@ -494,10 +495,10 @@ model MentorChannelAssignment {
 }
 
 model ModeratorChannelAssignment {
-  id          Int      @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   channelId   Int
   moderatorId Int
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
   channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   moderator   User        @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
 
@@ -515,13 +516,13 @@ model ChatModerationRule {
 }
 
 model ChatMute {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
   channelId Int?
   reason    String
   expiresAt DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, channelId, expiresAt])
 }
@@ -546,7 +547,7 @@ model SupportDialog {
   userName      String
   userLevel     Int
   currentStep   String
-  status        SupportDialogStatus  @default(new)
+  status        SupportDialogStatus @default(new)
   assignedToId  Int?
   lastMessage   String
   lastMessageAt DateTime
@@ -580,17 +581,17 @@ model SupportMessage {
 }
 
 model MentorChatDialog {
-  id            Int      @id @default(autoincrement())
+  id            Int                 @id @default(autoincrement())
   userId        Int
   mentorId      Int?
-  status        String   @default("locked")
+  status        String              @default("locked")
   unlockReason  String?
   lastMessage   String?
   lastMessageAt DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User     @relation("MentorChatOwner", fields: [userId], references: [id], onDelete: Cascade)
-  mentor        User?    @relation("MentorChatAssignee", fields: [mentorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation("MentorChatOwner", fields: [userId], references: [id], onDelete: Cascade)
+  mentor        User?               @relation("MentorChatAssignee", fields: [mentorId], references: [id], onDelete: SetNull)
   messages      MentorChatMessage[]
 
   @@index([userId, status])
@@ -598,55 +599,55 @@ model MentorChatDialog {
 }
 
 model MentorChatMessage {
-  id           Int      @id @default(autoincrement())
+  id           Int              @id @default(autoincrement())
   dialogId     Int
   senderUserId Int?
   senderRole   UserRole
   message      String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime         @default(now())
   dialog       MentorChatDialog @relation(fields: [dialogId], references: [id], onDelete: Cascade)
-  senderUser   User?    @relation("MentorMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  senderUser   User?            @relation("MentorMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
 
   @@index([dialogId, createdAt])
 }
 
 model DailyLoginReward {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id         Int      @id @default(autoincrement())
+  userId     Int
   rewardDate String
-  streak    Int
-  xpGranted Int      @default(0)
-  rewardId  Int?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streak     Int
+  xpGranted  Int      @default(0)
+  rewardId   Int?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, rewardDate])
 }
 
 model Promocode {
-  id          Int           @id @default(autoincrement())
-  code        String        @unique
-  type        PromocodeType
-  value       Json
-  maxUses     Int?
-  perUserLimit Int          @default(1)
-  usedCount   Int           @default(0)
-  startsAt    DateTime?
-  expiresAt   DateTime?
-  isActive    Boolean       @default(true)
-  createdById Int?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id           Int                   @id @default(autoincrement())
+  code         String                @unique
+  type         PromocodeType
+  value        Json
+  maxUses      Int?
+  perUserLimit Int                   @default(1)
+  usedCount    Int                   @default(0)
+  startsAt     DateTime?
+  expiresAt    DateTime?
+  isActive     Boolean               @default(true)
+  createdById  Int?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
   redemptions  PromocodeRedemption[]
 
   @@index([isActive, startsAt, expiresAt])
 }
 
 model PromocodeRedemption {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   promocodeId Int
   userId      Int
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   promocode   Promocode @relation(fields: [promocodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -654,25 +655,25 @@ model PromocodeRedemption {
 }
 
 model Achievement {
-  id          Int      @id @default(autoincrement())
-  slug        String   @unique
+  id          Int               @id @default(autoincrement())
+  slug        String            @unique
   title       String
   description String
   rarity      String
   iconKey     String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
   users       UserAchievement[]
 }
 
 model UserAchievement {
-  id            Int      @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   userId        Int
   achievementId Int
   grantedById   Int?
-  grantedAt     DateTime @default(now())
-  source        String   @default("manual")
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedAt     DateTime    @default(now())
+  source        String      @default("manual")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementId])
@@ -704,26 +705,116 @@ model AuditLog {
 }
 
 model TesterFeedback {
-  id            Int                    @id @default(autoincrement())
-  userId        Int?
-  role          UserRole?
-  type          TesterFeedbackType
-  severity      TesterFeedbackSeverity
-  status        TesterFeedbackStatus   @default(new)
-  pageUrl       String?
-  title         String
-  message       String
-  browserInfo   String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  resolvedAt    DateTime?
-  resolvedById  Int?
-  adminComment  String?
-  user          User?                  @relation("TesterFeedbackAuthor", fields: [userId], references: [id], onDelete: SetNull)
-  resolvedBy    User?                  @relation("TesterFeedbackResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  id           Int                    @id @default(autoincrement())
+  userId       Int?
+  role         UserRole?
+  type         TesterFeedbackType
+  severity     TesterFeedbackSeverity
+  status       TesterFeedbackStatus   @default(new)
+  pageUrl      String?
+  title        String
+  message      String
+  browserInfo  String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  resolvedAt   DateTime?
+  resolvedById Int?
+  adminComment String?
+  user         User?                  @relation("TesterFeedbackAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  resolvedBy   User?                  @relation("TesterFeedbackResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([type, severity, status])
   @@index([userId])
   @@index([resolvedById])
+}
+
+enum CurriculumVersionStatus {
+  draft
+  published
+  archived
+}
+
+enum CurriculumDefinitionStatus {
+  active
+  disabled
+}
+
+enum LevelDefinitionType {
+  external_event
+  lesson
+  scenario
+  practice
+  report
+  mentor_review
+  financial_checkpoint
+  final_exam
+}
+
+model CurriculumVersion {
+  id            Int                     @id @default(autoincrement())
+  code          String
+  name          String
+  status        CurriculumVersionStatus @default(draft)
+  versionNumber Int
+  effectiveFrom DateTime?
+  createdAt     DateTime                @default(now())
+  publishedAt   DateTime?
+  createdById   Int?
+  changeNotes   String?
+  createdBy     User?                   @relation("CurriculumVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  modules       ModuleDefinition[]
+  levels        LevelDefinition[]
+
+  @@unique([code, versionNumber])
+  @@index([status])
+  @@index([createdById])
+}
+
+model ModuleDefinition {
+  id                  Int                        @id @default(autoincrement())
+  curriculumVersionId Int
+  moduleNumber        Int
+  code                String
+  title               String
+  description         String                     @default("")
+  firstLevel          Int
+  lastLevel           Int
+  checkpointLevel     Int?
+  learningObjective   String                     @default("")
+  status              CurriculumDefinitionStatus @default(active)
+  curriculumVersion   CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  levels              LevelDefinition[]
+
+  @@unique([id, curriculumVersionId])
+  @@unique([curriculumVersionId, moduleNumber])
+  @@unique([curriculumVersionId, code])
+  @@index([curriculumVersionId, firstLevel])
+}
+
+model LevelDefinition {
+  id                      Int                        @id @default(autoincrement())
+  curriculumVersionId     Int
+  moduleId                Int
+  levelNumber             Int
+  stableCode              String
+  type                    LevelDefinitionType
+  title                   String
+  shortDescription        String                     @default("")
+  learningObjective       String                     @default("")
+  completionMethod        String
+  xpReward                Int                        @default(0)
+  requiredXp              Int                        @default(0)
+  requiredPreviousLevel   Int?
+  requiredCheckpointLevel Int?
+  featureUnlockCode       String?
+  visibilityRule          Json?
+  status                  CurriculumDefinitionStatus @default(active)
+  curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
+
+  @@unique([curriculumVersionId, levelNumber])
+  @@unique([curriculumVersionId, stableCode])
+  @@index([moduleId])
+  @@index([curriculumVersionId, type])
 }
