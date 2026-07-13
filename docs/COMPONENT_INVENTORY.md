@@ -31,8 +31,8 @@
 | AppShell | sidebar + top bar (desktop) / bottom nav (mobile) / rail (tablet) |
 | Sidebar | collapsible, icon rail |
 | TopBar | rank, XP, notifications, profile, contextual actions |
-| BottomNav | 5 пунктов (Главная/Путь/Уроки/Инструменты/Профиль) |
-| MoreMenu | Community/Новости/Рефералы/Mentor/Support/Настройки |
+| BottomNav | 5 пунктов (Главная/Путь/Уроки/Инструменты/**Ещё**); профиль — через avatar в mobile top bar, не в bottom nav |
+| MoreMenu | раздел «Ещё»: Сообщество/Новости/Рефералы/Ментор/Поддержка/Профиль/Настройки |
 | PageHeader | заголовок + contextual actions |
 | TabBar | функциональные табы |
 | Breadcrumbs (light) | контекст внутри tool/community |

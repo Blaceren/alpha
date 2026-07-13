@@ -94,13 +94,17 @@ Scroll-driven сцены прелендинга не переносятся во
 
 Подробно — `docs/INFORMATION_ARCHITECTURE.md`, маршруты — `docs/ROUTE_MAP.md`.
 
-**Desktop:** сворачиваемый sidebar (Главная, Путь, Уроки, Инструменты, Community, Новости, Реферальная программа, Mentor, Support, Профиль) + top bar (rank, XP, notifications, profile, contextual actions).
+**Desktop:** сворачиваемый sidebar (Главная, Путь, Уроки, Инструменты, Сообщество, Новости, Реферальная программа, Ментор, Поддержка, Профиль) + top bar (ранг, XP, уведомления, профиль/avatar, contextual actions).
 
-**Mobile:** bottom nav из 5 (Главная, Путь, Уроки, Инструменты, Профиль); доп. меню — Community, Новости, Рефералы, Mentor, Support, Настройки.
+**Mobile:** bottom nav из 5 — Главная, Путь, Уроки, Инструменты, **Ещё**. Профиль доступен одним нажатием через avatar в mobile top bar. Раздел «Ещё»: Сообщество, Новости, Рефералы, Ментор, Поддержка, Профиль, Настройки.
 
 **Tablet:** полноценное responsive-состояние (compact sidebar/icon rail, portrait+landscape, touch, горизонтальный path, адаптивные two-pane tools), не растянутый mobile.
 
-Глобальный поиск в v1 не нужен. При открытии раздела — контекстный дефолт (текущий уровень / активный урок / последний инструмент / активный ticket / релевантная вкладка).
+Глобальный поиск в v1 не нужен. При открытии раздела — контекстный дефолт (текущий уровень / активный урок / последний инструмент / активный тикет / релевантная вкладка).
+
+**Маршруты и оболочки.** Канонические маршруты — Next.js App Router (`[param]`, `docs/ROUTE_MAP.md`). Route groups: `(app)` — авторизованный продукт, `(public)` — публичный `/blog` (отдельная оболочка без app sidebar; не входит в URL). Публичные SEO-статьи — `/blog`, in-product новости — `/news`. Прелендинг, login и registration не создаются в этом прототипе: для неавторизованного пользователя auth state приходит от backend с редиректом в отдельный public/prelanding flow; собственной login-страницы нет.
+
+**Терминология.** Интерфейс v1 полностью русский; английские термины — только code/domain language. Словарь — `docs/CONTENT_AND_TONE.md`, решение — DD-172.
 
 ---
 
@@ -113,13 +117,13 @@ Scroll-driven сцены прелендинга не переносятся во
 - **Урок** — цель, video (subtitles обязательны, позиция сохраняется, focus mode; без chapters/transcript/speed/PiP в v1), связанный tool, тест открывается на 50% (просмотр 50% не завершает уровень), следующий урок скрыт до completion.
 - **Тест** — по одному вопросу, progress bar, ответ меняется до завершения, no timer, chart/scenario-вопросы, «отказаться от сделки» может быть верным, explanation после, при fail показан правильный ответ, повтор, после серии неудач — mentor.
 - **Report** — structured форма: autosave, draft, images/video, rubric, пример, статусы pending/approved/rejected/resubmitted, комментарии к секциям, версии, исправление в том же report. Без mentor avatar и countdown; «Обычно проверка занимает до одного дня».
-- **Community / News / Public Article / Referral / Mentor / Support / Notifications / Profile / Settings** — см. `docs/PAGE_INVENTORY.md`.
+- **Сообщество / Новости / Публичная статья / Рефералы / Ментор / Поддержка / Уведомления / Профиль / Настройки** — см. `docs/PAGE_INVENTORY.md`.
 
 ---
 
 ## 8. Инструменты
 
-Все trading tools заполняются **вручную**; ни один не показывает реальный Pocket balance/broker wallet. Открываются по уровню (карта — `docs/CURRICULUM_AND_UNLOCKS.md`):
+Всего **20 инструментов** в интерфейсе: **19 curriculum-инструментов** (открываются на L10–L100) + **1 referral-gated «Секретный инструмент»** (не curriculum unlock, не имеет level unlock). Все trading tools заполняются **вручную**; ни один не показывает реальный Pocket balance/broker wallet. Curriculum-инструменты по уровню (карта — `docs/CURRICULUM_AND_UNLOCKS.md`):
 
 Trading Journal (L10), Risk Calculator (L15), Chart Markup (L20, uploaded screenshot, не live), Indicator Checklist (L25), News Calendar (L30, provider-agnostic), Pause Mode (L35), Weekly Review (L40), Strategy Builder (L45, mentor review), Capital Plan (L50), Market Regime Board (L55), Session Planner (L60), Strategy Statistics (L65, small-sample warnings), Watchlist (L70), Psychology Check-in (L75, private by default), Habit Calendar (L80), Mentor Case Room (L85), Performance Dashboard (L90, на journal data, не broker), Personal Playbook (L95, mentor review), Pro Workspace (L100, не терминал). **Секретный инструмент** — referral-gated (silhouette, прозрачные условия, no countdown/scarcity, содержимое позже).
 
@@ -129,7 +133,7 @@ Trading Journal (L10), Risk Calculator (L15), Chart Markup (L20, uploaded screen
 
 ## 9. Curriculum
 
-**20 модулей, 100 уровней, 20 checkpoints, 20 ranks (5 families × I–IV), 20 tool unlocks, 5 community unlocks.** Полный mapping — `docs/CURRICULUM_AND_UNLOCKS.md` (не менять смысл, thresholds, названия).
+**20 модулей, 100 уровней, 20 контрольных точек, 20 рангов (5 families × I–IV), 19 tool unlocks (L10–L100) + 1 referral-gated инструмент = 20 инструментов, 5 community unlocks.** Полный mapping — `docs/CURRICULUM_AND_UNLOCKS.md` (не менять смысл, thresholds, названия).
 
 **Checkpoints (min real balance):** L4 $50, L10 $100, L15 $150, L20 $200, L25 $300, L30 $400, L35 $500, L40 $750, L45 $1,000, L50 $1,500, L55 $2,000, L60 $2,500, L65 $3,000, L70 $4,000, L75 $5,000, L80 $6,000, L85 $7,000, L90 $8,000, L95 $9,000, L100 $10,000. Demo не учитывается.
 
@@ -220,3 +224,14 @@ current prelanding screenshots; logo; exact palette; brand graphics; Alex Curie 
 ## 18. Consistency
 
 Проверено отсутствие противоречий по осям: Alfa Trade Academy vs legacy name; checkpoint target vs hidden balance; learning streak vs login analytics; mentor vs support; public vs in-app news; manual tools vs Pocket integration; ranks vs checkpoints; tools vs curriculum; mobile vs desktop navigation; design system vs prelanding continuity. Результат и чек-лист — `docs/IMPLEMENTATION_STATUS.md` §3.
+
+### D0.1 — Consistency patch (зафиксированные решения)
+
+- **19 curriculum-инструментов (L10–L100) + 1 referral-gated «Секретный инструмент» = 20 инструментов** в интерфейсе (DD-170).
+- **Mobile bottom nav:** Главная, Путь, Уроки, Инструменты, **Ещё**; профиль — через avatar в top bar; «Ещё» = Сообщество/Новости/Рефералы/Ментор/Поддержка/Профиль/Настройки (DD-171).
+- **Пользовательская терминология — русская**; английский — только code/domain language; «Alfa Trade Academy» не переводится (DD-172, словарь в `docs/CONTENT_AND_TONE.md`).
+- **Канонические маршруты — Next.js App Router `[param]`**; `/blog` (public) vs `/news` (in-product); `/referrals`; `/mentor/[conversationId]` (DD-173).
+- **Route groups `(app)` / `(public)`** с разными оболочками; `/blog` без app sidebar (DD-174, DD-177).
+- **Pocket — регистрация, не подключение/привязка**; отдельный instruction flow для «У меня уже есть аккаунт»; нет прямой Pocket-кнопки после registration flow; backend verification не выдумывается (DD-175, DD-176).
+
+Полные записи — `docs/DESIGN_DECISIONS.md` (DD-170…DD-177).

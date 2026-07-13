@@ -5,6 +5,10 @@
 
 > Legacy note: в `les-prog.txt` встречается старое название **TradeQuest**. Во всех пользовательских текстах используется только **Alfa Trade Academy**. Смысл уроков сохранён без изменений.
 
+> Legacy note (D0.1): в `les-prog.txt` урок L1 назван «Подключение Pocket». По утверждённой продуктовой логике пользователь **не подключает и не связывает** аккаунт — это **регистрация**. Пользовательское название уровня — «Регистрация Pocket»; смысл урока не изменён. См. DD-175/DD-176.
+
+[^l1]: Источник (`les-prog.txt`) — «Подключение Pocket» (legacy). Пользовательское название — «Регистрация Pocket» (регистрация, не подключение).
+
 ---
 
 ## 1. Общая структура
@@ -13,7 +17,7 @@
 - Уровней: **100**
 - Checkpoints: **20** (по одному на каждый пятый уровень: L4, затем L10, L15, … L100)
 - Ranks: **20** (по одному на checkpoint)
-- Tool unlocks: **20** (на checkpoints L10–L100)
+- Tool unlocks: **19** curriculum-инструментов (на checkpoints L10–L100) + **1** referral-gated «Секретный инструмент» = **20** инструментов в интерфейсе. Секретный инструмент не является curriculum tool unlock и не имеет level unlock (см. §4).
 - Community unlocks: **5** (L4, L20, L35, L45, L85)
 - Обязательные reports / practical tasks: см. колонку «Артефакт»
 - Mentor reviews: см. колонку «Mentor»
@@ -47,7 +51,7 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 
 | Level | Code | Модуль | Название урока (canonical) | Тип | Артефакт | Mentor | Checkpoint $ | Unlock |
 |------:|------|--------|----------------------------|-----|----------|:------:|:-----------:|--------|
-| 1 | level.001 | module.01 Первое знакомство | Подключение Pocket | task | Pocket registration | — | — | — |
+| 1 | level.001 | module.01 Первое знакомство | Регистрация Pocket [^l1] | task | Pocket registration | — | — | — |
 | 2 | level.002 | module.01 | Как устроен Alfa Trade Academy | video+test | course mechanics test | — | — | — |
 | 3 | level.003 | module.01 | Первые пять demo-сделок | report | отчёт по 5 demo-сделкам | — | — | — |
 | 4 | level.004 | module.01 | Контрольная точка $50 | checkpoint | — | — | **$50** | rank.observer_1 · channel.start_questions |

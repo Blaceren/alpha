@@ -42,8 +42,8 @@
 
 ## Навигация
 
-- **DD-040 (Locked).** Desktop: сворачиваемый sidebar (Главная, Путь, Уроки, Инструменты, Community, Новости, Реферальная программа, Mentor, Support, Профиль) + top bar (rank, XP, notifications, profile, contextual actions).
-- **DD-041 (Locked).** Mobile: bottom navigation из 5 (Главная, Путь, Уроки, Инструменты, Профиль); остальное — в доп. меню (Community, Новости, Рефералы, Mentor, Support, Настройки).
+- **DD-040 (Locked).** Desktop: сворачиваемый sidebar (Главная, Путь, Уроки, Инструменты, Сообщество, Новости, Реферальная программа, Ментор, Поддержка, Профиль) + top bar (ранг, XP, уведомления, профиль/avatar, contextual actions).
+- **DD-041 (Locked, обновлено D0.1).** Mobile: bottom navigation из 5 — Главная, Путь, Уроки, Инструменты, **Ещё**. Профиль доступен одним нажатием через **avatar в mobile top bar** (не входит в bottom nav). Раздел «Ещё» содержит: Сообщество, Новости, Рефералы, Ментор, Поддержка, Профиль, Настройки. Формулировка «доп. меню из Ещё/Профиля» не используется.
 - **DD-042 (Locked).** Tablet — полноценное responsive-состояние (compact sidebar/icon rail, portrait+landscape, touch, горизонтальный path, адаптивные two-pane tools), не растянутый mobile.
 
 ## Путь (L1–100)
@@ -119,6 +119,17 @@
 - **DD-161 (Locked).** Motion: functional 140–240 ms, milestone 2–4 c, skippable; no scroll lock; reduced-motion не ломает UI; hidden tab ставит ambient на паузу; heavy effects off на слабых устройствах.
 - **DD-162 (Locked).** A11y baseline без формального WCAG-сертификата: semantic headings, visible focus, keyboard для desktop flows, no color-only meaning, captions, labels, helpful errors, 200% zoom, dark contrast, touch targets, screen-reader list-альтернатива для path, text-альтернатива для chart/canvas.
 - **DD-163 (Locked).** UI не считается готовым без реальных browser screenshots приложения (см. `SCREENSHOT_QA_PROTOCOL.md`).
+
+## D0.1 — Consistency patch (новые/уточнённые решения)
+
+- **DD-170 (Locked).** Количество инструментов: **19 curriculum-инструментов** (открываются на уровнях L10–L100) + **1 referral-gated «Секретный инструмент»** = **20 инструментов** в пользовательском интерфейсе. Секретный инструмент не является curriculum tool unlock и не имеет level unlock; открывается только через qualification реферальной программы. Формулировки «20 curriculum tools», «20 tool unlocks», «20 инструментов + secret» не используются.
+- **DD-171 (Locked).** Mobile bottom navigation: Главная, Путь, Уроки, Инструменты, **Ещё**. Профиль — через avatar в mobile top bar. «Ещё» содержит: Сообщество, Новости, Рефералы, Ментор, Поддержка, Профиль, Настройки. (См. DD-041.)
+- **DD-172 (Locked).** Пользовательская терминология первой версии — русская. Канон: Community→Сообщество, Mentor→Ментор, Report→Отчёт, Checkpoint→Контрольная точка, Rank→Ранг, Support→Поддержка, Referral→Реферальная программа/Рефералы, Tools Hub→Инструменты, Weekly Review→Недельный обзор (кроме внутреннего tool code). Английские термины допустимы только как code/domain language (identifiers, routes, analytics codes, технические объяснения). Официальное название «Alfa Trade Academy» не переводится. Названия конкретных инструментов пока могут оставаться английскими с русским описанием рядом. Полный словарь — `CONTENT_AND_TONE.md`.
+- **DD-173 (Locked).** Канонические маршруты — Next.js App Router с `[param]` (`ROUTE_MAP.md`). Запрещено смешивать `:code` / `:id` / `[code]`. Публичные SEO-статьи — `/blog`; in-product новости — `/news`. Рефералы — `/referrals`. Диалог с ментором — `/mentor/[conversationId]`.
+- **DD-174 (Locked).** Route groups: `(app)` — авторизованный продукт, `(public)` — `/blog`. Не входят в URL. Авторизованный продукт и публичный блог имеют разные оболочки: `/blog` — без authenticated app sidebar.
+- **DD-175 (Locked).** Pocket: пользователь **не подключает и не связывает** существующий аккаунт. Это **регистрация**. Из пользовательских текстов исключены «Подключить Pocket», «Связать Pocket», «Connect Pocket», «Pocket connection» (как пользовательское действие). Канон состояний: «Регистрация Pocket», «Перейти к заданию регистрации», «Подтвердить регистрацию», «Регистрация проверяется», «Регистрация подтверждена», «Не удалось подтвердить регистрацию», «У меня уже есть аккаунт».
+- **DD-176 (Locked).** Ветка «У меня уже есть аккаунт» — отдельный instruction flow (не подключение аккаунта): ordered steps, warning, confirmation, возврат к проверке. Точный текст инструкции утверждается позднее. После завершения registration flow нет прямой кнопки перехода из основного продукта в Pocket. Backend verification mechanism не выдумывается.
+- **DD-177 (Locked).** Прелендинг, login и registration не создаются внутри этого design-прототипа. Для неавторизованного пользователя продукт получает auth state от backend и перенаправляет в отдельный public/prelanding flow; собственная временная login-страница не показывается.
 
 ## Открытые вопросы (решаются позже)
 

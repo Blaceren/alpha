@@ -140,7 +140,7 @@ Touch target ≥ 44px. Safe-area padding учитывается на mobile.
 
 | Breakpoint | Диапазон | Навигация |
 |------------|----------|-----------|
-| mobile | ≤ 599 | bottom nav (5) + доп. меню |
+| mobile | ≤ 599 | bottom nav (5: Главная/Путь/Уроки/Инструменты/Ещё) + профиль через avatar в top bar |
 | tablet-portrait | 600–899 | icon rail / compact sidebar |
 | tablet-landscape | 900–1199 | compact sidebar, two-pane tools |
 | desktop | ≥ 1200 | сворачиваемый sidebar + top bar |

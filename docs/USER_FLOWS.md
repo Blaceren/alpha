@@ -4,37 +4,42 @@
 
 Аналитические события даны как provisional имена (snake_case). Финализируются с backend/CRM позже. Login фиксируется для retention, но **не** продлевает серию обучения.
 
+Маршруты — App Router (`[param]`, см. `ROUTE_MAP.md`). Терминология Pocket — регистрация, **не** подключение/привязка (см. `CONTENT_AND_TONE.md`).
+
+### App / public boundary
+Прелендинг, login и registration **не создаются** внутри этого design-прототипа. Для неавторизованного пользователя продукт получает auth state от backend и перенаправляет в отдельный public/prelanding flow — собственной временной login-страницы нет. Публичный `/blog` живёт в отдельной оболочке `(public)` без authenticated app sidebar; авторизованный продукт — в `(app)`.
+
 ---
 
 ## 1. First login (первое знакомство)
 
-- **Entry:** первый вход в ATA после регистрации.
-- **Steps:** приветствие Alex Curie → короткое объяснение (путь/один шаг/XP/checkpoints, без гарантий) → приземление на Главную с первым CTA (L1 «Подключение Pocket»).
+- **Entry:** первый авторизованный вход в ATA (auth state получен от backend; сам вход — вне прототипа).
+- **Steps:** приветствие Alex Curie → короткое объяснение (путь/один шаг/XP/контрольные точки, без гарантий) → приземление на Главную с первым CTA (L1 «Регистрация Pocket»).
 - **Decisions:** пропустить intro / начать сразу.
 - **Failures:** intro не догрузился → показать статичный fallback + CTA.
 - **Recovery:** intro доступен позже из Профиля/справки.
 - **Analytics:** `onboarding_started`, `onboarding_completed`, `home_first_view`.
 - **UX risks:** перегрузить первый экран; нарушить правило одного шага.
 
-## 2. Pocket registration task (L1)
+## 2. Pocket registration task (L1 «Регистрация Pocket»)
 
-- **Entry:** L1 «Подключение Pocket».
-- **Steps:** объяснение зачем связывать аккаунт, отличие ATA/Pocket, сохранение прогресса, почему сначала demo → действие: зарегистрировать и подтвердить аккаунт Pocket → возврат в ATA.
-- **Decisions:** новый Pocket-аккаунт vs существующий (см. флоу 3).
-- **Failures:** регистрация не завершена/не подтверждена → уровень остаётся in progress.
-- **Recovery:** повторить действие; инструкция сохранена.
-- **Analytics:** `pocket_task_started`, `pocket_task_completed`.
-- **UX risks:** ATA не должна запрашивать пароли/креденшелы Pocket в своём UI; действие выполняется на стороне Pocket.
+- **Entry:** L1 «Регистрация Pocket».
+- **Steps:** объяснение зачем нужен аккаунт Pocket, отличие ATA/Pocket, сохранение прогресса, почему сначала demo → «Перейти к заданию регистрации» → зарегистрировать → «Подтвердить регистрацию» → «Регистрация проверяется» → «Регистрация подтверждена» → возврат в ATA.
+- **Decisions:** новая регистрация Pocket vs «У меня уже есть аккаунт» (см. флоу 3).
+- **Failures:** регистрация не завершена/не подтверждена → «Не удалось подтвердить регистрацию»; уровень остаётся in progress.
+- **Recovery:** повторить действие; инструкция сохранена. (Пользователь **не подключает и не связывает** аккаунт — это регистрация.)
+- **Analytics:** `pocket_registration_started`, `pocket_registration_submitted`, `pocket_registration_verified`, `pocket_registration_failed`.
+- **UX risks:** ATA не запрашивает пароли/креденшелы Pocket в своём UI; действие выполняется на стороне Pocket; backend verification mechanism не выдумывается.
 
-## 3. Existing Pocket account (instruction state)
+## 3. «У меня уже есть аккаунт» (instruction flow)
 
-- **Entry:** у пользователя уже есть Pocket.
-- **Steps:** показать инструкцию по корректной привязке к ATA-прогрессу (без ввода чувствительных данных в ATA) → подтверждение связи.
-- **Decisions:** привязать существующий / создать новый.
-- **Failures:** связь не подтверждается → instruction state сохраняется.
-- **Recovery:** повтор; при затруднении — Support.
-- **Analytics:** `pocket_existing_linked`.
-- **UX risks:** путаница между «регистрация» и «привязка»; ясные две ветки.
+- **Entry:** пользователь выбирает «У меня уже есть аккаунт».
+- **Steps:** отдельный instruction flow (не подключение аккаунта): ordered steps → warning → confirmation → возврат к проверке регистрации. Точный текст инструкции утверждается позднее.
+- **Decisions:** следовать инструкции / вернуться к новой регистрации.
+- **Failures:** регистрация не подтверждается → instruction state сохраняется.
+- **Recovery:** повтор; при затруднении — Поддержка. После завершения flow **нет** прямой кнопки перехода из продукта в Pocket.
+- **Analytics:** `pocket_existing_instruction_view`, `pocket_registration_verified`.
+- **UX risks:** не подавать это как «привязку/подключение»; ясные две ветки; никакой прямой Pocket-кнопки после завершения.
 
 ## 4. Lesson (урок)
 
@@ -66,7 +71,7 @@
 - **Analytics:** `test_failed`, `test_retry`, `mentor_offer_shown`.
 - **UX risks:** тон без наказания; не блокировать обучение.
 
-## 7. Report → Mentor
+## 7. Отчёт → Ментор
 
 - **Entry:** practical-уровень с report (напр. L3, L14…).
 - **Steps:** заполнить структурированную форму (autosave/draft, images/video, rubric, пример) → submit → pending («Обычно проверка занимает до одного дня») → approved/rejected.
@@ -76,7 +81,7 @@
 - **Analytics:** `report_draft_saved`, `report_submitted`, `report_approved`, `report_rejected`, `report_resubmitted`.
 - **UX risks:** без countdown; без mentor avatar; версии сохраняются.
 
-## 8. Rejected report
+## 8. Отклонённый отчёт
 
 - **Entry:** статус rejected.
 - **Steps:** прочитать комментарии к секциям → доработать → resubmit → pending.
@@ -84,7 +89,7 @@
 - **Analytics:** `report_rejected_viewed`, `report_resubmitted`.
 - **UX risks:** конструктивный тон, без вины.
 
-## 9. Checkpoint (обычный)
+## 9. Контрольная точка (обычная)
 
 - **Entry:** checkpoint-уровень (L4…L100).
 - **Steps:** Upcoming (цель + reward) → Current (min real balance, demo не учитывается, CTA «Проверить выполнение») → Checking → Completed (rank-up + unlock, CTA «Продолжить путь»).
@@ -135,12 +140,12 @@
 ## 15. Tool unlock
 
 - **Entry:** checkpoint открыл инструмент.
-- **Steps:** milestone-оверлей → инструмент в Tools Hub (available/empty с примером).
+- **Steps:** milestone-оверлей → инструмент в разделе «Инструменты» (available/empty с примером).
 - **Recovery:** доступ из Инструменты в любой момент.
 - **Analytics:** `tool_unlocked`, `tool_first_open`.
 - **UX risks:** объяснить назначение; empty state с примером.
 
-## 16. Community unlock
+## 16. Открытие канала Сообщества
 
 - **Entry:** уровень открыл канал (L4/20/35/45/85).
 - **Steps:** milestone → канал доступен (messages/replies/reactions/images).
@@ -154,26 +159,26 @@
 - **Analytics:** `return_after_pause`, `streak_reset`.
 - **UX risks:** без укора/красного наказания; login не продлевает серию.
 
-## 18. Support ticket
+## 18. Тикет поддержки
 
-- **Entry:** Support (Ticket Center).
-- **Steps:** create ticket (category, thread, attachments) → waiting support → ответы → resolved; можно reopen.
+- **Entry:** Поддержка (Ticket Center).
+- **Steps:** создать тикет (category, thread, attachments) → waiting support → ответы → resolved; можно reopen.
 - **Decisions:** категория, вложения.
 - **Failures:** нет ответа вовремя → статус waiting support виден.
 - **Recovery:** reopen resolved.
 - **Analytics:** `ticket_created`, `ticket_replied`, `ticket_resolved`, `ticket_reopened`.
-- **UX risks:** не смешивать с mentor.
+- **UX risks:** не смешивать с Ментором.
 
-## 19. Mentor conversation
+## 19. Диалог с ментором
 
-- **Entry:** Mentor (образовательные вопросы/reviews).
-- **Steps:** отправить вопрос/report/strategy/case → awaiting mentor → feedback → возможен revision.
+- **Entry:** Ментор (образовательные вопросы/reviews).
+- **Steps:** отправить вопрос/отчёт/стратегию/кейс → awaiting mentor → feedback → возможен revision.
 - **Failures:** revision requested.
 - **Recovery:** доработать и отправить снова.
 - **Analytics:** `mentor_message_sent`, `mentor_feedback_received`, `mentor_revision_requested`.
-- **UX risks:** отдельно от Support; без конкретного avatar.
+- **UX risks:** отдельно от Поддержки; без конкретного avatar.
 
-## 20. Referral
+## 20. Рефералы
 
 - **Entry:** Реферальная программа.
 - **Steps:** поделиться ссылкой → друг регистрируется в ATA → проходит Pocket registration → достигает L4 → оба получают reward.

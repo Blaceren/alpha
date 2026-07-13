@@ -2,7 +2,9 @@
 
 Инвентарь страниц Alfa Trade Academy Web V2. Для каждой страницы: route · user goal · primary action · secondary actions · hierarchy · components · states · desktop · tablet · mobile · mock data · future backend data · analytics events · edge cases · acceptance criteria.
 
-Коды/маршруты — `ROUTE_MAP.md`. Состояния — `STATE_MATRIX.md`. Компоненты — `COMPONENT_INVENTORY.md`. Тексты — `CONTENT_AND_TONE.md`.
+Коды/маршруты — `ROUTE_MAP.md` (канонический App Router синтаксис `[param]`). Состояния — `STATE_MATRIX.md`. Компоненты — `COMPONENT_INVENTORY.md`. Тексты и терминология — `CONTENT_AND_TONE.md`.
+
+Терминология: пользовательские названия страниц/разделов — русские (Сообщество, Ментор, Отчёт, Контрольная точка, Ранг, Поддержка, Рефералы, Инструменты, Недельный обзор). Английские термины сохраняются только как code/domain language: имена компонентов (`CommunityMessage`), route codes (`tool.trading_journal`), analytics-события (`community_view`), enum-токены состояний (`draft/pending`). Названия конкретных инструментов пока могут быть английскими с русским описанием рядом.
 
 Инварианты для всех страниц: dark-only; один очевидный следующий шаг; никакого баланса пользователя / «осталось $X»; длинные PL-строки не ломают верстку; touch ≥44px; visible focus; no horizontal overflow.
 
@@ -11,14 +13,14 @@
 ## 1. Главная — `/`
 
 - **User goal:** понять «что делать сейчас».
-- **Primary action:** единственный primary CTA по приоритету: (1) текущий checkpoint, если он уже обязательный шаг; (2) активный урок; (3) обязательное задание; (4) исправление rejected report; (5) mentor feedback; (6) возвращение после паузы; (7) Weekly Review.
-- **Secondary actions:** открыть Путь; открыть недавний инструмент; прочитать статью; заглянуть в community.
-- **Hierarchy (первый viewport):** greeting · current rank · current level · один primary CTA · XP · progress текущего модуля · горизонтальный участок пути · серия обучения. Ниже: недавно открытый инструмент · сообщение Alex Curie · релевантная статья · community activity · mentor/support status (если реально активен). Не более 5–6 конкурирующих блоков в первом viewport.
+- **Primary action:** единственный primary CTA по приоритету: (1) текущая контрольная точка, если она уже обязательный шаг; (2) активный урок; (3) обязательное задание; (4) исправление отклонённого отчёта; (5) feedback ментора; (6) возвращение после паузы; (7) Недельный обзор.
+- **Secondary actions:** открыть Путь; открыть недавний инструмент; прочитать статью; заглянуть в Сообщество.
+- **Hierarchy (первый viewport):** приветствие · текущий ранг · текущий уровень · один primary CTA · XP · прогресс текущего модуля · горизонтальный участок пути · серия обучения. Ниже: недавно открытый инструмент · сообщение Alex Curie · релевантная статья · лента Сообщества · статус ментора/поддержки (если реально активен). Не более 5–6 конкурирующих блоков в первом viewport.
 - **Components:** PageHeader, RankBadge, XPIndicator, ModuleProgress, PathTrack (участок), StreakIndicator, PrimaryCTA, AlexCurieMessage, ArticleCard, community activity, status card.
-- **States:** обычный; возврат после паузы; checkpoint активен; rejected report ждёт; mentor feedback есть; пустой community.
+- **States:** обычный; возврат после паузы; контрольная точка активна; ждёт отклонённый отчёт; есть feedback ментора; пустое Сообщество.
 - **Desktop:** sidebar + top bar; путь-участок горизонтально; блоки в 1–2 колонки.
 - **Tablet:** compact rail; путь горизонтально; блоки в 1–2 колонки по ориентации.
-- **Mobile:** bottom nav; вертикальный стек; путь-участок горизонтально скроллится; primary CTA закреплён логически вверху.
+- **Mobile:** bottom nav (Главная/Путь/Уроки/Инструменты/Ещё), профиль через avatar в top bar; вертикальный стек; путь-участок горизонтально скроллится; primary CTA закреплён логически вверху.
 - **Mock data:** rank, level, XP, streak, module progress, next-step объект, 1 статья, community-снапшот.
 - **Future backend data:** progression state, checkpoint state, mentor/report статусы, рекомендованный next step, персональная статья.
 - **Analytics:** `home_view`, `home_primary_cta_click`, `home_secondary_click`.
@@ -42,7 +44,7 @@
 - **Edge cases:** быстрый scroll не ломает центрирование; локед-клик даёт explainer; suspended — приглушение будущего.
 - **Acceptance:** автоцентр текущего; сохранение scroll; explainer без перепрыгивания; screen-reader list-альтернатива; QA 3 размера.
 
-## 3. Level detail — `/path/level/:levelCode`
+## 3. Уровень (деталь) — `/path/level/[levelCode]`
 
 - **User goal:** понять конкретный уровень.
 - **Primary action:** начать/продолжить (если доступен) либо прочитать explainer (если locked).
@@ -69,7 +71,7 @@
 - **Edge cases:** пусто до L2; заблокированные не показываются как открытые.
 - **Acceptance:** дефолт — подсвечен активный урок; только открытые доступны.
 
-## 5. Урок — `/lessons/:levelCode`
+## 5. Урок — `/lessons/[levelCode]`
 
 - **User goal:** пройти урок.
 - **Primary action:** смотреть видео → (на 50%) начать тест.
@@ -86,7 +88,7 @@
 - **Edge cases:** видео не грузится (fallback); просмотр 50% не завершает уровень; следующий урок скрыт до completion.
 - **Acceptance:** subtitles обязательны; позиция сохраняется; тест открывается на 50%; QA 3 размера + landscape.
 
-## 6. Тест — `/lessons/:levelCode/test`
+## 6. Тест — `/lessons/[levelCode]/test`
 
 - **User goal:** проверить понимание.
 - **Primary action:** ответить и завершить.
@@ -101,9 +103,9 @@
 - **Edge cases:** no timer; «отказаться от сделки» как правильный ответ; после серии неудач — mentor offer.
 - **Acceptance:** по одному вопросу; ответ меняется до завершения; explanation после; при fail показан правильный ответ.
 
-## 7. Report — `/reports/:reportCode`
+## 7. Отчёт — `/reports/[reportCode]`
 
-- **User goal:** сдать structured report и получить mentor feedback.
+- **User goal:** сдать structured отчёт и получить feedback ментора.
 - **Primary action:** submit (или сохранить draft).
 - **Secondary actions:** добавить images/video; смотреть rubric/пример; version history.
 - **Hierarchy:** заголовок задания · rubric/пример · секции формы · вложения · статус.
@@ -117,7 +119,7 @@
 - **Edge cases:** autosave при обрыве; rejected → комментарии к секциям → исправление в том же report; без countdown; без mentor avatar.
 - **Acceptance:** autosave работает; статусы корректны; «Обычно проверка занимает до одного дня»; QA 3 размера.
 
-## 8. Tools Hub — `/tools`
+## 8. Инструменты (hub) — `/tools`
 
 - **User goal:** попасть в нужный инструмент / вернуться к последнему.
 - **Primary action:** открыть последний редактируемый инструмент.
@@ -131,9 +133,9 @@
 - **Edge cases:** ранний прогресс — почти всё locked; дефолт на Hub без истории.
 - **Acceptance:** дефолт — последний редактируемый; locked показывает «что/когда»; QA 3 размера.
 
-## 9. Инструменты (каждый) — `/tools/:toolCode`
+## 9. Инструмент (каждый) — `/tools/[toolCode]`
 
-Общие инварианты всех инструментов: только manual data; никакой автоподгрузки Pocket balance/broker wallet; ToolShell со состояниями locked/empty/draft/saved/versioned; EmptyState с примером. Общие analytics: `tool_open`, `tool_entry_created`, `tool_entry_saved`, `tool_versioned` (+ специфичные ниже). Общие acceptance: заполняется вручную; empty state с примером; данные приватны; QA 3 размера.
+Всего 20 инструментов в интерфейсе: **19 curriculum-инструментов** (открываются на L10–L100) + **Секретный инструмент** (referral-gated, не имеет level unlock). Общие инварианты всех инструментов: только manual data; никакой автоподгрузки Pocket balance/broker wallet; ToolShell со состояниями locked/empty/draft/saved/versioned; EmptyState с примером. Общие analytics: `tool_open`, `tool_entry_created`, `tool_entry_saved`, `tool_versioned` (+ специфичные ниже). Общие acceptance: заполняется вручную; empty state с примером; данные приватны; QA 3 размера.
 
 | Tool | Route code | Unlock | User goal | Primary action | Ключевые компоненты/поля | Специфика / edge cases |
 |------|-----------|:------:|-----------|----------------|--------------------------|------------------------|
@@ -143,7 +145,7 @@
 | Indicator Checklist | tool.indicator_checklist | L25 | проверить сигналы | заполнить checklist | context, observations, contradictions, red flags, no-trade result, templates, history | «no-trade» как валидный итог |
 | News Calendar | tool.news_calendar | L30 | планировать вокруг новостей | добавить событие | date, time, timezone, country, currency, importance, forecast, actual, notes, watch, avoid window | provider-agnostic; timezone-корректность |
 | Pause Mode | tool.pause_mode | L35 | взять контролируемую паузу | начать паузу | trigger, duration, reason, safe actions, return checklist | no shame, no recovery pressure |
-| Weekly Review | tool.weekly_review | L40 | недельный обзор | создать review | summary, discipline, plan followed, mistakes, good decisions, no-trade decisions, next focus, mentor optional | mentor опционален |
+| Weekly Review (Недельный обзор) | tool.weekly_review | L40 | недельный обзор | создать обзор | summary, discipline, plan followed, mistakes, good decisions, no-trade decisions, next focus, mentor optional | mentor опционален |
 | Strategy Builder | tool.strategy_builder | L45 | собрать стратегию | создать strategy card + отправить на review | context, setup, entry rules, confirmation, disqualifiers, timeframe, expiration, risk, examples, versions, mentor review | pending mentor review |
 | Capital Plan | tool.capital_plan | L50 | план капитала | сохранить план | working capital, reserve, risk boundaries, warning levels, pause, recovery protocol, manual values | только manual values |
 | Market Regime Board | tool.market_regime_board | L55 | оценить режим рынка | зафиксировать режим | trend/range/volatile/unclear, HTF/LTF, evidence, compatible/prohibited setups, screenshots | согласование setup ↔ режим |
@@ -158,7 +160,7 @@
 | Pro Workspace | tool.pro_workspace | L100 | собрать рабочее пространство | настроить виджеты | widgets: plan/journal/calendar/watchlist/strategy/risk/psychology/performance/playbook, levels 101+ preview | НЕ trading terminal |
 | Секретный инструмент | tool.secret | referral | получить reward | (до открытия — teaser) | silhouette, transparent qualification, progress | no countdown, no fake scarcity; содержимое позже |
 
-## 10. Community — `/community`
+## 10. Сообщество — `/community`
 
 - **User goal:** участвовать в открытых каналах.
 - **Primary action:** открыть релевантный канал / написать сообщение.
@@ -170,7 +172,7 @@
 - **Edge cases:** ранний прогресс — только L4-канал; скрытие ранга опционально; никаких leaderboards.
 - **Acceptance:** каналы по unlock (L4/20/35/45/85); rank badges; QA 3 размера.
 
-## 11. News (in-product) — `/news`, статья `/news/:slug`
+## 11. Новости (в продукте) — `/news`, статья `/news/[slug]`
 
 - **User goal:** читать релевантный контент.
 - **Primary action:** открыть статью «Подходит к текущему модулю».
@@ -182,7 +184,7 @@
 - **Edge cases:** нет релевантной статьи (fallback на general).
 - **Acceptance:** in-product feed отделён от публичного контура; related lessons связаны.
 
-## 12. Public Article — `/blog/:slug` (SEO)
+## 12. Публичная статья — `/blog/[slug]` (SEO), категории `/blog/category/[categorySlug]`, авторы `/blog/author/[authorSlug]`
 
 - **User goal (public):** прочитать статью из поиска/соцсетей.
 - **Primary action:** прочитать; перейти к продукту (CTA бренда).
@@ -196,11 +198,11 @@
 - **Edge cases:** без комментариев; social preview; PL-локализация позже.
 - **Acceptance:** indexable; SEO-метаданные и social preview; отделено от авторизованной оболочки.
 
-## 13. Referral — `/referral`
+## 13. Рефералы — `/referrals`
 
 - **User goal:** пригласить друга и получить reward.
 - **Primary action:** поделиться реферальной ссылкой.
-- **Secondary actions:** смотреть статусы приглашённых; teaser секретного инструмента.
+- **Secondary actions:** смотреть статусы приглашённых; teaser Секретного инструмента.
 - **Hierarchy:** ссылка · условия · статусы приглашённых · reward-state.
 - **Components:** ReferralPanel, SecretRewardTeaser, статус-карточки.
 - **States:** not shared/invited/pocket-in-progress/qualifying/qualified/reward-unlocked.
@@ -210,36 +212,36 @@
 - **Edge cases:** приглашающий не видит email/Pocket ID/balance/deposit/trading; прозрачные условия; no fake scarcity.
 - **Acceptance:** flow до L4 отражён; приватность приглашённого соблюдена.
 
-## 14. Mentor — `/mentor`, тред `/mentor/:threadId`
+## 14. Ментор — `/mentor`, диалог `/mentor/[conversationId]`
 
 - **User goal:** получить образовательный feedback.
 - **Primary action:** открыть активный review / отправить сообщение.
-- **Secondary actions:** прикрепить report/strategy/case; смотреть revisions.
-- **Hierarchy:** активный тред · история · вложения.
+- **Secondary actions:** прикрепить отчёт/стратегию/кейс; смотреть revisions.
+- **Hierarchy:** активный диалог · история · вложения.
 - **Components:** MentorThread, MentorReviewPanel, CaseDefensePanel.
 - **States:** no active/awaiting/feedback/revision/resolved.
 - **Analytics:** `mentor_view`, `mentor_message_sent`, `mentor_feedback_received`, `mentor_revision_requested`.
-- **Edge cases:** без конкретного avatar; отдельно от Support.
-- **Acceptance:** дефолт — активный тред/review; не смешан с Support.
+- **Edge cases:** без конкретного avatar; отдельно от Поддержки.
+- **Acceptance:** дефолт — активный диалог/review; не смешан с Поддержкой.
 
-## 15. Support — `/support`, `/support/new`, `/support/:ticketId`
+## 15. Поддержка — `/support`, `/support/new`, `/support/[ticketId]`
 
 - **User goal:** решить проблему через тикет.
-- **Primary action:** открыть активный ticket / создать новый.
+- **Primary action:** открыть активный тикет / создать новый.
 - **Secondary actions:** category, attachments, reopen.
 - **Hierarchy:** список тикетов · тред · статус.
 - **Components:** TicketList, TicketThread, CreateTicketForm.
 - **States:** open/waiting-support/waiting-user/resolved/reopened.
 - **Analytics:** `support_view`, `ticket_created`, `ticket_replied`, `ticket_resolved`, `ticket_reopened`.
-- **Edge cases:** дефолт — активный ticket; reopen resolved; отдельно от mentor.
-- **Acceptance:** Ticket Center отделён от mentor; статусы корректны.
+- **Edge cases:** дефолт — активный тикет; reopen resolved; отдельно от Ментора.
+- **Acceptance:** Ticket Center отделён от Ментора; статусы корректны.
 
-## 16. Notifications — `/notifications`
+## 16. Уведомления — `/notifications`
 
 - **User goal:** видеть и управлять уведомлениями.
 - **Primary action:** открыть уведомление / перейти к источнику.
 - **Secondary actions:** отметить прочитанным; настроить каналы (в Settings).
-- **Hierarchy:** категории: Обучение/Mentor/Community/Система/Новости/Награды.
+- **Hierarchy:** категории: Обучение/Ментор/Сообщество/Система/Новости/Награды.
 - **Components:** NotificationCenter, NotificationItem.
 - **States:** read/unread; по категориям.
 - **Analytics:** `notifications_view`, `notification_click`, `notification_read`.
@@ -251,20 +253,20 @@
 - **User goal:** видеть свой статус и открытые материалы.
 - **Primary action:** вернуться к обучению (к текущему шагу).
 - **Secondary actions:** открыть материалы; настройки; приватность ранга.
-- **Hierarchy:** rank · XP · серия обучения · открытые уроки/инструменты · достижения.
+- **Hierarchy:** ранг · XP · серия обучения · открытые уроки/инструменты · достижения.
 - **Components:** ProfileHeader, RankBadge, XPIndicator, StreakIndicator, UnlockedMaterials.
 - **States:** обычный; ранний прогресс.
-- **Mock data:** rank, XP, streak, открытые материалы.
+- **Mock data:** ранг, XP, streak, открытые материалы.
 - **Future backend data:** реальный прогресс, история.
 - **Analytics:** `profile_view`, `profile_material_open`.
 - **Edge cases:** нет баланса/финансов; серия отражает reset без наказания.
-- **Acceptance:** нет финансовых данных; rank без суммы; QA 3 размера.
+- **Acceptance:** нет финансовых данных; ранг без суммы; QA 3 размера.
 
 ## 18. Настройки — `/settings`, `/settings/notifications`
 
 - **User goal:** настроить продукт под себя.
 - **Primary action:** сохранить настройки.
-- **Secondary actions:** язык; приватность ранга в community; каналы уведомлений.
+- **Secondary actions:** язык; приватность ранга в Сообществе; каналы уведомлений.
 - **Hierarchy:** notifications prefs · язык · приватность · аккаунт.
 - **Components:** SettingsPanel, NotificationPrefs.
 - **States:** default/changed/saved.
@@ -276,4 +278,4 @@
 
 ## Покрытие
 
-Покрыты все требуемые страницы: Главная, Путь (+Level detail), Lessons, Lesson, Test, Report, Tools Hub, каждый tool (20 + secret), Community, News, Public Article, Referral, Mentor, Support, Notifications, Profile, Settings.
+Покрыты все требуемые страницы: Главная, Путь (+ Уровень), Уроки, Урок, Тест, Отчёт, Инструменты (hub), каждый инструмент (20 = 19 curriculum + Секретный), Сообщество, Новости, Публичная статья, Рефералы, Ментор, Поддержка, Уведомления, Профиль, Настройки.
