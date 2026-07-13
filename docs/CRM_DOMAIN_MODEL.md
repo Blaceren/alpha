@@ -128,11 +128,11 @@ interface StateTag<T extends string> {
 
 // --- Enum-значения (канон — STATE_MODEL.md) ---
 type LifecycleStage =
-  | 'registered' | 'pocket_connected' | 'pre_ftd' | 'first_depositor'
+  | 'registered' | 'pocket_registered' | 'pre_ftd' | 'first_depositor'
   | 'active' | 'at_risk' | 'dormant' | 'reactivated' | 'completed_current_curriculum';
 
 type FundingStatus =
-  | 'not_connected' | 'unfunded' | 'funded'
+  | 'not_available' | 'unfunded' | 'funded'
   | 'checkpoint_grace' | 'financial_access_suspended' | 'balance_unknown';
 
 type EngagementStatus =
@@ -144,7 +144,7 @@ type ValueSegment =
   | 'high_value_candidate' | 'advanced_learner';
 
 type OperationalBlocker =
-  | 'email_unconfirmed' | 'pocket_not_connected' | 'report_pending'
+  | 'email_unconfirmed' | 'pocket_registration_incomplete' | 'report_pending'
   | 'mentor_blocked' | 'support_blocked' | 'financial_data_conflict' | 'communication_fatigue';
 ```
 
@@ -313,7 +313,7 @@ interface PocketStatus {
 }
 
 type PocketConnectionState =
-  | 'not_connected' | 'pending' | 'registered' | 'confirmed' | 'disconnected';
+  | 'not_registered' | 'registration_pending' | 'registered';   // Pocket affiliate registration (registered = backend-confirmed)
 
 type PocketEventType =
   | 'pocket_registration_confirmed' | 'pocket_email_confirmed'
@@ -348,7 +348,7 @@ interface UserSignal {
 }
 
 type SignalCode =
-  | 'registration_no_start' | 'pocket_not_connected' | 'email_not_confirmed'
+  | 'registration_no_start' | 'pocket_registration_incomplete' | 'email_not_confirmed'
   | 'lesson_abandoned' | 'repeated_test_failure' | 'report_pending'
   | 'report_rejected_no_return' | 'mentor_sla_risk' | 'checkpoint_approaching'
   | 'checkpoint_grace_active' | 'financial_access_suspended' | 'balance_data_stale'

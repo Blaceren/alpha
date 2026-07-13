@@ -19,6 +19,11 @@ export interface MockIdentity {
   maskedEmail: string;
   /** Synthetic full email (example.test domains only) for permission testing. */
   fullEmail: string;
+  /**
+   * ATA account email confirmation ONLY. Does NOT represent Pocket registration
+   * or the Pocket "Email Confirmation" provider event — those are separate.
+   */
+  emailConfirmed: boolean;
   country: string;
   locale: string;
   timezone: string;
@@ -77,12 +82,11 @@ export interface MockWithdrawal {
 }
 
 export interface MockFinancial {
-  connectionStatus:
-    | "not_connected"
-    | "pending"
-    | "registered"
-    | "confirmed"
-    | "disconnected";
+  // Pocket AFFILIATE registration status. `registered` means the backend
+  // received and accepted the confirmed Pocket registration event via the
+  // affiliate flow. NOT set by user click, local form, deposit, financial data,
+  // or email confirmation. ATA email confirmation is a separate identity axis.
+  registrationStatus: "not_registered" | "registration_pending" | "registered";
   traderId: string | null;
   /** Real balance in USD; null when unknown/unavailable. */
   balanceUsd: number | null;

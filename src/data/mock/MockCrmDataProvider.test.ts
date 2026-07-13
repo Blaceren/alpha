@@ -60,6 +60,20 @@ describe("MockCrmDataProvider — filters & sort", () => {
     expect(bySignal.data?.items.length).toBeGreaterThan(0);
   });
 
+  it("filters by renamed Pocket-registration semantics", async () => {
+    const p = provider();
+    const stage = await p.searchUsers(admin, { filters: { lifecycleStage: ["pocket_registered"] } });
+    expect(stage.data?.items.every((u) => u.lifecycleStage === "pocket_registered")).toBe(true);
+
+    const funding = await p.searchUsers(admin, { filters: { fundingStatus: ["not_available"] } });
+    expect(funding.data?.items.length).toBeGreaterThan(0);
+    expect(funding.data?.items.every((u) => u.fundingStatus === "not_available")).toBe(true);
+
+    const blocker = await p.searchUsers(admin, { filters: { blocker: ["pocket_registration_incomplete"] } });
+    expect(blocker.data?.items.length).toBeGreaterThan(0);
+    expect(blocker.data?.items.every((u) => u.blockers?.includes("pocket_registration_incomplete"))).toBe(true);
+  });
+
   it("applies compound filters (AND semantics)", async () => {
     const res = await provider().searchUsers(admin, {
       filters: { fundingStatus: ["funded"], engagementStatus: ["active"], currentLevelMin: 10 },

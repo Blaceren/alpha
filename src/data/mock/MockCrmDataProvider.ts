@@ -122,6 +122,8 @@ export class MockCrmDataProvider implements CrmDataProvider {
       lifecycleStage: u.state.lifecycleStage,
       fundingStatus: u.state.fundingStatus,
       engagementStatus: u.state.engagementStatus,
+      registrationStatus: u.financial.registrationStatus,
+      emailConfirmed: u.identity.emailConfirmed,
       currentLevel: u.progression.currentLevel,
       lastMeaningfulActionAt: u.progression.lastMeaningfulActionAt,
       valueSegments: u.state.valueSegments,
@@ -150,6 +152,7 @@ export class MockCrmDataProvider implements CrmDataProvider {
     if (!inArr(f.lifecycleStage, u.state.lifecycleStage)) return false;
     if (!inArr(f.fundingStatus, u.state.fundingStatus)) return false;
     if (!inArr(f.engagementStatus, u.state.engagementStatus)) return false;
+    if (!inArr(f.registrationStatus, u.financial.registrationStatus)) return false;
     if (!anyOf(f.valueSegment, u.state.valueSegments)) return false;
     if (!anyOf(f.blocker, u.state.blockers)) return false;
     if (f.signals && f.signals.length > 0 && !f.signals.some((c) => d.signals.some((s) => s.code === c))) return false;

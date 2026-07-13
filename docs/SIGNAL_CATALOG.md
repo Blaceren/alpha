@@ -60,8 +60,8 @@ interface ThresholdConfig {
 | Code | Порог (стартовый) | thresholdConfig | Severity | Feeds |
 |---|---|---|---|---|
 | `registration_no_start` | 24 ч без meaningful action после регистрации | `{hours:24}` | medium | Engagement `not_started` |
-| `pocket_not_connected` | 24 ч после регистрации без подключения Pocket | `{hours:24}` | high | Blocker `pocket_not_connected` |
-| `email_not_confirmed` | 12 ч без подтверждения email | `{hours:12}` | medium | Blocker `email_unconfirmed` |
+| `pocket_registration_incomplete` | 24 ч, registrationStatus = not_registered/registration_pending (не registered) | `{hours:24}` | high | Blocker `pocket_registration_incomplete` |
+| `email_not_confirmed` | 12 ч, identity.emailConfirmed=false (ATA email, отдельно от Pocket) | `{hours:12}` | medium | Blocker `email_unconfirmed` |
 | `lesson_abandoned` | 24 ч после начала урока без продолжения | `{hours:24}` | medium | Engagement (риск) |
 | `progression_stalled` | 72 ч без прогресса при доступном следующем уровне | `{hours:72, requires:'next_level_available'}` | medium | Engagement `progression_stalled` |
 | `repeated_test_failure` | 3 неуспешные попытки за 24 ч | `{count:3, windowHours:24}` | high | Blocker (mentor риск) |
@@ -115,7 +115,7 @@ Severity сигнала влияет на `currentPriority` пользовате
 // src/config/signals.config.ts (создаётся в Phase 1, не сейчас)
 export const SIGNAL_THRESHOLDS = {
   registration_no_start: { hours: 24 },
-  pocket_not_connected:  { hours: 24 },
+  pocket_registration_incomplete:  { hours: 24 },
   email_not_confirmed:   { hours: 12 },
   lesson_abandoned:      { hours: 24 },
   progression_stalled:   { hours: 72 },

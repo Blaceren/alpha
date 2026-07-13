@@ -12,8 +12,8 @@
 | Signal | Severity | Триггер (mock) |
 |---|---|---|
 | registration_no_start | medium | not_started + нет действий + ≥24ч с регистрации |
-| pocket_not_connected | high | connection not_connected/pending + ≥24ч |
-| email_not_confirmed | medium | blocker email_unconfirmed + ≥12ч |
+| pocket_registration_incomplete | high | registrationStatus not_registered/registration_pending + ≥24ч (не для registered) |
+| email_not_confirmed | medium | identity.emailConfirmed = false + ≥12ч (независимо от Pocket registration) |
 | lesson_abandoned | medium | урок 0<progress<100 + ≥24ч без активности |
 | progression_stalled | medium | доступен next level + ≥72ч без действия |
 | repeated_test_failure | high | testAttempts ≥ 3 |

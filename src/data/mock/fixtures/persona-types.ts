@@ -78,13 +78,11 @@ export interface RawPersona {
   mentorReviewState: "none" | "queued" | "in_review" | "approved" | "rejected";
   lastLearningHoursAgo: number | null;
 
-  // financial
-  connectionStatus:
-    | "not_connected"
-    | "pending"
-    | "registered"
-    | "confirmed"
-    | "disconnected";
+  // identity — ATA account email confirmation (SEPARATE axis from Pocket).
+  emailConfirmed: boolean;
+
+  // financial — Pocket affiliate registration status (not "connection")
+  registrationStatus: "not_registered" | "registration_pending" | "registered";
   hasTraderId: boolean;
   /** number = USD, null = no balance yet, "unknown" = balance unavailable. */
   balanceUsd: number | null | "unknown";

@@ -9,10 +9,33 @@ const users = buildDataset(clock);
 describe("Today workspace builder", () => {
   const ws = buildTodayWorkspace(users, clock, "crm_admin");
 
-  it("produces all twelve queues", () => {
-    expect(ws.queues).toHaveLength(12);
-    expect(ws.queues.map((q) => q.code)).toContain("critical_attention");
-    expect(ws.queues.map((q) => q.code)).toContain("data_quality_issues");
+  it("produces all thirteen queues with canonical codes (no bare `critical`)", () => {
+    expect(ws.queues).toHaveLength(13);
+    const codes = ws.queues.map((q) => q.code);
+    expect(codes).toContain("critical_attention");
+    expect(codes).toContain("onboarding_attention");
+    expect(codes).toContain("data_quality_issues");
+    expect(codes).not.toContain("critical");
+  });
+
+  it("places onboarding users 001/002/003 into onboarding_attention", () => {
+    const onboarding = ws.queues.find((q) => q.code === "onboarding_attention")!;
+    const ids = onboarding.items.map((i) => i.userId);
+    expect(ids).toContain("usr_mock_001");
+    expect(ids).toContain("usr_mock_002");
+    expect(ids).toContain("usr_mock_003");
+    // Financial values are not shown for onboarding items.
+    expect(onboarding.items.every((i) => i.financial.mode === "hidden")).toBe(true);
+    // Each item carries a reason and an identity projection.
+    expect(onboarding.items.every((i) => i.reason.length > 0 && i.identity.mode)).toBe(true);
+  });
+
+  it("keeps global higher priority even when a user is also in onboarding", () => {
+    // usr_mock_003 (email_not_confirmed) is normal priority in onboarding.
+    const item = ws.queues
+      .find((q) => q.code === "onboarding_attention")!
+      .items.find((i) => i.userId === "usr_mock_003")!;
+    expect(item.priority).toBe("normal");
   });
 
   it("places support-blocked user in critical + support queues", () => {

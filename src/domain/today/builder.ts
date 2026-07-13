@@ -11,20 +11,16 @@ import { computeSignals, type ComputedSignal } from "@/domain/signals/engine";
 import { comparePriority, computePriority, type PriorityBand, type PriorityResult } from "@/domain/priority/priority";
 import { deriveRecommendations, type DerivedRecommendation } from "@/domain/recommendations/derive";
 import { projectFinancial, type FinancialProjection } from "@/domain/financial/projection";
+import { projectIdentity, type IdentityProjection } from "@/domain/identity/identity-projection";
+import {
+  QUEUE_PRIORITY,
+  QUEUE_TITLE,
+  QUEUES_WITHOUT_FINANCIALS,
+  TODAY_QUEUE_ORDER,
+  type TodayQueueCode,
+} from "@/config/queues";
 
-export type TodayQueueCode =
-  | "critical_attention"
-  | "sla_breached"
-  | "due_today"
-  | "mentor_review"
-  | "support_blockers"
-  | "checkpoint_attention"
-  | "learning_stalled"
-  | "returned_users"
-  | "new_funded_users"
-  | "repeat_funders"
-  | "communication_suppression"
-  | "data_quality_issues";
+export type { TodayQueueCode };
 
 export interface TodayQueueItem {
   userId: string;
@@ -39,7 +35,9 @@ export interface TodayQueueItem {
   recommendedAction: DerivedRecommendation | null;
   signalCodes: ComputedSignal["code"][];
   freshness: { asOf: ISODateString | null; isStale: boolean };
+  /** Permission-aware financial representation; `hidden` for onboarding queue. */
   financial: FinancialProjection;
+  identity: IdentityProjection;
 }
 
 export interface TodayQueue {
@@ -64,40 +62,14 @@ interface Derivation {
   recommendations: DerivedRecommendation[];
 }
 
-const QUEUE_TITLES: Record<TodayQueueCode, string> = {
-  critical_attention: "Критическое внимание",
-  sla_breached: "Нарушен SLA",
-  due_today: "Срок сегодня",
-  mentor_review: "Mentor-проверка",
-  support_blockers: "Support-блокеры",
-  checkpoint_attention: "Checkpoint",
-  learning_stalled: "Обучение остановилось",
-  returned_users: "Вернувшиеся",
-  new_funded_users: "Новые FTD",
-  repeat_funders: "Repeat funders",
-  communication_suppression: "Снизить коммуникации",
-  data_quality_issues: "Качество данных",
-};
-
-const QUEUE_PRIORITY: Record<TodayQueueCode, PriorityBand> = {
-  critical_attention: "critical",
-  sla_breached: "high",
-  due_today: "high",
-  mentor_review: "high",
-  support_blockers: "critical",
-  checkpoint_attention: "high",
-  learning_stalled: "normal",
-  returned_users: "normal",
-  new_funded_users: "normal",
-  repeat_funders: "low",
-  communication_suppression: "normal",
-  data_quality_issues: "high",
-};
-
 const hasSig = (d: Derivation, c: ComputedSignal["code"]) => d.signals.some((s) => s.code === c);
 
 const QUEUE_MEMBERSHIP: Record<TodayQueueCode, (d: Derivation, clock: Clock) => boolean> = {
   critical_attention: (d) => d.priority.level === "critical",
+  onboarding_attention: (d) =>
+    hasSig(d, "registration_no_start") ||
+    hasSig(d, "pocket_registration_incomplete") ||
+    hasSig(d, "email_not_confirmed"),
   sla_breached: (d, clock) =>
     !!d.user.operations.sla && clock.nowMs() >= new Date(d.user.operations.sla.dueAt).getTime(),
   due_today: (d, clock) => {
@@ -135,11 +107,20 @@ const QUEUE_MEMBERSHIP: Record<TodayQueueCode, (d: Derivation, clock: Clock) => 
   data_quality_issues: (d) => hasSig(d, "pocket_data_conflict") || hasSig(d, "balance_data_stale"),
 };
 
-const ALL_QUEUES = Object.keys(QUEUE_TITLES) as TodayQueueCode[];
+const HIDDEN_FINANCIAL: FinancialProjection = {
+  mode: "hidden",
+  amountUsd: null,
+  bucket: null,
+  label: "—",
+  stale: false,
+};
 
 function toItem(d: Derivation, code: TodayQueueCode, role: CrmRole): TodayQueueItem {
   const isStale =
     hasSig(d, "balance_data_stale") || d.user.state.fundingStatus === "balance_unknown";
+  const financial = QUEUES_WITHOUT_FINANCIALS.has(code)
+    ? HIDDEN_FINANCIAL
+    : projectFinancial({ role, amountUsd: d.user.financial.balanceUsd, isStale });
   return {
     userId: d.user.identity.userId,
     displayName: d.user.identity.displayName,
@@ -153,7 +134,15 @@ function toItem(d: Derivation, code: TodayQueueCode, role: CrmRole): TodayQueueI
     recommendedAction: d.recommendations[0] ?? null,
     signalCodes: d.signals.map((s) => s.code),
     freshness: { asOf: d.user.financial.balanceTimestamp, isStale },
-    financial: projectFinancial({ role, amountUsd: d.user.financial.balanceUsd, isStale }),
+    financial,
+    identity: projectIdentity({
+      role,
+      userId: d.user.identity.userId,
+      displayName: d.user.identity.displayName,
+      maskedEmail: d.user.identity.maskedEmail,
+      fullEmail: d.user.identity.fullEmail,
+      context: "list",
+    }),
   };
 }
 
@@ -170,14 +159,14 @@ export function buildTodayWorkspace(users: MockUser[], clock: Clock, role: CrmRo
   });
 
   const distinct = new Set<string>();
-  const queues: TodayQueue[] = ALL_QUEUES.map((code) => {
+  const queues: TodayQueue[] = TODAY_QUEUE_ORDER.map((code) => {
     const members = derivations
       .filter((d) => QUEUE_MEMBERSHIP[code](d, clock))
       .sort((a, b) => comparePriority(a, b, clock));
     for (const m of members) distinct.add(m.user.identity.userId);
     return {
       code,
-      title: QUEUE_TITLES[code],
+      title: QUEUE_TITLE[code],
       priority: QUEUE_PRIORITY[code],
       items: members.map((d) => toItem(d, code, role)),
     };

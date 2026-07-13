@@ -28,9 +28,9 @@ validate.ts (Zod + rules) ◄──────────┘                  
 
 | ID | Сценарий | Приоритет | Dims | Ключевые сигналы | Top-рекомендация | Queues | Owner | SLA |
 |----|----------|-----------|------|------------------|------------------|--------|-------|-----|
-| 001 | new registered / no start | normal | registered/not_connected/not_started | registration_no_start, pocket_not_connected | help_connect_pocket | — | — | — |
-| 002 | pocket not connected | normal | registered/not_connected/not_started | pocket_not_connected | help_connect_pocket | — | ret1 | — |
-| 003 | email not confirmed | normal | pocket_connected/unfunded/active | email_not_confirmed | remind_email_confirmation | — | — | — |
+| 001 | new registered / no start | normal | registered/not_available/not_started | registration_no_start, pocket_registration_incomplete | help_complete_pocket_registration | onboarding_attention | — | — |
+| 002 | pocket registration incomplete | normal | registered/not_available/not_started | pocket_registration_incomplete | help_complete_pocket_registration | onboarding_attention | ret1 | — |
+| 003 | email not confirmed | normal | pocket_registered/unfunded/active | email_not_confirmed | remind_email_confirmation | onboarding_attention | — | — |
 | 004 | pre-FTD | low | pre_ftd/unfunded/active | — | no_action_required | — | ret1 | — |
 | 005 | active learner | low | active/funded/active | — | no_action_required | — | ret2 | — |
 | 006 | lesson abandoned | normal | active/funded/active | lesson_abandoned | continue_current_lesson | learning_stalled | ret2 | — |
@@ -53,7 +53,7 @@ validate.ts (Zod + rules) ◄──────────┘                  
 | 023 | dormant 14d (balance stale) | normal | dormant/balance_unknown/dormant_14d | dormant_14_days, balance_data_stale | restore_learning_path | learning_stalled, data_quality_issues | — | — |
 | 024 | dormant 30d (no timestamp) | normal | dormant/balance_unknown/dormant_30d | dormant_30_days, balance_data_stale | restore_learning_path | learning_stalled, data_quality_issues | — | — |
 | 025 | returned after absence | normal | reactivated/funded/returned | returned_after_absence | review_checkpoint_grace | returned_users, checkpoint_attention | ret1 | — |
-| 026 | support blocked | critical | at_risk/funded/active | support_blocked | support_follow_up | critical, sla_breached, support_blockers | sup1 | support_high |
+| 026 | support blocked | critical | at_risk/funded/active | support_blocked | support_follow_up | critical_attention, sla_breached, support_blockers | sup1 | support_high |
 | 027 | communication fatigue | normal | active/funded/active | communication_fatigue | reduce_communication_frequency | communication_suppression, repeat_funders | ret2 | — |
 | 028 | completed curriculum (post-L100) | low | completed_current_curriculum/funded/active | — | no_action_required | repeat_funders | mgr | — |
 | 029 | pocket conflict + rapid decline | high | at_risk/checkpoint_grace/active | pocket_data_conflict, rapid_balance_decline, checkpoint_grace_active | review_checkpoint_grace | sla_breached, checkpoint_attention, data_quality_issues | ret1 | financial_data_conflict |

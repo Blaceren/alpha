@@ -15,7 +15,7 @@ import type { PriorityBand } from "@/domain/priority/priority";
 
 export const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
   registered: "Зарегистрирован",
-  pocket_connected: "Pocket подключён",
+  pocket_registered: "Pocket зарегистрирован",
   pre_ftd: "До первого депозита",
   first_depositor: "Первый депозит",
   active: "Активен",
@@ -26,7 +26,7 @@ export const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
 };
 
 export const FUNDING_LABEL: Record<FundingStatus, string> = {
-  not_connected: "Не подключён",
+  not_available: "Недоступно",
   unfunded: "Без депозита",
   funded: "Фондирован",
   checkpoint_grace: "Grace-период",
@@ -55,7 +55,7 @@ export const VALUE_SEGMENT_LABEL: Record<ValueSegment, string> = {
 
 export const BLOCKER_LABEL: Record<OperationalBlocker, string> = {
   email_unconfirmed: "Email не подтверждён",
-  pocket_not_connected: "Pocket не подключён",
+  pocket_registration_incomplete: "Регистрация Pocket не завершена",
   report_pending: "Отчёт на проверке",
   mentor_blocked: "Заблокирован ментором",
   support_blocked: "Заблокирован поддержкой",
@@ -72,7 +72,7 @@ export const PRIORITY_LABEL: Record<PriorityBand, string> = {
 
 export const SIGNAL_LABEL: Record<SignalCode, string> = {
   registration_no_start: "Регистрация без старта",
-  pocket_not_connected: "Pocket не подключён",
+  pocket_registration_incomplete: "Регистрация Pocket не завершена",
   email_not_confirmed: "Email не подтверждён",
   lesson_abandoned: "Урок брошен",
   progression_stalled: "Прогресс остановился",

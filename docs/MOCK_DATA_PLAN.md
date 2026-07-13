@@ -28,9 +28,9 @@ Mock-сотрудники: `emp_admin` (crm_admin), `emp_mgr` (crm_manager), `em
 
 Формат (5 измерений STATE_MODEL): **ID · имя · Lifecycle | Funding | Engagement | Value[] | Blockers[] · L/XP · balance(freshness) · signals · primary owner · сегмент**. Пустой массив = `—`.
 
-1. **usr_mock_001 · «Nadia N.»** · `registered` | `not_connected` | `not_started` | — | `pocket_not_connected` · L1/XP0 · — · `registration_no_start` · unassigned · «зарегистрировался, но не начал».
-2. **usr_mock_002 · «Boris P.»** · `registered` | `not_connected` | `not_started` | — | `pocket_not_connected` · L1/XP20 · — · `pocket_not_connected` · emp_ret1 · «не подключил Pocket».
-3. **usr_mock_003 · «Vera K.»** · `pocket_connected` | `unfunded` | `active` | — | `email_unconfirmed` · L2/XP40 · — · `email_not_confirmed` · unassigned · «email не подтверждён».
+1. **usr_mock_001 · «Nadia N.»** · `registered` | `not_available` | `not_started` | — | `pocket_registration_incomplete` · L1/XP0 · — · `registration_no_start` · unassigned · «зарегистрировался, но не начал».
+2. **usr_mock_002 · «Boris P.»** · `registered` | `not_available` | `not_started` | — | `pocket_registration_incomplete` · L1/XP20 · — · `pocket_registration_incomplete` · emp_ret1 · «не подключил Pocket».
+3. **usr_mock_003 · «Vera K.»** · `pocket_registered` | `unfunded` | `active` | — | `email_unconfirmed` · L2/XP40 · — · `email_not_confirmed` · unassigned · «email не подтверждён».
 4. **usr_mock_004 · «Grigori S.»** · `pre_ftd` | `unfunded` | `active` | — | — · L3/XP80 · $0 (fresh) · `checkpoint_approaching` (L4=$50) · emp_ret1 · «Pocket registered без FTD».
 5. **usr_mock_005 · «Lena M.»** · `active` | `funded` | `active` | — | — · L5/XP260 · $60 (fresh) · — · emp_ret2 · базовый активный ученик.
 6. **usr_mock_006 · «Timur A.»** · `active` | `funded` | `active` | — | — · L6/XP300 · $70 (fresh) · `lesson_abandoned` (урок L6 брошен 2 дня) · emp_ret2 · «остановился на уроке».
@@ -60,7 +60,7 @@ Mock-сотрудники: `emp_admin` (crm_admin), `emp_mgr` (crm_manager), `em
 27. **usr_mock_027 · «Rita S.»** · `active` | `funded` | `active` | `repeat_funder` | `financial_data_conflict` · L15/XP700 · $150 (fresh; продукт $150 / Pocket $135) · `pocket_data_conflict` · emp_ret1 · триггер `financial_data_conflict` case + Financial Ops.
 28. **usr_mock_028 · «Kostya M.»** · `at_risk` | `checkpoint_grace` | `active` | `first_depositor`,`repeat_funder`,`high_value_candidate` | `financial_data_conflict` · L20/XP950 · $180 (fresh, было $320) · `rapid_balance_decline`; открытые сделки → grace отложен · emp_ret1 · edge-case grace с открытыми сделками.
 29. **usr_mock_029 · «Anna B.»** · `active` | `funded` | `active` | — | — · L11/XP520 · $140 (fresh) · открыт moderation case · emp_mod1 · community/moderation.
-30. **usr_mock_030 · «Pavel Z.»** · `registered` | `not_connected` | `not_started` | — | `pocket_not_connected` · L3/XP90 · — · открыт identity case (несоответствие данных) · emp_sup1 · identity edge-case.
+30. **usr_mock_030 · «Pavel Z.»** · `registered` | `not_available` | `not_started` | — | `pocket_registration_incomplete` · L3/XP90 · — · открыт identity case (несоответствие данных) · emp_sup1 · identity edge-case.
 
 > Каждая персона выражена пятью независимыми измерениями. Пример совмещения (028): `at_risk` + `checkpoint_grace` + `active` + 3 value-тега + `financial_data_conflict` — прежняя mega-enum-модель потеряла бы всё, кроме одного.
 

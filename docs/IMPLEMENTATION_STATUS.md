@@ -45,7 +45,7 @@
 ## Phase 1B1 — Synthetic dataset & derivation layer ✅ (текущий)
 
 ### Выполнено
-- **Dependency gate:** Next.js `14.2.33 → 14.2.35` (последний патч 14.x, без major/React-19), postcss `8.4.49 → 8.5.17` (закрывает XSS-advisory), @playwright/test `1.48.2 → 1.61.1`. Осталось 11 advisories внутри `next@14.2.35` — устраняются только major-апгрейдом (15/16 + React 19), отложено с обоснованием (локальный mock, без production HTTP-поверхности).
+- **Dependency gate:** Next.js `14.2.33 → 14.2.35` (последний патч 14.x, без major/React-19), postcss `8.4.49 → 8.5.17` (закрывает XSS-advisory), @playwright/test `1.48.2 → 1.61.1`. Осталось 11 advisories внутри `next@14.2.35` — **не устранены**; экспозиция ограничена локальным mock-инструментом, локальную разработку не блокируют; публичный staging/production запрещён до отдельного security-review (DECISIONS D-26).
 - **FixedMockClock** (`src/lib/clock.ts`): Clock/SystemClock/FixedMockClock + relative-хелперы; `MOCK_NOW = 2026-07-13T09:00Z`.
 - **30 synthetic users** (`src/data/mock/fixtures/`): raw offsets → build(clock) → MockUser; identity/state(5 dims)/progression/learning/financial/operations; финансовая формула согласована; edge cases покрыты.
 - **Zod-валидация** (`validate.ts`): 30 пользователей, уникальность, enum, формулы, checkpoint/freshness consistency, coverage; невалидный fixture падает в тестах.
@@ -65,5 +65,21 @@
 ### Не входит в Phase 1B1 (сознательно)
 Полноценные экраны Today/Users/User 360; TanStack-таблица; localStorage mutation overlay и мутации; реальный timeline UI; реальная аутентификация/RBAC/БД/API/deploy; PII reveal flow (только контракты/проекция).
 
+## Phase 1B1.1 — Domain semantics & repository integrity patch ✅ (текущий)
+
+### Выполнено
+- **Git integrity gate:** `git fsck --full` чист (только безвредные dangling-объекты от прежних попыток), HEAD = `0d3ae55` (ожидаемый), status чист. Обнаружены зависшие `.git/index.lock` и `.git/HEAD.lock` (0 байт, git-процессов нет → доказанно stale), но FUSE-mount возвращает `Operation not permitted` на unlink — удалить штатно нельзя (см. отчёт).
+- **Fresh install verification:** из `git archive HEAD` → `npm ci` (next 14.2.35, postcss 8.5.17, playwright 1.61.1) → typecheck/test(76)/build — зелёные.
+- **Pocket semantic rename (D-23):** `pocket_connected→pocket_registered`, `not_connected→not_available`, `pocket_not_connected→pocket_registration_incomplete`, `help_connect_pocket→help_complete_pocket_registration`, поле `connectionStatus→registrationStatus`. Без backward-алиасов. Старых кодов в src/docs нет (consistency search).
+- **onboarding_attention (D-24):** 13-я очередь; users 001/002/003 покрыты; финансы скрыты; identity projection; единый `src/config/queues.ts`.
+- **Queue-code consistency:** канон `critical_attention`; bare `critical` как кода нет.
+- **Audit wording (D-26):** advisories описаны как не устранённые; staging/production — только после security-review.
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **76/76** · `build` ✅ (17 routes) · fresh `npm ci` ✅. `npm audit` — 11 не устранённых next-внутренних advisories (см. D-26).
+
+### Semantic finalization (registrationStatus)
+`financial.registrationStatus` финализирован до **трёх** значений: `not_registered / registration_pending / registered` (`confirmed` и `deregistered` удалены, D-27). `registered` = backend-confirmed affiliate registration. ATA email confirmation — отдельная ось `identity.emailConfirmed`; сигнал `email_not_confirmed` зависит только от неё. Pocket «Email Confirmation» отложен до backend/API contract (FUTURE_INTEGRATION §4). Добавлен фильтр `registrationStatus` (только 3 значения). Тесты: **86/86** ✅ (+10 registration-status); typecheck/lint/build ✅. Прогон выполнен в изолированной копии (node_modules проекта — macOS-нативные; в проекте reinstall не делался).
+
 ## Следующий этап (рекомендация)
-**Phase 1B2 — Users table + Today UI** поверх готового провайдера: TanStack-таблица Users с фильтрами по 5 измерениям и permission-safe финансами; экран Today из очередей builder'а; человекочитаемые бейджи из `config/labels.ts`. Затем — localStorage mutation overlay (D-09).
+**Phase 1B2 — только Users table** поверх готового провайдера (затем 1B3 Today, 1B4 mutations, 1C User 360). TanStack-таблица Users с фильтрами по 5 измерениям и permission-safe финансами; человекочитаемые бейджи из `config/labels.ts`.

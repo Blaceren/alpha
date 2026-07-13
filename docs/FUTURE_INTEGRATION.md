@@ -61,7 +61,9 @@ CRM UI → domain layer → CrmDataProvider
 
 ## 4. Pocket status API (производное, не прямой Pocket)
 
-- Состояние связи (not_connected/pending/registered/confirmed/disconnected), lastEvent, tokenState, dataConflict.
+- **Pocket affiliate registration status** — только три канонических значения: `not_registered / registration_pending / registered`. `registered` выставляется бэкендом при получении подтверждённого события регистрации Pocket по affiliate flow (не по клику/форме/депозиту/наличию финансовых данных/подтверждению email).
+- **Pocket «Email Confirmation» — отдельное provider-событие, НЕ смоделировано на mock-этапе.** Оно не является тем же, что `identity.emailConfirmed` (подтверждение email аккаунта ATA). Отдельное представление статуса Pocket Email Confirmation будет определено будущим backend/API contract (сейчас намеренно не придумываем для него status).
+- lastEvent, tokenState, dataConflict.
 - Нормализованные Pocket-события (по продуктовому mapping из PROJECT_CONTEXT §5) для Timeline — **уже очищенные** от секретов и сырых attribution-макросов.
 
 ---

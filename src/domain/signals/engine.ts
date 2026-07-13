@@ -32,7 +32,7 @@ export interface ComputedSignal {
 
 export const SIGNAL_SEVERITY: Record<SignalCode, SignalSeverity> = {
   registration_no_start: "medium",
-  pocket_not_connected: "high",
+  pocket_registration_incomplete: "high",
   email_not_confirmed: "medium",
   lesson_abandoned: "medium",
   progression_stalled: "medium",
@@ -102,19 +102,26 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     ]);
   }
 
-  // pocket_not_connected
+  // pocket_registration_incomplete
   if (
-    (user.financial.connectionStatus === "not_connected" || user.financial.connectionStatus === "pending") &&
-    regHours >= t.pocket_not_connected.hours
+    (user.financial.registrationStatus === "not_registered" ||
+      user.financial.registrationStatus === "registration_pending") &&
+    regHours >= t.pocket_registration_incomplete.hours
   ) {
-    push("pocket_not_connected", "Pocket не подключён — финансовые контрольные точки недоступны.", [
-      ev("connection", user.financial.connectionStatus, now),
-    ]);
+    push(
+      "pocket_registration_incomplete",
+      "Регистрация Pocket не подтверждена — финансовые контрольные точки недоступны.",
+      [ev("registration status", user.financial.registrationStatus, now)],
+    );
   }
 
-  // email_not_confirmed
-  if (user.state.blockers.includes("email_unconfirmed") && regHours >= t.email_not_confirmed.hours) {
-    push("email_not_confirmed", "Email не подтверждён.", [ev("hours since registration", Math.round(regHours), now)]);
+  // email_not_confirmed — depends ONLY on the ATA account email confirmation
+  // (identity.emailConfirmed), independent of Pocket registrationStatus.
+  if (!user.identity.emailConfirmed && regHours >= t.email_not_confirmed.hours) {
+    push("email_not_confirmed", "Email аккаунта ATA не подтверждён.", [
+      ev("email confirmed", "no", now),
+      ev("hours since registration", Math.round(regHours), now),
+    ]);
   }
 
   // lesson_abandoned

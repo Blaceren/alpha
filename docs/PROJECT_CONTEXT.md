@@ -97,11 +97,11 @@ Checkpoint проверяет **подтверждённый real balance Pocket
 
 > **Phase 0.5, DECISIONS D-01:** прежний единый lifecycle mega-enum заменён на **пять ортогональных измерений**, потому что состояния разной природы сосуществуют (пользователь одновременно `active` + `funded` + `repeat_funder` + `inactive_7d` + `support_blocked`). Канон — **STATE_MODEL.md**.
 
-1. **LifecycleStage** (ровно 1, versioned): `registered, pocket_connected, pre_ftd, first_depositor, active, at_risk, dormant, reactivated, completed_current_curriculum`.
-2. **FundingStatus** (1): `not_connected, unfunded, funded, checkpoint_grace, financial_access_suspended, balance_unknown`.
+1. **LifecycleStage** (ровно 1, versioned): `registered, pocket_registered, pre_ftd, first_depositor, active, at_risk, dormant, reactivated, completed_current_curriculum`.
+2. **FundingStatus** (1): `not_available, unfunded, funded, checkpoint_grace, financial_access_suspended, balance_unknown`.
 3. **EngagementStatus** (1): `not_started, active, progression_stalled, inactive_3d, inactive_7d, dormant_14d, dormant_30d, returned`.
 4. **ValueSegment** (0..N теги): `first_depositor, repeat_funder, frequent_repeat_funder, high_value_candidate, advanced_learner`.
-5. **OperationalBlocker** (0..N теги): `email_unconfirmed, pocket_not_connected, report_pending, mentor_blocked, support_blocked, financial_data_conflict, communication_fatigue`.
+5. **OperationalBlocker** (0..N теги): `email_unconfirmed, pocket_registration_incomplete, report_pending, mentor_blocked, support_blocked, financial_data_conflict, communication_fatigue`.
 
 `LifecycleStage` — versioned (current/previous/enteredAt/reason/evidence/history/override), чтобы изменения правил не переписывали историю. Остальные измерения несут evidence, reasonCode, calculatedAt и expiresAt (где применимо).
 

@@ -10,7 +10,7 @@ import type {
 
 export type SignalCode =
   | "registration_no_start"
-  | "pocket_not_connected"
+  | "pocket_registration_incomplete"
   | "email_not_confirmed"
   | "lesson_abandoned"
   | "progression_stalled"

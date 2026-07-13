@@ -8,7 +8,7 @@ import type { MockUser } from "@/domain/users/mock-user";
 
 export type SegmentCode =
   | "new_registrations"
-  | "pocket_not_connected"
+  | "pocket_registration_incomplete"
   | "pre_ftd"
   | "active_learners"
   | "progression_stalled"
@@ -37,13 +37,13 @@ export const SEGMENT_DEFINITIONS: SegmentDefinition[] = [
     predicate: (u) => u.state.lifecycleStage === "registered",
   },
   {
-    code: "pocket_not_connected",
-    title: "Pocket не подключён",
-    description: "Нет подключения Pocket — финансовые контрольные точки недоступны.",
+    code: "pocket_registration_incomplete",
+    title: "Регистрация Pocket не завершена",
+    description: "Регистрация Pocket не подтверждена — финансовые контрольные точки недоступны.",
     predicate: (u) =>
-      u.state.blockers.includes("pocket_not_connected") ||
-      u.financial.connectionStatus === "not_connected" ||
-      u.financial.connectionStatus === "pending",
+      u.state.blockers.includes("pocket_registration_incomplete") ||
+      u.financial.registrationStatus === "not_registered" ||
+      u.financial.registrationStatus === "registration_pending",
   },
   {
     code: "pre_ftd",

@@ -39,7 +39,7 @@
 
 Начальные mock-значения (полный список и структура — в SIGNAL_CATALOG.md):
 
-`registration_no_start` 24 ч · `pocket_not_connected` 24 ч · `email_not_confirmed` 12 ч · `lesson_abandoned` 24 ч · `progression_stalled` 72 ч (при доступном следующем уровне) · `repeated_test_failure` 3 провала за 24 ч · `report_rejected_no_return` 48 ч · `inactive_3d` 72 ч · `inactive_7d` 7 дней · `dormant_14d` 14 дней · `dormant_30d` 30 дней · `returned_after_absence` meaningful action после ≥7 дней · `communication_fatigue` >2 сообщений за 24 ч или 5 за 7 дней · `balance_data_stale` warning 15 мин / stale 60 мин (mock).
+`registration_no_start` 24 ч · `pocket_registration_incomplete` 24 ч · `email_not_confirmed` 12 ч · `lesson_abandoned` 24 ч · `progression_stalled` 72 ч (при доступном следующем уровне) · `repeated_test_failure` 3 провала за 24 ч · `report_rejected_no_return` 48 ч · `inactive_3d` 72 ч · `inactive_7d` 7 дней · `dormant_14d` 14 дней · `dormant_30d` 30 дней · `returned_after_absence` meaningful action после ≥7 дней · `communication_fatigue` >2 сообщений за 24 ч или 5 за 7 дней · `balance_data_stale` warning 15 мин / stale 60 мин (mock).
 
 - **Правило:** пороги **не hardcode** в UI-компонентах; берутся из конфига.
 - **Влияние:** SIGNAL_CATALOG.md (новый), STATE_MODEL (Engagement-пороги).
@@ -173,7 +173,9 @@ Playwright smoke-suite и конфиг включены в репозитори�
 
 ## D-18 · Next.js остаётся на 14.x (патч 14.2.35) — **Locked**
 
-Обновление `14.2.33 → 14.2.35` (последний патч линии 14.2, дист-тег `next-14`) + postcss `8.5.17` + @playwright/test `1.61.1`. **Не** переходим на 15/16, т.к. это major + React 19 (риск дестабилизации доменного слоя). Остаточные 11 advisories — внутри next 14.2.35; устраняются только major-апгрейдом и **отложены** до отдельного migration-этапа. Обоснование: Phase 1B1 — локальный mock без production-деплоя, middleware, image-optimization, i18n и недоверенного трафика, поэтому практический риск этих advisories ≈ 0. Findings не скрыты (см. IMPLEMENTATION_STATUS).
+Обновление `14.2.33 → 14.2.35` (последний патч линии 14.2, дист-тег `next-14`) + postcss `8.5.17` + @playwright/test `1.61.1`. **Не** переходим на 15/16, т.к. это major + React 19 (риск дестабилизации доменного слоя). Остаточные 11 advisories — внутри next 14.2.35; устраняются только major-апгрейдом и **отложены** до отдельного migration-этапа.
+
+**Формулировка риска (уточнено в Phase 1B1.1, см. D-26):** advisories остаются **не устранёнными**. Текущая экспозиция ограничена локальным mock-инструментом (нет production-деплоя, middleware, image-optimization, i18n, недоверенного трафика), поэтому они **не блокируют локальную разработку**. Публичный staging/production деплой **запрещён** до отдельного dependency/security review и upgrade-gate. Findings не скрыты (см. IMPLEMENTATION_STATUS).
 
 ## D-19 · Детерминированное время (FixedMockClock) — **Locked**
 
@@ -190,3 +192,45 @@ Playwright smoke-suite и конфиг включены в репозитори�
 ## D-22 · Сортировка по точным финансам без права → invalid_input — **Locked**
 
 Чтобы порядок по точной сумме не «утекал» неавторизованным ролям через UI-контракт, провайдер отклоняет sort по `balance`/`netDeposits` без `view_exact_financials` (ошибка `invalid_input`), а не молча переупорядочивает.
+
+---
+
+## Phase 1B1.1 — записи (Domain semantics & repository integrity patch)
+
+## D-23 · Pocket: регистрация, а не подключение — **Locked**
+
+Пользователь не «подключает» существующий Pocket-аккаунт — он проходит **регистрацию** Pocket, а продукт подтверждает статус. Финальный semantic rename (нет backward-алиасов, т.к. persistence/API ещё нет — один канонический набор кодов):
+
+- LifecycleStage `pocket_connected` → **`pocket_registered`**
+- FundingStatus `not_connected` → **`not_available`** (финансовый статус неприменим, пока регистрация Pocket не подтверждена)
+- OperationalBlocker `pocket_not_connected` → **`pocket_registration_incomplete`**
+- SignalCode `pocket_not_connected` → **`pocket_registration_incomplete`**
+- RecommendedAction `help_connect_pocket` → **`help_complete_pocket_registration`** («Помочь завершить регистрацию Pocket»)
+- Внутреннее поле `financial.connectionStatus` → **`registrationStatus`**. Финальные значения зафиксированы в D-27 (три значения; `confirmed`/`deregistered` удалены).
+
+UI-формулировки «Подключить Pocket», «Связать аккаунт», «Pocket connection» не используются; допустимы «Регистрация Pocket / не завершена / проверяется / подтверждена / Помочь завершить регистрацию». Обновлены types, fixtures, engine, recommendations, filters, provider, labels, coverage matrix, docs, tests.
+
+## D-24 · Очередь onboarding_attention — **Locked**
+
+Добавлена 13-я Today-очередь `onboarding_attention` для новых пользователей (сигналы `registration_no_start` / `pocket_registration_incomplete` / `email_not_confirmed`). Приоритет очереди — normal; глобальный более высокий приоритет пользователя сохраняется. Финансовые значения не показываются (`QUEUES_WITHOUT_FINANCIALS`); элемент несёт identity projection. Единый typed источник queue codes/labels — `src/config/queues.ts`; канонический код `critical_attention` (никогда `critical`).
+
+## D-25 · Git lock handling policy — **Locked**
+
+Запрещено обходить lock-файлы через git plumbing (`commit-tree`, ручной `update-ref`, прямую запись `.git/refs`, альтернативный index). При появлении `.git/*.lock`: (1) проверить активный git-процесс; (2) не удалять lock при активном процессе; (3) удалять только доказанно stale lock штатным `rm`; (4) если удалить/закоммитить штатно нельзя — **остановиться и сообщить**, не обходить. (В Phase 1B1 commit был завершён плумбингом из-за зависших lock; политика введена, чтобы это не повторялось.)
+
+## D-26 · Staging dependency security gate — **Locked**
+
+Оставшиеся npm advisories (внутри next 14.2.35) описываются как **не устранённые**, не «риск ≈ 0». Экспозиция ограничена локальным mock-инструментом; локальную разработку не блокируют. **Публичный staging/production deploy запрещён** до отдельного dependency/security review и upgrade-gate (major-апгрейд Next/React выполняется отдельной задачей).
+
+## D-27 · registrationStatus финализирован — три значения — **Locked**
+
+`financial.registrationStatus` содержит **ровно три** значения: `not_registered`, `registration_pending`, `registered`. Значения `confirmed` и `deregistered` **удалены** (без backward-алиасов — persistence/API ещё нет).
+
+Семантика:
+- **`not_registered`** — регистрация Pocket не подтверждена, активная backend/provider verification сейчас не выполняется.
+- **`registration_pending`** — пользователь выполнил/подтвердил регистрационное действие, но backend/provider ещё не подтвердил результат (не означает успешное завершение).
+- **`registered`** — backend получил и принял подтверждённое событие регистрации Pocket по affiliate flow. Нельзя выставлять по клику, локальной форме, ручному предположению CRM, email confirmation, депозиту или наличию финансовых данных.
+
+`deregistered` удалён, потому что **подтверждённого production-события дерегистрации нет** (было придумано по аналогии со старым `disconnected`). `confirmed` слит в `registered` (единственное «успешно завершено» состояние = получен `pocket_registration_confirmed`).
+
+**ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alfa Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.

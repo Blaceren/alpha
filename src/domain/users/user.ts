@@ -23,6 +23,10 @@ export interface UserSummary {
   lifecycleStage: LifecycleStage;
   fundingStatus: FundingStatus;
   engagementStatus: EngagementStatus;
+  /** Pocket affiliate registration status (backend-confirmed for `registered`). */
+  registrationStatus: "not_registered" | "registration_pending" | "registered";
+  /** ATA account email confirmation — separate from Pocket registration. */
+  emailConfirmed: boolean;
   currentLevel: number;
   lastMeaningfulActionAt: ISODateString | null;
 

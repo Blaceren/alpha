@@ -34,7 +34,7 @@ const userShape = z.object({
 /** Personas that MUST be present (by primaryScenario), per MOCK_DATA_PLAN. */
 export const REQUIRED_SCENARIOS = [
   "new_registered_no_start",
-  "pocket_not_connected",
+  "pocket_registration_incomplete",
   "email_not_confirmed",
   "pre_ftd",
   "first_depositor",

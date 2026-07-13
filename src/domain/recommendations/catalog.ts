@@ -13,7 +13,7 @@ export type ActionPriority = "critical" | "high" | "normal" | "low";
 
 export type RecommendedActionCode =
   | "review_new_registration"
-  | "help_connect_pocket"
+  | "help_complete_pocket_registration"
   | "remind_email_confirmation"
   | "continue_current_lesson"
   | "offer_learning_recap"
@@ -77,11 +77,11 @@ export const RECOMMENDATION_CATALOG: Record<RecommendedActionCode, RecommendedAc
     prohibitedWhen: [],
     humanApprovalRequired: false,
   },
-  help_connect_pocket: {
-    code: "help_connect_pocket",
-    title: "Помочь подключить Pocket",
-    reason: "Pocket не подключён — обучение и финансовые контрольные точки заблокированы.",
-    sourceSignalCodes: ["pocket_not_connected"],
+  help_complete_pocket_registration: {
+    code: "help_complete_pocket_registration",
+    title: "Помочь завершить регистрацию Pocket",
+    reason: "Регистрация Pocket не завершена — обучение и финансовые контрольные точки заблокированы.",
+    sourceSignalCodes: ["pocket_registration_incomplete"],
     allowedRoles: RETENTION_SUPPORT,
     priority: "high",
     suggestedChannel: "in_app",
@@ -296,7 +296,7 @@ export const RECOMMENDATION_CATALOG: Record<RecommendedActionCode, RecommendedAc
 /** Signal → recommended action codes. Single source used by the signal engine. */
 export const SIGNAL_TO_ACTIONS: Record<SignalCode, RecommendedActionCode[]> = {
   registration_no_start: ["review_new_registration"],
-  pocket_not_connected: ["help_connect_pocket"],
+  pocket_registration_incomplete: ["help_complete_pocket_registration"],
   email_not_confirmed: ["remind_email_confirmation"],
   lesson_abandoned: ["continue_current_lesson"],
   progression_stalled: ["offer_learning_recap", "restore_learning_path"],

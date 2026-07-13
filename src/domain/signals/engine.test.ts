@@ -10,10 +10,24 @@ const byId = (id: string) => users.find((u) => u.identity.userId === id) as Mock
 const codes = (u: MockUser) => computeSignals(u, clock).map((s) => s.code);
 
 describe("signal engine (deterministic, FixedMockClock)", () => {
-  it("new registration → registration_no_start + pocket_not_connected", () => {
+  it("new registration → registration_no_start + pocket_registration_incomplete", () => {
     const c = codes(byId("usr_mock_001"));
     expect(c).toContain("registration_no_start");
-    expect(c).toContain("pocket_not_connected");
+    expect(c).toContain("pocket_registration_incomplete");
+  });
+
+  it("pocket_registration_incomplete: threshold + confirmed-registration behaviour", () => {
+    const base = byId("usr_mock_002");
+    // Below 24h since registration → no signal.
+    const fresh: MockUser = { ...base, identity: { ...base.identity, registeredAt: new Date(clock.nowMs() - 20 * 3600_000).toISOString() } };
+    expect(computeSignals(fresh, clock).map((s) => s.code)).not.toContain("pocket_registration_incomplete");
+    // At/after 24h → signal present, mapped to the registration recommendation.
+    const sig = computeSignals(byId("usr_mock_002"), clock).find((s) => s.code === "pocket_registration_incomplete");
+    expect(sig).toBeTruthy();
+    expect(sig!.recommendedActionCodes).toContain("help_complete_pocket_registration");
+    // Backend-confirmed Pocket registration (registered) → signal gone.
+    const registered: MockUser = { ...base, financial: { ...base.financial, registrationStatus: "registered" } };
+    expect(computeSignals(registered, clock).map((s) => s.code)).not.toContain("pocket_registration_incomplete");
   });
 
   it("computes email / test / report signals", () => {

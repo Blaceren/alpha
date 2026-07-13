@@ -65,6 +65,7 @@ export function buildUser(clock: Clock, raw: RawPersona): MockUser {
       displayName: raw.name,
       maskedEmail: raw.maskedEmail,
       fullEmail: raw.fullEmail,
+      emailConfirmed: raw.emailConfirmed,
       country: raw.country,
       locale: raw.locale,
       timezone: raw.timezone,
@@ -108,7 +109,7 @@ export function buildUser(clock: Clock, raw: RawPersona): MockUser {
       lastLearningActivityAt: raw.lastLearningHoursAgo == null ? null : hoursAgo(clock, raw.lastLearningHoursAgo),
     },
     financial: {
-      connectionStatus: raw.connectionStatus,
+      registrationStatus: raw.registrationStatus,
       traderId: raw.hasTraderId ? `pp_mock_${raw.id.slice(-3)}` : null,
       balanceUsd,
       balanceTimestamp,

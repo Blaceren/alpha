@@ -30,7 +30,7 @@
 ```ts
 type LifecycleStage =
   | 'registered'
-  | 'pocket_connected'
+  | 'pocket_registered'
   | 'pre_ftd'
   | 'first_depositor'
   | 'active'
@@ -42,9 +42,9 @@ type LifecycleStage =
 
 | Значение | Смысл |
 |---|---|
-| `registered` | Зарегистрирован в академии, Pocket ещё не подключён. |
-| `pocket_connected` | Pocket подключён/подтверждён, депозита ещё нет. |
-| `pre_ftd` | Готов к первому депозиту (подключён, обучается), FTD не сделан. |
+| `registered` | Зарегистрирован в академии, регистрация Pocket ещё не завершена. |
+| `pocket_registered` | Регистрация Pocket подтверждена, депозита ещё нет. |
+| `pre_ftd` | Готов к первому депозиту (Pocket зарегистрирован, обучается), FTD не сделан. |
 | `first_depositor` | Сделал первый подтверждённый депозит (FTD). |
 | `active` | Устойчиво прогрессирует и/или funded, активен. |
 | `at_risk` | Есть признаки риска оттока/финансового риска (детализируется EngagementStatus/FundingStatus/Blockers). |
@@ -52,7 +52,7 @@ type LifecycleStage =
 | `reactivated` | Вернулся после длительного отсутствия. |
 | `completed_current_curriculum` | Прошёл весь доступный на данный момент curriculum. |
 
-**Переходы:** `registered → pocket_connected → pre_ftd → first_depositor → active → (at_risk ↔ active) → dormant → reactivated → active`. `completed_current_curriculum` достижимо из `active`. `at_risk`/`dormant`/`reactivated` — обратимы.
+**Переходы:** `registered → pocket_registered → pre_ftd → first_depositor → active → (at_risk ↔ active) → dormant → reactivated → active`. `completed_current_curriculum` достижимо из `active`. `at_risk`/`dormant`/`reactivated` — обратимы.
 
 `LifecycleStage` — **производное** от других измерений и продуктовых данных, но фиксируется как одно текущее значение с историей (см. §6).
 
@@ -64,7 +64,7 @@ type LifecycleStage =
 
 ```ts
 type FundingStatus =
-  | 'not_connected'
+  | 'not_available'
   | 'unfunded'
   | 'funded'
   | 'checkpoint_grace'
@@ -74,8 +74,8 @@ type FundingStatus =
 
 | Значение | Смысл |
 |---|---|
-| `not_connected` | Pocket не подключён — финансовых данных нет. |
-| `unfunded` | Подключён, но нет достаточного real balance / нет депозита. |
+| `not_available` | Финансовый статус неприменим — регистрация Pocket не подтверждена. |
+| `unfunded` | Pocket зарегистрирован, но нет достаточного real balance / нет депозита. |
 | `funded` | Подтверждённый real balance удовлетворяет последнему checkpoint. |
 | `checkpoint_grace` | Баланс упал ниже threshold, идёт grace period (24 ч, см. DECISIONS D-06). |
 | `financial_access_suspended` | Grace истёк, доступ после checkpoint приостановлен (решение — за backend). |
@@ -148,7 +148,7 @@ type ValueSegment =
 ```ts
 type OperationalBlocker =
   | 'email_unconfirmed'
-  | 'pocket_not_connected'
+  | 'pocket_registration_incomplete'
   | 'report_pending'
   | 'mentor_blocked'
   | 'support_blocked'
@@ -159,7 +159,7 @@ type OperationalBlocker =
 | Блокер | Что означает |
 |---|---|
 | `email_unconfirmed` | Email не подтверждён. |
-| `pocket_not_connected` | Pocket не подключён (мешает FTD/финансам). |
+| `pocket_registration_incomplete` | Регистрация Pocket не завершена/не подтверждена (мешает FTD/финансам). |
 | `report_pending` | Есть report, ожидающий mentor-проверки. |
 | `mentor_blocked` | Прогресс упёрся в mentor-решение (напр. rejected report без возврата). |
 | `support_blocked` | Открыт support-блокер (верификация и т.п.). |
@@ -230,10 +230,10 @@ interface UserStateProfile {
 |---|---|
 | anonymous | (вне scope CRM) |
 | academy_registered | LifecycleStage `registered` |
-| pocket_pending | LifecycleStage `registered` + Funding `not_connected` |
-| pocket_registered | LifecycleStage `pocket_connected` |
+| pocket_pending | LifecycleStage `registered` + Funding `not_available` |
+| pocket_registered | LifecycleStage `pocket_registered` |
 | email_unconfirmed | Blocker `email_unconfirmed` |
-| learning_started | Engagement `active` (Lifecycle `pre_ftd`/`pocket_connected`) |
+| learning_started | Engagement `active` (Lifecycle `pre_ftd`/`pocket_registered`) |
 | pre_ftd | LifecycleStage `pre_ftd` + Funding `unfunded` |
 | first_depositor | LifecycleStage `first_depositor` + ValueSegment `first_depositor` |
 | active_learner | LifecycleStage `active` + Engagement `active` |

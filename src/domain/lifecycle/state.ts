@@ -16,7 +16,7 @@ import type {
 /** LifecycleStage — exactly one, versioned with history. */
 export type LifecycleStage =
   | "registered"
-  | "pocket_connected"
+  | "pocket_registered"
   | "pre_ftd"
   | "first_depositor"
   | "active"
@@ -27,7 +27,7 @@ export type LifecycleStage =
 
 /** FundingStatus — exactly one. CRM only displays it (backend is authoritative). */
 export type FundingStatus =
-  | "not_connected"
+  | "not_available"
   | "unfunded"
   | "funded"
   | "checkpoint_grace"
@@ -56,7 +56,7 @@ export type ValueSegment =
 /** OperationalBlocker — zero or more active blockers. */
 export type OperationalBlocker =
   | "email_unconfirmed"
-  | "pocket_not_connected"
+  | "pocket_registration_incomplete"
   | "report_pending"
   | "mentor_blocked"
   | "support_blocked"

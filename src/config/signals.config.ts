@@ -5,7 +5,7 @@
  */
 export const SIGNAL_THRESHOLDS = {
   registration_no_start: { hours: 24 },
-  pocket_not_connected: { hours: 24 },
+  pocket_registration_incomplete: { hours: 24 },
   email_not_confirmed: { hours: 12 },
   lesson_abandoned: { hours: 24 },
   progression_stalled: { hours: 72 },

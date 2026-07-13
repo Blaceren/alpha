@@ -94,6 +94,8 @@ export interface UserFilters {
   xpMax?: number;
   balanceBucket?: FinancialBucket[];
   netDepositBucket?: FinancialBucket[];
+  /** Pocket affiliate registration status. Only the three canonical values. */
+  registrationStatus?: ("not_registered" | "registration_pending" | "registered")[];
   lastActionFrom?: ISODateString;
   lastActionTo?: ISODateString;
   registeredFrom?: ISODateString;
