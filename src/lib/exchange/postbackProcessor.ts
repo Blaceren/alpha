@@ -19,7 +19,7 @@ import type { z } from "zod";
 
 type ReceivePostbackPayload = z.infer<typeof receivePostbackSchema>;
 
-function buildPostbackAccountUpdate(
+export function buildPostbackAccountUpdate(
   normalizedEventType: string,
   eventType: string,
   amount: number,
@@ -78,11 +78,21 @@ function buildPostbackAccountUpdate(
     };
   }
 
-  if (normalizedEventType === "withdrawal" || normalizedEventType === "successful_withdrawal") {
+  if (normalizedEventType === "successful_withdrawal") {
     return {
       totalWithdrawals: { increment: amount },
       balance: { decrement: amount },
     };
+  }
+
+  if (
+    normalizedEventType === "withdrawal" ||
+    normalizedEventType === "new_withdrawal" ||
+    normalizedEventType === "canceled_withdrawal"
+  ) {
+    // Withdrawal request/cancel/status events stay a financial no-op:
+    // only the confirmed "Successful Withdrawal" may change account money state.
+    return {};
   }
 
   if (eventType === "balance") {
