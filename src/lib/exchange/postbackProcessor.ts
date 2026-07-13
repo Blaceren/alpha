@@ -109,6 +109,47 @@ export function buildPostbackAccountUpdate(
   return {};
 }
 
+export type SimulatedPostbackType =
+  | "Registration"
+  | "Email Confirmation"
+  | "First Deposit"
+  | "Re-deposit"
+  | "Withdrawal";
+
+export function buildSimulatedPostbackAccountUpdate(
+  postbackType: SimulatedPostbackType,
+  amount: number,
+): Prisma.ExchangeAccountUpdateInput {
+  if (postbackType === "Registration") {
+    return { registrationStatus: true };
+  }
+
+  if (postbackType === "Email Confirmation") {
+    return { emailConfirmed: true };
+  }
+
+  if (postbackType === "First Deposit") {
+    return {
+      firstDepositConfirmed: true,
+      depositAmount: { increment: amount },
+      totalDeposits: { increment: amount },
+      balance: { increment: amount },
+    };
+  }
+
+  if (postbackType === "Re-deposit") {
+    return {
+      depositAmount: { increment: amount },
+      totalDeposits: { increment: amount },
+      balance: { increment: amount },
+    };
+  }
+
+  // Plain "Withdrawal" is an unconfirmed status event and stays a financial
+  // no-op in simulation too, matching buildPostbackAccountUpdate semantics.
+  return {};
+}
+
 export async function processExchangePostbackPayload(
   data: ReceivePostbackPayload,
   request: Request,

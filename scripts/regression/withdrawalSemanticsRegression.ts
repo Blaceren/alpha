@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { buildPostbackAccountUpdate } from "../../src/lib/exchange/postbackProcessor";
+import {
+  buildPostbackAccountUpdate,
+  buildSimulatedPostbackAccountUpdate,
+} from "../../src/lib/exchange/postbackProcessor";
 import {
   normalizePocketEvent,
   pocketEventToExchangeEvent,
@@ -140,6 +143,44 @@ check("Unknown Pocket type: rejected branch, no financial change", () => {
 check("explicit eventType=balance still sets balance for non-withdrawal events", () => {
   const update = buildPostbackAccountUpdate("balance", "balance", 250);
   assert.deepEqual(update, { balance: 250 });
+});
+
+// 10. Admin simulate endpoint helper: plain Withdrawal must be a financial
+// no-op there as well (Pre-Phase 0B.1 fix for the independent side effect).
+check("simulate Withdrawal: financial no-op account update", () => {
+  const update = buildSimulatedPostbackAccountUpdate("Withdrawal", 200);
+  assert.deepEqual(update, {}, "simulated Withdrawal must not change money state");
+  for (const key of FINANCIAL_KEYS) {
+    assert.equal(key in update, false, `simulated Withdrawal must not set ${key}`);
+  }
+});
+
+check("simulate First Deposit: unchanged behaviour", () => {
+  const update = buildSimulatedPostbackAccountUpdate("First Deposit", 500);
+  assert.deepEqual(update, {
+    firstDepositConfirmed: true,
+    depositAmount: { increment: 500 },
+    totalDeposits: { increment: 500 },
+    balance: { increment: 500 },
+  });
+});
+
+check("simulate Re-deposit: unchanged behaviour", () => {
+  const update = buildSimulatedPostbackAccountUpdate("Re-deposit", 300);
+  assert.deepEqual(update, {
+    depositAmount: { increment: 300 },
+    totalDeposits: { increment: 300 },
+    balance: { increment: 300 },
+  });
+});
+
+check("simulate Registration/Email Confirmation: status flags only", () => {
+  assert.deepEqual(buildSimulatedPostbackAccountUpdate("Registration", 0), {
+    registrationStatus: true,
+  });
+  assert.deepEqual(buildSimulatedPostbackAccountUpdate("Email Confirmation", 0), {
+    emailConfirmed: true,
+  });
 });
 
 console.log(`\nwithdrawal semantics regression: ${passed} passed, ${failed} failed`);

@@ -6,6 +6,8 @@ import {
 } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
+import { buildSimulatedPostbackAccountUpdate } from "@/lib/exchange/postbackProcessor";
+import type { SimulatedPostbackType } from "@/lib/exchange/postbackProcessor";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import {
@@ -14,12 +16,7 @@ import {
   validateJsonBody,
 } from "@/lib/validation";
 
-type AllowedPostbackType =
-  | "Registration"
-  | "Email Confirmation"
-  | "First Deposit"
-  | "Re-deposit"
-  | "Withdrawal";
+type AllowedPostbackType = SimulatedPostbackType;
 
 function getDefaultAmount(type: AllowedPostbackType) {
   if (type === "First Deposit") return 500;
@@ -111,33 +108,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const data: {
-      registrationStatus?: boolean;
-      emailConfirmed?: boolean;
-      firstDepositConfirmed?: boolean;
-      depositAmount?: { increment: number };
-      totalDeposits?: { increment: number };
-      totalWithdrawals?: { increment: number };
-      balance?: { increment: number } | { decrement: number };
-    } = {};
-
-    if (postbackType === "Registration") data.registrationStatus = true;
-    if (postbackType === "Email Confirmation") data.emailConfirmed = true;
-    if (postbackType === "First Deposit") {
-      data.firstDepositConfirmed = true;
-      data.depositAmount = { increment: amount };
-      data.totalDeposits = { increment: amount };
-      data.balance = { increment: amount };
-    }
-    if (postbackType === "Re-deposit") {
-      data.depositAmount = { increment: amount };
-      data.totalDeposits = { increment: amount };
-      data.balance = { increment: amount };
-    }
-    if (postbackType === "Withdrawal") {
-      data.totalWithdrawals = { increment: amount };
-      data.balance = { decrement: amount };
-    }
+    const data = buildSimulatedPostbackAccountUpdate(postbackType, amount);
 
     const exchangeAccount = await tx.exchangeAccount.update({
       where: { id: user.exchangeAccount!.id },

@@ -31,7 +31,8 @@
     "smoke:mvp": "tsx scripts/smoke/mvpAcceptanceSmoke.ts",
     "smoke:production": "tsx scripts/smoke/integrationSmoke.ts",
     "smoke:ci": "tsx scripts/smoke/runProductionSmoke.ts",
-    "smoke:pocket-progression": "tsx scripts/smoke/pocketProgressionRegression.ts"
+    "smoke:pocket-progression": "tsx scripts/smoke/pocketProgressionRegression.ts",
+    "test:regression:withdrawal": "tsx scripts/regression/withdrawalSemanticsRegression.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
