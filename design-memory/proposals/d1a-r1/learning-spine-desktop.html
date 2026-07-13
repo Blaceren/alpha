@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Learning Spine — desktop</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas desktop">
+
+  <!-- minimal top bar — the SPINE is the primary navigation, not a sidebar -->
+  <div class="topstrip">
+    <span class="wordmark">Alfa Trade Academy</span>
+    <span class="topright">◔ уведомления <span class="avatar">А</span></span>
+  </div>
+
+  <!-- SIGNATURE: vertical Learning Spine (navigation + progression) -->
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <!-- future (above current): dashed -->
+    <line x1="460" y1="120" x2="460" y2="360" stroke="#5b6576" stroke-width="1.5" stroke-dasharray="5 7"/>
+    <!-- completed + current: solid signal -->
+    <line x1="460" y1="360" x2="460" y2="700" stroke="#34d6ac" stroke-width="2"/>
+    <!-- node connectors to labels -->
+    <line x1="475" y1="170" x2="560" y2="170" stroke="#5b8bd0" stroke-width="1"/>
+    <line x1="475" y1="360" x2="560" y2="360" stroke="#34d6ac" stroke-width="1"/>
+    <!-- tool branches (capabilities off the spine) -->
+    <line x1="460" y1="720" x2="360" y2="720" stroke="#2b3542" stroke-width="1"/>
+    <line x1="460" y1="770" x2="360" y2="770" stroke="#2b3542" stroke-width="1"/>
+    <!-- reward branch at checkpoint -->
+    <line x1="460" y1="170" x2="360" y2="210" stroke="#34d6ac" stroke-width="1"/>
+  </svg>
+
+  <!-- spine nodes: future (top) → completed (bottom) -->
+  <div class="checkpoint" style="left:449px;top:159px"></div>
+  <div class="node locked" style="left:453px;top:263px"></div>
+  <div class="label mono dim" style="left:415px;top:258px">L19</div>
+  <div class="node active" style="left:445px;top:345px"></div>
+  <div class="node done" style="left:453px;top:463px"></div>
+  <div class="label mono dim" style="left:415px;top:458px">L17</div>
+  <div class="node done" style="left:453px;top:553px"></div>
+  <div class="label mono dim" style="left:415px;top:548px">L16</div>
+  <div class="node done" style="left:453px;top:643px"></div>
+  <div class="label mono dim" style="left:415px;top:638px">L15 ✓</div>
+
+  <!-- checkpoint = reinforced spine node -->
+  <div style="position:absolute;left:560px;top:150px;width:360px">
+    <span class="tag gate">Контрольная точка · Уровень 20</span>
+    <div class="sub" style="margin-top:6px">Требуется баланс Pocket от <b class="hi">$200</b></div>
+  </div>
+  <div style="position:absolute;left:250px;top:196px"><span class="tag reward">Chart Markup Tool</span></div>
+
+  <!-- rank forms at the intersection of completed stages -->
+  <div style="position:absolute;left:250px;top:352px;text-align:right;width:150px">
+    <span class="instrument" style="justify-content:flex-end">Ранг<br><b>Наблюдатель III</b></span>
+  </div>
+
+  <!-- ONE large working plane to the right (not a card grid) -->
+  <div class="plane" style="left:560px;top:300px;width:620px;height:240px">
+    <div class="eyebrow">Текущий уровень 18 · активный узел оси</div>
+    <div class="h1">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика» · прогресс 2/5</div>
+    <div class="alex" style="margin-top:12px">уровни — это зоны реакции рынка, а не точные точки.</div>
+    <div style="margin-top:16px"><span class="cta">Продолжить урок →</span></div>
+  </div>
+
+  <!-- tools branch off the spine as capabilities -->
+  <div class="label" style="position:absolute;left:210px;top:712px">Trading Journal <span class="tag" style="border-color:var(--signal);color:var(--signal)">открыт</span></div>
+  <div class="label" style="position:absolute;left:210px;top:762px">Risk Calculator <span class="tag" style="border-color:var(--signal);color:var(--signal)">открыт</span></div>
+
+  <div style="position:absolute;left:560px;top:610px;display:flex;gap:22px">
+    <span class="instrument mono">2 480 <b>XP</b></span>
+    <span class="instrument">Серия обучения <b>6</b></span>
+  </div>
+
+  <div class="label" style="position:absolute;left:28px;bottom:24px;color:var(--faint)">
+    Direction B · Learning Spine — low-fi wireframe (design-only)
+  </div>
+</div>
+</body></html>

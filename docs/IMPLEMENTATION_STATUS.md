@@ -14,7 +14,9 @@
 |------|----------|--------|
 | D0 | Documentation & decision lock | ✅ Завершена (документация) |
 | D0.1 | Documentation Consistency Patch | ✅ Применён |
-| D1A | Application Foundation & Art-Direction Board | ✅ Выполнен (foundation, tokens, shell, 3 концепта Главной, screenshots, review) |
+| D1A | Application Foundation & Art-Direction Board | ⛔ Отклонён (generic dashboard) — сохранён как anti-example |
+| D1A-R0 | Provisional Brand Intelligence & Art-Direction Reset | ✅ Применён (4 base + 4 ATA skills, references) |
+| D1A-R1 | Structural Art-Direction Gate | ✅ Выполнен (3 структурно разных low-fi модели, 6 screenshots, comparison, scoring; победитель не выбран) |
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | Урок, тест, report, mentor feedback | ⛔ Не начата |

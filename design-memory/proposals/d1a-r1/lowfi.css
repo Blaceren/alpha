@@ -1,0 +1,107 @@
+/* D1A-R1 low-fidelity wireframe styles.
+   Mostly monochrome + ONE cold accent (--cold) + ONE green/cyan signal (--signal).
+   No final gradients, no polished shadows, no detailed icons, no photos, no decorative animation.
+   Purpose: test composition / navigation / product logic, not visual polish. */
+
+:root {
+  --bg: #0f141c;         /* deep navy field (monochrome base) */
+  --panel: #141b25;      /* one working surface */
+  --ink: #e7ecf3;        /* primary text (high contrast) */
+  --muted: #8a94a6;      /* secondary text */
+  --faint: #5b6576;      /* tertiary / locked */
+  --line: #2b3542;       /* wireframe strokes */
+  --cold: #5b8bd0;       /* ONE cold accent */
+  --signal: #34d6ac;     /* ONE green/cyan signal */
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Exact wireframe canvases */
+.canvas { position: relative; overflow: hidden; background: var(--bg); }
+.canvas.desktop { width: 1440px; height: 900px; }
+.canvas.mobile  { width: 390px;  height: 844px; }
+
+/* Wireframe primitives */
+.stroke { position: absolute; }
+.label { font-size: 13px; color: var(--muted); }
+/* mono labels are always placed absolutely via inline left/top */
+.label.mono { position: absolute; }
+.mono { font-family: var(--mono); }
+.hi { color: var(--ink); }
+.dim { color: var(--faint); }
+.cold { color: var(--cold); }
+.sig { color: var(--signal); }
+
+/* Navigation strips (never a persistent left sidebar) */
+.topstrip {
+  position: absolute; left: 0; right: 0; top: 0; height: 56px;
+  display: flex; align-items: center; gap: 22px;
+  padding: 0 28px; border-bottom: 1px solid var(--line);
+}
+.wordmark { font-weight: 700; letter-spacing: .2px; font-size: 15px; }
+.navitems { display: flex; gap: 18px; font-size: 13px; color: var(--muted); }
+.navitems .active { color: var(--ink); border-bottom: 2px solid var(--cold); padding-bottom: 4px; }
+.topright { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 13px; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--cold); color: var(--cold);
+  display: grid; place-items: center; font-size: 13px; font-weight: 600;
+}
+
+/* Working plane / callout (a real surface, not a card grid) */
+.plane {
+  position: absolute; border: 1px solid var(--line); background: var(--panel);
+  border-radius: 6px; padding: 16px 18px;
+}
+.eyebrow { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.h1 { font-size: 26px; font-weight: 700; line-height: 1.15; margin: 6px 0; }
+.h1.big { font-size: 34px; }
+.sub { font-size: 14px; color: var(--muted); }
+
+/* Primary action — outline in the signal color (one obvious next step) */
+.cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1.5px solid var(--signal); color: var(--signal);
+  border-radius: 6px; padding: 11px 18px; font-size: 14px; font-weight: 600;
+  min-height: 44px;
+}
+
+/* Instrument readouts (rank/XP/streak) — inline gauges, NOT KPI cards */
+.instrument { display: inline-flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--muted); }
+.instrument b { color: var(--ink); font-weight: 600; }
+
+/* Alex annotation — a tethered callout, not a card */
+.alex { font-size: 12px; color: var(--muted); font-style: italic; max-width: 320px; }
+.alex::before { content: "◆ Alex · "; color: var(--signal); font-style: normal; }
+
+/* Route / spine nodes */
+.node { position: absolute; border-radius: 50%; }
+.node.done { width: 14px; height: 14px; background: var(--faint); }
+.node.active { width: 30px; height: 30px; border: 2px solid var(--signal); box-shadow: 0 0 0 6px rgba(52,214,172,.12); }
+.node.locked { width: 14px; height: 14px; border: 1px solid var(--faint); }
+.checkpoint { position: absolute; width: 22px; height: 22px; border: 2px solid var(--cold); transform: rotate(45deg); }
+
+/* Bottom navigation (mobile only) */
+.bottomnav {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 58px;
+  display: flex; justify-content: space-around; align-items: center;
+  border-top: 1px solid var(--line); font-size: 10px; color: var(--muted);
+}
+.bottomnav .active { color: var(--cold); }
+
+.tag {
+  display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px 9px; font-size: 11px; color: var(--muted);
+}
+.tag.reward { border-color: var(--signal); color: var(--signal); }
+.tag.gate { border-color: var(--cold); color: var(--cold); }

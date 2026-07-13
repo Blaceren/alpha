@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>ATA · D1A-R1 Structural Directions — low-fi board</title>
+<link rel="stylesheet" href="lowfi.css">
+<style>
+  body { overflow: auto; }
+  .board { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
+  .board h1 { font-size: 28px; margin: 0 0 6px; }
+  .board .note { color: var(--muted); font-size: 14px; max-width: 760px; }
+  .dir { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 26px; }
+  .dir h2 { font-size: 20px; margin: 0 0 4px; }
+  .dir h2 small { color: var(--cold); font-family: var(--mono); font-size: 12px; }
+  .frames { display: flex; gap: 22px; align-items: flex-start; margin: 16px 0; flex-wrap: wrap; }
+  .frame-d { width: 660px; height: 412px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+  .frame-d iframe { width: 1440px; height: 900px; border: 0; transform: scale(.458); transform-origin: top left; }
+  .frame-m { width: 240px; height: 519px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+  .frame-m iframe { width: 390px; height: 844px; border: 0; transform: scale(.615); transform-origin: top left; }
+  .legend { flex: 1; min-width: 240px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .legend b { color: var(--ink); }
+  .cap { font-size: 11px; color: var(--faint); font-family: var(--mono); margin-top: 4px; }
+</style>
+</head><body>
+<div class="board">
+  <h1>Alfa Trade Academy · D1A-R1 — структурные направления</h1>
+  <p class="note">Три <b>структурно разных</b> low-fi модели одной и той же Главной (Артём, уровень 18,
+  «Поддержка и сопротивление»). Одинаковый product content. Low-fi: монохром + один холодный акцент +
+  один green/cyan сигнал; без градиентов/теней/иконок. <b>Победитель не выбран</b> — решение за пользователем.</p>
+
+  <div class="dir">
+    <h2>Direction A — Route Field <small>Главная = участок живого маршрута</small></h2>
+    <div class="frames">
+      <div>
+        <div class="frame-d"><iframe src="route-field-desktop.html" scrolling="no"></iframe></div>
+        <div class="cap">desktop 1440×900</div>
+        <div class="frame-m" style="margin-top:12px"><iframe src="route-field-mobile.html" scrolling="no"></iframe></div>
+        <div class="cap">mobile 390×844</div>
+      </div>
+      <div class="legend">
+        <p><b>Structure:</b> горизонтальный маршрут — весь экран; пользователь внутри progression field.</p>
+        <p><b>Signature:</b> Luminous Route Trace — функциональная линия (completed/active/locked/checkpoint/reward + «К текущему уровню»).</p>
+        <p><b>Navigation:</b> compact top command strip (не sidebar); edge-control возврата.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dir">
+    <h2>Direction B — Learning Spine <small>вертикальная ось обучения</small></h2>
+    <div class="frames">
+      <div>
+        <div class="frame-d"><iframe src="learning-spine-desktop.html" scrolling="no"></iframe></div>
+        <div class="cap">desktop 1440×900</div>
+        <div class="frame-m" style="margin-top:12px"><iframe src="learning-spine-mobile.html" scrolling="no"></iframe></div>
+        <div class="cap">mobile 390×844</div>
+      </div>
+      <div class="legend">
+        <p><b>Structure:</b> вертикальная spine + одна рабочая плоскость справа; нет второй колонки карточек.</p>
+        <p><b>Signature:</b> Learning Spine — ось-навигация+прогресс (module position / current / completion / checkpoint / tool unlock).</p>
+        <p><b>Navigation:</b> сама ось = навигация + минимальный top bar (не sidebar).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dir">
+    <h2>Direction C — Constructed Artifact <small>собираемый объект-система</small></h2>
+    <div class="frames">
+      <div>
+        <div class="frame-d"><iframe src="constructed-artifact-desktop.html" scrolling="no"></iframe></div>
+        <div class="cap">desktop 1440×900</div>
+        <div class="frame-m" style="margin-top:12px"><iframe src="constructed-artifact-mobile.html" scrolling="no"></iframe></div>
+        <div class="cap">mobile 390×844</div>
+      </div>
+      <div class="legend">
+        <p><b>Structure:</b> один центральный артефакт; route входит/выходит; инструменты = части объекта, ранг = форма, прогресс = степень сборки.</p>
+        <p><b>Signature:</b> Constructed Market Artifact — кодирует rank/module/progress/current lesson/next unlock.</p>
+        <p><b>Navigation:</b> top-oriented + radial-контролы вокруг объекта (не sidebar).</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>
