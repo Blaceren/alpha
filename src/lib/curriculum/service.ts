@@ -59,7 +59,7 @@ export function assertCurriculumEditable(version: Pick<CurriculumVersion, "id" |
   }
 }
 
-async function assertAdminActor(actorId: number, client: DbClient) {
+export async function assertAdminActor(actorId: number, client: DbClient) {
   const actor = await client.user.findUnique({ where: { id: actorId } });
 
   if (!actor || actor.role !== "admin" || actor.status !== "active") {
@@ -75,7 +75,7 @@ async function assertAdminActor(actorId: number, client: DbClient) {
 // Audit inside the lifecycle transaction must not be swallowed: if the audit
 // insert fails the whole status change has to roll back (unlike the generic
 // createAuditLog helper, which is fire-and-forget by design).
-async function writeAuditInTransaction(
+export async function writeAuditInTransaction(
   tx: DbClient,
   input: {
     actorId: number;

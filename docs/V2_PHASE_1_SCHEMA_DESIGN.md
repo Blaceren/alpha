@@ -334,7 +334,25 @@ draft ──publish──▶ published ──archive──▶ archived
 
 Все операции: роль **admin** (`requireAdmin` + CSRF по конвенции), audit через `createAuditLog`, domain errors в формате `{error: CODE, message}`.
 
-Статус реализации: `validateCurriculumDraft`, `publishCurriculumVersion`, `archiveCurriculumVersion` и guard `assertCurriculumEditable` реализованы в Phase 1B.2 (`src/lib/curriculum/`, typed-ошибки `CurriculumDomainError`); CRUD-операции draft/module/level — следующий этап и обязаны использовать guard.
+Статус реализации: `validateCurriculumDraft`, `publishCurriculumVersion`, `archiveCurriculumVersion` и guard `assertCurriculumEditable` реализованы в Phase 1B.2; draft-authoring команды — в Phase 1B.3 (`src/lib/curriculum/authoring.ts` + Zod DTO в `schemas.ts`).
+
+### Draft-authoring contract (реализовано, Phase 1B.3)
+
+Команды (все: typed DTO → Zod strict-схема → active-admin actor → `assertCurriculumEditable` → mutation + success-audit в одной транзакции; audit не проглатывается — его сбой откатывает mutation):
+
+- `createCurriculumDraft` — status всегда `draft`, `publishedAt=null`, `createdBy=actorId`; передать status/publishedAt извне нельзя (strict DTO); дубль `(code, versionNumber)` → `CURRICULUM_CONFLICT`.
+- `updateCurriculumDraft` — mutable: name, effectiveFrom (у draft может быть будущим), changeNotes. Immutable: code, versionNumber, status, publishedAt, createdBy, createdAt (strict patch → `CURRICULUM_INPUT_INVALID`).
+- `deleteEmptyCurriculumDraft` — только draft и только без definitions (`CURRICULUM_NOT_EMPTY`); без cascade/deleteMany.
+- `createModuleDefinition` / `updateModuleDefinition` — mutable: moduleNumber, code, title, description, learningObjective, firstLevel, lastLevel, checkpointLevel, status; immutable: id, curriculumVersionId. Дубли number/code в версии → `MODULE_CONFLICT`.
+- `deleteEmptyModuleDefinition` — только без levels (`MODULE_NOT_EMPTY`).
+- `createLevelDefinition` / `updateLevelDefinition` — mutable: moduleId (только module той же версии, иначе `MODULE_VERSION_MISMATCH`), levelNumber, stableCode, type, title, shortDescription, learningObjective, completionMethod, xpReward, requiredXp, requiredPreviousLevel, requiredCheckpointLevel, featureUnlockCode, status; immutable: id, curriculumVersionId, visibilityRule≠null. При смене levelNumber итоговый stableCode обязан соответствовать новому номеру (проверка merged-состояния). Дубли number/stableCode → `LEVEL_CONFLICT`.
+- `deleteLevelDefinition` — удаление уровня draft-версии.
+
+Write-time vs publish-time: на write-time проверяется локальная корректность одного объекта (формат stableCode и совпадение NNN, непустые code/title/learningObjective, firstLevel<=lastLevel, checkpointLevel в собственном диапазоне, requiredPrevious/Checkpoint < levelNumber, xp>=0, visibilityRule=null). Пересечения/разрывы диапазонов модулей, глобальная последовательность уровней и существование financial_checkpoint-ссылок на write-time РАЗРЕШЕНЫ (draft может собираться не по порядку) и блокируются только `validateCurriculumDraft` при publish.
+
+Typed-ошибки authoring: `CURRICULUM_CONFLICT`, `CURRICULUM_NOT_EMPTY`, `CURRICULUM_INPUT_INVALID` (field-ошибки — структурированными issues, без отдельного кода на поле), `MODULE_NOT_FOUND/CONFLICT/NOT_EMPTY/VERSION_MISMATCH`, `LEVEL_NOT_FOUND/CONFLICT`; ожидаемые P2002/P2003/P2025 маппятся в них, raw Prisma-ошибки наружу не выходят.
+
+Audit actions authoring: CURRICULUM_DRAFT_CREATED/UPDATED/DELETED, MODULE_DEFINITION_CREATED/UPDATED/DELETED, LEVEL_DEFINITION_CREATED/UPDATED/DELETED (metadata: actorId, curriculumVersionId, moduleDefinitionId/levelDefinitionId, code/number, changedFields для update; без before/after payload и контента).
 
 | Операция | Zod input (ядро) | Tx boundary | Audit action | Immutable guard | Domain errors |
 |---|---|---|---|---|---|
