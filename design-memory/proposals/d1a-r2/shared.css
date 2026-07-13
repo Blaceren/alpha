@@ -1,0 +1,123 @@
+/* Alfa Trade Academy — D1A-R2 consolidated high-fidelity prototype (design-only).
+   Provisional values (references are provisional; not final brand HEX).
+   Route Field = primary; Learning Spine = small module context; Constructed Artifact = rank.
+   Materials: deep navy field, cold blue structure, restrained cyan/green signal, one glow focus. */
+
+:root {
+  --field-0:#070b12;         /* deepest navy */
+  --field-1:#0a0f19;         /* base field */
+  --field-2:#0e1524;         /* raised field */
+  --plane:#111a2b;           /* lesson / gate working plane */
+  --plane-2:#0c1421;
+  --ink:#eef2f8;             /* primary text (high contrast) */
+  --ink-2:#b3bccd;           /* secondary (readable, not landing low-opacity) */
+  --ink-3:#7c8598;           /* tertiary */
+  --line:rgba(150,175,210,.14);   /* thin light border */
+  --line-2:rgba(150,175,210,.22);
+  --cold:#5f8fd6;            /* cold blue — structure */
+  --cold-deep:#3c5f96;
+  --signal:#3fe0b2;          /* cyan/green — active/completed signal */
+  --signal-dim:#1f7d64;
+  --warn:#e0a54b;
+  --font: "Manrope","Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--field-1); color:var(--ink); font-family:var(--font);
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+.canvas{position:relative;overflow:hidden;}
+.canvas.desktop{width:1440px;height:900px;
+  background:
+    radial-gradient(120% 90% at 62% 40%, rgba(63,224,178,.05), transparent 55%),
+    radial-gradient(90% 120% at 12% 8%, rgba(95,143,214,.07), transparent 60%),
+    linear-gradient(180deg,var(--field-1),var(--field-0));
+}
+.canvas.mobile{width:390px;height:844px;
+  background:
+    radial-gradient(120% 60% at 55% 34%, rgba(63,224,178,.06), transparent 60%),
+    linear-gradient(180deg,var(--field-1),var(--field-0));
+}
+@media (max-width:600px){ .canvas.desktop{display:none;} }
+@media (min-width:601px){ .canvas.mobile{display:none;} }
+
+/* ---- top command band (never a left sidebar) ---- */
+.band{position:absolute;left:0;right:0;top:0;height:60px;display:flex;align-items:center;
+  gap:26px;padding:0 30px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(8,12,20,.72),rgba(8,12,20,0));backdrop-filter:blur(3px);}
+.wordmark{font-weight:700;font-size:15px;letter-spacing:.2px;display:flex;align-items:center;gap:9px;}
+.wordmark .glyph{width:18px;height:18px;display:inline-block;}
+.nav{display:flex;gap:20px;font-size:13.5px;color:var(--ink-3);}
+.nav .on{color:var(--ink);}
+.nav .on::after{content:"";display:block;height:2px;margin-top:6px;background:var(--signal);border-radius:2px;}
+.band .right{margin-left:auto;display:flex;align-items:center;gap:16px;color:var(--ink-3);font-size:13px;}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;
+  color:#07100c;background:linear-gradient(135deg,var(--cold),var(--signal));}
+.bell{position:relative;}
+.bell::after{content:"";position:absolute;top:-2px;right:-2px;width:7px;height:7px;border-radius:50%;
+  background:var(--signal);box-shadow:0 0 0 2px var(--field-1);}
+
+/* ---- type ---- */
+.eyebrow{font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:var(--ink-3);}
+.eyebrow.sig{color:var(--signal);}
+.h1{font-size:34px;line-height:1.08;font-weight:700;letter-spacing:-.4px;margin:8px 0;}
+.h1.xl{font-size:42px;}
+.sub{font-size:15px;line-height:1.5;color:var(--ink-2);}
+.mono{font-family:var(--mono);}
+.k{color:var(--ink);font-weight:600;}
+
+/* ---- primary action ---- */
+.cta{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 22px;border-radius:10px;
+  font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;
+  color:#04140f;background:linear-gradient(180deg,#5cf0c6,var(--signal));
+  border:1px solid rgba(63,224,178,.5);box-shadow:0 10px 30px -12px rgba(63,224,178,.55);}
+.cta .arrow{font-weight:700;}
+.cta.ghost{color:var(--ink);background:transparent;border:1px solid var(--line-2);box-shadow:none;}
+
+/* ---- instruments (rank/xp/streak) — inline, not cards ---- */
+.instr{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);}
+.instr b{color:var(--ink);font-weight:600;}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--ink-3);display:inline-block;}
+
+/* ---- mini learning-spine (module context inside node) ---- */
+.spine{display:inline-flex;align-items:center;gap:0;}
+.spine i{width:8px;height:8px;border-radius:50%;background:var(--ink-3);opacity:.5;}
+.spine i.done{background:var(--signal-dim);opacity:1;}
+.spine i.cur{width:12px;height:12px;background:transparent;border:2px solid var(--signal);
+  box-shadow:0 0 0 4px rgba(63,224,178,.14);}
+.spine i.cp{width:10px;height:10px;border-radius:2px;transform:rotate(45deg);background:transparent;border:2px solid var(--cold);}
+.spine s{width:26px;height:1px;background:var(--line-2);display:inline-block;text-decoration:none;}
+.spine s.done{background:var(--signal-dim);}
+
+/* ---- lesson / gate plane (route continues through it) ---- */
+.plane{position:absolute;background:linear-gradient(180deg,var(--plane),var(--plane-2));
+  border:1px solid var(--line);border-radius:16px;padding:22px 26px;}
+.plane.glow{box-shadow:0 40px 90px -50px rgba(63,224,178,.35),inset 0 1px 0 rgba(255,255,255,.03);}
+
+/* ---- Alex — editorial quote embedded in route + replaceable portrait frame ---- */
+.alex{display:flex;gap:14px;align-items:flex-start;}
+.alex .frame{width:56px;height:56px;flex:0 0 56px;border-radius:12px;border:1px solid var(--line-2);
+  position:relative;overflow:hidden;background:radial-gradient(120% 90% at 50% 0,rgba(95,143,214,.35),transparent 70%),var(--field-2);}
+.alex .frame small{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:7px;letter-spacing:1px;color:var(--ink-3);text-transform:uppercase;}
+.alex .q{font-size:14.5px;line-height:1.5;color:var(--ink-2);font-style:italic;max-width:360px;}
+.alex .who{font-style:normal;color:var(--ink-3);font-size:11.5px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;}
+
+/* ---- tags ---- */
+.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:999px;
+  padding:5px 12px;font-size:12px;color:var(--ink-2);}
+.tag.reward{border-color:rgba(63,224,178,.45);color:var(--signal);}
+.tag.rank{border-color:rgba(95,143,214,.5);color:var(--cold);}
+
+/* ---- bottom nav (mobile) ---- */
+.bottomnav{position:absolute;left:0;right:0;bottom:0;height:60px;display:flex;justify-content:space-around;
+  align-items:center;border-top:1px solid var(--line);background:rgba(8,12,20,.85);backdrop-filter:blur(4px);}
+.bottomnav a{min-width:56px;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;font-size:10.5px;color:var(--ink-3);text-decoration:none;}
+.bottomnav a.on{color:var(--signal);}
+.bottomnav .ic{width:20px;height:20px;}
+
+.caption{position:absolute;left:30px;bottom:16px;font-size:11px;color:rgba(150,175,210,.3);font-family:var(--mono);}
+.swipehint{font-size:11.5px;color:var(--ink-3);}

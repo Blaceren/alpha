@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Главная · активный урок</title>
+<link rel="stylesheet" href="shared.css">
+</head><body>
+
+<!-- ============ DESKTOP 1440×900 ============ -->
+<div class="canvas desktop">
+  <div class="band">
+    <span class="wordmark">
+      <svg class="glyph" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="7" fill="#0e1524" stroke="rgba(150,175,210,.22)"/><polyline points="6,17 11,11 14,14 19,7" fill="none" stroke="#3fe0b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Alfa Trade Academy
+    </span>
+    <nav class="nav"><span class="on">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Ещё</span></nav>
+    <span class="right"><span class="bell">уведомления</span><span class="avatar">А</span></span>
+  </div>
+
+  <!-- SIGNATURE: the route is the main object -->
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <defs>
+      <filter id="g" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
+      <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#5f8fd6" stop-opacity=".7"/><stop offset="1" stop-color="#5f8fd6" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- completed segment: soft steady glow -->
+    <path d="M70 800 C 260 720, 360 580, 470 486" stroke="#1f7d64" stroke-width="10" opacity=".5" filter="url(#g)" fill="none"/>
+    <path d="M70 800 C 260 720, 360 580, 470 486" stroke="#3fe0b2" stroke-width="2.4" fill="none"/>
+    <!-- upcoming → checkpoint (fades) -->
+    <path d="M1006 404 C 1090 356, 1150 316, 1196 270" stroke="url(#fade)" stroke-width="2" stroke-dasharray="2 8" fill="none"/>
+    <!-- module boundary tick -->
+    <line x1="150" y1="726" x2="176" y2="742" stroke="#7c8598" stroke-width="1.4" opacity=".7"/>
+    <!-- completed nodes -->
+    <circle cx="250" cy="700" r="5" fill="#3fe0b2"/><circle cx="372" cy="566" r="5" fill="#3fe0b2"/>
+    <!-- locked upcoming node -->
+    <circle cx="1120" cy="300" r="5" fill="none" stroke="#5f6b80" stroke-width="1.5"/>
+    <!-- current node = spatial anchor + THE glow focus -->
+    <circle cx="470" cy="486" r="26" fill="#3fe0b2" opacity=".22" filter="url(#g)"/>
+    <circle cx="470" cy="486" r="13" fill="#0a0f19" stroke="#3fe0b2" stroke-width="2.5"/>
+    <circle cx="470" cy="486" r="4" fill="#3fe0b2"/>
+  </svg>
+
+  <div class="label mono" style="position:absolute;left:186px;top:744px;font-size:11px;color:var(--ink-3)">Модуль 4 · Чтение графика</div>
+  <div class="mono" style="position:absolute;left:236px;top:716px;font-size:11px;color:var(--ink-3)">16</div>
+  <div class="mono" style="position:absolute;left:358px;top:582px;font-size:11px;color:var(--ink-3)">17</div>
+
+  <!-- current lesson unfolds FROM the node; the route enters this plane (one system) -->
+  <div class="plane glow" style="left:470px;top:372px;width:560px;height:250px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="eyebrow sig">Следующий шаг · уровень 18</div>
+      <div class="spine" title="контекст модуля">
+        <i class="done"></i><s class="done"></s><i class="done"></i><s class="done"></s>
+        <i class="cur"></i><s></s><i></i><s></s><i class="cp"></i>
+      </div>
+    </div>
+    <div class="h1">Поддержка и&nbsp;сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика» · прогресс 2/5</div>
+    <div style="margin-top:18px;display:flex;align-items:center;gap:22px">
+      <a class="cta">Продолжить урок <span class="arrow">→</span></a>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <span class="instr mono">2 480 <b>XP</b></span>
+        <span class="instr">Серия обучения <b>6</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- rank artifact (compact) + label -->
+  <div style="position:absolute;left:472px;top:648px;display:flex;align-items:center;gap:12px">
+    <img src="assets/rank-observer-3.svg" width="42" height="42" alt="">
+    <div style="line-height:1.25">
+      <div class="eyebrow">Ранг</div>
+      <div style="font-weight:600;font-size:15px">Наблюдатель III</div>
+    </div>
+  </div>
+
+  <!-- Alex — editorial quote embedded into the route -->
+  <div class="alex" style="position:absolute;left:472px;top:730px;width:540px">
+    <div class="frame"><small>Alex</small></div>
+    <div>
+      <div class="who">Alex Curie · наставник курса</div>
+      <div class="q">Уровень — это зона реакции рынка, а не точная линия. Разметь три графика и объясни зоны — так проверишь понимание.</div>
+    </div>
+  </div>
+
+  <!-- checkpoint gate ahead: structural, but secondary in this state. Reward + rank = one gate. -->
+  <div style="position:absolute;left:1120px;top:150px;width:280px">
+    <svg width="60" height="230" style="position:absolute;left:-8px;top:6px" aria-hidden="true">
+      <line x1="30" y1="0" x2="30" y2="230" stroke="#5f8fd6" stroke-width="2" opacity=".8"/>
+      <line x1="18" y1="14" x2="42" y2="14" stroke="#5f8fd6" stroke-width="2"/>
+      <line x1="14" y1="118" x2="46" y2="118" stroke="#3fe0b2" stroke-width="2"/>
+      <line x1="18" y1="216" x2="42" y2="216" stroke="#5f8fd6" stroke-width="2"/>
+    </svg>
+    <div style="padding-left:44px">
+      <div class="eyebrow">Впереди · ворота</div>
+      <div style="font-size:17px;font-weight:600;margin:5px 0">Контрольная точка · Уровень 20</div>
+      <div class="sub" style="font-size:13px">Требуется баланс Pocket от <span class="k">$200</span></div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+        <span class="tag reward">◇ Награда: Chart Markup Tool</span>
+        <span class="tag rank">↑ Ранг: Наблюдатель IV</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:absolute;right:30px;bottom:24px">
+    <a class="cta ghost" style="min-height:40px;padding:0 16px;font-size:13px">⟲ К текущему уровню</a>
+  </div>
+  <div class="caption">D1A-R2 · Route Field · State A — active lesson (design-only)</div>
+</div>
+
+<!-- ============ MOBILE 390×844 ============ -->
+<div class="canvas mobile">
+  <div class="band" style="height:52px;padding:0 16px;gap:10px">
+    <span class="wordmark" style="font-size:13px">
+      <svg class="glyph" viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="7" fill="#0e1524" stroke="rgba(150,175,210,.22)"/><polyline points="6,17 11,11 14,14 19,7" fill="none" stroke="#3fe0b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Alfa Trade Academy
+    </span>
+    <span class="right"><span class="avatar" style="width:28px;height:28px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- route continues diagonally off-screen; current node central; neighbors partial -->
+  <svg width="390" height="330" style="position:absolute;left:0;top:70px" aria-hidden="true">
+    <defs><filter id="gm" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="6"/></filter></defs>
+    <path d="M-10 320 C 70 250, 120 190, 165 150" stroke="#1f7d64" stroke-width="9" opacity=".5" filter="url(#gm)" fill="none"/>
+    <path d="M-10 320 C 70 250, 120 190, 165 150" stroke="#3fe0b2" stroke-width="2.2" fill="none"/>
+    <path d="M215 122 C 300 70, 350 40, 400 8" stroke="#5f8fd6" stroke-width="1.8" stroke-dasharray="2 8" opacity=".7" fill="none"/>
+    <circle cx="60" cy="255" r="4" fill="#3fe0b2"/>
+    <circle cx="360" cy="40" r="4" fill="none" stroke="#5f6b80" stroke-width="1.4"/>
+    <circle cx="185" cy="140" r="22" fill="#3fe0b2" opacity=".2" filter="url(#gm)"/>
+    <circle cx="185" cy="140" r="12" fill="#0a0f19" stroke="#3fe0b2" stroke-width="2.4"/>
+    <circle cx="185" cy="140" r="3.5" fill="#3fe0b2"/>
+  </svg>
+  <div class="mono" style="position:absolute;left:24px;top:300px;font-size:11px;color:var(--ink-3)">‹ 17</div>
+  <div class="mono" style="position:absolute;right:16px;top:96px;font-size:11px;color:var(--ink-3)">19 · ◇20 ›</div>
+
+  <!-- lesson unfolds near node -->
+  <div class="plane glow" style="left:20px;top:300px;width:350px;padding:18px 20px">
+    <div class="eyebrow sig">Следующий шаг · уровень 18</div>
+    <div class="h1" style="font-size:26px;margin:6px 0">Поддержка и сопротивление</div>
+    <div class="sub" style="font-size:14px">Модуль 4 «Чтение графика» · 2/5</div>
+    <div class="spine" style="margin-top:12px"><i class="done"></i><s class="done"></s><i class="done"></i><s class="done"></s><i class="cur"></i><s></s><i></i><s></s><i class="cp"></i></div>
+    <a class="cta" style="width:100%;justify-content:center;margin-top:16px">Продолжить урок <span class="arrow">→</span></a>
+  </div>
+
+  <!-- instruments as ONE row (not three cards) -->
+  <div style="position:absolute;left:20px;top:560px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <img src="assets/rank-observer-3.svg" width="30" height="30" alt="">
+    <span class="instr" style="font-size:12.5px"><b>Наблюдатель III</b></span>
+    <span class="dot"></span><span class="instr mono" style="font-size:12.5px">2 480 <b>XP</b></span>
+    <span class="dot"></span><span class="instr" style="font-size:12.5px">Серия <b>6</b></span>
+  </div>
+
+  <!-- Alex compact -->
+  <div class="alex" style="position:absolute;left:20px;top:606px;width:350px">
+    <div class="frame" style="width:44px;height:44px;flex-basis:44px"><small>Alex</small></div>
+    <div class="q" style="font-size:13px">Уровень — это зона реакции рынка, а не точная линия.</div>
+  </div>
+
+  <!-- checkpoint preview secondary -->
+  <div style="position:absolute;left:20px;top:700px">
+    <span class="tag reward" style="font-size:11px">◇ Контрольная точка 20 · Chart Markup Tool</span>
+    <div class="swipehint" style="margin-top:10px">↔ маршрут можно двигать · ⟲ к текущему уровню</div>
+  </div>
+
+  <nav class="bottomnav">
+    <a class="on"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10l8-6 8 6v10" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Главная</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M4 18c4 0 4-12 8-12s4 12 8 12" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Путь</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Уроки</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M8 6H6v2M18 16v2h-2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Инструменты</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></svg>Ещё</a>
+  </nav>
+</div>
+</body></html>

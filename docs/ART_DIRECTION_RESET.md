@@ -56,3 +56,15 @@ sidebar; accent без брендовой причины; одинаковые �
 Следующий шаг — **D1A-R1** (art-direction exploration через `ata-art-direction-gate`): ≥3 структурно
 разных low-fi композиции на основе Stable DNA + по одной provisional-идее (route / spine / artifact).
 **На этом этапе (D1A-R0) новый дизайн не начинается и направление не выбирается.**
+
+## Итог reset (D1A-R1 → D1A-R2)
+
+- **D1A-R1** дал три структурно разных low-fi направления (Route Field / Learning Spine / Constructed
+  Artifact), все прошли anti-generic gate (88/87/86).
+- **D1A-R2** консолидировал их в **одну** high-fidelity систему с зафиксированными ролями:
+  - **Route Field = Home/Path system** (основа Главной и Пути);
+  - **Learning Spine = curriculum context** (модули/уроки/отчёты/история; на Главной — мини-индикатор);
+  - **Constructed Artifact = milestone/rank/unlock system** (компактный rank на Главной, крупнее в checkpoint).
+  Не все три появляются одновременно. Направление проверено в двух состояниях (Active lesson / Current
+  checkpoint), score 89/100, references остаются provisional. Детали — `docs/D1A_R2_MASTER_DIRECTION.md`.
+  **React implementation ещё не утверждён.**

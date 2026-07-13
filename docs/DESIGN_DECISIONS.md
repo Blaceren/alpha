@@ -140,6 +140,25 @@
 - **DD-184 (Locked).** Реальная Главная (`/`) и остальные production-маршруты в D1A не строятся; `/` временно редиректит на `/concepts`. Прелендинг/login/registration — вне прототипа (DD-177).
 - **DD-185 (Locked).** UI считается проверенным только по реальным browser screenshots (DD-163): D1A снял 6 концепт-PNG (1440×900 и 390×844) + board; после review-фиксов сделаны финальные screenshots.
 
+## D1A-R2 — Consolidated master direction
+
+- **DD-190 (Locked, D1A-R2).** Роли трёх систем: **Route Field = Home/Path** (основа), **Learning Spine =
+  curriculum context** (модули/уроки/отчёты/история; на Главной — только мини-индикатор модуля внутри
+  current-node), **Constructed Artifact = milestone/rank/unlock** (компактно на Главной, крупнее в
+  checkpoint-transition). Не все три появляются одновременно. Детали — `docs/D1A_R2_MASTER_DIRECTION.md`.
+- **DD-191 (Locked).** Главная = участок живого маршрута: route — главный объект; lesson-plane
+  разворачивается из current-node (route входит в плоскость); checkpoint — **структурные ворота**, а не
+  pill/badge; rank — constructed ascending-route artifact (не гексагон/медаль/буква A/пирамида).
+- **DD-192 (Locked).** Два состояния Главной на одной системе: State A (active lesson, «Продолжить урок»)
+  и State B (current checkpoint, «Проверить выполнение»). В B: условие «баланс Pocket от $200» + «demo не
+  засчитывается», без баланса пользователя/«осталось $X»/Pocket-CTA; награда+ранг = один объект ворот.
+- **DD-193 (Locked).** D1A-R2 anti-generic threshold = **85**; консолидированное направление получило
+  **89/100**, без automatic fail (`design-memory/reviews/d1a-r2-high-fi-review.md`).
+- **DD-194 (Provisional).** Материалы/цвета high-fi прототипа — provisional (deep navy, cold blue,
+  restrained cyan/green, один glow focus); финальные HEX не фиксируются без palette.
+- **DD-195 (Locked).** React implementation Главной **ещё не утверждён**; требуется явное решение
+  пользователя (правило art-gate сохраняется).
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

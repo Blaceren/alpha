@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ранг Наблюдатель III">
+  <!-- family container: open bracket (constructed from lines, not a solid shape) -->
+  <path d="M18 34 V18 H34" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M82 66 V82 H66" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- captured ascending route: 3 completed segments = tier III (Наблюдатель III) -->
+  <polyline points="26,75 42,60 57,66 72,39" fill="none" stroke="#3fe0b2" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="26" cy="75" r="2.6" fill="#3fe0b2"/>
+  <circle cx="42" cy="60" r="2.6" fill="#3fe0b2"/>
+  <circle cx="57" cy="66" r="2.6" fill="#3fe0b2"/>
+  <!-- focal signal node (current focus) -->
+  <circle cx="72" cy="39" r="5" fill="#3fe0b2"/>
+  <circle cx="72" cy="39" r="9.5" fill="none" stroke="#3fe0b2" stroke-opacity=".35" stroke-width="2"/>
+  <!-- fine coordinate ticks (metadata motif) -->
+  <g stroke="#7c8598" stroke-width="1.2" opacity=".55">
+    <line x1="50" y1="8" x2="50" y2="12"/><line x1="92" y1="50" x2="88" y2="50"/>
+    <line x1="50" y1="92" x2="50" y2="88"/><line x1="8" y1="50" x2="12" y2="50"/>
+  </g>
+</svg>
