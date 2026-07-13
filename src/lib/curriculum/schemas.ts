@@ -32,11 +32,15 @@ export const createCurriculumDraftSchema = z.strictObject({
 export const updateCurriculumDraftSchema = z.strictObject({
   actorId: idSchema,
   curriculumVersionId: idSchema,
-  patch: z.strictObject({
-    name: trimmedRequired.optional(),
-    effectiveFrom: z.date().nullable().optional(),
-    changeNotes: trimmedOptional.nullable().optional(),
-  }),
+  patch: z
+    .strictObject({
+      name: trimmedRequired.optional(),
+      effectiveFrom: z.date().nullable().optional(),
+      changeNotes: trimmedOptional.nullable().optional(),
+    })
+    .refine((value) => Object.keys(value).length > 0, {
+      message: "patch must contain at least one field",
+    }),
 });
 
 export const deleteCurriculumDraftSchema = z.strictObject({

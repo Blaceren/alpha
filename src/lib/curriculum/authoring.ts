@@ -227,6 +227,24 @@ export async function updateCurriculumDraft(input: unknown): Promise<CurriculumV
     await assertAdminActor(data.actorId, tx);
     const version = await loadEditableVersion(data.curriculumVersionId, tx);
 
+    // A body with values identical to the current entity must not create a
+    // fake audit entry (approved contract: typed CURRICULUM_NO_CHANGES).
+    const noChanges = Object.entries(data.patch).every(([key, value]) => {
+      const current = version[key as keyof CurriculumVersion];
+      if (value instanceof Date || current instanceof Date) {
+        const nextTime = value instanceof Date ? value.getTime() : value;
+        const currentTime = current instanceof Date ? current.getTime() : current;
+        return nextTime === currentTime;
+      }
+      return current === value;
+    });
+    if (noChanges) {
+      throw new CurriculumDomainError(
+        "CURRICULUM_NO_CHANGES",
+        `patch does not change CurriculumVersion ${version.id}`,
+      );
+    }
+
     const updated = await tx.curriculumVersion.update({
       where: { id: version.id },
       data: data.patch,

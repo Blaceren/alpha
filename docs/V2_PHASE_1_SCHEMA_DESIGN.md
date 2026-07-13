@@ -354,6 +354,26 @@ Typed-ошибки authoring: `CURRICULUM_CONFLICT`, `CURRICULUM_NOT_EMPTY`, `CU
 
 Audit actions authoring: CURRICULUM_DRAFT_CREATED/UPDATED/DELETED, MODULE_DEFINITION_CREATED/UPDATED/DELETED, LEVEL_DEFINITION_CREATED/UPDATED/DELETED (metadata: actorId, curriculumVersionId, moduleDefinitionId/levelDefinitionId, code/number, changedFields для update; без before/after payload и контента).
 
+### Feature-gated Admin API (реализовано, Phase 1B.4)
+
+**Feature flag:** `CURRICULUM_V2_ADMIN_ENABLED` (env, default/отсутствие = false; placeholder в `.env.example`). При выключенном флаге все routes отвечают 404 `{error:"NOT_FOUND"}` — неотличимо от отсутствующего маршрута. Public/user routes не создавались; флаг в live не включён.
+
+**Routes (только CurriculumVersion):**
+- `GET  /api/admin/curriculum/versions` — list (query: status?, code?, page>=1, limit 1..100 default 20; сортировка createdAt desc, id desc; items с moduleCount/levelCount без full definitions + pagination {page, limit, total, totalPages});
+- `POST /api/admin/curriculum/versions` — create draft (strict body: code, name, versionNumber, effectiveFrom? ISO, changeNotes?) → 201;
+- `GET  /api/admin/curriculum/versions/[id]` — detail (modules по moduleNumber, levels по levelNumber, createdBy только {id, name, email});
+- `PATCH /api/admin/curriculum/versions/[id]` — strict body только name/effectiveFrom/changeNotes, минимум одно поле; body без фактических изменений → 409 `CURRICULUM_NO_CHANGES` (утверждённый технический контракт: no-op PATCH не создаёт ложный audit);
+- `DELETE /api/admin/curriculum/versions/[id]` — только пустой draft;
+- `POST /api/admin/curriculum/versions/[id]/publish` — strict body `{expectedPublishedVersionId?: number|null}`;
+- `POST /api/admin/curriculum/versions/[id]/archive` — пустой body/`{}`.
+Module/Level write-endpoints не реализованы (следующая фаза).
+
+**Security (порядок write-request):** feature flag → session authentication (401) → active admin (403; blocked admin → 403) → rate limit per endpoint+admin (30/10 мин → 429) → CSRF cookie+header (403) → strict-валидация ID/body (400) → domain service → safe response. actorId берётся ТОЛЬКО из сессии; actorId/role/createdBy в body/query отклоняются strict-схемами. GET: no CSRF, но flag+auth+admin; `Cache-Control: no-store`.
+
+**Response contract:** успех `{data: ...}` (201 для create); ошибка `{error: "STABLE_CODE", issues?: [...]}`. Централизованный mapper domain→HTTP: CURRICULUM_INPUT_INVALID/битые ID/body → 400; auth → 401; ACTOR_FORBIDDEN/CSRF → 403; NOT_FOUND (+MODULE/LEVEL) → 404; CONFLICT/NOT_EMPTY/NOT_DRAFT/NOT_PUBLISHED/immutable/replacement/NO_CHANGES → 409; CURRICULUM_INVALID (с безопасным issues[])/EFFECTIVE_FROM_FUTURE → 422; rate limit → 429; неизвестное → 500 `INTERNAL_ERROR`. Raw Prisma/SQL/stack/пути/env наружу не попадают.
+
+**Read-only query service** (`src/lib/curriculum/query.ts`): `listCurriculumVersions`, `getCurriculumVersionDetail` — без audit-записей; несуществующий ID → typed CURRICULUM_NOT_FOUND.
+
 | Операция | Zod input (ядро) | Tx boundary | Audit action | Immutable guard | Domain errors |
 |---|---|---|---|---|---|
 | createCurriculumVersionDraft | code, name, changeNotes?, effectiveFrom?; versionNumber вычисляется | одна tx (выбор max(versionNumber)+1 и insert) | CURRICULUM_VERSION_CREATED | — | CURRICULUM_CODE_INVALID |

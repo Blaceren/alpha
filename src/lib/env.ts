@@ -24,6 +24,7 @@ const OPTIONAL_ENV = [
   "BETA_RESET_CONFIRM",
   "POCKET_POSTBACK_REQUIRE_SECRET",
   "POCKET_REFERRAL_URL",
+  "CURRICULUM_V2_ADMIN_ENABLED",
 ] as const;
 
 const envSchema = z.object({
@@ -42,6 +43,7 @@ const envSchema = z.object({
   ALLOW_PRODUCTION_BETA_RESET: z.enum(["true", "false"]).optional(),
   BETA_RESET_CONFIRM: z.string().optional(),
   POCKET_POSTBACK_REQUIRE_SECRET: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_ADMIN_ENABLED: z.enum(["true", "false"]).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -118,6 +120,11 @@ export function getPostbackSecret() {
 export function isPocketPostbackSecretRequired() {
   assertRuntimeEnv();
   return process.env.POCKET_POSTBACK_REQUIRE_SECRET === "true";
+}
+
+// Feature flag for the V2 curriculum admin API. Absent env means disabled.
+export function isCurriculumV2AdminEnabled() {
+  return process.env.CURRICULUM_V2_ADMIN_ENABLED === "true";
 }
 
 export const envContract = {

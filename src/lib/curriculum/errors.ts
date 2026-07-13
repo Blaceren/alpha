@@ -19,7 +19,8 @@ export type CurriculumDomainErrorCode =
   | "MODULE_NOT_EMPTY"
   | "MODULE_VERSION_MISMATCH"
   | "LEVEL_NOT_FOUND"
-  | "LEVEL_CONFLICT";
+  | "LEVEL_CONFLICT"
+  | "CURRICULUM_NO_CHANGES";
 
 export class CurriculumDomainError extends Error {
   readonly code: CurriculumDomainErrorCode;
