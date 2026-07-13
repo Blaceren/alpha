@@ -96,3 +96,26 @@ atadesign/
 ## Порядок реализации (обзор)
 
 D0 (текущая) → D1 foundation → D2 Главная+Путь → D3 Урок/Тест/Report/Mentor → D4 Tools L10–L30 → D5 Tools L35–L60 → D6 Tools L65–L100 → D7 Community/News/Referral → D8 Mentor/Support/Notifications/Profile/Settings → D9 Responsive/motion/a11y/perf/visual QA. Детали — `docs/IMPLEMENTATION_PLAN.md`. **Не начинать D1 без явного запроса.**
+
+## Обязательный workflow любого будущего UI
+
+D1A (generic dashboard) отклонён (`docs/ART_DIRECTION_RESET.md`). Для любого нового/переработанного
+UI Alfa Trade Academy соблюдать порядок (детали — `docs/DESIGN_SKILLS_INDEX.md`,
+`docs/DESIGN_QUALITY_CONSTITUTION.md`):
+
+1. `frontend-design`
+2. `ata-brand-language`
+3. анализ provisional references (`design-memory/references/ata-brand/REFERENCE_MANIFEST.md`)
+4. `ata-art-direction-gate` (19-пунктовый бриф + ≥3 структурно разных low-fi композиции)
+5. low-fidelity structural proposals (ASCII-вайрфреймы)
+6. **явный выбор пользователя**
+7. React implementation
+8. `webapp-testing`
+9. `ata-visual-qa-loop`
+10. `ata-anti-generic-ui-review`
+11. `ui-ux-pro-max` heuristic audit (только usability/a11y/responsive/interaction/component-state)
+12. final screenshot report
+
+**Запрещено** переходить от анализа references сразу к React (шаги 4–6 обязательны). Project-specific
+ATA skills имеют приоритет над generic-рекомендациями. References — provisional; финальные HEX/logo/
+роль Alex Curie не фиксируются без assets (`design-memory/references/ata-brand/MISSING_BRAND_ASSETS.md`).
