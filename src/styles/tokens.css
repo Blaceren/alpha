@@ -1,0 +1,69 @@
+/*
+ * Alfa Trade Academy — provisional semantic design tokens (Phase D1A).
+ * Dark-only. Cold accents, deep surfaces, controlled glow.
+ *
+ * These values are PROVISIONAL placeholders. When the prelanding palette is
+ * delivered, replace only the values in this file — token names, Tailwind
+ * mappings and component classNames stay unchanged.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --background-deep: #06080c;
+  --background-base: #0a0d13;
+
+  /* Surfaces */
+  --surface-primary: #10141c;
+  --surface-secondary: #151b25;
+  --surface-elevated: #1b2230;
+  --surface-interactive: #232c3d;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.11);
+
+  /* Text */
+  --text-primary: #eef2f8;
+  --text-secondary: #a7b0c2;
+  --text-muted: #79839a;
+
+  /* Accents (cold) */
+  --accent-primary: #4c8dff;
+  --accent-secondary: #34e1ce;
+
+  /* Status */
+  --success: #45c58c;
+  --warning: #e0a54b;
+  --danger: #e5635f;
+  --info: #4c8dff;
+
+  /* Progression states */
+  --locked: #616b80;
+  --completed: #45c58c;
+  --active: #4c8dff;
+  --suspended: #cf9346;
+
+  /* Interaction */
+  --focus-ring: #7aabff;
+  --overlay: rgba(4, 6, 10, 0.66);
+
+  /* Path motif */
+  --path-line: rgba(126, 152, 198, 0.35);
+  --path-glow: rgba(76, 141, 255, 0.5);
+
+  /* Typography families (self-hosted variable fonts via @fontsource) */
+  --font-display: "Manrope Variable", "Manrope", system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
+  --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI",
+    Roboto, Arial, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Motion */
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}

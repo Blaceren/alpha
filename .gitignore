@@ -7,13 +7,22 @@ Thumbs.db
 .idea/
 *.swp
 
-# Node / build (для будущих фаз D1+; в D0 не создаётся)
+# Node / build
 node_modules/
 .next/
 out/
 dist/
 build/
 coverage/
+next-env.d.ts
+*.tsbuildinfo
+.eslintcache
+
+# Test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # Env / secrets
 .env

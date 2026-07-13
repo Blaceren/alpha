@@ -3,8 +3,8 @@
 Актуальный статус реализации Alfa Trade Academy Web V2.
 
 **Дата:** 2026-07-13
-**Текущая фаза:** D0 завершена → **D0.1 — Documentation Consistency Patch** (применён)
-**Состояние приложения:** приложения нет (по правилам D0/D0.1). Только документация.
+**Текущая фаза:** D0 / D0.1 завершены → **D1A — Application Foundation & Art-Direction Board** (выполнен)
+**Состояние приложения:** Next.js foundation + дизайн-токены + shell + три концепта Главной. Backend/CRM/Pocket/database не подключены; данные synthetic. Реальный продукт не реализован.
 
 ---
 
@@ -14,7 +14,8 @@
 |------|----------|--------|
 | D0 | Documentation & decision lock | ✅ Завершена (документация) |
 | D0.1 | Documentation Consistency Patch | ✅ Применён |
-| D1 | Foundation (Next.js, tokens, компоненты, shell, роуты, mock) | ⛔ Не начата |
+| D1A | Application Foundation & Art-Direction Board | ✅ Выполнен (foundation, tokens, shell, 3 концепта Главной, screenshots, review) |
+| D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | Урок, тест, report, mentor feedback | ⛔ Не начата |
 | D4 | Tools L10–L30 | ⛔ Не начата |
@@ -69,6 +70,34 @@
 6. **App/public boundary:** прелендинг/login/registration вне прототипа; auth state от backend; `/blog` — отдельная оболочка без app sidebar.
 
 ---
+
+## 2b. D1A — Application Foundation & Art-Direction Board
+
+**Создано:** Next.js 16 App Router приложение (TypeScript strict, Tailwind, CSS-variable токены,
+Radix Tooltip, lucide, self-hosted variable fonts), application shell, foundation-компоненты,
+synthetic dashboard state, три концепта Главной (`/concepts/*`) и доска `/concepts`; Vitest/Playwright.
+
+**Новые документы:** `README.md`, `docs/ART_DIRECTION_BOARD.md`, `docs/FRONTEND_ARCHITECTURE.md`.
+**Screenshots:** `design-memory/screenshots/d1a-art-directions/` (6 концепт-PNG + board).
+**Review:** `design-memory/reviews/d1a-art-directions-review.md` (без выбора победителя).
+
+**Проверки (все зелёные):**
+
+| Проверка | Результат |
+|----------|-----------|
+| `npm run typecheck` | ✅ чисто |
+| `npm run lint` | ✅ чисто |
+| `npm run build` | ✅ статические маршруты |
+| `npm run test:run` (Vitest) | ✅ 27 тестов |
+| `npm run test:e2e` (Playwright smoke) | ✅ 7 тестов |
+| `npm run screenshots` | ✅ 7 PNG, точные размеры |
+| npm audit | 2 moderate (транзитивный postcss внутри Next; fix ломает Next — не применяем) |
+| Overflow 390/1024/1440 | ✅ 0px |
+| Console (app) | ✅ без ошибок (dev HMR websocket-шум отфильтрован) |
+| Финансовая приватность | ✅ target есть, баланса/«осталось $X»/Pocket-CTA нет |
+
+**Ограничения соблюдены:** нет backend/CRM/Pocket/database/deploy/production auth; реализованы только
+концепт-маршруты (не все routes/инструменты); реальная Главная и Путь не финализированы; данные synthetic.
 
 ## 3. Consistency validation (D0)
 

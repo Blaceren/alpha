@@ -131,6 +131,15 @@
 - **DD-176 (Locked).** Ветка «У меня уже есть аккаунт» — отдельный instruction flow (не подключение аккаунта): ordered steps, warning, confirmation, возврат к проверке. Точный текст инструкции утверждается позднее. После завершения registration flow нет прямой кнопки перехода из основного продукта в Pocket. Backend verification mechanism не выдумывается.
 - **DD-177 (Locked).** Прелендинг, login и registration не создаются внутри этого design-прототипа. Для неавторизованного пользователя продукт получает auth state от backend и перенаправляет в отдельный public/prelanding flow; собственная временная login-страница не показывается.
 
+## D1A — Foundation & art-direction (новые решения)
+
+- **DD-180 (Locked).** Стек: Next.js 16 App Router (без experimental), TypeScript strict, Tailwind 3 + CSS-variable токены, Radix только по необходимости (Tooltip), lucide-react, self-hosted variable fonts (`@fontsource-variable/*`, без внешнего fetch), Vitest + Testing Library, Playwright, npm. Next 16 удалил `next lint` → ESLint flat config напрямую.
+- **DD-181 (Locked).** Semantic токены реализованы значениями в `src/styles/tokens.css` и маппятся в Tailwind; код не хардкодит HEX. Значения provisional до палитры прелендинга (см. DD-004).
+- **DD-182 (Locked).** Синтетический state Главной для сравнения: уровень 18 «Поддержка и сопротивление» (Модуль 4 «Чтение графика»), ранг Наблюдатель III (L15), next checkpoint L20 от $200 → Наблюдатель IV, доступны Trading Journal + Risk Calculator, ближайшая награда Chart Markup Tool. Только synthetic-данные; контракт без поля баланса.
+- **DD-183 (Locked, D1A).** Три арт-направления (Product Portal / Market Atlas / Editorial Academy) на одной базовой палитре и одном наборе компонентов; различаются композицией/глубиной/типографикой/материалами/характером пути/плотностью/ролью Alex. Маршруты `/concepts/*` — development-only, вне production sitemap. **Победитель не выбирается автоматически** — решение продуктовой команды.
+- **DD-184 (Locked).** Реальная Главная (`/`) и остальные production-маршруты в D1A не строятся; `/` временно редиректит на `/concepts`. Прелендинг/login/registration — вне прототипа (DD-177).
+- **DD-185 (Locked).** UI считается проверенным только по реальным browser screenshots (DD-163): D1A снял 6 концепт-PNG (1440×900 и 390×844) + board; после review-фиксов сделаны финальные screenshots.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

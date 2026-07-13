@@ -2,6 +2,14 @@
 
 Инвентарь компонентов Alfa Trade Academy Web V2. Provisional — уточняется при реализации (D1+). Компоненты используют semantic tokens (`DESIGN_SYSTEM.md`), выдерживают длинные польские строки и покрывают состояния из `STATE_MATRIX.md`.
 
+> **D1A реализовано (foundation-подмножество).** Построены в `src/components/`:
+> ui — Button, IconButton, Badge, Tooltip (Radix), Surface, Avatar, VisuallyHidden, Icon (lucide-реестр);
+> shell — AppShell, TopBar, LogoPlaceholder (provisional), NotificationButton;
+> navigation — AppNavigation (desktop), MobileNavigation (bottom, 5 пунктов + «Ещё»);
+> progression — RankBadge (+locked silhouette), XPIndicator, LearningStreak, ModuleProgress, PathPreview (варианты portal/atlas/strip), PathNode, CheckpointPreview, ToolUnlockPreview;
+> dashboard — PrimaryAction, AlexMessage (provisional media), homes/{ProductPortalHome, MarketAtlasHome, EditorialAcademyHome}.
+> Это минимальный набор для трёх концептов Главной, не полная UI-библиотека.
+
 Легенда фазы: где компонент впервые нужен (D1 foundation … D9).
 
 ---
