@@ -33,7 +33,8 @@
     "smoke:ci": "tsx scripts/smoke/runProductionSmoke.ts",
     "smoke:pocket-progression": "tsx scripts/smoke/pocketProgressionRegression.ts",
     "test:regression:withdrawal": "tsx scripts/regression/withdrawalSemanticsRegression.ts",
-    "test:regression:curriculum-schema": "tsx scripts/regression/curriculumSchemaRegression.ts"
+    "test:regression:curriculum-schema": "tsx scripts/regression/curriculumSchemaRegression.ts",
+    "test:regression:curriculum-domain": "tsx scripts/regression/curriculumDomainRegression.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

@@ -78,6 +78,16 @@
 - Строгая regex-валидация формата выполняется service/Zod-слоем (Phase 1B.2+); сложный SQLite CHECK для slug не используется.
 - Для одного curriculum code одновременно существует не более одной published-версии: обеспечено partial unique index в миграции + будущей service-проверкой publish.
 
+## 9. Publication lifecycle (утверждено, Phase 1B.2)
+
+- Публикация новой версии того же curriculum code требует явного `expectedPublishedVersionId` текущей published-версии: без него — `CURRICULUM_REPLACEMENT_REQUIRED`, при несовпадении — `CURRICULUM_REPLACEMENT_MISMATCH`.
+- Старая published-версия архивируется атомарно в одной транзакции с публикацией новой; её definitions не изменяются.
+- Existing users в будущей Phase 2 останутся привязаны к своей historical version (enrollment будет ссылаться на конкретную CurriculumVersion, включая archived).
+- Scheduled publication пока не поддерживается.
+- `effectiveFrom` в будущем блокирует непосредственный publish (`CURRICULUM_EFFECTIVE_FROM_FUTURE`).
+- Archive выполняется только для published-версии; повторный archive и archive черновика — ошибка, а не тихий success.
+- Published/archived версии защищены от редактирования domain-guard'ом `assertCurriculumEditable` (draft — единственное редактируемое состояние).
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

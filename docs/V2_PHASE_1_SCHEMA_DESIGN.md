@@ -318,16 +318,23 @@ draft ──publish──▶ published ──archive──▶ archived
 - Правка published = создание новой версии (`versionNumber + 1`, копия definitions) — операция клонирования проектируется в Phase 1B как create-draft-from-version.
 - Module/Level definitions: `active|disabled`, редактируемы только при родительском `draft` (см. §4.2).
 
-## 7. Draft/publish/archive invariants
+## 7. Draft/publish/archive invariants (реализовано в Phase 1B.2)
 
-- Publish выполняется одной транзакцией: re-read версии → статус строго `draft` → `validateCurriculumDraft` без ошибок → `status=published, publishedAt=now()` → audit. Любая ошибка = rollback, статус не меняется.
-- Archive: одна транзакция, строго `published→archived`, audit; archived-версия остаётся читаемой (история пользователей в Phase 2 будет ссылаться на неё).
-- Никакая операция не изменяет и не удаляет published/archived definitions; клонирование в новый draft — единственный путь эволюции.
+Фактический контракт `src/lib/curriculum/service.ts`:
+
+- `publishCurriculumVersion({curriculumVersionId, actorId, expectedPublishedVersionId?})` — одна interactive-транзакция: проверка actor (active admin) → загрузка snapshot → статус строго `draft` (`CURRICULUM_NOT_DRAFT`) → `effectiveFrom` не в будущем (`CURRICULUM_EFFECTIVE_FROM_FUTURE`) → `validateCurriculumDraft` без issues (`CURRICULUM_INVALID` со всеми issues) → replacement-протокол: при существующей published-версии того же code обязателен её ID (`CURRICULUM_REPLACEMENT_REQUIRED` / `CURRICULUM_REPLACEMENT_MISMATCH`), старая версия атомарно становится `archived` → target: `status=published, publishedAt=now` → audit в той же транзакции (не проглатывается: сбой audit откатывает всё). Partial unique index — финальная DB-защита от race.
+- `archiveCurriculumVersion({curriculumVersionId, actorId})` — одна транзакция: active admin → строго `published→archived` (`CURRICULUM_NOT_PUBLISHED` для draft/повторного archive) → audit. Definitions не изменяются.
+- `assertCurriculumEditable(version)` — обязательный guard будущих CRUD: draft → ok; published → `CURRICULUM_PUBLISHED_IMMUTABLE`; archived → `CURRICULUM_ARCHIVED_IMMUTABLE`.
+- Rejected-публикации аудируются вне откатанной транзакции (`CURRICULUM_PUBLICATION_REJECTED`, метаданные — только issue codes) по существующей fire-and-forget audit-политике.
+- Никакая операция не изменяет и не удаляет published/archived definitions; клонирование в новый draft — единственный путь эволюции. createdAt и historical definitions не меняются.
 - Delete: только `draft`; будущий draft-management service удаляет definitions явно снизу вверх (levels → modules → version) в одной транзакции — FK Restrict исключает неявный каскад; audit обязателен. Published и archived версии физически не удаляются.
+- Scheduled publication не реализован; после ручного archive временно может не быть published-версии (public resolver появится позже).
 
 ## 8. Validation matrix / service boundaries (Phase 1B, проектирование)
 
 Все операции: роль **admin** (`requireAdmin` + CSRF по конвенции), audit через `createAuditLog`, domain errors в формате `{error: CODE, message}`.
+
+Статус реализации: `validateCurriculumDraft`, `publishCurriculumVersion`, `archiveCurriculumVersion` и guard `assertCurriculumEditable` реализованы в Phase 1B.2 (`src/lib/curriculum/`, typed-ошибки `CurriculumDomainError`); CRUD-операции draft/module/level — следующий этап и обязаны использовать guard.
 
 | Операция | Zod input (ядро) | Tx boundary | Audit action | Immutable guard | Domain errors |
 |---|---|---|---|---|---|
