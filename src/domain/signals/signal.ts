@@ -29,6 +29,7 @@ export type SignalCode =
   | "dormant_30_days"
   | "returned_after_absence"
   | "communication_fatigue"
+  | "support_blocked"
   | "frequent_redeposit_pattern"
   | "rapid_balance_decline";
 

@@ -32,3 +32,7 @@ npm-debug.log*
 # editor
 .idea
 .vscode
+
+# stray sandbox artifacts (cannot be deleted on this mount)
+*.zip
+ziMfbTLc

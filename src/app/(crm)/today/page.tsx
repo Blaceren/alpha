@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ProviderSmoke } from "@/components/crm-shell/provider-smoke";
+import { isDevelopment } from "@/config/env";
 
 export default function TodayPage() {
   return (
@@ -8,13 +9,21 @@ export default function TodayPage() {
       <PageHeader
         title="Сегодня"
         description="Стартовый экран смены: приоритезированные очереди и рекомендованные действия."
-        actions={<Badge tone="info">Каркас · Phase 1A</Badge>}
+        actions={isDevelopment ? <Badge tone="info">Каркас · Phase 1A</Badge> : undefined}
       />
-      <p className="text-sm text-text-secondary">
-        Полноценные очереди Today появятся в Phase 1B. Ниже — техническая проверка того, что
-        оболочка получает данные строго через <code className="text-text-primary">CrmDataProvider</code>.
-      </p>
-      <ProviderSmoke />
+      {isDevelopment ? (
+        <>
+          <p className="text-sm text-text-secondary">
+            Полноценные очереди Today появятся на следующем этапе. Ниже — dev-диагностика
+            доменного слоя.
+          </p>
+          <ProviderSmoke />
+        </>
+      ) : (
+        <p className="text-sm text-text-secondary">
+          Рабочие очереди появятся на следующем этапе.
+        </p>
+      )}
     </div>
   );
 }

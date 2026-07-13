@@ -166,3 +166,27 @@ CSS-токены (`src/styles/tokens.css`) помечены как provisional �
 ## D-17 · E2E-браузер вне sandbox — **Noted**
 
 Playwright smoke-suite и конфиг включены в репозиторий, но бинарник Chromium не скачивается в текущем sandbox (лимиты). Запуск — локально: `npx playwright install chromium && npm run test:e2e`. В Phase 1A выполнена runtime-проверка через server-rendered HTML для всех маршрутов.
+
+---
+
+## Phase 1B1 — записи реализации (Synthetic dataset & derivation)
+
+## D-18 · Next.js остаётся на 14.x (патч 14.2.35) — **Locked**
+
+Обновление `14.2.33 → 14.2.35` (последний патч линии 14.2, дист-тег `next-14`) + postcss `8.5.17` + @playwright/test `1.61.1`. **Не** переходим на 15/16, т.к. это major + React 19 (риск дестабилизации доменного слоя). Остаточные 11 advisories — внутри next 14.2.35; устраняются только major-апгрейдом и **отложены** до отдельного migration-этапа. Обоснование: Phase 1B1 — локальный mock без production-деплоя, middleware, image-optimization, i18n и недоверенного трафика, поэтому практический риск этих advisories ≈ 0. Findings не скрыты (см. IMPLEMENTATION_STATUS).
+
+## D-19 · Детерминированное время (FixedMockClock) — **Locked**
+
+Единая опорная точка `MOCK_NOW = 2026-07-13T09:00:00Z`. Fixtures хранят относительные смещения; абсолютные времена и все производные состояния (SLA, grace, inactivity) вычисляются от `Clock`. Тесты и данные не зависят от реального времени.
+
+## D-20 · Приоритет — правила, не score — **Locked**
+
+Приоритет = полоса `critical/high/normal/low`, определяемая упорядоченными правилами с `reasonCode`+`evidence`. Никакого непрозрачного числового score. Tie-break детерминирован (SLA → severity → last action → user id).
+
+## D-21 · Запрет финансово-давящих рекомендаций — **Locked**
+
+Каталог рекомендаций не содержит `deposit_now/recover_losses/increase_trade_size/trade_more/restore_balance_by_deposit/urgent_redeposit` (проверяется тестом). После падения баланса — только образовательные/mentor/support/communication-suppression действия, с `humanApprovalRequired`.
+
+## D-22 · Сортировка по точным финансам без права → invalid_input — **Locked**
+
+Чтобы порядок по точной сумме не «утекал» неавторизованным ролям через UI-контракт, провайдер отклоняет sort по `balance`/`netDeposits` без `view_exact_financials` (ошибка `invalid_input`), а не молча переупорядочивает.

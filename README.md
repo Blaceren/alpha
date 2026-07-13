@@ -4,11 +4,11 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1A — Application Foundation & CRM Shell**. Полноценные Today / Users / User 360 ещё не реализованы (см. `docs/IMPLEMENTATION_STATUS.md`).
+Статус реализации: **Phase 1B1 — Synthetic dataset & derivation layer** поверх Phase 1A shell. Есть детерминированный mock-домен (30 персон, сигналы, приоритеты, рекомендации, очереди Today, сегменты) за `CrmDataProvider`. Полноценные экраны Today / Users / User 360 ещё не реализованы (см. `docs/IMPLEMENTATION_STATUS.md`, `docs/MOCK_DATA_IMPLEMENTATION.md`).
 
 ## Стек
 
-Next.js 14 (App Router) · TypeScript strict · Tailwind CSS · Radix UI · TanStack Table · Zod · React Hook Form · Vitest + Testing Library · Playwright. Без базы данных, Prisma и настоящей аутентификации (см. `docs/DECISIONS.md` D-03).
+Next.js 14.2.35 (App Router) · TypeScript strict · Tailwind CSS · Radix UI · TanStack Table · Zod · React Hook Form · Vitest + Testing Library · Playwright. Без базы данных, Prisma и настоящей аутентификации (см. `docs/DECISIONS.md` D-03/D-18).
 
 ## Запуск
 

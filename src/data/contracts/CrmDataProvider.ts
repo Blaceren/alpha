@@ -78,6 +78,8 @@ export interface GetTodayInput {
 
 /* ------------------------------------------------------------------ Users */
 
+export type SlaStateFilter = "on_track" | "warning" | "breached" | "none";
+
 export interface UserFilters {
   lifecycleStage?: LifecycleStage[];
   fundingStatus?: FundingStatus[];
@@ -86,15 +88,36 @@ export interface UserFilters {
   blocker?: OperationalBlocker[];
   signals?: SignalCode[];
   ownerId?: EmployeeId[] | "unassigned";
+  currentLevelMin?: number;
+  currentLevelMax?: number;
+  xpMin?: number;
+  xpMax?: number;
   balanceBucket?: FinancialBucket[];
-  lastActionBefore?: ISODateString;
-  hasActiveCase?: boolean;
+  netDepositBucket?: FinancialBucket[];
+  lastActionFrom?: ISODateString;
+  lastActionTo?: ISODateString;
+  registeredFrom?: ISODateString;
+  registeredTo?: ISODateString;
+  acquisitionSource?: string[];
+  country?: string[];
+  hasOpenTask?: boolean;
+  hasOpenCase?: boolean;
+  slaState?: SlaStateFilter[];
+  /** Free-text search over name / id / masked email. */
+  query?: string;
 }
 
 export type UserSortField =
-  | "priority"
+  | "name"
+  | "registeredAt"
+  | "lastMeaningfulActionAt"
   | "currentLevel"
-  | "lastMeaningfulActionAt";
+  | "xp"
+  | "balance"
+  | "netDeposits"
+  | "redepositCount"
+  | "priority"
+  | "dueAt";
 
 export interface SearchUsersInput {
   query?: string;

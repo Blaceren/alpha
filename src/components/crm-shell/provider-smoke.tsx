@@ -11,11 +11,13 @@ import { SkeletonRows } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
+import { FUNDING_LABEL, LIFECYCLE_LABEL } from "@/config/labels";
 
 /**
- * Small live proof that the shell reaches data ONLY through the CrmDataProvider
- * boundary (never fixtures directly), and that loading/empty/error states work.
- * This is intentionally minimal — the real Today/Users screens arrive in Phase 1B.
+ * DEV-ONLY diagnostic: live proof that the shell reaches data ONLY through the
+ * CrmDataProvider boundary (never fixtures directly), and that loading/empty/
+ * error states work. Not shown in production builds. Uses human labels, not raw
+ * enum codes (Phase 1B1 §16). The real Today/Users screens arrive later.
  */
 export function ProviderSmoke() {
   const { session } = useSession();
@@ -48,11 +50,14 @@ export function ProviderSmoke() {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <p className="mb-2 text-xs text-text-secondary">
-        Загружено через <code className="text-text-primary">CrmDataProvider</code>:{" "}
-        {items.length} synthetic-пользователей (UI не читает fixtures напрямую).
-      </p>
+    <div className="rounded-lg border border-dashed border-border bg-surface p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <Badge tone="warning">DEV diagnostic</Badge>
+        <p className="text-xs text-text-secondary">
+          Данные получены через <code className="text-text-primary">CrmDataProvider</code>:{" "}
+          {items.length} synthetic-пользователей (UI не читает fixtures напрямую).
+        </p>
+      </div>
       <ul className="divide-y divide-border">
         {items.map((u) => (
           <li key={u.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
@@ -61,8 +66,8 @@ export function ProviderSmoke() {
               <span className="text-text-muted">{u.maskedEmail}</span>
             </span>
             <span className="flex shrink-0 items-center gap-1">
-              <Badge tone="neutral">{u.lifecycleStage}</Badge>
-              <Badge tone="info">{u.fundingStatus}</Badge>
+              <Badge tone="neutral">{LIFECYCLE_LABEL[u.lifecycleStage]}</Badge>
+              <Badge tone="info">{FUNDING_LABEL[u.fundingStatus]}</Badge>
             </span>
           </li>
         ))}

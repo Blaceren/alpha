@@ -57,6 +57,21 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Phase 1A — самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; будущий localStorage mutation overlay и подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
 
+## Derivation layer (Phase 1B1)
+
+Между fixtures и провайдером добавлен чистый доменный слой (framework-agnostic, инъекция `Clock`):
+
+```
+fixtures (MockUser[])
+  → signals/engine.computeSignals(user, clock)        // 23 сигнала, suppression
+  → priority/priority.computePriority(user, signals)  // полосы + правила
+  → recommendations/derive.deriveRecommendations(...)  // объяснимые действия
+  → today/builder.buildTodayWorkspace(users, clock, role)  // 12 очередей + dedup
+  → financial/projection + identity/identity-projection    // permission-aware
+```
+
+Всё детерминировано (`FixedMockClock`). Провайдер (`data/mock/MockCrmDataProvider`) — тонкая обёртка: фильтры/сортировка/пагинация + вызов derivation + проекции по роли. Пороги/лейблы/SLA живут в `src/config/*`. Правило безопасности: сортировка по точным финансам без права → `invalid_input`, чтобы порядок не утекал.
+
 ## Тестирование
 
 - **Unit/компонентные (Vitest):** permission matrix, section visibility, финансовые бакеты, provider error handling, sidebar active state, breadcrumbs, роль-видимость sidebar (render).

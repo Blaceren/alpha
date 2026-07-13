@@ -42,5 +42,28 @@
 ### Известные заметки
 - `next@14.2.33` при установке показывает предупреждение о security-обновлении (декабрь 2025). Рекомендуется поднять до патч-версии 14.2.x на следующем этапе; на функциональность Phase 1A не влияет.
 
+## Phase 1B1 — Synthetic dataset & derivation layer ✅ (текущий)
+
+### Выполнено
+- **Dependency gate:** Next.js `14.2.33 → 14.2.35` (последний патч 14.x, без major/React-19), postcss `8.4.49 → 8.5.17` (закрывает XSS-advisory), @playwright/test `1.48.2 → 1.61.1`. Осталось 11 advisories внутри `next@14.2.35` — устраняются только major-апгрейдом (15/16 + React 19), отложено с обоснованием (локальный mock, без production HTTP-поверхности).
+- **FixedMockClock** (`src/lib/clock.ts`): Clock/SystemClock/FixedMockClock + relative-хелперы; `MOCK_NOW = 2026-07-13T09:00Z`.
+- **30 synthetic users** (`src/data/mock/fixtures/`): raw offsets → build(clock) → MockUser; identity/state(5 dims)/progression/learning/financial/operations; финансовая формула согласована; edge cases покрыты.
+- **Zod-валидация** (`validate.ts`): 30 пользователей, уникальность, enum, формулы, checkpoint/freshness consistency, coverage; невалидный fixture падает в тестах.
+- **Signals engine** (`domain/signals/engine.ts`): 23 сигнала чистыми функциями + suppression; пороги из `config/signals.config.ts`.
+- **Recommendations** (`domain/recommendations/`): 18 объяснимых действий, запрещённых финансовых действий нет; fatigue-suppression; no_action fallback.
+- **Priority model** (`domain/priority/priority.ts`): полосы critical/high/normal/low по явным правилам + детерминированный tie-break.
+- **Today builder** (`domain/today/builder.ts`): 12 очередей, дедупликация, permission-aware финансы.
+- **Projections:** financial (exact/bucket/aggregated/hidden) и identity (full/masked/pseudonymous/hidden).
+- **Segments** (`domain/segments/`): 14 вычисляемых сегментов (membership через предикаты).
+- **MockCrmDataProvider:** все 13 read-операций с pagination/filter(§13)/sort/permission-projection/stale/error/empty; детерминизм; sort по точным финансам без права → `invalid_input` (не утекает).
+- **Human labels** (`config/labels.ts`): централизованные подписи enum; UI не показывает raw-коды; ProviderSmoke → dev-only диагностика; «Каркас · Phase 1A» только в dev.
+- **Docs:** MOCK_DATA_IMPLEMENTATION (coverage matrix), SIGNAL_ENGINE, RECOMMENDATION_CATALOG, TODAY_QUEUE_RULES.
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **72/72** · `build` ✅ (17 routes). `npm audit` — 11 next-внутренних advisories (см. выше, не скрыты). `test:e2e` — ⚠️ браузер не скачивается в sandbox; UI менялся минимально, скриншот не блокирует этап.
+
+### Не входит в Phase 1B1 (сознательно)
+Полноценные экраны Today/Users/User 360; TanStack-таблица; localStorage mutation overlay и мутации; реальный timeline UI; реальная аутентификация/RBAC/БД/API/deploy; PII reveal flow (только контракты/проекция).
+
 ## Следующий этап (рекомендация)
-**Phase 1B — Today workspace + Users table** на реальном mock-провайдере: полный набор из 30 персон, TanStack-таблица Users с фильтрами по 5 измерениям, приоритезированные очереди Today, и localStorage mutation overlay (D-09).
+**Phase 1B2 — Users table + Today UI** поверх готового провайдера: TanStack-таблица Users с фильтрами по 5 измерениям и permission-safe финансами; экран Today из очередей builder'а; человекочитаемые бейджи из `config/labels.ts`. Затем — localStorage mutation overlay (D-09).
