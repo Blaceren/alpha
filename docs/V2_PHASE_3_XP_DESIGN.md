@@ -346,6 +346,8 @@ Range policy: each amount must be `1..1_000_000`; aggregate must be an integer i
 
 Замечание по тестам: ownership/version/level XP-consistency обеспечена composite FK и source-allowlist/CHECK в БД (не инжектируется валидными данными; покрыта XP ledger regression). Level-state whole-result-corrupt поведение проверяется инжектируемыми ledger-corruption'ами (fingerprint, idempotency key, metadata, amount).
 
+**Temporal cutoff hardening (Phase 3B.3.1).** `asOf` is an internal/test-only dependency and is never accepted from an HTTP payload or query. A top-level LevelState resolution or lazy-start command captures exactly one `evaluationTime` (`asOf ?? new Date()`) and reuses it for curriculum context, progress, `resolveEnrollmentXp({ asOf: evaluationTime })`, start timestamps, and concurrent-start recovery. V2 XP rows count iff `createdAt <= evaluationTime`; equality is inclusive and future rows cannot create `available`, `xp_eligible`, or start authorization. The same transaction client carries curriculum/progress/XP reads, so there is no nested transaction or mixed snapshot. Temporal tests anchor cutoffs to the durable `XPTransaction.createdAt` returned by the production command; the command still owns `createdAt` and its public input remains unchanged.
+
 ## 5.10 Trusted award command
 
 There is no generic client-callable `awardXp(amount,source,target,...)`. The internal primitive accepts a discriminated, owner-created object unavailable to route payload mappers. It derives target/pin/definition/amount/source/key/metadata from durable owner records.

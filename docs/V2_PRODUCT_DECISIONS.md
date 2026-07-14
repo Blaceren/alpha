@@ -37,6 +37,8 @@
 - XP-gate использует только V2 `XPTransaction` (не V1 `User.xp`/`XpEvent`). При выключенном `CURRICULUM_V2_XP_ENABLED` gate fail-closed: `requiredXp = 0` проходит, `requiredXp > 0` блокируется (`xp_engine_unavailable`), `xp_eligible` не выдаётся (Phase 3B.3).
 - XP не открывает уровень в обход последовательности/checkpoint: доступным (`available`) может быть только текущий уровень; будущие уровни с достаточным XP показываются как `xp_eligible`, но не стартуются; checkpoint/inactive/unsupported-visibility остаются blocked независимо от XP (Phase 3B.3).
 
+- Temporal XP decisions are evaluated at one server-owned `evaluationTime` per LevelState resolution or lazy-start command. V2 rows with `createdAt <= evaluationTime` count (including equality); later rows do not affect level state or start eligibility. `asOf` remains internal/test-only, is not an HTTP input, and cannot be used to set ledger `createdAt` (Phase 3B.3.1).
+
 ## 4. Pocket Commission
 
 - Endpoint может принимать событие `Commission` для совместимости.

@@ -325,9 +325,13 @@ function deriveEnrolledLevelStates(
 async function resolveLevelStatesWithin(
   client: LevelStateCommandDb,
   userId: number,
-  asOf: Date,
+  evaluationTime: Date,
 ): Promise<UserCurriculumLevelStatesResult> {
-  const context = await resolveUserCurriculumContext({ userId, asOf, db: client });
+  const context = await resolveUserCurriculumContext({
+    userId,
+    asOf: evaluationTime,
+    db: client,
+  });
   if (context.kind === "disabled") return context;
   if (context.kind === "user_not_found") return context;
   if (context.kind === "corrupt") return context;
@@ -346,7 +350,7 @@ async function resolveLevelStatesWithin(
   // plausible level map.
   const rawXp = await resolveEnrollmentXp({
     enrollmentId: context.enrollment.id,
-    asOf,
+    asOf: evaluationTime,
     db: client,
   });
   if (rawXp.kind === "not_found") {
@@ -395,16 +399,19 @@ async function resolveLevelStatesWithin(
 
 export async function resolveUserCurriculumLevelStates({
   userId,
-  asOf = new Date(),
+  asOf,
   db,
 }: ResolveUserCurriculumLevelStatesInput): Promise<UserCurriculumLevelStatesResult> {
   if (!isCurriculumV2ReadEnabled()) return { kind: "disabled" };
+  const evaluationTime = asOf ?? new Date();
 
   // A supplied transaction client is used directly (no nested transaction).
   // Otherwise open one read snapshot so curriculum, progress and XP are read
   // from a single consistent boundary. The resolver only reads.
-  if (db) return resolveLevelStatesWithin(db, userId, asOf);
-  return prisma.$transaction((tx) => resolveLevelStatesWithin(tx, userId, asOf));
+  if (db) return resolveLevelStatesWithin(db, userId, evaluationTime);
+  return prisma.$transaction((tx) =>
+    resolveLevelStatesWithin(tx, userId, evaluationTime),
+  );
 }
 
 export type LevelStartDomainErrorCode =
@@ -502,7 +509,7 @@ function currentState(result: ResolvedLevelStateContext): EffectiveLevelStateIte
 async function loadStartState(
   tx: Prisma.TransactionClient,
   actorUserId: number,
-  asOf: Date,
+  evaluationTime: Date,
 ) {
   const user = await tx.user.findUnique({
     where: { id: actorUserId },
@@ -523,7 +530,7 @@ async function loadStartState(
 
   const result = await resolveUserCurriculumLevelStates({
     userId: user.id,
-    asOf,
+    asOf: evaluationTime,
     db: tx,
   });
   if (result.kind !== "resolved") mapLevelStateFailure(result);
@@ -533,9 +540,13 @@ async function loadStartState(
 async function runStartTransaction(
   tx: Prisma.TransactionClient,
   actorUserId: number,
-  asOf: Date,
+  evaluationTime: Date,
 ): Promise<StartCurrentCurriculumLevelResult> {
-  const { result, state } = await loadStartState(tx, actorUserId, asOf);
+  const { result, state } = await loadStartState(
+    tx,
+    actorUserId,
+    evaluationTime,
+  );
 
   if (
     state.progress &&
@@ -563,14 +574,14 @@ async function runStartTransaction(
       curriculumVersionId: result.curriculumVersion.id,
       levelDefinitionId: state.levelDefinition.id,
       status: "in_progress",
-      startedAt: asOf,
-      lastProgressAt: asOf,
+      startedAt: evaluationTime,
+      lastProgressAt: evaluationTime,
       attemptCount: 0,
     },
   });
   const enrollment = await tx.userCurriculumEnrollment.update({
     where: { id: result.enrollment.id },
-    data: { lastMeaningfulActionAt: asOf },
+    data: { lastMeaningfulActionAt: evaluationTime },
   });
 
   await tx.auditLog.create({
@@ -609,10 +620,14 @@ function isPrismaUniqueConflict(error: unknown) {
 async function recoverConcurrentStart(
   db: LevelStartCommandDb,
   actorUserId: number,
-  asOf: Date,
+  evaluationTime: Date,
 ): Promise<StartCurrentCurriculumLevelResult | null> {
   return db.$transaction(async (tx) => {
-    const { result, state } = await loadStartState(tx, actorUserId, asOf);
+    const { result, state } = await loadStartState(
+      tx,
+      actorUserId,
+      evaluationTime,
+    );
     if (
       !state.progress ||
       (state.state !== "in_progress" && state.state !== "pending_review")
@@ -631,7 +646,7 @@ async function recoverConcurrentStart(
 
 export async function startCurrentCurriculumLevel({
   actorUserId,
-  asOf = new Date(),
+  asOf,
   db = prisma,
 }: StartCurrentCurriculumLevelInput): Promise<StartCurrentCurriculumLevelResult> {
   if (!isCurriculumV2EnrollmentEnabled()) {
@@ -646,14 +661,19 @@ export async function startCurrentCurriculumLevel({
       "curriculum read resolver is disabled",
     );
   }
+  const evaluationTime = asOf ?? new Date();
 
   try {
     return await db.$transaction((tx) =>
-      runStartTransaction(tx, actorUserId, asOf),
+      runStartTransaction(tx, actorUserId, evaluationTime),
     );
   } catch (error) {
     if (!isPrismaUniqueConflict(error)) throw error;
-    const recovered = await recoverConcurrentStart(db, actorUserId, asOf);
+    const recovered = await recoverConcurrentStart(
+      db,
+      actorUserId,
+      evaluationTime,
+    );
     if (recovered) return recovered;
     throw error;
   }

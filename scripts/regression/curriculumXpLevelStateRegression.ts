@@ -12,7 +12,9 @@ import {
 
 // Phase 3B.3 regression: XP-aware effective level state. Temporary SQLite DB in
 // /tmp, cleaned up in finally. XP totals are seeded through the real ledger
-// service; corruption is injected with targeted raw UPDATEs.
+// service. Temporal assertions use the durable transaction.createdAt returned
+// by that service; callers never gain control of createdAt. Corruption is
+// injected only with targeted test-fixture UPDATEs.
 
 const dbPath = `/tmp/ata-curriculum-xp-level-state-${process.pid}.db`;
 const dbUrl = `file:${dbPath}`;
@@ -207,21 +209,26 @@ async function main() {
     const previous = process.env.CURRICULUM_V2_XP_ENABLED;
     process.env.CURRICULUM_V2_XP_ENABLED = "true";
     try {
-      await xp.recordCurriculumXp({
+      const result = await xp.recordCurriculumXp({
         db: prisma,
         enrollmentId,
         sourceType: "promocode",
         sourceId: sourceId ?? `promo-${process.pid}-${xpSeq}`,
         amount,
       });
+      return result.transaction;
     } finally {
       if (previous === undefined) delete process.env.CURRICULUM_V2_XP_ENABLED;
       else process.env.CURRICULUM_V2_XP_ENABLED = previous;
     }
   }
 
-  async function resolve(userId: number, db?: Prisma.TransactionClient) {
-    return levelState.resolveUserCurriculumLevelStates({ userId, db });
+  async function resolve(
+    userId: number,
+    db?: Prisma.TransactionClient,
+    asOf?: Date,
+  ) {
+    return levelState.resolveUserCurriculumLevelStates({ userId, db, asOf });
   }
 
   function findLevel(result: Resolved, levelNumber: number) {
@@ -961,6 +968,396 @@ async function main() {
         assert.equal("currentXp" in (level as object), false);
         assert.equal("totalXp" in (level as object), false);
       }
+    });
+
+    // ---------- Temporal cutoff hardening (62-81) ----------
+    await run("62. XP created before asOf is counted", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm62");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const evaluationTime = new Date(transaction.createdAt.getTime() + 1);
+      const result = asResolved(await resolve(user.id, undefined, evaluationTime));
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 10);
+      assert.equal(findLevel(result, 1).state, "available");
+    });
+
+    await run("63. XP created exactly at asOf is counted", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm63");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const result = asResolved(
+        await resolve(user.id, undefined, transaction.createdAt),
+      );
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 10);
+      assert.equal(findLevel(result, 1).state, "available");
+    });
+
+    await run("64. XP created after asOf is excluded", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm64");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const evaluationTime = new Date(transaction.createdAt.getTime() - 1);
+      const result = asResolved(await resolve(user.id, undefined, evaluationTime));
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 0);
+      assert.equal(findLevel(result, 1).state, "locked");
+    });
+
+    await run("65. rows on both sides of cutoff are summed correctly", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm65");
+      const { version } = await createGraph({ requiredXp: { 1: 7 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      await seedXp(enrollment.id, 3, "temporal-before-one");
+      const atBoundary = await seedXp(enrollment.id, 4, "temporal-at-boundary");
+      await new Promise((done) => setTimeout(done, 1_200));
+      const afterBoundary = await seedXp(enrollment.id, 8, "temporal-after");
+      assert.equal(afterBoundary.createdAt > atBoundary.createdAt, true);
+      const result = asResolved(
+        await resolve(user.id, undefined, atBoundary.createdAt),
+      );
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 7);
+      assert.equal(
+        result.xp.kind === "available" && result.xp.transactionCount,
+        2,
+      );
+    });
+
+    await run("66. future XP does not make current level available", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm66");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const result = asResolved(
+        await resolve(
+          user.id,
+          undefined,
+          new Date(transaction.createdAt.getTime() - 1),
+        ),
+      );
+      assert.equal(findLevel(result, 1).state, "locked");
+      assert.deepEqual(findLevel(result, 1).blockers, ["xp_insufficient"]);
+    });
+
+    await run("67. future XP does not create xp_eligible", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm67");
+      const graph = await createGraph({
+        levelCount: 3,
+        requiredXp: { 2: 1, 3: 10 },
+      });
+      const enrollment = await enroll({ userId: user.id, version: graph.version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const result = asResolved(
+        await resolve(
+          user.id,
+          undefined,
+          new Date(transaction.createdAt.getTime() - 1),
+        ),
+      );
+      assert.equal(findLevel(result, 3).state, "locked");
+      assert.equal(result.levels.some((level) => level.state === "xp_eligible"), false);
+    });
+
+    await run("68. future XP cannot authorize start", async () => {
+      setFlags({ read: true, enrollment: true, xp: true });
+      const user = await createUser("tm68");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      await expectStartError("LEVEL_START_NOT_AVAILABLE", () =>
+        levelState.startCurrentCurriculumLevel({
+          actorUserId: user.id,
+          asOf: new Date(transaction.createdAt.getTime() - 1),
+          db: prisma,
+        }),
+      );
+      assert.equal(
+        await prisma.userLevelProgress.count({ where: { enrollmentId: enrollment.id } }),
+        0,
+      );
+    });
+
+    await run("69. start immediately before XP timestamp is blocked", async () => {
+      setFlags({ read: true, enrollment: true, xp: true });
+      const user = await createUser("tm69");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const auditBefore = await prisma.auditLog.count();
+      await expectStartError("LEVEL_START_NOT_AVAILABLE", () =>
+        levelState.startCurrentCurriculumLevel({
+          actorUserId: user.id,
+          asOf: new Date(transaction.createdAt.getTime() - 1),
+          db: prisma,
+        }),
+      );
+      assert.equal(await prisma.auditLog.count(), auditBefore);
+      assert.equal(
+        await prisma.userLevelProgress.count({ where: { enrollmentId: enrollment.id } }),
+        0,
+      );
+    });
+
+    await run("70. start exactly at XP timestamp is allowed", async () => {
+      setFlags({ read: true, enrollment: true, xp: true });
+      const user = await createUser("tm70");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const started = await levelState.startCurrentCurriculumLevel({
+        actorUserId: user.id,
+        asOf: transaction.createdAt,
+        db: prisma,
+      });
+      assert.equal(started.created, true);
+      assert.equal(started.progress.startedAt.getTime(), transaction.createdAt.getTime());
+      assert.ok(started.progress.lastProgressAt);
+      assert.equal(
+        started.progress.lastProgressAt.getTime(),
+        transaction.createdAt.getTime(),
+      );
+      assert.equal(
+        started.enrollment.lastMeaningfulActionAt?.getTime(),
+        transaction.createdAt.getTime(),
+      );
+    });
+
+    await run("71. start after XP timestamp is allowed", async () => {
+      setFlags({ read: true, enrollment: true, xp: true });
+      const user = await createUser("tm71");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const evaluationTime = new Date(transaction.createdAt.getTime() + 1);
+      const started = await levelState.startCurrentCurriculumLevel({
+        actorUserId: user.id,
+        asOf: evaluationTime,
+        db: prisma,
+      });
+      assert.equal(started.created, true);
+      assert.equal(started.progress.startedAt.getTime(), evaluationTime.getTime());
+    });
+
+    await run("72. default current-time resolution includes durable XP", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm72");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      await seedXp(enrollment.id, 10);
+      const result = asResolved(await resolve(user.id));
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 10);
+      assert.equal(findLevel(result, 1).state, "available");
+    });
+
+    await run("73. one evaluationTime reaches curriculum, XP, start and no API input", () => {
+      const source = fs.readFileSync(
+        path.join("src", "lib", "curriculum", "level-state.ts"),
+        "utf8",
+      );
+      const within = source.slice(
+        source.indexOf("async function resolveLevelStatesWithin"),
+        source.indexOf("export async function resolveUserCurriculumLevelStates"),
+      );
+      assert.equal((within.match(/asOf: evaluationTime/g) ?? []).length, 2);
+
+      const resolver = source.slice(
+        source.indexOf("export async function resolveUserCurriculumLevelStates"),
+        source.indexOf("export type LevelStartDomainErrorCode"),
+      );
+      assert.equal((resolver.match(/new Date\(\)/g) ?? []).length, 1);
+      assert.match(resolver, /const evaluationTime = asOf \?\? new Date\(\);/);
+
+      const start = source.slice(
+        source.indexOf("export async function startCurrentCurriculumLevel"),
+      );
+      assert.equal((start.match(/new Date\(\)/g) ?? []).length, 1);
+      assert.match(start, /runStartTransaction\(tx, actorUserId, evaluationTime\)/);
+      assert.match(start, /recoverConcurrentStart\([\s\S]*evaluationTime/);
+
+      const route = fs.readFileSync(
+        path.join("src", "app", "api", "curriculum", "v2", "current", "route.ts"),
+        "utf8",
+      );
+      assert.match(route, /searchParams\.size !== 0/);
+      assert.equal(route.includes('searchParams.get("asOf")'), false);
+
+      const xpSource = fs.readFileSync(
+        path.join("src", "lib", "curriculum", "xp.ts"),
+        "utf8",
+      );
+      const awardInput = xpSource.slice(
+        xpSource.indexOf("export type RecordCurriculumXpInput"),
+        xpSource.indexOf("export type RecordCurriculumXpInTransactionInput"),
+      );
+      assert.equal(awardInput.includes("createdAt:"), false);
+    });
+
+    await run("74. archived pin honors temporal XP cutoff", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm74");
+      const { version } = await createGraph({
+        status: "archived",
+        requiredXp: { 1: 10 },
+      });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const before = asResolved(
+        await resolve(
+          user.id,
+          undefined,
+          new Date(transaction.createdAt.getTime() - 1),
+        ),
+      );
+      const at = asResolved(await resolve(user.id, undefined, transaction.createdAt));
+      assert.equal(before.xp.kind === "available" && before.xp.totalXp, 0);
+      assert.equal(at.xp.kind === "available" && at.xp.totalXp, 10);
+    });
+
+    await run("75. temporal resolution is deterministic", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm75");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const first = await resolve(user.id, undefined, transaction.createdAt);
+      const second = await resolve(user.id, undefined, transaction.createdAt);
+      assert.deepEqual(second, first);
+    });
+
+    await run("76. temporal resolution remains one XP read with bounded queries", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm76");
+      const { version } = await createGraph({
+        levelCount: 6,
+        requiredXp: { 1: 10 },
+      });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      await prisma.$transaction(async (tx) => {
+        let queryRaw = 0;
+        const proxy = new Proxy(tx, {
+          get(target, prop, receiver) {
+            if (prop === "$queryRaw") {
+              queryRaw += 1;
+              return (target as { $queryRaw: unknown }).$queryRaw;
+            }
+            const value = Reflect.get(target, prop, receiver);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        }) as unknown as Prisma.TransactionClient;
+        asResolved(await resolve(user.id, proxy, transaction.createdAt));
+        assert.equal(queryRaw, 2);
+      });
+    });
+
+    await run("77. top-level resolver owns exactly one snapshot transaction", () => {
+      const source = fs.readFileSync(
+        path.join("src", "lib", "curriculum", "level-state.ts"),
+        "utf8",
+      );
+      const resolver = source.slice(
+        source.indexOf("export async function resolveUserCurriculumLevelStates"),
+        source.indexOf("export type LevelStartDomainErrorCode"),
+      );
+      assert.equal((resolver.match(/prisma\.\$transaction\(/g) ?? []).length, 1);
+      assert.match(
+        resolver,
+        /resolveLevelStatesWithin\(tx, userId, evaluationTime\)/,
+      );
+    });
+
+    await run("78. temporal read performs no writes", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm78");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      const snapshot = async () => ({
+        xp: await prisma.xPTransaction.count(),
+        progress: await prisma.userLevelProgress.count(),
+        audit: await prisma.auditLog.count(),
+        enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+          where: { id: enrollment.id },
+        }),
+      });
+      const before = await snapshot();
+      asResolved(await resolve(user.id, undefined, transaction.createdAt));
+      assert.deepEqual(await snapshot(), before);
+    });
+
+    await run("79. V1 XP is ignored at a temporal cutoff", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm79", { xp: 999_999 });
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      await enroll({ userId: user.id, version });
+      await prisma.xpEvent.create({
+        data: {
+          userId: user.id,
+          amount: 999_999,
+          source: "legacy",
+          sourceId: "temporal-legacy",
+        },
+      });
+      const result = asResolved(await resolve(user.id, undefined, new Date()));
+      assert.equal(result.xp.kind === "available" && result.xp.totalXp, 0);
+      assert.equal(findLevel(result, 1).state, "locked");
+    });
+
+    await run("80. corrupt diagnostics do not leak temporal values", async () => {
+      setFlags({ read: true, xp: true });
+      const user = await createUser("tm80");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const transaction = await seedXp(enrollment.id, 10);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "XPTransaction" SET "payloadFingerprint" = 'sha256:${"0".repeat(64)}' WHERE "id" = ${transaction.id}`,
+      );
+      const result = await resolve(user.id, undefined, transaction.createdAt);
+      assert.equal(result.kind, "corrupt");
+      const serialized = JSON.stringify(result);
+      assert.equal(serialized.includes(transaction.createdAt.toISOString()), false);
+      assert.equal(serialized.includes("createdAt"), false);
+      assert.equal(serialized.includes("asOf"), false);
+      assert.equal(serialized.includes("payloadFingerprint"), false);
+    });
+
+    await run("81. Phase 2 flag-off behaviour is unchanged at a cutoff", async () => {
+      setFlags({ read: true, enrollment: true, xp: false });
+      const user = await createUser("tm81");
+      const { version } = await createGraph({ requiredXp: { 1: 10 } });
+      const enrollment = await enroll({ userId: user.id, version });
+      const evaluationTime = new Date(AS_OF.getTime() + 60_000);
+      const result = asResolved(await resolve(user.id, undefined, evaluationTime));
+      assert.deepEqual(findLevel(result, 1).blockers, ["xp_engine_unavailable"]);
+      const before = {
+        progress: await prisma.userLevelProgress.count(),
+        audit: await prisma.auditLog.count(),
+      };
+      await expectStartError("LEVEL_START_NOT_AVAILABLE", () =>
+        levelState.startCurrentCurriculumLevel({
+          actorUserId: user.id,
+          asOf: evaluationTime,
+          db: prisma,
+        }),
+      );
+      assert.deepEqual(
+        {
+          progress: await prisma.userLevelProgress.count(),
+          audit: await prisma.auditLog.count(),
+        },
+        before,
+      );
+      assert.equal(
+        await prisma.userLevelProgress.count({ where: { enrollmentId: enrollment.id } }),
+        0,
+      );
     });
   } finally {
     await prisma.$disconnect();
