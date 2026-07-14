@@ -158,6 +158,10 @@ export type RecordCurriculumXpResult = {
   transaction: CurriculumXpTransactionSummary;
 };
 
+export type VerifyCurriculumXpAwardResult =
+  | { kind: "missing" }
+  | RecordCurriculumXpResult;
+
 type EnrollmentHeaderRow = {
   enrollmentId: bigint | number;
   userId: bigint | number;
@@ -726,6 +730,7 @@ function recoveredResult(
 async function canonicalAward(
   tx: XpTransactionClient,
   input: RecordCurriculumXpInTransactionInput,
+  allowCompletedEnrollment = false,
 ): Promise<CanonicalAward> {
   const enrollmentId = positiveId(input.enrollmentId, "enrollmentId");
   if (!isApprovedSource(input.sourceType)) {
@@ -766,7 +771,8 @@ async function canonicalAward(
     );
   }
   if (
-    enrollment.status !== "active" ||
+    (enrollment.status !== "active" &&
+      !(allowCompletedEnrollment && enrollment.status === "completed")) ||
     enrollment.curriculumVersion.id !== enrollment.curriculumVersionId ||
     enrollment.curriculumVersion.code !== enrollment.curriculumCode ||
     (enrollment.curriculumVersion.status !== "published" &&
@@ -887,6 +893,34 @@ export async function recordCurriculumXpInTransaction(
   }
   try {
     return await recordInsideTransaction(tx, input);
+  } catch (error) {
+    if (isCurriculumXpError(error)) throw error;
+    throw internalError();
+  }
+}
+
+// Read-only durable retry verifier for transaction coordinators. It deliberately
+// permits a completed enrollment because terminal completion retries happen after
+// the enrollment transition. The ordinary record path above still requires an
+// active enrollment and therefore cannot create XP for completed history.
+export async function verifyCurriculumXpAwardInTransaction(
+  tx: XpTransactionClient,
+  input: RecordCurriculumXpInTransactionInput,
+): Promise<VerifyCurriculumXpAwardResult> {
+  if (!isCurriculumV2XpEnabled()) {
+    throw new CurriculumXpError("XP_DISABLED", "curriculum XP is disabled");
+  }
+  try {
+    const award = await canonicalAward(tx, input, true);
+    const existingByKey = await findExistingByKey(tx, award.idempotencyKey);
+    if (existingByKey) {
+      return recoveredResult(existingByKey, award, "idempotency");
+    }
+    const existingBySource = await findExistingBySource(tx, award);
+    if (existingBySource) {
+      return recoveredResult(existingBySource, award, "source");
+    }
+    return { kind: "missing" };
   } catch (error) {
     if (isCurriculumXpError(error)) throw error;
     throw internalError();

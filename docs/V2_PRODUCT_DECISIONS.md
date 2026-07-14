@@ -4,6 +4,7 @@
 **Дата:** 2026-07-12
 **Связанный документ:** `V2_GAP_ANALYSIS.md`
 
+
 ---
 
 ## 1. Product name
@@ -169,6 +170,16 @@
 - Exact retry возвращает durable row с `created=false` без timestamp/audit side effects. Key/source collision — typed error; expected P2002 восстанавливается только после полной проверки stored row.
 - Ledger insert и `CURRICULUM_XP_AWARDED` audit выполняются одним transaction client. Audit failure и outer transaction failure полностью откатывают award.
 - Runtime module не экспортирует ledger update/delete и не меняет enrollment/progress, notifications, CRM или V1 XP. HTTP, LevelState, completion и owner adapters остаются будущими фазами.
+
+## 17. Atomic V2 level completion foundation (Phase 3B.4)
+
+- Completion is an internal server-only coordinator; there is no generic HTTP complete-level route. A future owner adapter must already possess durable owner authorization and may call the transaction-aware function inside its own transaction.
+- READ, ENROLLMENT and XP flags are jointly required. ADMIN is irrelevant to this gate, and a disabled result performs no reads or writes.
+- Accepted mappings are intentionally narrow: lesson/lesson or lesson/manual with `level_completion`; final_exam/assessment_pass with `assessment_pass`; report/report_approval with `report_approval`; mentor_review/mentor_review with `mentor_completion`. Ordinary/assessment require `in_progress`; report/mentor require `pending_review`. All ambiguous owner types fail closed.
+- Reward is the positive immutable pinned `LevelDefinition.xpReward`; the caller cannot provide amount, user, version, level number, key, fingerprint, evidence or a desired transition.
+- Progress, XP, both awaited audits and the enrollment summary commit atomically. CAS predicates protect both progress and enrollment. No next progress, V1 mutation, notification, CRM write, re-enrollment or version migration is created.
+- Exact duplicate verifies the durable ledger key/fingerprint and returns `created=false` without timestamp or audit changes. Partial states are corruption, different identities are conflicts, and unknown database errors are never treated as retry success.
+- Final completion uses the approved summary representation `highestCompletedLevel=maxLevel`, `currentLevel=maxLevel+1`, `status=completed`, with one shared evaluation timestamp. Archived pins remain valid and are never rebound.
 
 ---
 

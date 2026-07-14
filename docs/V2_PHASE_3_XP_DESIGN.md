@@ -527,6 +527,12 @@ Minimum future groups:
 
 ### Phase 3B.4 — Atomic completion transition foundation
 
+- **Implementation status:** complete. `completeCurriculumLevel` owns one interactive transaction and returns a safe discriminated result; `completeCurriculumLevelInTransaction` uses an owner-supplied transaction client without nesting. No HTTP route or owner storage was added.
+- **Trusted input:** enrollment ID, level definition ID, one approved completion source, stable source identity, nullable actor and one captured evaluation time. User/version/level number, reward, key, fingerprint, evidence, desired status and next-level fields are server-derived or forbidden.
+- **Unambiguous owner map:** `lesson + (lesson|manual) -> level_completion/in_progress`; `final_exam + assessment_pass -> assessment_pass/in_progress`; `report + report_approval -> report_approval/pending_review`; `mentor_review + mentor_review -> mentor_completion/pending_review`. Scenario, practice, external-event and checkpoint definitions fail closed as `COMPLETION_OWNER_UNAVAILABLE` until their owner contracts exist.
+- **Transition:** READ, ENROLLMENT and XP flags are all required. The coordinator validates the published/archived pin, owner, active definitions, contiguous progress and summary state; conditionally claims progress, records definition-owned positive XP through the ledger helper, conditionally advances enrollment, and awaits both XP and completion audits. Final completion persists `highestCompletedLevel=maxLevel`, `currentLevel=maxLevel+1`, `status=completed` and one completion timestamp.
+- **Retry/concurrency:** exact retry validates the full ledger plus canonical key/fingerprint and returns `created=false` without writes. Completed-without-XP and XP-without-completion are corruption. Progress and enrollment use CAS predicates; a CAS loser is re-read once and may recover only as an exact retry. Unknown database errors are not converted into success or retry recovery.
+- **Notification policy:** no notification/outbox exists in this phase. Completion does not emit best-effort notification, CRM or other fire-and-forget effects.
 - **Scope:** internal transaction coordinator, ordinary zero/level completion adapter foundation, durable owner interface, audit and chosen notification policy, fault-injection regression.
 - **Forbidden:** generic public completion route; fake assessment/checkpoint/report/mentor evidence; promo changes.
 - **Acceptance:** all ten state transitions atomic, duplicate no-op, rollback injection, financial/trade zero XP, cross-version rejection.
@@ -550,6 +556,8 @@ Minimum future groups:
 - **Dependencies/stop:** 3B.1–3B.5 green; stop if permissions or public history fields remain undecided.
 
 ## 6. Phase 3 status
+
+Phase 3B.4 adds the feature-gated internal atomic completion coordinator. It derives positive XP from the pinned immutable level, persists progress/enrollment/XP and both audits in one transaction, supports archived pins and terminal `maxLevel+1`, and leaves owner adapters, checkpoints, notifications, promo compatibility and HTTP exposure outside this phase.
 
 Phase 3A была design-only. Phase 3B.1 реализовала schema foundation. Phase 3B.2 добавляет выключенный по умолчанию internal ledger service и read-only resolver: XP суммируется только из `XPTransaction` одного enrollment, archived pin поддерживается, draft/cross-owner/cross-version/range corruption fail closed. `currentXp` cache и `levelNumber` не добавлены; V1 XP не читается как V2 authority и не получает dual-write.
 
