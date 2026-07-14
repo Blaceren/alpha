@@ -17,7 +17,8 @@
 | D1A | Application Foundation & Art-Direction Board | ⛔ Отклонён (generic dashboard) — сохранён как anti-example |
 | D1A-R0 | Provisional Brand Intelligence & Art-Direction Reset | ✅ Применён (4 base + 4 ATA skills, references) |
 | D1A-R1 | Structural Art-Direction Gate | ✅ Выполнен (3 структурно разных low-fi модели, 6 screenshots, comparison, scoring; победитель не выбран) |
-| D1A-R2 | Consolidated High-Fidelity Home Direction | ✅ Выполнен (Route Field master, 2 состояния, rank artifact, 5 hi-fi screenshots, QA×2, score 89; React не утверждён) |
+| D1A-R2 | Consolidated High-Fidelity Home Direction | ✅ Концептуально принят / ⚠️ визуально не принят (см. R2.1) |
+| D1A-R2.1 | Route Field Visual Correction | ✅ Выполнен (no central card, gate near/boundary/far, Route Sigil, финансовое давление снижено; evidence matrix — все Pass; 5 final + first-pass screenshots; React не разрешён) |
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | Урок, тест, report, mentor feedback | ⛔ Не начата |

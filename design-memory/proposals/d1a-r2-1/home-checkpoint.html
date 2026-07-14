@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Главная · контрольная точка</title>
+<link rel="stylesheet" href="shared.css">
+</head><body>
+
+<!-- ============ DESKTOP 1440×900 ============ -->
+<div class="canvas desktop">
+  <div class="band">
+    <span class="brand"><svg class="mark" viewBox="0 0 24 24"><rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="#6f9ad8" stroke-width="1.5"/><polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="#39d3a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Alfa Trade Academy</span>
+    <nav class="rnav"><a class="on">Главная</a><a>Путь</a><a>Уроки</a><a>Инструменты</a><a>Ещё</a></nav>
+    <span class="right"><span class="bell">уведомления</span><span class="avatar">А</span></span>
+  </div>
+
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <defs>
+      <filter id="g2" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="8"/></filter>
+      <radialGradient id="ap" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#39d3a6" stop-opacity=".28"/><stop offset="1" stop-color="#39d3a6" stop-opacity="0"/></radialGradient>
+      <linearGradient id="depth" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#070b12" stop-opacity="0"/><stop offset="1" stop-color="#05080e" stop-opacity=".8"/></linearGradient>
+    </defs>
+    <!-- FAR zone: depth change after the boundary (field behind is deeper/darker) -->
+    <rect x="720" y="58" width="720" height="842" fill="url(#depth)"/>
+    <!-- NEAR: completed route hugs the bottom, then rises and PHYSICALLY STOPS before the gate -->
+    <path d="M70 814 C 340 808, 502 772, 610 612" stroke="#1f7d64" stroke-width="11" opacity=".5" filter="url(#g2)" fill="none"/>
+    <path d="M70 814 C 340 808, 502 772, 610 612" stroke="#39d3a6" stroke-width="2.6" fill="none"/>
+    <circle cx="330" cy="800" r="5" fill="#39d3a6"/><circle cx="500" cy="742" r="5" fill="#39d3a6"/>
+    <circle cx="610" cy="612" r="6" fill="#39d3a6"/>
+    <line x1="610" y1="600" x2="610" y2="624" stroke="#39d3a6" stroke-width="3"/> <!-- route stop cap -->
+    <!-- BOUNDARY: two offset vertical planes + light aperture (a gate/threshold) -->
+    <ellipse cx="672" cy="450" rx="30" ry="150" fill="url(#ap)"/>
+    <line x1="648" y1="150" x2="648" y2="760" stroke="#6f9ad8" stroke-width="2.5" opacity=".9"/>
+    <line x1="700" y1="188" x2="700" y2="722" stroke="#6f9ad8" stroke-width="2.5" opacity=".5"/>
+    <ellipse cx="674" cy="450" rx="20" ry="120" fill="none" stroke="#39d3a6" stroke-width="1.5" opacity=".65"/>
+    <!-- FAR: next module field — faint continuing route -->
+    <path d="M760 430 C 900 400, 1080 388, 1300 384" stroke="#5f6b80" stroke-width="1.6" stroke-dasharray="2 9" opacity=".5" fill="none"/>
+  </svg>
+
+  <div class="svc mono" style="position:absolute;left:112px;top:706px;color:var(--ink-3)">Пройдено · уровни 16–20</div>
+
+  <!-- NEAR zone: condition hierarchy (amount is NOT the advertising centre) + CTA at the boundary -->
+  <div style="position:absolute;left:96px;top:300px;width:470px">
+    <div class="action-ctx" style="color:var(--cold)">Текущая контрольная точка · Уровень 20</div>
+    <div class="lesson-title" style="font-size:34px;margin:12px 0 14px">Подтверди условие,<br>чтобы пройти дальше</div>
+    <div class="cp-cond">Для продолжения требуется подтвердить условие контрольной точки:</div>
+    <div class="cp-cond" style="margin-top:8px">Баланс Pocket от <b>$200</b>.</div>
+    <div class="svc" style="margin-top:8px">Учитывается только подтверждённый реальный баланс. Demo не учитывается.</div>
+    <div style="margin-top:22px"><a class="route-cta">Проверить выполнение <span class="go">→</span></a></div>
+    <div class="alexstrip" style="margin-top:26px;width:460px">
+      <div class="frame" style="width:56px;height:56px"><span class="tag" style="font-size:8px">Alex</span></div>
+      <div><div class="who" style="font-size:11.5px">Alex Curie · наставник курса</div>
+      <div class="mentor" style="font-size:14px">Контрольная точка подтверждает готовность идти дальше. Проверка выполнится сама — спешить не нужно.</div></div>
+    </div>
+  </div>
+
+  <!-- FAR zone: reward + new rank BEHIND the boundary (spatially further, dimmer) -->
+  <div style="position:absolute;left:790px;top:300px;width:340px;opacity:.86">
+    <div class="farfield">
+      <div class="lbl">За границей · что откроется</div>
+      <div style="margin-top:18px;display:flex;align-items:center;gap:14px">
+        <svg width="60" height="60" viewBox="0 0 100 100" aria-hidden="true" opacity=".92">
+          <path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3" stroke-linecap="round"/>
+          <path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57 A4 4 0 0 1 59 61 H45" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="47" cy="55" r="3.6" fill="#39d3a6"/><circle cx="31" cy="33" r="3" fill="#39d3a6"/>
+        </svg>
+        <div><div class="svc" style="color:var(--ink-3)">Следующий ранг</div><div style="font-size:17px;font-weight:600">Наблюдатель IV</div></div>
+      </div>
+      <div style="margin-top:18px" class="chip">◇ Новый инструмент — <b style="color:var(--ink);font-weight:600;margin-left:4px">Chart Markup Tool</b></div>
+      <div class="svc" style="margin-top:16px;color:var(--ink-3)">…и следующий модуль пути</div>
+    </div>
+  </div>
+
+  <div class="caption">D1A-R2.1 · Route Field · State B — current checkpoint (near / boundary / far)</div>
+</div>
+
+<!-- ============ MOBILE 390×844 ============ -->
+<div class="canvas mobile">
+  <div class="band" style="height:52px;padding:0 16px;gap:10px">
+    <span class="brand" style="font-size:13px"><svg class="mark" viewBox="0 0 24 24" width="16" height="16"><rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="#6f9ad8" stroke-width="1.5"/><polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="#39d3a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Alfa Trade Academy</span>
+    <span class="right"><span class="avatar" style="width:28px;height:28px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- gate fully visible in first viewport: near route → boundary → far field behind -->
+  <svg width="390" height="270" style="position:absolute;left:0;top:60px" aria-hidden="true">
+    <defs><filter id="g2m" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="6"/></filter>
+      <radialGradient id="apm" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#39d3a6" stop-opacity=".3"/><stop offset="1" stop-color="#39d3a6" stop-opacity="0"/></radialGradient>
+      <linearGradient id="depthm" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#070b12" stop-opacity="0"/><stop offset="1" stop-color="#05080e" stop-opacity=".7"/></linearGradient></defs>
+    <rect x="248" y="0" width="142" height="270" fill="url(#depthm)"/>
+    <path d="M-10 260 C 60 220, 130 190, 196 156" stroke="#1f7d64" stroke-width="10" opacity=".5" filter="url(#g2m)" fill="none"/>
+    <path d="M-10 260 C 60 220, 130 190, 196 156" stroke="#39d3a6" stroke-width="2.4" fill="none"/>
+    <line x1="196" y1="146" x2="196" y2="166" stroke="#39d3a6" stroke-width="3"/>
+    <ellipse cx="234" cy="130" rx="20" ry="70" fill="url(#apm)"/>
+    <line x1="222" y1="34" x2="222" y2="226" stroke="#6f9ad8" stroke-width="2.4" opacity=".9"/>
+    <line x1="250" y1="52" x2="250" y2="208" stroke="#6f9ad8" stroke-width="2.4" opacity=".5"/>
+    <ellipse cx="235" cy="130" rx="13" ry="56" fill="none" stroke="#39d3a6" stroke-width="1.4" opacity=".65"/>
+    <path d="M270 120 C 320 110, 360 108, 400 106" stroke="#5f6b80" stroke-width="1.4" stroke-dasharray="2 8" opacity=".5" fill="none"/>
+  </svg>
+  <div class="svc mono" style="position:absolute;left:16px;top:300px;color:var(--ink-3)">Пройдено 16–20 ↙</div>
+  <div class="svc" style="position:absolute;right:12px;top:150px;color:var(--ink-3);text-align:right;font-size:11px">за границей →<br>Наблюдатель IV</div>
+
+  <!-- near-zone condition (compact) + CTA in first viewport; amount not dominant -->
+  <div style="position:absolute;left:20px;top:330px;width:352px">
+    <div class="action-ctx" style="color:var(--cold)">Контрольная точка · Уровень 20</div>
+    <div class="lesson-title sm" style="font-size:22px;margin:8px 0 10px">Подтверди условие,<br>чтобы пройти дальше</div>
+    <div class="cp-cond" style="font-size:14px">Требуется баланс Pocket от <b>$200</b>.</div>
+    <div class="svc" style="margin-top:6px;font-size:12px">Учитывается только подтверждённый реальный баланс. Demo не учитывается.</div>
+    <div style="margin-top:16px"><a class="route-cta" style="width:100%;justify-content:space-between">Проверить выполнение <span class="go">→</span></a></div>
+  </div>
+
+  <!-- far zone summary (behind boundary) + Alex compact -->
+  <div style="position:absolute;left:20px;top:560px;width:352px">
+    <div class="chip" style="font-size:12.5px"><svg width="26" height="26" viewBox="0 0 100 100" style="margin-right:6px"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3"/><path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57" fill="none" stroke="#39d3a6" stroke-width="4.5"/><circle cx="47" cy="55" r="3.6" fill="#39d3a6"/></svg>За границей — <b style="color:var(--ink);font-weight:600;margin:0 4px">Наблюдатель IV</b> · Chart Markup Tool</div>
+    <div class="alexstrip" style="margin-top:16px">
+      <div class="frame" style="width:44px;height:44px"><span class="tag" style="font-size:8px">Alex</span></div>
+      <div class="mentor" style="font-size:12.5px">Проверка выполнится сама — спешить не нужно.</div>
+    </div>
+  </div>
+
+  <nav class="bottomnav">
+    <a class="on"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10l8-6 8 6v10" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Главная</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M4 18c4 0 4-12 8-12s4 12 8 12" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Путь</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Уроки</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M8 6H6v2M18 16v2h-2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Инструменты</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></svg>Ещё</a>
+  </nav>
+</div>
+</body></html>

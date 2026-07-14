@@ -159,6 +159,28 @@
 - **DD-195 (Locked).** React implementation Главной **ещё не утверждён**; требуется явное решение
   пользователя (правило art-gate сохраняется).
 
+## D1A-R2.1 — Route Field visual correction
+
+- **DD-200 (Locked).** R2 принят концептуально, но **не** визуально. Card-centric implementation
+  **отклонён**: lesson context — открытая асимметричная поверхность, сформированная route geometry
+  (bounded top+left, open bottom-right), не generic central card. Route формирует интерфейс.
+- **DD-201 (Locked).** Checkpoint gate обязан иметь структуру **near / boundary / far**: near
+  (путь+позиция+условие) → boundary (две смещённые вертикальные плоскости + световой aperture +
+  остановка route + депт-сдвиг) → far (новый ранг + инструмент + следующий module field). Reward и
+  новый ранг — за воротами, не floating pills. Не координатная ось.
+- **DD-202 (Locked).** Sparkline rank artifact **отклонён**. **Route Sigil** — новое provisional
+  направление ранга: завершённый маршрут, свёрнутый в знак (anchor + один continuous trace + 1–4 слоя +
+  family contour + точка ступени). Читается в 22px, силуэт держится в monochrome. Не chart/sparkline/
+  hexagon/медаль/щит/буква A/пирамида/стрелка/монета.
+- **DD-203 (Locked).** Финансовая иерархия checkpoint: сумма «Баланс Pocket от $200» показывается
+  спокойно (обычный ink, без glow/зелёного гиганта/deposit-styling/срочности/«осталось»/Pocket-CTA);
+  главный — не $200, а условие/действие. CTA — route action marker, не ярче route-системы.
+- **DD-204 (Locked).** Alex Curie — заметное provisional media presence (reserved media frame +
+  editorial voice strip, привязан к node); не серый avatar/не generic-карточка/не floating chatbot.
+- **DD-205 (Locked).** Оценка коррекции — evidence matrix (14 критериев, все Pass), не self-балл.
+  Любой Fail блокирует React. React всё равно **не разрешён** без явного решения пользователя.
+  Детали — `docs/D1A_R2_1_VISUAL_CORRECTION.md`, `design-memory/reviews/d1a-r2-1-review.md`.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

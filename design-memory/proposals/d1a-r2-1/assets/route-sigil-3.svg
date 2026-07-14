@@ -1,0 +1,15 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ранг Наблюдатель III">
+  <!-- family contour (Наблюдатель): open rounded frame with a top notch, cold blue -->
+  <path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58"
+        fill="none" stroke="#5f8fd6" stroke-width="3" stroke-linecap="round"/>
+  <!-- route folded into a stable sign: one continuous trace, 3 assembled layers (tier III) -->
+  <path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57"
+        fill="none" stroke="#3fe0b2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- locked 4th layer (next tier) -->
+  <path d="M63 57 V61 A4 4 0 0 1 59 65 H45"
+        fill="none" stroke="#7c8598" stroke-width="3" stroke-linecap="round" stroke-dasharray="1.5 4" opacity=".8"/>
+  <!-- central anchor -->
+  <circle cx="47" cy="55" r="3.6" fill="#3fe0b2"/>
+  <!-- current-step dot (outer end of the trace) -->
+  <circle cx="31" cy="33" r="3" fill="#3fe0b2"/>
+</svg>
