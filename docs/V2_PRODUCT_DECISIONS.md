@@ -146,6 +146,16 @@
 - Endpoint зависит только от READ flag; ADMIN/ENROLLMENT flags не влияют на read availability. Reads не создают audit/notification/progress/enrollment и не касаются timestamps.
 - Rollout запрещён; все три curriculum flags сохраняют default false.
 
+## 15. Immutable V2 XP ledger schema foundation (Phase 3B.1)
+
+- V2 XP ledger принадлежит конкретному `UserCurriculumEnrollment`; `userId` и `curriculumVersionId` сохраняются как discriminators и защищены composite FK.
+- Optional `levelDefinitionId` может ссылаться только на level той же pinned curriculum version. `levelNumber` не хранится и выводится из immutable `LevelDefinition`.
+- `amount` строго положительный на DB level. Нулевые и отрицательные rows, включая отрицательный `admin_correction`, запрещены.
+- Source allowlist ограничен: `level_completion | assessment_pass | report_approval | mentor_completion | promocode | migration_adjustment | admin_correction`.
+- `idempotencyKey` globally unique; `payloadFingerprint` обязателен; nullable metadata не является authority.
+- Enrollment/user/version/level ownership использует `ON DELETE RESTRICT`; удаление nullable actor использует `SET NULL`.
+- `currentXp` cache не добавляется. Phase 3B.1 не импортирует V1 XP, не выполняет backfill/dual-write и не реализует award/resolver/API.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

@@ -9,8 +9,9 @@ import type { PrismaClient } from "@prisma/client";
 
 // Cumulative upgrade regression: upgrade an existing populated V1 database
 // through the Phase 1 curriculum migration, add representative Phase 1 data,
-// then apply the additive Phase 2B.1 enrollment/progress migration. Proves V1
-// and Phase 1 data preservation before exercising runtime compatibility.
+// then apply the additive Phase 2B.1 enrollment/progress and Phase 3B.1 XP
+// migrations. Proves V1, Phase 1 and Phase 2 data preservation before
+// exercising runtime compatibility.
 // Uses only a throwaway SQLite DB in /tmp, removed in finally.
 
 const dbPath = `/tmp/ata-curriculum-upgrade-${process.pid}.db`;
@@ -20,6 +21,7 @@ const dbUrl = `file:${dbPath}`;
 process.env.DATABASE_URL = dbUrl;
 const PHASE_1_MIGRATION = "20260714000000_curriculum_versioning_foundation";
 const PHASE_2_MIGRATION = "20260714010000_curriculum_enrollment_progress_foundation";
+const PHASE_3_XP_MIGRATION = "20260714020000_xp_transaction_foundation";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -204,9 +206,12 @@ async function main() {
     const all = migrationNames();
     const phase1Index = all.indexOf(PHASE_1_MIGRATION);
     const phase2Index = all.indexOf(PHASE_2_MIGRATION);
+    const phase3XpIndex = all.indexOf(PHASE_3_XP_MIGRATION);
     assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
     assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
+    assert.notEqual(phase3XpIndex, -1, "Phase 3 XP migration missing");
     assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
+    assert.equal(phase3XpIndex > phase2Index, true, "Phase 3 XP migration must follow Phase 2");
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -421,7 +426,105 @@ async function main() {
       assert.equal([...enrollmentFks, ...progressFks].every((fk) => fk.on_update === "CASCADE"), true);
     });
 
-    await check("7. V1 CRUD still works after upgrade", async () => {
+    const phase2Enrollment = await prisma.userCurriculumEnrollment.create({
+      data: {
+        userId: user.id,
+        curriculumVersionId: phase1Version.id,
+        curriculumCode: phase1Version.code,
+      },
+    });
+    const phase2Progress = await prisma.userLevelProgress.create({
+      data: {
+        enrollmentId: phase2Enrollment.id,
+        curriculumVersionId: phase1Version.id,
+        levelDefinitionId: phase1Level.id,
+      },
+    });
+    const phase2Snapshot = {
+      enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+        where: { id: phase2Enrollment.id },
+      }),
+      progress: await prisma.userLevelProgress.findUniqueOrThrow({
+        where: { id: phase2Progress.id },
+      }),
+      user: await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
+      xpEvent: await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }),
+      curriculumVersion: await prisma.curriculumVersion.findUniqueOrThrow({
+        where: { id: phase1Version.id },
+      }),
+      levelDefinition: await prisma.levelDefinition.findUniqueOrThrow({
+        where: { id: phase1Level.id },
+      }),
+    };
+
+    // ---- Apply only the additive Phase 3B.1 XP migration ----
+    await applyMigration(prisma, PHASE_3_XP_MIGRATION);
+
+    await check("7. Phase 3B.1 preserves populated V1, Phase 1 and Phase 2 rows", async () => {
+      assert.deepEqual(
+        await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+          where: { id: phase2Enrollment.id },
+        }),
+        phase2Snapshot.enrollment,
+      );
+      assert.deepEqual(
+        await prisma.userLevelProgress.findUniqueOrThrow({
+          where: { id: phase2Progress.id },
+        }),
+        phase2Snapshot.progress,
+      );
+      assert.deepEqual(
+        await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
+        phase2Snapshot.user,
+      );
+      assert.deepEqual(
+        await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }),
+        phase2Snapshot.xpEvent,
+      );
+      assert.deepEqual(
+        await prisma.curriculumVersion.findUniqueOrThrow({
+          where: { id: phase1Version.id },
+        }),
+        phase2Snapshot.curriculumVersion,
+      );
+      assert.deepEqual(
+        await prisma.levelDefinition.findUniqueOrThrow({
+          where: { id: phase1Level.id },
+        }),
+        phase2Snapshot.levelDefinition,
+      );
+    });
+
+    await check("8. XPTransaction is empty after populated upgrade", async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+        'SELECT COUNT(*) AS count FROM "XPTransaction"',
+      );
+      assert.equal(Number(rows[0].count), 0);
+    });
+
+    await check("9. one valid enrollment-owned XP row can be created", async () => {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "XPTransaction" (
+          "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
+          "sourceType", "sourceId", "idempotencyKey", "payloadFingerprint", "amount"
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        user.id,
+        phase2Enrollment.id,
+        phase1Version.id,
+        phase1Level.id,
+        "level_completion",
+        `progress:${phase2Progress.id}`,
+        `xp:upgrade:${phase2Progress.id}`,
+        `fp:upgrade:${phase2Progress.id}`,
+        10,
+      );
+      const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+        'SELECT COUNT(*) AS count FROM "XPTransaction"',
+      );
+      assert.equal(Number(rows[0].count), 1);
+    });
+
+    await check("10. V1 CRUD still works after upgrade", async () => {
       const updated = await prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 10 } } });
       assert.equal(updated.xp, snapshot.userRow.xp + 10);
       await prisma.user.update({ where: { id: user.id }, data: { xp: snapshot.userRow.xp } }); // restore
@@ -430,7 +533,7 @@ async function main() {
     });
 
     let draftId = 0;
-    await check("8. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
+    await check("11. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
       const authoring = await import("../../src/lib/curriculum/authoring");
       const draft = await authoring.createCurriculumDraft({
         actorId: adminUser.id, code: "upgrade-check", name: "Upgrade Check", versionNumber: 1,
@@ -439,13 +542,26 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
-    await check("9. re-running the real migration runner does not duplicate schema or data", async () => {
+    await check("12. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
           'SELECT COUNT(*) as c FROM "_prisma_migrations"',
         ))[0].c,
         users: await prisma.user.count(),
         drafts: await prisma.curriculumVersion.count(),
+        xpTransactions: Number(
+          (
+            await prisma.$queryRawUnsafe<Array<{ c: bigint }>>(
+              'SELECT COUNT(*) as c FROM "XPTransaction"',
+            )
+          )[0].c,
+        ),
+        enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+          where: { id: phase2Enrollment.id },
+        }),
+        progress: await prisma.userLevelProgress.findUniqueOrThrow({
+          where: { id: phase2Progress.id },
+        }),
       };
       const runner = spawnSync("npx", ["tsx", path.join("prisma", "migrate.ts")], {
         env: serverEnv as NodeJS.ProcessEnv, encoding: "utf8",
@@ -458,6 +574,19 @@ async function main() {
         ))[0].c,
         users: await prisma.user.count(),
         drafts: await prisma.curriculumVersion.count(),
+        xpTransactions: Number(
+          (
+            await prisma.$queryRawUnsafe<Array<{ c: bigint }>>(
+              'SELECT COUNT(*) as c FROM "XPTransaction"',
+            )
+          )[0].c,
+        ),
+        enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+          where: { id: phase2Enrollment.id },
+        }),
+        progress: await prisma.userLevelProgress.findUniqueOrThrow({
+          where: { id: phase2Progress.id },
+        }),
       };
       assert.deepEqual(after, before, "re-run changed migration/data state");
     });
@@ -466,7 +595,7 @@ async function main() {
     await prisma.$disconnect();
 
     server = await startServer(false);
-    await check("10. flag OFF: /api/health OK and V1 authenticated read works", async () => {
+    await check("13. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
       const login = await client.login(user.email);
@@ -475,7 +604,7 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("11. flag OFF: curriculum admin routes return 404", async () => {
+    await check("14. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -487,7 +616,7 @@ async function main() {
     server = null;
 
     server = await startServer(true);
-    await check("12. flag ON: admin authenticated read of curriculum versions works", async () => {
+    await check("15. flag ON: admin authenticated read of curriculum versions works", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -504,7 +633,7 @@ async function main() {
     cleanupDb();
   }
 
-  await check("13. temporary DB and journals removed after test", () => {
+  await check("16. temporary DB and journals removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);

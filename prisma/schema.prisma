@@ -106,55 +106,57 @@ enum TesterFeedbackStatus {
 }
 
 model User {
-  id                          Int                          @id @default(autoincrement())
-  email                       String                       @unique
-  pendingEmail                String?                      @unique
-  pendingEmailRequestedAt     DateTime?
-  referralCode                String                       @unique @default(cuid())
-  passwordHash                String                       @default("")
-  role                        UserRole                     @default(user)
-  status                      UserStatus                   @default(active)
-  name                        String
-  level                       Int                          @default(1)
-  xp                          Int                          @default(0)
-  currentTask                 String?
-  emailVerifiedAt             DateTime?
-  leaderboardExcluded         Boolean                      @default(false)
-  selectedAchievementId       Int?
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @updatedAt
-  notificationSettings        NotificationSettings?
-  invitedReferrals            Referral[]                   @relation("InviterReferrals")
-  invitedByReferral           Referral?                    @relation("InvitedReferral")
-  taskProgress                UserTaskProgress[]
-  rewards                     UserReward[]
-  checkpoint                  Checkpoint?
-  exchangeAccount             ExchangeAccount?
-  chatMessages                ChatMessage[]
-  supportDialogs              SupportDialog[]              @relation("SupportDialogOwner")
-  assignedSupportDialogs      SupportDialog[]              @relation("SupportDialogAssignee")
-  supportMessages             SupportMessage[]             @relation("SupportMessageSender")
-  crmUserCohorts              CrmUserCohort[]
-  auditLogs                   AuditLog[]
-  taskReports                 TaskReport[]                 @relation("TaskReportOwner")
-  reviewedTaskReports         TaskReport[]                 @relation("TaskReportReviewer")
-  notifications               Notification[]
-  fileAssets                  FileAsset[]
-  testerFeedback              TesterFeedback[]             @relation("TesterFeedbackAuthor")
-  resolvedFeedback            TesterFeedback[]             @relation("TesterFeedbackResolver")
-  emailVerificationTokens     EmailVerificationToken[]
-  dailyRewards                DailyLoginReward[]
-  promocodeRedemptions        PromocodeRedemption[]
-  achievements                UserAchievement[]
-  mentorDialogs               MentorChatDialog[]           @relation("MentorChatOwner")
-  assignedMentorDialogs       MentorChatDialog[]           @relation("MentorChatAssignee")
-  mentorMessages              MentorChatMessage[]          @relation("MentorMessageSender")
-  channelMentorAssignments    MentorChannelAssignment[]
-  channelModeratorAssignments ModeratorChannelAssignment[]
-  chatMutes                   ChatMute[]
-  xpEvents                    XpEvent[]
-  curriculumVersionsCreated   CurriculumVersion[]          @relation("CurriculumVersionCreator")
-  curriculumEnrollments       UserCurriculumEnrollment[]
+  id                              Int                          @id @default(autoincrement())
+  email                           String                       @unique
+  pendingEmail                    String?                      @unique
+  pendingEmailRequestedAt         DateTime?
+  referralCode                    String                       @unique @default(cuid())
+  passwordHash                    String                       @default("")
+  role                            UserRole                     @default(user)
+  status                          UserStatus                   @default(active)
+  name                            String
+  level                           Int                          @default(1)
+  xp                              Int                          @default(0)
+  currentTask                     String?
+  emailVerifiedAt                 DateTime?
+  leaderboardExcluded             Boolean                      @default(false)
+  selectedAchievementId           Int?
+  createdAt                       DateTime                     @default(now())
+  updatedAt                       DateTime                     @updatedAt
+  notificationSettings            NotificationSettings?
+  invitedReferrals                Referral[]                   @relation("InviterReferrals")
+  invitedByReferral               Referral?                    @relation("InvitedReferral")
+  taskProgress                    UserTaskProgress[]
+  rewards                         UserReward[]
+  checkpoint                      Checkpoint?
+  exchangeAccount                 ExchangeAccount?
+  chatMessages                    ChatMessage[]
+  supportDialogs                  SupportDialog[]              @relation("SupportDialogOwner")
+  assignedSupportDialogs          SupportDialog[]              @relation("SupportDialogAssignee")
+  supportMessages                 SupportMessage[]             @relation("SupportMessageSender")
+  crmUserCohorts                  CrmUserCohort[]
+  auditLogs                       AuditLog[]
+  taskReports                     TaskReport[]                 @relation("TaskReportOwner")
+  reviewedTaskReports             TaskReport[]                 @relation("TaskReportReviewer")
+  notifications                   Notification[]
+  fileAssets                      FileAsset[]
+  testerFeedback                  TesterFeedback[]             @relation("TesterFeedbackAuthor")
+  resolvedFeedback                TesterFeedback[]             @relation("TesterFeedbackResolver")
+  emailVerificationTokens         EmailVerificationToken[]
+  dailyRewards                    DailyLoginReward[]
+  promocodeRedemptions            PromocodeRedemption[]
+  achievements                    UserAchievement[]
+  mentorDialogs                   MentorChatDialog[]           @relation("MentorChatOwner")
+  assignedMentorDialogs           MentorChatDialog[]           @relation("MentorChatAssignee")
+  mentorMessages                  MentorChatMessage[]          @relation("MentorMessageSender")
+  channelMentorAssignments        MentorChannelAssignment[]
+  channelModeratorAssignments     ModeratorChannelAssignment[]
+  chatMutes                       ChatMute[]
+  xpEvents                        XpEvent[]
+  curriculumVersionsCreated       CurriculumVersion[]          @relation("CurriculumVersionCreator")
+  curriculumEnrollments           UserCurriculumEnrollment[]
+  curriculumXpTransactions        XPTransaction[]              @relation("CurriculumXpTarget")
+  curriculumXpTransactionsCreated XPTransaction[]              @relation("CurriculumXpCreator")
 }
 
 model XpEvent {
@@ -764,6 +766,16 @@ enum UserLevelProgressStatus {
   completed
 }
 
+enum CurriculumXpSourceType {
+  level_completion
+  assessment_pass
+  report_approval
+  mentor_completion
+  promocode
+  migration_adjustment
+  admin_correction
+}
+
 model CurriculumVersion {
   id            Int                        @id @default(autoincrement())
   code          String
@@ -828,6 +840,7 @@ model LevelDefinition {
   curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
   module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
   userProgress            UserLevelProgress[]
+  xpTransactions          XPTransaction[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -853,8 +866,10 @@ model UserCurriculumEnrollment {
   user                   User                       @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
   levelProgress          UserLevelProgress[]
+  xpTransactions         XPTransaction[]
 
   @@unique([id, curriculumVersionId])
+  @@unique([id, userId, curriculumVersionId])
   @@index([curriculumVersionId, status])
   @@index([userId, enrolledAt])
 }
@@ -880,4 +895,30 @@ model UserLevelProgress {
   @@index([enrollmentId, status])
   @@index([curriculumVersionId, status])
   @@index([levelDefinitionId])
+}
+
+model XPTransaction {
+  id                  Int                      @id @default(autoincrement())
+  userId              Int
+  enrollmentId        Int
+  curriculumVersionId Int
+  levelDefinitionId   Int?
+  sourceType          CurriculumXpSourceType
+  sourceId            String?
+  idempotencyKey      String                   @unique
+  payloadFingerprint  String
+  amount              Int
+  metadata            Json?
+  createdAt           DateTime                 @default(now())
+  createdById         Int?
+  user                User                     @relation("CurriculumXpTarget", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition     LevelDefinition?         @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User?                    @relation("CurriculumXpCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([enrollmentId, createdAt, id])
+  @@index([userId, createdAt, id])
+  @@index([curriculumVersionId, sourceType])
+  @@index([levelDefinitionId])
+  @@index([sourceType, sourceId])
 }

@@ -180,7 +180,7 @@ model XPTransaction {
   sourceType            CurriculumXpSourceType
   sourceId              String?
   idempotencyKey        String                 @unique
-  requestFingerprint    String
+  payloadFingerprint    String
   amount                Int
   metadata              Json?
   createdAt             DateTime               @default(now())
@@ -201,7 +201,7 @@ model XPTransaction {
 
 Inverse relation fields are required on `User`, `UserCurriculumEnrollment` and `LevelDefinition`; they do not add columns. Exact relation names should be fixed in Phase 3B.1 and regression-tested.
 
-`levelNumber` is intentionally rejected. It is derivable from the immutable pinned `LevelDefinition`; duplicating it creates drift. `levelDefinitionId` is null only for promo/migration/admin rows not owned by one level. `userId` is retained despite being derivable from enrollment because it is a useful indexed query/audit discriminator and, with the triple FK, strengthens ownership. `createdById` is retained for human admin/migration actors; automated awards use the authenticated/system owner policy and may leave it null. `requestFingerprint` is required to distinguish a safe retry from reuse of the same key with a different payload.
+`levelNumber` is intentionally rejected. It is derivable from the immutable pinned `LevelDefinition`; duplicating it creates drift. `levelDefinitionId` is null only for promo/migration/admin rows not owned by one level. `userId` is retained despite being derivable from enrollment because it is a useful indexed query/audit discriminator and, with the triple FK, strengthens ownership. `createdById` is retained for human admin/migration actors; automated awards use the authenticated/system owner policy and may leave it null. `payloadFingerprint` is required to distinguish a safe retry from reuse of the same key with a different payload.
 
 ### Future SQLite SQL shape
 
@@ -220,7 +220,7 @@ CREATE TABLE "XPTransaction" (
   )),
   "sourceId" TEXT,
   "idempotencyKey" TEXT NOT NULL,
-  "requestFingerprint" TEXT NOT NULL,
+  "payloadFingerprint" TEXT NOT NULL,
   "amount" INTEGER NOT NULL CHECK ("amount" > 0),
   "metadata" JSONB,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -276,7 +276,7 @@ xp:v2:migration-adjustment:<migrationRunId>:<enrollmentId>:<sequence>
 xp:v2:admin-correction:<correctionRequestId>
 ```
 
-The command canonicalizes all authoritative inputs (owner type/id, enrollment/user/version/level, source, amount, safe metadata schema version) and stores SHA-256 as `requestFingerprint`. An HTTP idempotency header, if a future owner route uses one, is untrusted entropy only: validate length/charset, bind it to authenticated actor+route+payload, and derive a namespaced hash; never store/use it directly as ledger authority.
+The command canonicalizes all authoritative inputs (owner type/id, enrollment/user/version/level, source, amount, safe metadata schema version) and stores SHA-256 as `payloadFingerprint`. An HTTP idempotency header, if a future owner route uses one, is untrusted entropy only: validate length/charset, bind it to authenticated actor+route+payload, and derive a namespaced hash; never store/use it directly as ledger authority.
 
 Algorithm:
 
@@ -482,6 +482,8 @@ Minimum future groups:
 
 ### Phase 3B.1 — XP schema foundation
 
+**Implementation status:** schema foundation реализован одной additive migration `20260714020000_xp_transaction_foundation`. Ledger остаётся пустым после upgrade; award/resolver/runtime отсутствуют.
+
 - **Scope:** exact enum/model/inverse relations, parent composite unique, additive migration, schema/cross-version/upgrade regressions, design doc sync.
 - **Forbidden:** resolver, award/completion, promo route, API/UI, seed/backfill, flags/live.
 - **Acceptance:** CHECK/FK/index tests; wrong user/version/level rejected; V1 populated rows byte-equivalent; Prisma format/validate/generate and cumulative gates only as explicitly requested by that prompt.
@@ -528,9 +530,11 @@ Minimum future groups:
 - **Expected files:** narrow routes/mappers, correction service if approved, regression/gate scripts, completion docs.
 - **Dependencies/stop:** 3B.1–3B.5 green; stop if permissions or public history fields remain undecided.
 
-## 6. Phase 3A completion statement
+## 6. Phase 3 status
 
-Phase 3A defines architecture only. No schema, migration, application code, API, package, env, DB, runtime, live service, Docker, nginx or deployment state is changed. Phase 3 functional implementation remains 0% until a separate Phase 3B.1 prompt.
+Phase 3A была design-only. Phase 3B.1 реализует только schema foundation: `CurriculumXpSourceType`, enrollment-owned `XPTransaction`, positive/source DB CHECKs, composite ownership FKs, indexes и schema/upgrade regressions. `currentXp` и `levelNumber` не добавлены; V1 XP не импортируется и не получает dual-write.
+
+DB гарантирует положительный `amount`, source allowlist, required fingerprint, global idempotency-key uniqueness, cross-user/cross-version ownership, same-version optional level relation и `RESTRICT`/actor `SET NULL` delete policy. Append-only domain boundary пока обеспечивается отсутствием mutation service/API и будет реализован в Phase 3B.2. Privileged raw SQL технически может выполнить `UPDATE` или `DELETE`, потому что triggers намеренно отсутствуют ради совместимости custom migration runner.
 
 ---
 
