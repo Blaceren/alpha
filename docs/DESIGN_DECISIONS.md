@@ -181,6 +181,28 @@
   Любой Fail блокирует React. React всё равно **не разрешён** без явного решения пользователя.
   Детали — `docs/D1A_R2_1_VISUAL_CORRECTION.md`, `design-memory/reviews/d1a-r2-1-review.md`.
 
+## D1A-R2.2 — Final production-readiness correction
+
+- **DD-210 (Locked).** Route Field **окончательно утверждён** как основа Главной, глобального Пути,
+  отображения текущего уровня и приближения к контрольной точке. R2.2 — последняя design-only correction
+  перед React. Новое art direction не создаётся; к трём вариантам не возвращаться; card-grid/sidebar не возвращать.
+- **DD-211 (Locked).** Nested-square Route Sigil **отклонён**. **Route Knot** — новая provisional rank
+  система: пройденный маршрут, свёрнутый в компактный **асимметричный узел** (один continuous trace +
+  central anchor + open/closed endpoints + 1–4 captured nodes + асимметричный силуэт; без рамки-контейнера,
+  без полного круга, без направления графика). Ступень I–IV = число captured nodes (меняется структура
+  узла; IV замыкает внутренний маршрут). Читается в 22px, monochrome-силуэт держится; не похож на
+  wallet/camera/scanner/QR/chart/target/shield/medal/букву A/пирамиду/стрелку/монету.
+- **DD-212 (Locked).** Checkpoint: результаты за воротами **разделены** (Следующий ранг / инструмент)
+  как far-side preview со структурной линией + минимальным разделителем, не две pills/cards. Future
+  checkpoint preview — структурный (дальняя граница), не текстовая строка. Финансовая иерархия спокойная:
+  «$200» не крупнее heading, без glow/deposit/urgency/«осталось»/Pocket-CTA.
+- **DD-213 (Locked).** Alex media-frame — cinematic crop без лица + directional light + явная asset-layer
+  boundary для замены; имя нормально, «наставник курса» вторично; без stock-person.
+- **DD-214 (Locked).** Debug/phase copy запрещён в пользовательских кадрах (design documentation — можно).
+- **DD-215 (Locked).** Оценка — evidence matrix (все Pass). **Отсутствие Fail не заменяет пользовательское
+  approval: React разрешается только после ручного просмотра R2.2 и явного решения.** Детали —
+  `docs/D1A_R2_2_PRODUCTION_READINESS.md`, `design-memory/reviews/d1a-r2-2-review.md`.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

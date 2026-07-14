@@ -19,6 +19,7 @@
 | D1A-R1 | Structural Art-Direction Gate | ✅ Выполнен (3 структурно разных low-fi модели, 6 screenshots, comparison, scoring; победитель не выбран) |
 | D1A-R2 | Consolidated High-Fidelity Home Direction | ✅ Концептуально принят / ⚠️ визуально не принят (см. R2.1) |
 | D1A-R2.1 | Route Field Visual Correction | ✅ Выполнен (no central card, gate near/boundary/far, Route Sigil, финансовое давление снижено; evidence matrix — все Pass; 5 final + first-pass screenshots; React не разрешён) |
+| D1A-R2.2 | Final Production-Readiness Correction | ✅ Выполнен (mobile overlap устранён, route density, структурный checkpoint preview, rank/tool разделены, debug убран, **Route Knot** заменил Route Sigil; evidence matrix — все Pass; final+first-pass; React только после ручного review) |
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | Урок, тест, report, mentor feedback | ⛔ Не начата |
