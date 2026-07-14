@@ -135,6 +135,17 @@
 - Existing valid `in_progress` or `pending_review` current progress returns `created=false` without timestamp or audit changes. Expected progress unique races recover only after validating the persisted current-level row.
 - Completion, XP, checkpoint, report, mentor, entitlement, content and assessment runtime remain separate future phases.
 
+## 14. Authenticated current-user curriculum read API (Phase 2B.5)
+
+- Единственный user endpoint Phase 2: `GET /api/curriculum/v2/current`; mutation aliases и cross-user parameters отсутствуют.
+- Порядок security gate: READ flag → session → active user → strict empty query → existing context/level-state resolvers → explicit allowlist mapper.
+- Flag off возвращает indistinguishable 404 до auth. Anonymous получает 401, non-active/blocked user — 403, любой query parameter — 400. GET не требует CSRF и всегда `no-store`.
+- Success — discriminated union `candidate | enrolled | completed | unavailable` внутри `{data}`. Product unavailable — HTTP 200; typed corrupt state — sanitized HTTP 409 `CURRICULUM_STATE_CORRUPT`.
+- Candidate не создаёт enrollment и не изображает levels как available. Enrolled показывает pinned published/archived definitions, durable/presentation state и stable blockers. Completed остаётся terminal history.
+- Prisma objects напрямую не сериализуются. Email/role/password, internal IDs, createdBy, audit, migrationSource, completionEvidence, raw visibilityRule, currentXp, V1 XP/progression и raw infrastructure errors запрещены в response.
+- Endpoint зависит только от READ flag; ADMIN/ENROLLMENT flags не влияют на read availability. Reads не создают audit/notification/progress/enrollment и не касаются timestamps.
+- Rollout запрещён; все три curriculum flags сохраняют default false.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

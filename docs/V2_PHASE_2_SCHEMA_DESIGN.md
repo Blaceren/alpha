@@ -756,6 +756,8 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ### 2B.5 Progression read API
 
+**Реализованный acceptance contract:** единственный authenticated owner endpoint — `GET /api/curriculum/v2/current`; cross-user/admin target IDs и mutation routes отсутствуют. Gate выполняется в порядке READ flag → session → active user → strict empty query → existing context/level-state resolvers → safe allowlist mapper. Success возвращает `{data:{kind:"candidate"|"enrolled"|"completed"|"unavailable", ...}}`; unavailable — HTTP 200, typed corrupt state — sanitized 409 `CURRICULUM_STATE_CORRUPT`. Все ответы `no-store`; GET не требует CSRF и не создаёт enrollment/progress/audit/notification, не обновляет timestamps. ADMIN/ENROLLMENT flags не влияют на доступность read route. Полный зафиксированный контракт и cumulative evidence находятся в `V2_PHASE_2_COMPLETION.md`.
+
 **Scope:** authenticated owner/admin read over resolver output, durableStatus + presentationState + machine reasons, no-store, flag/auth/ownership/security tests.
 
 **Запрещено:** mutation endpoints, XP/checkpoint implementation, Pocket changes, automatic migration.
