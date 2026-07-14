@@ -20,6 +20,38 @@ export function curriculumFeatureDisabledResponse() {
   return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 }
 
+export type CurriculumReadErrorCode =
+  | "INVALID_QUERY"
+  | "CURRICULUM_STATE_CORRUPT"
+  | "XP_STATE_CORRUPT"
+  | "INTERNAL_ERROR";
+
+const CURRICULUM_READ_STATUS: Record<CurriculumReadErrorCode, number> = {
+  INVALID_QUERY: 400,
+  CURRICULUM_STATE_CORRUPT: 409,
+  XP_STATE_CORRUPT: 409,
+  INTERNAL_ERROR: 500,
+};
+
+// Shared safe mapper for self-service curriculum reads. Callers may pass only
+// stable issue codes; database errors, cursor contents and internal messages
+// are never serialized.
+export function curriculumReadErrorResponse(
+  code: CurriculumReadErrorCode,
+  issueCode?: string,
+) {
+  const body =
+    issueCode && code === "CURRICULUM_STATE_CORRUPT"
+      ? { error: code, reason: issueCode, issues: [{ code: issueCode }] }
+      : issueCode && code !== "INTERNAL_ERROR"
+        ? { error: code, issues: [{ code: issueCode }] }
+        : { error: code };
+  return NextResponse.json(body, {
+    status: CURRICULUM_READ_STATUS[code],
+    headers: NO_STORE_HEADERS,
+  });
+}
+
 type AdminUser = Awaited<ReturnType<typeof requireAdmin>>;
 
 type GateResult =

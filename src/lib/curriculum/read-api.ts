@@ -5,17 +5,29 @@ import type {
   UserCurriculumEnrollment,
 } from "@prisma/client";
 import type { UserCurriculumLevelStatesResult } from "./level-state";
+import type { ResolveEnrollmentXpResult } from "./xp";
 import type {
   ResolvedProgress,
   UserCurriculumContextResult,
 } from "./resolver";
 
-type EnrolledContext = Extract<UserCurriculumContextResult, { kind: "enrolled" }>;
 type CompletedContext = Extract<UserCurriculumContextResult, { kind: "completed" }>;
 type ResolvedLevelStates = Extract<
   UserCurriculumLevelStatesResult,
   { kind: "resolved" }
 >;
+type AvailableXp = Extract<ResolveEnrollmentXpResult, { kind: "available" }>;
+
+export type CurriculumReadXp =
+  | { kind: "disabled" }
+  | {
+      kind: "available";
+      currentXp: number;
+      transactionCount: number;
+      lastTransactionAt: string | null;
+      nextLevelRequiredXp: number | null;
+      xpRemaining: number;
+    };
 
 function toIso(value: Date | null) {
   return value?.toISOString() ?? null;
@@ -124,6 +136,7 @@ function mapCompletedModules(context: CompletedContext) {
 
 export function mapCandidateCurriculumRead(
   context: Extract<UserCurriculumContextResult, { kind: "candidate" }>,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }>,
 ) {
   return {
     kind: "candidate" as const,
@@ -133,32 +146,83 @@ export function mapCandidateCurriculumRead(
       levelCount: context.levels.length,
     },
     enrollment: null,
+    ...(xp ? { xp } : {}),
+  };
+}
+
+function mapXp(
+  summary: { totalXp: number; transactionCount: number; lastTransactionAt: Date | null },
+  nextLevelRequiredXp: number | null,
+): CurriculumReadXp {
+  if (
+    !Number.isSafeInteger(summary.totalXp) ||
+    summary.totalXp < 0 ||
+    !Number.isSafeInteger(summary.transactionCount) ||
+    summary.transactionCount < 0 ||
+    (nextLevelRequiredXp !== null &&
+      (!Number.isSafeInteger(nextLevelRequiredXp) || nextLevelRequiredXp < 0))
+  ) {
+    throw new Error("invalid curriculum XP summary");
+  }
+  return {
+    kind: "available",
+    currentXp: summary.totalXp,
+    transactionCount: summary.transactionCount,
+    lastTransactionAt: toIso(summary.lastTransactionAt),
+    nextLevelRequiredXp,
+    xpRemaining:
+      nextLevelRequiredXp === null
+        ? 0
+        : Math.max(0, nextLevelRequiredXp - summary.totalXp),
   };
 }
 
 export function mapEnrolledCurriculumRead(
-  context: EnrolledContext,
   levelStates: ResolvedLevelStates,
 ) {
+  const currentDefinition = levelStates.levels.find(
+    (item) =>
+      item.levelDefinition.levelNumber === levelStates.enrollment.currentLevel,
+  );
+  if (!currentDefinition) throw new Error("current level definition missing");
+  const xp: CurriculumReadXp =
+    levelStates.xp.kind === "disabled"
+      ? { kind: "disabled" }
+      : mapXp(levelStates.xp, currentDefinition.levelDefinition.requiredXp);
   return {
     kind: "enrolled" as const,
-    curriculum: mapCurriculum(context.curriculumVersion),
-    enrollment: mapEnrollment(context.enrollment),
+    curriculum: mapCurriculum(levelStates.curriculumVersion),
+    enrollment: mapEnrollment(levelStates.enrollment),
     modules: mapEnrolledModules(levelStates),
+    xp,
   };
 }
 
-export function mapCompletedCurriculumRead(context: CompletedContext) {
+export function mapCompletedCurriculumRead(
+  context: CompletedContext,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp,
+) {
+  const mappedXp = !xp
+    ? undefined
+    : xp.kind === "disabled"
+      ? xp
+      : mapXp(xp, null);
   return {
     kind: "completed" as const,
     curriculum: mapCurriculum(context.curriculumVersion),
     enrollment: mapEnrollment(context.enrollment),
     modules: mapCompletedModules(context),
+    ...(mappedXp ? { xp: mappedXp } : {}),
   };
 }
 
 export function mapUnavailableCurriculumRead(
   context: Extract<UserCurriculumContextResult, { kind: "unavailable" }>,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }>,
 ) {
-  return { kind: "unavailable" as const, reason: context.reason };
+  return {
+    kind: "unavailable" as const,
+    reason: context.reason,
+    ...(xp ? { xp } : {}),
+  };
 }

@@ -50,7 +50,9 @@
     "test:regression:curriculum-xp-level-state": "tsx scripts/regression/curriculumXpLevelStateRegression.ts",
     "test:regression:curriculum-level-completion": "tsx scripts/regression/curriculumLevelCompletionRegression.ts",
     "test:regression:curriculum-promocode-xp": "tsx scripts/regression/curriculumPromocodeXpRegression.ts",
-    "test:regression:curriculum-phase2": "tsx scripts/regression/curriculumPhase2Gate.ts"
+    "test:regression:curriculum-xp-api": "tsx scripts/regression/curriculumXpReadApiRegression.ts",
+    "test:regression:curriculum-phase2": "tsx scripts/regression/curriculumPhase2Gate.ts",
+    "test:regression:curriculum-phase3": "tsx scripts/regression/curriculumPhase3Gate.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

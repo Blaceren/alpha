@@ -85,6 +85,9 @@ async function applyMigration(prisma: PrismaClient, name: string) {
 
 const serverEnv: Record<string, string | undefined> = { ...process.env };
 delete serverEnv.CURRICULUM_V2_ADMIN_ENABLED;
+delete serverEnv.CURRICULUM_V2_READ_ENABLED;
+delete serverEnv.CURRICULUM_V2_ENROLLMENT_ENABLED;
+delete serverEnv.CURRICULUM_V2_XP_ENABLED;
 delete serverEnv.NODE_ENV;
 Object.assign(serverEnv, {
   DATABASE_URL: dbUrl,
@@ -97,9 +100,14 @@ Object.assign(serverEnv, {
   CAPTCHA_DEV_BYPASS: "true",
 });
 
-async function startServer(flagEnabled: boolean): Promise<ChildProcess> {
+async function startServer(
+  flags: { admin?: boolean; read?: boolean; enrollment?: boolean; xp?: boolean } = {},
+): Promise<ChildProcess> {
   const env = { ...serverEnv };
-  if (flagEnabled) env.CURRICULUM_V2_ADMIN_ENABLED = "true";
+  if (flags.admin) env.CURRICULUM_V2_ADMIN_ENABLED = "true";
+  if (flags.read) env.CURRICULUM_V2_READ_ENABLED = "true";
+  if (flags.enrollment) env.CURRICULUM_V2_ENROLLMENT_ENABLED = "true";
+  if (flags.xp) env.CURRICULUM_V2_XP_ENABLED = "true";
   const options: SpawnOptions = {
     cwd: process.cwd(),
     env: env as NodeJS.ProcessEnv,
@@ -179,6 +187,12 @@ class HttpClient {
     return this.request("POST", "/api/auth/login", {
       body: { email, password: PASSWORD, captchaToken: "dev-captcha-ok" },
     });
+  }
+  async csrfToken() {
+    const response = await this.get("/api/csrf");
+    const token = (response.json as { csrfToken?: string })?.csrfToken;
+    assert.equal(typeof token, "string");
+    return token!;
   }
 }
 
@@ -559,25 +573,18 @@ async function main() {
     });
 
     await check("9. one valid enrollment-owned XP row can be created", async () => {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "XPTransaction" (
-          "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
-          "sourceType", "sourceId", "idempotencyKey", "payloadFingerprint", "amount"
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        user.id,
-        phase2Enrollment.id,
-        phase1Version.id,
-        phase1Level.id,
-        "level_completion",
-        `progress:${phase2Progress.id}`,
-        `xp:upgrade:${phase2Progress.id}`,
-        `fp:upgrade:${phase2Progress.id}`,
-        10,
-      );
-      const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-        'SELECT COUNT(*) AS count FROM "XPTransaction"',
-      );
-      assert.equal(Number(rows[0].count), 1);
+      process.env.CURRICULUM_V2_XP_ENABLED = "true";
+      const { recordCurriculumXp } = await import("../../src/lib/curriculum/xp");
+      const result = await recordCurriculumXp({
+        enrollmentId: phase2Enrollment.id,
+        sourceType: "level_completion",
+        sourceId: `progress:${phase2Progress.id}`,
+        levelDefinitionId: phase1Level.id,
+        amount: 10,
+      });
+      assert.equal(result.created, true);
+      assert.equal(await prisma.xPTransaction.count(), 1);
+      delete process.env.CURRICULUM_V2_XP_ENABLED;
     });
 
     // ---- Apply only the additive Phase 3B.5 promocode migration ----
@@ -670,7 +677,7 @@ async function main() {
     // ---- Runtime compatibility on the upgraded DB ----
     await prisma.$disconnect();
 
-    server = await startServer(false);
+    server = await startServer();
     await check("14. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
@@ -680,7 +687,28 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("15. flag OFF: curriculum admin routes return 404", async () => {
+    await check("15. all V2 flags off: V1 promocode route remains operational", async () => {
+      const client = new HttpClient();
+      await client.login(user.email);
+      const csrf = await client.csrfToken();
+      const response = await client.request("POST", "/api/promocodes/redeem", {
+        body: { code: promocode.code },
+        headers: {
+          "x-csrf-token": csrf,
+          "Idempotency-Key": "upgrade-v1-promo-runtime",
+        },
+      });
+      assert.equal(response.status, 200, response.text);
+    });
+
+    await check("16. READ off hides current and XP history routes", async () => {
+      const client = new HttpClient();
+      await client.login(user.email);
+      assert.equal((await client.get("/api/curriculum/v2/current")).status, 404);
+      assert.equal((await client.get("/api/curriculum/v2/xp/history")).status, 404);
+    });
+
+    await check("17. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -691,8 +719,43 @@ async function main() {
     await stopServer(server);
     server = null;
 
-    server = await startServer(true);
-    await check("16. flag ON: admin authenticated read of curriculum versions works", async () => {
+    server = await startServer({ read: true });
+    await check("18. READ on and XP off returns current with disabled XP", async () => {
+      const client = new HttpClient();
+      await client.login(user.email);
+      const response = await client.get("/api/curriculum/v2/current");
+      assert.equal(response.status, 200, response.text);
+      assert.deepEqual((response.json as { data?: { xp?: unknown } }).data?.xp, {
+        kind: "disabled",
+      });
+      assert.equal((await client.get("/api/curriculum/v2/xp/history")).status, 404);
+    });
+    await stopServer(server);
+    server = null;
+
+    server = await startServer({ read: true, xp: true });
+    await check("19. READ and XP on return enrollment history", async () => {
+      const client = new HttpClient();
+      await client.login(user.email);
+      const response = await client.get("/api/curriculum/v2/xp/history");
+      assert.equal(response.status, 200, response.text);
+      const data = (response.json as { data?: { kind?: string; summary?: { currentXp?: number } } }).data;
+      assert.equal(data?.kind, "available");
+      assert.equal(data?.summary?.currentXp, 10);
+    });
+    await stopServer(server);
+    server = null;
+
+    await check("20. curriculum feature flags default false", async () => {
+      const env = await import("../../src/lib/env");
+      const defaults = { NODE_ENV: "test" } as NodeJS.ProcessEnv;
+      assert.equal(env.isCurriculumV2ReadEnabled(defaults), false);
+      assert.equal(env.isCurriculumV2EnrollmentEnabled(defaults), false);
+      assert.equal(env.isCurriculumV2XpEnabled(defaults), false);
+    });
+
+    server = await startServer({ admin: true });
+    await check("21. admin flag ON preserves authenticated curriculum admin read", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -709,12 +772,20 @@ async function main() {
     cleanupDb();
   }
 
-  await check("17. temporary DB and journals removed after test", () => {
+  await check("22. temporary DB, journals and listener removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
     }
+    const listener = spawnSync(
+      "bash",
+      ["-lc", `ss -tln 2>/dev/null | grep -E '[:.]${PORT} ' || true`],
+      { encoding: "utf8" },
+    );
+    assert.equal((listener.stdout ?? "").trim(), "");
   });
+
+  assert.equal(passed + failed, 22, "upgrade regression scenario count drifted");
 }
 
 main()
