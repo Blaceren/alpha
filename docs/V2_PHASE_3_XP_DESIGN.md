@@ -323,16 +323,28 @@ The result is deterministic: `SUM(amount)` and count for one enrollment, with hi
 
 Range policy: each amount must be `1..1_000_000`; aggregate must be an integer in `0..2_147_483_647`. SQLite can sum wider than Prisma `Int`, so implementation must aggregate in a representation that detects unsafe/overflow values before converting to JS number. Out-of-range returns `xp_amount_out_of_range` or `xp_total_out_of_range`, never clamping/wrapping.
 
-## 5.9 XP-aware LevelState
+## 5.9 XP-aware LevelState (реализовано, Phase 3B.3)
 
-Phase 3B.3 replaces `xp_engine_unavailable` only when XP flag is on and the resolver returns a valid snapshot.
+`resolveUserCurriculumLevelStates` вызывает `resolveEnrollmentXp` ровно один раз на enrolled resolution и использует его как единственный XP-authority. V1 `User.xp`/`XpEvent` игнорируются.
 
-- Current level with no persisted progress is `available` only if definition/module active, prior sequence complete, `currentXp >= requiredXp`, checkpoint satisfied and visibility rules supported.
-- Insufficient XP: `locked` with typed `xp_requirement_not_met` and safe `{currentXp,requiredXp}`.
-- A future level may be presentation `xp_eligible` when XP is sufficient, but remains not available with `not_current_level` and/or `sequence_incomplete`; it cannot be started.
-- XP never removes checkpoint/sequence/definition blockers. Maximum one `available` remains an invariant.
-- XP flag off/disabled/corrupt remains fail-closed (`xp_engine_unavailable` or typed corrupt), not zero XP.
-- `currentXp`, definition `requiredXp`, enrollment summary and progress must be loaded/derived from the same transaction snapshot used by start/completion. A route must not combine an earlier XP response with a later LevelState read.
+**Snapshot boundary.** Если transaction client не передан, весь curriculum/progress/XP-read выполняется в одной `prisma.$transaction` (read snapshot). Если client передан (lazy start), он используется напрямую, без вложенной транзакции. XP запрашивается один раз (2 bounded raw-запроса: header + ledger), не per-level, без N+1. Резолвер ничего не пишет.
+
+**Effective states.** Persisted durable: `completed`, `pending_review`, `in_progress` (имеют приоритет над computed). Computed presentation: `available`, `xp_eligible`, `locked`.
+
+**Blockers** (детерминированный порядок): `not_current_level`, `definition_inactive`, `sequence_incomplete`, XP-slot (`xp_engine_unavailable` при выключенном движке и requiredXp>0, либо `xp_insufficient` при включённом движке и currentXp<requiredXp), `checkpoint_engine_unavailable`, `visibility_rule_unsupported`.
+
+- `available` — только currentLevel, без progress, при: active definition/module, полная последовательность, `currentXp >= requiredXp`, нет checkpoint-gate, поддерживаемая visibility. Максимум один `available` — инвариант (иначе corrupt).
+- `xp_eligible` — только при включённом XP-движке и выполненном XP-пороге (`requiredXp === 0` или `currentXp >= requiredXp`), когда единственные оставшиеся blockers ⊆ {`not_current_level`, `sequence_incomplete`}. Не сохраняется в `UserLevelProgress`, не позволяет start, не заменяет blockers. Level с `definition_inactive`/`visibility_rule_unsupported`/`checkpoint_engine_unavailable` НИКОГДА не `xp_eligible` — остаётся `locked` (XP не снимает эти blockers).
+- XP-порог `requiredXp > 0` при выключенном/disabled движке → fail-closed `xp_engine_unavailable` (не «ноль XP», не fallback на V1).
+- Любой corrupt/not_found от `resolveEnrollmentXp` для существующего enrollment, XP snapshot чужого enrollment/version, или XP total вне безопасного диапазона → whole-result `corrupt` (не частичная карта уровней); диагностика не раскрывает raw XP-значения.
+
+**Feature flag.** `CURRICULUM_V2_XP_ENABLED` читается динамически; READ/ENROLLMENT/ADMIN-флаги его не заменяют.
+
+**Lazy start.** `startCurrentCurriculumLevel` использует XP-aware LevelState внутри своей write-транзакции: requiredXp=0 как раньше; выключенный движок + requiredXp>0 → start blocked; недостаточный XP → blocked (`xp_insufficient`); точный/избыточный XP → start только при выполнении остальных gates; checkpoint не обходится; `xp_eligible` future нельзя стартовать (start работает только с currentLevel). Start не начисляет XP, не меняет XPTransaction, не меняет currentLevel/highestCompletedLevel; идемпотентный повтор возвращает created=false даже после выключения XP-флага; audit — только `CURRICULUM_LEVEL_STARTED` при фактическом создании progress.
+
+**Internal result contract.** LevelState result содержит безопасный XP-summary (`kind`, `totalXp`, `transactionCount`, `lastTransactionAt`) один раз на result, не дублируется per-level; каждый level несёт только `requiredXp`/`presentationState`/`blockers`. HTTP `/api/curriculum/v2/current` структурно не расширен: `presentationState` может принять значение `xp_eligible` при включённом флаге; `currentXp`/история/internal ID в HTTP не добавлены (Phase 3B.6).
+
+Замечание по тестам: ownership/version/level XP-consistency обеспечена composite FK и source-allowlist/CHECK в БД (не инжектируется валидными данными; покрыта XP ledger regression). Level-state whole-result-corrupt поведение проверяется инжектируемыми ledger-corruption'ами (fingerprint, idempotency key, metadata, amount).
 
 ## 5.10 Trusted award command
 

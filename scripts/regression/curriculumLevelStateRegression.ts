@@ -9,7 +9,6 @@ import type {
   Prisma,
   UserCurriculumEnrollment,
 } from "@prisma/client";
-import type { CurriculumResolverDb } from "../../src/lib/curriculum/resolver";
 import type { LevelStartCommandDb } from "../../src/lib/curriculum/level-state";
 
 // Phase 2B.4 regression: read-only effective Level State plus transactional lazy start.
@@ -252,7 +251,7 @@ async function main() {
       const queryGuard = new Proxy(
         {},
         { get: () => { throw new Error("disabled level resolver touched DB"); } },
-      ) as CurriculumResolverDb;
+      ) as unknown as Prisma.TransactionClient;
       assert.deepEqual(
         await levelState.resolveUserCurriculumLevelStates({ userId: 1, db: queryGuard }),
         { kind: "disabled" },
@@ -398,7 +397,7 @@ async function main() {
         userCurriculumEnrollment: {
           findMany: async () => [{ ...snapshot, curriculumCode: "other-v2" }],
         },
-      } as unknown as CurriculumResolverDb;
+      } as unknown as Prisma.TransactionClient;
       const result = await levelState.resolveUserCurriculumLevelStates({
         userId: user.id,
         db: fakeDb,

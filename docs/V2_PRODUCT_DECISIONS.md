@@ -34,6 +34,8 @@
 - Referral XP в V1 пока сохраняется без изменений.
 - Referral bonus в V2 — отдельный конфигурируемый источник, **выключенный по умолчанию** до anti-abuse правил.
 - Legacy V1 XP history не удаляется и не переписывается; корректировки — только отдельными `migration_adjustment`-транзакциями, видимыми в audit.
+- XP-gate использует только V2 `XPTransaction` (не V1 `User.xp`/`XpEvent`). При выключенном `CURRICULUM_V2_XP_ENABLED` gate fail-closed: `requiredXp = 0` проходит, `requiredXp > 0` блокируется (`xp_engine_unavailable`), `xp_eligible` не выдаётся (Phase 3B.3).
+- XP не открывает уровень в обход последовательности/checkpoint: доступным (`available`) может быть только текущий уровень; будущие уровни с достаточным XP показываются как `xp_eligible`, но не стартуются; checkpoint/inactive/unsupported-visibility остаются blocked независимо от XP (Phase 3B.3).
 
 ## 4. Pocket Commission
 

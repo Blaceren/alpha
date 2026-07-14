@@ -47,6 +47,7 @@
     "test:regression:curriculum-read-api": "tsx scripts/regression/curriculumReadApiRegression.ts",
     "test:regression:curriculum-xp-schema": "tsx scripts/regression/curriculumXpSchemaRegression.ts",
     "test:regression:curriculum-xp-ledger": "tsx scripts/regression/curriculumXpLedgerRegression.ts",
+    "test:regression:curriculum-xp-level-state": "tsx scripts/regression/curriculumXpLevelStateRegression.ts",
     "test:regression:curriculum-phase2": "tsx scripts/regression/curriculumPhase2Gate.ts"
   },
   "dependencies": {

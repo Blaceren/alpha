@@ -15,17 +15,18 @@ import { prisma } from "@/lib/prisma";
 import { CURRICULUM_AUDIT_ACTIONS } from "./constants";
 import {
   resolveUserCurriculumContext,
-  type CurriculumResolverDb,
   type ResolvedProgress,
   type SafeResolverDiagnostics,
   type UserCurriculumContextResult,
 } from "./resolver";
+import { resolveEnrollmentXp } from "./xp";
 
 export type EffectiveLevelState =
   | "completed"
   | "pending_review"
   | "in_progress"
   | "available"
+  | "xp_eligible"
   | "locked";
 
 export type LevelStateBlockerCode =
@@ -33,6 +34,7 @@ export type LevelStateBlockerCode =
   | "sequence_incomplete"
   | "definition_inactive"
   | "xp_engine_unavailable"
+  | "xp_insufficient"
   | "checkpoint_engine_unavailable"
   | "visibility_rule_unsupported";
 
@@ -44,11 +46,33 @@ export type EffectiveLevelStateItem = {
   blockers: LevelStateBlockerCode[];
 };
 
+// Safe internal XP summary (never duplicated per level; each level exposes only
+// its own requiredXp/presentationState/blockers). Not part of the HTTP contract.
+export type LevelStateXpSummary =
+  | { kind: "disabled" }
+  | {
+      kind: "available";
+      totalXp: number;
+      transactionCount: number;
+      lastTransactionAt: Date | null;
+    };
+
 export type LevelStateCorruptReason =
   | "invalid_level_sequence"
   | "invalid_summary_progress"
   | "invalid_progress_timestamps"
-  | "multiple_available_levels";
+  | "multiple_available_levels"
+  | "xp_enrollment_missing"
+  | "xp_resolution_corrupt"
+  | "xp_snapshot_mismatch"
+  | "xp_total_out_of_range";
+
+// Blockers that a satisfied XP threshold does not clear but which still leave a
+// structurally-sound future level presentable as xp_eligible.
+const XP_ELIGIBLE_REMAINING_BLOCKERS = new Set<LevelStateBlockerCode>([
+  "not_current_level",
+  "sequence_incomplete",
+]);
 
 type ResolvedLevelStateContext = {
   kind: "resolved";
@@ -57,7 +81,10 @@ type ResolvedLevelStateContext = {
   curriculumVersion: CurriculumVersion;
   modules: ModuleDefinition[];
   levels: EffectiveLevelStateItem[];
+  xp: LevelStateXpSummary;
 };
+
+type LevelStateCommandDb = Prisma.TransactionClient;
 
 export type UserCurriculumLevelStatesResult =
   | { kind: "disabled" }
@@ -79,7 +106,10 @@ export type UserCurriculumLevelStatesResult =
 export type ResolveUserCurriculumLevelStatesInput = {
   userId: number;
   asOf?: Date;
-  db?: CurriculumResolverDb;
+  // When a transaction client is supplied (e.g. the lazy-start command), it is
+  // used directly and no nested transaction is opened. When omitted, the whole
+  // curriculum/progress/XP read runs inside one snapshot transaction.
+  db?: LevelStateCommandDb;
 };
 
 function corruptLevelState(
@@ -91,7 +121,10 @@ function corruptLevelState(
 
 function deriveEnrolledLevelStates(
   context: Extract<UserCurriculumContextResult, { kind: "enrolled" }>,
+  xp: LevelStateXpSummary,
 ): UserCurriculumLevelStatesResult {
+  const xpEnabled = xp.kind === "available";
+  const currentXp = xp.kind === "available" ? xp.totalXp : 0;
   const modules = [...context.modules].sort(
     (left, right) => left.moduleNumber - right.moduleNumber || left.id - right.id,
   );
@@ -224,8 +257,18 @@ function deriveEnrolledLevelStates(
         break;
       }
     }
+    // XP gate uses only the V2 ledger authority. requiredXp === 0 always passes.
+    // Fail closed when the engine is unavailable; only report insufficiency when
+    // the engine is available and the pinned total is below the threshold.
+    const xpThresholdMet =
+      levelDefinition.requiredXp === 0 ||
+      (xpEnabled && currentXp >= levelDefinition.requiredXp);
     if (levelDefinition.requiredXp > 0) {
-      blockers.push("xp_engine_unavailable");
+      if (!xpEnabled) {
+        blockers.push("xp_engine_unavailable");
+      } else if (currentXp < levelDefinition.requiredXp) {
+        blockers.push("xp_insufficient");
+      }
     }
     if (levelDefinition.requiredCheckpointLevel !== null) {
       blockers.push("checkpoint_engine_unavailable");
@@ -234,11 +277,28 @@ function deriveEnrolledLevelStates(
       blockers.push("visibility_rule_unsupported");
     }
 
+    let state: EffectiveLevelState;
+    if (blockers.length === 0) {
+      state = "available";
+    } else if (
+      xpEnabled &&
+      xpThresholdMet &&
+      blockers.every((blocker) => XP_ELIGIBLE_REMAINING_BLOCKERS.has(blocker))
+    ) {
+      // XP threshold satisfied and structurally sound (active definition,
+      // supported visibility, no checkpoint gate); still not startable because
+      // of sequence/current-level. XP never removes a checkpoint/inactive/
+      // visibility blocker, so those keep the level locked instead.
+      state = "xp_eligible";
+    } else {
+      state = "locked";
+    }
+
     return {
       levelDefinition,
       moduleDefinition,
       progress,
-      state: blockers.length === 0 ? "available" : "locked",
+      state,
       blockers,
     };
   });
@@ -258,28 +318,93 @@ function deriveEnrolledLevelStates(
     curriculumVersion: context.curriculumVersion,
     modules,
     levels,
+    xp,
   };
 }
 
-export async function resolveUserCurriculumLevelStates({
-  userId,
-  asOf = new Date(),
-  db = prisma,
-}: ResolveUserCurriculumLevelStatesInput): Promise<UserCurriculumLevelStatesResult> {
-  if (!isCurriculumV2ReadEnabled()) return { kind: "disabled" };
-
-  const context = await resolveUserCurriculumContext({ userId, asOf, db });
+async function resolveLevelStatesWithin(
+  client: LevelStateCommandDb,
+  userId: number,
+  asOf: Date,
+): Promise<UserCurriculumLevelStatesResult> {
+  const context = await resolveUserCurriculumContext({ userId, asOf, db: client });
   if (context.kind === "disabled") return context;
   if (context.kind === "user_not_found") return context;
   if (context.kind === "corrupt") return context;
   if (context.kind === "completed") {
     return { kind: "unavailable", reason: "enrollment_completed" };
   }
-  if (context.kind === "enrolled") return deriveEnrolledLevelStates(context);
   if (context.kind === "unavailable") {
     return { kind: "unavailable", reason: "curriculum_unavailable" };
   }
-  return { kind: "unavailable", reason: "no_active_enrollment" };
+  if (context.kind !== "enrolled") {
+    return { kind: "unavailable", reason: "no_active_enrollment" };
+  }
+
+  // Resolve XP exactly once per enrollment, on the same snapshot client, and
+  // treat any raw XP failure as whole-result corruption rather than a partially
+  // plausible level map.
+  const rawXp = await resolveEnrollmentXp({
+    enrollmentId: context.enrollment.id,
+    asOf,
+    db: client,
+  });
+  if (rawXp.kind === "not_found") {
+    return corruptLevelState("xp_enrollment_missing", {
+      enrollmentId: context.enrollment.id,
+      versionId: context.curriculumVersion.id,
+    });
+  }
+  if (rawXp.kind === "corrupt") {
+    return corruptLevelState("xp_resolution_corrupt", {
+      enrollmentId: context.enrollment.id,
+      versionId: context.curriculumVersion.id,
+      xpReason: rawXp.reason,
+    });
+  }
+
+  let xpSummary: LevelStateXpSummary;
+  if (rawXp.kind === "available") {
+    if (
+      rawXp.enrollmentId !== context.enrollment.id ||
+      rawXp.curriculumVersion.id !== context.curriculumVersion.id
+    ) {
+      return corruptLevelState("xp_snapshot_mismatch", {
+        enrollmentId: context.enrollment.id,
+        versionId: context.curriculumVersion.id,
+      });
+    }
+    if (!Number.isSafeInteger(rawXp.totalXp) || rawXp.totalXp < 0) {
+      return corruptLevelState("xp_total_out_of_range", {
+        enrollmentId: context.enrollment.id,
+        versionId: context.curriculumVersion.id,
+      });
+    }
+    xpSummary = {
+      kind: "available",
+      totalXp: rawXp.totalXp,
+      transactionCount: rawXp.transactionCount,
+      lastTransactionAt: rawXp.lastTransactionAt,
+    };
+  } else {
+    xpSummary = { kind: "disabled" };
+  }
+
+  return deriveEnrolledLevelStates(context, xpSummary);
+}
+
+export async function resolveUserCurriculumLevelStates({
+  userId,
+  asOf = new Date(),
+  db,
+}: ResolveUserCurriculumLevelStatesInput): Promise<UserCurriculumLevelStatesResult> {
+  if (!isCurriculumV2ReadEnabled()) return { kind: "disabled" };
+
+  // A supplied transaction client is used directly (no nested transaction).
+  // Otherwise open one read snapshot so curriculum, progress and XP are read
+  // from a single consistent boundary. The resolver only reads.
+  if (db) return resolveLevelStatesWithin(db, userId, asOf);
+  return prisma.$transaction((tx) => resolveLevelStatesWithin(tx, userId, asOf));
 }
 
 export type LevelStartDomainErrorCode =
