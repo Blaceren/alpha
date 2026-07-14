@@ -470,16 +470,19 @@ Storage/Prisma infrastructure exceptions remain exceptions; typed corruption is 
 
 ### 10.1 Enrollment transaction
 
-Future enrollment command в одной transaction:
+Реализованная controlled admin enrollment command выполняется в одной transaction:
 
-1. Проверяет enrollment flag и authenticated actor policy.
-2. Получает published resolver candidate; draft/archived для нового enrollment запрещены.
-3. Повторно проверяет target status/effective timestamps внутри transaction.
-4. Создаёт enrollment `active`, `highestCompletedLevel=0`, `currentLevel=1`.
-5. Не создаёт progress rows (lazy strategy).
-6. Пишет awaited success audit в той же transaction.
+1. До transaction требует одновременно READ и ENROLLMENT flags; оба default false, admin flag независим.
+2. В transaction проверяет, что actor — active admin, а target user существует и active; role target user не ограничивается.
+3. Читает всю `ata-v2` history одним include graph: valid active возвращает `created=false`; completed блокирует re-enrollment; superseded без active replacement и invalid pin/invariants дают typed history corruption.
+4. Только при отсутствии history получает effective published target через `resolvePublishedCurriculum({ curriculumCode: "ata-v2", asOf, db: tx })`; caller не передаёт version ID/code.
+5. Создаёт enrollment `active`, `highestCompletedLevel=0`, `currentLevel=1`, nullable action/completion/migration fields = null и pin на точную resolved version.
+6. Не создаёт progress rows (lazy strategy).
+7. Пишет awaited `CURRICULUM_USER_ENROLLED` audit в той же transaction с actor/target/enrollment/version IDs, code и versionNumber.
 
-Race закрывается manual partial unique index; P2002/SQLite unique маппится в typed `ENROLLMENT_ALREADY_ACTIVE`, raw error наружу не выходит.
+Race закрывается manual partial unique index. Только ожидаемый P2002 запускает повторное чтение: valid active возвращается как `created=false`, corrupt history остаётся typed failure, отсутствие active повторно выбрасывает исходную infrastructure error. Unknown DB errors не маскируются. Audit failure откатывает enrollment.
+
+Typed success result: `{ kind: "enrolled", created: true | false, enrollment }`. Expected failures используют `EnrollmentDomainError`: disabled flags, forbidden actor, missing/inactive target, unavailable/corrupt published target, corrupt history и already completed. API mapper в Phase 2B.3 отсутствует.
 
 ### 10.2 Initial presentation
 
@@ -514,7 +517,7 @@ Race закрывается manual partial unique index; P2002/SQLite unique м�
 2. READ=true, ENROLLMENT=false — read-only shadow/QA;
 3. ENROLLMENT=true для controlled cohort после schema/resolver verification.
 
-На Phase 2A flags не добавляются ни в код, ни в `.env.example`, live env не меняется. Официальный curriculum code не должен быть скрытым env default; resolver принимает его явно из trusted product configuration/caller.
+Оба Phase 2 flags объявлены в коде и `.env.example` со значением `false`; live env не меняется. Resolver имеет typed default `ata-v2`, а enrollment command всегда передаёт этот trusted constant явно и не принимает code от caller.
 
 ---
 
@@ -722,12 +725,12 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ### 2B.3 Enrollment command
 
-**Scope:** explicit enrollment service, ENROLLMENT flag false, transaction, active unique conflict mapping, audit.
+**Scope:** реализованная controlled admin enrollment service, совместные READ/ENROLLMENT gates, fixed `ata-v2` resolver target, transaction, active unique race recovery и awaited audit.
 
 **Запрещено:** public route unless separately approved, automatic enrollment on read/login, existing-user backfill, version migration.
 
-**Acceptance:** published-only target, immutable identity, concurrent idempotency, no progress rows, audit rollback.
-**Dependency:** actor/re-enrollment product policy.
+**Acceptance:** published-only target, active-admin authorization, active pin idempotency, completed/superseded policy, deterministic P2002 recovery, no progress rows, audit rollback и no-listener regression.
+**Dependency:** выполнена для ordinary first enrollment; re-enrollment/version migration остаются отдельной policy/command.
 
 ### 2B.4 Initial progress creation
 
@@ -759,7 +762,7 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ## 18. Next phase boundary
 
-Phase 2B.2 завершает только feature-gated read-only resolver поверх schema foundation. Enrollment commands, initial progress creation, progression engine, XP transactions, checkpoint runtime, API, UI и seed/backfill не начинаются автоматически и остаются вне scope до отдельного запроса и acceptance contract.
+Phase 2B.3 завершает только controlled first-enrollment command поверх schema foundation и read-only resolver. Initial progress creation (Phase 2B.4), progression engine, XP transactions, checkpoint runtime, API, UI, seed/backfill, re-enrollment и version migration не начинаются автоматически и остаются вне scope до отдельного запроса и acceptance contract.
 
 ---
 

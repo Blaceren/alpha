@@ -136,7 +136,7 @@ export function isCurriculumV2ReadEnabled(env: NodeJS.ProcessEnv = process.env) 
   return env.CURRICULUM_V2_READ_ENABLED === "true";
 }
 
-// Declared for the future enrollment command. Phase 2B.2 does not consume it.
+// Mutation gate for the controlled enrollment command; absent env stays disabled.
 export function isCurriculumV2EnrollmentEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_ENROLLMENT_ENABLED === "true";
 }

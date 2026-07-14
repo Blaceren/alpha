@@ -113,6 +113,17 @@
 - Persisted progress is returned as stored and deterministically ordered. Presentation states such as `hidden`, `locked`, and `available` remain outside this phase.
 - Phase 2B.2 adds no API route and does not expose resolver diagnostics containing secrets or personal data.
 
+## 12. Controlled user enrollment command (Phase 2B.3)
+
+- Первая enrollment command доступна только controlled internal/admin flow: actor должен существовать, быть active и иметь role `admin`.
+- Target всегда выбирается published resolver для trusted constant `ata-v2`; `curriculumVersionId`, curriculum code и initial state не принимаются извне.
+- Для mutation одновременно обязательны `CURRICULUM_V2_READ_ENABLED=true` и `CURRICULUM_V2_ENROLLMENT_ENABLED=true`; admin flag их не заменяет.
+- Команда идемпотентна: существующий valid active enrollment возвращается с `created=false`, без timestamp touch, нового audit или смены pinned version.
+- Completed history блокирует ordinary re-enrollment; superseded history без active replacement считается corruption.
+- Новый enrollment, его success audit и проверки выполняются в одной transaction. Partial unique active index завершает защиту от race; loser перечитывает valid active enrollment.
+- Enrollment не создаёт `UserLevelProgress`: lazy progress materialization остаётся отдельной Phase 2B.4.
+- Version migration и re-enrollment являются отдельными будущими операциями и не выполняются автоматически.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*
