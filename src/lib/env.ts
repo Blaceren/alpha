@@ -25,6 +25,8 @@ const OPTIONAL_ENV = [
   "POCKET_POSTBACK_REQUIRE_SECRET",
   "POCKET_REFERRAL_URL",
   "CURRICULUM_V2_ADMIN_ENABLED",
+  "CURRICULUM_V2_READ_ENABLED",
+  "CURRICULUM_V2_ENROLLMENT_ENABLED",
 ] as const;
 
 const envSchema = z.object({
@@ -44,6 +46,8 @@ const envSchema = z.object({
   BETA_RESET_CONFIRM: z.string().optional(),
   POCKET_POSTBACK_REQUIRE_SECRET: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ADMIN_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_READ_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_ENROLLMENT_ENABLED: z.enum(["true", "false"]).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -125,6 +129,16 @@ export function isPocketPostbackSecretRequired() {
 // Feature flag for the V2 curriculum admin API. Absent env means disabled.
 export function isCurriculumV2AdminEnabled() {
   return process.env.CURRICULUM_V2_ADMIN_ENABLED === "true";
+}
+
+// Read at call time so tests and long-lived processes never capture stale flag values.
+export function isCurriculumV2ReadEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_READ_ENABLED === "true";
+}
+
+// Declared for the future enrollment command. Phase 2B.2 does not consume it.
+export function isCurriculumV2EnrollmentEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_ENROLLMENT_ENABLED === "true";
 }
 
 export const envContract = {

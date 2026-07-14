@@ -397,65 +397,72 @@ SQLite требует, чтобы referenced composite columns соответс�
 
 ```ts
 resolvePublishedCurriculum(input: {
-  curriculumCode: string;
-  now?: Date;
+  curriculumCode?: string;
+  asOf?: Date;
+  db?: CurriculumResolverDb;
 }): Promise<PublishedCurriculumResult>
 
 resolveUserCurriculumContext(input: {
   userId: number;
-  curriculumCode: string;
-  now?: Date;
+  curriculumCode?: string;
+  asOf?: Date;
+  db?: CurriculumResolverDb;
 }): Promise<UserCurriculumContextResult>
 ```
 
-`curriculumCode` — required argument; официальный code первой линии — `ata-v2`. Будущий resolver не должен подменять явно переданный code скрытым env default.
+`curriculumCode` defaults to the constant `DEFAULT_CURRICULUM_CODE = "ata-v2"`. An explicit code is never replaced. `CURRICULUM_V2_READ_ENABLED` and `CURRICULUM_V2_ENROLLMENT_ENABLED` are independent, default-false flags read at call time; the admin flag remains independent.
 
 ### 9.2 Published resolver
 
-1. Если read flag off — `{kind:"disabled"}` без DB write.
+1. Если read flag off — `{kind:"disabled"}` без DB query и без DB write.
 2. Strict validate curriculumCode.
 3. Читать `status=published` и `code=curriculumCode`, deterministic order: `versionNumber desc`, `publishedAt desc`, `id desc`, limit 2.
 4. 0 rows — `{kind:"unavailable", reason:"no_published_version"}`.
-5. >1 row — `{kind:"corrupt", reason:"multiple_published_versions"}`; не выбирать молча, несмотря на ordering.
-6. `publishedAt == null` — corrupt.
-7. `publishedAt > now` — unavailable/corrupt policy error; scheduled publication не поддерживается.
-8. `effectiveFrom != null && effectiveFrom > now` — `{kind:"unavailable", reason:"not_effective"}`; publish service должен был это запретить, поэтому одновременно server warning.
-9. Иначе `{kind:"available", curriculumVersion}`.
+5. >1 row — `{kind:"corrupt", reason:"duplicate_published_version"}`; не выбирать молча, несмотря на ordering.
+6. `publishedAt == null` — `{kind:"corrupt", reason:"published_without_published_at"}`.
+7. `publishedAt > asOf` — `{kind:"unavailable", reason:"not_effective_yet"}`.
+8. `effectiveFrom != null && effectiveFrom > asOf` — `{kind:"unavailable", reason:"not_effective_yet"}`.
+9. Modules and levels must belong to the selected version and return in deterministic `(number, id)` order. Cross-version links, disabled published definitions, and code mismatch return `invalid_curriculum_graph` or `code_mismatch` with safe scalar diagnostics.
+10. Иначе `{kind:"available", curriculumVersion, modules, levels}`.
 
 Ordering нужен для deterministic diagnostics, но не превращает повреждённые данные в валидный выбор.
 
 ### 9.3 User context resolver
 
 1. Read flag off -> disabled.
-2. Найти active enrollment по `(userId, curriculumCode)`, limit 2.
-3. >1 -> corrupt; DB partial unique должен исключать это.
-4. Если enrollment найден, вернуть именно его pinned version:
+2. Read the user, then enrollment history for `(userId, curriculumCode)` with pinned definitions and persisted progress. A missing user returns `user_not_found`.
+3. More than one active enrollment is corrupt; DB partial unique должен исключать это.
+4. Active enrollment has priority and returns exactly its pinned version:
    - `published` допустим;
    - `archived` допустим и ожидаем для historical enrollment;
-   - `draft` -> corrupt (`enrollment_points_to_draft`).
+   - `draft` -> corrupt (`draft_pinned_version`).
 5. Не подменять pinned archived version новой published version.
-6. Если active enrollment отсутствует, вызвать published resolver и вернуть candidate как `unenrolled_available`; enrollment не создаётся.
-7. Completed/superseded history может быть возвращена отдельным history summary, но не выбирается как active.
-8. Никаких writes, lazy enrollment, timestamp touch или audit из resolver.
+6. If the latest enrollment is completed, return `completed`; no candidate and no re-enrollment are offered.
+7. A latest superseded enrollment without an active replacement returns `superseded_without_replacement`, unless a newer completed enrollment exists.
+8. Only when no history exists, call the published resolver and return `candidate`, `unavailable`, or `corrupt`; enrollment не создаётся.
+9. Persisted progress returns exactly as stored in `(levelNumber, id)` order. Cross-version progress, invalid status/timestamps, or impossible summary values are corrupt.
+10. Никаких writes, missing progress creation, lazy enrollment, timestamp touch, audit, XP calculation, checkpoint evaluation, or presentation-state derivation из resolver.
 
 ### 9.4 Typed results
 
 ```ts
 type PublishedCurriculumResult =
   | { kind: "disabled" }
-  | { kind: "unavailable"; reason: "no_published_version" | "not_effective" }
-  | { kind: "corrupt"; reason: "multiple_published_versions" | "published_at_missing" | "published_in_future" }
-  | { kind: "available"; curriculumVersion: CurriculumVersion };
+  | { kind: "unavailable"; reason: "no_published_version" | "not_effective_yet" }
+  | { kind: "corrupt"; reason: "published_without_published_at" | "duplicate_published_version" | "invalid_curriculum_graph" | "code_mismatch"; diagnostics?: SafeDiagnostics }
+  | { kind: "available"; curriculumVersion: CurriculumVersion; modules: ModuleDefinition[]; levels: LevelDefinition[] };
 
 type UserCurriculumContextResult =
   | { kind: "disabled" }
-  | { kind: "corrupt"; reason: string }
-  | { kind: "enrolled"; enrollment: UserCurriculumEnrollment; curriculumVersion: CurriculumVersion }
-  | { kind: "unenrolled_unavailable"; reason: string }
-  | { kind: "unenrolled_available"; candidate: CurriculumVersion };
+  | { kind: "user_not_found" }
+  | { kind: "enrolled"; enrollment: UserCurriculumEnrollment; curriculumVersion: CurriculumVersion; modules: ModuleDefinition[]; levels: LevelDefinition[]; progress: UserLevelProgress[] }
+  | { kind: "completed"; enrollment: UserCurriculumEnrollment; curriculumVersion: CurriculumVersion; modules: ModuleDefinition[]; levels: LevelDefinition[]; progress: UserLevelProgress[] }
+  | { kind: "candidate"; curriculumVersion: CurriculumVersion; modules: ModuleDefinition[]; levels: LevelDefinition[] }
+  | { kind: "unavailable"; reason: "no_published_version" | "not_effective_yet" }
+  | { kind: "corrupt"; reason: string; diagnostics?: SafeDiagnostics };
 ```
 
-Storage/Prisma exceptions не возвращаются клиенту raw; service log получает safe correlation id, caller — sanitized internal error.
+Storage/Prisma infrastructure exceptions remain exceptions; typed corruption is only for domain/data contradictions. Diagnostics contain no secrets, emails, or raw records. Phase 2B.2 adds no route or API response mapping.
 
 ---
 
@@ -706,12 +713,12 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ### 2B.2 Read-only resolver
 
-**Scope:** `resolvePublishedCurriculum`, `resolveUserCurriculumContext`, typed results, READ flag default false, resolver regression.
+**Scope:** реализованные `resolvePublishedCurriculum`, `resolveUserCurriculumContext`, typed results, independent default-false READ/ENROLLMENT flags, default code `ata-v2`, resolver regression.
 
 **Запрещено:** auto-enrollment, timestamp touches, public routes, progress writes.
 
-**Acceptance:** archived pinning, no published, disabled, effectiveFrom, corrupt data, deterministic/no-write tests.
-**Dependency:** official curriculumCode caller/config and visibility policy only for richer progress output.
+**Acceptance:** archived pinning, completed terminal result, superseded contradiction, no published, future timestamps, corrupt graph/progress, deterministic ordering, bounded reads, and no-write/no-listener tests.
+**Dependency:** выполнена в рамках read-only контракта; visibility/progression policy намеренно не вычисляется.
 
 ### 2B.3 Enrollment command
 
@@ -752,7 +759,7 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ## 18. Next phase boundary
 
-Phase 2B.1 завершает только schema foundation. Resolver и Phase 2B.2 не начинаются автоматически: для них требуется отдельный запрос и отдельный acceptance contract. Enrollment commands, initial progress creation, progression engine, XP transactions, checkpoint runtime, API, UI и seed/backfill остаются вне scope.
+Phase 2B.2 завершает только feature-gated read-only resolver поверх schema foundation. Enrollment commands, initial progress creation, progression engine, XP transactions, checkpoint runtime, API, UI и seed/backfill не начинаются автоматически и остаются вне scope до отдельного запроса и acceptance contract.
 
 ---
 

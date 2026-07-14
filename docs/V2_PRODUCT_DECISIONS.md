@@ -101,6 +101,18 @@
 - `completionEvidence` остаётся nullable schema-полем, но до профильных фаз допустимо только `null`; generic arbitrary evidence writer не реализуется.
 - Enrollment/progress relations используют `ON DELETE RESTRICT` и `ON UPDATE CASCADE`; физическое удаление history после начала запрещено.
 
+## 11. Feature-gated read-only curriculum resolution (Phase 2B.2)
+
+- `CURRICULUM_V2_READ_ENABLED` and `CURRICULUM_V2_ENROLLMENT_ENABLED` are separate flags, both default to `false`, and neither changes `CURRICULUM_V2_ADMIN_ENABLED`.
+- The first official curriculum line defaults to `ata-v2`; an explicit resolver argument takes precedence over this default.
+- An active enrollment is pinned to its exact published or archived version. A draft pin is corrupt data and is never replaced silently with the current published version.
+- A completed latest enrollment resolves as `completed`: read resolution does not offer a candidate, re-enrol the user, or create any rows.
+- A latest superseded enrollment without an active replacement is corrupt unless a newer completed enrollment exists.
+- Both resolvers are strictly read-only: no lazy enrollment, progress creation, audit write, timestamp touch, XP calculation, or checkpoint evaluation.
+- `publishedAt` or `effectiveFrom` in the future makes the published curriculum `not_effective_yet`.
+- Persisted progress is returned as stored and deterministically ordered. Presentation states such as `hidden`, `locked`, and `available` remain outside this phase.
+- Phase 2B.2 adds no API route and does not expose resolver diagnostics containing secrets or personal data.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*
