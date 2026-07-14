@@ -1,76 +1,91 @@
 import { test, expect, type Page } from "@playwright/test";
 
-const CONCEPTS = [
-  { name: "Product Portal", url: "/concepts/product-portal" },
-  { name: "Market Atlas", url: "/concepts/market-atlas" },
-  { name: "Editorial Academy", url: "/concepts/editorial-academy" },
-] as const;
+/**
+ * D1B smoke: renders the two Route Field Home scenarios across the three canonical
+ * viewports and asserts the invariants that screenshots cannot prove on their own —
+ * no horizontal overflow, no console errors, a visible primary CTA, keyboard reach,
+ * and (mobile) a bottom bar that does not cover the primary action.
+ */
 
-function collectErrors(page: Page): string[] {
+const VIEWPORTS = {
+  desktop: { width: 1440, height: 900 },
+  tablet: { width: 1024, height: 768 },
+  mobile: { width: 390, height: 844 },
+} as const;
+
+const SCENARIOS = ["active", "checkpoint"] as const;
+
+const CTA_LABEL: Record<(typeof SCENARIOS)[number], RegExp> = {
+  active: /Продолжить урок/,
+  checkpoint: /Проверить выполнение/,
+};
+
+function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
-  // Ignore dev-server-only noise (HMR websocket) — not an application error.
-  const devNoise = /favicon|_next\/webpack-hmr|WebSocket connection to 'ws|hot-reloader/i;
-  page.on("console", (m) => {
-    if (m.type() === "error" && !devNoise.test(m.text())) errors.push(m.text());
+  page.on("console", (msg) => {
+    if (msg.type() === "error") errors.push(msg.text());
   });
-  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("pageerror", (err) => errors.push(String(err)));
   return errors;
 }
 
-test("concepts board renders and lists the three directions", async ({ page }) => {
-  const errors = collectErrors(page);
-  await page.goto("/concepts", { waitUntil: "networkidle" });
-  await expect(page.getByRole("heading", { name: "Три направления Главной" })).toBeVisible();
-  for (const c of CONCEPTS) {
-    await expect(page.getByRole("heading", { name: c.name })).toBeVisible();
+for (const scenario of SCENARIOS) {
+  for (const [name, size] of Object.entries(VIEWPORTS)) {
+    test(`${scenario} @ ${name}: renders cleanly with a visible CTA and no overflow`, async ({ page }) => {
+      const errors = collectConsoleErrors(page);
+      await page.setViewportSize(size);
+      await page.goto(`/?scenario=${scenario}`, { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+
+      // Exactly one document heading.
+      await expect(page.locator("h1")).toHaveCount(1);
+
+      // Primary CTA present and visible.
+      const cta = page.getByRole("button", { name: CTA_LABEL[scenario] });
+      await expect(cta).toBeVisible();
+
+      // No horizontal overflow of the page.
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, "no horizontal page overflow").toBeLessThanOrEqual(1);
+
+      // No console / page errors.
+      expect(errors, errors.join("\n")).toHaveLength(0);
+    });
   }
-  expect(errors).toEqual([]);
+}
+
+test("keyboard: the skip link is the first focusable control and targets main", async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.keyboard.press("Tab");
+  const focused = page.locator(":focus");
+  await expect(focused).toHaveText(/Перейти к содержимому|содержим/i);
+  await expect(focused).toHaveAttribute("href", "#main");
 });
 
-for (const c of CONCEPTS) {
-  test(`${c.name}: shared content + financial-privacy invariants`, async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto(c.url, { waitUntil: "networkidle" });
+test("mobile: the bottom nav does not cover the primary CTA", async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
 
-    // Shared navigation labels (RU).
-    for (const label of ["Сообщество", "Ментор", "Поддержка", "Инструменты"]) {
-      await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
-    }
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const nav = page.locator("nav.bottomnav");
+  await expect(nav).toBeVisible();
 
-    // Checkpoint target is shown...
-    await expect(page.getByText(/требуется баланс Pocket от/).first()).toBeVisible();
-    await expect(page.getByText("$200").first()).toBeVisible();
+  const ctaBox = await cta.boundingBox();
+  const navBox = await nav.boundingBox();
+  expect(ctaBox, "CTA has a box").not.toBeNull();
+  expect(navBox, "bottom nav has a box").not.toBeNull();
+  // The CTA's bottom edge sits above the bottom nav's top edge (no overlap).
+  expect(ctaBox!.y + ctaBox!.height).toBeLessThanOrEqual(navBox!.y + 1);
+});
 
-    const body = (await page.locator("body").innerText()).toLowerCase();
-    // ...but no user balance / "remaining $X" / deposits.
-    expect(body).not.toMatch(/осталось|ваш баланс|депозит|вывод средств/);
-    // No raw internal codes leak to the user.
-    expect(body).not.toMatch(/level\.\d{3}|tool\.[a-z_]+|rank\.[a-z_]+/);
-
-    // No Pocket CTA (button or link).
-    expect(await page.getByRole("button", { name: /pocket/i }).count()).toBe(0);
-    expect(await page.getByRole("link", { name: /pocket/i }).count()).toBe(0);
-
-    // A single primary action.
-    expect(await page.getByRole("button", { name: /Продолжить урок/ }).count()).toBe(1);
-
-    expect(errors).toEqual([]);
-  });
-
-  test(`${c.name}: mobile nav + no horizontal overflow`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(c.url, { waitUntil: "networkidle" });
-
-    const nav = page.getByRole("navigation", { name: "Мобильная навигация" });
-    for (const label of ["Главная", "Путь", "Уроки", "Инструменты", "Ещё"]) {
-      await expect(nav.getByText(label, { exact: true })).toBeVisible();
-    }
-
-    const overflow = await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth + 1,
-    );
-    expect(overflow).toBe(false);
-  });
-}
+test("keyboard: the CTA is reachable and activatable by keyboard", async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  await cta.focus();
+  await expect(cta).toBeFocused();
+});

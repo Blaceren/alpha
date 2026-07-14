@@ -97,3 +97,15 @@ success/warning/danger/info, locked/completed/active/suspended, focus-ring, over
 - Логотип, палитра, фото/видео Alex Curie — provisional placeholders.
 - Только functional-motion; milestone-сцены вне scope.
 - Next lint удалён в Next 16 → ESLint запускается напрямую (flat config).
+
+## Дополнение D1B — React App Shell & Route Field Home
+
+- `/` стал production-Главной: `app/(app)/page.tsx` (async, читает `searchParams`) →
+  `resolveScenario` → `HomeScreen`. D1A-концепты и `/concepts`-маршруты сняты.
+- **Server components only** на Главной: детерминированная статическая разметка + CSS-motion,
+  нулевой клиентский JS, стабильные screenshots.
+- Единый источник состояния — `data/mock/home-scenarios.ts` (`getHomeState`); UI не импортирует
+  фикстуры напрямую. Контракт по-прежнему без поля баланса пользователя.
+- Responsive: два breakpoint — навигация на 900px, композиция/маршрут на 1200px (DD-218).
+- Тесты: Vitest (component/unit) + Playwright (`test:e2e` = smoke, `screenshots` = 8 кадров).
+- Детали — `D1B_REACT_HOME_IMPLEMENTATION.md`.

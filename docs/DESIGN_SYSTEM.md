@@ -162,3 +162,14 @@ Reference viewports для QA: 1440×900, 1024×768, 390×844 (+ tablet portrait
 - Все HEX выше — placeholder. При получении палитры прелендинга обновляется только слой значений токенов; имена и компоненты не меняются.
 - Финальные visual tokens остаются provisional до assets (DD-004, DD-005).
 - Missing assets: см. `IMPLEMENTATION_PLAN.md` → раздел Missing assets.
+
+---
+
+## 9. D1B — применённые токены (Route Field Home)
+
+Первое реальное применение провизорных семантических токенов: deep-navy поверхности
+(`--background-base/-field`, `--surface-context`), холодный синий + green/cyan сигнал
+(`--route-*`, `--signal-*`, `--gate-boundary`), controlled glow (`--glow-current`), дивайдеры.
+Шрифты через `@fontsource-variable` (Manrope/Inter/JetBrains Mono). Все значения остаются
+provisional до assets прелендинга (DD-004/005) — заменяется только слой значений. Детали —
+`D1B_REACT_HOME_IMPLEMENTATION.md`.

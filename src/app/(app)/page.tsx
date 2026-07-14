@@ -1,9 +1,23 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { HomeScreen } from "@/features/home/home-screen";
+import { resolveScenario } from "@/domain/home";
+
+export const metadata: Metadata = {
+  title: "Главная — Alfa Trade Academy",
+  description: "Твой путь обучения: текущий шаг и контрольная точка.",
+};
 
 /**
- * Production "Главная" (/) is intentionally NOT built in Phase D1A.
- * During art-direction exploration, root redirects to the concepts board.
+ * Главная (Route Field Home). Default scenario is Active Lesson. A deterministic
+ * dev/Playwright scenario can be selected with ?scenario=active|checkpoint — this
+ * is a mock adapter only: not shown to the user, no debug panel, no domain contract.
+ * Unknown values safely fall back to active.
  */
-export default function RootPage() {
-  redirect("/concepts");
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scenario?: string }>;
+}) {
+  const { scenario } = await searchParams;
+  return <HomeScreen scenario={resolveScenario(scenario)} />;
 }

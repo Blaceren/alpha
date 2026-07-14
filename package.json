@@ -2,7 +2,7 @@
   "name": "alfa-trade-academy-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Alfa Trade Academy Web V2 — application foundation and art-direction board (Phase D1A)",
+  "description": "Alfa Trade Academy Web V2 — app shell and Route Field Home (Phase D1B)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

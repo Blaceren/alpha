@@ -203,6 +203,25 @@
   approval: React разрешается только после ручного просмотра R2.2 и явного решения.** Детали —
   `docs/D1A_R2_2_PRODUCTION_READINESS.md`, `design-memory/reviews/d1a-r2-2-review.md`.
 
+### D1B — React App Shell & Route Field Home
+
+- **DD-216 (Locked).** Финальная система рангов **не** фиксируется в D1B. Ранее исследованный «Route Knot»
+  (DD-211) **не** принимается как финальный ранг. В D1B используется только `ProvisionalRankMark`
+  (один trace + node). Выбор финальной rank-identity — отдельная фаза с явным approval и (по возможности)
+  на финальных assets. Детали — `docs/RANK_IDENTITY_FUTURE_PHASE.md`.
+- **DD-217 (Locked).** Два детерминированных состояния Главной переключаются **только** через query
+  (`?scenario=active|checkpoint`), резолвинг `resolveScenario` (неизвестное → active). Без debug-панели,
+  тумблера и phase-copy в пользовательском UI. Оба состояния читаются исключительно через `getHomeState()`.
+- **DD-218 (Locked).** Responsive-стратегия Главной: два независимых breakpoint. Навигация (app bar ↔
+  mobile top/bottom bars) переключается на 900px; композиция/маршрут (stacked `r-narrow` ↔ Route-Field grid
+  `r-wide`) — на 1200px. Планшет (900–1199) — настоящий stacked-state, а не сжатый desktop-grid.
+- **DD-219 (Locked).** Незавершённые адресаты в D1B: CTA — no-op кнопка (без навигации), непостроенные
+  пункты навигации — focusable-disabled (`aria-disabled`, «Скоро»). Нет 404, нет фейкового «успех», нет
+  Pocket-CTA. Профиль доступен через avatar (кнопка-заглушка, без /profile).
+- **DD-220 (Locked).** Оценка D1B — evidence matrix (20 критериев, все Pass; любой Fail блокирует) +
+  visual-QA лог по реальным screenshots. Детали — `design-memory/reviews/d1b-react-home-review.md`,
+  `docs/D1B_REACT_HOME_IMPLEMENTATION.md`.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

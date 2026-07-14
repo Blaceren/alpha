@@ -175,3 +175,21 @@
 - Длинные PL-строки не ломают компонент.
 - Milestone-компоненты skippable и имеют reduced-motion fallback.
 - Никакой компонент не показывает Pocket balance / broker wallet / «осталось $X».
+
+---
+
+## 12. D1B — компоненты Route Field Home (реализованы)
+
+Оболочка: `AppShell`, `BrandMark`, `NotificationButton`, `UserAvatar`,
+`DesktopRouteNavigation`, `MobileBottomNavigation`.
+
+Прогрессия/маршрут: `RouteField`, `RouteNode`, `ModuleBoundary`, `RouteContinuation`,
+`LessonPlane`, `ModuleProgress`, `ProgressInstrumentation`, `PrimaryRouteAction`,
+`CheckpointGate`, `CheckpointRequirement`, `CheckpointOutcome`, `FutureCheckpointPreview`.
+
+Ранг/наставник: `ProvisionalRankMark` (не финальная система рангов — `RANK_IDENTITY_FUTURE_PHASE.md`),
+`MentorMediaPlaceholder`, `MentorContext`.
+
+Инварианты D1B: ровно один `<h1>` на состояние; маршрут декоративен (`aria-hidden`) и продублирован
+`sr-only`-текстом; CTA — не самый яркий объект; ни один компонент не показывает баланс/депозиты/выводы/
+«осталось $X»/Pocket-CTA (закреплено тестами).

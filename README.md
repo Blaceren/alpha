@@ -31,19 +31,24 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
 | `npm run test:e2e` | Playwright smoke suite |
-| `npm run screenshots` | Playwright — реальные screenshots концептов |
+| `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
-## Art-direction board (D1A)
+## Главная — Route Field Home (D1B)
 
-Development-only маршруты (вне production sitemap):
+Реализована оболочка приложения и Главная на базе утверждённого **Route Field** в двух
+детерминированных состояниях (переключение только через query):
 
-- `/concepts` — доска сравнения
-- `/concepts/product-portal` — Direction A
-- `/concepts/market-atlas` — Direction B
-- `/concepts/editorial-academy` — Direction C
+- `/?scenario=active` — активный урок (Продолжить урок);
+- `/?scenario=checkpoint` — текущая контрольная точка (Проверить выполнение);
+- неизвестное значение scenario безопасно → active.
 
-Победитель на этом этапе не выбран. См. `docs/ART_DIRECTION_BOARD.md` и
-`design-memory/reviews/d1a-art-directions-review.md`.
+Детали — `docs/D1B_REACT_HOME_IMPLEMENTATION.md`, review —
+`design-memory/reviews/d1b-react-home-review.md`, screenshots —
+`design-memory/screenshots/d1b-react-home/final/`.
+
+Финальная система рангов в D1B не фиксируется — используется только `ProvisionalRankMark`
+(`docs/RANK_IDENTITY_FUTURE_PHASE.md`). D1A art-direction board и `/concepts`-маршруты сняты:
+`/` теперь production-Главная.
 
 ## Документация
 

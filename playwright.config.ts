@@ -1,9 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright runs against a real Next.js dev server (fonts are bundled via
- * @fontsource, so there is no external font fetch). Both the smoke suite and
- * the screenshot suite live under ./e2e.
+ * Playwright runs against a real Next.js dev server (fonts bundled via @fontsource,
+ * so no external font fetch). Home scenarios via ?scenario=active|checkpoint.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -17,15 +16,10 @@ export default defineConfig({
     trace: "off",
     screenshot: "off",
   },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "npm run dev -- --port 3100",
-    url: "http://127.0.0.1:3100/concepts",
+    url: "http://127.0.0.1:3100/",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

@@ -151,3 +151,32 @@ synthetic dashboard state, три концепта Главной (`/concepts/*`
 ## 6. Следующий шаг
 
 **D1 — Foundation.** Не начинать без явного запроса пользователя.
+
+---
+
+## 7. D1B — React App Shell & Route Field Home (выполнено)
+
+| Пункт | Статус |
+|-------|--------|
+| Аутентифицированная оболочка (app bar / mobile top / bottom nav) | ✅ |
+| Главная — Active Lesson (`/?scenario=active`) | ✅ |
+| Главная — Current Checkpoint (`/?scenario=checkpoint`) | ✅ |
+| Responsive Route Field (mobile / tablet / desktop) | ✅ |
+| Минимальные переиспользуемые компоненты | ✅ |
+| Реальные screenshots (desktop/tablet/mobile + 320px + zoom 200%) | ✅ 8 кадров |
+| Visual QA после браузерного рендера | ✅ 10 findings, все Critical/Major исправлены |
+| Финансовая приватность (нет баланса/депозитов/выводов/«осталось»/Pocket-CTA) | ✅ закреплено тестами |
+| `ProvisionalRankMark` (не финальная система рангов) | ✅ |
+| Unit/component tests | ✅ 32 |
+| E2E smoke (Playwright) | ✅ 9 |
+| lint / typecheck / build | ✅ чисто |
+| npm audit | ⚠️ 2 moderate (транзитивный postcss в Next; форс-даунгрейд отклонён) |
+
+**Границы соблюдены:** нет `/path`, страниц урока/теста/report/tools/community/news/referrals/mentor/
+support/profile/settings; нет полной системы рангов и 20 rank-ассетов; нет реальной auth/backend/CRM/
+Pocket/Prisma/БД; нет deploy; D2 не начат.
+
+Детали — `docs/D1B_REACT_HOME_IMPLEMENTATION.md`, `design-memory/reviews/d1b-react-home-review.md`.
+
+**Следующий шаг после D1B:** по явному запросу — фаза Rank Identity или D2 (Главная + Путь).
+Не начинать без запроса пользователя.
