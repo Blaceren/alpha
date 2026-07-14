@@ -124,6 +124,17 @@
 - Enrollment не создаёт `UserLevelProgress`: lazy progress materialization остаётся отдельной Phase 2B.4.
 - Version migration и re-enrollment являются отдельными будущими операциями и не выполняются автоматически.
 
+## 13. Effective Level State and lazy start (Phase 2B.4)
+
+- Effective states `completed`, `pending_review` and `in_progress` come only from persisted `UserLevelProgress`; `available` and `locked` are computed and never stored.
+- Only `enrollment.currentLevel` without a progress row may be `available`, and only for active module/level definitions, completed prior sequence, `requiredXp=0`, no checkpoint dependency and `visibilityRule=null`.
+- Unsupported dependencies fail closed with stable blockers: `xp_engine_unavailable`, `checkpoint_engine_unavailable`, `visibility_rule_unsupported`, `sequence_incomplete`, `definition_inactive` and `not_current_level`.
+- Phase 2B.4 never emits `xp_eligible`, `hidden` or `temporarily_suspended`, and never reads legacy `User.xp`, `Level`, `Task` or `UserTaskProgress` as V2 authority.
+- Lazy start is an actor-only internal command: caller cannot choose user, curriculum, version or level. Both READ and ENROLLMENT flags are required.
+- A successful start creates one `in_progress` row with zero attempts, updates only `lastMeaningfulActionAt`, and writes awaited `CURRICULUM_LEVEL_STARTED` audit in the same transaction.
+- Existing valid `in_progress` or `pending_review` current progress returns `created=false` without timestamp or audit changes. Expected progress unique races recover only after validating the persisted current-level row.
+- Completion, XP, checkpoint, report, mentor, entitlement, content and assessment runtime remain separate future phases.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

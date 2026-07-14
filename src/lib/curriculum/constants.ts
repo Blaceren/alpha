@@ -19,4 +19,5 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   levelUpdated: "LEVEL_DEFINITION_UPDATED",
   levelDeleted: "LEVEL_DEFINITION_DELETED",
   userEnrolled: "CURRICULUM_USER_ENROLLED",
+  levelStarted: "CURRICULUM_LEVEL_STARTED",
 } as const;

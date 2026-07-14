@@ -486,12 +486,15 @@ Typed success result: `{ kind: "enrolled", created: true | false, enrollment }`.
 
 ### 10.2 Initial presentation
 
-- Level 1: `available` только если definition active, `requiredPreviousLevel=null`, `requiredXp=0`, нет unresolved checkpoint/report/mentor prerequisite.
-- Level 2+: `locked` до completed previous level.
-- Visibility policy может дать `hidden`, но Phase 1 разрешает только `visibilityRule=null`; точный default visibility dictionary остаётся product decision.
-- Если `requiredXp>0`, а Phase 3 XP authority не готова, state fail-closed: `locked` с machine reason `xp_authority_unavailable`, не `available`.
-- Financial checkpoint requirements до Phase 8 fail-closed: `locked` с reason `checkpoint_runtime_unavailable`.
-- `report`, `mentor_review`, `financial_checkpoint`, `final_exam` не получают упрощённый auto-complete path до соответствующих phases.
+- Read-only `resolveUserCurriculumLevelStates` переиспользует pinned context resolver и принимает только `userId/asOf/db`.
+- Persisted `completed | pending_review | in_progress` отображаются без переинтерпретации; только `available | locked` вычисляются и не записываются в БД.
+- Без progress row доступным может быть максимум один уровень — только `enrollment.currentLevel`, если module/level active, prior sequence подтверждена completed rows, `requiredXp=0`, checkpoint отсутствует и `visibilityRule=null`.
+- Future/non-current levels locked с `not_current_level`; отсутствующая последовательность — `sequence_incomplete`; inactive definitions — `definition_inactive`.
+- `requiredXp>0` fail-closed как `xp_engine_unavailable`; legacy `User.xp` не читается и не является V2 authority.
+- Checkpoint dependency fail-closed как `checkpoint_engine_unavailable`; non-null visibility — `visibility_rule_unsupported`, а не выдуманный `hidden`.
+- `xp_eligible`, `hidden` и `temporarily_suspended` в Phase 2B.4 не выдаются.
+- Cross-version pins/progress, invalid sequence, impossible summary/progress и status/timestamp contradictions дают typed `corrupt`, а не частичный маршрут.
+- Resolver не пишет progress/audit/notifications, не касается timestamps и не читает V1 `Level/Task/UserTaskProgress`.
 
 ### 10.3 Почему lazy безопаснее
 
@@ -500,6 +503,16 @@ Typed success result: `{ kind: "enrolled", created: true | false, enrollment }`.
 - publication replacement не влияет на pinned definitions;
 - no-op enrollment не создаёт сотни rows;
 - unique progress row остаётся idempotency boundary для durable activity.
+
+### 10.4 Lazy current-level start
+
+- `startCurrentCurriculumLevel({ actorUserId, asOf?, db? })` действует только для actor и не принимает target user/version/code/level.
+- Команда требует READ + ENROLLMENT flags, active user и active pinned enrollment; state вычисляется тем же resolver внутри interactive transaction.
+- Только current state `available` создаёт один `UserLevelProgress(status=in_progress, startedAt=asOf, lastProgressAt=asOf, attemptCount=0)`.
+- В той же transaction обновляется только `enrollment.lastMeaningfulActionAt` и awaited audit `CURRICULUM_LEVEL_STARTED` с безопасными actor/user/enrollment/version/level identifiers.
+- Existing valid `in_progress` или `pending_review` current row возвращается как `created=false` без writes/audit/timestamp touch.
+- P2002 recovery перечитывает тот же pinned context и принимает только valid current-level `in_progress/pending_review`; иначе исходная infrastructure error не маскируется.
+- Audit failure откатывает progress и enrollment timestamp. XP/checkpoint/report/mentor/entitlement/content/assessment records не создаются.
 
 ---
 
@@ -734,12 +747,12 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ### 2B.4 Initial progress creation
 
-**Scope:** lazy materialization contract; durable row creation on start/trusted completion, computed initial matrix, summary-cache transaction.
+**Scope:** реализованные effective Level States и actor-only lazy start текущего available уровня; stable fail-closed blockers, progress unique-race recovery и awaited audit.
 
 **Запрещено:** XP grants, generic unlock engine, checkpoint/report/mentor shortcuts.
 
-**Acceptance:** zero rows at enrollment; exact first/subsequent computed states; requiredXp/checkpoint fail closed; cross-version FK tests.
-**Dependency:** completion method allowlist; XP/checkpoint remain unsupported inputs.
+**Acceptance:** persisted-state fidelity, maximum one available, sequence/summary corruption, requiredXp/checkpoint/visibility fail closed, read-only proof, one-row start, full idempotency, controlled P2002, audit rollback и no-side-effect regression.
+**Dependency:** выполнена только start/read часть; completion method allowlist, XP/checkpoint и state transitions остаются будущими commands.
 
 ### 2B.5 Progression read API
 
@@ -762,7 +775,7 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ## 18. Next phase boundary
 
-Phase 2B.3 завершает только controlled first-enrollment command поверх schema foundation и read-only resolver. Initial progress creation (Phase 2B.4), progression engine, XP transactions, checkpoint runtime, API, UI, seed/backfill, re-enrollment и version migration не начинаются автоматически и остаются вне scope до отдельного запроса и acceptance contract.
+Phase 2B.4 завершает effective Level State read и lazy start текущего available уровня. Progression read API (Phase 2B.5), completion/transitions, XP transactions, checkpoint runtime, report/mentor/entitlement/content/assessment runtime, UI, seed/backfill, re-enrollment и version migration не начинаются автоматически и остаются вне scope до отдельного запроса и acceptance contract.
 
 ---
 

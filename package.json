@@ -42,6 +42,7 @@
     "test:regression:curriculum-phase1": "tsx scripts/regression/curriculumPhase1Gate.ts",
     "test:regression:curriculum-enrollment-schema": "tsx scripts/regression/curriculumEnrollmentSchemaRegression.ts",
     "test:regression:curriculum-enrollment-command": "tsx scripts/regression/curriculumEnrollmentCommandRegression.ts",
+    "test:regression:curriculum-level-state": "tsx scripts/regression/curriculumLevelStateRegression.ts",
     "test:regression:curriculum-resolver": "tsx scripts/regression/curriculumResolverRegression.ts"
   },
   "dependencies": {
