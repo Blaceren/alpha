@@ -61,6 +61,19 @@ function stripUndefined<T extends Record<string, unknown>>(patch: T): Partial<T>
   ) as Partial<T>;
 }
 
+// After stripUndefined only explicitly-provided keys remain (explicit null is
+// kept, an omitted field is gone). Module/Level patches carry no Date fields,
+// so a direct comparison correctly distinguishes "not passed" from
+// "explicitly null" from "cleared string".
+function patchHasChanges<T extends Record<string, unknown>>(
+  existing: T,
+  patch: Partial<T>,
+): boolean {
+  return Object.entries(patch).some(
+    ([key, value]) => existing[key as keyof T] !== value,
+  );
+}
+
 function throwInputIssues(entity: InputEntity, issues: CurriculumValidationIssue[]) {
   if (issues.length > 0) {
     throw new CurriculumDomainError(
@@ -380,6 +393,13 @@ export async function updateModuleDefinition(input: unknown): Promise<ModuleDefi
     }
     await loadEditableVersion(existing.curriculumVersionId, tx);
 
+    if (!patchHasChanges(existing, data.patch)) {
+      throw new CurriculumDomainError(
+        "MODULE_NO_CHANGES",
+        `patch does not change ModuleDefinition ${existing.id}`,
+      );
+    }
+
     const next = { ...existing, ...data.patch };
     throwInputIssues(
       "module",
@@ -569,6 +589,13 @@ export async function updateLevelDefinition(input: unknown): Promise<LevelDefini
       );
     }
     await loadEditableVersion(existing.curriculumVersionId, tx);
+
+    if (!patchHasChanges(existing, data.patch)) {
+      throw new CurriculumDomainError(
+        "LEVEL_NO_CHANGES",
+        `patch does not change LevelDefinition ${existing.id}`,
+      );
+    }
 
     if (data.patch.moduleId !== undefined) {
       await loadModuleForVersion(data.patch.moduleId, existing.curriculumVersionId, tx);

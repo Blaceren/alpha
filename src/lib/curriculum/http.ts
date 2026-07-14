@@ -26,11 +26,18 @@ type GateResult =
   | { ok: true; admin: AdminUser }
   | { ok: false; response: NextResponse };
 
+// One shared rate-limit bucket per admin covers EVERY curriculum admin
+// mutation, so the limit cannot be bypassed by rotating routes or resource
+// IDs. rateKey is accepted for readability/telemetry but never widens the
+// bucket. Limit sized to leave admin authoring flows comfortable headroom
+// while still tripping under sustained hammering.
+const CURRICULUM_ADMIN_WRITE_LIMIT = 50;
+
 // Write-request order: feature flag -> authentication -> active admin ->
 // rate limit -> CSRF. Body validation and domain calls happen in the route.
 export async function gateCurriculumAdmin(
   request: Request,
-  options: { write: boolean; rateKey?: string; rateLimitMax?: number } = { write: false },
+  options: { write: boolean; rateKey?: string } = { write: false },
 ): Promise<GateResult> {
   if (!isCurriculumV2AdminEnabled()) {
     return { ok: false, response: curriculumFeatureDisabledResponse() };
@@ -44,10 +51,10 @@ export async function gateCurriculumAdmin(
   }
 
   if (options.write) {
-    const limit = rateLimit(
-      `curriculum:admin:${options.rateKey ?? "write"}:${admin.id}`,
-      { limit: options.rateLimitMax ?? 30, windowMs: 10 * 60 * 1000 },
-    );
+    const limit = rateLimit(`curriculum:admin:write:${admin.id}`, {
+      limit: CURRICULUM_ADMIN_WRITE_LIMIT,
+      windowMs: 10 * 60 * 1000,
+    });
     if (!limit.allowed) {
       return { ok: false, response: rateLimitedResponse() };
     }
@@ -80,7 +87,9 @@ const HTTP_STATUS_BY_CODE: Record<CurriculumDomainErrorCode, number> = {
   MODULE_CONFLICT: 409,
   MODULE_NOT_EMPTY: 409,
   MODULE_VERSION_MISMATCH: 409,
+  MODULE_NO_CHANGES: 409,
   LEVEL_CONFLICT: 409,
+  LEVEL_NO_CHANGES: 409,
 };
 
 // Centralized domain-error -> HTTP mapper. Never leaks Prisma/SQL/stack.
@@ -173,3 +182,92 @@ export function toEffectiveFromDate(value: string | null | undefined): Date | nu
   if (value === null) return null;
   return new Date(value);
 }
+
+// --- Module body contracts ---
+
+const nonNegativeInt = z.number().int().min(0);
+const positiveInt = z.number().int().positive();
+const requiredText = z.string().trim().min(1);
+const optionalText = z.string().trim();
+
+const definitionStatus = z.enum(["active", "disabled"]);
+
+const levelTypeEnum = z.enum([
+  "external_event",
+  "lesson",
+  "scenario",
+  "practice",
+  "report",
+  "mentor_review",
+  "financial_checkpoint",
+  "final_exam",
+]);
+
+export const createModuleBodySchema = z.strictObject({
+  moduleNumber: positiveInt,
+  code: requiredText,
+  title: requiredText,
+  description: optionalText.optional(),
+  firstLevel: positiveInt,
+  lastLevel: positiveInt,
+  checkpointLevel: positiveInt.nullable().optional(),
+  learningObjective: requiredText,
+  status: definitionStatus.optional(),
+});
+
+export const patchModuleBodySchema = z
+  .strictObject({
+    moduleNumber: positiveInt.optional(),
+    code: requiredText.optional(),
+    title: requiredText.optional(),
+    description: optionalText.optional(),
+    firstLevel: positiveInt.optional(),
+    lastLevel: positiveInt.optional(),
+    checkpointLevel: positiveInt.nullable().optional(),
+    learningObjective: requiredText.optional(),
+    status: definitionStatus.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "at least one field is required",
+  });
+
+// --- Level body contracts (visibilityRule / contentVersionId /
+// assessmentVersionId are intentionally absent, so strict parsing rejects them) ---
+
+export const createLevelBodySchema = z.strictObject({
+  moduleId: positiveInt,
+  levelNumber: positiveInt,
+  stableCode: requiredText,
+  type: levelTypeEnum,
+  title: requiredText,
+  shortDescription: optionalText.optional(),
+  learningObjective: requiredText,
+  completionMethod: requiredText,
+  xpReward: nonNegativeInt,
+  requiredXp: nonNegativeInt,
+  requiredPreviousLevel: positiveInt.nullable().optional(),
+  requiredCheckpointLevel: positiveInt.nullable().optional(),
+  featureUnlockCode: requiredText.nullable().optional(),
+  status: definitionStatus.optional(),
+});
+
+export const patchLevelBodySchema = z
+  .strictObject({
+    moduleId: positiveInt.optional(),
+    levelNumber: positiveInt.optional(),
+    stableCode: requiredText.optional(),
+    type: levelTypeEnum.optional(),
+    title: requiredText.optional(),
+    shortDescription: optionalText.optional(),
+    learningObjective: requiredText.optional(),
+    completionMethod: requiredText.optional(),
+    xpReward: nonNegativeInt.optional(),
+    requiredXp: nonNegativeInt.optional(),
+    requiredPreviousLevel: positiveInt.nullable().optional(),
+    requiredCheckpointLevel: positiveInt.nullable().optional(),
+    featureUnlockCode: requiredText.nullable().optional(),
+    status: definitionStatus.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "at least one field is required",
+  });

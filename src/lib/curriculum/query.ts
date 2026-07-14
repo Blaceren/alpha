@@ -88,3 +88,38 @@ export async function getCurriculumVersionDetail(curriculumVersionId: number) {
 
   return version;
 }
+
+// Path-ownership guards for module/level routes. A resource that exists but
+// belongs to a different CurriculumVersion is reported as NOT_FOUND so the
+// existence of another version's resource is never disclosed.
+export async function assertModuleInVersion(
+  moduleId: number,
+  curriculumVersionId: number,
+) {
+  const moduleDef = await prisma.moduleDefinition.findUnique({
+    where: { id: moduleId },
+    select: { curriculumVersionId: true },
+  });
+  if (!moduleDef || moduleDef.curriculumVersionId !== curriculumVersionId) {
+    throw new CurriculumDomainError(
+      "MODULE_NOT_FOUND",
+      `ModuleDefinition ${moduleId} not found in CurriculumVersion ${curriculumVersionId}`,
+    );
+  }
+}
+
+export async function assertLevelInVersion(
+  levelId: number,
+  curriculumVersionId: number,
+) {
+  const levelDef = await prisma.levelDefinition.findUnique({
+    where: { id: levelId },
+    select: { curriculumVersionId: true },
+  });
+  if (!levelDef || levelDef.curriculumVersionId !== curriculumVersionId) {
+    throw new CurriculumDomainError(
+      "LEVEL_NOT_FOUND",
+      `LevelDefinition ${levelId} not found in CurriculumVersion ${curriculumVersionId}`,
+    );
+  }
+}

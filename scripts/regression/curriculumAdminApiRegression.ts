@@ -679,9 +679,24 @@ async function main() {
       assert.equal(body(response).error, "CURRICULUM_NOT_EMPTY");
     });
 
+    await check("37. errors do not leak Prisma/SQL/stack", async () => {
+      const conflict = await adminClient.request("POST", "/api/admin/curriculum/versions", {
+        body: { code: "api-created", name: "Dup", versionNumber: 1 },
+        headers: { "x-csrf-token": csrf },
+      });
+      assert.equal(conflict.status, 409);
+      const badId = await adminClient.get("/api/admin/curriculum/versions/abc");
+      for (const text of [conflict.text, badId.text]) {
+        assert.equal(/prisma|sqlite|P20\d\d|stack|\/home\/|node_modules/i.test(text), false, text);
+      }
+    });
+
+    // Ordered last among writes: the shared per-admin rate-limit bucket (now
+    // covering every curriculum admin mutation) is exhausted here, so no
+    // curriculum write must follow this hammer.
     await check("36. rate limit really returns 429", async () => {
       let got429 = false;
-      for (let i = 0; i < 40; i += 1) {
+      for (let i = 0; i < 60; i += 1) {
         const response = await adminClient.request(
           "DELETE",
           "/api/admin/curriculum/versions/999999",
@@ -694,19 +709,7 @@ async function main() {
         }
         assert.equal(response.status, 404);
       }
-      assert.equal(got429, true, "expected a 429 within 40 delete attempts");
-    });
-
-    await check("37. errors do not leak Prisma/SQL/stack", async () => {
-      const conflict = await adminClient.request("POST", "/api/admin/curriculum/versions", {
-        body: { code: "api-created", name: "Dup", versionNumber: 1 },
-        headers: { "x-csrf-token": csrf },
-      });
-      assert.equal(conflict.status, 409);
-      const badId = await adminClient.get("/api/admin/curriculum/versions/abc");
-      for (const text of [conflict.text, badId.text]) {
-        assert.equal(/prisma|sqlite|P20\d\d|stack|\/home\/|node_modules/i.test(text), false, text);
-      }
+      assert.equal(got429, true, "expected a 429 within 60 delete attempts");
     });
 
     await check("38. V1 API and tables untouched", async () => {

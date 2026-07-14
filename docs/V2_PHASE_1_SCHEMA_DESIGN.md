@@ -374,6 +374,34 @@ Module/Level write-endpoints не реализованы (следующая ф�
 
 **Read-only query service** (`src/lib/curriculum/query.ts`): `listCurriculumVersions`, `getCurriculumVersionDetail` — без audit-записей; несуществующий ID → typed CURRICULUM_NOT_FOUND.
 
+### Module/Level Admin API (реализовано, Phase 1B.5)
+
+Наследует весь security-контур Phase 1B.4 (feature flag `CURRICULUM_V2_ADMIN_ENABLED`, session auth, active admin, CSRF, safe-error mapping). GET отдельно не добавлялся — modules/levels отдаёт существующий GET detail версии.
+
+**Routes** (`[id]` = CurriculumVersion):
+- `POST   /api/admin/curriculum/versions/[id]/modules` — create module → 201;
+- `PATCH  /api/admin/curriculum/versions/[id]/modules/[moduleId]`;
+- `DELETE /api/admin/curriculum/versions/[id]/modules/[moduleId]` — только пустой модуль;
+- `POST   /api/admin/curriculum/versions/[id]/levels` — create level → 201;
+- `PATCH  /api/admin/curriculum/versions/[id]/levels/[levelId]`;
+- `DELETE /api/admin/curriculum/versions/[id]/levels/[levelId]`.
+Каждая команда вызывает соответствующий authoring-сервис Phase 1B.3 (`createModuleDefinition` … `deleteLevelDefinition`).
+
+**Strict request contracts** (unknown keys → 400):
+- POST module: `{moduleNumber, code, title, description?, firstLevel, lastLevel, checkpointLevel?, learningObjective, status?}` (status default active);
+- PATCH module: partial из тех же полей (identity `id`/`curriculumVersionId` не принимаются), ≥1 поле;
+- POST level: `{moduleId, levelNumber, stableCode, type, title, shortDescription?, learningObjective, completionMethod, xpReward, requiredXp, requiredPreviousLevel?, requiredCheckpointLevel?, featureUnlockCode?, status?}`; `visibilityRule`/`contentVersionId`/`assessmentVersionId` не принимаются (strict → 400);
+- PATCH level: partial (включая `moduleId`), ≥1 поле, без visibilityRule/identity.
+`actorId` всегда из сессии; `curriculumVersionId` — из path; тело их не принимает.
+
+**Path ownership:** каждый module/level-запрос проверяет, что ресурс принадлежит именно версии из path (`assertModuleInVersion`/`assertLevelInVersion` в query.ts). Ресурс, существующий в другой версии → **404 MODULE_NOT_FOUND/LEVEL_NOT_FOUND** (факт существования чужого ресурса не раскрывается, mutation и audit не выполняются). Для create/patch level, если `moduleId` в теле принадлежит другой версии → тоже 404.
+
+**No-change semantics:** сравнение на domain-уровне по merged state; `stripUndefined` отличает «поле не передано» / «явный null» / «очищенная строка». Если все переданные значения совпадают с текущими — mutation и audit не выполняются, возвращается **409 MODULE_NO_CHANGES / LEVEL_NO_CHANGES**. Published/archived-версия при этом даёт 409 IMMUTABLE раньше no-change проверки.
+
+**Error mapping (расширение):** MODULE_NO_CHANGES / LEVEL_NO_CHANGES / MODULE_NOT_EMPTY / MODULE_CONFLICT / LEVEL_CONFLICT / MODULE_VERSION_MISMATCH → 409; MODULE_NOT_FOUND / LEVEL_NOT_FOUND (в т.ч. path-version mismatch) → 404; CURRICULUM_INPUT_INVALID → 400; immutable/not-draft → 409. Контракты CurriculumVersion-ошибок не менялись.
+
+**Rate limit:** единый per-admin bucket `curriculum:admin:write:${adminId}` (лимит 50 / 10 мин) покрывает ВСЕ curriculum-admin mutations — обойти перебором разных route/ID нельзя.
+
 | Операция | Zod input (ядро) | Tx boundary | Audit action | Immutable guard | Domain errors |
 |---|---|---|---|---|---|
 | createCurriculumVersionDraft | code, name, changeNotes?, effectiveFrom?; versionNumber вычисляется | одна tx (выбор max(versionNumber)+1 и insert) | CURRICULUM_VERSION_CREATED | — | CURRICULUM_CODE_INVALID |
