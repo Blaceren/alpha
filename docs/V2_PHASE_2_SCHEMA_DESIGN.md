@@ -1,13 +1,13 @@
-# ATA V2 — Phase 2A: Enrollment and Progression Schema Contract
+# ATA V2 — Phase 2B.1: Enrollment and Progress Schema Foundation
 
-**Статус:** технический schema-контракт; только анализ и документирование
+**Статус:** утверждённая и реализованная additive schema foundation
 
 **Дата:** 2026-07-14
 
-**Базовый HEAD:** `2e0712fe3a3da55ec2e24e83848dc848561e3d78`
+**Базовый HEAD:** `297090956010b361cea698b77936a18cb7dd6606`
 **Связанные документы:** `V2_GAP_ANALYSIS.md`, `V2_PRODUCT_DECISIONS.md`, `V2_PHASE_1_SCHEMA_DESIGN.md`, `V2_PHASE_1_COMPLETION.md`
 
-На этом этапе Prisma schema, migrations, source code, package.json, API, feature flags, DB и runtime не изменяются. Документ проектирует Phase 2, но не начинает Phase 2B.1.
+Phase 2B.1 добавляет только enum/model declarations, inverse relations, compound/partial indexes, composite FK и schema/upgrade regressions. Resolver, enrollment commands, progression engine, XP, checkpoints, API, UI, seed/backfill, live runtime и production DB не изменяются.
 
 ---
 
@@ -33,7 +33,7 @@
 
 `hidden`, `locked`, `xp_eligible`, `available`, `in_progress`, `pending_review`, `completed`, `temporarily_suspended`.
 
-Точный enrollment enum, семантика `xp_eligible`, правила re-enrollment после completion и version-migration policy не зафиксированы. Они не выбираются молча: минимальная рекомендация ниже помечена как требующая product approval до migration.
+Для Phase 2B.1 утверждены: официальный curriculum code `ata-v2`; enrollment statuses `active | completed | superseded`; только один active enrollment на `(userId, curriculumCode)`; отсутствие обычного re-enrollment после completed; version migration только отдельной аудируемой командой. Persisted progress statuses — `in_progress | pending_review | completed`; presentation states вычисляются будущим resolver. XP authority и `XPTransaction` отложены до Phase 3.
 
 ### 1.3 Неизменяемые решения
 
@@ -56,7 +56,7 @@
 
 **Вариант B — отдельный `id Int @id @default(autoincrement())` (рекомендуется).** Даёт стабильный enrollment identity, допускает несколько historical enrollments и соответствует conventions проекта.
 
-Рекомендация: вариант B. Дополнительно `@@unique([userId, curriculumVersionId])` запрещает повторно создавать тот же enrollment для той же версии.
+Утверждён вариант B. `@@unique([userId, curriculumVersionId])` не добавляется: historical completed/superseded rows сохраняются, а единственный active enrollment защищён отдельным partial unique index на `(userId, curriculumCode)`.
 
 ### 2.2 Область active uniqueness
 
@@ -77,7 +77,7 @@ WHERE "status" = 'active';
 - История нескольких enrollments сохраняется.
 - Одновременно разрешён максимум один `active` enrollment на `(userId, curriculumCode)`.
 - `completed` и `superseded` не считаются active для partial index.
-- Новый enrollment после completion не создаётся автоматически. Разрешён ли explicit re-enrollment без version migration — открытое product decision.
+- Обычный enrollment command не создаёт новый enrollment после completion. Переход на другую version выполняется только отдельной аудируемой migration-командой.
 - При future version migration старая active запись становится `superseded`, новая создаётся `active`; обе операции и audit выполняются в одной transaction.
 
 ### 2.4 Delete и immutability
@@ -90,12 +90,7 @@ WHERE "status" = 'active';
 
 ### 2.5 `currentXp`
 
-`currentXp` не является source of truth. В Phase 2 это nullable projection/cache:
-
-- `null` = V2 XP projection ещё не инициализирована;
-- Phase 2 не синхронизирует её из `User.xp` и не использует для unlock;
-- Phase 3 должна определить authoritative V2 XP ledger/projection и атомарное обновление cache;
-- до Phase 3 resolver fail-closed для уровней с `requiredXp > 0`, если нет явно утверждённого authoritative XP input.
+`currentXp` в Phase 2B.1 не добавляется. Phase 3 введёт `XPTransaction` как источник истины; отдельный cached aggregate может быть добавлен только вместе с утверждённым ledger/projection contract.
 
 ### 2.6 `migrationSource`
 
@@ -131,7 +126,7 @@ WHERE "status" = 'active';
 
 ### 3.4 Completion evidence
 
-`completionEvidence Json?` — versioned, strictly validated envelope, например:
+`completionEvidence Json?` остаётся nullable schema-полем, но до профильных фаз допустимо только `null`. Phase 2B.1 не реализует generic arbitrary evidence writer. Будущий evidence envelope должен быть versioned и строго validated, например:
 
 ```json
 {
@@ -161,7 +156,7 @@ WHERE "status" = 'active';
 
 ## 4. Recommended exact Prisma models
 
-Ниже exact recommendation для следующего schema-этапа. Enrollment enum остаётся **provisional до product approval**, см. §6 и §16.
+Ниже фактическая schema Phase 2B.1 с утверждёнными enum и defaults.
 
 ```prisma
 enum CurriculumEnrollmentStatus {
@@ -185,17 +180,16 @@ model UserCurriculumEnrollment {
   status                 CurriculumEnrollmentStatus @default(active)
   highestCompletedLevel  Int                        @default(0)
   currentLevel           Int                        @default(1)
-  currentXp              Int?
   lastMeaningfulActionAt DateTime?
   completedAt            DateTime?
   migrationSource        String?
+  createdAt              DateTime                   @default(now())
   updatedAt              DateTime                   @updatedAt
-  user                   User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict)
+  user                   User                       @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
   levelProgress          UserLevelProgress[]
 
   @@unique([id, curriculumVersionId])
-  @@unique([userId, curriculumVersionId])
   @@index([curriculumVersionId, status])
   @@index([userId, enrolledAt])
 }
@@ -205,16 +199,17 @@ model UserLevelProgress {
   enrollmentId        Int
   curriculumVersionId Int
   levelDefinitionId   Int
-  status              UserLevelProgressStatus
-  startedAt           DateTime?
+  status              UserLevelProgressStatus @default(in_progress)
+  startedAt           DateTime                @default(now())
   lastProgressAt      DateTime?
   completedAt         DateTime?
   completionMethod    String?
   completionEvidence  Json?
   attemptCount        Int                     @default(0)
+  createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
-  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
-  levelDefinition     LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
+  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition     LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([enrollmentId, levelDefinitionId])
   @@index([enrollmentId, status])
@@ -264,13 +259,13 @@ model LevelDefinition {
 | status | enum / TEXT | active | lifecycle; не доверять SQLite enum без service validation |
 | highestCompletedLevel | Int | 0 | transactional summary cache, не самостоятельный source of truth |
 | currentLevel | Int | 1 | первый обязательный level, который ещё не completed; summary cache |
-| currentXp | Int? | null | Phase 3 projection cache; Phase 2 не использует для eligibility |
 | lastMeaningfulActionAt | DateTime? | null | не обновляется login/read; только progression/report/assessment meaningful command |
 | completedAt | DateTime? | null | обязателен только при status=completed |
 | migrationSource | String? | null | strict origin code; immutable |
+| createdAt | DateTime | now | immutable creation timestamp |
 | updatedAt | DateTime | @updatedAt | технический mutation timestamp, не audit substitute |
 
-Service invariants: `highestCompletedLevel >= 0`, `currentLevel >= 1`, `currentXp == null || currentXp >= 0`; `completedAt != null` iff completed; `completedAt >= enrolledAt`; pinned version не draft.
+Service invariants: `highestCompletedLevel >= 0`, `currentLevel >= 1`; `completedAt != null` iff completed; `completedAt >= enrolledAt`; pinned version не draft.
 
 ### 5.2 UserLevelProgress
 
@@ -280,13 +275,14 @@ Service invariants: `highestCompletedLevel >= 0`, `currentLevel >= 1`, `currentX
 | enrollmentId | Int FK component | NOT NULL | owner вместо userId |
 | curriculumVersionId | Int FK discriminator | NOT NULL | связывает enrollment и level одной version |
 | levelDefinitionId | Int FK component | NOT NULL | immutable level identity |
-| status | enum / TEXT | no default | caller обязан явно выбрать durable transition |
-| startedAt | DateTime? | null | ставится при first start; direct trusted completion может установить равным completion time |
+| status | enum / TEXT | in_progress | durable persisted lifecycle |
+| startedAt | DateTime | now | время создания первой durable progress row |
 | lastProgressAt | DateTime? | null | meaningful progress only; reads не меняют |
 | completedAt | DateTime? | null | только completed |
 | completionMethod | String? | null | actual allowlisted method; обязателен при completed |
 | completionEvidence | Json? | null | sanitized/versioned evidence envelope |
 | attemptCount | Int | 0 | owner — future assessment/report attempt service |
+| createdAt | DateTime | now | immutable creation timestamp |
 | updatedAt | DateTime | @updatedAt | технический mutation timestamp |
 
 Service invariants: attemptCount non-negative; completed requires completedAt+completionMethod; non-completed has completedAt null; evidence валидируется по kind/method; identity fields immutable.
@@ -302,7 +298,7 @@ Service invariants: attemptCount non-negative; completed requires completedAt+co
 - Доступная V2 ссылка: `hidden | locked | xp_eligible | available | in_progress | pending_review | completed | temporarily_suspended`.
 - Enrollment statuses в доступных документах не определены.
 
-### 6.2 Minimal enrollment enum — recommendation requiring approval
+### 6.2 Утверждённый minimal enrollment enum
 
 ```text
 active ──complete──▶ completed
@@ -314,7 +310,7 @@ active ──complete──▶ completed
 - `superseded`: enrollment закрыт explicit version migration; terminal.
 - Reverse transitions, silent reactivation и delete запрещены.
 
-**Product approval до migration:** подтвердить названия `completed`/`superseded`, разрешён ли re-enrollment после completed и требуется ли отдельный business state вроде `cancelled`. До ответа расширять enum нельзя.
+Для Phase 2B.1 утверждены только `active`, `completed`, `superseded`. Обычный re-enrollment после completed запрещён; version migration выполняется отдельной аудируемой командой. Дополнительные business states не добавляются.
 
 ### 6.3 Durable progress lifecycle
 
@@ -354,7 +350,7 @@ active ──complete──▶ completed
 | hidden/locked/xp_eligible/available | computed | зависит от prerequisites, XP, visibility, checkpoint |
 | temporarily_suspended | computed overlay | future external checkpoint/entitlement state; не теряет prior lifecycle |
 | highestCompletedLevel/currentLevel | persisted cache | быстрые summary reads; обновление только в transaction с progress |
-| currentXp | nullable future cache | Phase 3; не source of truth |
+| XP aggregate | отсутствует в Phase 2B.1 | Phase 3 `XPTransaction` будет source of truth |
 | active published version for unenrolled user | computed | publication state/effective time |
 | pinned version for enrolled user | persisted FK | historical stability |
 
@@ -412,7 +408,7 @@ resolveUserCurriculumContext(input: {
 }): Promise<UserCurriculumContextResult>
 ```
 
-`curriculumCode` — required argument. Не вводить скрытый env default до product approval официального code. Пример `ata-main` в Phase 1 document не является утверждённым production value.
+`curriculumCode` — required argument; официальный code первой линии — `ata-v2`. Будущий resolver не должен подменять явно переданный code скрытым env default.
 
 ### 9.2 Published resolver
 
@@ -472,7 +468,7 @@ Future enrollment command в одной transaction:
 1. Проверяет enrollment flag и authenticated actor policy.
 2. Получает published resolver candidate; draft/archived для нового enrollment запрещены.
 3. Повторно проверяет target status/effective timestamps внутри transaction.
-4. Создаёт enrollment `active`, `highestCompletedLevel=0`, `currentLevel=1`, `currentXp=null`.
+4. Создаёт enrollment `active`, `highestCompletedLevel=0`, `currentLevel=1`.
 5. Не создаёт progress rows (lazy strategy).
 6. Пишет awaited success audit в той же transaction.
 
@@ -519,7 +515,7 @@ Race закрывается manual partial unique index; P2002/SQLite unique м�
 
 ### 12.1 Предлагаемое имя
 
-`20260714010000_curriculum_enrollment_progression_foundation` (timestamp уточняется в момент реализации, semantic suffix фиксирован).
+`20260714010000_curriculum_enrollment_progress_foundation`.
 
 ### 12.2 Содержимое одной additive migration
 
@@ -680,22 +676,20 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ---
 
-## 16. Open product decisions
+## 16. Phase 2B.1 decisions and deferred inputs
 
-Блокируют migration/schema finalization:
+Утверждены для schema foundation:
 
-1. Утвердить enrollment enum: минимально `active | completed | superseded`; нужен ли `cancelled/paused`.
-2. Разрешён ли новый active enrollment после completed без explicit version migration.
-3. Подтвердить точную семантику `xp_eligible`.
-4. Утвердить официальный `curriculumCode`; `ata-main` пока только пример.
-5. Утвердить, является ли `effectiveFrom` только eligibility date или будущий scheduler (текущий Phase 1 scheduler запрещает).
-6. Утвердить default visibility при `visibilityRule=null`.
-7. Утвердить authoritative XP input до Phase 3; рекомендация этого документа — fail-closed, не использовать V1 `User.xp` молча.
-8. Утвердить re-enrollment/version migration правила для completed users и handling незавершённого review.
-9. Утвердить retention/anonymization policy для enrollment/progress при удалении User.
-10. Утвердить allowlist `completionMethod` и evidence kinds до write implementation.
+1. Официальный curriculum code первой линии — `ata-v2`.
+2. Enrollment enum — `active | completed | superseded`; один active row на `(userId, curriculumCode)`.
+3. Completed user не получает обычный re-enrollment; переход version выполняет только отдельная аудируемая migration-команда.
+4. Persisted progress states — `in_progress | pending_review | completed`.
+5. `hidden | locked | xp_eligible | available | temporarily_suspended` — computed resolver states и не входят в DB enum.
+6. History enrollment/progress физически не удаляется; relations используют Restrict, retention бессрочный до отдельной policy.
+7. XP authority отложена до Phase 3 `XPTransaction`; `currentXp` в Phase 2B.1 отсутствует.
+8. `completionEvidence` до профильных фаз допускает только `null`; generic evidence writer отсутствует.
 
-Не блокируют пустую additive schema, но блокируют соответствующие commands: report rejection/resubmission details, assessment attempts, checkpoint verification, entitlement suspension/restore.
+Для последующих command/runtime фаз остаются отдельными входами: точная semantics `xp_eligible`, `effectiveFrom`, default visibility, report rejection/resubmission, assessment attempts, checkpoint verification, entitlement suspension/restore, retention/anonymization policy и allowlist completion methods/evidence kinds.
 
 ---
 
@@ -708,7 +702,7 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 **Запрещено:** resolver, writes, API, seed/backfill, XP/checkpoint runtime.
 
 **Acceptance:** schema/DB constraints и populated V1 upgrade tests зелёные; новые tables пусты; flags/live untouched.
-**Dependency:** product approval enrollment enum до migration creation.
+**Dependency:** выполнена утверждёнными решениями §16.
 
 ### 2B.2 Read-only resolver
 
@@ -756,19 +750,10 @@ Audit metadata: actorId, userId, enrollmentId, curriculumVersionId, curriculumCo
 
 ---
 
-## 18. Recommended next code step
+## 18. Next phase boundary
 
-После утверждения open decisions §16 следующий отдельный запрос должен быть только **Phase 2B.1 schema foundation**:
-
-1. повторить takeover guard;
-2. добавить exact models/indexes/FK из §4/§8 одной additive migration;
-3. добавить isolated schema + populated V1 upgrade regressions;
-4. не добавлять resolver, API, enrollment rows, seed, XP/checkpoint logic или flags;
-5. прогнать targeted schema/upgrade tests, existing Phase 1 gate, Prisma validate/generate, lint/tsc/build;
-6. один отдельный commit.
-
-До product approval enum/status semantics migration создавать нельзя. Phase 2B.1 в рамках текущего Phase 2A не начинается.
+Phase 2B.1 завершает только schema foundation. Resolver и Phase 2B.2 не начинаются автоматически: для них требуется отдельный запрос и отдельный acceptance contract. Enrollment commands, initial progress creation, progression engine, XP transactions, checkpoint runtime, API, UI и seed/backfill остаются вне scope.
 
 ---
 
-*Документ не содержит secrets, паролей, реальных пользовательских данных или live env values. В рамках Phase 2A изменён только этот Markdown-файл.*
+*Документ не содержит secrets, паролей, реальных пользовательских данных или live env values.*

@@ -7,9 +7,10 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import type { PrismaClient } from "@prisma/client";
 
-// Phase 1C regression: upgrade an existing (populated) V1 database with the
-// single additive curriculum migration and prove full V1 compatibility, then
-// exercise runtime compatibility (flag off / flag on) on the upgraded DB.
+// Cumulative upgrade regression: upgrade an existing populated V1 database
+// through the Phase 1 curriculum migration, add representative Phase 1 data,
+// then apply the additive Phase 2B.1 enrollment/progress migration. Proves V1
+// and Phase 1 data preservation before exercising runtime compatibility.
 // Uses only a throwaway SQLite DB in /tmp, removed in finally.
 
 const dbPath = `/tmp/ata-curriculum-upgrade-${process.pid}.db`;
@@ -17,7 +18,8 @@ const dbUrl = `file:${dbPath}`;
 // Must be set before @/lib/prisma is imported, so the shared client (also used
 // by the authoring domain service) connects to this throwaway DB.
 process.env.DATABASE_URL = dbUrl;
-const CURRICULUM_MIGRATION = "20260714000000_curriculum_versioning_foundation";
+const PHASE_1_MIGRATION = "20260714000000_curriculum_versioning_foundation";
+const PHASE_2_MIGRATION = "20260714010000_curriculum_enrollment_progress_foundation";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -185,7 +187,7 @@ async function main() {
   let server: ChildProcess | null = null;
 
   try {
-    // ---- Apply migration chain UP TO (not including) the curriculum migration ----
+    // ---- Apply migration chain UP TO (not including) Phase 1 curriculum ----
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY,
@@ -200,13 +202,16 @@ async function main() {
     `);
 
     const all = migrationNames();
-    const preCurriculum = all.filter((n) => n !== CURRICULUM_MIGRATION);
-    assert.equal(all.includes(CURRICULUM_MIGRATION), true, "curriculum migration missing");
-    for (const name of preCurriculum) {
+    const phase1Index = all.indexOf(PHASE_1_MIGRATION);
+    const phase2Index = all.indexOf(PHASE_2_MIGRATION);
+    assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
+    assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
+    assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
+    for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
 
-    await check("1. V1 migration chain applies without the curriculum migration", async () => {
+    await check("1. V1 migration chain applies before curriculum migrations", async () => {
       const tables = (
         await prisma.$queryRawUnsafe<Array<{ name: string }>>(
           "SELECT name FROM sqlite_master WHERE type='table'",
@@ -258,6 +263,40 @@ async function main() {
       data: { userId: user.id, taskId: task.id, status: "pending", reportText: "done" },
     });
 
+    // ---- Apply Phase 1 and populate representative curriculum data ----
+    await applyMigration(prisma, PHASE_1_MIGRATION);
+    const phase1Version = await prisma.curriculumVersion.create({
+      data: {
+        code: "ata-v2",
+        name: "ATA V2 populated upgrade",
+        versionNumber: 1,
+        status: "published",
+        publishedAt: new Date("2026-07-14T00:00:00.000Z"),
+        createdById: adminUser.id,
+      },
+    });
+    const phase1Module = await prisma.moduleDefinition.create({
+      data: {
+        curriculumVersionId: phase1Version.id,
+        moduleNumber: 1,
+        code: "m01-upgrade",
+        title: "Upgrade module",
+        firstLevel: 1,
+        lastLevel: 1,
+      },
+    });
+    const phase1Level = await prisma.levelDefinition.create({
+      data: {
+        curriculumVersionId: phase1Version.id,
+        moduleId: phase1Module.id,
+        levelNumber: 1,
+        stableCode: "v2.l001.upgrade",
+        type: "lesson",
+        title: "Upgrade level",
+        completionMethod: "lesson",
+      },
+    });
+
     const snapshot = {
       users: await prisma.user.count(),
       levels: await prisma.level.count(),
@@ -273,12 +312,15 @@ async function main() {
       postbackRow: await prisma.postbackEvent.findUniqueOrThrow({ where: { id: postback.id } }),
       progressRow: await prisma.userTaskProgress.findUniqueOrThrow({ where: { id: progress.id } }),
       reportRow: await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } }),
+      curriculumVersionRow: await prisma.curriculumVersion.findUniqueOrThrow({ where: { id: phase1Version.id } }),
+      moduleDefinitionRow: await prisma.moduleDefinition.findUniqueOrThrow({ where: { id: phase1Module.id } }),
+      levelDefinitionRow: await prisma.levelDefinition.findUniqueOrThrow({ where: { id: phase1Level.id } }),
     };
 
-    // ---- Apply the single curriculum migration ----
-    await applyMigration(prisma, CURRICULUM_MIGRATION);
+    // ---- Apply only the additive Phase 2B.1 migration ----
+    await applyMigration(prisma, PHASE_2_MIGRATION);
 
-    await check("2. all V1 rows survive the upgrade (counts unchanged)", async () => {
+    await check("2. all V1 rows survive Phase 2B.1 (counts unchanged)", async () => {
       assert.equal(await prisma.user.count(), snapshot.users);
       assert.equal(await prisma.level.count(), snapshot.levels);
       assert.equal(await prisma.task.count(), snapshot.tasks);
@@ -289,13 +331,25 @@ async function main() {
       assert.equal(await prisma.taskReport.count(), snapshot.reports);
     });
 
-    await check("3. V1 primary keys, values and relations are unchanged", async () => {
+    await check("3. V1 and Phase 1 rows, values and relations are unchanged", async () => {
       assert.deepEqual(await prisma.user.findUniqueOrThrow({ where: { id: user.id } }), snapshot.userRow);
       assert.deepEqual(await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }), snapshot.xpRow);
       assert.deepEqual(await prisma.exchangeAccount.findUniqueOrThrow({ where: { id: exchangeAccount.id } }), snapshot.exchangeRow);
       assert.deepEqual(await prisma.postbackEvent.findUniqueOrThrow({ where: { id: postback.id } }), snapshot.postbackRow);
       assert.deepEqual(await prisma.userTaskProgress.findUniqueOrThrow({ where: { id: progress.id } }), snapshot.progressRow);
       assert.deepEqual(await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } }), snapshot.reportRow);
+      assert.deepEqual(
+        await prisma.curriculumVersion.findUniqueOrThrow({ where: { id: phase1Version.id } }),
+        snapshot.curriculumVersionRow,
+      );
+      assert.deepEqual(
+        await prisma.moduleDefinition.findUniqueOrThrow({ where: { id: phase1Module.id } }),
+        snapshot.moduleDefinitionRow,
+      );
+      assert.deepEqual(
+        await prisma.levelDefinition.findUniqueOrThrow({ where: { id: phase1Level.id } }),
+        snapshot.levelDefinitionRow,
+      );
       // relations still resolve
       const rel = await prisma.userTaskProgress.findUniqueOrThrow({
         where: { id: progress.id }, include: { user: true, task: true },
@@ -308,29 +362,66 @@ async function main() {
       assert.equal(pbRel.exchangeAccount?.id, exchangeAccount.id);
     });
 
-    await check("4. three V2 tables exist and are empty", async () => {
+    await check("4. Phase 2B.1 tables exist empty while Phase 1 data remains", async () => {
       const tables = (
         await prisma.$queryRawUnsafe<Array<{ name: string }>>(
           "SELECT name FROM sqlite_master WHERE type='table'",
         )
       ).map((r) => r.name);
-      for (const t of ["CurriculumVersion", "ModuleDefinition", "LevelDefinition"]) {
+      for (const t of [
+        "CurriculumVersion", "ModuleDefinition", "LevelDefinition",
+        "UserCurriculumEnrollment", "UserLevelProgress",
+      ]) {
         assert.equal(tables.includes(t), true, `missing ${t}`);
       }
-      assert.equal(await prisma.curriculumVersion.count(), 0);
-      assert.equal(await prisma.moduleDefinition.count(), 0);
-      assert.equal(await prisma.levelDefinition.count(), 0);
+      assert.equal(await prisma.curriculumVersion.count(), 1);
+      assert.equal(await prisma.moduleDefinition.count(), 1);
+      assert.equal(await prisma.levelDefinition.count(), 1);
+      assert.equal(await prisma.userCurriculumEnrollment.count(), 0);
+      assert.equal(await prisma.userLevelProgress.count(), 0);
     });
 
-    await check("5. partial published unique index exists", async () => {
-      const row = await prisma.$queryRawUnsafe<Array<{ sql: string | null }>>(
-        "SELECT sql FROM sqlite_master WHERE type='index' AND name='CurriculumVersion_code_published_key'",
+    await check("5. Phase 1 and Phase 2 partial/compound indexes exist", async () => {
+      const indexes = await prisma.$queryRawUnsafe<Array<{ name: string; sql: string | null }>>(
+        "SELECT name, sql FROM sqlite_master WHERE type='index'",
       );
-      assert.equal(row.length, 1, "partial index missing");
-      assert.equal(/where\s+"?status"?\s*=\s*'published'/i.test(row[0].sql ?? ""), true, row[0].sql ?? "no sql");
+      const byName = new Map(indexes.map((row) => [row.name, row.sql]));
+      assert.equal(
+        /where\s+"?status"?\s*=\s*'published'/i.test(byName.get("CurriculumVersion_code_published_key") ?? ""),
+        true,
+      );
+      assert.equal(
+        /where\s+"?status"?\s*=\s*'active'/i.test(
+          byName.get("UserCurriculumEnrollment_userId_curriculumCode_active_key") ?? "",
+        ),
+        true,
+      );
+      for (const index of [
+        "CurriculumVersion_id_code_key",
+        "LevelDefinition_id_curriculumVersionId_key",
+        "UserCurriculumEnrollment_id_curriculumVersionId_key",
+      ]) {
+        assert.equal(byName.has(index), true, `missing ${index}`);
+      }
     });
 
-    await check("6. V1 CRUD still works after upgrade", async () => {
+    await check("6. Phase 2 composite foreign keys exist with Restrict/Cascade", async () => {
+      const enrollmentFks = await prisma.$queryRawUnsafe<Array<{ table: string; on_delete: string; on_update: string }>>(
+        'PRAGMA foreign_key_list("UserCurriculumEnrollment")',
+      );
+      const progressFks = await prisma.$queryRawUnsafe<Array<{ table: string; on_delete: string; on_update: string }>>(
+        'PRAGMA foreign_key_list("UserLevelProgress")',
+      );
+      assert.deepEqual(new Set(enrollmentFks.map((fk) => fk.table)), new Set(["User", "CurriculumVersion"]));
+      assert.deepEqual(
+        new Set(progressFks.map((fk) => fk.table)),
+        new Set(["UserCurriculumEnrollment", "LevelDefinition"]),
+      );
+      assert.equal([...enrollmentFks, ...progressFks].every((fk) => fk.on_delete === "RESTRICT"), true);
+      assert.equal([...enrollmentFks, ...progressFks].every((fk) => fk.on_update === "CASCADE"), true);
+    });
+
+    await check("7. V1 CRUD still works after upgrade", async () => {
       const updated = await prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 10 } } });
       assert.equal(updated.xp, snapshot.userRow.xp + 10);
       await prisma.user.update({ where: { id: user.id }, data: { xp: snapshot.userRow.xp } }); // restore
@@ -339,7 +430,7 @@ async function main() {
     });
 
     let draftId = 0;
-    await check("7. a new draft curriculum can be created on the upgraded DB", async () => {
+    await check("8. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
       const authoring = await import("../../src/lib/curriculum/authoring");
       const draft = await authoring.createCurriculumDraft({
         actorId: adminUser.id, code: "upgrade-check", name: "Upgrade Check", versionNumber: 1,
@@ -348,7 +439,7 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
-    await check("8. re-running the real migration runner does not duplicate schema or data", async () => {
+    await check("9. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
           'SELECT COUNT(*) as c FROM "_prisma_migrations"',
@@ -375,7 +466,7 @@ async function main() {
     await prisma.$disconnect();
 
     server = await startServer(false);
-    await check("9. flag OFF: /api/health OK and V1 authenticated read works", async () => {
+    await check("10. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
       const login = await client.login(user.email);
@@ -384,7 +475,7 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("10. flag OFF: curriculum admin routes return 404", async () => {
+    await check("11. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -396,7 +487,7 @@ async function main() {
     server = null;
 
     server = await startServer(true);
-    await check("11. flag ON: admin authenticated read of curriculum versions works", async () => {
+    await check("12. flag ON: admin authenticated read of curriculum versions works", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -413,8 +504,11 @@ async function main() {
     cleanupDb();
   }
 
-  await check("12. temporary DB removed after test", () => {
+  await check("13. temporary DB and journals removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
+    for (const suffix of ["-journal", "-wal", "-shm"]) {
+      assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
+    }
   });
 }
 

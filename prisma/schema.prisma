@@ -154,6 +154,7 @@ model User {
   chatMutes                   ChatMute[]
   xpEvents                    XpEvent[]
   curriculumVersionsCreated   CurriculumVersion[]          @relation("CurriculumVersionCreator")
+  curriculumEnrollments       UserCurriculumEnrollment[]
 }
 
 model XpEvent {
@@ -751,21 +752,35 @@ enum LevelDefinitionType {
   final_exam
 }
 
+enum CurriculumEnrollmentStatus {
+  active
+  completed
+  superseded
+}
+
+enum UserLevelProgressStatus {
+  in_progress
+  pending_review
+  completed
+}
+
 model CurriculumVersion {
-  id            Int                     @id @default(autoincrement())
+  id            Int                        @id @default(autoincrement())
   code          String
   name          String
-  status        CurriculumVersionStatus @default(draft)
+  status        CurriculumVersionStatus    @default(draft)
   versionNumber Int
   effectiveFrom DateTime?
-  createdAt     DateTime                @default(now())
+  createdAt     DateTime                   @default(now())
   publishedAt   DateTime?
   createdById   Int?
   changeNotes   String?
-  createdBy     User?                   @relation("CurriculumVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy     User?                      @relation("CurriculumVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   modules       ModuleDefinition[]
   levels        LevelDefinition[]
+  enrollments   UserCurriculumEnrollment[]
 
+  @@unique([id, code])
   @@unique([code, versionNumber])
   @@index([status])
   @@index([createdById])
@@ -812,9 +827,57 @@ model LevelDefinition {
   status                  CurriculumDefinitionStatus @default(active)
   curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
   module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
+  userProgress            UserLevelProgress[]
 
+  @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
   @@unique([curriculumVersionId, stableCode])
   @@index([moduleId])
   @@index([curriculumVersionId, type])
+}
+
+model UserCurriculumEnrollment {
+  id                     Int                        @id @default(autoincrement())
+  userId                 Int
+  curriculumVersionId    Int
+  curriculumCode         String
+  status                 CurriculumEnrollmentStatus @default(active)
+  enrolledAt             DateTime                   @default(now())
+  highestCompletedLevel  Int                        @default(0)
+  currentLevel           Int                        @default(1)
+  lastMeaningfulActionAt DateTime?
+  completedAt            DateTime?
+  migrationSource        String?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  user                   User                       @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
+  levelProgress          UserLevelProgress[]
+
+  @@unique([id, curriculumVersionId])
+  @@index([curriculumVersionId, status])
+  @@index([userId, enrolledAt])
+}
+
+model UserLevelProgress {
+  id                  Int                      @id @default(autoincrement())
+  enrollmentId        Int
+  curriculumVersionId Int
+  levelDefinitionId   Int
+  status              UserLevelProgressStatus  @default(in_progress)
+  startedAt           DateTime                 @default(now())
+  lastProgressAt      DateTime?
+  completedAt         DateTime?
+  completionMethod    String?
+  completionEvidence  Json?
+  attemptCount        Int                      @default(0)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition     LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([enrollmentId, levelDefinitionId])
+  @@index([enrollmentId, status])
+  @@index([curriculumVersionId, status])
+  @@index([levelDefinitionId])
 }

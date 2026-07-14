@@ -39,7 +39,8 @@
     "test:regression:curriculum-admin-api": "tsx scripts/regression/curriculumAdminApiRegression.ts",
     "test:regression:curriculum-definitions-api": "tsx scripts/regression/curriculumDefinitionsAdminApiRegression.ts",
     "test:regression:curriculum-upgrade": "tsx scripts/regression/curriculumUpgradeCompatibilityRegression.ts",
-    "test:regression:curriculum-phase1": "tsx scripts/regression/curriculumPhase1Gate.ts"
+    "test:regression:curriculum-phase1": "tsx scripts/regression/curriculumPhase1Gate.ts",
+    "test:regression:curriculum-enrollment-schema": "tsx scripts/regression/curriculumEnrollmentSchemaRegression.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

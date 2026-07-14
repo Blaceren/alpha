@@ -88,6 +88,19 @@
 - Archive выполняется только для published-версии; повторный archive и archive черновика — ошибка, а не тихий success.
 - Published/archived версии защищены от редактирования domain-guard'ом `assertCurriculumEditable` (draft — единственное редактируемое состояние).
 
+## 10. Enrollment and durable progress (утверждено, Phase 2B.1)
+
+- Официальный code первой Curriculum V2 line: `ata-v2`.
+- Enrollment statuses: `active | completed | superseded`.
+- Одновременно допустим только один `active` enrollment на `(userId, curriculumCode)`; historical completed/superseded rows сохраняются бессрочно до отдельной retention policy.
+- Обычный enrollment command в будущей фазе идемпотентно возвращает существующий active enrollment и не выполняет re-enrollment после completed.
+- Переход пользователя на другую CurriculumVersion выполняется только отдельной аудируемой version-migration командой; автоматической миграции нет.
+- Persisted `UserLevelProgress` statuses: `in_progress | pending_review | completed`.
+- `hidden | locked | xp_eligible | available | temporarily_suspended` — вычисляемые состояния будущего resolver и не хранятся в DB enum.
+- Phase 2B.1 не добавляет `currentXp`. В Phase 3 `XPTransaction` станет источником истины; cached aggregate допускается только отдельным решением Phase 3.
+- `completionEvidence` остаётся nullable schema-полем, но до профильных фаз допустимо только `null`; generic arbitrary evidence writer не реализуется.
+- Enrollment/progress relations используют `ON DELETE RESTRICT` и `ON UPDATE CASCADE`; физическое удаление history после начала запрещено.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*
