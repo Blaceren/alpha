@@ -907,9 +907,6 @@ export async function verifyCurriculumXpAwardInTransaction(
   tx: XpTransactionClient,
   input: RecordCurriculumXpInTransactionInput,
 ): Promise<VerifyCurriculumXpAwardResult> {
-  if (!isCurriculumV2XpEnabled()) {
-    throw new CurriculumXpError("XP_DISABLED", "curriculum XP is disabled");
-  }
   try {
     const award = await canonicalAward(tx, input, true);
     const existingByKey = await findExistingByKey(tx, award.idempotencyKey);

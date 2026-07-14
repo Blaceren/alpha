@@ -68,9 +68,11 @@
 
 ## 7. Promocode concurrency
 
-- Нельзя добавлять unique `(promocodeId, userId)`, не проверив `perUserLimit`: такой констрейнт навсегда ограничит промокоды одним использованием и сломает лимиты > 1.
-- Требуется отдельное атомарное решение: idempotency каждого запроса, атомарное соблюдение `perUserLimit`, защита от параллельных redemption, поддержка лимитов больше одного.
-- Promocode race не исправляется «первой попавшейся уникальностью»; дизайн — отдельной задачей.
+- Unique `(promocodeId, userId)` запрещён: `perUserLimit > 1` является поддерживаемым контрактом.
+- Phase 3B.5 использует отдельную additive `PromocodeRedemptionRequest` с unique `(userId,requestId)`, unique redemption result, optional unique V2 transaction и `RESTRICT` ownership FKs. Legacy redemption не перестраивается и не backfill'ится.
+- `usedCount` обязан совпадать с количеством redemptions до нового claim; drift — typed fail-closed corruption. Ограниченный promo использует conditional increment только при `usedCount < maxUses`; unlimited promo делает один транзакционный increment.
+- Per-user count, global claim, redemption, V1 reward/event, optional V2 XP/audit и durable request result находятся в одной transaction. SQLite lock retry повторяет всю transaction, ограничен восемью попытками и не применяется к validation/limit/conflict/unknown errors.
+- Exact retry возвращает stored result с `created=false` и не меняет counter, XP, redemptions, timestamps, audit или notifications. Первый режим V1-only/dual-write сохраняется независимо от последующих flag changes.
 
 ## 8. Level stableCode format (утверждено, Phase 1B.1)
 
@@ -180,6 +182,15 @@
 - Progress, XP, both awaited audits and the enrollment summary commit atomically. CAS predicates protect both progress and enrollment. No next progress, V1 mutation, notification, CRM write, re-enrollment or version migration is created.
 - Exact duplicate verifies the durable ledger key/fingerprint and returns `created=false` without timestamp or audit changes. Partial states are corruption, different identities are conflicts, and unknown database errors are never treated as retry success.
 - Final completion uses the approved summary representation `highestCompletedLevel=maxLevel`, `currentLevel=maxLevel+1`, `status=completed`, with one shared evaluation timestamp. Archived pins remain valid and are never rebound.
+
+## 18. Atomic promocode V1/V2 compatibility (Phase 3B.5)
+
+- Existing redeem endpoint сохраняется. Security order: authenticated active user → per-user rate limit → CSRF → strict `Idempotency-Key`/body → atomic service. Body не принимает user, actor, amount, enrollment или version.
+- First-party callers создают UUID на одну операцию и сохраняют его для network/5xx retry. Legacy missing-key caller получает server UUID в body/header; потерянный response без повторно переданного key нельзя распознать как exact retry.
+- V1 `User.xp`, `XpEvent(source=promocode,sourceId=promocode.id)`, `PromocodeRedemption` и `usedCount` остаются совместимыми authorities/effects.
+- V2 award создаётся только для XP promo при одновременных READ+ENROLLMENT+XP flags и valid active enrollment с published/archived pin. Source — `promocode`, sourceId — durable redemption ID, level отсутствует, amount выводится из promo, metadata содержит только technical IDs.
+- Candidate/no enrollment, completed history и неполная/off flag matrix остаются V1-only. New published version не repin'ит existing enrollment. Corrupt enabled history откатывает всю transaction. Automatic enrollment и later backfill запрещены.
+- Legacy success audit/notification остаются post-commit best-effort и выполняются только при `created=true`. Exact retry не повторяет их. Transactional outbox отсутствует и остаётся известным Phase 3+ ограничением; V2 XP audit при этом атомарен с обоими ledger effects.
 
 ---
 

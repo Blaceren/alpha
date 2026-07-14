@@ -49,6 +49,7 @@
     "test:regression:curriculum-xp-ledger": "tsx scripts/regression/curriculumXpLedgerRegression.ts",
     "test:regression:curriculum-xp-level-state": "tsx scripts/regression/curriculumXpLevelStateRegression.ts",
     "test:regression:curriculum-level-completion": "tsx scripts/regression/curriculumLevelCompletionRegression.ts",
+    "test:regression:curriculum-promocode-xp": "tsx scripts/regression/curriculumPromocodeXpRegression.ts",
     "test:regression:curriculum-phase2": "tsx scripts/regression/curriculumPhase2Gate.ts"
   },
   "dependencies": {

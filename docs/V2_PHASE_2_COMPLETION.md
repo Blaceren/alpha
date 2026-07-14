@@ -101,7 +101,7 @@ V1 `Task`, `UserTaskProgress`, `Level`, `User.level/xp/currentTask`, checkpoint/
 
 Следующие фазы отдельно определят XP ledger/projection, completion/unlock transitions, checkpoint verification, report/mentor workflow, entitlements, content/assessment runtime, UI, seed/backfill, re-enrollment/version migration и retention/anonymization.
 
-Сохраняются pre-existing backlog items, не созданные Phase 2: `User.referralCode` migration/schema drift; `ChatMessage.channelId` FK drift; отсутствие `migration_lock.toml`; `postback_received` для no-op withdrawal; fallback fingerprint без `transaction_id`; promocode concurrency; hardcoded admin password; simulated balance event semantics; distributed rate-limit/shared store; реальный balance provider.
+Сохраняются pre-existing backlog items, не созданные Phase 2: `User.referralCode` migration/schema drift; `ChatMessage.channelId` FK drift; отсутствие `migration_lock.toml`; `postback_received` для no-op withdrawal; fallback fingerprint без `transaction_id`; hardcoded admin password; simulated balance event semantics; distributed rate-limit/shared store; реальный balance provider. Исторический пункт promocode concurrency закрыт отдельно в Phase 3B.5 atomic request/counter implementation.
 
 ## 12. Completion decision
 

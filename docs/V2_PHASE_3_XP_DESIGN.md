@@ -395,27 +395,25 @@ Owner boundaries:
 
 V1 route checks active window, expiry, `maxUses` and `usedCount` before the transaction; then counts per-user redemptions before the transaction. The tx creates one redemption, increments `usedCount`, and optionally writes V1 XP/reward/achievement. Audit/notification occur after commit. There is intentionally no unique `(promocodeId,userId)` because `perUserLimit` may exceed one. There is no request idempotency. Parallel requests can both pass counts and exceed global/per-user limits; retry after a lost success can redeem again. Mutation failure inside tx rolls back redemption/counter/XP together, but post-commit audit/notification failure does not.
 
-### Safe future algorithm
+### Implemented Phase 3B.5 algorithm
 
-Phase 3B.5 must not add unique `(promocodeId,userId)`. It should add a nullable-for-legacy, required-for-new server-derived `requestKey` with a partial unique index to `PromocodeRedemption`, plus stored request fingerprint. New redemption transaction:
+Migration `20260714030000_promocode_redemption_idempotency` adds a separate `PromocodeRedemptionRequest` history table. It stores `(userId,requestId)`, canonical SHA-256 request fingerprint, the exact redemption/promo ownership, nullable positive `xpAwarded` snapshot and optional V2 transaction relation. Composite parent keys exist only for FK ownership and begin with already-unique IDs. There is no unique `(promocodeId,userId)`, so `perUserLimit > 1` remains valid. All new history FKs use `RESTRICT`; existing rows are not backfilled and the table is empty after upgrade.
 
-1. Derive a namespaced request key bound to authenticated user, promo and normalized request token; exact existing request returns original after fingerprint validation.
-2. Acquire the promo write lock first with one conditional atomic update that increments `usedCount` only while promo is active/in-window and below `maxUses`. This serialization happens before per-user count.
-3. Recount committed redemptions for `(promo,user)` inside that same write transaction; if `>= perUserLimit`, abort so counter increment rolls back.
-4. Create redemption; derive V1 and optional V2 effects from that redemption ID.
-5. Write redemption, usedCount, V1 effect and any approved V2 ledger row in the same transaction; success audit/outbox follows the selected atomic policy.
-6. On SQLite busy/serialization failure, retry the whole bounded transaction and re-evaluate time/limits. On expected request-key P2002, reread and validate. Unknown failures remain failures.
+The existing `POST /api/promocodes/redeem` boundary uses authentication/active user → rate limit → CSRF → strict key/body validation → service. First-party callers send a UUID `Idempotency-Key` and retain it after a network/5xx outcome. A legacy caller without the header receives a generated key in both response body and header. That request is concurrency-safe, but a client that loses the response cannot identify a retry unless it resends the returned key.
 
-The conditional update must recheck `isActive`, `startsAt`, `expiresAt` and `maxUses` in DB; a preflight read is only for friendly error text. Any later failure rolls back counter and both ledgers.
+One interactive transaction performs exact request lookup first, promo/window/counter validation, in-transaction per-user count, conditional `usedCount < maxUses` claim (or one unlimited increment), redemption, V1 reward, optional V2 award/audit and durable request result. Existing `usedCount != redemption count` is typed corruption and is never repaired silently. A failure at any later stage rolls back the counter, redemption, V1 XP/event, V2 XP/audit and request result together.
+
+SQLite busy/locked/transaction-contention errors retry the whole transaction, including all counts and the exact request lookup. Retry is exponential but capped and bounded at eight attempts. Validation, limit, collision and unknown database errors are never retried or converted to success. Parallel regression proves one winner for a shared request, one winner at `perUserLimit=1`, exactly two winners at `perUserLimit=2`, and global `maxUses` across users.
 
 ### Enrollment states and dual-write
 
-- No V2 enrollment or XP flag off: preserve V1 redemption only; do not create an enrollment implicitly.
-- Valid active V2 enrollment: unresolved decision whether one redemption deliberately credits both V1 and V2 during coexistence. Recommendation is controlled dual-write from the same redemption owner transaction so V1 remains compatible and V2 promo can satisfy its gate; never call two independent routes.
-- Completed/superseded enrollment or archived historical pin without active enrollment: recommendation is V1-only; do not mutate terminal historical XP. A later enrollment does not inherit old promo XP automatically.
-- A retry always resolves by redemption request identity, never by promo/user unique. Multiple different request identities remain allowed up to `perUserLimit`.
+- V2 dual-write is evaluated only on the first new XP promocode redemption and requires READ+ENROLLMENT+XP flags together.
+- A valid active enrollment pinned to published or archived definitions receives V1 `User.xp`/`XpEvent` plus one `XPTransaction(sourceType=promocode, sourceId=redemptionId, levelDefinitionId=null)` in the same transaction. A newer published version never repins it.
+- Candidate/no enrollment, completed history, or any incomplete/off flag matrix stays V1-only. No enrollment, backfill or terminal-history mutation is created.
+- Enabled corrupt V2 state fails closed and rolls back the entire redemption.
+- Durable request history freezes the original mode. V1-only retry remains V1-only after flags turn on. Dual-write retry verifies the stored XP relation even after flags turn off and never adds another award.
 
-Dual-write and terminal behavior are product decisions required before Phase 3B.5; Phase 3B.1–3B.4 must not alter the V1 promo route.
+Legacy `PROMOCODE_REDEEMED` audit and notification remain awaited post-commit only for `created=true`; exact retry emits neither. There is still no transactional outbox, so a post-commit delivery failure can lose those best-effort side effects and is an explicit Phase 3+ limitation. The transactional `CURRICULUM_XP_AWARDED` audit remains part of the V2 award and rolls back both ledgers on failure.
 
 ## 5.13 Audit and safe metadata
 
@@ -447,7 +445,7 @@ No routes are created in Phase 3A.
 Recommended additive sequence:
 
 1. **Phase 3B.1 migration:** add `CurriculumXpSourceType` Prisma enum, inverse relations, parent `@@unique([id,userId,curriculumVersionId])`, `XPTransaction`, indexes/FKs/CHECKs. No V1 table ALTER/DROP/RENAME. SQLite enum remains TEXT plus manual CHECK.
-2. **Optional Phase 3B.5 promo migration:** add nullable legacy-compatible request identity/fingerprint fields and partial unique index to redemption, only after exact concurrency design. Do not add promo/user unique.
+2. **Phase 3B.5 promo migration:** additive `PromocodeRedemptionRequest` table with durable request/result identity, ownership FKs and exact-replay indexes. Do not add promo/user unique and do not backfill legacy redemption.
 3. **Optional outbox migration:** separate prompt/decision if transactional notification policy is accepted.
 
 Each migration SQL must be semicolon-splitter compatible: no trigger bodies or semicolon literals. Apply only to temporary SQLite in future regression. No seed, V1 backfill or production DB. Verify FK lists, CHECK behavior, partial/compound indexes and migration order.
@@ -541,6 +539,9 @@ Minimum future groups:
 
 ### Phase 3B.5 — Promocode compatibility/concurrency
 
+- **Implementation status:** complete. The existing redeem route delegates to the typed atomic coordinator, first-party callers send stable per-operation keys, and legacy missing-key requests receive a generated key. The additive request-history table preserves `perUserLimit > 1`; no legacy row is rebuilt or backfilled.
+- **Transaction:** request replay, counter consistency, per-user limit, atomic global claim, redemption, V1 reward, optional V2 XP/audit and request result share one transaction. SQLite lock retry is whole-transaction, capped and bounded. Legacy success audit/notification remain post-commit only for a new result.
+- **V2 matrix:** READ+ENROLLMENT+XP plus valid active published/archived pin dual-writes. Candidate, completed history, absent enrollment and incomplete/off flags remain V1-only. Corruption rolls back. Retry preserves the originally stored mode across later flag changes.
 - **Scope:** approved promo migration, request identity, atomic limits/expiry/rollback, active-enrollment V2 adapter and dual-write policy.
 - **Forbidden:** unique `(promocodeId,userId)`, implicit enrollment, referral/daily changes, unrelated promo UI.
 - **Acceptance:** parallel/global/per-user tests, `perUserLimit > 1`, exact retry/collision, no enrollment, active, completed/archived, dual-ledger rollback.
@@ -557,9 +558,9 @@ Minimum future groups:
 
 ## 6. Phase 3 status
 
-Phase 3B.4 adds the feature-gated internal atomic completion coordinator. It derives positive XP from the pinned immutable level, persists progress/enrollment/XP and both audits in one transaction, supports archived pins and terminal `maxLevel+1`, and leaves owner adapters, checkpoints, notifications, promo compatibility and HTTP exposure outside this phase.
+Phase 3B.5 adds atomic promocode compatibility on the existing endpoint. Request identity, `maxUses`, `perUserLimit`, V1 reward and optional active-enrollment V2 XP now commit or roll back together; exact retry is a durable no-op and the initial V1-only/dual-write choice is preserved. Archived pins are eligible, completed/candidate contexts remain V1-only, and no enrollment/backfill is created. Phase 3B.6 XP read/API completion gate remains unstarted.
 
-Phase 3A была design-only. Phase 3B.1 реализовала schema foundation. Phase 3B.2 добавляет выключенный по умолчанию internal ledger service и read-only resolver: XP суммируется только из `XPTransaction` одного enrollment, archived pin поддерживается, draft/cross-owner/cross-version/range corruption fail closed. `currentXp` cache и `levelNumber` не добавлены; V1 XP не читается как V2 authority и не получает dual-write.
+Phase 3A была design-only. Phase 3B.1 реализовала schema foundation. Phase 3B.2 добавила выключенный по умолчанию internal ledger service и read-only resolver: XP суммируется только из `XPTransaction` одного enrollment, archived pin поддерживается, draft/cross-owner/cross-version/range corruption fail closed. `currentXp` cache и `levelNumber` не добавлены; V1 XP никогда не читается как V2 authority. Phase 3B.5 делает только явно утверждённый atomic promo dual-write, сохраняя V1 и V2 отдельными authorities. Phase 3 завершена на 5 из 6 частей (83,3%).
 
 DB гарантирует positive amount/source allowlist, required fingerprint, uniqueness, ownership и delete policy. Service boundary дополнительно не экспортирует update/delete, принимает только validated trusted award identity, строит key/fingerprint server-side и пишет awaited audit атомарно. Privileged raw SQL по-прежнему технически может выполнить `UPDATE` или `DELETE`, потому что triggers намеренно отсутствуют ради совместимости custom migration runner.
 

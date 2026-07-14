@@ -22,6 +22,7 @@ process.env.DATABASE_URL = dbUrl;
 const PHASE_1_MIGRATION = "20260714000000_curriculum_versioning_foundation";
 const PHASE_2_MIGRATION = "20260714010000_curriculum_enrollment_progress_foundation";
 const PHASE_3_XP_MIGRATION = "20260714020000_xp_transaction_foundation";
+const PHASE_3_PROMOCODE_MIGRATION = "20260714030000_promocode_redemption_idempotency";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -207,11 +208,18 @@ async function main() {
     const phase1Index = all.indexOf(PHASE_1_MIGRATION);
     const phase2Index = all.indexOf(PHASE_2_MIGRATION);
     const phase3XpIndex = all.indexOf(PHASE_3_XP_MIGRATION);
+    const phase3PromocodeIndex = all.indexOf(PHASE_3_PROMOCODE_MIGRATION);
     assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
     assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
     assert.notEqual(phase3XpIndex, -1, "Phase 3 XP migration missing");
+    assert.notEqual(phase3PromocodeIndex, -1, "Phase 3 promocode migration missing");
     assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
     assert.equal(phase3XpIndex > phase2Index, true, "Phase 3 XP migration must follow Phase 2");
+    assert.equal(
+      phase3PromocodeIndex > phase3XpIndex,
+      true,
+      "Phase 3 promocode migration must follow the XP migration",
+    );
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -267,6 +275,19 @@ async function main() {
     const report = await prisma.taskReport.create({
       data: { userId: user.id, taskId: task.id, status: "pending", reportText: "done" },
     });
+    const promocode = await prisma.promocode.create({
+      data: {
+        code: "UPGRADEXP",
+        type: "xp_bonus",
+        value: { xp: 20 },
+        maxUses: 5,
+        perUserLimit: 2,
+        usedCount: 1,
+      },
+    });
+    const promocodeRedemption = await prisma.promocodeRedemption.create({
+      data: { userId: user.id, promocodeId: promocode.id },
+    });
 
     // ---- Apply Phase 1 and populate representative curriculum data ----
     await applyMigration(prisma, PHASE_1_MIGRATION);
@@ -311,12 +332,18 @@ async function main() {
       exchangeAccounts: await prisma.exchangeAccount.count(),
       postbacks: await prisma.postbackEvent.count(),
       reports: await prisma.taskReport.count(),
+      promocodes: await prisma.promocode.count(),
+      promocodeRedemptions: await prisma.promocodeRedemption.count(),
       userRow: await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
       xpRow: await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }),
       exchangeRow: await prisma.exchangeAccount.findUniqueOrThrow({ where: { id: exchangeAccount.id } }),
       postbackRow: await prisma.postbackEvent.findUniqueOrThrow({ where: { id: postback.id } }),
       progressRow: await prisma.userTaskProgress.findUniqueOrThrow({ where: { id: progress.id } }),
       reportRow: await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } }),
+      promocodeRow: await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
+      promocodeRedemptionRow: await prisma.promocodeRedemption.findUniqueOrThrow({
+        where: { id: promocodeRedemption.id },
+      }),
       curriculumVersionRow: await prisma.curriculumVersion.findUniqueOrThrow({ where: { id: phase1Version.id } }),
       moduleDefinitionRow: await prisma.moduleDefinition.findUniqueOrThrow({ where: { id: phase1Module.id } }),
       levelDefinitionRow: await prisma.levelDefinition.findUniqueOrThrow({ where: { id: phase1Level.id } }),
@@ -334,6 +361,11 @@ async function main() {
       assert.equal(await prisma.exchangeAccount.count(), snapshot.exchangeAccounts);
       assert.equal(await prisma.postbackEvent.count(), snapshot.postbacks);
       assert.equal(await prisma.taskReport.count(), snapshot.reports);
+      assert.equal(await prisma.promocode.count(), snapshot.promocodes);
+      assert.equal(
+        await prisma.promocodeRedemption.count(),
+        snapshot.promocodeRedemptions,
+      );
     });
 
     await check("3. V1 and Phase 1 rows, values and relations are unchanged", async () => {
@@ -343,6 +375,16 @@ async function main() {
       assert.deepEqual(await prisma.postbackEvent.findUniqueOrThrow({ where: { id: postback.id } }), snapshot.postbackRow);
       assert.deepEqual(await prisma.userTaskProgress.findUniqueOrThrow({ where: { id: progress.id } }), snapshot.progressRow);
       assert.deepEqual(await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } }), snapshot.reportRow);
+      assert.deepEqual(
+        await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
+        snapshot.promocodeRow,
+      );
+      assert.deepEqual(
+        await prisma.promocodeRedemption.findUniqueOrThrow({
+          where: { id: promocodeRedemption.id },
+        }),
+        snapshot.promocodeRedemptionRow,
+      );
       assert.deepEqual(
         await prisma.curriculumVersion.findUniqueOrThrow({ where: { id: phase1Version.id } }),
         snapshot.curriculumVersionRow,
@@ -449,6 +491,10 @@ async function main() {
       }),
       user: await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
       xpEvent: await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }),
+      promocode: await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
+      promocodeRedemption: await prisma.promocodeRedemption.findUniqueOrThrow({
+        where: { id: promocodeRedemption.id },
+      }),
       curriculumVersion: await prisma.curriculumVersion.findUniqueOrThrow({
         where: { id: phase1Version.id },
       }),
@@ -480,6 +526,16 @@ async function main() {
       assert.deepEqual(
         await prisma.xpEvent.findUniqueOrThrow({ where: { id: xpEvent.id } }),
         phase2Snapshot.xpEvent,
+      );
+      assert.deepEqual(
+        await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
+        phase2Snapshot.promocode,
+      );
+      assert.deepEqual(
+        await prisma.promocodeRedemption.findUniqueOrThrow({
+          where: { id: promocodeRedemption.id },
+        }),
+        phase2Snapshot.promocodeRedemption,
       );
       assert.deepEqual(
         await prisma.curriculumVersion.findUniqueOrThrow({
@@ -524,7 +580,25 @@ async function main() {
       assert.equal(Number(rows[0].count), 1);
     });
 
-    await check("10. V1 CRUD still works after upgrade", async () => {
+    // ---- Apply only the additive Phase 3B.5 promocode migration ----
+    await applyMigration(prisma, PHASE_3_PROMOCODE_MIGRATION);
+
+    await check("10. Phase 3B.5 preserves populated promo/XP rows and creates empty request history", async () => {
+      assert.deepEqual(
+        await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
+        snapshot.promocodeRow,
+      );
+      assert.deepEqual(
+        await prisma.promocodeRedemption.findUniqueOrThrow({
+          where: { id: promocodeRedemption.id },
+        }),
+        snapshot.promocodeRedemptionRow,
+      );
+      assert.equal(await prisma.xPTransaction.count(), 1);
+      assert.equal(await prisma.promocodeRedemptionRequest.count(), 0);
+    });
+
+    await check("11. V1 CRUD still works after upgrade", async () => {
       const updated = await prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 10 } } });
       assert.equal(updated.xp, snapshot.userRow.xp + 10);
       await prisma.user.update({ where: { id: user.id }, data: { xp: snapshot.userRow.xp } }); // restore
@@ -533,7 +607,7 @@ async function main() {
     });
 
     let draftId = 0;
-    await check("11. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
+    await check("12. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
       const authoring = await import("../../src/lib/curriculum/authoring");
       const draft = await authoring.createCurriculumDraft({
         actorId: adminUser.id, code: "upgrade-check", name: "Upgrade Check", versionNumber: 1,
@@ -542,7 +616,7 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
-    await check("12. re-running the real migration runner does not duplicate schema or data", async () => {
+    await check("13. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
           'SELECT COUNT(*) as c FROM "_prisma_migrations"',
@@ -556,6 +630,7 @@ async function main() {
             )
           )[0].c,
         ),
+        promocodeRequests: await prisma.promocodeRedemptionRequest.count(),
         enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
           where: { id: phase2Enrollment.id },
         }),
@@ -581,6 +656,7 @@ async function main() {
             )
           )[0].c,
         ),
+        promocodeRequests: await prisma.promocodeRedemptionRequest.count(),
         enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({
           where: { id: phase2Enrollment.id },
         }),
@@ -595,7 +671,7 @@ async function main() {
     await prisma.$disconnect();
 
     server = await startServer(false);
-    await check("13. flag OFF: /api/health OK and V1 authenticated read works", async () => {
+    await check("14. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
       const login = await client.login(user.email);
@@ -604,7 +680,7 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("14. flag OFF: curriculum admin routes return 404", async () => {
+    await check("15. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -616,7 +692,7 @@ async function main() {
     server = null;
 
     server = await startServer(true);
-    await check("15. flag ON: admin authenticated read of curriculum versions works", async () => {
+    await check("16. flag ON: admin authenticated read of curriculum versions works", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -633,7 +709,7 @@ async function main() {
     cleanupDb();
   }
 
-  await check("16. temporary DB and journals removed after test", () => {
+  await check("17. temporary DB and journals removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);

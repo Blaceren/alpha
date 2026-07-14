@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ProtectedPage } from "@/components/ProtectedPage";
 import { Alert, Card, FormField, Input, PageHeader } from "@/components/ui";
@@ -29,6 +29,7 @@ function ProfileContent() {
   const [email, setEmail] = useState("");
   const [promocode, setPromocode] = useState("");
   const [message, setMessage] = useState("");
+  const redeemAttempt = useRef<{ code: string; requestId: string } | null>(null);
 
   const load = useCallback(async () => {
     const [meResponse, achievementsResponse] = await Promise.all([
@@ -63,14 +64,27 @@ function ProfileContent() {
 
   async function redeem(event: FormEvent) {
     event.preventDefault();
-    const response = await csrfFetch("/api/promocodes/redeem", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: promocode.trim() }),
-    });
-    const result = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
-    setMessage(response.ok ? "Промокод активирован." : (result.message ?? result.error ?? "Промокод не активирован"));
-    if (response.ok) { setPromocode(""); await load(); }
+    const normalizedCode = promocode.trim().toUpperCase();
+    const attempt = redeemAttempt.current?.code === normalizedCode
+      ? redeemAttempt.current
+      : { code: normalizedCode, requestId: crypto.randomUUID() };
+    redeemAttempt.current = attempt;
+    try {
+      const response = await csrfFetch("/api/promocodes/redeem", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": attempt.requestId,
+        },
+        body: JSON.stringify({ code: normalizedCode }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
+      if (response.ok || response.status < 500) redeemAttempt.current = null;
+      setMessage(response.ok ? "Промокод активирован." : (result.message ?? result.error ?? "Промокод не активирован"));
+      if (response.ok) { setPromocode(""); await load(); }
+    } catch {
+      setMessage("Ошибка сети. Повтор использует тот же идентификатор запроса.");
+    }
   }
 
   return (
@@ -98,7 +112,7 @@ function ProfileContent() {
           </Card>
           <Card>
             <h2 className="section-title">Промокод</h2>
-            <form onSubmit={redeem} className="mt-4 flex gap-2"><Input value={promocode} onChange={(event) => setPromocode(event.target.value)} required /><button className="btn btn-secondary">Активировать</button></form>
+            <form onSubmit={redeem} className="mt-4 flex gap-2"><Input value={promocode} onChange={(event) => { setPromocode(event.target.value); redeemAttempt.current = null; }} required /><button className="btn btn-secondary">Активировать</button></form>
           </Card>
           <Card>
             <h2 className="section-title">Сеанс и безопасность</h2>

@@ -145,6 +145,7 @@ model User {
   emailVerificationTokens         EmailVerificationToken[]
   dailyRewards                    DailyLoginReward[]
   promocodeRedemptions            PromocodeRedemption[]
+  promocodeRedemptionRequests     PromocodeRedemptionRequest[]
   achievements                    UserAchievement[]
   mentorDialogs                   MentorChatDialog[]           @relation("MentorChatOwner")
   assignedMentorDialogs           MentorChatDialog[]           @relation("MentorChatAssignee")
@@ -628,33 +629,58 @@ model DailyLoginReward {
 }
 
 model Promocode {
-  id           Int                   @id @default(autoincrement())
-  code         String                @unique
-  type         PromocodeType
-  value        Json
-  maxUses      Int?
-  perUserLimit Int                   @default(1)
-  usedCount    Int                   @default(0)
-  startsAt     DateTime?
-  expiresAt    DateTime?
-  isActive     Boolean               @default(true)
-  createdById  Int?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  redemptions  PromocodeRedemption[]
+  id                 Int                          @id @default(autoincrement())
+  code               String                       @unique
+  type               PromocodeType
+  value              Json
+  maxUses            Int?
+  perUserLimit       Int                          @default(1)
+  usedCount          Int                          @default(0)
+  startsAt           DateTime?
+  expiresAt          DateTime?
+  isActive           Boolean                      @default(true)
+  createdById        Int?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  redemptions        PromocodeRedemption[]
+  redemptionRequests PromocodeRedemptionRequest[]
 
   @@index([isActive, startsAt, expiresAt])
 }
 
 model PromocodeRedemption {
-  id          Int       @id @default(autoincrement())
+  id          Int                         @id @default(autoincrement())
   promocodeId Int
   userId      Int
-  createdAt   DateTime  @default(now())
-  promocode   Promocode @relation(fields: [promocodeId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                    @default(now())
+  promocode   Promocode                   @relation(fields: [promocodeId], references: [id], onDelete: Cascade)
+  user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request     PromocodeRedemptionRequest?
 
+  @@unique([id, userId, promocodeId])
   @@index([promocodeId, userId])
+}
+
+model PromocodeRedemptionRequest {
+  id                 Int                 @id @default(autoincrement())
+  userId             Int
+  promocodeId        Int
+  redemptionId       Int                 @unique
+  requestId          String
+  requestFingerprint String
+  xpAwarded          Int?
+  v2XpTransactionId  Int?                @unique
+  createdAt          DateTime            @default(now())
+  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  promocode          Promocode           @relation(fields: [promocodeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  redemption         PromocodeRedemption @relation(fields: [redemptionId, userId, promocodeId], references: [id, userId, promocodeId], onDelete: Restrict, onUpdate: Cascade)
+  v2XpTransaction    XPTransaction?      @relation(fields: [v2XpTransactionId, userId], references: [id, userId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([userId, requestId])
+  @@unique([redemptionId, userId, promocodeId])
+  @@unique([v2XpTransactionId, userId])
+  @@index([promocodeId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Achievement {
@@ -898,24 +924,26 @@ model UserLevelProgress {
 }
 
 model XPTransaction {
-  id                  Int                      @id @default(autoincrement())
-  userId              Int
-  enrollmentId        Int
-  curriculumVersionId Int
-  levelDefinitionId   Int?
-  sourceType          CurriculumXpSourceType
-  sourceId            String?
-  idempotencyKey      String                   @unique
-  payloadFingerprint  String
-  amount              Int
-  metadata            Json?
-  createdAt           DateTime                 @default(now())
-  createdById         Int?
-  user                User                     @relation("CurriculumXpTarget", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  levelDefinition     LevelDefinition?         @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  createdBy           User?                    @relation("CurriculumXpCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  id                         Int                         @id @default(autoincrement())
+  userId                     Int
+  enrollmentId               Int
+  curriculumVersionId        Int
+  levelDefinitionId          Int?
+  sourceType                 CurriculumXpSourceType
+  sourceId                   String?
+  idempotencyKey             String                      @unique
+  payloadFingerprint         String
+  amount                     Int
+  metadata                   Json?
+  createdAt                  DateTime                    @default(now())
+  createdById                Int?
+  user                       User                        @relation("CurriculumXpTarget", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment                 UserCurriculumEnrollment    @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition            LevelDefinition?            @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy                  User?                       @relation("CurriculumXpCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  promocodeRedemptionRequest PromocodeRedemptionRequest?
 
+  @@unique([id, userId])
   @@index([enrollmentId, createdAt, id])
   @@index([userId, createdAt, id])
   @@index([curriculumVersionId, sourceType])
