@@ -156,6 +156,16 @@
 - Enrollment/user/version/level ownership использует `ON DELETE RESTRICT`; удаление nullable actor использует `SET NULL`.
 - `currentXp` cache не добавляется. Phase 3B.1 не импортирует V1 XP, не выполняет backfill/dual-write и не реализует award/resolver/API.
 
+## 16. Immutable V2 XP runtime foundation (Phase 3B.2)
+
+- `CURRICULUM_V2_XP_ENABLED` — независимый dynamic runtime flag с default false. READ/ENROLLMENT/ADMIN flags его не заменяют; live env не включается.
+- Current XP — только deterministic sum `XPTransaction.amount` конкретного enrollment. V1 `User.xp`/`XpEvent` не читаются; archived pin валиден, draft или ownership/version/range corruption fail closed.
+- Internal award service сам выводит user/version из enrollment, строит global key и canonical SHA-256 fingerprint, требует stable source identity, positive amount и source/level contract.
+- Metadata — bounded plain JSON object без prototype, secret/auth/session, raw provider/payload/content/evidence keys и non-JSON values. Она остаётся descriptive, а не authority.
+- Exact retry возвращает durable row с `created=false` без timestamp/audit side effects. Key/source collision — typed error; expected P2002 восстанавливается только после полной проверки stored row.
+- Ledger insert и `CURRICULUM_XP_AWARDED` audit выполняются одним transaction client. Audit failure и outer transaction failure полностью откатывают award.
+- Runtime module не экспортирует ledger update/delete и не меняет enrollment/progress, notifications, CRM или V1 XP. HTTP, LevelState, completion и owner adapters остаются будущими фазами.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

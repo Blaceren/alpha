@@ -492,6 +492,11 @@ Minimum future groups:
 
 ### Phase 3B.2 — Immutable ledger and XP resolver
 
+- **Implementation status:** internal runtime foundation реализован. `CURRICULUM_V2_XP_ENABLED` читается динамически и по умолчанию выключен; `resolveEnrollmentXp` и transaction-aware `recordCurriculumXp` не подключены к HTTP, LevelState или owner flows.
+- **Runtime identity:** service принимает только trusted enrollment/source identity, optional same-version level, positive amount, nullable active actor и safe metadata. User/version/key/fingerprint/timestamp выводятся или строятся на сервере. Stored key format: `xp:v2:<source-kebab>:<enrollmentId>:<encoded-sourceId>`; migration identity `<runId>:<sequence>` и admin correction используют утверждённые Phase 3A layouts. Fingerprint format — `sha256:<64 lowercase hex>` над canonical JSON contract `xp-v2-fingerprint-v1`.
+- **Metadata boundary:** только plain JSON object, максимум 4096 UTF-8 bytes, depth 4, 128 nodes, 64 keys, 64 array elements и 512 chars на string. Prototype, secret/auth/session, raw payload/provider/content/evidence keys и non-JSON values запрещены.
+- **Atomicity/idempotency:** insert и `CURRICULUM_XP_AWARDED` audit выполняются одним transaction client; exact retry возвращает durable row с `created=false`, expected P2002 перечитывается и проверяется, collision и неизвестный Prisma error не маскируются как success.
+
 - **Scope:** future flag/config, internal award primitive, fingerprint/idempotency/P2002 handling, read-only resolver, focused regressions.
 - **Forbidden:** completion transition, promo adaptation, public API, admin correction route, V1 changes.
 - **Acceptance:** exact retry/no-op, collision, sum/range/corruption/archived pin, static no-mutation scan, flag off no writes.
@@ -532,9 +537,9 @@ Minimum future groups:
 
 ## 6. Phase 3 status
 
-Phase 3A была design-only. Phase 3B.1 реализует только schema foundation: `CurriculumXpSourceType`, enrollment-owned `XPTransaction`, positive/source DB CHECKs, composite ownership FKs, indexes и schema/upgrade regressions. `currentXp` и `levelNumber` не добавлены; V1 XP не импортируется и не получает dual-write.
+Phase 3A была design-only. Phase 3B.1 реализовала schema foundation. Phase 3B.2 добавляет выключенный по умолчанию internal ledger service и read-only resolver: XP суммируется только из `XPTransaction` одного enrollment, archived pin поддерживается, draft/cross-owner/cross-version/range corruption fail closed. `currentXp` cache и `levelNumber` не добавлены; V1 XP не читается как V2 authority и не получает dual-write.
 
-DB гарантирует положительный `amount`, source allowlist, required fingerprint, global idempotency-key uniqueness, cross-user/cross-version ownership, same-version optional level relation и `RESTRICT`/actor `SET NULL` delete policy. Append-only domain boundary пока обеспечивается отсутствием mutation service/API и будет реализован в Phase 3B.2. Privileged raw SQL технически может выполнить `UPDATE` или `DELETE`, потому что triggers намеренно отсутствуют ради совместимости custom migration runner.
+DB гарантирует positive amount/source allowlist, required fingerprint, uniqueness, ownership и delete policy. Service boundary дополнительно не экспортирует update/delete, принимает только validated trusted award identity, строит key/fingerprint server-side и пишет awaited audit атомарно. Privileged raw SQL по-прежнему технически может выполнить `UPDATE` или `DELETE`, потому что triggers намеренно отсутствуют ради совместимости custom migration runner.
 
 ---
 

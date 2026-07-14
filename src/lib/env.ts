@@ -27,6 +27,7 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_ADMIN_ENABLED",
   "CURRICULUM_V2_READ_ENABLED",
   "CURRICULUM_V2_ENROLLMENT_ENABLED",
+  "CURRICULUM_V2_XP_ENABLED",
 ] as const;
 
 const envSchema = z.object({
@@ -48,6 +49,7 @@ const envSchema = z.object({
   CURRICULUM_V2_ADMIN_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_READ_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ENROLLMENT_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_XP_ENABLED: z.enum(["true", "false"]).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -139,6 +141,11 @@ export function isCurriculumV2ReadEnabled(env: NodeJS.ProcessEnv = process.env) 
 // Mutation gate for the controlled enrollment command; absent env stays disabled.
 export function isCurriculumV2EnrollmentEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_ENROLLMENT_ENABLED === "true";
+}
+
+// Read at call time. Absent env is the safe disabled default.
+export function isCurriculumV2XpEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_XP_ENABLED === "true";
 }
 
 export const envContract = {
