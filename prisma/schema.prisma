@@ -158,6 +158,11 @@ model User {
   curriculumEnrollments           UserCurriculumEnrollment[]
   curriculumXpTransactions        XPTransaction[]              @relation("CurriculumXpTarget")
   curriculumXpTransactionsCreated XPTransaction[]              @relation("CurriculumXpCreator")
+  contentVersionsCreated          ContentVersion[]             @relation("ContentVersionCreator")
+  assessmentVersionsCreated       AssessmentVersion[]          @relation("AssessmentVersionCreator")
+  levelResourceBindingsCreated    LevelResourceBinding[]       @relation("LevelResourceBindingCreator")
+  assessmentAttempts              AssessmentAttempt[]          @relation("AssessmentAttemptUser")
+  lessonProgress                  UserLessonProgress[]         @relation("UserLessonProgressUser")
 }
 
 model XpEvent {
@@ -802,6 +807,41 @@ enum CurriculumXpSourceType {
   admin_correction
 }
 
+enum ContentResourceStatus {
+  draft
+  published
+  archived
+}
+
+enum ContentAssetKind {
+  video
+  subtitles
+  image
+  chart
+  attachment
+}
+
+enum QuestionType {
+  single_choice
+  multiple_choice
+  true_false
+  ordered_steps
+  scenario_choice
+  numeric
+  chart_choice
+}
+
+enum AssessmentAttemptStatus {
+  in_progress
+  passed
+  failed
+}
+
+enum LessonProgressStatus {
+  in_progress
+  completed
+}
+
 model CurriculumVersion {
   id            Int                        @id @default(autoincrement())
   code          String
@@ -867,6 +907,11 @@ model LevelDefinition {
   module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
   userProgress            UserLevelProgress[]
   xpTransactions          XPTransaction[]
+  contentVersions         ContentVersion[]
+  assessmentVersions      AssessmentVersion[]
+  resourceBinding         LevelResourceBinding?
+  assessmentAttempts      AssessmentAttempt[]
+  lessonProgress          UserLessonProgress[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -893,6 +938,8 @@ model UserCurriculumEnrollment {
   curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
   levelProgress          UserLevelProgress[]
   xpTransactions         XPTransaction[]
+  assessmentAttempts     AssessmentAttempt[]
+  lessonProgress         UserLessonProgress[]
 
   @@unique([id, curriculumVersionId])
   @@unique([id, userId, curriculumVersionId])
@@ -921,6 +968,211 @@ model UserLevelProgress {
   @@index([enrollmentId, status])
   @@index([curriculumVersionId, status])
   @@index([levelDefinitionId])
+}
+
+model ContentVersion {
+  id                   Int                    @id @default(autoincrement())
+  levelDefinitionId    Int
+  curriculumVersionId  Int
+  versionNumber        Int
+  status               ContentResourceStatus  @default(draft)
+  videoDurationSeconds Int?
+  createdById          Int?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  publishedAt          DateTime?
+  archivedAt           DateTime?
+  changeNotes          String?
+  levelDefinition      LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy            User?                  @relation("ContentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  localizations        ContentLocalization[]
+  assets               ContentAsset[]
+  resourceBindings     LevelResourceBinding[]
+  lessonProgress       UserLessonProgress[]
+
+  @@unique([id, levelDefinitionId])
+  @@unique([levelDefinitionId, versionNumber])
+  @@index([curriculumVersionId, status])
+  @@index([createdById])
+}
+
+model ContentLocalization {
+  id                         Int            @id @default(autoincrement())
+  contentVersionId           Int
+  locale                     String
+  title                      String
+  subtitle                   String         @default("")
+  learningObjectiveExtension String         @default("")
+  summary                    String         @default("")
+  transcript                 String?
+  body                       Json
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+  contentVersion             ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([contentVersionId, locale])
+}
+
+model ContentAsset {
+  id               Int              @id @default(autoincrement())
+  contentVersionId Int
+  kind             ContentAssetKind
+  assetCode        String
+  locale           String?
+  url              String
+  mimeType         String
+  sizeBytes        Int?
+  durationSeconds  Int?
+  checksum         String?
+  sortOrder        Int              @default(0)
+  createdAt        DateTime         @default(now())
+  contentVersion   ContentVersion   @relation(fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([id, contentVersionId])
+  @@unique([contentVersionId, assetCode])
+  @@unique([contentVersionId, sortOrder])
+  @@index([contentVersionId, kind, locale])
+}
+
+model AssessmentVersion {
+  id                  Int                    @id @default(autoincrement())
+  levelDefinitionId   Int
+  curriculumVersionId Int
+  versionNumber       Int
+  status              ContentResourceStatus  @default(draft)
+  passPercent         Int
+  maxAttempts         Int?
+  showExplanation     Boolean                @default(false)
+  createdById         Int?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  publishedAt         DateTime?
+  archivedAt          DateTime?
+  changeNotes         String?
+  levelDefinition     LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User?                  @relation("AssessmentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  questions           QuestionDefinition[]
+  resourceBindings    LevelResourceBinding[]
+  attempts            AssessmentAttempt[]
+
+  @@unique([id, levelDefinitionId])
+  @@unique([levelDefinitionId, versionNumber])
+  @@index([curriculumVersionId, status])
+  @@index([createdById])
+}
+
+model QuestionDefinition {
+  id                  Int                        @id @default(autoincrement())
+  assessmentVersionId Int
+  questionNumber      Int
+  stableKey           String
+  type                QuestionType
+  skillTag            String?
+  status              CurriculumDefinitionStatus @default(active)
+  options             Json?
+  correctAnswer       Json
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  assessmentVersion   AssessmentVersion          @relation(fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  localizations       QuestionLocalization[]
+
+  @@unique([assessmentVersionId, questionNumber])
+  @@unique([assessmentVersionId, stableKey])
+}
+
+model QuestionLocalization {
+  id           Int                @id @default(autoincrement())
+  questionId   Int
+  locale       String
+  prompt       String
+  optionLabels Json?
+  explanation  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  question     QuestionDefinition @relation(fields: [questionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([questionId, locale])
+}
+
+model LevelResourceBinding {
+  id                  Int                @id @default(autoincrement())
+  levelDefinitionId   Int                @unique
+  curriculumVersionId Int
+  contentVersionId    Int?
+  assessmentVersionId Int?
+  createdById         Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  levelDefinition     LevelDefinition    @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion      ContentVersion?    @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion   AssessmentVersion? @relation(fields: [assessmentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User?              @relation("LevelResourceBindingCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([levelDefinitionId, curriculumVersionId])
+  @@index([contentVersionId])
+  @@index([assessmentVersionId])
+  @@index([curriculumVersionId])
+  @@index([createdById])
+}
+
+model AssessmentAttempt {
+  id                  Int                      @id @default(autoincrement())
+  userId              Int
+  enrollmentId        Int
+  curriculumVersionId Int
+  levelDefinitionId   Int
+  assessmentVersionId Int
+  attemptNumber       Int
+  status              AssessmentAttemptStatus  @default(in_progress)
+  startedAt           DateTime                 @default(now())
+  submittedAt         DateTime?
+  durationSeconds     Int?
+  totalQuestions      Int?
+  correctCount        Int?
+  scoreBasisPoints    Int?
+  submittedAnswers    Json?
+  answersFingerprint  String?
+  startRequestId      String
+  submitRequestId     String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  user                User                     @relation("AssessmentAttemptUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition     LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion   AssessmentVersion        @relation(fields: [assessmentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([enrollmentId, assessmentVersionId, attemptNumber])
+  @@unique([enrollmentId, startRequestId])
+  @@index([enrollmentId, assessmentVersionId, status])
+  @@index([userId, createdAt])
+  @@index([assessmentVersionId, status])
+}
+
+model UserLessonProgress {
+  id                      Int                      @id @default(autoincrement())
+  userId                  Int
+  enrollmentId            Int
+  curriculumVersionId     Int
+  levelDefinitionId       Int
+  contentVersionId        Int
+  status                  LessonProgressStatus     @default(in_progress)
+  startedAt               DateTime                 @default(now())
+  lastProgressAt          DateTime                 @default(now())
+  completedAt             DateTime?
+  playbackPositionSeconds Int                      @default(0)
+  completedSections       Json                     @default("[]")
+  progressData            Json?
+  lastRequestId           String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  user                    User                     @relation("UserLessonProgressUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment              UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition         LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion          ContentVersion           @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([enrollmentId, contentVersionId])
+  @@index([enrollmentId, levelDefinitionId])
+  @@index([userId, lastProgressAt])
 }
 
 model XPTransaction {

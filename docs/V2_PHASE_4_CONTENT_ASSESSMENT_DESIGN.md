@@ -1,6 +1,6 @@
 # ATA V2 — Phase 4 Content, Assessments and Lesson Progress Design (Phase 4A)
 
-**Статус:** утверждаемый design-контракт Phase 4 (design-only, без кода и миграций)
+**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1
 **Дата:** 2026-07-15
 **База:** commit `6e0c32df66089ab42855d2759c2361e2d6bdfafc` (Phase 3 завершена)
 **Связанные документы:** `V2_PRODUCT_DECISIONS.md`, `V2_GAP_ANALYSIS.md`, `V2_PHASE_1_SCHEMA_DESIGN.md`, `V2_PHASE_2_SCHEMA_DESIGN.md`, `V2_PHASE_3_XP_DESIGN.md`, `V2_PHASE_1_COMPLETION.md`, `V2_PHASE_2_COMPLETION.md`, `V2_PHASE_3_COMPLETION.md`
@@ -98,6 +98,7 @@ model ContentVersion {
   videoDurationSeconds Int?                  // CHECK > 0 при NOT NULL (SQL)
   createdById          Int?
   createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   publishedAt          DateTime?
   archivedAt           DateTime?
   changeNotes          String?
@@ -131,7 +132,8 @@ model ContentLocalization {
 model ContentAsset {
   id               Int            @id @default(autoincrement())
   contentVersionId Int
-  kind             String         // CHECK IN ('video','subtitles','image','chart','attachment')
+  kind             ContentAssetKind // migration CHECK mirrors the approved enum
+  assetCode        String         // stable code, unique внутри content version
   locale           String?        // NULL = locale-независимый (video, chart)
   url              String         // https-only, allowlisted host policy (§22.4)
   mimeType         String
@@ -143,6 +145,8 @@ model ContentAsset {
   contentVersion   ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([id, contentVersionId])
+  @@unique([contentVersionId, assetCode])
+  @@unique([contentVersionId, sortOrder])
   @@index([contentVersionId, kind, locale])
 }
 ```
@@ -243,6 +247,8 @@ model LevelResourceBinding {
   contentVersion      ContentVersion?   @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
   assessmentVersion   AssessmentVersion? @relation(fields: [assessmentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
   createdBy           User?            @relation("LevelResourceBindingCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([levelDefinitionId, curriculumVersionId]) // Prisma one-to-one relation key
 }
 ```
 
@@ -272,8 +278,10 @@ model AssessmentVersion {
   status              ContentResourceStatus @default(draft)
   passPercent         Int                   // CHECK BETWEEN 1 AND 100; продуктовый стандарт 80
   maxAttempts         Int?                  // NULL = unlimited (зафиксировано); поле для будущих policies, CHECK > 0
+  showExplanation     Boolean               @default(false)
   createdById         Int?
   createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   publishedAt         DateTime?
   archivedAt          DateTime?
   changeNotes         String?
@@ -292,9 +300,9 @@ model QuestionDefinition {
   assessmentVersionId Int
   questionNumber      Int               // порядок; unique per version
   stableKey           String            // stable code вопроса внутри версии (для answers/аналитики)
-  type                String            // CHECK IN (7 типов, §8)
+  type                QuestionType      // migration CHECK mirrors the 7 approved types
   skillTag            String?
-  status              String            @default("active") // CHECK IN ('active','disabled'); в published — только 'active' (§7)
+  status              CurriculumDefinitionStatus @default(active)
   options             Json?             // упорядоченные stable option codes: [{code}...] (labels — в localization)
   correctAnswer       Json              // SERVER-ONLY. Канонический ответ (§8); НИКОГДА не сериализуется наружу
   createdAt           DateTime          @default(now())
@@ -328,7 +336,7 @@ model AssessmentAttempt {
   levelDefinitionId   Int
   assessmentVersionId Int
   attemptNumber       Int               // CHECK > 0
-  status              String            @default("in_progress") // CHECK IN ('in_progress','passed','failed')
+  status              AssessmentAttemptStatus @default(in_progress)
   startedAt           DateTime          @default(now())
   submittedAt         DateTime?
   durationSeconds     Int?              // server-derived: submittedAt - startedAt; CHECK >= 0
@@ -532,7 +540,7 @@ model UserLessonProgress {
   curriculumVersionId     Int
   levelDefinitionId       Int
   contentVersionId        Int
-  status                  String   @default("in_progress") // CHECK IN ('in_progress','completed')
+  status                  LessonProgressStatus @default(in_progress)
   startedAt               DateTime @default(now())
   lastProgressAt          DateTime @default(now())
   completedAt             DateTime?
@@ -594,7 +602,8 @@ CREATE INDEX "ContentVersion_curriculumVersionId_status_idx" ON "ContentVersion"
 
 -- 2. ContentLocalization (unique(contentVersionId, locale))
 -- 3. ContentAsset (CHECK kind IN (...), CHECK sizeBytes/durationSeconds > 0 при NOT NULL,
---    unique(id, contentVersionId), index(contentVersionId, kind, locale))
+--    stable assetCode, unique(id, contentVersionId), unique(contentVersionId, assetCode),
+--    unique(contentVersionId, sortOrder), index(contentVersionId, kind, locale))
 -- 4. AssessmentVersion (CHECK passPercent BETWEEN 1 AND 100, CHECK maxAttempts IS NULL OR maxAttempts > 0,
 --    unique(id, levelDefinitionId), unique(levelDefinitionId, versionNumber),
 --    partial unique published per level, как у ContentVersion)
@@ -619,7 +628,7 @@ ON "AssessmentAttempt"("enrollmentId","assessmentVersionId") WHERE "status"='in_
 --    unique(enrollmentId, contentVersionId); composite FK как в §15)
 ```
 
-Свойства: только `CREATE TABLE`/`CREATE INDEX` — **никаких** `ALTER/DROP/RENAME` V1- и Phase 1–3-таблиц (включая `LevelDefinition` — §5.3); все нужные parent unique keys уже существуют (`LevelDefinition(id, curriculumVersionId)`, `UserCurriculumEnrollment(id, userId, curriculumVersionId)`); enums — Prisma-enum для `ContentResourceStatus` + TEXT CHECK для остальных (question type/attempt status держим TEXT+CHECK, чтобы не плодить Prisma-enum'ы для полей, чьи словари могут расшириться продуктовыми решениями §22); no seed/backfill; custom runner-совместимость — без триггеров, statement'ы разделены `;`; FK-порядок создания: ContentVersion → ContentLocalization/ContentAsset → AssessmentVersion → QuestionDefinition → QuestionLocalization → LevelResourceBinding → AssessmentAttempt → UserLessonProgress. Rollback (документируемый, вручную): DROP в обратном порядке — child-таблицы прежде parents; данных V1 rollback не касается.
+Свойства: только `CREATE TABLE`/`CREATE INDEX` — **никаких** `ALTER/DROP/RENAME` V1- и Phase 1–3-таблиц (включая `LevelDefinition` — §5.3); все нужные parent unique keys уже существуют (`LevelDefinition(id, curriculumVersionId)`, `UserCurriculumEnrollment(id, userId, curriculumVersionId)`); Prisma-enums фиксируют утверждённые словари lifecycle, asset kind, question type, attempt status и lesson-progress status, а migration дублирует их SQLite `CHECK`-allowlist'ами; no seed/backfill; custom runner-совместимость — без триггеров, statement'ы разделены `;`; FK-порядок создания: ContentVersion → ContentLocalization/ContentAsset → AssessmentVersion → QuestionDefinition → QuestionLocalization → LevelResourceBinding → AssessmentAttempt → UserLessonProgress. Rollback (документируемый, вручную): DROP в обратном порядке — child-таблицы прежде parents; данных V1 rollback не касается.
 
 ---
 

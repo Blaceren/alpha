@@ -300,7 +300,7 @@ async function main() {
   await check("new request table is empty after upgrade", async () => {
     assert.equal(await prisma.promocodeRedemptionRequest.count(), 0);
   });
-  await check("real migration runner is idempotent", async () => {
+  await check("real migration runner applies later additive migrations then is idempotent", async () => {
     const before = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
       'SELECT COUNT(*) AS count FROM "_prisma_migrations"',
     );
@@ -309,10 +309,23 @@ async function main() {
       encoding: "utf8",
     });
     assert.equal(runner.status, 0, `${runner.stdout}\n${runner.stderr}`);
-    const after = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+    const afterFirst = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
       'SELECT COUNT(*) AS count FROM "_prisma_migrations"',
     );
-    assert.equal(Number(after[0].count), Number(before[0].count));
+    assert.equal(Number(afterFirst[0].count) >= Number(before[0].count), true);
+    const secondRunner = spawnSync("npx", ["tsx", path.join("prisma", "migrate.ts")], {
+      env: { ...process.env, DATABASE_URL: dbUrl },
+      encoding: "utf8",
+    });
+    assert.equal(secondRunner.status, 0, `${secondRunner.stdout}\n${secondRunner.stderr}`);
+    const afterSecond = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+      'SELECT COUNT(*) AS count FROM "_prisma_migrations"',
+    );
+    assert.equal(Number(afterSecond[0].count), Number(afterFirst[0].count));
+    const phase4Rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+      'SELECT COUNT(*) AS count FROM "AssessmentAttempt"',
+    );
+    assert.equal(Number(phase4Rows[0].count), 0);
   });
   await check("forbidden promocode-user unique index is absent", async () => {
     const indexes = await prisma.$queryRawUnsafe<Array<{ name: string; sql: string | null }>>(

@@ -9,8 +9,8 @@ import type { PrismaClient } from "@prisma/client";
 
 // Cumulative upgrade regression: upgrade an existing populated V1 database
 // through the Phase 1 curriculum migration, add representative Phase 1 data,
-// then apply the additive Phase 2B.1 enrollment/progress and Phase 3B.1 XP
-// migrations. Proves V1, Phase 1 and Phase 2 data preservation before
+// then apply the additive Phase 2 enrollment/progress, Phase 3 XP and Phase 4
+// content/assessment migrations. Proves all prior data is preserved before
 // exercising runtime compatibility.
 // Uses only a throwaway SQLite DB in /tmp, removed in finally.
 
@@ -23,6 +23,7 @@ const PHASE_1_MIGRATION = "20260714000000_curriculum_versioning_foundation";
 const PHASE_2_MIGRATION = "20260714010000_curriculum_enrollment_progress_foundation";
 const PHASE_3_XP_MIGRATION = "20260714020000_xp_transaction_foundation";
 const PHASE_3_PROMOCODE_MIGRATION = "20260714030000_promocode_redemption_idempotency";
+const PHASE_4_CONTENT_MIGRATION = "20260715000000_content_assessment_foundation";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -223,10 +224,12 @@ async function main() {
     const phase2Index = all.indexOf(PHASE_2_MIGRATION);
     const phase3XpIndex = all.indexOf(PHASE_3_XP_MIGRATION);
     const phase3PromocodeIndex = all.indexOf(PHASE_3_PROMOCODE_MIGRATION);
+    const phase4ContentIndex = all.indexOf(PHASE_4_CONTENT_MIGRATION);
     assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
     assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
     assert.notEqual(phase3XpIndex, -1, "Phase 3 XP migration missing");
     assert.notEqual(phase3PromocodeIndex, -1, "Phase 3 promocode migration missing");
+    assert.notEqual(phase4ContentIndex, -1, "Phase 4 content migration missing");
     assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
     assert.equal(phase3XpIndex > phase2Index, true, "Phase 3 XP migration must follow Phase 2");
     assert.equal(
@@ -234,6 +237,7 @@ async function main() {
       true,
       "Phase 3 promocode migration must follow the XP migration",
     );
+    assert.equal(phase4ContentIndex > phase3PromocodeIndex, true, "Phase 4 migration must follow Phase 3");
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -590,7 +594,10 @@ async function main() {
     // ---- Apply only the additive Phase 3B.5 promocode migration ----
     await applyMigration(prisma, PHASE_3_PROMOCODE_MIGRATION);
 
-    await check("10. Phase 3B.5 preserves populated promo/XP rows and creates empty request history", async () => {
+    // ---- Apply only the additive Phase 4B.1 content/assessment migration ----
+    await applyMigration(prisma, PHASE_4_CONTENT_MIGRATION);
+
+    await check("10. Phase 4B.1 preserves Phase 1-3 rows and creates nine empty tables", async () => {
       assert.deepEqual(
         await prisma.promocode.findUniqueOrThrow({ where: { id: promocode.id } }),
         snapshot.promocodeRow,
@@ -603,14 +610,95 @@ async function main() {
       );
       assert.equal(await prisma.xPTransaction.count(), 1);
       assert.equal(await prisma.promocodeRedemptionRequest.count(), 0);
+      for (const table of [
+        "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+        "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
+        "AssessmentAttempt", "UserLessonProgress",
+      ]) {
+        const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) AS count FROM "${table}"`,
+        );
+        assert.equal(Number(rows[0].count), 0, `${table} must be empty after populated upgrade`);
+      }
     });
 
-    await check("11. V1 CRUD still works after upgrade", async () => {
+    await check("11. V1 CRUD works and a representative Phase 4 graph can be created", async () => {
       const updated = await prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 10 } } });
       assert.equal(updated.xp, snapshot.userRow.xp + 10);
       await prisma.user.update({ where: { id: user.id }, data: { xp: snapshot.userRow.xp } }); // restore
       const tasks = await prisma.task.findMany({ orderBy: { stepNumber: "asc" } });
       assert.equal(tasks.length, snapshot.tasks);
+
+      const contentId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "ContentVersion" (
+          "levelDefinitionId", "curriculumVersionId", "versionNumber", "status",
+          "updatedAt", "publishedAt"
+        ) VALUES (?, ?, 1, 'published', ?, ?) RETURNING "id"`,
+        phase1Level.id, phase1Version.id, new Date(), new Date(),
+      ))[0].id);
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "ContentLocalization" (
+          "contentVersionId", "locale", "title", "body", "updatedAt"
+        ) VALUES (?, 'ru', 'Upgrade lesson', ?, ?)`,
+        contentId, JSON.stringify({ sections: [{ code: "intro", title: "Intro", body: "Body" }] }), new Date(),
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "ContentAsset" (
+          "contentVersionId", "kind", "assetCode", "url", "mimeType", "sortOrder"
+        ) VALUES (?, 'video', 'main-video', 'https://example.com/video.mp4', 'video/mp4', 0)`,
+        contentId,
+      );
+      const assessmentId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "AssessmentVersion" (
+          "levelDefinitionId", "curriculumVersionId", "versionNumber", "status",
+          "passPercent", "showExplanation", "updatedAt", "publishedAt"
+        ) VALUES (?, ?, 1, 'published', 80, 0, ?, ?) RETURNING "id"`,
+        phase1Level.id, phase1Version.id, new Date(), new Date(),
+      ))[0].id);
+      const questionId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "QuestionDefinition" (
+          "assessmentVersionId", "questionNumber", "stableKey", "type",
+          "options", "correctAnswer", "updatedAt"
+        ) VALUES (?, 1, 'upgrade-q1', 'single_choice', ?, ?, ?) RETURNING "id"`,
+        assessmentId, JSON.stringify([{ code: "a" }, { code: "b" }]), JSON.stringify({ code: "a" }), new Date(),
+      ))[0].id);
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "QuestionLocalization" (
+          "questionId", "locale", "prompt", "optionLabels", "updatedAt"
+        ) VALUES (?, 'ru', 'Upgrade question?', ?, ?)`,
+        questionId, JSON.stringify({ a: "A", b: "B" }), new Date(),
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "LevelResourceBinding" (
+          "levelDefinitionId", "curriculumVersionId", "contentVersionId",
+          "assessmentVersionId", "updatedAt"
+        ) VALUES (?, ?, ?, ?, ?)`,
+        phase1Level.id, phase1Version.id, contentId, assessmentId, new Date(),
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "AssessmentAttempt" (
+          "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
+          "assessmentVersionId", "attemptNumber", "startRequestId", "updatedAt"
+        ) VALUES (?, ?, ?, ?, ?, 1, 'upgrade-start-request', ?)`,
+        user.id, phase2Enrollment.id, phase1Version.id, phase1Level.id, assessmentId, new Date(),
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "UserLessonProgress" (
+          "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
+          "contentVersionId", "completedSections", "updatedAt"
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        user.id, phase2Enrollment.id, phase1Version.id, phase1Level.id, contentId, JSON.stringify(["intro"]), new Date(),
+      );
+      for (const table of [
+        "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+        "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
+        "AssessmentAttempt", "UserLessonProgress",
+      ]) {
+        const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) AS count FROM "${table}"`,
+        );
+        assert.equal(Number(rows[0].count), 1, `${table} representative row missing`);
+      }
     });
 
     let draftId = 0;
@@ -644,6 +732,13 @@ async function main() {
         progress: await prisma.userLevelProgress.findUniqueOrThrow({
           where: { id: phase2Progress.id },
         }),
+        phase4Counts: await Promise.all([
+          "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+          "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
+          "AssessmentAttempt", "UserLessonProgress",
+        ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) AS count FROM "${table}"`,
+        ))[0].count))),
       };
       const runner = spawnSync("npx", ["tsx", path.join("prisma", "migrate.ts")], {
         env: serverEnv as NodeJS.ProcessEnv, encoding: "utf8",
@@ -670,6 +765,13 @@ async function main() {
         progress: await prisma.userLevelProgress.findUniqueOrThrow({
           where: { id: phase2Progress.id },
         }),
+        phase4Counts: await Promise.all([
+          "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+          "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
+          "AssessmentAttempt", "UserLessonProgress",
+        ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) AS count FROM "${table}"`,
+        ))[0].count))),
       };
       assert.deepEqual(after, before, "re-run changed migration/data state");
     });
