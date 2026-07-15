@@ -203,6 +203,17 @@
 - Каждая успешная mutation и audit commit'ятся одной interactive transaction. Audit metadata содержит только IDs/code/version/locale/order; body/transcript/asset URL не журналируются. P2002 recovery возвращает success только после durable state verification; неизвестные DB errors sanitise'ятся как `CONTENT_INTERNAL_ERROR`.
 - Phase 4B.2 не добавляет HTTP, assessment/question runtime, attempts/scoring, lesson progress, XP, uploads, seed, UI или V1 side effects. Schema и migration Phase 4B.1 не меняются.
 
+## 20. Assessment draft authoring and publication lifecycle (Phase 4B.3)
+
+- Независимый dynamic flag `CURRICULUM_V2_ASSESSMENT_ENABLED` по умолчанию выключен. Server-only command service не добавляет HTTP/UI, attempts, scoring runtime, XP, lesson progress или V1 side effects.
+- AssessmentVersion можно менять только в состоянии `draft` и только под draft CurriculumVersion. Published/archived version, вопросы и локализации immutable. Удаляется только пустой, unbound draft без attempts; bound published version нельзя архивировать напрямую.
+- Поддержаны семь authoring contracts: `single_choice`, `multiple_choice`, `true_false`, `ordered_steps`, `scenario_choice`, `numeric`, `chart_choice`. Options — упорядоченные `{code}` с уникальными stable codes. Correct answer — strict `{code}`, `{codes}` или decimal-string `{value}`; multiple choice канонизируется как sorted set, ordered steps требует полную permutation, numeric не использует float и канонизирует `-0` в `0`.
+- Numeric и chart-choice можно хранить в draft, но publish fail-closed: точная numeric grading policy и проверяемая связь chart asset с question ещё не утверждены. Partial/manual/fuzzy grading не изобретены.
+- QuestionLocalization содержит только prompt, exact optionLabels и optional explanation. Locale задаётся явно и нормализуется; default locale отсутствует. Publish требует хотя бы одну общую полную locale у всех active questions.
+- Publish требует `passPercent=80`, только active questions, 5–7 вопросов для lesson; final_exam — ровно 30, включая минимум 3 scenario-choice. Для остальных level types assessment publication fail-closed.
+- Replacement требует exact expected published ID: старая версия атомарно архивируется, новая публикуется, assessment binding переносится только если указывал на старую. Первый publish не создаёт binding. Exact binding допускает только published assessment того же level/curriculum и сохраняет content side; clear удаляет row только при пустом content side.
+- Все успешные mutations и безопасные audit metadata commit'ятся одной interactive transaction. Prompt, labels, explanation и correctAnswer не журналируются. Rejected publication audit содержит только IDs и issue codes; неизвестные ошибки sanitise'ятся как `ASSESSMENT_INTERNAL_ERROR`.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*
