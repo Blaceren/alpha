@@ -1149,30 +1149,51 @@ model AssessmentAttempt {
 }
 
 model UserLessonProgress {
-  id                      Int                      @id @default(autoincrement())
+  id                      Int                             @id @default(autoincrement())
   userId                  Int
   enrollmentId            Int
   curriculumVersionId     Int
   levelDefinitionId       Int
   contentVersionId        Int
-  status                  LessonProgressStatus     @default(in_progress)
-  startedAt               DateTime                 @default(now())
-  lastProgressAt          DateTime                 @default(now())
+  status                  LessonProgressStatus            @default(in_progress)
+  startedAt               DateTime                        @default(now())
+  lastProgressAt          DateTime                        @default(now())
   completedAt             DateTime?
-  playbackPositionSeconds Int                      @default(0)
-  completedSections       Json                     @default("[]")
+  playbackPositionSeconds Int                             @default(0)
+  completedSections       Json                            @default("[]")
   progressData            Json?
   lastRequestId           String?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  user                    User                     @relation("UserLessonProgressUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  enrollment              UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  levelDefinition         LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  contentVersion          ContentVersion           @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+  revision                Int                             @default(0)
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  user                    User                            @relation("UserLessonProgressUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment              UserCurriculumEnrollment        @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition         LevelDefinition                 @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion          ContentVersion                  @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+  saveReceipts            UserLessonProgressSaveReceipt[]
 
+  @@unique([id, userId, enrollmentId, curriculumVersionId, levelDefinitionId, contentVersionId])
   @@unique([enrollmentId, contentVersionId])
   @@index([enrollmentId, levelDefinitionId])
   @@index([userId, lastProgressAt])
+}
+
+model UserLessonProgressSaveReceipt {
+  id                  Int                @id @default(autoincrement())
+  lessonProgressId    Int
+  userId              Int
+  enrollmentId        Int
+  curriculumVersionId Int
+  levelDefinitionId   Int
+  contentVersionId    Int
+  requestId           String
+  revision            Int
+  payloadFingerprint  String
+  appliedAt           DateTime           @default(now())
+  lessonProgress      UserLessonProgress @relation(fields: [lessonProgressId, userId, enrollmentId, curriculumVersionId, levelDefinitionId, contentVersionId], references: [id, userId, enrollmentId, curriculumVersionId, levelDefinitionId, contentVersionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([userId, requestId])
+  @@unique([lessonProgressId, revision])
 }
 
 model XPTransaction {

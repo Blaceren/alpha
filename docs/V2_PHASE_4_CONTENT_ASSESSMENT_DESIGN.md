@@ -547,19 +547,30 @@ model UserLessonProgress {
   playbackPositionSeconds Int      @default(0)  // CHECK >= 0
   completedSections       Json     @default("[]") // массив section-codes; монотонное множество
   progressData            Json?    // bounded (≤ 8 KB), allowlist-ключи; НЕ authority
-  lastRequestId           String?  // идемпотентность autosave
+  lastRequestId           String?  // compatibility marker последнего применённого autosave
+  revision                Int      @default(0)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   user            User                     @relation("UserLessonProgressUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   enrollment      UserCurriculumEnrollment @relation(fields: [enrollmentId, userId, curriculumVersionId], references: [id, userId, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   levelDefinition LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   contentVersion  ContentVersion           @relation(fields: [contentVersionId, levelDefinitionId], references: [id, levelDefinitionId], onDelete: Restrict, onUpdate: Cascade)
+  saveReceipts    UserLessonProgressSaveReceipt[]
 
   @@unique([enrollmentId, contentVersionId])
+  @@unique([id, userId, enrollmentId, curriculumVersionId, levelDefinitionId, contentVersionId])
   @@index([enrollmentId, levelDefinitionId])
   @@index([userId, lastProgressAt])
 }
 ```
+
+### 15.1. Phase 4B.4.1 — schema hardening для autosave
+
+`UserLessonProgressSaveReceipt` — durable append-only application ledger успешных autosave. Каждая квитанция хранит полный parent discriminator (`lessonProgressId`, user, enrollment, curriculum version, level, exact content version), `requestId`, положительную `revision`, канонический `payloadFingerprint` формата `sha256:<64 lowercase hex>` и DB-generated `appliedAt`. Единственный composite FK с `ON DELETE RESTRICT` не позволяет смешивать ownership/pin-компоненты разных progress rows. Unique `(userId, requestId)` задаёт глобальную для пользователя идемпотентность запроса, unique `(lessonProgressId, revision)` — одного победителя каждой ревизии. Существующие progress rows получают `revision=0`; миграция не создаёт для них искусственных receipts и не выполняет backfill/DML.
+
+Будущий runtime 4B.4 должен выполнять один алгоритм в одной транзакции: (1) нормализовать и провалидировать payload, вычислить fingerprint; (2) найти receipt по `(userId, requestId)` — тот же fingerprint возвращает уже зафиксированный результат без записи, другой fingerprint даёт conflict; (3) прочитать pinned progress row и его `revision`; (4) применить нормализованное состояние CAS-обновлением `WHERE id=? AND revision=?`, одновременно увеличив revision на 1 и сохранив `lastRequestId`; (5) вставить receipt с новой revision и fingerprint; (6) при unique/CAS-гонке повторно прочитать receipt и вернуть идемпотентный результат либо conflict. Update progress и insert receipt обязаны commit/rollback вместе.
+
+Append-only — граница command service/application: штатный код не обновляет и не удаляет receipts. SQLite-схема намеренно не добавляет triggers и не заявляет абсолютную неизменяемость против privileged raw SQL. Политика retention/очистки receipts отсутствует и этим этапом не изобретается; автоматическое удаление или каскад запрещены.
 
 Pin'ы: enrollment (c user/version-дискриминаторами), curriculum version, level, **точная ContentVersion**, user — все требуемые, все composite-FK.
 
@@ -567,7 +578,7 @@ Pin'ы: enrollment (c user/version-дискриминаторами), curriculum
 
 Правила:
 
-- Autosave идемпотентен: тот же `lastRequestId` + тот же payload → no-op `created=false` без touch `lastProgressAt`; новый requestId → upsert-обновление. Позиция может уходить назад (пересмотр) — это валидно; `completedSections` — только монотонное объединение (unknown section code для этой ContentVersion → 400); `completedAt` монотонен (снятие completed запрещено).
+- Autosave-контракт реализуется будущим runtime через receipt + fingerprint + revision/CAS из §15.1; одного `lastRequestId` недостаточно для безопасных retry после последующих autosave. Позиция может уходить назад (пересмотр) — это валидно; `completedSections` — только монотонное объединение (unknown section code для этой ContentVersion → 400); `completedAt` монотонен (снятие completed запрещено).
 - Client video percent НЕ является authority XP/completion (зафиксировано): модель не начисляет XP, не трогает `UserLevelProgress`, не завершает уровень. Условие «lesson content completed» (`status='completed'`) — open decision §22.11; до решения статус выставляется только явным клиентским сигналом «конец контента достигнут» и имеет чисто презентационное значение.
 - Stale ContentVersion не перезаписывает прогресс новой: unique `(enrollmentId, contentVersionId)` держит прогресс per-версионно; исторические строки сохраняются (Restrict); при будущей version-migration новая версия получает **новую** строку.
 - Write throttling: rate limit 120/10мин + рекомендация клиенту слать autosave не чаще раза в 15 с (сервер дополнительно может no-op'ить неизменившийся payload — дешёвый фингерпринт-чек).

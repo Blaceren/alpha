@@ -214,6 +214,14 @@
 - Replacement требует exact expected published ID: старая версия атомарно архивируется, новая публикуется, assessment binding переносится только если указывал на старую. Первый publish не создаёт binding. Exact binding допускает только published assessment того же level/curriculum и сохраняет content side; clear удаляет row только при пустом content side.
 - Все успешные mutations и безопасные audit metadata commit'ятся одной interactive transaction. Prompt, labels, explanation и correctAnswer не журналируются. Rejected publication audit содержит только IDs и issue codes; неизвестные ошибки sanitise'ятся как `ASSESSMENT_INTERNAL_ERROR`.
 
+## 21. Lesson progress autosave idempotency schema hardening (Phase 4B.4.1)
+
+- `UserLessonProgress.revision` начинается с `0`; populated upgrade сохраняет существующие строки без backfill receipts. `lastRequestId` остаётся compatibility marker, но больше не считается достаточной историей идемпотентности.
+- `UserLessonProgressSaveReceipt` хранит полный pinned ownership discriminator, `(userId, requestId)`, положительную revision, canonical `sha256:<64 lowercase hex>` fingerprint и DB-generated `appliedAt`. Composite FK использует `RESTRICT/CASCADE`; unique `(lessonProgressId, revision)` гарантирует одного победителя ревизии.
+- Будущий Phase 4B.4 runtime обязан в одной transaction: проверить existing receipt и fingerprint, выполнить revision-CAS progress update, вставить receipt и обработать race повторным чтением durable receipt. Повтор того же request/payload — no-op success; reuse requestId с другим payload — conflict.
+- Receipts append-only только на application/service boundary. Triggers не добавляются, поэтому privileged raw SQL технически может мутировать строки; абсолютная DB-level immutability не заявляется.
+- Retention policy отсутствует: receipts автоматически не очищаются и не каскадируются. Этот этап не реализует resolver, autosave service, HTTP, XP/completion или V1 side effects.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

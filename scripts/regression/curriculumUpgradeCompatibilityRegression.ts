@@ -24,6 +24,7 @@ const PHASE_2_MIGRATION = "20260714010000_curriculum_enrollment_progress_foundat
 const PHASE_3_XP_MIGRATION = "20260714020000_xp_transaction_foundation";
 const PHASE_3_PROMOCODE_MIGRATION = "20260714030000_promocode_redemption_idempotency";
 const PHASE_4_CONTENT_MIGRATION = "20260715000000_content_assessment_foundation";
+const PHASE_4_LESSON_PROGRESS_MIGRATION = "20260715010000_lesson_progress_autosave_idempotency";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -225,11 +226,13 @@ async function main() {
     const phase3XpIndex = all.indexOf(PHASE_3_XP_MIGRATION);
     const phase3PromocodeIndex = all.indexOf(PHASE_3_PROMOCODE_MIGRATION);
     const phase4ContentIndex = all.indexOf(PHASE_4_CONTENT_MIGRATION);
+    const phase4LessonProgressIndex = all.indexOf(PHASE_4_LESSON_PROGRESS_MIGRATION);
     assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
     assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
     assert.notEqual(phase3XpIndex, -1, "Phase 3 XP migration missing");
     assert.notEqual(phase3PromocodeIndex, -1, "Phase 3 promocode migration missing");
     assert.notEqual(phase4ContentIndex, -1, "Phase 4 content migration missing");
+    assert.notEqual(phase4LessonProgressIndex, -1, "Phase 4 lesson progress migration missing");
     assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
     assert.equal(phase3XpIndex > phase2Index, true, "Phase 3 XP migration must follow Phase 2");
     assert.equal(
@@ -238,6 +241,11 @@ async function main() {
       "Phase 3 promocode migration must follow the XP migration",
     );
     assert.equal(phase4ContentIndex > phase3PromocodeIndex, true, "Phase 4 migration must follow Phase 3");
+    assert.equal(
+      phase4LessonProgressIndex > phase4ContentIndex,
+      true,
+      "Phase 4 lesson progress migration must follow the content migration",
+    );
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -622,6 +630,7 @@ async function main() {
       }
     });
 
+    let lessonProgressId = 0;
     await check("11. V1 CRUD works and a representative Phase 4 graph can be created", async () => {
       const updated = await prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 10 } } });
       assert.equal(updated.xp, snapshot.userRow.xp + 10);
@@ -682,13 +691,13 @@ async function main() {
         ) VALUES (?, ?, ?, ?, ?, 1, 'upgrade-start-request', ?)`,
         user.id, phase2Enrollment.id, phase1Version.id, phase1Level.id, assessmentId, new Date(),
       );
-      await prisma.$executeRawUnsafe(
+      lessonProgressId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
         `INSERT INTO "UserLessonProgress" (
           "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
           "contentVersionId", "completedSections", "updatedAt"
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING "id"`,
         user.id, phase2Enrollment.id, phase1Version.id, phase1Level.id, contentId, JSON.stringify(["intro"]), new Date(),
-      );
+      ))[0].id);
       for (const table of [
         "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
         "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
@@ -701,8 +710,65 @@ async function main() {
       }
     });
 
+    const preAutosaveHardening = {
+      user: await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
+      enrollment: await prisma.userCurriculumEnrollment.findUniqueOrThrow({ where: { id: phase2Enrollment.id } }),
+      levelProgress: await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: phase2Progress.id } }),
+    };
+    await applyMigration(prisma, PHASE_4_LESSON_PROGRESS_MIGRATION);
+
+    await check("12. autosave hardening preserves the populated progress row with revision zero", async () => {
+      const progressRows = await prisma.$queryRawUnsafe<Array<{
+        id: number;
+        revision: number;
+        completedSections: unknown;
+      }>>(
+        'SELECT "id", "revision", "completedSections" FROM "UserLessonProgress" WHERE "id" = ?',
+        lessonProgressId,
+      );
+      assert.equal(progressRows.length, 1);
+      assert.equal(progressRows[0].revision, 0);
+      assert.deepEqual(progressRows[0].completedSections, ["intro"]);
+      assert.equal(await prisma.userLessonProgressSaveReceipt.count(), 0);
+      assert.deepEqual(await prisma.user.findUniqueOrThrow({ where: { id: user.id } }), preAutosaveHardening.user);
+      assert.deepEqual(
+        await prisma.userCurriculumEnrollment.findUniqueOrThrow({ where: { id: phase2Enrollment.id } }),
+        preAutosaveHardening.enrollment,
+      );
+      assert.deepEqual(
+        await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: phase2Progress.id } }),
+        preAutosaveHardening.levelProgress,
+      );
+    });
+
+    await check("13. autosave receipt schema has the complete constrained ownership identity", async () => {
+      const table = (await prisma.$queryRawUnsafe<Array<{ sql: string }>>(
+        `SELECT sql FROM sqlite_master WHERE type='table' AND name='UserLessonProgressSaveReceipt'`,
+      ))[0];
+      assert.match(table.sql, /CHECK \("revision" > 0\)/);
+      assert.match(table.sql, /sha256:/);
+      assert.match(table.sql, /length\(trim\("requestId"\)\) BETWEEN 8 AND 128/);
+      const indexes = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        `SELECT name FROM sqlite_master WHERE type='index'`,
+      );
+      for (const name of [
+        "UserLessonProgress_id_userId_enrollmentId_curriculumVersionId_levelDefinitionId_contentVersionId_key",
+        "UserLessonProgressSaveReceipt_userId_requestId_key",
+        "UserLessonProgressSaveReceipt_lessonProgressId_revision_key",
+      ]) {
+        assert.equal(indexes.some((item) => item.name === name), true, `${name} missing`);
+      }
+      const fks = await prisma.$queryRawUnsafe<Array<{ table: string; on_delete: string; on_update: string }>>(
+        'PRAGMA foreign_key_list("UserLessonProgressSaveReceipt")',
+      );
+      assert.equal(fks.length, 6);
+      assert.equal(fks.every((item) => item.table === "UserLessonProgress"), true);
+      assert.equal(fks.every((item) => item.on_delete === "RESTRICT"), true);
+      assert.equal(fks.every((item) => item.on_update === "CASCADE"), true);
+    });
+
     let draftId = 0;
-    await check("12. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
+    await check("14. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
       const authoring = await import("../../src/lib/curriculum/authoring");
       const draft = await authoring.createCurriculumDraft({
         actorId: adminUser.id, code: "upgrade-check", name: "Upgrade Check", versionNumber: 1,
@@ -711,7 +777,7 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
-    await check("13. re-running the real migration runner does not duplicate schema or data", async () => {
+    await check("15. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
           'SELECT COUNT(*) as c FROM "_prisma_migrations"',
@@ -735,7 +801,7 @@ async function main() {
         phase4Counts: await Promise.all([
           "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
           "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
-          "AssessmentAttempt", "UserLessonProgress",
+          "AssessmentAttempt", "UserLessonProgress", "UserLessonProgressSaveReceipt",
         ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
           `SELECT COUNT(*) AS count FROM "${table}"`,
         ))[0].count))),
@@ -768,7 +834,7 @@ async function main() {
         phase4Counts: await Promise.all([
           "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
           "AssessmentVersion", "QuestionDefinition", "QuestionLocalization",
-          "AssessmentAttempt", "UserLessonProgress",
+          "AssessmentAttempt", "UserLessonProgress", "UserLessonProgressSaveReceipt",
         ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
           `SELECT COUNT(*) AS count FROM "${table}"`,
         ))[0].count))),
@@ -780,7 +846,7 @@ async function main() {
     await prisma.$disconnect();
 
     server = await startServer();
-    await check("14. flag OFF: /api/health OK and V1 authenticated read works", async () => {
+    await check("16. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
       const login = await client.login(user.email);
@@ -789,7 +855,7 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("15. all V2 flags off: V1 promocode route remains operational", async () => {
+    await check("17. all V2 flags off: V1 promocode route remains operational", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const csrf = await client.csrfToken();
@@ -803,14 +869,14 @@ async function main() {
       assert.equal(response.status, 200, response.text);
     });
 
-    await check("16. READ off hides current and XP history routes", async () => {
+    await check("18. READ off hides current and XP history routes", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       assert.equal((await client.get("/api/curriculum/v2/current")).status, 404);
       assert.equal((await client.get("/api/curriculum/v2/xp/history")).status, 404);
     });
 
-    await check("17. flag OFF: curriculum admin routes return 404", async () => {
+    await check("19. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -822,7 +888,7 @@ async function main() {
     server = null;
 
     server = await startServer({ read: true });
-    await check("18. READ on and XP off returns current with disabled XP", async () => {
+    await check("20. READ on and XP off returns current with disabled XP", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const response = await client.get("/api/curriculum/v2/current");
@@ -836,7 +902,7 @@ async function main() {
     server = null;
 
     server = await startServer({ read: true, xp: true });
-    await check("19. READ and XP on return enrollment history", async () => {
+    await check("21. READ and XP on return enrollment history", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const response = await client.get("/api/curriculum/v2/xp/history");
@@ -848,7 +914,7 @@ async function main() {
     await stopServer(server);
     server = null;
 
-    await check("20. curriculum feature flags default false", async () => {
+    await check("22. curriculum feature flags default false", async () => {
       const env = await import("../../src/lib/env");
       const defaults = { NODE_ENV: "test" } as NodeJS.ProcessEnv;
       assert.equal(env.isCurriculumV2ReadEnabled(defaults), false);
@@ -857,7 +923,7 @@ async function main() {
     });
 
     server = await startServer({ admin: true });
-    await check("21. admin flag ON preserves authenticated curriculum admin read", async () => {
+    await check("23. admin flag ON preserves authenticated curriculum admin read", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -874,7 +940,7 @@ async function main() {
     cleanupDb();
   }
 
-  await check("22. temporary DB, journals and listener removed after test", () => {
+  await check("24. temporary DB, journals and listener removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
@@ -887,7 +953,7 @@ async function main() {
     assert.equal((listener.stdout ?? "").trim(), "");
   });
 
-  assert.equal(passed + failed, 22, "upgrade regression scenario count drifted");
+  assert.equal(passed + failed, 24, "upgrade regression scenario count drifted");
 }
 
 main()
