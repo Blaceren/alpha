@@ -222,6 +222,16 @@
 - Receipts append-only только на application/service boundary. Triggers не добавляются, поэтому privileged raw SQL технически может мутировать строки; абсолютная DB-level immutability не заявляется.
 - Retention policy отсутствует: receipts автоматически не очищаются и не каскадируются. Этот этап не реализует resolver, autosave service, HTTP, XP/completion или V1 side effects.
 
+## 22. Pinned content read and lesson autosave runtime (Phase 4B.4)
+
+- `CURRICULUM_V2_READ_ENABLED`, `CURRICULUM_V2_ENROLLMENT_ENABLED` и `CURRICULUM_V2_CONTENT_ENABLED` обязательны одновременно и динамически; default false. ADMIN/ASSESSMENT/XP их не заменяют, live env не включается.
+- Server-only resolver следует только enrollment-pinned curriculum/version/level binding и exact published ContentVersion. Locale обязателен, нормализован и exact: fallback/default отсутствует; assets — neutral плюс та же locale в `sortOrder`. Archived curriculum pin поддерживается, draft/cross-version/corrupt graph fail closed. Latest version lookup, automatic repin, lazy level start, HTTP и writes отсутствуют.
+- Доступны current `available`, durable `in_progress`, historical `completed`; `pending_review` разрешён только report/mentor review. Locked/xp-eligible/future/inactive/candidate/unsupported и ordinary lesson pending-review не раскрывают content. Safe mapper не выдаёт IDs, assessment authority, XP, fingerprints или raw Prisma.
+- Actor-only autosave принимает selector, requestId, expectedRevision и строгий presentation payload. Playback clamped к pinned duration (или 86400 при null), может уменьшаться; completed sections — monotonic set; `progressData` разрешает только nullable `activeSectionCode`. Autosave никогда не меняет status/completedAt и не является completion/XP authority.
+- Receipt проверяется первым по полному ownership scope, fingerprint и правилу `receipt.revision = expectedRevision + 1`. Exact retry возвращает receipt `acceptedRevision`/`appliedAt` и текущий progress snapshot без mutation; старый retry после новых revisions не откатывает состояние. Reuse requestId с другим scope/payload — idempotency conflict.
+- Новый save выполняет revision CAS и вставляет receipt в одной transaction. First create требует expected revision 0; populated legacy revision 0 без receipts совместима. Stale/gap/negative/no-change отклоняются без timestamp effects. P2002/CAS recovery признаёт success только после полного durable сравнения; competing same-revision saves имеют одного победителя.
+- После durable level/enrollment completion новые autosave immutable, но старые exact receipt retries разрешены. Единственные mutations — `UserLessonProgress` и `UserLessonProgressSaveReceipt`; enrollment/level progress, XP, attempts, audit, notification, CRM и V1 не затрагиваются. Schema/migration Phase 4B.4.1 не меняются.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

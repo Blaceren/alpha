@@ -1,6 +1,6 @@
 # ATA V2 — Phase 4 Content, Assessments and Lesson Progress Design (Phase 4A)
 
-**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1, server-only content lifecycle — в Phase 4B.2
+**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1, content/assessment authoring — в Phase 4B.2/4B.3, pinned content read и lesson autosave — в Phase 4B.4
 **Дата:** 2026-07-15
 **База:** commit `6e0c32df66089ab42855d2759c2361e2d6bdfafc` (Phase 3 завершена)
 **Связанные документы:** `V2_PRODUCT_DECISIONS.md`, `V2_GAP_ANALYSIS.md`, `V2_PHASE_1_SCHEMA_DESIGN.md`, `V2_PHASE_2_SCHEMA_DESIGN.md`, `V2_PHASE_3_XP_DESIGN.md`, `V2_PHASE_1_COMPLETION.md`, `V2_PHASE_2_COMPLETION.md`, `V2_PHASE_3_COMPLETION.md`
@@ -478,7 +478,7 @@ Matrix (`R`=READ, `E`=ENROLLMENT, `X`=XP, `C`=CONTENT, `A`=ASSESSMENT, `Adm`=ADM
 
 | Операция | R | E | X | C | A | Adm | Поведение при недостатке |
 |---|---|---|---|---|---|---|---|
-| GET level content | ✔ | — | — | ✔ | — | — | любой отсутствующий флаг → 404 до auth (неотличимо от несуществующего route) |
+| GET level content | ✔ | ✔ | — | ✔ | — | — | любой отсутствующий флаг → disabled; будущий HTTP-mapper обязан скрывать route до auth |
 | SAVE lesson progress | ✔ | ✔ | — | ✔ | — | — | 404 до auth |
 | START assessment | ✔ | ✔ | ✔ | — | ✔ | — | 404 до auth |
 | SUBMIT assessment (fail) | ✔ | ✔ | ✔ | — | ✔ | — | 404 до auth |
@@ -486,7 +486,7 @@ Matrix (`R`=READ, `E`=ENROLLMENT, `X`=XP, `C`=CONTENT, `A`=ASSESSMENT, `Adm`=ADM
 | GET attempt result/history | ✔ | — | — | — | ✔ | — | 404 до auth |
 | Admin content/assessment authoring, binding, publish/archive | — | — | — | — | — | ✔ | `gateCurriculumAdmin` (существующий), 404 до auth |
 
-Обоснования: START/SUBMIT требуют XP-флаг **симметрично** (не только pass-ветка), иначе выключение XP между start и submit порождало бы passed-attempt-без-completion — запрещённое состояние (§11.11); GET content не требует ENROLLMENT-флага (read-only, но требует enrolled-контекста самого пользователя через существующий resolver); admin authoring гейтится только ADMIN — консистентно с Phase 1B.4/1B.5 (авторинг определений работает при выключенных user-флагах; content/assessment authoring — та же плоскость). Ни один флаг не заменяет другой; выключение user-флага скрывает только свою подсистему (READ off скрывает всё user-facing V2, включая Phase 4-routes, т.к. READ входит во все user-матрицы).
+Обоснования: START/SUBMIT требуют XP-флаг **симметрично** (не только pass-ветка), иначе выключение XP между start и submit порождало бы passed-attempt-без-completion — запрещённое состояние (§11.11). Pinned content read и lesson autosave требуют одновременно READ+ENROLLMENT+CONTENT: флаги читаются на каждом вызове, default false, ADMIN/ASSESSMENT/XP не могут заменить ни один из них. Admin authoring гейтится только ADMIN — это отдельная плоскость. Выключение любого user-флага скрывает только соответствующую подсистему; live env этим этапом не меняется.
 
 ---
 
@@ -496,7 +496,7 @@ Matrix (`R`=READ, `E`=ENROLLMENT, `X`=XP, `C`=CONTENT, `A`=ASSESSMENT, `Adm`=ADM
 
 | Route | Метод | Auth | Flags | Rate limit (per user) | CSRF | Body/Query | Response allowlist | Ошибки |
 |---|---|---|---|---|---|---|---|---|
-| `/api/curriculum/v2/levels/{stableCode}/content` | GET | session, active, self-enrollment | R+C | 120/10мин | нет | query: `locale?` (валидируется allowlist'ом доступных) | `{data:{level:{stableCode,levelNumber,title,type}, content:{versionNumber, locale, title, subtitle, summary, transcript, body, assets:[{kind,locale,url,mimeType,durationSeconds}], videoDurationSeconds}, assessment?:{questionCount, passPercent, maxAttempts, attemptsSummary:{total, passed, active:bool}}, lessonProgress?:{...}}}` — вопросов и ответов НЕТ | 400 bad query/locale; 403 level не открыт (durable/available-предикат; контент будущих locked-уровней не выдаётся); 404 no binding; 409 corrupt |
+| `/api/curriculum/v2/levels/{stableCode}/content` | GET | session, active, self-enrollment | R+E+C | 120/10мин | нет | query: обязательный exact normalized `locale` | `{data:{level:{stableCode,levelNumber,title,type}, content:{versionNumber, locale, title, subtitle, summary, transcript, body, assets:[{kind,assetCode,locale,url,mimeType,sizeBytes,durationSeconds,checksum,sortOrder}], videoDurationSeconds}, lessonProgress?:{status,revision,playbackPositionSeconds,completedSections,progressData,startedAt,lastProgressAt,completedAt}}}` — internal IDs, assessment authority и XP НЕТ | 400 bad query/locale; 403 level не открыт; 404 no binding/locale; 409 corrupt |
 | `/api/curriculum/v2/levels/{stableCode}/lesson-progress` | PUT | тот же | R+E+C | 120/10мин (autosave) | да | strict: `{requestId, playbackPositionSeconds?, completedSections?, progressData?}` | `{data:{status, playbackPositionSeconds, completedSections, lastProgressAt, completedAt}}` | 400; 403; 409 stale/corrupt; 429 |
 | `/api/curriculum/v2/levels/{stableCode}/assessment/attempts` | POST (start) | тот же | R+E+X+A | 30/10мин | да | strict: `{requestId}` | `{data:{attemptId, attemptNumber, startedAt, passPercent, totalQuestions, questions:[{stableKey, questionNumber, type, prompt, options:[{code,label}], skillTag}]}}` — БЕЗ correctAnswer/explanation | 400; 403 level state; 404 no assessment; 409 `ASSESSMENT_ATTEMPT_ACTIVE`/maxAttempts; 429 |
 | `/api/curriculum/v2/assessment/attempts/{attemptId}/submit` | POST | тот же + ownership attempt'а | R+E+X+A | 30/10мин | да | strict: `{requestId, answers:[{stableKey, answer}]}` | `{data:{status:'passed'\|'failed', correctCount, totalQuestions, scoreBasisPoints, passPercent, questions:[{stableKey, correct:bool, explanation?}], completion?:{levelNumber, xpAwarded, nextLevelNumber, terminal}}}` (`explanation`/reveal-глубина — §22.8) | 400 answers invalid; 403; 404 чужой/нет; 409 submit conflict/duplicate-key-diff-payload; 429 |
@@ -568,7 +568,9 @@ model UserLessonProgress {
 
 `UserLessonProgressSaveReceipt` — durable append-only application ledger успешных autosave. Каждая квитанция хранит полный parent discriminator (`lessonProgressId`, user, enrollment, curriculum version, level, exact content version), `requestId`, положительную `revision`, канонический `payloadFingerprint` формата `sha256:<64 lowercase hex>` и DB-generated `appliedAt`. Единственный composite FK с `ON DELETE RESTRICT` не позволяет смешивать ownership/pin-компоненты разных progress rows. Unique `(userId, requestId)` задаёт глобальную для пользователя идемпотентность запроса, unique `(lessonProgressId, revision)` — одного победителя каждой ревизии. Существующие progress rows получают `revision=0`; миграция не создаёт для них искусственных receipts и не выполняет backfill/DML.
 
-Будущий runtime 4B.4 должен выполнять один алгоритм в одной транзакции: (1) нормализовать и провалидировать payload, вычислить fingerprint; (2) найти receipt по `(userId, requestId)` — тот же fingerprint возвращает уже зафиксированный результат без записи, другой fingerprint даёт conflict; (3) прочитать pinned progress row и его `revision`; (4) применить нормализованное состояние CAS-обновлением `WHERE id=? AND revision=?`, одновременно увеличив revision на 1 и сохранив `lastRequestId`; (5) вставить receipt с новой revision и fingerprint; (6) при unique/CAS-гонке повторно прочитать receipt и вернуть идемпотентный результат либо conflict. Update progress и insert receipt обязаны commit/rollback вместе.
+Runtime 4B.4 выполняет один алгоритм в одной транзакции: (1) нормализует и валидирует payload, вычисляет fingerprint из actor + полного pinned scope + точной content version + payload; (2) ищет receipt по `(userId, requestId)` — совпадение полного ownership/scope, fingerprint и `receipt.revision === expectedRevision + 1` означает exact retry, любое отличие даёт idempotency conflict; (3) без matching receipt проверяет `expectedRevision` против текущей `UserLessonProgress.revision`, stale/gap/negative отклоняет; (4) принятая revision равна `currentRevision + 1`; (5) применяет состояние CAS-обновлением `WHERE id=? AND revision=?`, одновременно сохраняя `lastRequestId` и `lastProgressAt`; (6) вставляет receipt; (7) при P2002/CAS-гонке выполняет durable reread и полное сравнение до выбора idempotent success или conflict/stale. Update progress и insert receipt commit/rollback вместе.
+
+Exact retry старого save после более новых revisions не откатывает progress: response возвращает исходные `acceptedRevision`/`appliedAt` из receipt и текущий authoritative progress snapshot. Receipt не хранит старый snapshot, поэтому byte-identical старый response не обещается. Timestamp'ы при retry, stale, conflict и no-change не обновляются.
 
 Append-only — граница command service/application: штатный код не обновляет и не удаляет receipts. SQLite-схема намеренно не добавляет triggers и не заявляет абсолютную неизменяемость против privileged raw SQL. Политика retention/очистки receipts отсутствует и этим этапом не изобретается; автоматическое удаление или каскад запрещены.
 
@@ -578,12 +580,21 @@ Pin'ы: enrollment (c user/version-дискриминаторами), curriculum
 
 Правила:
 
-- Autosave-контракт реализуется будущим runtime через receipt + fingerprint + revision/CAS из §15.1; одного `lastRequestId` недостаточно для безопасных retry после последующих autosave. Позиция может уходить назад (пересмотр) — это валидно; `completedSections` — только монотонное объединение (unknown section code для этой ContentVersion → 400); `completedAt` монотонен (снятие completed запрещено).
-- Client video percent НЕ является authority XP/completion (зафиксировано): модель не начисляет XP, не трогает `UserLevelProgress`, не завершает уровень. Условие «lesson content completed» (`status='completed'`) — open decision §22.11; до решения статус выставляется только явным клиентским сигналом «конец контента достигнут» и имеет чисто презентационное значение.
+- Autosave runtime использует receipt + fingerprint + revision/CAS из §15.1; одного `lastRequestId` недостаточно. Позиция может уходить назад (пересмотр), значение clamped к pinned duration; `completedSections` — только монотонное объединение, unknown section code отклоняется. Разрешённый `progressData` сейчас строго ограничен `{activeSectionCode: string|null}` и остаётся presentation-only.
+- Client video percent НЕ является authority XP/completion: Phase 4B.4 не меняет `status`/`completedAt`, не начисляет XP, не трогает `UserLevelProgress` и не завершает уровень. После durable completion новый autosave запрещён, но ранее принятый exact receipt retry остаётся доступен и не мутирует состояние. Условие перевода lesson progress в `completed` остаётся open decision §22.11.
 - Stale ContentVersion не перезаписывает прогресс новой: unique `(enrollmentId, contentVersionId)` держит прогресс per-версионно; исторические строки сохраняются (Restrict); при будущей version-migration новая версия получает **новую** строку.
 - Write throttling: rate limit 120/10мин + рекомендация клиенту слать autosave не чаще раза в 15 с (сервер дополнительно может no-op'ить неизменившийся payload — дешёвый фингерпринт-чек).
 - No V1 writes: `UserTaskProgress`/`XpEvent`/`User.xp` не затрагиваются.
 - Fake anti-cheat не вводится (никаких «доказательств просмотра» без телеметрии); `progressData` — описательная, лимитированная, не участвует ни в каких решениях.
+
+### 15.2. Phase 4B.4 — pinned read resolver и actor-only autosave
+
+- `resolveUserLevelContent` — server-only read, без HTTP. Он принимает только trusted `actorUserId`, ровно один selector (`levelNumber` XOR `stableCode`), обязательный exact normalized locale и optional transaction client. Без client'а весь read выполняется в одной snapshot transaction с одним `evaluationTime`; с client'ом nested transaction не открывается.
+- Путь разрешения фиксирован: actor → его enrollment → pinned published/archived curriculum version → level → `LevelResourceBinding` → exact published `ContentVersion` → exact locale → neutral+same-locale assets в стабильном порядке → exact lesson progress. Latest/fallback/V1 lookup, automatic repin, lazy start и любые writes запрещены.
+- Чтение допускается для current `available`, durable `in_progress`, исторического `completed`, а `pending_review` — только для `report`/`mentor_review`. `locked`, `xp_eligible`, future, inactive, candidate и неподдерживаемые level types fail closed; ordinary lesson в `pending_review` не читается. Archived curriculum pin валиден при целостном graph.
+- Public union: `disabled | user_not_found | not_enrolled | unavailable | locked | available | completed | corrupt`. Safe mapper возвращает только allowlisted level/content/localization/asset/progress fields; internal IDs, raw Prisma, assessment questions/answers, fingerprints и XP отсутствуют.
+- `saveOwnLessonProgress` — actor-only command без target user/version/content IDs, timestamps или желаемого status. Новый save требует active user/enrollment, exact published binding, `lesson`, durable `UserLevelProgress.in_progress` и валидную expected revision. First row принимается только с revision 0 и атомарно создаёт progress revision 1 + receipt; legacy row revision 0 без receipts поддерживается после полной проверки.
+- Единственные runtime mutations: `UserLessonProgress` и `UserLessonProgressSaveReceipt`. Enrollment summary/`lastMeaningfulActionAt`, level status, completion, XP, assessment attempts, audit, notification, CRM и V1 не меняются. HTTP, CSRF/rate limit и route mapping остаются следующей фазой.
 
 ---
 
