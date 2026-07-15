@@ -1,18 +1,6 @@
-import { SectionPlaceholder } from "@/components/navigation/section-placeholder";
+import { UsersWorkspace } from "@/features/users/users-workspace";
 
+/** Users workspace (Phase 1B2). Data comes only via the CrmDataProvider. */
 export default function UsersPage() {
-  return (
-    <SectionPlaceholder
-      title="Пользователи"
-      purpose="Рабочий реестр пользователей с поиском, фильтрами по 5 измерениям состояния и переходом в User 360."
-      plannedFeatures={[
-        "Плотная конфигурируемая таблица (TanStack Table)",
-        "Фильтры: lifecycle, funding, engagement, value, blockers",
-        "Saved views и конфигурация колонок",
-        "Маскирование финансов по роли (бакеты)",
-        "Курсорная пагинация через CrmDataProvider",
-        "Переход в карточку User 360",
-      ]}
-    />
-  );
+  return <UsersWorkspace />;
 }

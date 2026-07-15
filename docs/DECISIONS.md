@@ -233,4 +233,15 @@ UI-формулировки «Подключить Pocket», «Связать а
 
 `deregistered` удалён, потому что **подтверждённого production-события дерегистрации нет** (было придумано по аналогии со старым `disconnected`). `confirmed` слит в `registered` (единственное «успешно завершено» состояние = получен `pocket_registration_confirmed`).
 
+## D-28 · Provider contract-дополнения из Users UI — **Locked**
+
+Экран `/users` выявил реальные пробелы контракта `CrmDataProvider` (не косметика): (1) сортировка по **owner** отсутствовала в `UserSortField`; (2) фильтры по **priority** (`PriorityBand[]`) и **registrationStatus** отсутствовали в `UserFilters`, хотя оба заявлены как вторичные фильтры Users. Добавлены в контракт и в `MockCrmDataProvider` (owner-sort с детерминированным tie-break `￿` для «без owner»; priority/registrationStatus — membership-фильтры). Провайдер остаётся единственным источником pagination/search/filter/sort/projection — UI логику не дублирует.
+
+## D-29 · Users table density & assets — **Locked**
+
+Три исправления, продиктованные реальным браузерным рендером (visual-review §первый pass), не меняющие доменную модель:
+- **Действие в строке** на десктопе — компактная доступная иконка (`ArrowRight` + `aria-label` + `sr-only` «Открыть профиль» + tooltip); на мобильных карточках сохранена полнотекстовая кнопка. Причина: 9 дефолтных колонок + текстовое действие давали горизонтальный overflow на 1440 (`Owner`/действие обрезались). После уплотнения (перенос заголовков, `px-2`, ограничение ширины «тяжёлых» ячеек, иконка) замер `scrollWidth − clientWidth = 0`. «Явное действие в строке» сохранено (иконка — дискретный контрол, не implicit-клик по всей строке).
+- **`src/app/icon.svg`** добавлен: устраняет автоматический запрос `/favicon.ico` → 404 (требование «no failed assets» в консоли).
+- **Stale-флаг** у «Последней активности» убран: ранее ошибочно брался из `balance.stale` (staleness баланса ≠ staleness meaningful activity).
+
 **ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alfa Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.

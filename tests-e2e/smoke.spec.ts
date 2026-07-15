@@ -13,7 +13,11 @@ test("no console errors and /today loads with the shell", async ({ page }) => {
 
   await page.goto("/today");
   await expect(page.getByRole("heading", { name: "Сегодня" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Боковая навигация" })).toBeVisible();
+  // Desktop navigation landmark = <nav aria-label="Разделы CRM"> inside the sidebar.
+  // (Stale assertion fix: "Боковая навигация" is the name of the complementary
+  //  <aside> container, not the navigation role; the shell splits them into two
+  //  landmarks. We check the real navigation landmark by role + accessible name.)
+  await expect(page.getByRole("navigation", { name: "Разделы CRM" })).toBeVisible();
   await expect(page.getByText("DEMO MODE").first()).toBeVisible();
 
   expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);

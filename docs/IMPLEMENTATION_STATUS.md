@@ -81,5 +81,25 @@
 ### Semantic finalization (registrationStatus)
 `financial.registrationStatus` финализирован до **трёх** значений: `not_registered / registration_pending / registered` (`confirmed` и `deregistered` удалены, D-27). `registered` = backend-confirmed affiliate registration. ATA email confirmation — отдельная ось `identity.emailConfirmed`; сигнал `email_not_confirmed` зависит только от неё. Pocket «Email Confirmation» отложен до backend/API contract (FUTURE_INTEGRATION §4). Добавлен фильтр `registrationStatus` (только 3 значения). Тесты: **86/86** ✅ (+10 registration-status); typecheck/lint/build ✅. Прогон выполнен в изолированной копии (node_modules проекта — macOS-нативные; в проекте reinstall не делался).
 
+## Phase 1B2 — Users workspace ✅ (текущий)
+
+### Выполнено
+- **Экран `/users`** больше не placeholder: `src/features/users/` (feature-папка: `hooks/`, `columns/`, `components/`, `users-workspace.tsx`, `users-toolbar.tsx`, `users-filters.tsx`, `users-table.tsx`, `users-pagination.tsx`, `users-summary.tsx`, `users-states.tsx`). Данные — только через `CrmDataProvider` (fixtures в UI не импортируются).
+- **TanStack Table** (`manualSorting` + `manualPagination`): 9 дефолтных колонок (Пользователь, Приоритет, Lifecycle, Финансовый статус, Engagement, Прогресс, Активные блокеры, Owner, Последняя активность) + 6 опциональных через меню «Колонки» (Value-сегменты, Рекомендация, Регистрация, Кампания/источник, Баланс, Net deposits; состояние — только React state). Действие в строке — доступная иконка «Открыть профиль» (десктоп) / полнотекстовая кнопка (mobile); имя — ссылка на `/users/[id]`.
+- **Поиск** через provider (debounce 300 ms, сброс страницы). **Фильтры**: 5 канонических измерений (multi-select) + owner/priority/registrationStatus; active-chips, счётчики, «Сбросить всё», zero-results ≠ empty dataset; на мобильном — Sheet.
+- **Sorting** (provider): priority, registeredAt, lastMeaningfulActionAt, currentLevel, owner, displayName; `aria-sort`. **Pagination** (provider): 20/50, prev/next, диапазон, disabled, сброс при изменении search/filter.
+- **Permission-safe** финансы (exact/bucket/aggregated/hidden/stale) и identity (list-контекст всегда masked) — берутся из provider-проекции; exact-значение не попадает в DOM ролям без права (тест). Подтверждено скриншотами: admin `$90` (exact) vs support `$50–99` (bucket).
+- **UI-состояния**: loading (skeleton), empty dataset, no-results (CTA «Сбросить фильтры»), error (+«Повторить»), stale (баннер + данные видимы), unauthorized. **Responsive**: 1440 (все 9 колонок без h-scroll, замер overflow 0 px), 1024 (второстепенные колонки скрыты, toolbar-wrap), 390 (карточки + Sheet). **A11y**: semantic table, `th scope`, `aria-sort`, keyboard-фильтры, label поиска, sr-текст иконок, focus-visible, статусы не только цветом.
+- **Provider-дополнения (реальные пробелы контракта):** `UserSortField` += `owner`; `UserFilters` += `priority: PriorityBand[]`, `registrationStatus`. (D-28.)
+- **Мелкие фиксы, найденные UI:** убран ошибочный stale-флаг у «Последней активности» (staleness баланса ≠ активности); добавлен `src/app/icon.svg` (устраняет 404 favicon в консоли); действие в строке → компактная доступная иконка (устраняет horizontal overflow на 1440). (D-29.)
+- **Docs:** `USERS_WORKSPACE.md`, `visual-reviews/PHASE_1B2_USERS.md`; `screenshots/phase-1b2-users/` (+README).
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **110/110** (+24 к 1B1.1: hook-query, workspace/states, permissions) · `build` ✅ (`/users` = 22.3 kB / 191 kB first load; `/users/[id]` остаётся placeholder). `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26, `--force` не выполнялся). `test:e2e` ✅ — **5/5** реальных screenshots (headless Chromium 149), консоль чистая.
+- Прогон гейтов — в изолированной Linux-копии (node_modules проекта macOS-нативные; в проекте reinstall не делался). Screenshots сгенерированы реальным браузером (см. visual-review).
+
+### Не входит в Phase 1B2 (сознательно)
+Today, User 360, localStorage mutation overlay и любые мутации, notes/tasks/cases, owner reassignment, saved-views persistence, bulk actions, export, PII reveal flow, communications, backend/API/БД/Prisma/Pocket, аутентификация, deploy. `/users/[id]` остаётся placeholder.
+
 ## Следующий этап (рекомендация)
-**Phase 1B2 — только Users table** поверх готового провайдера (затем 1B3 Today, 1B4 mutations, 1C User 360). TanStack-таблица Users с фильтрами по 5 измерениям и permission-safe финансами; человекочитаемые бейджи из `config/labels.ts`.
+**Phase 1B3 — Today workspace** поверх готового провайдера (очереди/приоритеты), затем 1B4 mutations overlay, 1C User 360.

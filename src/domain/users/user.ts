@@ -13,8 +13,11 @@ import type {
   ValueSegment,
 } from "@/domain/lifecycle/state";
 import type { SignalCode } from "@/domain/signals/signal";
+import type { CheckpointStatus } from "@/domain/financial/financial";
 import type { FinancialProjection } from "@/domain/financial/projection";
+import type { IdentityProjection } from "@/domain/identity/identity-projection";
 import type { PriorityBand } from "@/domain/priority/priority";
+import type { RecommendedActionCode } from "@/domain/recommendations/catalog";
 
 export interface UserSummary {
   id: UserId;
@@ -31,6 +34,8 @@ export interface UserSummary {
   lastMeaningfulActionAt: ISODateString | null;
 
   // ---- Phase 1B1 enriched, permission-safe projections ----
+  /** Permission-aware identity projection for the LIST context (always masked). */
+  identity?: IdentityProjection;
   valueSegments?: ValueSegment[];
   blockers?: OperationalBlocker[];
   ownerId?: string | null;
@@ -41,9 +46,14 @@ export interface UserSummary {
   /** Permission-aware net deposits projection. */
   netDeposits?: FinancialProjection;
   redepositCount?: number;
+  xp?: number;
+  checkpointStatus?: CheckpointStatus;
+  topRecommendationCode?: RecommendedActionCode | null;
   registeredAt?: ISODateString;
   country?: string;
+  locale?: string;
   acquisitionSource?: string;
+  campaign?: string;
   activeTaskCount?: number;
   activeCaseCount?: number;
   signalCodes?: SignalCode[];

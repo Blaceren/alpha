@@ -12,6 +12,62 @@ import type {
 } from "@/domain/lifecycle/state";
 import type { SignalCode } from "@/domain/signals/signal";
 import type { PriorityBand } from "@/domain/priority/priority";
+import type { CheckpointStatus } from "@/domain/financial/financial";
+import type { RecommendedActionCode } from "@/domain/recommendations/catalog";
+
+export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
+
+export const REGISTRATION_STATUS_LABEL: Record<RegistrationStatus, string> = {
+  not_registered: "Не зарегистрирован",
+  registration_pending: "Регистрация проверяется",
+  registered: "Регистрация подтверждена",
+};
+
+export const CHECKPOINT_LABEL: Record<CheckpointStatus, string> = {
+  not_reached: "Checkpoint не достигнут",
+  approaching: "Приближается checkpoint",
+  met: "Checkpoint пройден",
+  grace: "Grace-период",
+  suspended: "Доступ приостановлен",
+  restored: "Доступ восстановлен",
+  future_checkpoint_not_defined: "Программа в разработке",
+};
+
+/** Human labels for priority reason codes (computePriority reasonCode). */
+export const PRIORITY_REASON_LABEL: Record<string, string> = {
+  critical_support_issue: "Критический support-блокер",
+  financial_access_suspended: "Финансовый доступ приостановлен",
+  financial_data_conflict: "Конфликт финансовых данных",
+  sla_breach: "Нарушен SLA",
+  checkpoint_grace_near_expiration: "Grace-период скоро истечёт",
+  report_or_mentor_blocker: "Блокер отчёта/ментора",
+  rapid_balance_decline: "Резкое падение баланса",
+  returned_user: "Вернувшийся пользователь",
+  progression_stalled: "Прогресс остановился",
+  ordinary_follow_up: "Плановый follow-up",
+  no_priority_signal: "Без активных сигналов",
+};
+
+export const RECOMMENDATION_LABEL: Record<RecommendedActionCode, string> = {
+  review_new_registration: "Разобрать нового пользователя",
+  help_complete_pocket_registration: "Помочь завершить регистрацию Pocket",
+  remind_email_confirmation: "Напомнить подтвердить email",
+  continue_current_lesson: "Подтолкнуть продолжить урок",
+  offer_learning_recap: "Предложить учебный recap",
+  review_failed_test: "Разобрать проваленный тест",
+  review_report: "Проверить отчёт",
+  request_report_revision: "Запросить доработку отчёта",
+  mentor_follow_up: "Follow-up ментора",
+  support_follow_up: "Follow-up поддержки",
+  verify_financial_data: "Проверить финансовые данные",
+  review_checkpoint_grace: "Разобрать checkpoint grace",
+  restore_learning_path: "Восстановить учебный доступ",
+  reduce_communication_frequency: "Снизить частоту коммуникаций",
+  review_risk_material: "Материал по управлению риском",
+  open_pause_protocol: "Открыть протокол паузы",
+  celebrate_learning_return: "Отметить возвращение",
+  no_action_required: "Действие не требуется",
+};
 
 export const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
   registered: "Зарегистрирован",
@@ -95,6 +151,24 @@ export const SIGNAL_LABEL: Record<SignalCode, string> = {
   frequent_redeposit_pattern: "Частые повторные депозиты",
   rapid_balance_decline: "Резкое падение баланса",
 };
+
+/** Human labels for mock employee (owner) ids. */
+export const OWNER_LABEL: Record<string, string> = {
+  emp_admin: "Администратор",
+  emp_mgr: "Менеджер",
+  emp_ret1: "Retention 1",
+  emp_ret2: "Retention 2",
+  emp_men1: "Mentor 1",
+  emp_sup1: "Support 1",
+  emp_mod1: "Moderator 1",
+  emp_an1: "Analyst 1",
+  emp_mock_admin: "Demo Operator",
+};
+
+export function ownerLabel(ownerId: string | null | undefined): string {
+  if (!ownerId) return "Не назначен";
+  return OWNER_LABEL[ownerId] ?? humanizeCode(ownerId);
+}
 
 /** Generic fallback: humanize an unknown code (never show raw snake_case). */
 export function humanizeCode(code: string): string {

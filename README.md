@@ -4,7 +4,7 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1B1 — Synthetic dataset & derivation layer** поверх Phase 1A shell. Есть детерминированный mock-домен (30 персон, сигналы, приоритеты, рекомендации, очереди Today, сегменты) за `CrmDataProvider`. Полноценные экраны Today / Users / User 360 ещё не реализованы (см. `docs/IMPLEMENTATION_STATUS.md`, `docs/MOCK_DATA_IMPLEMENTATION.md`).
+Статус реализации: **Phase 1B2 — Users workspace** поверх Phase 1B1 mock-домена. Реализован полноценный экран `/users` (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive desktop/tablet/mobile) — данные только через `CrmDataProvider`. Экраны Today и User 360 ещё не реализованы (`/users/[id]` — placeholder). См. `docs/USERS_WORKSPACE.md`, `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Стек
 

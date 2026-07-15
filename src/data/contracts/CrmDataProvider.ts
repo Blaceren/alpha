@@ -20,6 +20,7 @@ import type { SignalCode, UserSignal } from "@/domain/signals/signal";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
 import type { CrmCase, CaseStatus, CaseType } from "@/domain/cases/case";
 import type { FinancialBucket } from "@/domain/financial/financial";
+import type { PriorityBand } from "@/domain/priority/priority";
 import type { UserSummary } from "@/domain/users/user";
 import type { Paginated, PageParams, Result, SortParam } from "./result";
 
@@ -96,6 +97,8 @@ export interface UserFilters {
   netDepositBucket?: FinancialBucket[];
   /** Pocket affiliate registration status. Only the three canonical values. */
   registrationStatus?: ("not_registered" | "registration_pending" | "registered")[];
+  /** Computed priority band (derived by the provider). */
+  priority?: PriorityBand[];
   lastActionFrom?: ISODateString;
   lastActionTo?: ISODateString;
   registeredFrom?: ISODateString;
@@ -111,6 +114,7 @@ export interface UserFilters {
 
 export type UserSortField =
   | "name"
+  | "owner"
   | "registeredAt"
   | "lastMeaningfulActionAt"
   | "currentLevel"

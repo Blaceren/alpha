@@ -67,6 +67,29 @@ export function DropdownMenuRadioItem({
 
 export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  checked,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      checked={checked}
+      className={cn(
+        "flex cursor-pointer select-none items-center justify-between gap-2 rounded px-2 py-1.5 text-text-primary outline-none focus:bg-row-hover",
+        className,
+      )}
+      {...props}
+    >
+      <span>{children}</span>
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Check className="h-3.5 w-3.5 text-accent" aria-hidden />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
 export function DropdownMenuSeparator({
   className,
   ...props

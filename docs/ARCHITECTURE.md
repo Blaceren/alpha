@@ -72,7 +72,29 @@ fixtures (MockUser[])
 
 Всё детерминировано (`FixedMockClock`). Провайдер (`data/mock/MockCrmDataProvider`) — тонкая обёртка: фильтры/сортировка/пагинация + вызов derivation + проекции по роли. Пороги/лейблы/SLA живут в `src/config/*`. Правило безопасности: сортировка по точным финансам без права → `invalid_input`, чтобы порядок не утекал.
 
+## Feature layer (Phase 1B2 — Users)
+
+Экранная логика вынесена в `src/features/<feature>/` и общается с доменом **только** через `CrmDataProvider` (fixtures в компоненты не импортируются). `src/features/users/`:
+
+```
+users-workspace.tsx        # композиция: summary + toolbar + (states | table + pagination)
+users-toolbar.tsx          # поиск (debounce, provider) + инлайн-фильтры + Sheet(mobile) + «Колонки»
+users-filters.tsx          # 5 измерений (multi-select) + owner/priority/registrationStatus, chips
+users-table.tsx            # TanStack Table (manualSorting/Pagination) + mobile-карточки
+users-pagination.tsx       # 20/50, prev/next, диапазон
+users-summary.tsx          # заголовок: всего/фильтров/freshness (без графиков/KPI)
+users-states.tsx           # loading/empty/no-results/error/stale/unauthorized
+hooks/use-users-query.ts   # состояние запроса к провайдеру (search/filters/sort/page)
+hooks/use-column-visibility.ts   # видимость опциональных колонок (React state)
+columns/columns.tsx        # ColumnDef[]: 9 дефолтных + 6 опциональных + действие
+components/*                # ячейки: identity/priority/state-badges/blockers/financial/…
+```
+
+Разделение обязанностей: провайдер = данные/фильтр/сортировка/пагинация/проекции; feature = presentation + локальный UI-state (видимость колонок, ввод фильтров). Financial/identity-видимость **не** пересчитывается в компонентах — рендерится готовая provider-проекция (exact/bucket/aggregated/hidden vs masked/pseudonymous/hidden). Лейблы — из `config/labels.ts` (raw enum-коды в UI не появляются).
+
 ## Тестирование
 
 - **Unit/компонентные (Vitest):** permission matrix, section visibility, финансовые бакеты, provider error handling, sidebar active state, breadcrumbs, роль-видимость sidebar (render).
 - **E2E (Playwright, smoke):** `/today` грузится, sidebar доступен, переход в `/users`, dev role switch меняет видимость, 404, отсутствие console-ошибок.
+- **E2E (Playwright, screenshots — Phase 1B2):** `tests-e2e/users-screenshots.spec.ts` — реальный рендер `/users` в 5 сценариях (admin/support/filtered 1440×900, tablet 1024×768, mobile 390×844), точные размеры + assert чистой консоли. Артефакты — `screenshots/phase-1b2-users/`.
+- **Component (Vitest, Phase 1B2):** `use-users-query` (search/5 измерений/compound/registration/sort/pagination), `users-workspace` (рендер + состояния + отсутствие raw-кодов), `users-permissions` (exact отсутствует в DOM у support; masked identity).

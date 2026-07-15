@@ -1,0 +1,71 @@
+# USERS_WORKSPACE.md — Alfa Trade Academy CRM (Phase 1B2)
+
+Полноценный экран `/users`. Реализация: `src/features/users/`.
+
+## Purpose
+Дать сотруднику быстро: найти пользователя, понять его состояние и причину приоритета, отфильтровать базу по пяти измерениям, увидеть блокеры / owner / последнюю активность и перейти в будущий User 360 — **без** доступа к финансам/identity сверх прав роли. Экран — рабочий инструмент, не generic admin table.
+
+## Information hierarchy
+Главный принцип: **сначала идентичность и причина внимания, затем состояния и операционный контекст**. Порядок колонок отражает это: Пользователь → Приоритет (+причина) → состояния (Lifecycle/Funding/Engagement) → Прогресс → Блокеры → Owner → Активность.
+
+## Columns
+Основные (по умолчанию, 9):
+1. **Пользователь** — avatar initials, display name (ссылка на `/users/[id]`), masked email (по identity projection), country/locale компактно.
+2. **Приоритет** — человекочитаемая полоса (critical/high/normal/low, не только цвет) + краткая причина + tooltip.
+3. **Lifecycle** — нейтральный бейдж (первичная стадия).
+4. **Финансовый статус** (FundingStatus) — семантический бейдж.
+5. **Engagement** — семантический бейдж.
+6. **Прогресс** — уровень + XP + checkpoint-хинт (без per-row progress bar).
+7. **Активные блокеры** — до 2 chips + `+N` (tooltip раскрывает все).
+8. **Owner** — человекочитаемый.
+9. **Последняя активность** — относительное время + exact в tooltip + freshness.
+
+Опциональные (меню «Колонки», по умолчанию скрыты, состояние только в React state): Value-сегменты, Рекомендованное действие, Статус регистрации, Кампания/источник, Финансовое представление (баланс), Net deposits.
+
+Row action «**Открыть профиль**» — явное действие в строке (строка целиком НЕ кликабельна). На десктопе — компактная доступная иконка (`aria-label` + `sr-only` «Открыть профиль» + tooltip), чтобы 9 дефолтных колонок помещались на 1440 без горизонтального scroll; на мобильных карточках — полнотекстовая кнопка «Открыть профиль». Имя пользователя дополнительно является обычной ссылкой на `/users/[id]`.
+
+## Filters
+Search: один input «Имя, email или ID», debounce 300 ms, ищет через provider (не локально).
+Пять канонических измерений (multi-select): LifecycleStage, FundingStatus, EngagementStatus, ValueSegment, OperationalBlocker. Значения канонические (`pocket_registered`, `not_available`, `pocket_registration_incomplete`, …); пользователю показываются только человекочитаемые labels.
+Вторичные (немного): priority, registrationStatus, owner.
+UX: счётчик выбранных, active-chips, «Сбросить всё», очистка конкретного фильтра, совместная работа фильтров, zero-results ≠ empty dataset, на мобильном — Sheet/Drawer.
+
+## Sorting
+Provider-sorting по: priority, registeredAt, lastMeaningfulActionAt, currentLevel, owner, displayName. Индикатор направления (aria-sort). Начальная сортировка — по правилу приоритета (полоса → индекс правила → SLA → severity → last activity → stable user id); opaque score не вводится.
+
+## Pagination
+Provider cursor-pagination. Page size 20 (по умолчанию) / 50. Previous/next, диапазон «X–Y из N», disabled states. Сбрасывается при изменении search/filter. Не infinite scroll, не грузит весь датасет сразу.
+
+## Responsive
+- **1440×900** — полная таблица, основные колонки без горизонтального скролла; опциональные могут дать скролл.
+- **1024×768** — второстепенные колонки (Прогресс, Owner) скрываются (`hidden xl:table-cell`), toolbar переносится.
+- **390×844** — mobile cards с теми же данными (пользователь, priority, три single-value state, blockers, owner, last activity, «Открыть профиль»), фильтры — Sheet. Mobile — представление, не отдельный источник логики.
+
+## Roles
+Проверяются: admin, retention, mentor, support, analyst, read_only. Экран/данные фильтруются через существующий permission layer и provider-проекции. См. таблицу ролей в `docs/visual-reviews/PHASE_1B2_USERS.md`.
+
+## Financial projections
+UI рендерит ТОЛЬКО provider-проекцию (`FinancialProjection`), не считает права сам:
+- **exact** — только роли с правом (admin/manager/retention).
+- **bucket** — человекочитаемый диапазон, без точной суммы (mentor/support/moderator/content_manager).
+- **aggregated** — analyst (bucket-level, псевдонимно).
+- **hidden** — «Недоступно для роли» (read_only и no-data).
+- **stale** — значение видно + иконка freshness.
+Provider не отдаёт точную сумму ролям без права → exact-значение физически не попадает в DOM (не в title/data-*, не скрыто только CSS). Покрыто тестом.
+
+## Identity projection
+List-контекст всегда masked (даже для привилегированных ролей — полный email в списке не показывается). analyst → pseudonymous; content_manager → hidden; moderator → display name + platform id. Реальный PII reveal НЕ реализован (вне scope).
+
+## States
+loading (skeleton header+rows, стабильная ширина), empty dataset, no-results (отдельно, CTA «Сбросить фильтры»), error (сообщение + «Повторить» для retriable; internal-код не показывается), stale (данные видимы + спокойный banner + freshness), unauthorized (без частичных данных).
+
+## Accessibility
+Semantic `<table>` на desktop, `<th scope>`, `aria-sort`, keyboard-доступные фильтры, label для search, sr-текст для icon-кнопок, focus-visible, статусы не только цветом (всегда есть текст), accessible tooltips (Radix), row action через Tab, mobile cards с корректной иерархией.
+
+## Screenshots
+`screenshots/phase-1b2-users/` (реальный рендер, headless Chromium 149 через `tests-e2e/users-screenshots.spec.ts`, перегенерация — `npm run test:e2e`): admin/support/filtered 1440×900, tablet 1024×768, mobile 390×844 — точных размеров, консоль чистая. Визуальное ревью, найденные проблемы и исправления — в `docs/visual-reviews/PHASE_1B2_USERS.md`.
+
+## Non-scope (Phase 1B2)
+Today, User 360, localStorage mutation overlay, notes/tasks/cases, owner reassignment, saved-views persistence, bulk actions, export, PII reveal, communications, backend/API/DB/Prisma/Pocket, auth, deploy. `/users/[id]` остаётся placeholder.
+
+_Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, config/labels.ts, ARCHITECTURE.md._

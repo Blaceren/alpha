@@ -33,7 +33,7 @@ export function Breadcrumbs() {
         {crumbs.map((c, i) => {
           const isLast = i === crumbs.length - 1;
           return (
-            <li key={c.href} className="flex min-w-0 items-center gap-1">
+            <li key={`${i}-${c.href}`} className="flex min-w-0 items-center gap-1">
               {i > 0 ? <ChevronRight className="h-3 w-3 shrink-0" aria-hidden /> : null}
               {isLast ? (
                 <span aria-current="page" className="truncate font-medium text-text-secondary">

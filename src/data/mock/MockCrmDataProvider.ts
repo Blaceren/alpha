@@ -8,6 +8,7 @@ import type { UserId, Freshness } from "@/domain/shared/primitives";
 import type { UserSummary } from "@/domain/users/user";
 import type { Paginated, Result } from "@/data/contracts/result";
 import { empty, fail, ok, stale } from "@/data/contracts/result";
+import type { CrmRole } from "@/domain/identity/roles";
 import type {
   CrmContext,
   CrmDataProvider,
@@ -40,6 +41,7 @@ import { computeSignals, type ComputedSignal } from "@/domain/signals/engine";
 import { computePriority, comparePriority, type PriorityBand } from "@/domain/priority/priority";
 import { deriveRecommendations } from "@/domain/recommendations/derive";
 import { projectFinancial } from "@/domain/financial/projection";
+import { projectIdentity } from "@/domain/identity/identity-projection";
 import { toFinancialBucket } from "@/domain/financial/financial";
 import { canViewExactFinancials } from "@/domain/identity/access";
 import { computeSegments } from "@/domain/segments/segments";
@@ -112,13 +114,22 @@ export class MockCrmDataProvider implements CrmDataProvider {
     return { asOf: ts ?? this.clock.nowIso(), isStale };
   }
 
-  private toSummary(d: Derived, role: string): UserSummary {
+  private toSummary(d: Derived, role: CrmRole): UserSummary {
     const u = d.user;
     const stl = this.freshness(u).isStale;
+    const identity = projectIdentity({
+      role,
+      userId: u.identity.userId,
+      displayName: u.identity.displayName,
+      maskedEmail: u.identity.maskedEmail,
+      fullEmail: u.identity.fullEmail,
+      context: "list", // list is ALWAYS masked (never full email)
+    });
     return {
       id: u.identity.userId,
       displayName: u.identity.displayName,
       maskedEmail: u.identity.maskedEmail,
+      identity,
       lifecycleStage: u.state.lifecycleStage,
       fundingStatus: u.state.fundingStatus,
       engagementStatus: u.state.engagementStatus,
@@ -131,12 +142,17 @@ export class MockCrmDataProvider implements CrmDataProvider {
       ownerId: u.operations.primaryOwnerId,
       priority: d.priority.level,
       priorityReasonCode: d.priority.reasonCode,
-      balance: projectFinancial({ role: role as never, amountUsd: u.financial.balanceUsd, isStale: stl }),
-      netDeposits: projectFinancial({ role: role as never, amountUsd: u.financial.netDepositsUsd, isStale: stl }),
+      balance: projectFinancial({ role, amountUsd: u.financial.balanceUsd, isStale: stl }),
+      netDeposits: projectFinancial({ role, amountUsd: u.financial.netDepositsUsd, isStale: stl }),
       redepositCount: u.financial.redeposits.length,
+      xp: u.progression.xp,
+      checkpointStatus: u.progression.checkpointStatus,
+      topRecommendationCode: deriveRecommendations(u, d.signals)[0]?.code ?? null,
       registeredAt: u.identity.registeredAt,
       country: u.identity.country,
+      locale: u.identity.locale,
       acquisitionSource: u.identity.acquisitionSource,
+      campaign: u.identity.campaign,
       activeTaskCount: u.operations.activeTaskCount,
       activeCaseCount: u.operations.activeCaseCount,
       signalCodes: d.signals.map((s) => s.code),
@@ -153,6 +169,7 @@ export class MockCrmDataProvider implements CrmDataProvider {
     if (!inArr(f.fundingStatus, u.state.fundingStatus)) return false;
     if (!inArr(f.engagementStatus, u.state.engagementStatus)) return false;
     if (!inArr(f.registrationStatus, u.financial.registrationStatus)) return false;
+    if (!inArr(f.priority, d.priority.level)) return false;
     if (!anyOf(f.valueSegment, u.state.valueSegments)) return false;
     if (!anyOf(f.blocker, u.state.blockers)) return false;
     if (f.signals && f.signals.length > 0 && !f.signals.some((c) => d.signals.some((s) => s.code === c))) return false;
@@ -271,7 +288,9 @@ export class MockCrmDataProvider implements CrmDataProvider {
       rows = this.sortRows(rows, input.sort);
       const summaries = rows.map((d) => this.toSummary(d, ctx.role));
       const page = this.paginate(summaries, input.page?.cursor, input.page?.pageSize);
-      return page.items.length === 0 ? empty(page) : ok(page);
+      if (page.items.length === 0) return empty(page);
+      if (this.staleMode) return stale(page, { asOf: this.clock.nowIso(), isStale: true });
+      return ok(page, { asOf: this.clock.nowIso(), isStale: false });
     });
   }
 
@@ -285,6 +304,8 @@ export class MockCrmDataProvider implements CrmDataProvider {
       switch (sort.field) {
         case "name":
           return u.identity.displayName;
+        case "owner":
+          return u.operations.primaryOwnerId ?? "￿"; // unassigned sorts last
         case "registeredAt":
           return u.identity.registeredAt;
         case "lastMeaningfulActionAt":
