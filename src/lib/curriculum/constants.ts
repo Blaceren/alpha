@@ -52,4 +52,6 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   assessmentBound: "ASSESSMENT_BOUND",
   assessmentUnbound: "ASSESSMENT_UNBOUND",
   assessmentPublicationRejected: "ASSESSMENT_PUBLICATION_REJECTED",
+  assessmentAttemptStarted: "CURRICULUM_ASSESSMENT_ATTEMPT_STARTED",
+  assessmentAttemptGraded: "CURRICULUM_ASSESSMENT_ATTEMPT_GRADED",
 } as const;

@@ -768,4 +768,22 @@ UI, content seed (реальные уроки/вопросы) и production roll
 - Version-migration enrollment'ов (и поведение lesson progress/attempts при ней) — отдельная будущая фаза; Phase 4 лишь не создаёт этому препятствий (per-version строки).
 - `scenario`/`practice`/`external_event`/`financial_checkpoint` completion-owners остаются fail-closed.
 
+---
+
+## 22. Phase 4B.5 — утверждённый assessment runtime
+
+- Реализованы только server-only actor-bound команды `startOwnAssessmentAttempt` и `submitOwnAssessmentAttempt`; HTTP, UI, history route и generic COMPLETE LEVEL endpoint отложены. Пользовательский payload не содержит target user, enrollment/version/level/assessment IDs, attempt number, score/status, XP или timestamps.
+- Start/resume динамически требует READ + ENROLLMENT + ASSESSMENT. Passing submit дополнительно требует XP; ADMIN и CONTENT эти gates не заменяют. Все flags default false.
+- Trusted resolution идёт только через active actor, active pinned enrollment, pinned CurriculumVersion, текущий started `UserLevelProgress`, exact `LevelResourceBinding` и exact published `AssessmentVersion`. Новейшая published curriculum version не repin'ит enrollment; archived curriculum pin остаётся допустимым.
+- Частичный unique index остаётся authority одного `in_progress` attempt. Номер нового attempt равен `terminalCount + 1` внутри transaction; валидный active attempt возвращается без изменения timestamp/audit. Terminal attempts учитываются в nullable `maxAttempts`; исчерпание возвращает `ASSESSMENT_ATTEMPT_LIMIT_REACHED` и не завершает level.
+- Start mapper возвращает только безопасную identity уровня, attempt id/number/status, pass/max-attempt presentation, exact locale и детерминированно упорядоченные prompt/option labels. `correctAnswer`, explanation, raw Prisma и внутренние ownership IDs не возвращаются. Locale exact, fallback отсутствует.
+- Submit требует полный набор уникальных известных `questionKey`. `single_choice`, `true_false`, `scenario_choice` сравниваются по exact stable code; `multiple_choice` — как canonical set без partial credit; `ordered_steps` — как exact order. `numeric` и `chart_choice` grader не утверждены и fail closed для всей операции.
+- Server score хранит `correctCount`, `totalQuestions` и `scoreBasisPoints = floor(correctCount * 10000 / totalQuestions)`. Pass authority использует только целочисленную формулу `correctCount * 100 >= passPercent * totalQuestions`.
+- `AssessmentAttempt` хранит normalized submitted answers, `sha256:` fingerprint и `submitRequestId`; этого достаточно для exact retry, same-attempt different-payload conflict и durable reread после CAS/P2002 loser. Exact terminal retry не меняет timestamps, audits, XP, progress или enrollment. Historical terminal retry привязан к immutable AssessmentVersion самого attempt, включая archived replacement history, а не к будущему current binding.
+- Failed submit атомарно переводит attempt в `failed`, сохраняет server score/answers/fingerprint и grading audit, но не меняет level/enrollment и не создаёт XP/completion audit. Следующий attempt разрешён только в пределах `maxAttempts`.
+- Passed submit одной transaction выполняет CAS attempt, server grading, `completeCurriculumLevelInTransaction`, immutable `LevelDefinition.xpReward`, XP audit, progress/enrollment transition, completion audit и grading audit. Любая ошибка откатывает весь набор.
+- Phase 3 OWNER_RULES минимально расширен парой `lesson:assessment_pass`. Для lesson completion core внутри той же transaction требует durable passed attempt того же user/enrollment/curriculum/level/AssessmentVersion с source identity `assessment-attempt:<id>`. Остальные owner mappings не изменены; final_exam mapping сохранён.
+- Audit allowlist дополнен `CURRICULUM_ASSESSMENT_ATTEMPT_STARTED` и `CURRICULUM_ASSESSMENT_ATTEMPT_GRADED`. Audit awaited и transactional; metadata не содержит answers, correctAnswer, prompt, labels, explanation или raw JSON.
+- Открытыми остаются product-policy для numeric tolerance/chart assets, abandon/expiry active attempt, default `maxAttempts` по типам и будущая политика explanation reveal. В 4B.5 утверждены deterministic order без shuffle и отсутствие answer/explanation reveal в runtime response.
+
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

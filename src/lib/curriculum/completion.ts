@@ -57,7 +57,7 @@ const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
   },
   assessment_pass: {
     initialStatus: "in_progress",
-    pairs: new Set(["final_exam:assessment_pass"]),
+    pairs: new Set(["lesson:assessment_pass", "final_exam:assessment_pass"]),
   },
   report_approval: {
     initialStatus: "pending_review",
@@ -411,6 +411,62 @@ function assertOwnerRule(
   }
 }
 
+const ASSESSMENT_ATTEMPT_SOURCE = /^assessment-attempt:([1-9]\d*)$/;
+
+async function assertLessonAssessmentProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+) {
+  if (input.sourceType !== "assessment_pass" || context.level.type !== "lesson") {
+    return;
+  }
+  const match = ASSESSMENT_ATTEMPT_SOURCE.exec(input.sourceId);
+  const attemptId = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(attemptId) || attemptId <= 0) {
+    failure("COMPLETION_OWNER_MISMATCH", "lesson assessment proof identity is invalid");
+  }
+  const attempt = await tx.assessmentAttempt.findUnique({ where: { id: attemptId } });
+  const assessment = attempt
+    ? await tx.assessmentVersion.findUnique({ where: { id: attempt.assessmentVersionId } })
+    : null;
+  if (
+    !attempt ||
+    attempt.userId !== context.enrollment.userId ||
+    attempt.enrollmentId !== context.enrollment.id ||
+    attempt.curriculumVersionId !== context.enrollment.curriculumVersionId ||
+    attempt.levelDefinitionId !== context.level.id ||
+    attempt.status !== "passed" ||
+    !attempt.submittedAt ||
+    attempt.durationSeconds === null ||
+    attempt.durationSeconds < 0 ||
+    attempt.durationSeconds !==
+      Math.floor((attempt.submittedAt.getTime() - attempt.startedAt.getTime()) / 1_000) ||
+    attempt.totalQuestions === null ||
+    attempt.correctCount === null ||
+    attempt.scoreBasisPoints === null ||
+    attempt.submittedAnswers === null ||
+    !attempt.answersFingerprint ||
+    !/^sha256:[a-f0-9]{64}$/.test(attempt.answersFingerprint) ||
+    !attempt.submitRequestId ||
+    !assessment ||
+    assessment.id !== attempt.assessmentVersionId ||
+    (assessment.status !== "published" && assessment.status !== "archived") ||
+    !assessment.publishedAt ||
+    assessment.levelDefinitionId !== context.level.id ||
+    assessment.curriculumVersionId !== context.enrollment.curriculumVersionId ||
+    attempt.totalQuestions <= 0 ||
+    attempt.correctCount < 0 ||
+    attempt.correctCount > attempt.totalQuestions ||
+    attempt.correctCount * 100 <
+      assessment.passPercent * attempt.totalQuestions ||
+    attempt.scoreBasisPoints !==
+      Math.floor((attempt.correctCount * 10_000) / attempt.totalQuestions)
+  ) {
+    failure("COMPLETION_STATE_CORRUPT", "lesson assessment proof is missing or corrupt");
+  }
+}
+
 function assertReward(context: CompletionContext) {
   if (!Number.isInteger(context.level.xpReward) || context.level.xpReward <= 0) {
     failure("COMPLETION_REWARD_INVALID", "curriculum level reward is invalid");
@@ -537,6 +593,7 @@ async function runCompletionTransaction(
 ): Promise<CurriculumLevelCompletedResult> {
   const context = await loadContext(tx, input);
   assertOwnerRule(context, input.sourceType);
+  await assertLessonAssessmentProof(tx, context, input);
   assertReward(context);
 
   if (context.progress.status === "completed") {
