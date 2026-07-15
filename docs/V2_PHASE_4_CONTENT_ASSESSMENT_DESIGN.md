@@ -1,6 +1,6 @@
 # ATA V2 — Phase 4 Content, Assessments and Lesson Progress Design (Phase 4A)
 
-**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1
+**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1, server-only content lifecycle — в Phase 4B.2
 **Дата:** 2026-07-15
 **База:** commit `6e0c32df66089ab42855d2759c2361e2d6bdfafc` (Phase 3 завершена)
 **Связанные документы:** `V2_PRODUCT_DECISIONS.md`, `V2_GAP_ANALYSIS.md`, `V2_PHASE_1_SCHEMA_DESIGN.md`, `V2_PHASE_2_SCHEMA_DESIGN.md`, `V2_PHASE_3_XP_DESIGN.md`, `V2_PHASE_1_COMPLETION.md`, `V2_PHASE_2_COMPLETION.md`, `V2_PHASE_3_COMPLETION.md`
@@ -665,10 +665,10 @@ Phase 4 completion gate (4B.6): `curriculumPhase4Gate.ts` — последова
 
 Формат: Evidence → Варианты → Рекомендация → Trade-offs → Blocker → Крайний этап решения.
 
-1. **Default locale.** Evidence: весь V1-контент русский; локализационной инфраструктуры нет. Варианты: `ru`; `en`; без default'а (обязательный явный locale). Рекомендация: `ru` как default+обязательный publish-locale. Trade-offs: `en`-default удобнее будущей экспансии, но противоречит фактической аудитории. Blocker: publish-валидация и read-fallback (4B.2/4B.4). Крайний этап: **до 4B.2**. (Официально НЕ утверждается этим документом.)
-2. **Localization model (финализация B + политика аддитивных locale).** Evidence: §3.2. Варианты: B c запретом новых locale у published; B c admin-командой добавления locale (audit). Рекомендация: второе. Trade-offs: строгий запрет чище, но заставляет клонировать смысловую версию ради перевода. Blocker: authoring-команды. Крайний этап: **до 4B.2**.
+1. **Default locale — решено в Phase 4B.2.** Default locale отсутствует: каждая localization принимает обязательный явный нормализованный locale; publish требует минимум одну валидную localization, но не hardcode'ит `ru` или `en`. Read-fallback остаётся отдельным решением Phase 4B.4.
+2. **Localization model — решено в Phase 4B.2.** Выбран logical ContentVersion + ContentLocalization children. Published/archived version и все children полностью immutable; новый перевод требует новой ContentVersion.
 3. **Content JSON vs structured tables.** Evidence: §4; прецедент `visibilityRule Json`. Варианты: Json `body` (рекомендовано); typed-таблицы sections/examples. Trade-offs: таблицы дают SQL-валидацию, но контент не участвует в FK/фильтрах, а publish-Zod даёт эквивалентную строгость. Blocker: schema 4B.1. Крайний этап: **до 4B.1**.
-4. **Asset hosting/domain policy.** Evidence: `FileAsset` локальный (10 MB, mime-allowlist), видео-хостинга нет; news использует внешние URL без allowlist'а. Варианты: env-allowlist доменов (рекомендовано); собственный storage-driver (S3/R2 задел есть); любой https. Trade-offs: allowlist прост, но требует ops-конфигурации; свой хостинг — отдельная инфраструктурная работа; «любой https» — фишинг/подмена. Blocker: publish-валидация assets. Крайний этап: **до 4B.2**.
+4. **Asset hosting/domain policy — решено для Phase 4B.2.** Asset хранит только metadata/reference. Принимается абсолютный HTTPS URL длиной до 2048 без userinfo и unsafe scheme; upload/storage/network/provider/CDN и hostname allowlist не реализуются и не изобретаются этим этапом.
 5. **Numeric tolerance.** Evidence: типов вопросов в V1 нет; продуктовое правило не задано. Варианты: exact decimal (рекомендовано как default); ± absolute tolerance; ± relative %. Рекомендация: exact в 4B; tolerance-поля не добавлять до решения. Trade-offs: exact прост и детерминирован, но жесток к «введите ≈0.33». Blocker: контракт `correctAnswer` numeric-вопросов. Крайний этап: **до 4B.3** (схема Json расширяема — можно и позже, новой версией assessment'а).
 6. **Multiple-choice partial credit.** Evidence: продуктом не задан. Варианты: всё-или-ничего (рекомендовано); частичный балл. Trade-offs: partial усложняет «correctCount» (дробные баллы ломают integer-scoring §9). Blocker: scoring 4B.5. Крайний этап: **до 4B.5**.
 7. **Question randomization (порядок вопросов/опций per attempt).** Evidence: не задан; хранение порядка per attempt потребовало бы snapshot. Варианты: фиксированный порядок (рекомендовано для 4B); shuffle с сохранением seed в attempt. Trade-offs: shuffle против списывания, но требует seed-поля и усложняет воспроизводимость. Blocker: start-response 4B.5. Крайний этап: **до 4B.5**.
@@ -695,12 +695,12 @@ Phase 4 completion gate (4B.6): `curriculumPhase4Gate.ts` — последова
 - **Files:** `prisma/schema.prisma`, `prisma/migrations/20260715000000_content_assessment_foundation/migration.sql`, `scripts/regression/curriculumContentSchemaRegression.ts`, upgrade-расширение, `package.json` script.
 
 ### Phase 4B.2 — Content authoring/publication lifecycle
-- **Scope:** domain-сервисы ContentVersion/Localization/Asset (draft CRUD, publish/archive c валидацией §3.3/§4), LevelResourceBinding (draft curriculum only), расширение publish-валидации CurriculumVersion (content-полнота), admin HTTP (§13) через `gateCurriculumAdmin`, audit-actions.
-- **Forbidden:** user-facing routes, assessment-модели runtime, lesson progress, изменение user-флагов.
-- **Acceptance:** authoring/lifecycle/attachment/localization-suites (≈50–70), admin HTTP-suite, Phase 3 gate.
-- **Dependencies:** 4B.1; §22.1, §22.2, §22.4.
+- **Implemented scope:** server-only domain-сервисы ContentVersion/Localization/Asset (draft CRUD, publish/replace/archive c валидацией §3.3/§4), exact content-part LevelResourceBinding (draft curriculum only), independent default-off feature flag и awaited transactional audit. Phase-задача явно сузила исходный план: HTTP и расширение общего CurriculumVersion publish validator не входят в 4B.2.
+- **Forbidden:** любые HTTP routes, user-facing runtime, assessment/question authoring, attempt/scoring, lesson progress, XP, uploads/storage и V1-изменения.
+- **Acceptance:** 48-case lifecycle regression, schema/upgrade/Phase 3 cumulative gates, Prisma/lint/tsc/build.
+- **Resolved decisions for this stage:** locale всегда явный, default locale отсутствует; published/archived content и все children полностью immutable; asset reference принимает безопасный абсолютный HTTPS без userinfo, hostname allowlist не изобретается.
 - **Stop:** невозможность выразить publish-валидацию без изменения Phase 1-кода сверх оговорённого расширения publish-проверки.
-- **Files:** `src/lib/curriculum/content.ts` (+ схемы/errors-расширения), admin routes `src/app/api/admin/curriculum/.../content*`, `resource-binding`, регрессии, `package.json`.
+- **Files:** `src/lib/curriculum/content.ts`, `content-schemas.ts`, `content-validation.ts`, `content-errors.ts`, env/constants, lifecycle regression, docs и `package.json`; schema/migration не меняются.
 
 ### Phase 4B.3 — Assessment/question authoring lifecycle
 - **Scope:** domain-сервисы AssessmentVersion/Question/Localization (draft CRUD, publish c §7/§8-валидацией: 5–7/30/scenario-правила, type-контракты, biективность labels), admin HTTP, audit.

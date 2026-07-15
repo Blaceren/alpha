@@ -192,6 +192,17 @@
 - Candidate/no enrollment, completed history и неполная/off flag matrix остаются V1-only. New published version не repin'ит existing enrollment. Corrupt enabled history откатывает всю transaction. Automatic enrollment и later backfill запрещены.
 - Legacy success audit/notification остаются post-commit best-effort и выполняются только при `created=true`. Exact retry не повторяет их. Transactional outbox отсутствует и остаётся известным Phase 3+ ограничением; V2 XP audit при этом атомарен с обоими ledger effects.
 
+## 19. Content authoring and publication lifecycle (Phase 4B.2)
+
+- `CURRICULUM_V2_CONTENT_ENABLED` — самостоятельный dynamic runtime flag с default `false`; ADMIN/READ/ENROLLMENT/XP flags его не заменяют, live env не включается.
+- ContentVersion создаётся только как draft внутри draft CurriculumVersion. `versionNumber` монотонно выделяется сервисом per level в транзакции; caller не управляет status, version, actor identity, timestamps или lifecycle fields.
+- ContentLocalization требует явный нормализованный locale. Default locale отсутствует и `ru`/`en` не hardcode'ятся. Published/archived ContentVersion, localizations и assets полностью immutable.
+- Structured body имеет фиксированный strict contract, bounded size/depth/text, unique stable section codes и не допускает HTML/unsafe URI/prototype/assessment-answer authority. Asset — только metadata/reference: абсолютный HTTPS без userinfo; upload/storage/network/provider и hostname allowlist не входят в этап.
+- Publish требует хотя бы одну валидную localization. Замена существующей published version требует exact expected ID, атомарно архивирует старую, публикует новую и переносит binding только если он указывал на заменяемую version. Не связанный первый publish binding автоматически не создаёт.
+- Exact content binding допустим только для published ContentVersion того же level/curriculum внутри draft CurriculumVersion. Assessment pin сохраняется; clear удаляет binding row только если assessment pin отсутствует. Bound published content нельзя архивировать напрямую.
+- Каждая успешная mutation и audit commit'ятся одной interactive transaction. Audit metadata содержит только IDs/code/version/locale/order; body/transcript/asset URL не журналируются. P2002 recovery возвращает success только после durable state verification; неизвестные DB errors sanitise'ятся как `CONTENT_INTERNAL_ERROR`.
+- Phase 4B.2 не добавляет HTTP, assessment/question runtime, attempts/scoring, lesson progress, XP, uploads, seed, UI или V1 side effects. Schema и migration Phase 4B.1 не меняются.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

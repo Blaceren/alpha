@@ -28,6 +28,7 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_READ_ENABLED",
   "CURRICULUM_V2_ENROLLMENT_ENABLED",
   "CURRICULUM_V2_XP_ENABLED",
+  "CURRICULUM_V2_CONTENT_ENABLED",
 ] as const;
 
 const envSchema = z.object({
@@ -50,6 +51,7 @@ const envSchema = z.object({
   CURRICULUM_V2_READ_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ENROLLMENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_XP_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_CONTENT_ENABLED: z.enum(["true", "false"]).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -146,6 +148,11 @@ export function isCurriculumV2EnrollmentEnabled(env: NodeJS.ProcessEnv = process
 // Read at call time. Absent env is the safe disabled default.
 export function isCurriculumV2XpEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_XP_ENABLED === "true";
+}
+
+// Independent dynamic gate for V2 content authoring/publication mutations.
+export function isCurriculumV2ContentEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_CONTENT_ENABLED === "true";
 }
 
 export const envContract = {
