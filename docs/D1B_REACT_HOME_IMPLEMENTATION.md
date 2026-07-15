@@ -97,6 +97,10 @@ deposit-кнопка, фейковые финансовые данные. Еди
 
 > Обновлено в D1B.1 (`docs/D1B_1_RESPONSIVE_CORRECTION.md`): tablet стал отдельной 2-региональной
 > композицией, geometry маршрута разбита на scenario-scoped группы, добавлены safe-area и zoom-reflow.
+> Обновлено в D1B.2 (`docs/D1B_2_SHORT_VIEWPORT_FIX.md`): добавлен short-height mode (`@media (max-height:560px)`),
+> canonical token `--mobile-bottom-nav-height`, единый window-scroller (`overflow-x: clip`), scroll-padding/
+> scroll-margin компенсация фокуса. CTA больше не уходит под bottom nav при 200% zoom / landscape; Alex и
+> checkpoint preview на 320px полностью прокручиваются выше nav. **Home завершена после D1B.2.**
 
 - **< 900px (mobile):** stacked-композиция, маршрут в верхней зоне (`a-narrow`/`c-narrow`), mobile top bar
   + bottom nav; `padding-bottom`/`scroll-padding-bottom` учитывают `env(safe-area-inset-bottom)`.

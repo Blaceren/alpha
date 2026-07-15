@@ -237,6 +237,21 @@
   на breakpoint; SVG двух сценариев не конфликтуют. Контраст вторичного/muted текста поднят (три уровня
   иерархии сохранены; opacity не единственный механизм иерархии). Desktop-композиция D1B не пересматривается.
 
+### D1B.2 — Short Viewport & Bottom Navigation Final Fix
+
+- **DD-225 (Locked).** Причина перекрытия CTA — фиксированный мобильный вертикальный ритм без
+  **short-height breakpoint**: при высоте viewport ≤~450px Y CTA попадал в полосу fixed bottom nav
+  (не вертикальное центрирование). Введён `@media (max-height: 560px)` short-height mode: компактный ритм,
+  grid → `align-content: start`, естественный scroll, title floor 21px, без CSS scale.
+- **DD-226 (Locked).** Canonical token `--mobile-bottom-nav-height: 60px` — единственный источник
+  компенсации bottom nav (`padding-bottom`, `scroll-padding-bottom` на root, `scroll-margin-bottom` на CTA),
+  не дублируется по компонентам. Последний содержательный элемент прокручивается ≥24px выше nav.
+- **DD-227 (Locked).** Единый scroller: `.home-main { overflow-x: clip }` — окно единственный скроллер,
+  поэтому scroll-padding/scroll-margin работают для клавиатурного фокуса и `scrollIntoView` (CTA/focusable
+  не уходят под nav). Проверяется e2e helper `assertElementAboveBottomNavigation`.
+- **DD-228 (Locked).** Home считается **завершённой** после D1B.2 (desktop/tablet/mobile/landscape/zoom/320
+  без Fail). Следующий этап — полноценный `/path`. Route Field не пересматривается.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

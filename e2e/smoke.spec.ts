@@ -30,6 +30,26 @@ function collectConsoleErrors(page: Page): string[] {
   return errors;
 }
 
+/**
+ * Reusable check: the given element's bottom edge sits at/above the fixed bottom
+ * nav's top edge (i.e. the element is not covered by the bar). `gap` optionally
+ * requires extra clearance. Asserts against real bounding boxes, not CSS classes.
+ */
+async function assertElementAboveBottomNavigation(page: Page, selector: string, gap = 0) {
+  const el = page.locator(selector).first();
+  const nav = page.locator("nav.bottomnav");
+  await expect(el, `${selector} is visible`).toBeVisible();
+  await expect(nav, "bottom nav is visible").toBeVisible();
+  const eBox = await el.boundingBox();
+  const nBox = await nav.boundingBox();
+  expect(eBox, `${selector} has a box`).not.toBeNull();
+  expect(nBox, "nav has a box").not.toBeNull();
+  expect(
+    eBox!.y + eBox!.height,
+    `${selector} bottom (${Math.round(eBox!.y + eBox!.height)}) clears nav top (${Math.round(nBox!.y)})`,
+  ).toBeLessThanOrEqual(nBox!.y - gap + 1);
+}
+
 for (const scenario of SCENARIOS) {
   for (const [name, size] of Object.entries(VIEWPORTS)) {
     test(`${scenario} @ ${name}: renders cleanly with a visible CTA and no overflow`, async ({ page }) => {
@@ -213,4 +233,98 @@ test("320px: CTA visible, five nav items, no horizontal overflow", async ({ page
   // Five bottom-nav destinations (accessible names present).
   const navItems = page.locator("nav.bottomnav li");
   await expect(navItems).toHaveCount(5);
+});
+
+/* ---------------- D1B.2 short-viewport / bottom-nav overlap ---------------- */
+
+test("200% zoom: CTA is fully above the bottom nav and focusable, no overflow", async ({ page }) => {
+  const errors = collectConsoleErrors(page);
+  await page.setViewportSize({ width: 720, height: 450 }); // 200% zoom of 1440x900
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, "no horizontal overflow at 200% zoom").toBeLessThanOrEqual(1);
+
+  // CTA is not covered by the fixed bottom nav at initial render.
+  await assertElementAboveBottomNavigation(page, ".cta");
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  await expect(cta).toBeVisible();
+  // Focusing the CTA must not scroll it under the nav.
+  await cta.focus();
+  await expect(cta).toBeFocused();
+  await assertElementAboveBottomNavigation(page, ".cta");
+  expect(errors, errors.join("\n")).toHaveLength(0);
+});
+
+test("landscape: CTA is above the bottom nav, page scrollable, no overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  // The page can scroll (content taller than the short viewport).
+  const scrollable = await page.evaluate(
+    () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
+  );
+  expect(scrollable).toBe(true);
+  await assertElementAboveBottomNavigation(page, ".cta");
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  await cta.focus();
+  await assertElementAboveBottomNavigation(page, ".cta");
+});
+
+test("320px: Alex and checkpoint preview scroll fully above the bottom nav", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+
+  // Whole mentor block (avatar + last quote line) scrolls above the nav.
+  await page.locator(".mentor").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  await assertElementAboveBottomNavigation(page, ".mentor", 16);
+
+  // Checkpoint preview (the last content block) also scrolls above the nav.
+  await page.locator(".fcp").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  await assertElementAboveBottomNavigation(page, ".fcp", 16);
+
+  // The bottom nav stays fixed (does not scroll away with the content).
+  const navPos = await page.evaluate(() => getComputedStyle(document.querySelector("nav.bottomnav")!).position);
+  expect(navPos).toBe("fixed");
+});
+
+test("checkpoint mobile regression: CTA in first viewport, outcomes above nav after scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?scenario=checkpoint", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+
+  // CTA visible without scrolling (first viewport).
+  await assertElementAboveBottomNavigation(page, ".cta");
+
+  // After scroll, the last outcome clears the nav; no excessive empty tail.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(200);
+  await assertElementAboveBottomNavigation(page, ".gate-far .result:last-of-type", 16);
+  const tail = await page.evaluate(() => {
+    const last = document.querySelector(".gate-far") as HTMLElement;
+    const rect = last.getBoundingClientRect();
+    return document.documentElement.scrollHeight - (window.scrollY + rect.bottom);
+  });
+  // Empty space after the last block should be bounded (compensation, not a huge gap).
+  expect(tail, "no excessive empty bottom padding").toBeLessThan(160);
+});
+
+test("no focusable element lands under the bottom nav when focused (mobile)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  await cta.focus();
+  await assertElementAboveBottomNavigation(page, ".cta");
 });

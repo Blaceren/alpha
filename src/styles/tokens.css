@@ -30,6 +30,10 @@
   --signal-active: #39d3a6;
   --signal-soft: #1f7d64;
 
+  /* layout — canonical mobile bottom-nav height (single source for scroll/padding
+     compensation; the visible bar is ~55px, this reserves it plus breathing space) */
+  --mobile-bottom-nav-height: 60px;
+
   /* interaction & structure */
   --focus-ring: #7fd8bd;
   --divider: rgba(150, 175, 210, 0.14);

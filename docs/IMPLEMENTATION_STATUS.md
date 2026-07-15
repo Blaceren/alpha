@@ -205,3 +205,28 @@ backend/CRM/Pocket/DB, dependency upgrade, deploy. Детали — `docs/D1B_1_
 `design-memory/reviews/d1b-1-responsive-fix-review.md`.
 
 **Следующий этап после принятия D1B.1 — полноценный `/path`** (не начинать без запроса).
+
+---
+
+## 9. D1B.2 — Short Viewport & Bottom Navigation Final Fix (выполнено)
+
+Финальный корректирующий этап Главной; Route Field/desktop/tablet не переделывались.
+
+| Пункт | Статус |
+|-------|--------|
+| 200% zoom — CTA полностью выше bottom nav | ✅ (−98px) |
+| Landscape — CTA выше bottom nav | ✅ (−38px, после focus −96px) |
+| 320px — Alex полностью прокручивается выше nav | ✅ |
+| 320px — checkpoint preview выше nav | ✅ |
+| Canonical `--mobile-bottom-nav-height` + единый scroller | ✅ |
+| Short-height mode (`max-height:560px`) | ✅ |
+| Focus/keyboard не под nav | ✅ |
+| Checkpoint mobile regression-free | ✅ |
+| Desktop/tablet regression-free | ✅ |
+| Unit 32 / E2E smoke 21 / lint / typecheck / build | ✅ |
+| npm audit | ⚠️ 2 moderate (без изменений; `--force` не выполнялся) |
+
+**Home завершена после D1B.2.** Детали — `docs/D1B_2_SHORT_VIEWPORT_FIX.md`,
+`design-memory/reviews/d1b-2-short-viewport-fix-review.md`.
+
+**Следующий этап — полноценный `/path`** (не начинать без явного запроса).

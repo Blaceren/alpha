@@ -23,7 +23,7 @@ export function LessonPlane({ state }: { state: HomeState }) {
         {lesson.module.completed} из {lesson.module.total}
       </p>
       <ModuleProgress route={route} />
-      <div style={{ marginTop: 20 }}>
+      <div className="cta-wrap">
         <PrimaryRouteAction label={primaryAction.label} />
       </div>
     </section>

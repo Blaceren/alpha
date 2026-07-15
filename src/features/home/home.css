@@ -46,6 +46,7 @@
 
 /* ---------- bottom nav (mobile) ---------- */
 .bottomnav { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; display: block;
+  min-height: var(--mobile-bottom-nav-height);
   border-top: 1px solid var(--divider);
   background: color-mix(in srgb, var(--background-base) 88%, transparent); backdrop-filter: blur(6px);
   padding-bottom: env(safe-area-inset-bottom); }
@@ -57,8 +58,11 @@
 .bottomnav [aria-current="page"] .lbl { position: relative; }
 .bottomnav [aria-current="page"] .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; border-radius: 2px; background: var(--signal-active); }
 
-/* ---------- main / stage ---------- */
-.home-main { position: relative; flex: 1; overflow-x: hidden; overflow-y: auto; }
+/* ---------- main / stage ----------
+   overflow-x: clip contains the decorative route SVG horizontally WITHOUT turning
+   .home-main into a nested scroll container — the window stays the single scroller,
+   so scroll-padding / scroll-margin (below) work against one predictable scroller. */
+.home-main { position: relative; flex: 1; overflow-x: clip; }
 .routebg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* Route geometry groups: each breakpoint reveals only its own group (mobile→tablet→desktop).
    Groups are scenario-scoped (a-* active, c-* checkpoint) so the two SVGs never collide. */
@@ -124,6 +128,9 @@
 .cta:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 22%, transparent), color-mix(in srgb, var(--signal-active) 10%, transparent)); }
 .cta .go { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--signal-active); color: #06120e; font-weight: 800; }
 .cta.block { width: 100%; justify-content: space-between; }
+/* keyboard focus must not scroll the CTA under the fixed bottom nav */
+.cta { scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 20px); }
+.cta-wrap { margin-top: 20px; }
 
 /* ---------- instrumentation ---------- */
 .instr-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; z-index: 2; }
@@ -168,11 +175,12 @@
 
 /* =========================================================
    NARROW (mobile) composition  — default; wider overrides below.
-   Bottom padding + scroll-padding clear the fixed bottom nav (safe-area aware),
-   so the last content element is fully scrollable above it.
+   Bottom-nav compensation is defined ONCE here from the canonical token, so the
+   last content element is fully scrollable above the fixed bar. The window is the
+   scroller, so scroll-padding lives on the root element (focus/scrollIntoView).
    ========================================================= */
-.home-main { padding: 20px 16px calc(92px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px); }
+.home-main { padding: 20px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px); }
 .content { position: relative; display: flex; flex-direction: column; gap: 22px; }
 
 /* active mobile: node sits above the plane (safe gap, no route/title overlap) */
@@ -193,7 +201,7 @@
   .appbar { display: flex; }
   .mtop { display: none; }
   .bottomnav { display: none; }
-  .home-main { scroll-padding-bottom: 0; }
+  html { scroll-padding-bottom: 0; }
   .node-wide { display: block; }
   .node-narrow { display: none; }
 }
@@ -256,4 +264,33 @@
   .content--checkpoint .results { flex-direction: column; align-items: stretch; }
   .content--checkpoint .result-div { width: 100%; height: 1px; }
   .content--checkpoint .checkpoint-gate { top: 50%; transform: translate(-50%, -50%); height: min(62vh, 500px); }
+}
+
+/* =========================================================
+   SHORT-HEIGHT mode (≤560px tall) — landscape phones and 200% zoom.
+   The fixed mobile vertical rhythm (compact top bar + node zone + gaps) is tightened
+   so the current node, title, module progress and the primary CTA fit in the first
+   viewport ABOVE the fixed bottom nav. Vertical centering (grid) collapses to the
+   start of flow; scrolling stays natural; nothing is hidden with overflow.
+   Placed last so it overrides the width-based blocks when a short viewport also
+   matches them. Text stays readable (title floor 21px).
+   ========================================================= */
+@media (max-height: 560px) {
+  .mtop { height: 46px; }
+  .home-main { padding-top: 10px; }
+  .content { gap: 12px; }
+
+  /* active: compact the route/node zone and header so the CTA rises above the fold.
+     Priority order kept: node → title → progress → CTA; Alex/checkpoint fall below. */
+  .content--active .lesson-anchor { margin-top: 0; }
+  .content--active .node-narrow { height: 44px; }
+  .lesson-plane { padding: 12px 24px 16px 20px; }
+  .lesson-title { font-size: clamp(21px, 4.4vw, 27px); margin: 4px 0 4px; }
+  .route-meta { font-size: 13px; }
+  .modline { margin-top: 8px; }
+  .cta-wrap { margin-top: 12px; }
+
+  /* any grid composition (tablet/desktop) that is also short: start-align, no forced
+     min-height, so tall content scrolls instead of being vertically clipped. */
+  .content { align-content: start !important; min-height: 0 !important; }
 }
