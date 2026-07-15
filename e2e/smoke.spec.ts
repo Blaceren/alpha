@@ -1,10 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * D1B smoke: renders the two Route Field Home scenarios across the three canonical
- * viewports and asserts the invariants that screenshots cannot prove on their own —
- * no horizontal overflow, no console errors, a visible primary CTA, keyboard reach,
- * and (mobile) a bottom bar that does not cover the primary action.
+ * Home smoke (D1B + D1B.1): renders the two Route Field Home scenarios across the
+ * canonical viewports and asserts the invariants screenshots cannot prove — no
+ * horizontal overflow (incl. 200% zoom reflow and landscape), no console errors,
+ * a visible primary CTA, keyboard reach, per-breakpoint route geometry, a distinct
+ * tablet composition, and a bottom bar that never covers content (CTA / last outcome).
  */
 
 const VIEWPORTS = {
@@ -88,4 +89,128 @@ test("keyboard: the CTA is reachable and activatable by keyboard", async ({ page
   const cta = page.getByRole("button", { name: CTA_LABEL.active });
   await cta.focus();
   await expect(cta).toBeFocused();
+});
+
+/* ---------------- D1B.1 responsive / zoom / safe-area ---------------- */
+
+async function routeDisplays(page: Page) {
+  return page.evaluate(() => {
+    const d = (sel: string) => {
+      const el = document.querySelector(sel);
+      return el ? getComputedStyle(el).display : "absent";
+    };
+    return { narrow: d(".a-narrow"), tablet: d(".a-tablet"), wide: d(".a-wide") };
+  });
+}
+
+test("200% zoom reflows to the compact layout without horizontal overflow", async ({ page }) => {
+  const errors = collectConsoleErrors(page);
+  // 200% browser zoom on a 1440x900 window == a 720x450 CSS layout viewport.
+  await page.setViewportSize({ width: 720, height: 450 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+
+  // Required assertion: no horizontal page overflow at 200% zoom.
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, "no horizontal overflow at 200% zoom").toBeLessThanOrEqual(1);
+
+  // Lesson title and CTA remain accessible; layout is compact (mobile bars, not desktop).
+  await expect(page.locator("h1")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  await expect(page.locator("nav.bottomnav")).toBeVisible();
+  const disp = await routeDisplays(page);
+  expect(disp.narrow, "compact route geometry at 200% zoom").not.toBe("none");
+  expect(disp.wide).toBe("none");
+  expect(errors, errors.join("\n")).toHaveLength(0);
+});
+
+test("each breakpoint uses its own route geometry (mobile ≠ tablet ≠ desktop)", async ({ page }) => {
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await routeDisplays(page)).toMatchObject({ narrow: "inline", tablet: "none", wide: "none" });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  expect(await routeDisplays(page)).toMatchObject({ narrow: "none", tablet: "inline", wide: "none" });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  expect(await routeDisplays(page)).toMatchObject({ narrow: "none", tablet: "none", wide: "inline" });
+});
+
+test("tablet active is a distinct 2-region composition (not stacked, not desktop)", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  const display = await page.evaluate(
+    () => getComputedStyle(document.querySelector(".content--active")!).display,
+  );
+  expect(display).toBe("grid");
+  // The checkpoint preview shares the top region and the CTA is above the fold.
+  await expect(page.locator(".fcp")).toBeVisible();
+  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const box = await cta.boundingBox();
+  expect(box!.y).toBeLessThan(768);
+});
+
+test("checkpoint mobile: the last outcome is fully scrollable above the bottom nav", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?scenario=checkpoint", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.body.scrollHeight);
+    const main = document.querySelector(".home-main");
+    if (main) main.scrollTop = main.scrollHeight;
+  });
+  await page.waitForTimeout(250);
+
+  const lastOutcome = page.getByText("Chart Markup Tool");
+  const nav = page.locator("nav.bottomnav");
+  await expect(lastOutcome).toBeVisible();
+  const oBox = await lastOutcome.boundingBox();
+  const nBox = await nav.boundingBox();
+  // The last outcome's bottom edge is above the bottom nav's top edge.
+  expect(oBox!.y + oBox!.height, "last outcome clears the bottom nav").toBeLessThanOrEqual(nBox!.y + 1);
+});
+
+test("mobile landscape (844x390): no horizontal overflow, nav present", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator("nav.bottomnav")).toBeVisible();
+});
+
+test("reduced motion: renders cleanly with motion disabled", async ({ page }) => {
+  const errors = collectConsoleErrors(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  // The pulsing node must not animate; the page must still render its meaning.
+  const animName = await page.evaluate(() => {
+    const el = document.querySelector(".rnode");
+    return el ? getComputedStyle(el).animationName : "absent";
+  });
+  expect(animName).toBe("none");
+  await expect(page.locator("h1")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  expect(errors, errors.join("\n")).toHaveLength(0);
+});
+
+test("320px: CTA visible, five nav items, no horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/?scenario=active", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  // Five bottom-nav destinations (accessible names present).
+  const navItems = page.locator("nav.bottomnav li");
+  await expect(navItems).toHaveCount(5);
 });

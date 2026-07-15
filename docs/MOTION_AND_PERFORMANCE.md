@@ -73,3 +73,11 @@ rank-up, checkpoint completion, module completion, tool unlock, community unlock
 - Functional-страницы (уроки, тесты, reports, tools, community, news, support, mentor, profile, settings) — без ambient-сцен прелендинга.
 - Внутри форм (reports, tools) — только микрофидбек (focus, autosave), без отвлекающего движения.
 - Никаких казино-эффектов на rank-up/reward.
+
+## 7. D1B.1 — примечание (responsive/zoom)
+
+Корректирующий этап D1B.1 (responsive/zoom/safe-area/contrast) **не менял motion-стратегию**.
+Единственная анимация Главной — CSS-пульс текущего узла (`node-pulse`), отключаемый через
+`prefers-reduced-motion`. 200% zoom-reflow достигается медиазапросами (CSS-ширина), без
+`transform: scale()`/CSS `zoom`, поэтому не влияет на анимацию и не создаёт layout-трэшинга.
+Reduced-motion проверен в e2e. Детали — `docs/D1B_1_RESPONSIVE_CORRECTION.md`.

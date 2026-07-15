@@ -60,15 +60,17 @@
 /* ---------- main / stage ---------- */
 .home-main { position: relative; flex: 1; overflow-x: hidden; overflow-y: auto; }
 .routebg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.routebg .r-wide { display: none; }
+/* Route geometry groups: each breakpoint reveals only its own group (mobile→tablet→desktop).
+   Groups are scenario-scoped (a-* active, c-* checkpoint) so the two SVGs never collide. */
+.routebg .rg { display: none; }
+.routebg .a-narrow, .routebg .c-narrow { display: inline; }
 .route-line { fill: none; vector-effect: non-scaling-stroke; }
 .rc-completed { stroke: var(--route-completed); stroke-width: 2.4; }
 .rc-glow { stroke: var(--signal-soft); stroke-width: 10; opacity: .5; filter: blur(6px); }
-.rc-upcoming { stroke: var(--route-upcoming); stroke-width: 2; opacity: .55; }
-.rc-fade { stroke: var(--route-upcoming); stroke-width: 2; opacity: .5; stroke-dasharray: 3 8; }
-.rc-edge { stroke: var(--signal-active); stroke-width: 1.6; opacity: .5; }
+.rc-upcoming { stroke: var(--route-upcoming); stroke-width: 2.2; opacity: .72; }
+.rc-fade { stroke: var(--route-upcoming); stroke-width: 2; opacity: .6; stroke-dasharray: 3 8; }
 .rc-boundary { stroke: var(--gate-boundary); stroke-width: 2.4; }
-.rc-distant { stroke: var(--route-locked); stroke-width: 1.6; opacity: .5; stroke-dasharray: 2 9; }
+.rc-distant { stroke: var(--route-locked); stroke-width: 1.7; opacity: .62; stroke-dasharray: 2 9; }
 
 /* current-node glow (single DOM marker inside the lesson anchor) */
 .rnode { position: relative; width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
@@ -165,9 +167,12 @@
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* =========================================================
-   NARROW (mobile) composition  — default; wide overrides below
+   NARROW (mobile) composition  — default; wider overrides below.
+   Bottom padding + scroll-padding clear the fixed bottom nav (safe-area aware),
+   so the last content element is fully scrollable above it.
    ========================================================= */
-.home-main { padding: 20px 16px 96px; }
+.home-main { padding: 20px 16px calc(92px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
 .content { position: relative; display: flex; flex-direction: column; gap: 22px; }
 
 /* active mobile: node sits above the plane (safe gap, no route/title overlap) */
@@ -182,34 +187,56 @@
 
 /* =========================================================
    NAV breakpoint — desktop app bar replaces the mobile bars at ≥900px.
-   The content composition stays stacked until 1200px (see below).
+   From here up, the current node lives at the plane's top-left corner.
    ========================================================= */
 @media (min-width: 900px) {
   .appbar { display: flex; }
   .mtop { display: none; }
   .bottomnav { display: none; }
+  .home-main { scroll-padding-bottom: 0; }
+  .node-wide { display: block; }
+  .node-narrow { display: none; }
 }
 
 /* =========================================================
-   TABLET (900–1199) — a real tablet state: the stacked mobile
-   composition (top-zone r-narrow route) given room to breathe.
-   NOT the desktop route-field grid shrunk down.
+   TABLET (900–1199) — a dedicated tablet state (not a shrunk desktop):
+   Active is a two-region composition — lesson plane (wide) + checkpoint
+   preview beside it, with the route as one diagonal node→preview trajectory;
+   instrumentation under the plane, Alex spanning the full width below.
+   Checkpoint stays stacked with the gate on top.
    ========================================================= */
 @media (min-width: 900px) and (max-width: 1199px) {
-  .home-main { padding: 34px clamp(40px, 7vw, 96px) 56px; }
-  .content { gap: 26px; }
-  .lesson-plane { max-width: 640px; }
-  .mentor { max-width: 640px; }
+  .routebg .a-narrow, .routebg .c-narrow { display: none; }
+  .routebg .a-tablet, .routebg .c-tablet { display: inline; }
+  .home-main { padding: 0; }
   .lesson-title { font-size: clamp(30px, 4vw, 38px); }
-  .content--checkpoint .near { margin-top: 224px; }
+
+  .content--active {
+    display: grid; align-content: start; min-height: calc(100dvh - 60px);
+    padding: clamp(44px, 9vh, 104px) clamp(40px, 6vw, 80px) 56px; gap: 24px 44px;
+    grid-template-columns: minmax(0, 1fr) clamp(210px, 30%, 320px);
+    grid-template-areas:
+      "plane   fcp"
+      "instr   fcp"
+      "mentor  mentor";
+  }
+  .content--active .lesson-anchor { display: contents; }
+  .content--active .lesson-plane { grid-area: plane; max-width: none; align-self: start; }
+  .content--active .instr-line { grid-area: instr; align-self: start; }
+  .content--active .mentor { grid-area: mentor; max-width: 760px; }
+  .content--active .fcp { grid-area: fcp; align-self: start; justify-self: start; max-width: 300px; }
+
+  .content--checkpoint { padding: 34px clamp(40px, 7vw, 96px) 56px; gap: 26px; }
+  .content--checkpoint .near { margin-top: 224px; max-width: 720px; }
+  .content--checkpoint .mentor { max-width: 720px; }
 }
 
 /* =========================================================
-   DESKTOP (≥1200) — the Route Field grid composition.
+   DESKTOP (≥1200) — the full Route Field grid composition.
    ========================================================= */
 @media (min-width: 1200px) {
-  .routebg .r-narrow { display: none; }
-  .routebg .r-wide { display: inline; }
+  .routebg .a-narrow, .routebg .c-narrow, .routebg .a-tablet, .routebg .c-tablet { display: none; }
+  .routebg .a-wide, .routebg .c-wide { display: inline; }
   .home-main { padding: 0; }
 
   .content { display: grid; align-content: center; min-height: calc(100dvh - 60px);
@@ -218,10 +245,8 @@
   /* active: empty left column (route lives here) · lesson (centre) · future-checkpoint (right) */
   .content--active { grid-template-columns: 24% minmax(340px, 1.25fr) minmax(190px, .8fr);
     grid-template-areas: ".  lesson  fcp" ".  lesson  ."; }
-  .content--active .lesson-anchor { grid-area: lesson; margin-top: 0; align-self: center; }
+  .content--active .lesson-anchor { display: flex; grid-area: lesson; margin-top: 0; align-self: center; }
   .content--active .fcp { grid-area: fcp; align-self: start; justify-self: end; max-width: 320px; }
-  .node-wide { display: block; }
-  .node-narrow { display: none; }
 
   /* checkpoint: near (left) + far (right); the gate is drawn by the route SVG between them */
   .content--checkpoint { grid-template-columns: minmax(340px, 1fr) minmax(300px, 1fr);

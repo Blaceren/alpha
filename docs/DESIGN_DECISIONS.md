@@ -222,6 +222,21 @@
   visual-QA лог по реальным screenshots. Детали — `design-memory/reviews/d1b-react-home-review.md`,
   `docs/D1B_REACT_HOME_IMPLEMENTATION.md`.
 
+### D1B.1 — Responsive / Zoom / Safe-Area Correction
+
+- **DD-221 (Locked).** Responsive определяется фактической CSS-шириной. **200% browser zoom** reflow'ит в
+  compact-композицию (медиазапросы, без `transform: scale()`/CSS `zoom`), без horizontal overflow. Три
+  breakpoint: <900 mobile stacked, 900–1199 tablet, ≥1200 desktop Route Field grid.
+- **DD-222 (Locked).** Tablet (900–1199) — **отдельная композиция**, не сжатый desktop и не растянутый mobile.
+  Active: 2-региональный grid (plane широкий + checkpoint preview рядом), маршрут — одна диагональ
+  node→preview; instrumentation под plane, Alex во всю ширину. Checkpoint: stacked с воротами сверху.
+- **DD-223 (Locked).** Fixed bottom nav не перекрывает контент: `padding-bottom`/`scroll-padding-bottom`
+  учитывают `env(safe-area-inset-bottom)`; последний содержательный элемент полностью прокручивается выше nav
+  (проверяется e2e bounding-box). Проблема не решается увеличением высоты скриншота.
+- **DD-224 (Locked).** Геометрия маршрута — scenario-scoped группы (`a-*` active, `c-*` checkpoint), по одной
+  на breakpoint; SVG двух сценариев не конфликтуют. Контраст вторичного/muted текста поднят (три уровня
+  иерархии сохранены; opacity не единственный механизм иерархии). Desktop-композиция D1B не пересматривается.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

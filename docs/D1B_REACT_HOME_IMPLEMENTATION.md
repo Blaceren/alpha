@@ -95,13 +95,19 @@ deposit-кнопка, фейковые финансовые данные. Еди
 
 ## 8. Responsive-стратегия
 
-- **< 900px (mobile):** stacked-композиция, маршрут в верхней зоне (`r-narrow`), mobile top bar + bottom nav.
-- **900–1199px (tablet):** тот же stacked, но просторнее (padding, `max-width`), desktop app bar, без bottom nav.
-- **≥ 1200px (desktop):** grid Route Field — пустая левая колонка (маршрут) · урок (центр) · future-checkpoint (справа);
-  `r-wide` маршрут; чекпоинт — near/far с центральными воротами.
+> Обновлено в D1B.1 (`docs/D1B_1_RESPONSIVE_CORRECTION.md`): tablet стал отдельной 2-региональной
+> композицией, geometry маршрута разбита на scenario-scoped группы, добавлены safe-area и zoom-reflow.
+
+- **< 900px (mobile):** stacked-композиция, маршрут в верхней зоне (`a-narrow`/`c-narrow`), mobile top bar
+  + bottom nav; `padding-bottom`/`scroll-padding-bottom` учитывают `env(safe-area-inset-bottom)`.
+- **900–1199px (tablet):** отдельный state. Active — 2-региональный grid (plane + preview рядом, route как
+  диагональ node→preview, `a-tablet`); checkpoint — stacked с воротами сверху (`c-tablet`). Desktop app bar.
+- **≥ 1200px (desktop):** grid Route Field — пустая левая колонка (маршрут) · урок (центр) · future-checkpoint
+  (справа); `a-wide`/`c-wide`; чекпоинт — near/far с центральными воротами.
 
 Breakpoint навигации (app bar ↔ mobile bars) = 900px; breakpoint композиции/маршрута = 1200px — намеренно
-разные, чтобы планшет получил настоящий stacked-state, а не сжатый desktop-grid.
+разные. Маршрут — три scenario-scoped группы на состояние; каждый breakpoint показывает только свою.
+**200% browser zoom** reflow'ит в compact-композицию (CSS-ширина, без scale-transform), без horizontal overflow.
 
 ## 9. Токены и шрифты
 

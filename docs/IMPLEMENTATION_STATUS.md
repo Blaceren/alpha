@@ -180,3 +180,28 @@ Pocket/Prisma/БД; нет deploy; D2 не начат.
 
 **Следующий шаг после D1B:** по явному запросу — фаза Rank Identity или D2 (Главная + Путь).
 Не начинать без запроса пользователя.
+
+---
+
+## 8. D1B.1 — Responsive / Zoom / Safe-Area Correction (выполнено)
+
+Корректирующий этап поверх принятого D1B; Route Field не пересматривался.
+
+| Пункт | Статус |
+|-------|--------|
+| 200% browser zoom reflow'ит в compact (без обрезки, без h-overflow) | ✅ |
+| Tablet Active — отдельная 2-региональная композиция (не scaled desktop) | ✅ |
+| Bottom nav не перекрывает контент (safe-area, scroll-padding) | ✅ |
+| Checkpoint mobile outcomes полностью доступны | ✅ |
+| 320px usable | ✅ |
+| Контраст вторичного/muted поднят (3 уровня сохранены) | ✅ |
+| Desktop regression-free | ✅ |
+| Financial privacy сохранена | ✅ |
+| Unit 32 / E2E smoke 15 / lint / typecheck / build | ✅ |
+| npm audit | ⚠️ 2 moderate (без изменений; `--force` не выполнялся) |
+
+Границы: без нового art-direction, `/path`, lesson page, tools, community, rank identity,
+backend/CRM/Pocket/DB, dependency upgrade, deploy. Детали — `docs/D1B_1_RESPONSIVE_CORRECTION.md`,
+`design-memory/reviews/d1b-1-responsive-fix-review.md`.
+
+**Следующий этап после принятия D1B.1 — полноценный `/path`** (не начинать без запроса).

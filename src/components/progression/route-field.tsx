@@ -27,35 +27,51 @@ export function RouteField({
       <svg className="routebg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         {scenario === "active" ? (
           <>
-            <g className="r-wide">
-              {/* completed route rises up the empty left column to the current node (~27%, 32%).
-                  The plane's own top+left borders (CSS) are the route-derived edges. */}
-              <path className="route-line rc-glow" d="M0 82 C 10 78, 16 58, 27 32" />
-              <path className="route-line rc-completed" d="M0 82 C 10 78, 16 58, 27 32" vectorEffect="non-scaling-stroke" />
-              {/* upcoming continues up-right toward the checkpoint boundary */}
-              <path className="route-line rc-upcoming" d="M27 32 C 46 26, 64 19, 82 12" vectorEffect="non-scaling-stroke" />
-              <RouteContinuation d="M82 12 C 88 10, 92 8, 98 6" />
-              <ModuleBoundary x={11} y1={52} y2={90} />
-            </g>
-            <g className="r-narrow">
-              {/* route lives in the top zone and arrives at the node (~7%, 17%); clears the plane below */}
+            {/* mobile (<900): route lives in the top zone, arrives at the node (~7%, 17%). */}
+            <g className="rg a-narrow">
               <path className="route-line rc-glow" d="M-8 36 C 2 28, 5 22, 7 17" />
               <path className="route-line rc-completed" d="M-8 36 C 2 28, 5 22, 7 17" vectorEffect="non-scaling-stroke" />
               <RouteContinuation d="M7 17 C 22 11, 44 6, 74 1" />
             </g>
+            {/* tablet (900–1199): node at the plane's top-left, then one diagonal trajectory
+                across the top to the checkpoint preview (top-right). */}
+            <g className="rg a-tablet">
+              <path className="route-line rc-glow" d="M-8 44 C -1 32, 3 20, 6 13" />
+              <path className="route-line rc-completed" d="M-8 44 C -1 32, 3 20, 6 13" vectorEffect="non-scaling-stroke" />
+              <path className="route-line rc-upcoming" d="M6 13 C 28 11, 50 10, 70 9" vectorEffect="non-scaling-stroke" />
+              <RouteContinuation d="M70 9 C 80 8, 90 7, 99 6" />
+              <ModuleBoundary x={2} y1={20} y2={52} />
+            </g>
+            {/* desktop (≥1200): route rises up the empty left column to the node (~27%, 32%).
+                The plane's own top+left borders (CSS) are the route-derived edges. */}
+            <g className="rg a-wide">
+              <path className="route-line rc-glow" d="M0 82 C 10 78, 16 58, 27 32" />
+              <path className="route-line rc-completed" d="M0 82 C 10 78, 16 58, 27 32" vectorEffect="non-scaling-stroke" />
+              <path className="route-line rc-upcoming" d="M27 32 C 46 26, 64 19, 82 12" vectorEffect="non-scaling-stroke" />
+              <RouteContinuation d="M82 12 C 88 10, 92 8, 98 6" />
+              <ModuleBoundary x={11} y1={52} y2={90} />
+            </g>
           </>
         ) : (
           <>
-            <g className="r-wide">
-              <path className="route-line rc-glow" d="M2 96 C 20 90, 38 82, 49 58" />
-              <path className="route-line rc-completed" d="M2 96 C 20 90, 38 82, 49 58" vectorEffect="non-scaling-stroke" />
-              <RouteContinuation d="M52 40 C 64 34, 80 30, 96 28" />
-            </g>
-            <g className="r-narrow">
-              {/* arrives at the gate through the top band (stays above the heading below) */}
+            {/* mobile (<900): the route arrives at the gate through the top band
+                (stays above the heading below it). */}
+            <g className="rg c-narrow">
               <path className="route-line rc-glow" d="M-8 23 C 12 22, 28 22, 44 22" />
               <path className="route-line rc-completed" d="M-8 23 C 12 22, 28 22, 44 22" vectorEffect="non-scaling-stroke" />
               <RouteContinuation d="M56 22 C 70 21, 84 20, 98 19" />
+            </g>
+            {/* tablet (900–1199): still stacked with the gate on top — same top-band arrival. */}
+            <g className="rg c-tablet">
+              <path className="route-line rc-glow" d="M-8 20 C 12 19, 28 19, 44 19" />
+              <path className="route-line rc-completed" d="M-8 20 C 12 19, 28 19, 44 19" vectorEffect="non-scaling-stroke" />
+              <RouteContinuation d="M56 19 C 70 18, 84 17, 98 16" />
+            </g>
+            {/* desktop (≥1200): route rises from the bottom-left to the centred gate. */}
+            <g className="rg c-wide">
+              <path className="route-line rc-glow" d="M2 96 C 20 90, 38 82, 49 58" />
+              <path className="route-line rc-completed" d="M2 96 C 20 90, 38 82, 49 58" vectorEffect="non-scaling-stroke" />
+              <RouteContinuation d="M52 40 C 64 34, 80 30, 96 28" />
             </g>
           </>
         )}

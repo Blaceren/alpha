@@ -14,10 +14,10 @@
   --surface-context: #0e1524;      /* lesson / gate working surface */
   --surface-subtle: rgba(150, 175, 210, 0.06);
 
-  /* text */
+  /* text — three explicit levels, all AA on the navy fields */
   --text-primary: #eef2f8;
-  --text-secondary: #c2ccdb;       /* readable service text */
-  --text-muted: #9aa6ba;           /* raised from design-only #8c96a8 for contrast */
+  --text-secondary: #cdd6e3;       /* readable service text (raised in D1B.1) */
+  --text-muted: #aab4c7;           /* muted but AA-readable (raised in D1B.1 from #9aa6ba) */
 
   /* route states */
   --route-completed: #39d3a6;
