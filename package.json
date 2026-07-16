@@ -58,6 +58,7 @@
     "test:regression:curriculum-report-schema": "tsx scripts/regression/curriculumReportSchemaRegression.ts",
     "test:regression:curriculum-report-authoring": "tsx scripts/regression/curriculumReportAuthoringRegression.ts",
     "test:regression:curriculum-report-submission": "tsx scripts/regression/curriculumReportSubmissionRegression.ts",
+    "test:regression:curriculum-report-review": "tsx scripts/regression/curriculumReportReviewRegression.ts",
     "test:regression:curriculum-content-read-progress": "tsx scripts/regression/curriculumContentReadProgressRegression.ts",
     "test:regression:curriculum-assessment-runtime": "tsx scripts/regression/curriculumAssessmentRuntimeRegression.ts",
     "test:regression:curriculum-phase4-http": "tsx scripts/regression/curriculumPhase4HttpRegression.ts",

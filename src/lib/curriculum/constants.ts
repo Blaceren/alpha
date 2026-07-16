@@ -97,4 +97,7 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportUnbound: "REPORT_UNBOUND",
   reportSubmitted: "REPORT_SUBMITTED",
   reportResubmitted: "REPORT_RESUBMITTED",
+  reportClaimed: "REPORT_CLAIMED",
+  reportReassigned: "REPORT_REASSIGNED",
+  reportRejected: "REPORT_REJECTED",
 } as const;

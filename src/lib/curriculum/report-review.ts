@@ -1,0 +1,945 @@
+import { createHash } from "node:crypto";
+import { Prisma, type PrismaClient, type ReportCommandType, type UserRole } from "@prisma/client";
+import { z } from "zod";
+import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
+import { ReportDomainError, isReportDomainError, type ReportDomainErrorCode } from "@/lib/curriculum/report-errors";
+import {
+  reportAssignmentLocalizationPayloadSchema,
+  reportCriterionLocalizationPayloadSchema,
+  reportCriterionPayloadSchema,
+  reportFieldDefinitionPayloadSchema,
+  reportFieldLocalizationPayloadSchema,
+  reportLocaleSchema,
+  reportReasonLocalizationPayloadSchema,
+  reportReasonPayloadSchema,
+  reportScaleLocalizationPayloadSchema,
+  reportScaleOptionPayloadSchema,
+} from "@/lib/curriculum/report-schemas";
+import {
+  isCurriculumV2EnrollmentEnabled,
+  isCurriculumV2ReadEnabled,
+  isCurriculumV2ReportEnabled,
+} from "@/lib/env";
+import { prisma } from "@/lib/prisma";
+
+const MAX_INT = 2_147_483_647;
+const CLAIM_LEASE_MS = 60 * 60 * 1_000;
+const MAX_TRANSACTION_ATTEMPTS = 3;
+const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$/;
+const STABLE_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
+const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
+const REASSIGN_REASONS = [
+  "reviewer_unavailable",
+  "claim_stale",
+  "workload_rebalance",
+  "operational_override",
+] as const;
+
+type TransactionClient = Prisma.TransactionClient;
+type CommandDb = Pick<PrismaClient, "$transaction">;
+type ReviewerRole = "admin" | "mentor";
+type ReviewOperation = "claim" | "renew" | "release" | "reassign" | "reject";
+type CommandOptions = { db?: CommandDb; evaluationTime?: Date };
+
+const submissionRefSchema = z.string().trim().min(8).max(128);
+const commandBase = {
+  submissionRef: submissionRefSchema,
+  requestId: z.string().trim().regex(REQUEST_ID),
+  expectedWorkflowVersion: z.number().int().nonnegative().max(MAX_INT - 1),
+  expectedClaimVersion: z.number().int().nonnegative().max(MAX_INT - 1),
+  expectedSubmittedRevision: z.number().int().positive().max(MAX_INT),
+};
+const claimCommandSchema = z.strictObject(commandBase);
+const reassignCommandSchema = z.strictObject({
+  ...commandBase,
+  targetReviewerId: z.number().int().positive().max(MAX_INT),
+  reasonCode: z.enum(REASSIGN_REASONS),
+});
+const scoreSchema = z.strictObject({
+  criterionCode: z.string().trim().regex(STABLE_KEY),
+  scaleCode: z.string().trim().regex(STABLE_KEY),
+  comment: z.string().trim().min(1).max(4_000).optional(),
+});
+const reviewEvidenceSchema = z.strictObject({
+  ...commandBase,
+  scores: z.array(scoreSchema).min(1).max(100),
+});
+const rejectCommandSchema = reviewEvidenceSchema.extend({
+  reasonCode: z.string().trim().regex(STABLE_KEY),
+  humanComment: z.string().trim().min(1).max(4_000),
+  correctiveAction: z.string().trim().min(1).max(4_000),
+});
+const queueSchema = z.strictObject({
+  locale: reportLocaleSchema,
+  limit: z.number().int().min(1).max(50).default(20),
+  cursor: z.string().trim().min(8).max(256).optional(),
+});
+const receiptResultSchema = z.strictObject({
+  version: z.literal(1),
+  operation: z.enum(["claim", "renew", "release", "reassign", "reject"]),
+  submissionRef: submissionRefSchema,
+  submittedRevision: z.number().int().positive(),
+  workflowVersion: z.number().int().positive(),
+  claimVersion: z.number().int().nonnegative(),
+  claimState: z.enum(["active", "released", "closed"]),
+  claimExpiresAt: z.string().datetime().nullable(),
+  reviewerRole: z.enum(["admin", "mentor"]).nullable(),
+  reasonCode: z.string().nullable(),
+});
+
+const submissionInclude = Prisma.validator<Prisma.ReportSubmissionInclude>()({
+  user: { select: { id: true, name: true, status: true } },
+  enrollment: { select: { id: true, status: true } },
+  curriculumVersion: { select: { id: true, status: true, versionNumber: true, code: true } },
+  levelDefinition: { select: { id: true, status: true, type: true, completionMethod: true, stableCode: true, levelNumber: true, title: true } },
+  progress: { select: { id: true, status: true } },
+  assignment: {
+    include: {
+      localizations: true,
+      fields: { include: { localizations: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+    },
+  },
+  rubric: {
+    include: {
+      criteria: { include: { localizations: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      scaleOptions: { include: { localizations: true }, orderBy: [{ ordinal: "asc" }, { id: "asc" }] },
+      rejectionReasons: { include: { localizations: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+    },
+  },
+  submittedRevision: true,
+});
+
+type ReviewSubmission = Prisma.ReportSubmissionGetPayload<{ include: typeof submissionInclude }>;
+
+export type SafeReviewerQueueItem = {
+  submissionRef: string;
+  owner: { displayName: string };
+  curriculum: { code: string; versionNumber: number };
+  level: { stableCode: string; levelNumber: number; title: string };
+  assignment: {
+    versionNumber: number;
+    title: string;
+    instructions: string;
+    successCriteriaSummary: string | null;
+    fields: Array<{
+      code: string;
+      type: string;
+      required: boolean;
+      label: string;
+      helpText: string | null;
+    }>;
+  };
+  rubric: {
+    versionNumber: number;
+    criteria: Array<{
+      code: string;
+      categoryCode: string;
+      commentRequired: boolean;
+      title: string;
+      description: string;
+    }>;
+    scale: Array<{ code: string; label: string; description: string | null }>;
+  };
+  revision: {
+    revisionNumber: number;
+    values: Record<string, string | number | boolean | string[]>;
+  };
+  submittedAt: string;
+  claim: { state: "unclaimed" | "owned_by_you" | "claimed" | "expired"; expiresAt: string | null };
+};
+
+export type ReviewerQueueResult =
+  | { kind: "disabled" }
+  | { kind: "forbidden" }
+  | { kind: "resolved"; items: SafeReviewerQueueItem[]; nextCursor: string | null };
+
+export type SafeReviewCommandResult = {
+  operation: ReviewOperation;
+  created: boolean;
+  retry: boolean;
+  submissionRef: string;
+  submittedRevision: number;
+  workflowVersion: number;
+  claimVersion: number;
+  claim: { state: "active" | "released" | "closed"; expiresAt: string | null; reviewerRole: ReviewerRole | null };
+  reasonCode: string | null;
+  appliedAt: string;
+};
+
+export type ApprovalReadinessResult = {
+  kind: "ready";
+  submissionRef: string;
+  submittedRevision: number;
+  workflowVersion: number;
+  claimVersion: number;
+  reviewerRole: ReviewerRole;
+  scoreCount: number;
+};
+
+function flagsEnabled() {
+  return isCurriculumV2ReadEnabled() && isCurriculumV2EnrollmentEnabled() && isCurriculumV2ReportEnabled();
+}
+
+function fail(code: ReportDomainErrorCode, message: string): never {
+  throw new ReportDomainError(code, message);
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+}
+
+function hash(value: unknown) {
+  return `sha256:${createHash("sha256").update(stableJson(value)).digest("hex")}`;
+}
+
+function submissionRef(id: number) {
+  return Buffer.from(`report-submission:v1:${id}`, "utf8").toString("base64url");
+}
+
+function parseSubmissionRef(value: string) {
+  try {
+    const decoded = Buffer.from(value, "base64url").toString("utf8");
+    const match = /^report-submission:v1:([1-9]\d*)$/.exec(decoded);
+    if (!match || Buffer.from(decoded, "utf8").toString("base64url") !== value) return null;
+    const id = Number(match[1]);
+    return Number.isSafeInteger(id) && id <= MAX_INT ? id : null;
+  } catch { return null; }
+}
+
+function encodeCursor(submittedAt: Date, id: number) {
+  return Buffer.from(JSON.stringify({ version: 1, submittedAt: submittedAt.toISOString(), id }), "utf8").toString("base64url");
+}
+
+function decodeCursor(value: string | undefined): { submittedAt: Date; id: number } | null | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const raw = Buffer.from(value, "base64url").toString("utf8");
+    if (Buffer.from(raw, "utf8").toString("base64url") !== value) return null;
+    const parsed = z.strictObject({ version: z.literal(1), submittedAt: z.string().datetime(), id: z.number().int().positive().max(MAX_INT) }).safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+    const submittedAt = new Date(parsed.data.submittedAt);
+    return Number.isNaN(submittedAt.getTime()) ? null : { submittedAt, id: parsed.data.id };
+  } catch { return null; }
+}
+
+function parseActorId(actorUserId: number) {
+  if (!Number.isSafeInteger(actorUserId) || actorUserId < 1) fail("REPORT_REVIEWER_FORBIDDEN", "reviewer is forbidden");
+}
+
+async function requireReviewer(tx: TransactionClient, actorUserId: number): Promise<{ id: number; role: ReviewerRole }> {
+  const actor = await tx.user.findUnique({ where: { id: actorUserId }, select: { id: true, role: true, status: true } });
+  if (!actor || actor.status !== "active" || (actor.role !== "admin" && actor.role !== "mentor")) {
+    fail("REPORT_REVIEWER_FORBIDDEN", "reviewer is forbidden");
+  }
+  return { id: actor.id, role: actor.role };
+}
+
+async function loadSubmission(tx: TransactionClient, id: number) {
+  return tx.reportSubmission.findUnique({ where: { id }, include: submissionInclude });
+}
+
+function validateDefinitionGraph(submission: ReviewSubmission, locale?: string) {
+  if (
+    submission.assignment.id !== submission.reportAssignmentVersionId ||
+    submission.assignment.levelDefinitionId !== submission.levelDefinitionId ||
+    submission.assignment.curriculumVersionId !== submission.curriculumVersionId ||
+    submission.rubric.id !== submission.reportRubricVersionId ||
+    submission.rubric.reportAssignmentVersionId !== submission.assignment.id ||
+    !["published", "archived"].includes(submission.assignment.status) ||
+    !["published", "archived"].includes(submission.rubric.status)
+  ) fail("REPORT_STATE_CORRUPT", "report definition graph is corrupt");
+  const assignmentLocale = locale ? submission.assignment.localizations.find((item) => item.locale === locale) : null;
+  if (locale && (!assignmentLocale || !reportAssignmentLocalizationPayloadSchema.safeParse({
+    locale: assignmentLocale.locale,
+    title: assignmentLocale.title,
+    instructions: assignmentLocale.instructions,
+    successCriteriaSummary: assignmentLocale.successCriteriaSummary,
+    submitLabel: assignmentLocale.submitLabel,
+  }).success)) {
+    fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+  }
+  if (submission.assignment.fields.length === 0 || submission.rubric.criteria.length === 0 || submission.rubric.scaleOptions.length === 0) {
+    fail("REPORT_STATE_CORRUPT", "report definition graph is incomplete");
+  }
+  const fieldKeys = new Set<string>();
+  for (const field of submission.assignment.fields) {
+    const parsed = reportFieldDefinitionPayloadSchema.safeParse({
+      stableKey: field.stableKey, type: field.type, required: field.required, sortOrder: field.sortOrder,
+      validationRules: field.validationRules, choiceCodes: field.choiceCodes,
+    });
+    if (!parsed.success || fieldKeys.has(field.stableKey)) fail("REPORT_STATE_CORRUPT", "report field graph is corrupt");
+    fieldKeys.add(field.stableKey);
+    if (locale) {
+      const localized = field.localizations.find((item) => item.locale === locale);
+      if (!localized || !reportFieldLocalizationPayloadSchema.safeParse({
+        locale: localized.locale, label: localized.label, helpText: localized.helpText,
+        placeholder: localized.placeholder, choiceLabels: localized.choiceLabels,
+      }).success) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+    }
+  }
+  const criteria = new Map<string, ReviewSubmission["rubric"]["criteria"][number]>();
+  for (const criterion of submission.rubric.criteria) {
+    if (!reportCriterionPayloadSchema.safeParse({
+      stableKey: criterion.stableKey, categoryCode: criterion.categoryCode,
+      sortOrder: criterion.sortOrder, commentRequired: criterion.commentRequired,
+    }).success || criteria.has(criterion.stableKey)) fail("REPORT_STATE_CORRUPT", "report rubric is corrupt");
+    criteria.set(criterion.stableKey, criterion);
+    if (locale) {
+      const localized = criterion.localizations.find((item) => item.locale === locale);
+      if (!localized || !reportCriterionLocalizationPayloadSchema.safeParse({
+        locale: localized.locale, title: localized.title, description: localized.description,
+      }).success) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+    }
+  }
+  const scale = new Map<string, ReviewSubmission["rubric"]["scaleOptions"][number]>();
+  for (const option of submission.rubric.scaleOptions) {
+    if (!reportScaleOptionPayloadSchema.safeParse({ stableKey: option.stableKey, ordinal: option.ordinal }).success || scale.has(option.stableKey)) fail("REPORT_STATE_CORRUPT", "report scale is corrupt");
+    scale.set(option.stableKey, option);
+    if (locale) {
+      const localized = option.localizations.find((item) => item.locale === locale);
+      if (!localized || !reportScaleLocalizationPayloadSchema.safeParse({
+        locale: localized.locale, label: localized.label, description: localized.description,
+      }).success) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+    }
+  }
+  const reasons = new Map<string, ReviewSubmission["rubric"]["rejectionReasons"][number]>();
+  for (const reason of submission.rubric.rejectionReasons) {
+    if (!reportReasonPayloadSchema.safeParse({
+      stableKey: reason.stableKey, sortOrder: reason.sortOrder, active: reason.active,
+    }).success || reasons.has(reason.stableKey)) fail("REPORT_STATE_CORRUPT", "report rejection catalog is corrupt");
+    reasons.set(reason.stableKey, reason);
+    if (locale) for (const localized of reason.localizations) {
+      if (!reportReasonLocalizationPayloadSchema.safeParse({
+        locale: localized.locale, title: localized.title, guidance: localized.guidance,
+      }).success) fail("REPORT_STATE_CORRUPT", "report rejection catalog is corrupt");
+    }
+  }
+  return { assignmentLocale, criteria, scale, reasons };
+}
+
+function validatePendingSubmission(submission: ReviewSubmission) {
+  if (
+    submission.status !== "pending_review" || submission.enrollment.status !== "active" ||
+    !["published", "archived"].includes(submission.curriculumVersion.status) ||
+    submission.levelDefinition.status !== "active" || submission.levelDefinition.type !== "report" ||
+    submission.levelDefinition.completionMethod !== "report_approval" || submission.progress.status !== "pending_review" ||
+    !submission.submittedRevision || submission.submittedRevisionId !== submission.activeRevisionId ||
+    submission.submittedRevision.submissionId !== submission.id ||
+    (submission.submittedRevision.kind !== "initial_submission" && submission.submittedRevision.kind !== "resubmission") ||
+    !submission.submittedAt || !submission.firstSubmittedAt || submission.approvedRevisionId || submission.approvedReviewId ||
+    submission.approvedAt || submission.rejectedAt || !Number.isSafeInteger(submission.workflowVersion) ||
+    !Number.isSafeInteger(submission.claimVersion)
+  ) fail("REPORT_STATE_CORRUPT", "pending report submission is corrupt");
+  if (
+    (submission.claimedById === null && (submission.claimedAt !== null || submission.claimExpiresAt !== null || submission.reviewStartedAt !== null)) ||
+    (submission.claimedById !== null && (!submission.claimedAt || !submission.claimExpiresAt || submission.claimExpiresAt <= submission.claimedAt))
+  ) fail("REPORT_STATE_CORRUPT", "report claim state is corrupt");
+  validateDefinitionGraph(submission);
+}
+
+function safeSubmittedValues(submission: ReviewSubmission) {
+  const raw = submission.submittedRevision!.content;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("REPORT_STATE_CORRUPT", "submitted report content is corrupt");
+  const source = raw as Record<string, Prisma.JsonValue>;
+  const allowed = new Set(submission.assignment.fields.map((field) => field.stableKey));
+  if (Object.keys(source).some((key) => !allowed.has(key))) fail("REPORT_STATE_CORRUPT", "submitted report content is corrupt");
+  const values: Record<string, string | number | boolean | string[]> = {};
+  for (const field of submission.assignment.fields) {
+    const value = source[field.stableKey];
+    if (value === undefined) {
+      if (field.required) fail("REPORT_STATE_CORRUPT", "submitted report content is incomplete");
+      continue;
+    }
+    const choices = Array.isArray(field.choiceCodes) && field.choiceCodes.every((item) => typeof item === "string")
+      ? field.choiceCodes as string[]
+      : [];
+    if (["short_text", "long_text", "url", "single_choice"].includes(field.type) && typeof value === "string") {
+      if (value.length > 12_000 || UNSAFE_TEXT.test(value)) fail("REPORT_STATE_CORRUPT", "submitted report content is unsafe");
+      if (field.type === "url") {
+        try {
+          const url = new URL(value);
+          if (url.protocol !== "https:" || url.username || url.password) fail("REPORT_STATE_CORRUPT", "submitted report URL is corrupt");
+        } catch { fail("REPORT_STATE_CORRUPT", "submitted report URL is corrupt"); }
+      }
+      if (field.type === "single_choice" && !choices.includes(value)) fail("REPORT_STATE_CORRUPT", "submitted report choice is corrupt");
+      values[field.stableKey] = value;
+    } else if (field.type === "integer" && typeof value === "number") {
+      if (!Number.isSafeInteger(value)) fail("REPORT_STATE_CORRUPT", "submitted report content is corrupt");
+      values[field.stableKey] = value;
+    } else if (field.type === "boolean" && typeof value === "boolean") {
+      values[field.stableKey] = value;
+    } else if (field.type === "multi_choice" && Array.isArray(value) && value.length <= 100 &&
+      value.every((item) => typeof item === "string" && item.length <= 300 && choices.includes(item) && !UNSAFE_TEXT.test(item)) &&
+      new Set(value).size === value.length) {
+      values[field.stableKey] = value as string[];
+    } else {
+      fail("REPORT_STATE_CORRUPT", "submitted report content is corrupt");
+    }
+  }
+  return values;
+}
+
+function assertPendingReview(submission: ReviewSubmission) {
+  if (submission.status !== "pending_review") fail("REPORT_NOT_PENDING_REVIEW", "report is not pending review");
+}
+
+function assertNotSelfReview(actorUserId: number, submission: ReviewSubmission, targetReviewerId = actorUserId) {
+  if (submission.userId === actorUserId || submission.userId === targetReviewerId) fail("REPORT_SELF_REVIEW_FORBIDDEN", "self review is forbidden");
+}
+
+function assertExpected(command: z.infer<typeof claimCommandSchema>, submission: ReviewSubmission) {
+  if (command.expectedSubmittedRevision !== submission.submittedRevision!.revisionNumber) fail("REPORT_REVISION_STALE", "submitted revision is stale");
+  if (command.expectedWorkflowVersion < submission.workflowVersion || command.expectedClaimVersion < submission.claimVersion) fail("REPORT_REVISION_STALE", "review workflow is stale");
+  if (command.expectedWorkflowVersion > submission.workflowVersion || command.expectedClaimVersion > submission.claimVersion) fail("REPORT_REVISION_CONFLICT", "review workflow is ahead of durable state");
+}
+
+function commandFingerprint(input: {
+  operation: ReviewOperation;
+  actorUserId: number;
+  submission: ReviewSubmission;
+  command: z.infer<typeof claimCommandSchema>;
+  payload?: unknown;
+}) {
+  return hash({
+    version: 1,
+    operation: input.operation,
+    actorUserId: input.actorUserId,
+    submissionId: input.submission.id,
+    curriculumVersionId: input.submission.curriculumVersionId,
+    levelDefinitionId: input.submission.levelDefinitionId,
+    reportAssignmentVersionId: input.submission.reportAssignmentVersionId,
+    reportRubricVersionId: input.submission.reportRubricVersionId,
+    expectedSubmittedRevision: input.command.expectedSubmittedRevision,
+    expectedWorkflowVersion: input.command.expectedWorkflowVersion,
+    expectedClaimVersion: input.command.expectedClaimVersion,
+    payload: input.payload ?? null,
+  });
+}
+
+function safeReceiptResult(input: {
+  operation: ReviewOperation;
+  submission: ReviewSubmission;
+  workflowVersion: number;
+  claimVersion: number;
+  claimState: "active" | "released" | "closed";
+  claimExpiresAt: Date | null;
+  reviewerRole: ReviewerRole | null;
+  reasonCode?: string | null;
+}) {
+  return {
+    version: 1 as const,
+    operation: input.operation,
+    submissionRef: submissionRef(input.submission.id),
+    submittedRevision: input.submission.submittedRevision!.revisionNumber,
+    workflowVersion: input.workflowVersion,
+    claimVersion: input.claimVersion,
+    claimState: input.claimState,
+    claimExpiresAt: input.claimExpiresAt?.toISOString() ?? null,
+    reviewerRole: input.reviewerRole,
+    reasonCode: input.reasonCode ?? null,
+  };
+}
+
+function resultFromReceipt(receipt: { safeResult: Prisma.JsonValue; appliedAt: Date }, retry: boolean): SafeReviewCommandResult {
+  const parsed = receiptResultSchema.safeParse(receipt.safeResult);
+  if (!parsed.success) fail("REPORT_STATE_CORRUPT", "report receipt is corrupt");
+  return {
+    operation: parsed.data.operation,
+    created: !retry,
+    retry,
+    submissionRef: parsed.data.submissionRef,
+    submittedRevision: parsed.data.submittedRevision,
+    workflowVersion: parsed.data.workflowVersion,
+    claimVersion: parsed.data.claimVersion,
+    claim: { state: parsed.data.claimState, expiresAt: parsed.data.claimExpiresAt, reviewerRole: parsed.data.reviewerRole },
+    reasonCode: parsed.data.reasonCode,
+    appliedAt: receipt.appliedAt.toISOString(),
+  };
+}
+
+async function exactRetry(input: {
+  tx: TransactionClient;
+  actorUserId: number;
+  requestId: string;
+  submission: ReviewSubmission;
+  commandType: ReportCommandType;
+  fingerprint: string;
+  operation: ReviewOperation;
+  expectedSubmittedRevision: number;
+}) {
+  const receipt = await input.tx.reportCommandReceipt.findUnique({
+    where: { actorUserId_requestId: { actorUserId: input.actorUserId, requestId: input.requestId } },
+  });
+  if (!receipt) return null;
+  const safe = receiptResultSchema.safeParse(receipt.safeResult);
+  const revisionIds = [receipt.targetRevisionId, receipt.resultRevisionId].filter((id): id is number => id !== null);
+  const revisions = revisionIds.length === 2
+    ? await input.tx.reportRevision.findMany({
+        where: { id: { in: [...new Set(revisionIds)] }, submissionId: input.submission.id },
+        select: { id: true, revisionNumber: true },
+      })
+    : [];
+  const revisionsMatch = revisionIds.length === 2 && revisionIds.every((id) =>
+    revisions.some((revision) => revision.id === id && revision.revisionNumber === input.expectedSubmittedRevision));
+  if (
+    receipt.submissionId !== input.submission.id || receipt.commandType !== input.commandType ||
+    receipt.payloadFingerprint !== input.fingerprint || !safe.success || safe.data.operation !== input.operation ||
+    safe.data.submissionRef !== submissionRef(input.submission.id) ||
+    !revisionsMatch || safe.data.submittedRevision !== input.expectedSubmittedRevision ||
+    receipt.resultingWorkflowVersion !== safe.data.workflowVersion || !FINGERPRINT.test(receipt.payloadFingerprint)
+  ) fail("REPORT_IDEMPOTENCY_CONFLICT", "request id was already used for a different report review command");
+  return resultFromReceipt(receipt, true);
+}
+
+function isRetryable(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return true;
+  return /database is locked|SQLITE_BUSY/i.test(error instanceof Error ? error.message : String(error));
+}
+
+async function executeCommand<T>(db: CommandDb, operation: (tx: TransactionClient) => Promise<T>) {
+  for (let attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try { return await db.$transaction(operation); }
+    catch (error) {
+      if (isReportDomainError(error)) throw error;
+      if (isRetryable(error) && attempt < MAX_TRANSACTION_ATTEMPTS) continue;
+      throw new ReportDomainError("REPORT_INTERNAL_ERROR", "report review command failed");
+    }
+  }
+  throw new ReportDomainError("REPORT_INTERNAL_ERROR", "report review command failed");
+}
+
+async function writeAudit(tx: TransactionClient, input: {
+  actor: { id: number; role: ReviewerRole };
+  submission: ReviewSubmission;
+  action: string;
+  workflowVersion: number;
+  claimVersion: number;
+  targetReviewerId?: number;
+  reasonCode?: string;
+}) {
+  await tx.auditLog.create({ data: {
+    userId: input.actor.id,
+    action: input.action,
+    entityType: "ReportSubmission",
+    entityId: String(input.submission.id),
+    metadata: {
+      actorUserId: input.actor.id,
+      actorRoleSnapshot: input.actor.role,
+      submissionId: input.submission.id,
+      curriculumVersionId: input.submission.curriculumVersionId,
+      levelDefinitionId: input.submission.levelDefinitionId,
+      submittedRevisionNumber: input.submission.submittedRevision!.revisionNumber,
+      workflowVersion: input.workflowVersion,
+      claimVersion: input.claimVersion,
+      ...(input.targetReviewerId ? { targetReviewerId: input.targetReviewerId } : {}),
+      ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
+    },
+  } });
+}
+
+function parseCommand<T>(schema: z.ZodType<T>, input: unknown, code: ReportDomainErrorCode = "REPORT_REVIEW_INPUT_INVALID") {
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) fail(code, "report review input is invalid");
+  return parsed.data;
+}
+
+async function getCommandContext(
+  tx: TransactionClient,
+  actorUserId: number,
+  command: z.infer<typeof claimCommandSchema>,
+) {
+  const actor = await requireReviewer(tx, actorUserId);
+  const id = parseSubmissionRef(command.submissionRef);
+  if (!id) fail("REPORT_SUBMISSION_NOT_FOUND", "report submission was not found");
+  const submission = await loadSubmission(tx, id);
+  if (!submission) fail("REPORT_SUBMISSION_NOT_FOUND", "report submission was not found");
+  return { actor, submission };
+}
+
+function normalizeScores(submission: ReviewSubmission, values: z.infer<typeof scoreSchema>[]) {
+  const graph = validateDefinitionGraph(submission);
+  if (values.length !== graph.criteria.size) fail("REPORT_REVIEW_INPUT_INVALID", "all rubric criteria are required");
+  const seen = new Set<string>();
+  return values.map((value) => {
+    if (seen.has(value.criterionCode)) fail("REPORT_REVIEW_INPUT_INVALID", "rubric criterion is duplicated");
+    seen.add(value.criterionCode);
+    const criterion = graph.criteria.get(value.criterionCode);
+    const option = graph.scale.get(value.scaleCode);
+    if (!criterion || !option) fail("REPORT_RUBRIC_MISMATCH", "rubric score does not belong to the pinned rubric");
+    const comment = value.comment?.trim() ?? null;
+    if (criterion.commentRequired && !comment) fail("REPORT_REVIEW_INPUT_INVALID", "rubric criterion comment is required");
+    if (comment && UNSAFE_TEXT.test(comment)) fail("REPORT_REVIEW_INPUT_INVALID", "rubric comment is unsafe");
+    return { criterion, option, comment, criterionCode: criterion.stableKey, scaleCode: option.stableKey };
+  }).sort((left, right) => left.criterion.sortOrder - right.criterion.sortOrder || left.criterionCode.localeCompare(right.criterionCode));
+}
+
+async function mutateClaim(
+  actorUserId: number,
+  input: unknown,
+  operation: "claim" | "renew" | "release",
+  options: CommandOptions = {},
+): Promise<SafeReviewCommandResult> {
+  if (!flagsEnabled()) fail("REPORT_DISABLED", "report workflow is disabled");
+  parseActorId(actorUserId);
+  const command = parseCommand(claimCommandSchema, input);
+  return executeCommand(options.db ?? prisma, async (tx) => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const expiresAt = new Date(evaluationTime.getTime() + CLAIM_LEASE_MS);
+    const { actor, submission } = await getCommandContext(tx, actorUserId, command);
+    const fingerprint = commandFingerprint({ operation, actorUserId, submission, command });
+    const retry = await exactRetry({
+      tx, actorUserId, requestId: command.requestId, submission, commandType: "claim", fingerprint, operation,
+      expectedSubmittedRevision: command.expectedSubmittedRevision,
+    });
+    if (retry) return retry;
+    assertPendingReview(submission);
+    validatePendingSubmission(submission);
+    assertNotSelfReview(actorUserId, submission);
+    assertExpected(command, submission);
+    const active = submission.claimedById !== null && !!submission.claimExpiresAt && submission.claimExpiresAt > evaluationTime;
+    if (operation === "claim") {
+      if (active) fail("REPORT_CLAIM_CONFLICT", "report already has an active claim");
+    } else {
+      if (submission.claimedById !== actorUserId) fail("REPORT_CLAIM_NOT_OWNER", "review claim belongs to another reviewer");
+      if (!active) fail("REPORT_CLAIM_EXPIRED", "review claim has expired");
+    }
+    const workflowVersion = submission.workflowVersion + 1;
+    const claimVersion = submission.claimVersion + 1;
+    const where: Prisma.ReportSubmissionWhereInput = {
+      id: submission.id,
+      status: "pending_review",
+      submittedRevisionId: submission.submittedRevisionId,
+      workflowVersion: submission.workflowVersion,
+      claimVersion: submission.claimVersion,
+      claimedById: submission.claimedById,
+      claimedAt: submission.claimedAt,
+      claimExpiresAt: submission.claimExpiresAt,
+    };
+    const data: Prisma.ReportSubmissionUncheckedUpdateManyInput = operation === "release"
+      ? {
+          workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+          claimedById: null, claimedAt: null, claimExpiresAt: null, reviewStartedAt: null,
+        }
+      : {
+          workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+          claimedById: actorUserId,
+          ...(operation === "claim" ? { claimedAt: evaluationTime, reviewStartedAt: null } : {}),
+          claimExpiresAt: expiresAt,
+        };
+    const updated = await tx.reportSubmission.updateMany({ where, data });
+    if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "review claim changed concurrently");
+    const safeResult = safeReceiptResult({
+      operation, submission, workflowVersion, claimVersion,
+      claimState: operation === "release" ? "released" : "active",
+      claimExpiresAt: operation === "release" ? null : expiresAt,
+      reviewerRole: operation === "release" ? null : actor.role,
+    });
+    const receipt = await tx.reportCommandReceipt.create({ data: {
+      actorUserId, submissionId: submission.id, commandType: "claim", requestId: command.requestId,
+      payloadFingerprint: fingerprint, targetRevisionId: submission.submittedRevisionId,
+      resultRevisionId: submission.submittedRevisionId, resultingWorkflowVersion: workflowVersion,
+      safeResult, appliedAt: evaluationTime,
+    } });
+    if (operation === "claim") await writeAudit(tx, {
+      actor, submission, action: CURRICULUM_AUDIT_ACTIONS.reportClaimed, workflowVersion, claimVersion,
+      targetReviewerId: actorUserId,
+    });
+    return resultFromReceipt(receipt, false);
+  });
+}
+
+export function claimReportForReview(actorUserId: number, input: unknown, options: CommandOptions = {}) {
+  return mutateClaim(actorUserId, input, "claim", options);
+}
+
+export function renewOwnReportClaim(actorUserId: number, input: unknown, options: CommandOptions = {}) {
+  return mutateClaim(actorUserId, input, "renew", options);
+}
+
+export function releaseOwnReportClaim(actorUserId: number, input: unknown, options: CommandOptions = {}) {
+  return mutateClaim(actorUserId, input, "release", options);
+}
+
+export async function reassignReportClaim(actorUserId: number, input: unknown, options: CommandOptions = {}): Promise<SafeReviewCommandResult> {
+  if (!flagsEnabled()) fail("REPORT_DISABLED", "report workflow is disabled");
+  parseActorId(actorUserId);
+  const command = parseCommand(reassignCommandSchema, input);
+  return executeCommand(options.db ?? prisma, async (tx) => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const expiresAt = new Date(evaluationTime.getTime() + CLAIM_LEASE_MS);
+    const { actor, submission } = await getCommandContext(tx, actorUserId, command);
+    if (actor.role !== "admin") fail("REPORT_REVIEWER_FORBIDDEN", "admin reviewer is required");
+    const fingerprint = commandFingerprint({
+      operation: "reassign", actorUserId, submission, command,
+      payload: { targetReviewerId: command.targetReviewerId, reasonCode: command.reasonCode },
+    });
+    const retry = await exactRetry({
+      tx, actorUserId, requestId: command.requestId, submission, commandType: "reassign", fingerprint,
+      operation: "reassign", expectedSubmittedRevision: command.expectedSubmittedRevision,
+    });
+    if (retry) return retry;
+    assertPendingReview(submission);
+    validatePendingSubmission(submission);
+    assertNotSelfReview(actorUserId, submission, command.targetReviewerId);
+    assertExpected(command, submission);
+    if (submission.claimedById === null) fail("REPORT_CLAIM_CONFLICT", "unclaimed report must be claimed normally");
+    const target = await requireReviewer(tx, command.targetReviewerId);
+    const workflowVersion = submission.workflowVersion + 1;
+    const claimVersion = submission.claimVersion + 1;
+    const updated = await tx.reportSubmission.updateMany({
+      where: {
+        id: submission.id, status: "pending_review", submittedRevisionId: submission.submittedRevisionId,
+        workflowVersion: submission.workflowVersion, claimVersion: submission.claimVersion,
+        claimedById: submission.claimedById, claimedAt: submission.claimedAt, claimExpiresAt: submission.claimExpiresAt,
+      },
+      data: {
+        workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+        claimedById: target.id, claimedAt: evaluationTime, claimExpiresAt: expiresAt, reviewStartedAt: null,
+      },
+    });
+    if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "review claim changed concurrently");
+    const safeResult = safeReceiptResult({
+      operation: "reassign", submission, workflowVersion, claimVersion, claimState: "active",
+      claimExpiresAt: expiresAt, reviewerRole: target.role, reasonCode: command.reasonCode,
+    });
+    const receipt = await tx.reportCommandReceipt.create({ data: {
+      actorUserId, submissionId: submission.id, commandType: "reassign", requestId: command.requestId,
+      payloadFingerprint: fingerprint, targetRevisionId: submission.submittedRevisionId,
+      resultRevisionId: submission.submittedRevisionId, resultingWorkflowVersion: workflowVersion,
+      safeResult, appliedAt: evaluationTime,
+    } });
+    await writeAudit(tx, {
+      actor, submission, action: CURRICULUM_AUDIT_ACTIONS.reportReassigned,
+      workflowVersion, claimVersion, targetReviewerId: target.id, reasonCode: command.reasonCode,
+    });
+    return resultFromReceipt(receipt, false);
+  });
+}
+
+async function validateReadinessWithin(
+  tx: TransactionClient,
+  actorUserId: number,
+  command: z.infer<typeof reviewEvidenceSchema>,
+  evaluationTime: Date,
+) {
+  const { actor, submission } = await getCommandContext(tx, actorUserId, command);
+  assertPendingReview(submission);
+  validatePendingSubmission(submission);
+  assertNotSelfReview(actorUserId, submission);
+  assertExpected(command, submission);
+  if (submission.claimedById !== actorUserId) fail("REPORT_CLAIM_NOT_OWNER", "review claim belongs to another reviewer");
+  if (!submission.claimExpiresAt || submission.claimExpiresAt <= evaluationTime) fail("REPORT_CLAIM_EXPIRED", "review claim has expired");
+  const scores = normalizeScores(submission, command.scores);
+  return { actor, submission, scores };
+}
+
+export async function validateReportApprovalReadiness(
+  actorUserId: number,
+  input: unknown,
+  options: CommandOptions = {},
+): Promise<ApprovalReadinessResult> {
+  if (!flagsEnabled()) fail("REPORT_DISABLED", "report workflow is disabled");
+  parseActorId(actorUserId);
+  const command = parseCommand(reviewEvidenceSchema, input);
+  const run = async (tx: TransactionClient) => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const { actor, submission, scores } = await validateReadinessWithin(tx, actorUserId, command, evaluationTime);
+    return {
+      kind: "ready" as const,
+      submissionRef: submissionRef(submission.id),
+      submittedRevision: submission.submittedRevision!.revisionNumber,
+      workflowVersion: submission.workflowVersion,
+      claimVersion: submission.claimVersion,
+      reviewerRole: actor.role,
+      scoreCount: scores.length,
+    };
+  };
+  if (options.db) return options.db.$transaction(run);
+  return prisma.$transaction(run);
+}
+
+export async function rejectReportSubmission(actorUserId: number, input: unknown, options: CommandOptions = {}): Promise<SafeReviewCommandResult> {
+  if (!flagsEnabled()) fail("REPORT_DISABLED", "report workflow is disabled");
+  parseActorId(actorUserId);
+  const command = parseCommand(rejectCommandSchema, input);
+  if (UNSAFE_TEXT.test(command.humanComment) || UNSAFE_TEXT.test(command.correctiveAction)) fail("REPORT_REVIEW_INPUT_INVALID", "review feedback is unsafe");
+  return executeCommand(options.db ?? prisma, async (tx) => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const { actor, submission } = await getCommandContext(tx, actorUserId, command);
+    const normalizedScores = command.scores.map((score) => ({
+      criterionCode: score.criterionCode, scaleCode: score.scaleCode, comment: score.comment?.trim() ?? null,
+    })).sort((left, right) => left.criterionCode.localeCompare(right.criterionCode));
+    const fingerprint = commandFingerprint({
+      operation: "reject", actorUserId, submission, command,
+      payload: {
+        reasonCode: command.reasonCode,
+        humanComment: command.humanComment.trim(),
+        correctiveAction: command.correctiveAction.trim(),
+        scores: normalizedScores,
+      },
+    });
+    const retry = await exactRetry({
+      tx, actorUserId, requestId: command.requestId, submission, commandType: "reject", fingerprint,
+      operation: "reject", expectedSubmittedRevision: command.expectedSubmittedRevision,
+    });
+    if (retry) return retry;
+    const readiness = await validateReadinessWithin(tx, actorUserId, command, evaluationTime);
+    const reason = validateDefinitionGraph(submission).reasons.get(command.reasonCode);
+    if (!reason || !reason.active) fail("REPORT_REASON_MISMATCH", "rejection reason does not belong to the pinned rubric");
+    const review = await tx.reportReview.create({ data: {
+      submissionId: submission.id,
+      revisionId: submission.submittedRevisionId!,
+      curriculumVersionId: submission.curriculumVersionId,
+      levelDefinitionId: submission.levelDefinitionId,
+      reportAssignmentVersionId: submission.reportAssignmentVersionId,
+      reportRubricVersionId: submission.reportRubricVersionId,
+      reviewerId: actorUserId,
+      reviewerRoleSnapshot: actor.role as UserRole,
+      decision: "rejected",
+      humanComment: command.humanComment.trim(),
+      correctiveAction: command.correctiveAction.trim(),
+      rejectionReasonId: reason.id,
+      requestId: command.requestId,
+      payloadFingerprint: fingerprint,
+      claimedAt: submission.claimedAt,
+      claimExpiresAt: submission.claimExpiresAt,
+      reviewStartedAt: submission.reviewStartedAt,
+      reviewedAt: evaluationTime,
+    } });
+    await tx.reportReviewScore.createMany({ data: readiness.scores.map((score) => ({
+      reportReviewId: review.id,
+      reportRubricVersionId: submission.reportRubricVersionId,
+      rubricCriterionId: score.criterion.id,
+      rubricScaleOptionId: score.option.id,
+      comment: score.comment,
+    })) });
+    const workflowVersion = submission.workflowVersion + 1;
+    const claimVersion = submission.claimVersion + 1;
+    const updated = await tx.reportSubmission.updateMany({
+      where: {
+        id: submission.id, status: "pending_review", submittedRevisionId: submission.submittedRevisionId,
+        workflowVersion: submission.workflowVersion, claimVersion: submission.claimVersion,
+        claimedById: actorUserId, claimedAt: submission.claimedAt, claimExpiresAt: submission.claimExpiresAt,
+      },
+      data: {
+        status: "rejected", workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+        latestReviewId: review.id, reviewedAt: evaluationTime, rejectedAt: evaluationTime,
+        claimedById: null, claimedAt: null, claimExpiresAt: null, reviewStartedAt: null,
+      },
+    });
+    if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "report review changed concurrently");
+    const progress = await tx.userLevelProgress.updateMany({
+      where: { id: submission.userLevelProgressId, status: "pending_review" },
+      data: { status: "in_progress", lastProgressAt: evaluationTime },
+    });
+    if (progress.count !== 1) fail("REPORT_REVISION_CONFLICT", "report progress changed concurrently");
+    const safeResult = safeReceiptResult({
+      operation: "reject", submission, workflowVersion, claimVersion,
+      claimState: "closed", claimExpiresAt: null, reviewerRole: null, reasonCode: reason.stableKey,
+    });
+    const receipt = await tx.reportCommandReceipt.create({ data: {
+      actorUserId, submissionId: submission.id, commandType: "reject", requestId: command.requestId,
+      payloadFingerprint: fingerprint, targetRevisionId: submission.submittedRevisionId,
+      resultRevisionId: submission.submittedRevisionId, resultingWorkflowVersion: workflowVersion,
+      safeResult, appliedAt: evaluationTime,
+    } });
+    await writeAudit(tx, {
+      actor, submission, action: CURRICULUM_AUDIT_ACTIONS.reportRejected,
+      workflowVersion, claimVersion, reasonCode: reason.stableKey,
+    });
+    return resultFromReceipt(receipt, false);
+  });
+}
+
+export async function listReportReviewQueue(
+  actorUserId: number,
+  input: unknown,
+  options: { db?: TransactionClient; evaluationTime?: Date } = {},
+): Promise<ReviewerQueueResult> {
+  if (!flagsEnabled()) return { kind: "disabled" };
+  if (!Number.isSafeInteger(actorUserId) || actorUserId < 1) return { kind: "forbidden" };
+  const parsed = queueSchema.safeParse(input);
+  if (!parsed.success) fail("REPORT_REVIEW_INPUT_INVALID", "review queue query is invalid");
+  const cursor = decodeCursor(parsed.data.cursor);
+  if (cursor === null) fail("REPORT_REVIEW_INPUT_INVALID", "review queue cursor is invalid");
+  const run = async (tx: TransactionClient): Promise<ReviewerQueueResult> => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    let actor: { id: number; role: ReviewerRole };
+    try { actor = await requireReviewer(tx, actorUserId); }
+    catch (error) { if (isReportDomainError(error, "REPORT_REVIEWER_FORBIDDEN")) return { kind: "forbidden" }; throw error; }
+    const rows = await tx.reportSubmission.findMany({
+      where: {
+        status: "pending_review",
+        userId: { not: actorUserId },
+        ...(cursor ? { OR: [{ submittedAt: { gt: cursor.submittedAt } }, { submittedAt: cursor.submittedAt, id: { gt: cursor.id } }] } : {}),
+      },
+      include: submissionInclude,
+      orderBy: [{ submittedAt: "asc" }, { id: "asc" }],
+      take: parsed.data.limit + 1,
+    });
+    const items: SafeReviewerQueueItem[] = [];
+    for (const submission of rows.slice(0, parsed.data.limit)) {
+      validatePendingSubmission(submission);
+      const graph = validateDefinitionGraph(submission, parsed.data.locale);
+      const assignmentLocale = graph.assignmentLocale!;
+      const scale = submission.rubric.scaleOptions.map((option) => {
+        const localized = option.localizations.find((item) => item.locale === parsed.data.locale);
+        if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+        return { code: option.stableKey, label: localized.label, description: localized.description };
+      });
+      const fields = submission.assignment.fields.map((field) => {
+        const localized = field.localizations.find((item) => item.locale === parsed.data.locale);
+        if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+        return {
+          code: field.stableKey, type: field.type, required: field.required,
+          label: localized.label, helpText: localized.helpText,
+        };
+      });
+      const criteria = submission.rubric.criteria.map((criterion) => {
+        const localized = criterion.localizations.find((item) => item.locale === parsed.data.locale);
+        if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+        return {
+          code: criterion.stableKey, categoryCode: criterion.categoryCode,
+          commentRequired: criterion.commentRequired, title: localized.title, description: localized.description,
+        };
+      });
+      const active = submission.claimedById !== null && !!submission.claimExpiresAt && submission.claimExpiresAt > evaluationTime;
+      const claimState = submission.claimedById === null
+        ? "unclaimed" as const
+        : active && submission.claimedById === actor.id
+          ? "owned_by_you" as const
+          : active ? "claimed" as const : "expired" as const;
+      items.push({
+        submissionRef: submissionRef(submission.id),
+        owner: { displayName: submission.user.name },
+        curriculum: { code: submission.curriculumVersion.code, versionNumber: submission.curriculumVersion.versionNumber },
+        level: { stableCode: submission.levelDefinition.stableCode, levelNumber: submission.levelDefinition.levelNumber, title: submission.levelDefinition.title },
+        assignment: {
+          versionNumber: submission.assignment.versionNumber,
+          title: assignmentLocale.title,
+          instructions: assignmentLocale.instructions,
+          successCriteriaSummary: assignmentLocale.successCriteriaSummary,
+          fields,
+        },
+        rubric: { versionNumber: submission.rubric.versionNumber, criteria, scale },
+        revision: {
+          revisionNumber: submission.submittedRevision!.revisionNumber,
+          values: safeSubmittedValues(submission),
+        },
+        submittedAt: submission.submittedAt!.toISOString(),
+        claim: { state: claimState, expiresAt: submission.claimExpiresAt?.toISOString() ?? null },
+      });
+    }
+    const last = rows.length > parsed.data.limit ? rows[parsed.data.limit - 1] : null;
+    return { kind: "resolved", items, nextCursor: last?.submittedAt ? encodeCursor(last.submittedAt, last.id) : null };
+  };
+  if (options.db) return run(options.db);
+  return prisma.$transaction(run);
+}
+
+export async function approveReportSubmission(): Promise<never> {
+  fail("REPORT_APPROVAL_ENGINE_UNAVAILABLE", "atomic report approval is unavailable until Phase 5B.5");
+}

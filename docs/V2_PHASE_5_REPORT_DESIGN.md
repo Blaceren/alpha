@@ -1249,7 +1249,7 @@ reported, not hidden.
 | rejection reason catalog | absent | version with rubric; publish only approved codes | global enum/catalog | safe learner feedback and historic meaning | B.2/B.4 |
 | reviewer roles | V1 admin+mentor | retain active admin+mentor | dedicated permission/role | least privilege | B.4 |
 | self-review | V1 indirectly prevents it | explicit hard prohibition | admin exception | integrity/fraud risk | B.4 |
-| claim lease/reassignment/admin override | absent | lease + expired mentor takeover; reasoned admin reassignment | permanent claim/manual-only | queue availability and race control | B.4 |
+| claim lease/reassignment/admin override | approved for B.4 | exact 60-minute server-owned lease; expired normal takeover; reasoned admin reassignment | permanent claim/manual-only | implemented by CAS and durable receipts | resolved in B.4 |
 | durable reviewer identity after deletion | V1 relations SetNull; audit metadata persists ids | SetNull + role snapshot; decide pseudonymous durable ref under retention policy | copy display identity; Restrict deletion | privacy versus audit evidence | B.1/B.4 |
 | SLA duration/business hours/timezone | absent | compute and store due time from approved policy | elapsed calendar duration only | operations and fairness | B.4/SLA job |
 | resubmission limit | absent | unlimited in schema, policy-enforced later; always retain history | fixed/versioned limit | learner access and abuse limits | B.3 |
@@ -1378,10 +1378,98 @@ CAS, a competing-save race, complete submit, duplicate submit, archived pin,
 rejected correction, resubmit, audit secrecy, out-of-scope invariants and safe
 unknown-error behavior.
 
-## 36. Design readiness verdict
+## 36. Implemented Phase 5B.4 reviewer and rejection contract
 
-Phase 5A and Phase 5B.1-B.3 are implemented in the isolated workspace. The
-safe rollout state remains `CURRICULUM_V2_REPORT_ENABLED=false`. Learner draft
-and submit/resubmit domain support is ready for the next isolated stage, but no
-HTTP surface or reviewer decision/approval support is claimed. Phase 5B.4 has
-not started.
+Phase 5B.4 adds a server-only reviewer runtime behind the dynamic READ +
+ENROLLMENT + REPORT matrix. All flags retain default `false`; XP is not needed
+for queue, claim, readiness or rejection. Only an existing active `admin` or
+`mentor` is a reviewer. Actor identity is a trusted service argument and is not
+accepted in any command DTO. Self-review is explicitly forbidden for every
+role, including admins.
+
+The deterministic bounded queue contains only `pending_review` submissions
+that were not authored by the reader. It follows the submission's immutable
+curriculum, level, assignment, rubric and submitted-revision pins, including
+archived historical pins. Its allowlist projection contains localized
+assignment fields, localized rubric criteria/neutral scale and validated
+submitted values needed for review. It excludes raw ownership IDs,
+fingerprints, audit metadata, XP internals and secrets. Queue reads perform no
+writes or timestamp touches.
+
+### 36.1 Approved claim policy
+
+- One `evaluationTime` is created by the server inside each transaction. The
+  client cannot provide `evaluationTime`, `claimedAt` or `claimExpiresAt`.
+- A new claim stores `claimedAt=evaluationTime` and
+  `claimExpiresAt=evaluationTime + 60 minutes`, exactly. A claim is active only
+  while `claimExpiresAt > evaluationTime`; equality is expired.
+- An active mentor or admin may claim an unclaimed or expired submission, but
+  never their own. A fresh claim owned by another reviewer cannot be replaced
+  by an ordinary claim.
+- Only the owner of an active claim may renew it. Renewal sets expiry to
+  `evaluationTime + 60 minutes`, never to the previous expiry plus 60 minutes.
+  An expired claim must be claimed again.
+- Only the owner of an active claim may release it. Release atomically clears
+  `claimedById`, `claimedAt`, `claimExpiresAt` and `reviewStartedAt`; it does not
+  change the submitted revision, report status or progress.
+- Only an active admin may reassign either an active or expired claim. The
+  target must be an active mentor or admin and must not be the submission
+  author. The required reason is exactly one of `reviewer_unavailable`,
+  `claim_stale`, `workload_rebalance`, or `operational_override`; no arbitrary
+  reassignment comment is stored. Reassignment starts a new exact 60-minute
+  lease. A fresh claim can be replaced only through this command.
+
+Claim, renew, release and reassignment use both `workflowVersion` and
+`claimVersion` CAS plus canonical SHA-256 receipt identity. Exact retry returns
+the original durable result without another lease extension, timestamp touch
+or audit. Key reuse with another operation or payload conflicts. Competing
+claims have one winner. P2002/SQLite-busy recovery repeats the bounded
+transaction and accepts success only after the complete durable receipt is
+verified; unrelated database failures are never interpreted as idempotent
+success or a claim conflict.
+
+Initial claim and admin reassignment write awaited transactional allowlisted
+audits. Reassignment audit failure rolls back its new owner and lease. Audit
+metadata contains only safe actor/scope/version/target/reason facts and never
+report values, localized presentation, reviewer feedback or fingerprints.
+
+### 36.2 Rubric evidence, rejection and approval boundary
+
+Approval-readiness and rejection load the exact immutable submitted revision
+and pinned rubric. Evidence must contain every criterion exactly once, use only
+the pinned neutral scale options, and supply comments for criteria whose pinned
+definition requires them. Unknown, duplicate, missing or cross-rubric evidence
+fails closed. Rejection additionally requires one active reason from the exact
+pinned versioned catalog, a bounded reviewer comment and a bounded corrective
+action.
+
+Reject creates one immutable `ReportReview` and immutable criterion scores,
+CAS-transitions the submission `pending_review -> rejected`, clears the claim,
+and transitions `UserLevelProgress pending_review -> in_progress` in one
+transaction. It preserves the submitted revision and all prior history so the
+B.3 correction/resubmit flow remains possible. The `REPORT_REJECTED` audit is
+awaited in the same transaction; audit failure rolls back review, scores,
+submission, claim, progress and receipt. Exact retry creates none of them
+again, including after a later permissible correction draft.
+
+Approval-readiness is validation-only and performs no writes. The public
+approval adapter remains fail-closed with
+`REPORT_APPROVAL_ENGINE_UNAVAILABLE`. No durable approved review/status may be
+stored until Phase 5B.5 can atomically combine approved review, report XP,
+level/enrollment completion and all required audits.
+
+The B.4 runtime does not write XP, `XpEvent`, enrollment summaries, V1
+`TaskReport`, notifications/outbox, attachments, bindings or revisions. It
+adds no HTTP route, schema change, migration, seed, backfill, UI or rollout.
+The isolated B.4 regression covers 25 scenarios, including gates/roles,
+read-only pagination, archived pins, all lease operations, admin reassignment,
+claim races, CAS/idempotency, rubric validation, rejection atomicity, old exact
+retry, audit rollback, corruption, audit secrecy and the approval boundary.
+
+## 37. Design readiness verdict
+
+Phase 5A and Phase 5B.1-B.4 are implemented in the isolated workspace. The
+safe rollout state remains `CURRICULUM_V2_REPORT_ENABLED=false`. Reviewer queue,
+claim ownership, rubric evidence and atomic rejection are ready for the next
+isolated stage. Final approval is deliberately unavailable until Phase 5B.5;
+no HTTP or rollout readiness is claimed.
