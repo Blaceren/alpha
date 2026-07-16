@@ -2,10 +2,14 @@ import Link from "next/link";
 import { MOBILE_NAV } from "@/config/navigation";
 import { Icon } from "@/components/ui/icon";
 
+/** Sections that exist as real routes (D2A: Главная + Путь). */
+const BUILT_ROUTES = new Set(["home", "path"]);
+
 /**
  * Mobile bottom navigation — 5 items. Fixed, safe-area padded, ≥54px targets,
- * active marked with aria-current + underline (not colour only). Only Главная is a
- * real route; the rest are focusable-disabled (no 404). Profile via the top-bar avatar.
+ * active marked with aria-current + underline (not colour only). Built sections
+ * are real links; the rest are focusable-disabled (no 404). Profile via the
+ * top-bar avatar.
  */
 export function MobileBottomNavigation({ activeId = "home" }: { activeId?: string }) {
   return (
@@ -13,8 +17,8 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
       <ul>
         {MOBILE_NAV.map((item) => (
           <li key={item.id}>
-            {item.id === "home" ? (
-              <Link href="/" aria-current={activeId === "home" ? "page" : undefined}>
+            {BUILT_ROUTES.has(item.id) ? (
+              <Link href={item.href} aria-current={activeId === item.id ? "page" : undefined}>
                 <Icon name={item.iconKey} className="ic" />
                 <span className="lbl">{item.label}</span>
               </Link>

@@ -230,3 +230,30 @@ backend/CRM/Pocket/DB, dependency upgrade, deploy. Детали — `docs/D1B_1_
 `design-memory/reviews/d1b-2-short-viewport-fix-review.md`.
 
 **Следующий этап — полноценный `/path`** (не начинать без явного запроса).
+
+---
+
+## 10. D2A — Learning Path (выполнено)
+
+| Пункт | Статус |
+|-------|--------|
+| Typed curriculum: 20 модулей / 100 уровней / 20 checkpoints (пороги канона) | ✅ + 16 consistency-тестов |
+| `/path` — module navigator, focused Route Field, состояния, detail, return-to-current | ✅ |
+| Сценарии active/checkpoint/early/advanced/completed (fallback → active) | ✅ |
+| Desktop 1440 / tablet 1024 / mobile 390 / 320 / landscape / zoom-200 | ✅ |
+| Keyboard (←→ Enter Escape Home) + roving tabindex + visible focus | ✅ |
+| Semantic outline (sr-only, 20 модулей + уровни, aria-current="step") | ✅ |
+| Financial privacy (только target; без баланса/«осталось»/Pocket CTA) | ✅ тестами |
+| Performance: ≤8 узлов, ≤30 SVG-элементов, без random/rAF | ✅ e2e |
+| Тесты: 65 unit/component; e2e 15 path + 21 home (регрессия Home) | ✅ |
+| Visual QA: 14 findings first-pass, Major исправлены, final переснят | ✅ |
+| Screenshots: 13 final (точные размеры в review) | ✅ |
+| lint / typecheck / build | ✅ |
+| npm audit | ⚠️ 2 moderate (транзитивный postcss в Next; без изменений) |
+
+**Границы:** прогресс остаётся mock; backend/API/CRM/Pocket/Prisma/auth не подключены;
+lesson/test/report/tools/community страницы не реализованы; rank identity — provisional;
+Главная не переделана. Детали — `docs/D2A_PATH_ARCHITECTURE.md`, `docs/PATH_LAYOUT_ENGINE.md`,
+`docs/PATH_ACCESSIBILITY.md`, review — `design-memory/reviews/d2a-path-review.md`.
+
+**D2B не начинается автоматически.**

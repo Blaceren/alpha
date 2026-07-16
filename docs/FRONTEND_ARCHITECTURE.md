@@ -109,3 +109,15 @@ success/warning/danger/info, locked/completed/active/suspended, focus-ring, over
 - Responsive: два breakpoint — навигация на 900px, композиция/маршрут на 1200px (DD-218).
 - Тесты: Vitest (component/unit) + Playwright (`test:e2e` = smoke, `screenshots` = 8 кадров).
 - Детали — `D1B_REACT_HOME_IMPLEMENTATION.md`.
+
+## Дополнение D2A — Learning Path
+
+- `/path` — production-страница: server `page.tsx` (async searchParams → `resolvePathScenario`) →
+  client `PathWorkspace` (выбор/окно/detail/клавиатура). Главная остаётся server-only.
+- Слои: `domain/curriculum.ts` (типы) → `data/curriculum/fixture.ts` (typed канон, 100 уровней) →
+  `features/path/model/` (scenario adapter, layout engine, visible window) → `features/path/components/`.
+  UI читает только fixture+adapter; raw `les-prog.txt` не импортируется.
+- AppShell рендерится страницей (per-page `activeId`); layout `(app)` несёт только CSS.
+  `Путь` — реальный Link в обеих навигациях (BUILT_ROUTES = home, path).
+- Координатная модель Пути: проценты одного контейнера для DOM и SVG (`PATH_LAYOUT_ENGINE.md`).
+- Детали — `D2A_PATH_ARCHITECTURE.md`.

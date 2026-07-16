@@ -173,3 +173,14 @@ Reference viewports для QA: 1440×900, 1024×768, 390×844 (+ tablet portrait
 Шрифты через `@fontsource-variable` (Manrope/Inter/JetBrains Mono). Все значения остаются
 provisional до assets прелендинга (DD-004/005) — заменяется только слой значений. Детали —
 `D1B_REACT_HOME_IMPLEMENTATION.md`.
+
+---
+
+## 10. D2A — визуальный язык Пути
+
+Путь переиспользует токены и route-язык Главной (deep navy, luminous line, cold blue +
+green/cyan signal, gate aperture), добавляя структурные роли: сегментная лента модулей
+(tick-подчерк состояния), 5 геометрий маркеров уровня (диск-check «пройден», glow-кольцо
+«текущий», контурное кольцо «следующий», пунктирное кольцо «закрыт», ромб контрольной точки),
+слои соединений (completed/upcoming/future/distant), footer соседних модулей. Detail — anchored
+plane (не modal) / sheet выше bottom nav. Все значения — provisional токены (DD-004/005).

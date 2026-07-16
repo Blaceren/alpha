@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/shell/app-shell";
 import { HomeScreen } from "@/features/home/home-screen";
 import { resolveScenario } from "@/domain/home";
 
@@ -19,5 +20,9 @@ export default async function HomePage({
   searchParams: Promise<{ scenario?: string }>;
 }) {
   const { scenario } = await searchParams;
-  return <HomeScreen scenario={resolveScenario(scenario)} />;
+  return (
+    <AppShell userName="Артём" activeId="home">
+      <HomeScreen scenario={resolveScenario(scenario)} />
+    </AppShell>
+  );
 }

@@ -1,0 +1,230 @@
+/* Путь (Phase D2A) — Route Field as an explorable structure.
+   Shares the token layer and route visual language with the Home, but the
+   composition is different: module navigator + focused module window + gate +
+   contextual detail. DOM nodes and the SVG connection layer share one
+   percentage coordinate space (see layout-engine.ts), so they always align.
+   Bottom-nav compensation comes from the canonical token (D1B.2). */
+
+/* ---------- page frame ---------- */
+.path-page { position: relative; padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px); }
+
+/* ---------- header ---------- */
+.path-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; }
+.path-h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.3px;
+  font-size: clamp(24px, 2.4vw, 30px); margin: 0; color: var(--text-primary); }
+.path-now { font-size: 13.5px; color: var(--text-secondary); margin: 0; }
+.path-now b { color: var(--text-primary); font-weight: 600; }
+.path-cp-ahead { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 0; }
+.path-cp-ahead b { color: var(--text-secondary); font-weight: 600; }
+
+.rtc { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  margin-left: auto; border-radius: 9px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+  font-family: inherit; color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 38%, transparent);
+  background: color-mix(in srgb, var(--signal-active) 8%, transparent); }
+.rtc:hover { background: color-mix(in srgb, var(--signal-active) 15%, transparent); }
+.rtc .dotmark { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--signal-active); }
+.rtc[hidden] { display: none; }
+
+/* ---------- module navigator ---------- */
+.modnav { margin-top: 18px; }
+.modnav-band { display: flex; gap: 3px; overflow-x: auto; padding: 4px 2px 6px; margin: 0;
+  list-style: none; scrollbar-width: thin; touch-action: pan-x pan-y; }
+.modnav-band li { flex: 0 0 auto; }
+.modseg { position: relative; flex: 0 0 auto; min-width: 30px; min-height: 44px;
+  display: grid; place-items: center; padding: 0 4px; border-radius: 7px; cursor: pointer;
+  border: 1px solid transparent; background: none; font-family: var(--font-mono);
+  font-size: 11.5px; color: var(--text-muted); }
+.modseg .tick { display: block; width: 16px; height: 4px; border-radius: 2px; margin-top: 4px;
+  background: var(--divider-strong); }
+.modseg.m-completed { color: var(--text-secondary); }
+.modseg.m-completed .tick { background: var(--signal-soft); }
+.modseg.m-current { color: var(--text-primary); border-color: color-mix(in srgb, var(--signal-active) 45%, transparent);
+  background: color-mix(in srgb, var(--signal-active) 8%, transparent); }
+.modseg.m-current .tick { background: var(--signal-active); }
+.modseg.m-upcoming { color: var(--text-secondary); }
+.modseg.m-upcoming .tick { background: var(--route-upcoming); opacity: .75; }
+.modseg.m-locked { color: color-mix(in srgb, var(--text-muted) 72%, transparent); }
+.modseg[aria-pressed="true"] { border-color: var(--divider-strong);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent); color: var(--text-primary); }
+.modseg.m-current[aria-pressed="true"] { border-color: color-mix(in srgb, var(--signal-active) 60%, transparent); }
+.modseg:hover { color: var(--text-primary); }
+
+.modnav-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-top: 8px; }
+.modnav-pos { font-size: 12px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+.modnav-title { font-size: 14.5px; color: var(--text-primary); font-weight: 600; margin: 0; }
+.modnav-range { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
+
+/* ---------- body: field + detail ---------- */
+.path-body { margin-top: 14px; }
+.path-field { position: relative; border-top: 1px solid var(--divider);
+  background:
+    radial-gradient(110% 90% at 30% 30%, color-mix(in srgb, var(--signal-active) 4%, transparent), transparent 55%),
+    radial-gradient(90% 110% at 86% 12%, color-mix(in srgb, var(--gate-boundary) 6%, transparent), transparent 60%); }
+
+.path-scroll { overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; scrollbar-width: thin; }
+.path-canvas { position: relative; width: 720px; height: 320px; }
+
+.path-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pline { fill: none; vector-effect: non-scaling-stroke; }
+.pl-completed { stroke: var(--route-completed); stroke-width: 2.2; opacity: .92; }
+.pl-upcoming { stroke: var(--route-upcoming); stroke-width: 2; opacity: .8; }
+.pl-future { stroke: var(--route-upcoming); stroke-width: 1.8; opacity: .48; stroke-dasharray: 5 7; }
+.pl-distant { stroke: var(--route-locked); stroke-width: 1.6; opacity: .55; stroke-dasharray: 2 8; }
+.pl-boundary { stroke: var(--gate-boundary); stroke-width: 2; opacity: .55; }
+.pl-gate { stroke: var(--gate-boundary); stroke-width: 2.4; }
+.pl-gate-back { stroke: var(--gate-boundary); stroke-width: 2.4; opacity: .45; }
+.pl-aperture { stroke: var(--signal-active); stroke-width: 1.4; opacity: .6; fill: none; }
+.pl-branch { stroke: var(--signal-active); stroke-width: 1.6; opacity: .6; stroke-dasharray: 1.5 4; }
+
+/* ---------- nodes ---------- */
+.pnode { position: absolute; transform: translate(-50%, -50%); min-width: 44px; min-height: 44px;
+  display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: inherit; color: inherit; z-index: 3; }
+.pnode .marker { position: relative; display: grid; place-items: center; }
+
+/* marker geometry differs by state (never colour alone) */
+.pn-completed .marker { width: 14px; height: 14px; border-radius: 50%;
+  background: var(--signal-soft); border: 1.5px solid color-mix(in srgb, var(--route-completed) 55%, transparent); }
+.pn-completed .marker::after { content: ""; width: 6px; height: 3.5px;
+  border-left: 1.6px solid #dff7ee; border-bottom: 1.6px solid #dff7ee;
+  transform: rotate(-45deg) translate(0.5px, -0.5px); }
+.pn-current .marker { width: 24px; height: 24px; border-radius: 50%;
+  border: 2.5px solid var(--signal-active); background: var(--background-field);
+  box-shadow: 0 0 0 7px var(--glow-current), 0 0 22px 4px var(--glow-current); }
+.pn-current .marker::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--signal-active); }
+@media (prefers-reduced-motion: no-preference) {
+  .pn-current .marker { animation: pnode-pulse 3.2s var(--ease-standard) infinite; }
+  @keyframes pnode-pulse {
+    0%, 100% { box-shadow: 0 0 0 6px var(--glow-current), 0 0 18px 3px var(--glow-current); }
+    50% { box-shadow: 0 0 0 9px var(--glow-current), 0 0 26px 6px var(--glow-current); }
+  }
+}
+.pn-available .marker { width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--route-upcoming); background: color-mix(in srgb, var(--route-upcoming) 12%, transparent); }
+.pn-locked .marker { width: 12px; height: 12px; border-radius: 50%;
+  border: 1.6px dashed color-mix(in srgb, var(--route-locked) 80%, transparent); background: transparent; }
+/* checkpoint nodes: diamond geometry (rotated square) */
+.pn-cp .marker { border-radius: 3px; transform: rotate(45deg); }
+.pn-cp .marker::after { transform: rotate(-45deg); }
+.pn-checkpoint-ahead .marker { width: 16px; height: 16px; border: 2px solid var(--gate-boundary); background: transparent; }
+.pn-checkpoint-ahead .marker::after { content: none; }
+.pn-checkpoint-current .marker { width: 18px; height: 18px; border: 2.5px solid var(--signal-active);
+  background: var(--background-field); box-shadow: 0 0 0 6px var(--glow-current), 0 0 20px 4px var(--glow-current); }
+.pn-checkpoint-current .marker::after { content: ""; width: 6px; height: 6px; border-radius: 1px; background: var(--signal-active); }
+@media (prefers-reduced-motion: no-preference) {
+  .pn-checkpoint-current .marker { animation: pnode-pulse 3.2s var(--ease-standard) infinite; }
+}
+.pn-checkpoint-completed .marker { width: 16px; height: 16px; border: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--gate-boundary) 40%, transparent); }
+.pn-checkpoint-completed .marker::after { content: none; }
+
+/* selection ring (keyboard/click) — geometry + outline, not colour only */
+.pnode[data-selected="true"] .marker { outline: 2px solid color-mix(in srgb, var(--focus-ring) 75%, transparent); outline-offset: 4px; }
+.pnode:focus-visible { outline: none; }
+.pnode:focus-visible .marker { outline: 2px solid var(--focus-ring); outline-offset: 5px; }
+
+/* node labels */
+.pnode-label { position: absolute; left: 50%; transform: translateX(-50%); width: 128px; text-align: center; pointer-events: none; }
+.pnode-label.side-below { top: calc(50% + 22px); }
+.pnode-label.side-above { bottom: calc(50% + 22px); }
+.pnode-label .n { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+.pnode-label .t { display: block; font-size: 12px; line-height: 1.3; color: var(--text-secondary); margin-top: 1px; }
+.pnode-label .s { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.pn-current .pnode-label .t { color: var(--text-primary); font-weight: 600; font-size: 12.5px; }
+.pn-current .pnode-label .s { color: var(--signal-active); }
+.pn-locked .pnode-label .t { color: var(--text-muted); }
+
+/* ---------- neighbour-module edges (footer row under the canvas) ---------- */
+.field-footer { display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; border-top: 1px solid var(--divider); }
+.mod-edge { display: inline-flex; align-items: center; gap: 7px;
+  min-height: 44px; padding: 0 10px; background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 12px; color: var(--text-muted); }
+.mod-edge:hover { color: var(--text-secondary); }
+.mod-edge .arr { font-family: var(--font-mono); color: var(--text-muted); }
+
+/* ---------- checkpoint gate info ---------- */
+.gate-info { position: absolute; transform: translateX(-50%); width: 168px; text-align: center; z-index: 2; pointer-events: none; }
+.gate-info .k { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--gate-boundary); margin: 0; }
+.gate-info .cond { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
+.gate-info .cond b { color: var(--text-primary); font-weight: 600; }
+
+.branch-label { position: absolute; transform: translate(-50%, -115%); z-index: 2; pointer-events: none; text-align: center; }
+.branch-label .k { font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+.branch-label .v { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin: 1px 0 0; white-space: nowrap; }
+
+/* ---------- detail layer ---------- */
+.path-detail { background: linear-gradient(150deg,
+    color-mix(in srgb, var(--surface-context) 92%, transparent),
+    color-mix(in srgb, var(--surface-context) 66%, transparent));
+  border: 1px solid var(--divider-strong); border-radius: 14px; padding: 18px 20px 20px; }
+.path-detail .d-eyebrow { font-size: 11.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin: 0; padding-right: 40px; }
+.path-detail h2 { font-family: var(--font-display); font-size: 19px; line-height: 1.2; font-weight: 700; color: var(--text-primary); margin: 6px 0 2px; }
+.path-detail .d-state { font-size: 12.5px; color: var(--signal-active); margin: 0 0 10px; }
+.path-detail .d-state.cold { color: var(--gate-boundary); }
+.path-detail .d-state.mut { color: var(--text-muted); }
+.path-detail .d-sec { border-top: 1px solid var(--divider); padding-top: 10px; margin-top: 10px; }
+.path-detail .d-k { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 4px; }
+.path-detail ul { margin: 0; padding: 0; list-style: none; }
+.path-detail li { font-size: 13.5px; color: var(--text-secondary); padding: 3px 0 3px 16px; position: relative; }
+.path-detail li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 2px; background: var(--divider-strong); }
+.path-detail li b { color: var(--text-primary); font-weight: 600; }
+.path-detail .d-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; }
+.path-detail .d-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+.d-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 10px; border: 0; cursor: pointer;
+  background: none; color: var(--text-muted); font-size: 17px; font-family: inherit; }
+.d-close:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+.path-detail { position: relative; }
+
+.d-cta { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 16px;
+  border-radius: 9px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+  color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--signal-active) 42%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 14%, transparent),
+    color-mix(in srgb, var(--signal-active) 6%, transparent)); }
+.d-cta:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 20%, transparent),
+    color-mix(in srgb, var(--signal-active) 9%, transparent)); }
+.d-cta.quiet { border-color: var(--divider-strong); background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+
+/* ---------- mobile detail sheet (<900) ---------- */
+@media (max-width: 899px) {
+  .path-detail { position: fixed; z-index: 45; inset-inline: 10px;
+    bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 10px);
+    max-height: min(58vh, 430px); overflow-y: auto; box-shadow: 0 -14px 40px rgba(2, 6, 14, .55); }
+}
+
+/* ---------- wider compositions ---------- */
+@media (min-width: 900px) {
+  .path-page { padding: 26px clamp(28px, 4vw, 56px) 40px; }
+  .path-scroll { overflow: visible; }
+  .path-canvas { width: 100%; height: clamp(340px, 44vh, 470px); }
+  .path-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .path-body.detail-open { grid-template-columns: minmax(0, 1fr) minmax(292px, 344px); align-items: start; }
+  .path-detail { position: sticky; top: 18px; }
+  .pnode-label { width: 148px; }
+  .pnode-label .t { font-size: 12.5px; }
+}
+
+@media (min-width: 1200px) {
+  .path-page { padding: 30px clamp(40px, 5vw, 84px) 48px; }
+  .path-body.detail-open { grid-template-columns: minmax(0, 1fr) 360px; }
+  .gate-info { width: 190px; }
+}
+
+/* ---------- short viewports (landscape phones, 200% zoom) ----------
+   Priority of the first viewport: current node + module context + route.
+   The header compresses; the checkpoint-ahead line yields to the field. */
+@media (max-height: 560px) {
+  .path-page { padding-top: 10px; }
+  .path-h1 { font-size: 21px; }
+  .path-cp-ahead { display: none; }
+  .modnav { margin-top: 6px; }
+  .modnav-band { padding-bottom: 2px; }
+  .modseg { min-height: 40px; }
+  .modnav-meta { margin-top: 4px; }
+  .path-body { margin-top: 8px; }
+  .path-canvas { height: 235px; }
+  .field-footer .mod-edge { min-height: 38px; }
+  .path-detail { max-height: 74vh; }
+}

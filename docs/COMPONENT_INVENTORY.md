@@ -193,3 +193,21 @@
 Инварианты D1B: ровно один `<h1>` на состояние; маршрут декоративен (`aria-hidden`) и продублирован
 `sr-only`-текстом; CTA — не самый яркий объект; ни один компонент не показывает баланс/депозиты/выводы/
 «осталось $X»/Pocket-CTA (закреплено тестами).
+
+---
+
+## 13. D2A — компоненты Пути (реализованы)
+
+`PathWorkspace` (client-оркестратор) · `PathHeader` (h1 + контекст + return-to-current) ·
+`ModuleNavigator` (лента 20 модулей + meta) · `PathViewport` (canvas: SVG-слой соединений,
+границы, ворота, ветка инструмента + footer соседних модулей) · `PathNode` (кнопка уровня,
+5 геометрий состояний, aria-current="step") · `PathDetailLayer` (side plane / mobile sheet,
+locked-explainer, dev-safe действия) · `PathAccessibleOutline` (sr-only семантическая структура) ·
+hook `usePathKeyboard` (← → Enter Space Escape Home).
+
+Model: `path-state.ts` (scenario adapter, состояния/traits/причины блокировки),
+`layout-engine.ts` (детерминированные якоря/сегменты), `visible-window.ts` (окно модуля).
+Данные: `domain/curriculum.ts` + `data/curriculum/fixture.ts` (канон, 16 consistency-тестов).
+
+Инварианты: состояние = геометрия + текст (не только цвет); критический текст вне SVG;
+узлы ≥44px; ни один компонент не показывает баланс/«осталось»/Pocket CTA.

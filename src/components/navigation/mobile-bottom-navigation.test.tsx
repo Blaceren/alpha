@@ -23,10 +23,18 @@ describe("MobileBottomNavigation", () => {
 
   it("keeps unbuilt destinations as focusable-disabled controls (no dead links)", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    // Exactly one real link (home); the four others are disabled buttons.
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    // Two real links (Главная + Путь since D2A); the three others are disabled buttons.
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(2);
+    expect(screen.getByRole("link", { name: /Путь/ })).toHaveAttribute("href", "/path");
     const disabled = screen.getAllByRole("button");
-    expect(disabled).toHaveLength(4);
+    expect(disabled).toHaveLength(3);
     for (const b of disabled) expect(b).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("marks Путь active with aria-current on the path page", () => {
+    render(<MobileBottomNavigation activeId="path" />);
+    expect(screen.getByRole("link", { name: /Путь/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /Главная/ })).not.toHaveAttribute("aria-current");
   });
 });

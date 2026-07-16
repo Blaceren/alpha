@@ -252,6 +252,32 @@
 - **DD-228 (Locked).** Home считается **завершённой** после D1B.2 (desktop/tablet/mobile/landscape/zoom/320
   без Fail). Следующий этап — полноценный `/path`. Route Field не пересматривается.
 
+### D2A — Learning Path
+
+- **DD-229 (Locked).** Curriculum живёт в **typed fixture** (`src/data/curriculum/fixture.ts`):
+  20 модулей, 100 уровней, 20 checkpoints с каноническими порогами, 19 tool unlocks, 5 community
+  unlocks, 7 mentor reviews. Raw `les-prog.txt` в React не импортируется; consistency-тесты пиновали
+  fixture к канону. Прогресс на curriculum **не хранится** — состояние выводит scenario adapter
+  (позже заменяется backend-прогрессом без изменения UI).
+- **DD-230 (Locked).** Масштаб 100 уровней решается **окном одного модуля** (4–6 уровней + ворота +
+  стабы соседей): ≤8 визуальных узлов одновременно. Остальные модули — сегментная лента (вариант A
+  из допустимого списка; minimap и edge-only отклонены, рёбра сохранены как дополнение). Никаких
+  100 карточек/таблиц/длинных timeline/скроллбара из 100 кружков.
+- **DD-231 (Locked).** Layout Пути — детерминированный движок (`PATH_LAYOUT_ENGINE.md`): проценты
+  одного контейнера для DOM-узлов и SVG-слоя (никогда не расходятся), «походка» WALK вместо шума,
+  без random/rAF. Изгибы объяснимы: уровень/граница модуля/ворота/ветка инструмента.
+- **DD-232 (Locked).** Состояния уровней выводятся: core `completed/current/available/locked` +
+  checkpoint-уточнения + trait-маркеры. Состояние передаётся геометрией маркера **и** текстом,
+  не только цветом. Completed — приглушённый (не ярко-зелёный), locked открывается и объясняет причину.
+- **DD-233 (Locked).** Level detail — anchored side plane (desktop, карта видима; не центральная
+  modal) / sheet выше bottom nav (mobile). Locked-explainer без контента сверх brief. Primary-действия —
+  dev-safe no-op (расширение DD-219) до появления lesson/checkpoint flow.
+- **DD-234 (Locked).** Сценарии Пути: active/checkpoint/early/advanced/completed через query;
+  неизвестное → active; невидимы пользователю; adapter-only. Канон пользователя: Артём, L18,
+  модуль 4, Наблюдатель III, 2 480 XP, серия 6, точка L20 $200 → Наблюдатель IV + Chart Markup Tool.
+- **DD-235 (Locked).** Навигация приложения: `Путь` — реальный маршрут (Link) в обеих навигациях;
+  AppShell рендерится страницей (per-page activeId), layout группы `(app)` несёт только CSS.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.
