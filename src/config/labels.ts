@@ -13,6 +13,8 @@ import type {
 import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { CheckpointStatus } from "@/domain/financial/financial";
+import type { FinancialHiddenReason, FinancialProjectionMode } from "@/domain/financial/projection";
+import { HIDDEN_LABEL } from "@/domain/financial/projection";
 import type { RecommendedActionCode, SuggestedChannel } from "@/domain/recommendations/catalog";
 
 export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
@@ -21,6 +23,29 @@ export const REGISTRATION_STATUS_LABEL: Record<RegistrationStatus, string> = {
   not_registered: "Не зарегистрирован",
   registration_pending: "Регистрация проверяется",
   registered: "Регистрация подтверждена",
+};
+
+/**
+ * Human text for a hidden financial value, shared by every renderer of
+ * `FinancialProjection` (Users table cell, User 360 summary) so "no data" can
+ * never be shown as "no permission" in one place and not the other. Keyed by the
+ * projection's own `hiddenReason` — the UI never guesses.
+ *
+ * Re-exported from the projection itself, which uses the same strings for its
+ * `label`: one source, so read model and screen cannot contradict each other.
+ */
+export const FINANCIAL_HIDDEN_LABEL = HIDDEN_LABEL;
+
+/** Tooltip for each hidden reason. Must never contain the withheld value. */
+export const FINANCIAL_HIDDEN_TOOLTIP: Record<FinancialHiddenReason, string> = {
+  no_data: "Значение ещё не поступало из продукта",
+  not_permitted: "Финансовые данные недоступны для вашей роли",
+};
+
+/** Suffix marking a non-exact financial representation. */
+export const FINANCIAL_MODE_SUFFIX: Partial<Record<FinancialProjectionMode, string>> = {
+  bucket: "диапазон",
+  aggregated: "агрег.",
 };
 
 export const CHECKPOINT_LABEL: Record<CheckpointStatus, string> = {

@@ -87,7 +87,7 @@ describe("User 360 — financial permission in the DOM", () => {
 
   it("says 'no data' — not 'no permission' — when no balance exists", async () => {
     const { container } = await renderAs("crm_admin", "usr_mock_001");
-    expect(screen.getAllByText("нет данных").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Нет данных").length).toBeGreaterThan(0);
     expect(container.innerHTML).not.toContain("Недоступно для роли");
   });
 });

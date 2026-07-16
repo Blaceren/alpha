@@ -157,7 +157,7 @@ test("onboarding user — Pocket registration axis is honest", async ({ page }) 
   await expect(page.getByText("Недоступно").first()).toBeVisible();
   // No balance exists → says so honestly; not a fake zero, and NOT a false
   // "no permission" message (this role may see exact financials).
-  await expect(page.getByText("нет данных").first()).toBeVisible();
+  await expect(page.getByText("Нет данных").first()).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain("Недоступно для роли");
 

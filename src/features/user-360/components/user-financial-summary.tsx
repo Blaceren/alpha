@@ -2,7 +2,13 @@ import * as React from "react";
 import { Clock, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
-import { USER_360_LABEL, USERS_COLUMN_LABEL } from "@/config/labels";
+import {
+  FINANCIAL_HIDDEN_LABEL,
+  FINANCIAL_HIDDEN_TOOLTIP,
+  FINANCIAL_MODE_SUFFIX,
+  USER_360_LABEL,
+  USERS_COLUMN_LABEL,
+} from "@/config/labels";
 import { formatExactTime, formatRelativeTime } from "@/lib/format";
 import type { FinancialProjection } from "@/domain/financial/projection";
 import type { User360 } from "@/domain/users/user-360";
@@ -75,27 +81,21 @@ export function UserFinancialSummary({ view }: { view: User360 }) {
   );
 }
 
-/** Renders only what the projection carries — never a raw number. */
+/**
+ * Renders only what the projection carries — never a raw number. Hidden states
+ * use the SAME shared semantics as the Users table cell (D-40), so "no data"
+ * and "not permitted" can never diverge between the two screens.
+ */
 function Money({ projection }: { projection: FinancialProjection }) {
   if (projection.mode === "hidden") {
-    // "No data" and "not permitted" are different facts and must not be mixed:
-    // telling a permitted role it lacks access would simply be false.
-    const noData = projection.hiddenReason === "no_data";
+    const reason = projection.hiddenReason ?? "no_data";
     return (
-      <Tooltip
-        content={
-          noData
-            ? "Значение ещё не поступало из продукта"
-            : "Финансовые данные недоступны для вашей роли"
-        }
-        side="top"
-      >
-        <span className="text-text-muted">{noData ? "нет данных" : "Недоступно для роли"}</span>
+      <Tooltip content={FINANCIAL_HIDDEN_TOOLTIP[reason]} side="top">
+        <span className="text-text-muted">{FINANCIAL_HIDDEN_LABEL[reason]}</span>
       </Tooltip>
     );
   }
-  const suffix =
-    projection.mode === "bucket" ? "диапазон" : projection.mode === "aggregated" ? "агрег." : null;
+  const suffix = FINANCIAL_MODE_SUFFIX[projection.mode] ?? null;
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="font-mono tabular-nums">{projection.label}</span>

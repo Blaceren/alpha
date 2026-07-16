@@ -17,6 +17,18 @@ export type FinancialProjectionMode = "exact" | "bucket" | "aggregated" | "hidde
  */
 export type FinancialHiddenReason = "no_data" | "not_permitted";
 
+/**
+ * Text for each hidden reason. Lives here (not in config/labels) because the
+ * projection's own `label` must say the same thing the UI renders — otherwise
+ * the read model and the screen could contradict each other. `config/labels`
+ * re-exports these as FINANCIAL_HIDDEN_LABEL for components; a test pins the two
+ * together so they cannot drift.
+ */
+export const HIDDEN_LABEL: Record<FinancialHiddenReason, string> = {
+  no_data: "Нет данных",
+  not_permitted: "Недоступно для роли",
+};
+
 export interface FinancialProjection {
   mode: FinancialProjectionMode;
   /** Present only when mode === "exact". */
@@ -44,7 +56,7 @@ export function projectFinancial({ role, amountUsd, isStale }: ProjectFinancialI
       mode: "hidden",
       amountUsd: null,
       bucket: null,
-      label: "нет данных",
+      label: HIDDEN_LABEL.no_data,
       hiddenReason: "no_data",
       stale: true,
     };
@@ -92,7 +104,7 @@ export function projectFinancial({ role, amountUsd, isStale }: ProjectFinancialI
     mode: "hidden",
     amountUsd: null,
     bucket: null,
-    label: "скрыто",
+    label: HIDDEN_LABEL.not_permitted,
     hiddenReason: "not_permitted",
     stale: isStale,
   };

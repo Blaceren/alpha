@@ -203,7 +203,7 @@ describe("getUser360 — honest absence vs restriction", () => {
     expect(v.financial.balance.mode).toBe("hidden");
     // The admin MAY see financials — the value simply does not exist.
     expect(v.financial.balance.hiddenReason).toBe("no_data");
-    expect(v.financial.balance.label).toBe("нет данных");
+    expect(v.financial.balance.label).toBe("Нет данных");
   });
 
   it("keeps Pocket registration independent of funding and email confirmation", async () => {

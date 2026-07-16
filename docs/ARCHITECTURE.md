@@ -119,6 +119,33 @@ email только ролям с `view_identity_full_email`); суммы — т�
 баланс, поэтому балансо-производные пояснения и `nextCheckpointRequiredUsd` скрываются вместе с
 суммами. HIGH-события не отдаются ролям без exact-финансов.
 
+### Canonical timeline projector (Phase 1C.1, D-39)
+
+Событийная лента имеет **один** источник правды на оба провайдерских чтения:
+
+```
+domain/users/user-timeline.ts
+  buildUserTimeline(user)                 # все события + sensitivity, детерминированно
+  projectTimelineEvent(entry, role)       # ЕДИНСТВЕННОЕ решение о видимости события
+  projectTimeline(entries, role)
+  buildProjectedUserTimeline(user, role)  # ← getUserTimeline И getUser360
+```
+
+До этого у каждой операции была своя лента: `getUserTimeline` игнорировала контекст (`_ctx`) и
+отдавала HIGH-события любой роли, а `getUser360` имела корректный гейт, но собственный набор событий,
+заголовки, сортировку и дедупликацию — один пользователь давал разные события с разными правилами
+приватности в зависимости от операции. Теперь permission-логика живёт только в projector; вызывающая
+сторона может **сузить форму** (User 360 → `User360Event`), но не решает видимость.
+Инвариант: событие никогда не содержит суммы (только факт и время), поэтому скрытое событие
+невозможно восстановить.
+
+### Единая семантика скрытых финансов (Phase 1C.1, D-40)
+
+Все рендереры `FinancialProjection` (ячейка таблицы Users, блок «Финансы» User 360) читают
+`hiddenReason` и единый источник текста `HIDDEN_LABEL` (`domain/financial/projection.ts`,
+реэкспорт `FINANCIAL_HIDDEN_LABEL` в `config/labels.ts`): «Нет данных» ≠ «Недоступно для роли».
+`label` самой проекции берётся оттуда же, поэтому read-модель не может противоречить экрану.
+
 Структура: `user-360-workspace.tsx` (композиция + состояния), `user-360-states.tsx`,
 `hooks/use-user-360-query.ts` (один read), `components/*` (header, identity-summary, attention-panel,
 recommendations, state-overview, blockers, signals, learning-progress, activity-timeline,

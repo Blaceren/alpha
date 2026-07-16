@@ -23,7 +23,7 @@ onboarding/lifecycle находится, каков его финансовый 
 | Операция | Пригодность для User 360 |
 |---|---|
 | `getUserById` | Возвращает `UserSummary` — **плоскую list-проекцию** с `context: "list"` (identity всегда masked, даже для admin). Нет learning, grace, SLA-состояния, сигналов, рекомендаций, событий. Недостаточно. |
-| `getUserTimeline` | Существует, но **игнорирует `ctx`** — отдавала HIGH-события (депозиты) любой роли вопреки DATA_PROVIDER_CONTRACT §4. |
+| `getUserTimeline` | Существовала, но **игнорировала `ctx`** — отдавала HIGH-события (депозиты) любой роли вопреки DATA_PROVIDER_CONTRACT §4. Исправлено в Phase 1C.1 (D-39): обе операции используют единый canonical projector. |
 | `getUserSignals` | Существует, `ctx` не используется. |
 | `getRecommendedActions` | Существует, `ctx` не используется. |
 | `projectIdentity` | Уже поддерживает `context: "detail"` (полный email для ролей с `view_identity_full_email`) — путь был спроектирован, но никогда не использовался. |
@@ -80,8 +80,18 @@ getUser360(ctx: CrmContext, input: { userId: UserId }): Promise<Result<User360>>
 ### Честное «нет данных» vs «нет прав»
 
 `FinancialProjection.mode: "hidden"` раньше смешивал два разных факта. Добавлен `hiddenReason:
-"no_data" | "not_permitted"`: пользователю без баланса admin видит **«нет данных»**, а не ложное
-«Недоступно для роли».
+"no_data" | "not_permitted"`: пользователю без баланса admin видит **«Нет данных»**, а не ложное
+«Недоступно для роли». С Phase 1C.1 (D-40) этот же `hiddenReason` и единый источник текста
+`HIDDEN_LABEL` использует и `FinancialCell` в Users workspace — семантика скрытого финансового
+значения одинакова на обоих экранах.
+
+### Активность = canonical timeline (Phase 1C.1)
+
+`activity` строится **не** собственной реализацией User 360, а общим projector
+`domain/users/user-timeline.ts`, который используется и в `getUserTimeline` (D-39). User 360 лишь
+сужает форму события (`id/at/source/kind/title`) и **не принимает решений о видимости**. HIGH-события
+(подтверждённые депозиты) не отдаются ролям без exact-финансов; скрытие тихое. Ни одно поле события
+не содержит суммы — событие несёт только факт и время.
 
 ## Information architecture
 

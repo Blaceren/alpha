@@ -28,6 +28,7 @@ import type {
   SuggestedChannel,
 } from "@/domain/recommendations/catalog";
 import type { RegistrationStatus } from "@/domain/users/user";
+import type { TimelineEventSource } from "@/domain/users/user-timeline";
 
 /** Identity block. `projection` is the ONLY source of name/email/pseudonym. */
 export interface User360Identity {
@@ -155,11 +156,15 @@ export interface User360Owner {
   sla: { key: string; dueAt: ISODateString; state: SlaState } | null;
 }
 
-/** A recent operational event. HIGH-sensitivity events are omitted by role. */
+/**
+ * A recent operational event — a narrowed view of the canonical timeline entry
+ * (see `user-timeline.ts`), already projected for the caller's role. HIGH
+ * (financial) events are withheld from roles without exact financials.
+ */
 export interface User360Event {
   id: string;
   at: ISODateString;
-  source: "product" | "pocket" | "employee";
+  source: TimelineEventSource;
   kind: string;
   title: string;
 }

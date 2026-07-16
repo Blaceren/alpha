@@ -8,6 +8,7 @@ import type { UserId, Freshness } from "@/domain/shared/primitives";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
 import { projectUser360 } from "@/domain/users/user-360-projection";
+import { buildProjectedUserTimeline } from "@/domain/users/user-timeline";
 import type { Paginated, Result } from "@/data/contracts/result";
 import { empty, fail, ok, stale } from "@/data/contracts/result";
 import type { CrmRole } from "@/domain/identity/roles";
@@ -379,27 +380,21 @@ export class MockCrmDataProvider implements CrmDataProvider {
     });
   }
 
-  getUserTimeline(_ctx: CrmContext, input: GetTimelineInput): Promise<Result<Paginated<UserTimelineEvent>>> {
+  /**
+   * Permission-aware timeline. Projection happens HERE, via the same canonical
+   * projector `getUser360` uses, so an event a role may not see is never built
+   * into the result at all (Phase 1C.1, D-39).
+   */
+  getUserTimeline(ctx: CrmContext, input: GetTimelineInput): Promise<Result<Paginated<UserTimelineEvent>>> {
     return this.gate(() => {
       const u = this.users.find((x) => x.identity.userId === input.userId);
+      // Unknown user keeps its previous contract: an empty page, not an error.
       if (!u) return empty(this.paginate<UserTimelineEvent>([]));
-      const events = this.timelineFor(u).filter((e) => !input.sources || input.sources.includes(e.source));
+      const events: UserTimelineEvent[] = buildProjectedUserTimeline(u, ctx.role).filter(
+        (e) => !input.sources || input.sources.includes(e.source),
+      );
       return ok(this.paginate(events, input.page?.cursor, input.page?.pageSize));
     });
-  }
-
-  private timelineFor(u: MockUser): UserTimelineEvent[] {
-    const events: UserTimelineEvent[] = [];
-    const add = (at: string | null, source: UserTimelineEvent["source"], kind: string, title: string, sens: UserTimelineEvent["sensitivity"] = "LOW") => {
-      if (at) events.push({ id: `${u.identity.userId}_${kind}`, userId: u.identity.userId, at, source, kind, title, summary: null, sensitivity: sens });
-    };
-    add(u.identity.registeredAt, "product", "registered", "Регистрация");
-    add(u.financial.ftd?.at ?? null, "pocket", "first_deposit_confirmed", "Первый депозит", "HIGH");
-    for (const r of u.financial.redeposits) add(r.at, "pocket", "redeposit_confirmed", "Повторный депозит", "HIGH");
-    add(u.learning.reportSubmittedAt, "product", "report_submitted", "Отчёт отправлен");
-    add(u.progression.lastMeaningfulActionAt, "product", "meaningful_action", "Учебная активность");
-    add(u.operations.lastEmployeeContactAt, "employee", "employee_contact", "Контакт сотрудника");
-    return events.sort((a, b) => (a.at < b.at ? 1 : -1));
   }
 
   getUserTasks(_ctx: CrmContext, input: GetUserTasksInput): Promise<Result<Paginated<CrmTask>>> {

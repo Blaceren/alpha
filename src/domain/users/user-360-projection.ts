@@ -27,6 +27,7 @@ import { canViewExactFinancials } from "@/domain/identity/access";
 import { projectFinancial } from "@/domain/financial/projection";
 import { projectIdentity } from "@/domain/identity/identity-projection";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
+import { buildProjectedUserTimeline } from "./user-timeline";
 import type {
   SlaState,
   User360,
@@ -91,42 +92,19 @@ function projectRecommendations(
 }
 
 /**
- * Recent operational activity from events that actually exist in the fixtures.
- * Deposit events are HIGH sensitivity and are omitted for roles without exact
- * financials (DATA_PROVIDER_CONTRACT §4) — omitted silently, so their absence
- * does not advertise that money events exist.
+ * Recent operational activity, from the canonical timeline projector shared with
+ * `getUserTimeline` (Phase 1C.1). This function only narrows the shape the User
+ * 360 model needs — it makes no permission decision of its own, so the two
+ * operations can never drift apart on what a role may see.
  */
-function projectActivity(u: MockUser, exact: boolean): User360Event[] {
-  const events: User360Event[] = [];
-  const add = (
-    at: string | null,
-    source: User360Event["source"],
-    kind: string,
-    title: string,
-    high = false,
-  ) => {
-    if (!at) return;
-    if (high && !exact) return;
-    events.push({ id: `${u.identity.userId}_${kind}`, at, source, kind, title });
-  };
-
-  add(u.identity.registeredAt, "product", "registered", "Регистрация в академии");
-  add(u.financial.ftd?.at ?? null, "pocket", "first_deposit_confirmed", "Первый депозит подтверждён", true);
-  for (const [i, r] of u.financial.redeposits.entries()) {
-    add(r.at, "pocket", `redeposit_confirmed_${i + 1}`, "Повторный депозит подтверждён", true);
-  }
-  add(u.learning.reportSubmittedAt, "product", "report_submitted", "Отчёт отправлен на проверку");
-  add(u.learning.lastLearningActivityAt, "product", "learning_activity", "Учебная активность");
-  // The last meaningful action is usually the same event as the last learning
-  // activity; emitting both would show two identical rows at the same timestamp.
-  if (u.progression.lastMeaningfulActionAt !== u.learning.lastLearningActivityAt) {
-    add(u.progression.lastMeaningfulActionAt, "product", "meaningful_action", "Значимое действие");
-  }
-  add(u.operations.lastEmployeeContactAt, "employee", "employee_contact", "Контакт сотрудника");
-  add(u.financial.accessRestoredAt, "pocket", "access_restored", "Финансовый доступ восстановлен");
-
-  // Newest first; id keeps the order deterministic when timestamps collide.
-  return events.sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? 1 : -1));
+function projectActivity(u: MockUser, role: CrmRole): User360Event[] {
+  return buildProjectedUserTimeline(u, role).map(({ id, at, source, kind, title }) => ({
+    id,
+    at,
+    source,
+    kind,
+    title,
+  }));
 }
 
 export interface ProjectUser360Input {
@@ -238,7 +216,7 @@ export function projectUser360(input: ProjectUser360Input): User360 {
     },
     signals: projectSignals(signals, exact),
     recommendations: projectRecommendations(recommendations, role),
-    activity: projectActivity(u, exact),
+    activity: projectActivity(u, role),
     generatedAt: clock.nowIso(),
   };
 }
