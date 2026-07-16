@@ -344,4 +344,39 @@ gate **78**; lint/typecheck/build чисто; `npm audit` — 2 moderate, pre-ex
 
 **Документы:** `D2B_1_ACCEPTANCE_FIX.md`, DD-255…DD-257.
 
-**D2C не начинался.**
+
+## D2C-A — Lessons Library Art Direction (завершена)
+
+**D2C впервые определена.** До этой фазы «D2C» существовал в документации только как отрицание
+(«D2C автоматически не начинается») — ни scope, ни acceptance у него не было. Теперь:
+**D2C = Lessons Library & Module Overview**, production-маршрут `/lessons`
+(`docs/D2C_LESSONS_LIBRARY_SCOPE.md`, DD-258).
+
+**Различие зафиксировано:** Путь отвечает на «где я в последовательности» (**допуск**), Уроки — на
+«чему посвящён материал» (**содержание**). Если «Уроки» начинают отвечать на вопросы Пути, страница не
+нужна (DD-259).
+
+**Предъявлено три структурно разных направления** (`docs/D2C_ART_DIRECTION.md`, 19-пунктовый бриф на
+каждое): **A — Module Desk** (рейка + рабочая поверхность; текущая строка разворачивается в плоскость),
+**B — Curriculum Index** (curriculum как содержание книги; ноль карточек; все 20 модулей выше сгиба),
+**C — Learning Brief** (страница-аргумент; цепь ролей «изучаю → применю → откроет»).
+
+**Проверки:** реальные Chromium-кадры в точных вьюпортах (1440×900, 390×844, board 1920×1080);
+horizontal overflow **0px** во всех шести кадрах; 11 findings (1 critical, 6 major, 4 minor), все
+critical/major исправлены до финальных кадров, minor перечислены открыто
+(`design-memory/reviews/d2c-a-concepts-review.md`).
+
+**Границы:** production React **не написан**; `src/`, `package.json`, `package-lock.json`, `e2e/` не
+изменялись; production-тесты не запускались (production-код не менялся); screenshot-спеки прошлых фаз
+не запускались, historical evidence не перезаписан (DD-257). Прототипы линкуют **настоящие** токены,
+shell и шрифты продукта и лежат вне `src/`
+(`design-memory/proposals/d2c-lessons-library/`, DD-260).
+
+**Найдено попутно (не исправлено — production-код заморожен):** пункт навигации «Уроки» помечен
+`BUILT_ROUTES = {home, path}` как непостроенный и рендерится с подсказкой «Скоро», хотя `/lessons`
+работает с D2B — противоречие DD-254. Первый пункт работ фазы реализации
+(`D2C_LESSONS_LIBRARY_SCOPE.md` §7).
+
+**Победитель не выбран — выбирает пользователь. D2C-B (реализация) не начата.**
+
+**Документы:** `D2C_LESSONS_LIBRARY_SCOPE.md`, `D2C_ART_DIRECTION.md`, DD-258…DD-260.

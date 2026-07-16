@@ -4,10 +4,14 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D2B — Core Lesson Experience.** Реализованы Главная (`/`), Путь (`/path`) и
+> **Статус: Phase D2C-A — Lessons Library Art Direction.** Реализованы Главная (`/`), Путь (`/path`) и
 > Урок (`/lessons/[levelCode]`). Backend / CRM / Pocket / database / deploy — не подключены; все данные
 > synthetic, прогресс не сохраняется. Отчёты, mentor review и инструменты **не начинались**.
-> D2C автоматически не начинается.
+>
+> **D2C определена** как Lessons Library & Module Overview (`/lessons` как самостоятельная страница —
+> обзор материала, в отличие от Пути, который показывает допуск). Предъявлены три направления;
+> **победитель не выбран, production React не написан** — реализация не начинается до явного выбора.
+> См. `docs/D2C_LESSONS_LIBRARY_SCOPE.md`, `docs/D2C_ART_DIRECTION.md`.
 
 ## Требования
 

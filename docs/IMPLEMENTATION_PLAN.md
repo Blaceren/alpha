@@ -39,6 +39,35 @@
 - **Risks:** casino-эффекты; нарушение финансовой приватности.
 - **Stop condition:** QA-review закрыт (blocker/major = 0).
 
+## D2C — Lessons Library & Module Overview (определена в D2C-A)
+
+> Фаза получила определение позже остальных: до D2C-A «D2C» упоминался только в форме отрицания
+> («D2C автоматически не начинается»). Полное определение — `docs/D2C_LESSONS_LIBRARY_SCOPE.md`.
+
+- **Scope:** `/lessons` как самостоятельная страница (сейчас — redirect на текущий урок); доминирующее
+  «Продолжить обучение»; overview текущего модуля; навигация по 20 модулям; список уровней выбранного
+  модуля; статусы (завершён/текущий/доступен/закрыт последовательностью/checkpoint/practical); тип
+  учебного шага; длительность **только когда реально известна**; ссылки на доступные уроки; возврат к
+  завершённым; responsive desktop/tablet/mobile; 200% zoom; canonical navigation; переиспользование
+  существующих curriculum fixtures и state models.
+- **Non-scope:** отчёты; mentor feedback; проверка отчётов; редактор контента; CMS; отдельная test
+  route; практическое задание уровня 19; backend progress; Pocket; XP-rewards; новые checkpoint rules;
+  новый curriculum; поиск по продукту; AI-рекомендации; мутации; D3.
+- **Dependencies:** D1B, D2A, D2B/D2B.1.
+- **Acceptance:** «Уроки» отвечают на вопросы **материала**, а не **допуска** (различие с Путём —
+  главный критерий); текущий урок читается за 3–5 c; структура выдерживает 20/100 без стены карточек;
+  locked-уровни не доминируют; checkpoint виден как **граница модуля**, а не финансовая реклама;
+  финансовая приватность (только target); прогресс/доступ читаются через существующий resolver, а не
+  через новые правила.
+- **Подфазы:** **D2C-A — art direction** (выполнена: scope зафиксирован, 3 направления, победитель не
+  выбран); **D2C-B — implementation** (не начата; блокирована выбором направления).
+- **Screenshots:** desktop 1440×900 / mobile 390×844 на каждое направление + comparison board
+  1920×1080 (D2C-A); полный набор вьюпортов + 200% zoom + landscape (D2C-B).
+- **Tests:** consistency с fixtures; статусы уровней; финансовая приватность; отсутствие
+  horizontal overflow.
+- **Risks:** дублирование Пути; «вторая Главная»; стена из 100 карточек; generic LMS.
+- **Stop condition (D2C-A):** три направления предъявлены, выбор за пользователем — React не начинать.
+
 ## D3 — Урок, тест, report и mentor feedback
 
 - **Scope:** Урок (player, subtitles, 50%-gate), Тест (single question, scenario/chart, explanation, fail-flow), Report (autosave/draft/rubric/статусы/секц. комментарии/версии), Mentor feedback базово.

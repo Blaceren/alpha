@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Уроки · Concept B «Curriculum Index»</title>
+<!-- REAL product assets: self-hosted variable fonts, semantic tokens, app shell. -->
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+</head>
+<body>
+<div class="home lib-page">
+  <a href="#main" class="skip">Перейти к содержимому</a>
+
+  <!-- ============ REAL SHELL — desktop/tablet command band ============ -->
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a>
+      <a href="#">Путь</a>
+      <a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <!-- ============ REAL SHELL — mobile top bar ============ -->
+  <div class="mtop">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    <div class="actions" style="display:inline-flex;align-items:center;gap:8px">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </div>
+
+  <main class="home-main" id="main">
+    <div class="index-page">
+
+      <header class="page-head">
+        <h1 class="col-h">Уроки</h1>
+        <p class="col-scale">Модуль <b class="mono">04</b> из <span class="mono">20</span> · Чтение графика</p>
+      </header>
+
+      <!-- ---------- continue: a typographic band, not a card ---------- -->
+      <section class="cont" aria-label="Продолжить обучение">
+        <div class="cont-txt">
+          <p class="cont-k">Продолжить обучение</p>
+          <p class="cont-t">
+            <span class="mono cont-n">18</span>
+            <span>Поддержка и сопротивление</span>
+          </p>
+          <p class="cont-m">
+            <span class="mono">Модуль 04</span><i class="sep"></i>
+            <span>Чтение графика</span><i class="sep"></i>
+            <span>Видео-урок и тест</span><i class="sep"></i>
+            <span class="mono">8:00</span>
+          </p>
+        </div>
+        <a class="cta" href="#">Продолжить урок<span class="go" aria-hidden="true">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </span></a>
+      </section>
+
+      <!-- DOM order = reading order = mobile order: the opened module first, the
+           full contents second. Desktop places the contents in the left column
+           via grid areas, so no order/DOM mismatch is ever introduced. -->
+      <div class="index-grid">
+
+        <!-- ---------- the opened module, as a sub-index ---------- -->
+        <section class="open" aria-labelledby="open-h">
+          <header class="open-head">
+            <p class="open-k"><span class="mono">Модуль 04</span> · уровни 16–20 · пройдено <b class="mono">2</b> из <span class="mono">5</span></p>
+            <h2 class="open-h" id="open-h">Чтение графика</h2>
+            <p class="open-d">Свечи, тренд и диапазон, уровни поддержки и сопротивления, разметка.</p>
+          </header>
+
+          <ol class="sub" aria-label="Уровни модуля «Чтение графика»">
+            <li class="srow done">
+              <a href="#">
+                <span class="mono srow-n">16</span>
+                <span class="srow-body"><span class="srow-t">Свечи</span><span class="srow-k">Видео-урок и тест</span></span>
+                <span class="lead" aria-hidden="true"></span>
+                <span class="srow-s">Завершён · пересмотреть</span>
+              </a>
+            </li>
+            <li class="srow done">
+              <a href="#">
+                <span class="mono srow-n">17</span>
+                <span class="srow-body"><span class="srow-t">Тренд и диапазон</span><span class="srow-k">Видео-урок и тест</span></span>
+                <span class="lead" aria-hidden="true"></span>
+                <span class="srow-s">Завершён · пересмотреть</span>
+              </a>
+            </li>
+
+            <!-- current level: emphasised by RHYTHM, TYPE and one signal point —
+                 not by a bigger card -->
+            <li class="srow cur">
+              <a href="#" aria-current="true">
+                <span class="mono srow-n">18</span>
+                <span class="srow-body">
+                  <span class="srow-t">Поддержка и сопротивление</span>
+                  <span class="srow-k">Видео-урок и тест<i class="sep"></i><span class="mono">8:00</span><i class="sep"></i>Субтитры</span>
+                </span>
+                <span class="lead" aria-hidden="true"></span>
+                <span class="srow-s">Текущий урок</span>
+              </a>
+            </li>
+
+            <li class="srow next">
+              <span class="srow-static">
+                <span class="mono srow-n">19</span>
+                <span class="srow-body">
+                  <span class="srow-t">Разметка графика</span>
+                  <span class="srow-k">Практическое задание · Артефакт: <b>Разметка 3 графиков</b></span>
+                </span>
+                <span class="lead" aria-hidden="true"></span>
+                <span class="srow-s">Откроется после уровня 18</span>
+              </span>
+            </li>
+
+            <li class="srow cp">
+              <span class="srow-static">
+                <span class="mono srow-n">20</span>
+                <span class="srow-body">
+                  <span class="srow-t">Контрольная точка</span>
+                  <span class="srow-k">Условие: баланс Pocket от <b>$200</b></span>
+                </span>
+                <span class="lead" aria-hidden="true"></span>
+                <span class="srow-s">Граница модуля</span>
+              </span>
+            </li>
+          </ol>
+
+          <footer class="open-foot">
+            <p class="foot-k">После контрольной точки открывается</p>
+            <p class="foot-v">
+              <span><b>Chart Markup Tool</b></span><i class="sep"></i>
+              <span>ранг <b>Наблюдатель IV</b></span><i class="sep"></i>
+              <span>канал <b>Разбор графиков</b></span>
+            </p>
+          </footer>
+        </section>
+
+        <!-- ---------- contents of the whole curriculum ---------- -->
+        <section class="toc" aria-labelledby="toc-h">
+          <h2 class="toc-h" id="toc-h">Содержание программы</h2>
+          <ol class="idx">
+            <li class="ir done"><a href="#"><span class="mono ir-n">01</span><span class="ir-t">Первое знакомство</span><span class="lead" aria-hidden="true"></span><span class="ir-s">пройден</span></a></li>
+            <li class="ir done"><a href="#"><span class="mono ir-n">02</span><span class="ir-t">Как работает сделка</span><span class="lead" aria-hidden="true"></span><span class="ir-s">пройден</span></a></li>
+            <li class="ir done"><a href="#"><span class="mono ir-n">03</span><span class="ir-t">Управление риском</span><span class="lead" aria-hidden="true"></span><span class="ir-s">пройден</span></a></li>
+            <li class="ir cur"><a href="#" aria-current="true"><span class="mono ir-n">04</span><span class="ir-t">Чтение графика</span><span class="lead" aria-hidden="true"></span><span class="ir-s"><b class="mono">2</b>/5</span></a></li>
+            <li class="ir next"><a href="#"><span class="mono ir-n">05</span><span class="ir-t">Индикаторы</span><span class="lead" aria-hidden="true"></span><span class="ir-s">далее</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">06</span><span class="ir-t">Новости</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">07</span><span class="ir-t">Психология новичка</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">08</span><span class="ir-t">Торговый дневник</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">09</span><span class="ir-t">Первая стратегия</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">10</span><span class="ir-t">Капитал и просадка</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">11</span><span class="ir-t">Рыночные режимы</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">12</span><span class="ir-t">Исполнение</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">13</span><span class="ir-t">Статистика</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">14</span><span class="ir-t">Активы</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">15</span><span class="ir-t">Продвинутая психология</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">16</span><span class="ir-t">Привычка</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">17</span><span class="ir-t">Кейсы</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">18</span><span class="ir-t">Аналитика результатов</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">19</span><span class="ir-t">Личный Playbook</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+            <li class="ir lock"><a href="#"><span class="mono ir-n">20</span><span class="ir-t">Самостоятельная система</span><span class="lead" aria-hidden="true"></span><span class="ir-s">впереди</span></a></li>
+          </ol>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ REAL SHELL — mobile bottom navigation ============ -->
+  <nav class="bottomnav" aria-label="Мобильная навигация">
+    <ul>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="lbl">Главная</span></a></li>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19h5a4 4 0 0 0 0-8h-3a4 4 0 0 1 0-8h5"/></svg><span class="lbl">Путь</span></a></li>
+      <li><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="lbl">Уроки</span></a></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/></svg><span class="lbl">Инструменты</span></button></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span class="lbl">Ещё</span></button></li>
+    </ul>
+  </nav>
+</div>
+</body>
+</html>

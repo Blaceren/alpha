@@ -1,0 +1,295 @@
+/* ============================================================================
+   CONCEPT B — «Curriculum Index» (Phase D2C-A, prototype-only, NOT production)
+   ----------------------------------------------------------------------------
+   Spatial system: the curriculum read as the CONTENTS OF A BOOK. No panels, no
+   cards — the page is a typographic index: mono ordinals, dot leaders, right-
+   aligned states, hairline rhythm. The current lesson is emphasised by TYPE and
+   RHYTHM (weight, leader break, one signal point), never by a bigger container.
+
+   Reused from the product: shell (home.css), .cta, .sep, .mono, tokens.
+   ============================================================================ */
+
+.lib-page .mono { font-family: var(--font-mono); }
+
+/* ---------------------------------------------------------------- page head */
+.page-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-bottom: 14px;
+}
+.col-h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  font-size: clamp(24px, 2.4vw, 30px);
+  margin: 0;
+  color: var(--text-primary);
+}
+.col-scale { margin: 0; font-size: 13px; color: var(--text-muted); }
+.col-scale b { color: var(--text-primary); font-weight: 600; }
+
+/* ---------------------------------------------------------------- continue band
+   A band bounded by two hairlines and one left signal rule — NOT a card:
+   no full border, no shadow, no rounded box around it. */
+.cont {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 0 20px 16px;
+  border-top: 1px solid var(--divider-strong);
+  border-bottom: 1px solid var(--divider);
+  border-left: 2px solid var(--signal-active);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--signal-active) 7%, transparent) 0%,
+    transparent 58%
+  );
+}
+.cont-k {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--signal-active);
+}
+.cont-t {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+  font-size: clamp(22px, 4.8vw, 28px);
+  color: var(--text-primary);
+}
+.cont-n { font-size: 0.62em; color: var(--text-muted); font-weight: 500; }
+.cont-m {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* Mobile: the page head one line above already says «Модуль 04 … Чтение
+   графика», so the band repeats only what it alone knows — kind and length. */
+.cont-m > :nth-child(-n + 4) { display: none; }
+.cont .cta { align-self: start; }
+.cont .cta .go { width: 30px; height: 30px; }
+.cont .cta .go .ic { width: 16px; height: 16px; stroke: #06120e; }
+
+/* ---------------------------------------------------------------- index rows */
+.idx, .sub { list-style: none; margin: 0; padding: 0; }
+
+/* one shared row grammar for both index levels */
+.ir a,
+.srow a,
+.srow-static {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 2px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--divider);
+}
+.ir a:hover { background: var(--surface-subtle); }
+
+/* The dot leader — the signature of a printed contents page. It only earns its
+   place when the gap it spans is long enough to read as a leader: at 390px it
+   degenerated into 20px stubs of visual debris, so it is a ≥900px device. */
+.lead { display: none; }
+
+.ir-n { flex: 0 0 auto; font-size: 12px; color: var(--text-muted); }
+.ir-t { font-size: 14px; color: var(--text-secondary); }
+/* margin-left:auto keeps the state column right-aligned whether or not the
+   leader is present, so the row grammar survives the mobile transformation */
+.ir-s { flex: 0 0 auto; margin-left: auto; font-size: 12px; color: var(--text-muted); }
+
+.ir.done .ir-t { color: var(--text-secondary); }
+.ir.done .ir-s { color: var(--signal-soft); }
+.ir.next .ir-t { color: var(--text-secondary); }
+.ir.lock .ir-n, .ir.lock .ir-t, .ir.lock .ir-s { color: var(--route-locked); }
+
+/* current module inside the contents: type weight + one signal point.
+   No pill, no filled row, no icon. */
+.ir.cur a { border-bottom-color: var(--divider-strong); }
+.ir.cur .ir-n { color: var(--text-secondary); }
+.ir.cur .ir-t {
+  position: relative;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.ir.cur .ir-t::after {
+  content: "";
+  position: absolute;
+  right: -11px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--signal-active);
+  box-shadow: 0 0 0 3px var(--glow-current);
+}
+.ir.cur .ir-s { color: var(--text-secondary); }
+.ir.cur .ir-s b { color: var(--signal-active); }
+
+/* ---------------------------------------------------------------- opened module */
+.open-head { padding: 22px 0 12px; }
+.open-k { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.open-k b { color: var(--text-primary); font-weight: 600; }
+.open-h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  font-size: clamp(20px, 2vw, 24px);
+  margin: 5px 0 0;
+  color: var(--text-primary);
+}
+.open-d {
+  margin: 7px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 66ch;
+}
+
+.srow-n { flex: 0 0 auto; font-size: 12.5px; color: var(--text-muted); }
+.srow-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.srow-t { font-size: 14.5px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+.srow-k {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.srow-k b { color: var(--text-secondary); font-weight: 600; }
+/* narrow: the line wraps, and a wrapped inline list strands its separator dot
+   at the end of the line — the gap carries the separation instead */
+.srow-k .sep { display: none; }
+/* the practical level's requirement is a SENTENCE, not a chip list: as flex
+   items «Артефакт:» and its value were torn onto separate lines */
+.srow.next .srow-k { display: block; }
+.srow-s { flex: 0 0 auto; margin-left: auto; font-size: 12px; color: var(--text-muted); text-align: right; }
+
+.srow.done .srow-t { color: var(--text-secondary); font-weight: 500; }
+.srow.done a:hover .srow-t { color: var(--text-primary); }
+.srow.next .srow-t, .srow.cp .srow-t { color: var(--text-secondary); }
+.srow.next .srow-s, .srow.cp .srow-s { color: var(--route-locked); }
+
+/* the current lesson — the single brightest line on the page */
+.srow.cur a {
+  border-bottom-color: var(--divider-strong);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--signal-active) 9%, transparent), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--signal-active);
+  padding-left: 12px;
+}
+.srow.cur .srow-n { color: var(--signal-active); }
+.srow.cur .srow-t { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.srow.cur .srow-s { color: var(--signal-active); font-weight: 600; }
+
+/* the checkpoint keeps the index grammar; its boundary role is carried by a
+   cold rule + a diamond ordinal marker — not by a financial banner */
+.srow.cp .srow-static {
+  border-bottom: none;
+  border-top: 1px solid var(--gate-boundary);
+  margin-top: 2px;
+  padding-top: 12px;
+}
+.srow.cp .srow-n { color: var(--gate-boundary); }
+
+.open-foot { padding: 14px 0 0; }
+.foot-k { margin: 0; font-size: 12px; color: var(--text-muted); }
+.foot-v {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.foot-v b { color: var(--text-primary); font-weight: 600; }
+
+/* ---------------------------------------------------------------- contents block */
+.toc-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  margin: 26px 0 8px;
+  color: var(--text-muted);
+}
+
+/* ================================================================
+   DESKTOP / TABLET (≥900px) — two index levels side by side.
+   The contents column is placed LEFT via grid areas, while the DOM keeps
+   the opened module first: visual order and reading order stay compatible
+   because the two columns are read independently, not as one sequence.
+   ================================================================ */
+@media (min-width: 900px) {
+  .index-page {
+    padding: 26px clamp(28px, 4vw, 60px) 56px;
+    max-width: 1360px;
+    margin: 0 auto;
+  }
+  .page-head { padding-bottom: 16px; }
+
+  .cont {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 18px 24px 18px 20px;
+  }
+  .cont .cta { align-self: center; flex: 0 0 auto; }
+  .cont-m > :nth-child(-n + 4) { display: inline; }
+  .cont-m > i:nth-child(-n + 4) { display: block; }
+
+  .index-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    grid-template-areas: "toc open";
+    column-gap: clamp(40px, 5vw, 84px);
+    align-items: start;
+    padding-top: 8px;
+  }
+  .toc { grid-area: toc; }
+  .open { grid-area: open; }
+
+  .lead { display: block; }
+
+  /* The contents column is quiet and dense — 20 modules must never read as a
+     wall. Density is also load-bearing: at 30px rows the 20th module («Само-
+     стоятельная система») was sliced by the 900px fold, which made the scale of
+     the programme look accidental. All 20 now close above it. */
+  .toc-h { margin: 18px 0 4px; }
+  .ir a { min-height: 28px; padding: 2px 2px; gap: 12px; }
+  .ir-t { font-size: 13px; }
+
+  .open-head { padding: 22px 0 14px; }
+  .srow a, .srow-static { min-height: 52px; gap: 14px; }
+  /* the opened column is wide enough for the one-line metadata rhythm */
+  .srow-k .sep { display: block; }
+  .srow-k { column-gap: 7px; }
+}
+
+/* ================================================================
+   SHORT-HEIGHT (≤560px: landscape phones, 200% zoom)
+   ================================================================ */
+@media (max-height: 560px) {
+  .cont { padding-top: 12px; padding-bottom: 12px; }
+  .cont-t { font-size: clamp(19px, 3vw, 22px); }
+  .col-h { font-size: clamp(20px, 2.4vw, 24px); }
+  .open-head { padding-top: 14px; }
+}
