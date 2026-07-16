@@ -66,11 +66,27 @@ fixtures (MockUser[])
   → signals/engine.computeSignals(user, clock)        // 23 сигнала, suppression
   → priority/priority.computePriority(user, signals)  // полосы + правила
   → recommendations/derive.deriveRecommendations(...)  // объяснимые действия
-  → today/builder.buildTodayWorkspace(users, clock, role)  // 12 очередей + dedup
+  → today/builder.buildTodayWorkspace({users, clock, role, query})  // основания × секции
   → financial/projection + identity/identity-projection    // permission-aware
 ```
 
 Всё детерминировано (`FixedMockClock`). Провайдер (`data/mock/MockCrmDataProvider`) — тонкая обёртка: фильтры/сортировка/пагинация + вызов derivation + проекции по роли. Пороги/лейблы/SLA живут в `src/config/*`. Правило безопасности: сортировка по точным финансам без права → `invalid_input`, чтобы порядок не утекал.
+
+## Today: две оси вместо параллельных очередей (Phase 1B3)
+
+Phase 1B1 моделировала «почему» как 13 очередей, в которых пользователь мог сидеть одновременно.
+Это отвечает на «какая работа бывает», но не на «что открыть следующим». Phase 1B3 разводит оси:
+
+```
+BASIS   (почему)      TodayBasisCode   — те же 13 кодов; их может быть несколько; это же фильтр
+SECTION (насколько срочно) TodaySectionKey — overdue → critical_now → today → watch; ровно одна
+```
+
+Предикаты членства Phase 1B1 сохранены (`BASIS_MEMBERSHIP`) и переосмыслены как основания.
+Единственное место, где решается секция — `placeIn()`, поэтому пользователь не может попасть в две.
+Ценностные сегменты (`new_funded_users`, `repeat_funders`) основанием **не являются** — они
+описывают, кто пользователь, а не что нужно сделать (D-43); их обслуживает домен Segments.
+Детали: `docs/TODAY_WORKSPACE.md`.
 
 ## Feature layer (Phase 1B2 — Users)
 
@@ -152,6 +168,33 @@ recommendations, state-overview, blockers, signals, learning-progress, activity-
 financial-summary, owner-context, section-card). DOM-порядок = порядок чтения = mobile-порядок;
 на `lg+` контекст (финансы + ответственный) становится sticky-колонкой.
 
+## Feature layer (Phase 1B3 — Today, read-only)
+
+```
+src/domain/today/
+  today.ts            # permission-projected read model (как user-360.ts)
+  today-query.ts      # фильтры + сортировка; семантика принадлежит домену, не React
+  builder.ts          # derive → bases → membership → place → sort → PROJECT → filter → summarize
+src/features/today/
+  today-workspace.tsx today-states.tsx
+  hooks/use-today-query.ts
+  model/filter-defs.ts    # опции строятся из TodayFilterOptions провайдера, не хардкодятся
+  components/         # header, summary, toolbar, filters, queue-section, queue-item,
+                      # mobile-card, priority, identity, reason, next-step, due-chip,
+                      # activity, balance, freshness
+```
+
+Порядок в builder'е нагружен смыслом: **проекция идёт до фильтрации**, поэтому поиск может
+совпасть только с identity, которую роль вправе видеть (§24), а summary считает ровно те строки,
+на которые смотрит пользователь. `getTodayWorkspace` — единственная read-операция экрана.
+
+### Общее правило балансо-производной редакции (Phase 1B3, D-46)
+
+`FINANCIALLY_DERIVED_SIGNALS` вынесен из `user-360-projection.ts` в
+`domain/financial/financially-derived.ts` и используется Today и User 360. Две поверхности с
+личными копиями списка — это то, как редакция расходится молча: сигнал, добавленный в один
+список и не добавленный в другой, был бы скрыт в профиле и раскрыт в очереди.
+
 ## Тестирование
 
 - **Unit/компонентные (Vitest):** permission matrix, section visibility, финансовые бакеты, provider error handling, sidebar active state, breadcrumbs, роль-видимость sidebar (render).
@@ -159,4 +202,7 @@ financial-summary, owner-context, section-card). DOM-порядок = поряд
 - **E2E (Playwright, screenshots — Phase 1B2):** `tests-e2e/users-screenshots.spec.ts` — реальный рендер `/users` в 5 сценариях (admin/support/filtered 1440×900, tablet 1024×768, mobile 390×844), точные размеры + assert чистой консоли. Артефакты — `screenshots/phase-1b2-users/`.
 - **Component (Vitest, Phase 1B2):** `use-users-query` (search/5 измерений/compound/registration/sort/pagination), `users-workspace` (рендер + состояния + отсутствие raw-кодов), `users-permissions` (exact отсутствует в DOM у support; masked identity).
 - **Provider/projection + component (Vitest, Phase 1C):** `user-360-projection` (25 — контракт результата, детерминизм, все 9 ролей, невозможность реконструкции баланса, «нет данных» vs «нет прав»), `user-360-permissions` (12 — для каждой роли разрешённое присутствует / запрещённое отсутствует в `innerHTML`), `user-360-workspace` (19 — один h1, секции, независимость осей, отсутствие тройного дублирования и mutation-контролов, loading/not-found/unauthorized/error+retry/stale, keyboard).
-- **E2E (Playwright, Phase 1C):** `tests-e2e/user-360.spec.ts` — 13 сценариев (admin/support/high-priority/calm/onboarding 1440×900, tablet 1024×768, mobile 390×844 с замером порядка блоков, 200% zoom = CSS-viewport 720×450, unknown id, навигация `/users → профиль → назад`, keyboard focus, analyst, read_only). Артефакты — `screenshots/phase-1c-user-360/{first-pass,final}/`. Итого E2E — **26** (прежние 13 сохранены).
+- **E2E (Playwright, Phase 1C):** `tests-e2e/user-360.spec.ts` — 13 сценариев (admin/support/high-priority/calm/onboarding 1440×900, tablet 1024×768, mobile 390×844 с замером порядка блоков, 200% zoom = CSS-viewport 720×450, unknown id, навигация `/users → профиль → назад`, keyboard focus, analyst, read_only). Артефакты — `screenshots/phase-1c-user-360/{first-pass,final}/`.
+- **Domain/provider + component (Vitest, Phase 1B3):** `today/builder` (61 — членство, canonical placement, детерминизм сортировки, «один факт один раз», окно, freshness, все 9 ролей), `today/today-privacy` (53 — точные суммы/проценты/identity для каждой роли), `data/mock/today-provider` (11 — конверт результата, режимы, read-only), `today-workspace` (17 — один h1, порядок секций, причина, рекомендация, фильтры/сортировка, три разных empty-состояния, loading/error/stale), `today-permissions` (24 — запрещённое отсутствует в `innerHTML`/атрибутах, поиск только по разрешённой проекции), `config/evidence-labels` (11 — полнота карты, безопасный fallback), `user-timeline` (+17 — from/to).
+- **E2E (Playwright, Phase 1B3):** `tests-e2e/today-screenshots.spec.ts` — 11 сценариев (admin/support/retention/high-priority/filtered/empty/stale 1440×900, tablet 1024×768, mobile 390×844, mobile filter sheet, 200% zoom = 720×450). Артефакты — `screenshots/phase-1b3-today/{first-pass,final}/`.
+- **Итого:** unit/компонентные — **425**, E2E — **41** (прежние 30 сохранены; ни один suite не заменён).

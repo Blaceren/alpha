@@ -8,7 +8,12 @@ import type { UserId, Freshness } from "@/domain/shared/primitives";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
 import { projectUser360 } from "@/domain/users/user-360-projection";
-import { buildProjectedUserTimeline } from "@/domain/users/user-timeline";
+import {
+  buildProjectedUserTimeline,
+  filterTimelineByRange,
+  parseTimelineRange,
+  type TimelineRangeError,
+} from "@/domain/users/user-timeline";
 import type { Paginated, Result } from "@/data/contracts/result";
 import { empty, fail, ok, stale } from "@/data/contracts/result";
 import type { CrmRole } from "@/domain/identity/roles";
@@ -65,6 +70,14 @@ interface Derived {
 }
 
 const PAGE_DEFAULT = 50;
+
+/** Why a timeline range was rejected. Diagnostic text — never shown raw to users. */
+const TIMELINE_RANGE_MESSAGE: Record<TimelineRangeError, string> = {
+  invalid_from: "Timeline range: `from` is not a valid ISO-8601 instant.",
+  invalid_to: "Timeline range: `to` is not a valid ISO-8601 instant.",
+  inverted_range: "Timeline range: `from` must not be later than `to`.",
+};
+
 const bandToLevel: Record<PriorityBand, PriorityLevel> = {
   critical: "critical",
   high: "high",
@@ -246,28 +259,31 @@ export class MockCrmDataProvider implements CrmDataProvider {
 
   /* --------------------------------------------------------------- ops */
 
-  getTodayWorkspace(ctx: CrmContext, _input: GetTodayInput): Promise<Result<TodayWorkspace>> {
+  /**
+   * Read-only Today workspace (Phase 1B3). Queue membership, grouping, ordering
+   * and every permission decision happen in the builder, inside this provider —
+   * the result is already safe for `ctx.role`, so React neither re-derives the
+   * queue nor re-decides visibility. Read-only: no mutating counterpart exists.
+   */
+  getTodayWorkspace(ctx: CrmContext, input: GetTodayInput): Promise<Result<TodayWorkspace>> {
     return this.gate(() => {
-      const built = buildTodayWorkspace(this.users, this.clock, ctx.role);
-      // Adapt the rich builder output to the contract TodayWorkspace shape.
-      const workspace: TodayWorkspace = {
-        generatedAt: built.generatedAt,
-        groups: built.queues.map((q) => ({
-          key: q.code as never,
-          title: q.title,
-          priority: bandToLevel[q.priority],
-          items: q.items.map((it) => ({
-            userId: it.userId,
-            reason: it.reason,
-            priority: bandToLevel[it.priority],
-            recommendedAction: it.recommendedAction?.code ?? null,
-            owner: it.ownerId,
-            dueAt: it.dueAt,
-            status: it.reasonCode,
-          })),
-        })),
-      };
-      return ok(workspace);
+      if (this.emptyMode) {
+        return empty(
+          buildTodayWorkspace({ users: [], clock: this.clock, role: ctx.role, query: input }),
+        );
+      }
+      const workspace = buildTodayWorkspace({
+        users: this.users,
+        clock: this.clock,
+        role: ctx.role,
+        query: input,
+        staleMode: this.staleMode,
+      });
+      const freshness: Freshness = { asOf: workspace.freshness.asOf, isStale: workspace.freshness.isStale };
+      if (this.staleMode) return stale(workspace, freshness);
+      // An empty queue is a legitimate answer ("nothing needs you today"), not
+      // an error — the UI distinguishes it from a filtered-out result itself.
+      return ok(workspace, freshness);
     });
   }
 
@@ -384,16 +400,38 @@ export class MockCrmDataProvider implements CrmDataProvider {
    * Permission-aware timeline. Projection happens HERE, via the same canonical
    * projector `getUser360` uses, so an event a role may not see is never built
    * into the result at all (Phase 1C.1, D-39).
+   *
+   * Pipeline order matters: project → sources → range → paginate. The window
+   * narrows an already-projected list, so `page.total` counts only events this
+   * role may see (Phase 1B3, D-41).
    */
   getUserTimeline(ctx: CrmContext, input: GetTimelineInput): Promise<Result<Paginated<UserTimelineEvent>>> {
     return this.gate(() => {
+      // Validated before the user lookup: a malformed range is the caller's bug
+      // either way, and answering it identically for known and unknown ids keeps
+      // the error from revealing whether a user exists.
+      const parsed = parseTimelineRange(input.from, input.to);
+      if (!parsed.ok) {
+        return fail<Paginated<UserTimelineEvent>>({
+          code: "invalid_input",
+          message: TIMELINE_RANGE_MESSAGE[parsed.reason],
+          retriable: false,
+          details: { from: input.from ?? null, to: input.to ?? null },
+        });
+      }
+
       const u = this.users.find((x) => x.identity.userId === input.userId);
       // Unknown user keeps its previous contract: an empty page, not an error.
       if (!u) return empty(this.paginate<UserTimelineEvent>([]));
-      const events: UserTimelineEvent[] = buildProjectedUserTimeline(u, ctx.role).filter(
+
+      const projected = buildProjectedUserTimeline(u, ctx.role).filter(
         (e) => !input.sources || input.sources.includes(e.source),
       );
-      return ok(this.paginate(events, input.page?.cursor, input.page?.pageSize));
+      const events: UserTimelineEvent[] = filterTimelineByRange(projected, parsed.range);
+      const page = this.paginate(events, input.page?.cursor, input.page?.pageSize);
+      // A window that matches nothing is empty, not an error — same convention
+      // as every other read on this provider.
+      return events.length === 0 ? empty(page) : ok(page);
     });
   }
 

@@ -22,8 +22,8 @@ import type { MockUser } from "@/domain/users/mock-user";
 import type { ComputedSignal } from "@/domain/signals/engine";
 import type { PriorityResult } from "@/domain/priority/priority";
 import type { DerivedRecommendation } from "@/domain/recommendations/derive";
-import type { SignalCode } from "@/domain/signals/signal";
 import { canViewExactFinancials } from "@/domain/identity/access";
+import { FINANCIALLY_DERIVED_SIGNALS } from "@/domain/financial/financially-derived";
 import { projectFinancial } from "@/domain/financial/projection";
 import { projectIdentity } from "@/domain/identity/identity-projection";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
@@ -35,20 +35,6 @@ import type {
   User360Recommendation,
   User360Signal,
 } from "./user-360";
-
-/**
- * Signals whose human reason embeds a number derived from the exact balance.
- * `checkpoint_approaching` says "осталось N%" and the checkpoint grid is a
- * PUBLISHED constant ($100 at L10), so N% + grid reconstructs the exact balance
- * — a role limited to the "$50–99" bucket could derive "$90" by arithmetic.
- * `rapid_balance_decline` reports a drop %, which is relative but still balance-
- * derived. For roles without exact financials both are reduced to the neutral
- * catalog label and their evidence is dropped.
- */
-const FINANCIALLY_DERIVED_SIGNALS: readonly SignalCode[] = [
-  "checkpoint_approaching",
-  "rapid_balance_decline",
-];
 
 /** Evidence is only forwarded when it is safe for the caller's role. */
 function projectEvidence(evidence: StateEvidence[], exact: boolean): StateEvidence[] {

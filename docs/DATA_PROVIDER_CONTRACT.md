@@ -84,23 +84,49 @@ interface CrmDataProvider {
 
 ## 1. getTodayWorkspace
 
-- **Назначение:** собрать приоритезированный рабочий экран текущего сотрудника.
+**Реализовано (Phase 1B3, read-only).** Модель живёт в домене (`domain/today/today.ts`) и
+ре-экспортируется контрактом — так же, как `User360`. Подробности: `docs/TODAY_WORKSPACE.md`.
+
+> **Форма Phase 1A удалена (D-50).** Прежний `TodayGroupKey` (`today_tasks`, `no_progress`,
+> `new_ftd`, …) никогда не соответствовал тому, что производил builder: провайдер приводил
+> `key: q.code as never`, т.е. контракт документировал форму, которую никто не возвращал.
+
+- **Назначение:** собрать приоритезированную очередь внимания на текущую смену.
 - **Input:**
   ```ts
-  interface GetTodayInput { scope?: 'own' | 'team'; groups?: TodayGroupKey[]; }
-  type TodayGroupKey =
-    | 'today_tasks' | 'overdue' | 'no_progress' | 'mentor_sla' | 'support_blockers'
-    | 'rejected_reports' | 'checkpoint_approaching' | 'checkpoint_grace'
-    | 'suspended_access' | 'returned' | 'new_ftd' | 'repeat_funders'
-    | 'communication_fatigue' | 'data_conflicts' | 'recommended_actions';
+  type GetTodayInput = TodayQuery;
+  interface TodayQuery { filters?: TodayFilters; sort?: TodaySortField; }
+  interface TodayFilters {
+    priority?: PriorityBand[];
+    basis?: TodayBasisCode[];      // тип основания (13 кодов config/queues.ts)
+    section?: TodaySectionKey[];
+    ownerId?: EmployeeId[] | 'unassigned';
+    sla?: SlaState[];
+    query?: string;                // только по РАЗРЕШЁННОЙ identity-проекции
+  }
+  type TodaySortField = 'urgency' | 'last_activity' | 'owner';
   ```
-- **Output:** `TodayWorkspace { generatedAt; groups: TodayGroup[] }`, где `TodayGroup { key; title; priority; items: TodayItem[] }`, `TodayItem` содержит `userId, reason, evidence[], priority, recommendedAction, owner, dueAt, status`.
-- **Pagination:** нет (ограничение сверху N на группу, напр. 50; «показать все» → соответствующий список).
-- **Filters:** `scope`, `groups`.
-- **Sort:** фикс. приоритет (critical→low), затем dueAt asc; внутри — по severity.
+  `scope: 'own' | 'team'` **намеренно отсутствует** — mock-сессия даёт всем ролям один
+  `emp_mock_admin`, поэтому «моя очередь» всегда была бы пуста (D-44).
+- **Output:** `TodayWorkspace { generatedAt; role; sections: TodayQueueSection[]; summary;
+  filterOptions; freshness; window; hasCalmUsers }`.
+  `TodayQueueSection { key; title; hint; items: TodayQueueItem[] }` — только непустые секции.
+  `TodayQueueItem { userId, identity, section, priority, priorityReasonCode, basis,
+  additionalBasisCodes, recommendation, ownerId, due, lastActivityAt, todayEvent, evidence,
+  financial }`.
+- **Проекция:** результат **уже спроецирован** для `ctx.role` — точная сумма, балансо-производный
+  процент и полный email для роли без прав **не строятся вовсе** (D-46, D-49). React не вычисляет
+  права, не пересчитывает приоритет и не решает состав очереди.
+- **Членство:** только при наличии attention-основания; ценностные сегменты его не дают (D-43).
+- **Grouping:** один canonical placement rule → пользователь ровно в одной секции.
+- **Pagination:** нет — очередь целиком; объём ограничен самим основанием.
+- **Filters:** см. выше; опции (`filterOptions`) строит провайдер из реальной очереди роли,
+  поэтому контрол не предлагает значения, которое вернёт пусто.
+- **Sort:** внутри секций; `urgency` по умолчанию (доменный `comparePriority`), детерминированно.
 - **Errors:** `unauthorized, upstream_unavailable, stale_data, internal`.
-- **Loading/stale:** тяжёлый агрегат → кэш с `freshness`; при stale отдаём данные + бейдж.
-- **Permission:** View Today (все операционные роли; scope=team только manager/retention/admin).
+- **Loading/stale:** `freshness.ageMinutes` считает **провайдер против своего Clock**; при stale
+  отдаются данные + баннер, очередь остаётся доступной (D-47).
+- **Permission:** View Today — секция видна всем 9 ролям; различается **проекция полей**, не состав.
 
 ---
 
@@ -203,7 +229,16 @@ interface CrmDataProvider {
   ```
 - **Output:** `Paginated<UserTimelineEvent>`, отсортировано по `at desc`.
 - **Pagination:** курсорная по времени (`at` + id).
-- **Filters:** `sources, kinds, from/to`.
+- **Filters:** `sources`, `from/to`. (`kinds` — зарезервировано, не реализовано.)
+- **`from` / `to` — реализовано (Phase 1B3, D-41).** Обе границы **включительные**: событие ровно
+  на `from` или ровно на `to` возвращается. Сравнение по epoch ms, не по строке, — `…T09:00:00Z` и
+  `…T09:00:00.000Z` обозначают один момент. Порядок конвейера: **projection → sources → range →
+  paginate**, поэтому окно сужает уже спроецированный список и `page.total` считает только то, что
+  роли разрешено видеть; limit применяется **после** фильтра. Пустое окно → `empty`.
+  `from > to` → `invalid_input` (`retriable: false`) через `Result`, без throw в UI: пустая
+  страница скрыла бы ошибку вызывающего за правдоподобными данными. Проверка идёт **до** поиска
+  пользователя, поэтому ответ одинаков для существующего и несуществующего id.
+  Ранее фильтры были объявлены в контракте, но игнорировались реализацией.
 - **Sort:** всегда `at desc` (v1 без опций).
 - **Errors:** `unauthorized, not_found, upstream_unavailable, stale_data, internal`.
   Неизвестный пользователь возвращает **пустую страницу** (`empty`), а не ошибку.
@@ -389,7 +424,7 @@ interface CrmDataProvider {
 
 | Операция | Мин. право | Особое |
 |---|---|---|
-| getTodayWorkspace | View Today | scope=team → manager/retention/admin |
+| getTodayWorkspace | View Today (все 9 ролей) | различается проекция полей, не состав очереди; `scope` не реализован (D-44) |
 | searchUsers | View Users | fin-сорт/фильтр → Exact financials |
 | getUserById | View User 360 | плоская list-проекция |
 | getUser360 | View User 360 | вся проекция внутри провайдера; балансо-производные пояснения скрыты без Exact financials (D-36) |

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
-import type { CrmContext } from "@/data/contracts/CrmDataProvider";
+import type { CrmContext, GetTimelineInput } from "@/data/contracts/CrmDataProvider";
 import type { CrmRole } from "@/domain/identity/roles";
 import { CRM_ROLES } from "@/domain/identity/roles";
 import { buildDataset } from "@/data/mock/fixtures/build";
-import { buildUserTimeline, buildProjectedUserTimeline } from "./user-timeline";
+import { buildUserTimeline, buildProjectedUserTimeline, parseTimelineRange } from "./user-timeline";
 
 const clock = new FixedMockClock();
 const provider = new MockCrmDataProvider({ clock, delayMs: 0 });
@@ -192,6 +192,198 @@ describe("getUserTimeline — contract behaviour preserved", () => {
     const registered = res.data!.items.find((e) => e.kind === "registered")!;
     expect(registered.at).toBe(userById(WITH_DEPOSIT).identity.registeredAt);
     expect(registered.at).toBe("2026-06-13T09:00:00.000Z");
+  });
+});
+
+describe("getUserTimeline — from/to range (Phase 1B3 debt)", () => {
+  /** Every event of usr_mock_026, newest-first, as the admin sees them. */
+  async function adminEvents(extra: Partial<GetTimelineInput> = {}) {
+    const res = await provider.getUserTimeline(ctx("crm_admin"), {
+      userId: WITH_DEPOSIT,
+      page: { pageSize: 100 },
+      ...extra,
+    });
+    return res;
+  }
+
+  /**
+   * REGRESSION: the previous implementation accepted `from`/`to` and ignored
+   * them, returning the full timeline for any window. Each test below fails
+   * against that version.
+   */
+  it("applies `from` alone as an inclusive lower bound", async () => {
+    const all = await adminEvents();
+    const times = all.data!.items.map((e) => Date.parse(e.at)).sort((a, b) => a - b);
+    const cutoff = times[2]!; // drop the two oldest events
+
+    const res = await adminEvents({ from: new Date(cutoff).toISOString() });
+    expect(res.data!.items.length).toBeLessThan(all.data!.items.length);
+    expect(res.data!.items.every((e) => Date.parse(e.at) >= cutoff)).toBe(true);
+  });
+
+  it("applies `to` alone as an inclusive upper bound", async () => {
+    const all = await adminEvents();
+    const times = all.data!.items.map((e) => Date.parse(e.at)).sort((a, b) => a - b);
+    const cutoff = times[1]!;
+
+    const res = await adminEvents({ to: new Date(cutoff).toISOString() });
+    expect(res.data!.items.length).toBeLessThan(all.data!.items.length);
+    expect(res.data!.items.every((e) => Date.parse(e.at) <= cutoff)).toBe(true);
+  });
+
+  it("applies `from` + `to` together", async () => {
+    const all = await adminEvents();
+    const times = all.data!.items.map((e) => Date.parse(e.at)).sort((a, b) => a - b);
+    const from = times[1]!;
+    const to = times[times.length - 2]!;
+
+    const res = await adminEvents({
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+    });
+    expect(res.data!.items.every((e) => Date.parse(e.at) >= from && Date.parse(e.at) <= to)).toBe(true);
+    expect(res.data!.items.length).toBeGreaterThan(0);
+    expect(res.data!.items.length).toBeLessThan(all.data!.items.length);
+  });
+
+  it("KEEPS an event sitting exactly on either boundary (both bounds inclusive)", async () => {
+    const all = await adminEvents();
+    const oldest = all.data!.items[all.data!.items.length - 1]!;
+    const newest = all.data!.items[0]!;
+
+    // A window closed exactly on the two extreme events keeps both.
+    const res = await adminEvents({ from: oldest.at, to: newest.at });
+    expect(res.data!.items.map((e) => e.id)).toEqual(all.data!.items.map((e) => e.id));
+
+    // A degenerate window from==to keeps exactly the event at that instant.
+    const pin = await adminEvents({ from: newest.at, to: newest.at });
+    expect(pin.data!.items.map((e) => e.id)).toEqual([newest.id]);
+  });
+
+  it("compares instants, not strings (ISO spellings of the same instant agree)", async () => {
+    const withMs = await adminEvents({ from: "2026-06-13T09:00:00.000Z" });
+    const withoutMs = await adminEvents({ from: "2026-06-13T09:00:00Z" });
+    expect(withoutMs.data!.items.map((e) => e.id)).toEqual(withMs.data!.items.map((e) => e.id));
+  });
+
+  it("an empty window returns an empty page, not an error", async () => {
+    const res = await adminEvents({ from: "2030-01-01T00:00:00.000Z", to: "2030-01-02T00:00:00.000Z" });
+    expect(res.status).toBe("empty");
+    expect(res.data!.items).toEqual([]);
+    expect(res.data!.page.total).toBe(0);
+    expect(res.error).toBeNull();
+  });
+
+  it("an inverted range fails through Result, never throws", async () => {
+    const call = provider.getUserTimeline(ctx("crm_admin"), {
+      userId: WITH_DEPOSIT,
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-06-01T00:00:00.000Z",
+    });
+    await expect(call).resolves.toBeDefined(); // no throw reaches the UI
+    const res = await call;
+    expect(res.status).toBe("error");
+    expect(res.data).toBeNull();
+    expect(res.error!.code).toBe("invalid_input");
+    expect(res.error!.retriable).toBe(false);
+  });
+
+  it("an unparseable bound fails as invalid_input", async () => {
+    for (const bad of [{ from: "yesterday" }, { to: "not-a-date" }]) {
+      const res = await provider.getUserTimeline(ctx("crm_admin"), { userId: WITH_DEPOSIT, ...bad });
+      expect(res.status).toBe("error");
+      expect(res.error!.code).toBe("invalid_input");
+    }
+  });
+
+  it("rejects a bad range identically for known and unknown users (no existence leak)", async () => {
+    const known = await provider.getUserTimeline(ctx("crm_admin"), {
+      userId: WITH_DEPOSIT,
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-06-01T00:00:00.000Z",
+    });
+    const unknown = await provider.getUserTimeline(ctx("crm_admin"), {
+      userId: "usr_nope",
+      from: "2026-07-01T00:00:00.000Z",
+      to: "2026-06-01T00:00:00.000Z",
+    });
+    expect(unknown.status).toBe(known.status);
+    expect(unknown.error!.code).toBe(known.error!.code);
+  });
+
+  it("range narrows permission projection — it never widens it", async () => {
+    // A window wide enough to contain the FTD still yields no HIGH event for a
+    // role that may not see money movements.
+    const wide = { from: "2026-01-01T00:00:00.000Z", to: "2026-12-31T00:00:00.000Z", page: { pageSize: 100 } };
+    const support = await provider.getUserTimeline(ctx("support"), { userId: WITH_DEPOSIT, ...wide });
+    const admin = await provider.getUserTimeline(ctx("crm_admin"), { userId: WITH_DEPOSIT, ...wide });
+
+    expect(support.data!.items.every((e) => e.sensitivity !== "HIGH")).toBe(true);
+    expect(support.data!.items.map((e) => e.kind)).not.toContain("first_deposit_confirmed");
+    expect(admin.data!.items.map((e) => e.kind)).toContain("first_deposit_confirmed");
+    // `total` reflects only what the role may see inside the window.
+    expect(support.data!.page.total).toBe(support.data!.items.length);
+    expect(support.data!.page.total!).toBeLessThan(admin.data!.page.total!);
+  });
+
+  it("applies the limit AFTER the range, not before", async () => {
+    const all = await adminEvents();
+    const times = all.data!.items.map((e) => Date.parse(e.at)).sort((a, b) => a - b);
+    const from = new Date(times[1]!).toISOString();
+
+    const inRange = await adminEvents({ from });
+    expect(inRange.data!.items.length).toBeGreaterThan(1);
+
+    const limited = await provider.getUserTimeline(ctx("crm_admin"), {
+      userId: WITH_DEPOSIT,
+      from,
+      page: { pageSize: 1 },
+    });
+    // Page 1 of the RANGED list — had the limit been applied first, the page
+    // would have been cut from the full list and then emptied by the filter.
+    expect(limited.data!.items).toHaveLength(1);
+    expect(limited.data!.items[0]!.id).toBe(inRange.data!.items[0]!.id);
+    expect(limited.data!.page.total).toBe(inRange.data!.items.length);
+  });
+
+  it("keeps range results deterministic and newest-first", async () => {
+    const window = { from: "2026-06-01T00:00:00.000Z", to: "2026-07-13T09:00:00.000Z" };
+    const a = await adminEvents(window);
+    const b = await adminEvents(window);
+    expect(a.data!.items).toEqual(b.data!.items);
+    const times = a.data!.items.map((e) => e.at);
+    expect([...times]).toEqual([...times].sort((x, y) => (x < y ? 1 : x > y ? -1 : 0)));
+  });
+
+  it("combines with the source filter", async () => {
+    const res = await adminEvents({
+      sources: ["product"],
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-12-31T00:00:00.000Z",
+    });
+    expect(res.data!.items.every((e) => e.source === "product")).toBe(true);
+    expect(res.data!.items.length).toBeGreaterThan(0);
+  });
+});
+
+describe("parseTimelineRange — pure resolver", () => {
+  it("treats omitted bounds as unbounded", () => {
+    const r = parseTimelineRange(undefined, undefined);
+    expect(r).toEqual({ ok: true, range: { fromMs: -Infinity, toMs: Infinity } });
+  });
+
+  it("accepts an equal from/to (a single instant)", () => {
+    const r = parseTimelineRange("2026-07-13T09:00:00.000Z", "2026-07-13T09:00:00.000Z");
+    expect(r.ok).toBe(true);
+  });
+
+  it("names why a range was rejected", () => {
+    expect(parseTimelineRange("nope", undefined)).toEqual({ ok: false, reason: "invalid_from" });
+    expect(parseTimelineRange(undefined, "nope")).toEqual({ ok: false, reason: "invalid_to" });
+    expect(parseTimelineRange("2026-07-02T00:00:00.000Z", "2026-07-01T00:00:00.000Z")).toEqual({
+      ok: false,
+      reason: "inverted_range",
+    });
   });
 });
 

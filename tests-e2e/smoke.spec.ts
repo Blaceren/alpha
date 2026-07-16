@@ -12,7 +12,11 @@ test("no console errors and /today loads with the shell", async ({ page }) => {
   });
 
   await page.goto("/today");
-  await expect(page.getByRole("heading", { name: "Сегодня" })).toBeVisible();
+  // `level: 1` pins the page heading. Playwright matches an accessible name by
+  // substring, so a bare "Сегодня" also matched the Phase 1B3 queue section
+  // «Требует внимания сегодня» — two headings, strict-mode violation. Same
+  // intent as before: the page loaded and is titled.
+  await expect(page.getByRole("heading", { name: "Сегодня", level: 1 })).toBeVisible();
   // Desktop navigation landmark = <nav aria-label="Разделы CRM"> inside the sidebar.
   // (Stale assertion fix: "Боковая навигация" is the name of the complementary
   //  <aside> container, not the navigation role; the shell splits them into two

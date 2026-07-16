@@ -10,12 +10,14 @@ import type {
   OperationalBlocker,
   ValueSegment,
 } from "@/domain/lifecycle/state";
+import type { StateEvidence, StateEvidenceCode } from "@/domain/shared/primitives";
 import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { CheckpointStatus } from "@/domain/financial/financial";
 import type { FinancialHiddenReason, FinancialProjectionMode } from "@/domain/financial/projection";
 import { HIDDEN_LABEL } from "@/domain/financial/projection";
 import type { RecommendedActionCode, SuggestedChannel } from "@/domain/recommendations/catalog";
+import type { TodaySortField } from "@/domain/today/today";
 
 export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
 
@@ -225,6 +227,53 @@ export const USER_360_LABEL = {
   userId: "ID пользователя",
 } as const;
 
+/**
+ * Today workspace (`/today`) user-facing labels. Same rule as Users and User
+ * 360: fully Russian, single source, no raw enum codes on screen.
+ */
+export const TODAY_LABEL = {
+  title: "Сегодня",
+  reason: "Причина",
+  recommendation: "Рекомендация",
+  recommendationNotAllowed: "не для вашей роли",
+  owner: "Ответственный",
+  due: "Срок",
+  lastActivity: "Последняя активность",
+  todayEvent: "Сегодня",
+  noActivity: "нет активности",
+  nothingToday: "сегодня без событий",
+  alsoBecause: "Ещё основания",
+  openProfile: "Открыть профиль",
+  readOnly: "Только просмотр",
+  queueScope: "Очередь по вашей роли",
+  sort: "Сортировка",
+  filters: "Фильтры",
+  search: "Поиск по очереди",
+  searchPlaceholder: "Имя, email или ID",
+  resetFilters: "Сбросить фильтры",
+  resetAll: "Сбросить всё",
+  /** Summary strip. */
+  totalAttention: "Требуют внимания",
+  critical: "Критичных",
+  slaBreached: "Нарушен SLA",
+  unassigned: "Без ответственного",
+} as const;
+
+export const TODAY_SORT_LABEL: Record<TodaySortField, string> = {
+  urgency: "По срочности",
+  last_activity: "Сначала неактивные",
+  owner: "По ответственному",
+};
+
+/** Filter group labels for the Today toolbar. */
+export const TODAY_FILTER_LABEL = {
+  priority: "Приоритет",
+  basis: "Основание",
+  owner: "Ответственный",
+  sla: "SLA",
+  unassigned: "Без ответственного",
+} as const;
+
 export const SIGNAL_SEVERITY_LABEL: Record<SignalSeverity, string> = {
   critical: "Критическая",
   high: "Высокая",
@@ -318,4 +367,148 @@ export function ownerLabel(ownerId: string | null | undefined): string {
 /** Generic fallback: humanize an unknown code (never show raw snake_case). */
 export function humanizeCode(code: string): string {
   return code.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/* ------------------------------------------------------- StateEvidence */
+
+/**
+ * Russian wording for every `StateEvidenceCode`. Evidence is produced by the
+ * domain (signal engine) and read by several features — Today's queue reasons
+ * and User 360's attention panel — so the wording lives here once rather than
+ * being invented per component. A consistency test asserts this map covers
+ * STATE_EVIDENCE_CODES exactly.
+ *
+ * The label says WHAT was measured. It never carries severity: how bad a value
+ * is stays a domain decision (signal severity / priority band), and encoding it
+ * in a string would let the two disagree.
+ */
+export const STATE_EVIDENCE_LABEL: Record<StateEvidenceCode, string> = {
+  hours_since_registration: "С момента регистрации",
+  pocket_registration_status: "Регистрация Pocket",
+  email_confirmed: "Email подтверждён",
+  lesson_progress_pct: "Прогресс урока",
+  hours_since_last_action: "С последнего значимого действия",
+  test_attempts: "Попыток теста",
+  latest_test_score: "Последний результат теста",
+  report_state: "Состояние отчёта",
+  hours_since_report_rejection: "С момента отклонения отчёта",
+  sla_elapsed_pct: "Прошло от срока SLA",
+  sla_breached: "SLA нарушен",
+  checkpoint_delta_pct: "Осталось до контрольной точки",
+  grace_confirmations_below_threshold: "Подтверждений ниже порога",
+  financial_access_suspended: "Финансовый доступ приостановлен",
+  balance_age_minutes: "Возраст данных баланса",
+  pocket_data_conflict: "Расхождение данных Pocket",
+  days_inactive: "Дней без активности",
+  engagement_status: "Активность",
+  communications_24h: "Сообщений за 24ч",
+  communications_7d: "Сообщений за 7д",
+  support_state: "Состояние поддержки",
+  redeposit_count: "Повторных депозитов",
+  balance_drop_pct: "Падение баланса",
+};
+
+/**
+ * How to render each code's raw `value`. Kept beside the labels because the two
+ * must agree: "Прошло от срока SLA" is meaningless without the `%`.
+ * Enum-valued units delegate to the label maps above so one status is never
+ * worded two ways.
+ */
+type EvidenceUnit =
+  | "hours"
+  | "days"
+  | "minutes"
+  | "percent"
+  | "count"
+  | "plain"
+  | "flag"
+  | "registration_status"
+  | "report_state"
+  | "support_state"
+  | "engagement_status";
+
+const STATE_EVIDENCE_UNIT: Record<StateEvidenceCode, EvidenceUnit> = {
+  hours_since_registration: "hours",
+  pocket_registration_status: "registration_status",
+  email_confirmed: "flag",
+  lesson_progress_pct: "percent",
+  hours_since_last_action: "hours",
+  test_attempts: "count",
+  latest_test_score: "plain",
+  report_state: "report_state",
+  hours_since_report_rejection: "hours",
+  sla_elapsed_pct: "percent",
+  sla_breached: "flag",
+  checkpoint_delta_pct: "percent",
+  grace_confirmations_below_threshold: "count",
+  financial_access_suspended: "flag",
+  balance_age_minutes: "minutes",
+  pocket_data_conflict: "flag",
+  days_inactive: "days",
+  engagement_status: "engagement_status",
+  communications_24h: "count",
+  communications_7d: "count",
+  support_state: "support_state",
+  redeposit_count: "count",
+  balance_drop_pct: "percent",
+};
+
+/**
+ * Wording for an evidence code the map does not know. Deliberately neutral
+ * rather than `humanizeCode(code)`: humanizing prints the raw snake_case back
+ * in English ("support_blocked" → "Support blocked"), which is exactly what the
+ * UI must never show. The consistency test means this can only be reached by a
+ * code added without a label — losing detail is the correct failure here.
+ */
+const UNKNOWN_EVIDENCE_LABEL = "Системный признак";
+const UNKNOWN_EVIDENCE_VALUE = "—";
+
+/** Russian label for an evidence code; safe for codes outside the enum. */
+export function evidenceLabel(code: string): string {
+  return STATE_EVIDENCE_LABEL[code as StateEvidenceCode] ?? UNKNOWN_EVIDENCE_LABEL;
+}
+
+/** Render an evidence value in Russian, with its unit. Never emits a raw enum. */
+export function evidenceValue(evidence: StateEvidence): string {
+  const { value } = evidence;
+  const unit = STATE_EVIDENCE_UNIT[evidence.code];
+  if (unit === undefined) return UNKNOWN_EVIDENCE_VALUE;
+  // A missing measurement is a fact worth stating, not a blank.
+  if (value === null) return "Нет данных";
+
+  switch (unit) {
+    case "hours":
+      return `${value} ч`;
+    case "days":
+      return `${value} д`;
+    case "minutes":
+      // Minutes are the measurement's unit, not a readable one at every scale:
+      // a balance untouched for two weeks is "20160 мин", and eight hours is
+      // "500 мин". Step up to the unit an operator would actually say.
+      if (typeof value !== "number") return `${value} мин`;
+      if (value >= 1440) return `${Math.round(value / 1440)} д`;
+      if (value >= 120) return `${Math.round(value / 60)} ч`;
+      return `${value} мин`;
+    case "percent":
+      return `${value}%`;
+    case "flag":
+      return value ? "Да" : "Нет";
+    case "registration_status":
+      return REGISTRATION_STATUS_LABEL[value as RegistrationStatus] ?? UNKNOWN_EVIDENCE_VALUE;
+    case "report_state":
+      return REPORT_STATE_LABEL[value as keyof typeof REPORT_STATE_LABEL] ?? UNKNOWN_EVIDENCE_VALUE;
+    case "support_state":
+      return SUPPORT_STATE_LABEL[value as keyof typeof SUPPORT_STATE_LABEL] ?? UNKNOWN_EVIDENCE_VALUE;
+    case "engagement_status":
+      return ENGAGEMENT_LABEL[value as EngagementStatus] ?? UNKNOWN_EVIDENCE_VALUE;
+    case "count":
+    case "plain":
+    default:
+      return String(value);
+  }
+}
+
+/** One evidence item ready to render: "Осталось до контрольной точки · 10%". */
+export function formatEvidence(evidence: StateEvidence): { label: string; value: string } {
+  return { label: evidenceLabel(evidence.code), value: evidenceValue(evidence) };
 }

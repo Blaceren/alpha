@@ -5,7 +5,7 @@
  */
 import type { Clock } from "@/lib/clock";
 import { DAY_MS, HOUR_MS, hoursFromNow, hoursSince, hoursUntil } from "@/lib/clock";
-import type { ISODateString, StateEvidence } from "@/domain/shared/primitives";
+import type { ISODateString, StateEvidence, StateEvidenceCode } from "@/domain/shared/primitives";
 import type { MockUser } from "@/domain/users/mock-user";
 import { SIGNAL_THRESHOLDS } from "@/config/signals.config";
 import type { SignalCode, SignalSeverity } from "./signal";
@@ -58,8 +58,31 @@ export const SIGNAL_SEVERITY: Record<SignalCode, SignalSeverity> = {
 
 const t = SIGNAL_THRESHOLDS;
 
-function ev(label: string, value: string | number | null, at: ISODateString): StateEvidence {
-  return { kind: "metric", label, value, observedAt: at, sensitivity: "LOW" };
+/**
+ * A MEASURED quantity — a number that says how much/how long. `kind: "metric"`
+ * is load-bearing, not decoration: consumers that must stay compact (the Today
+ * queue) show metrics and drop references, because a metric adds a fact while a
+ * reference only restates the one the reason already made.
+ */
+function ev(
+  code: StateEvidenceCode,
+  value: number | null,
+  at: ISODateString,
+): StateEvidence {
+  return { kind: "metric", code, value, observedAt: at, sensitivity: "LOW" };
+}
+
+/**
+ * A STATE the signal is pointing at — a flag or an enum member. Confirmatory:
+ * "Открыт support-блокер" + "Состояние поддержки · Заблокирован" is one fact
+ * printed twice, so these are not surfaced where space is tight.
+ */
+function evRef(
+  code: StateEvidenceCode,
+  value: string | boolean | null,
+  at: ISODateString,
+): StateEvidence {
+  return { kind: "reference", code, value, observedAt: at, sensitivity: "LOW" };
 }
 
 /** Compute all active signals for a user (deterministic given the clock). */
@@ -98,7 +121,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     regHours >= t.registration_no_start.hours
   ) {
     push("registration_no_start", `Зарегистрирован ${Math.round(regHours)}ч назад, нет активности.`, [
-      ev("hours since registration", Math.round(regHours), now),
+      ev("hours_since_registration", Math.round(regHours), now),
     ]);
   }
 
@@ -111,7 +134,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     push(
       "pocket_registration_incomplete",
       "Регистрация Pocket не подтверждена — финансовые контрольные точки недоступны.",
-      [ev("registration status", user.financial.registrationStatus, now)],
+      [evRef("pocket_registration_status", user.financial.registrationStatus, now)],
     );
   }
 
@@ -119,8 +142,8 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
   // (identity.emailConfirmed), independent of Pocket registrationStatus.
   if (!user.identity.emailConfirmed && regHours >= t.email_not_confirmed.hours) {
     push("email_not_confirmed", "Email аккаунта ATA не подтверждён.", [
-      ev("email confirmed", "no", now),
-      ev("hours since registration", Math.round(regHours), now),
+      evRef("email_confirmed", false, now),
+      ev("hours_since_registration", Math.round(regHours), now),
     ]);
   }
 
@@ -132,7 +155,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     (learnHours ?? 0) >= t.lesson_abandoned.hours
   ) {
     push("lesson_abandoned", `Урок «${user.learning.lastLesson}» брошен ${Math.round(learnHours ?? 0)}ч назад.`, [
-      ev("lesson progress %", user.learning.lessonProgressPct, now),
+      ev("lesson_progress_pct", user.learning.lessonProgressPct, now),
     ]);
   }
 
@@ -143,22 +166,22 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     actionHours >= t.progression_stalled.hours
   ) {
     push("progression_stalled", `Нет прогресса ${Math.round(actionHours)}ч при доступном следующем уровне.`, [
-      ev("hours since action", Math.round(actionHours), now),
+      ev("hours_since_last_action", Math.round(actionHours), now),
     ]);
   }
 
   // repeated_test_failure
   if (user.learning.testAttempts >= t.repeated_test_failure.count) {
     push("repeated_test_failure", `${user.learning.testAttempts} неудачных попытки теста.`, [
-      ev("test attempts", user.learning.testAttempts, now),
-      ev("latest score", user.learning.latestScore, now),
+      ev("test_attempts", user.learning.testAttempts, now),
+      ev("latest_test_score", user.learning.latestScore, now),
     ]);
   }
 
   // report_pending
   if (user.learning.reportState === "pending") {
     push("report_pending", "Отчёт ожидает mentor-проверки.", [
-      ev("report state", user.learning.reportState, now),
+      evRef("report_state", user.learning.reportState, now),
     ]);
   }
 
@@ -170,7 +193,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     reportHours >= t.report_rejected_no_return.hours
   ) {
     push("report_rejected_no_return", `Отчёт отклонён ${Math.round(reportHours)}ч назад, нет повторной отправки.`, [
-      ev("hours since rejection", Math.round(reportHours), now),
+      ev("hours_since_report_rejection", Math.round(reportHours), now),
     ]);
   }
 
@@ -184,7 +207,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
       push(
         "mentor_sla_risk",
         breached ? "SLA mentor-проверки нарушен." : "SLA mentor-проверки под риском.",
-        [ev("elapsed %", Math.round(frac * 100), now), ev("breached", breached ? "yes" : "no", now)],
+        [ev("sla_elapsed_pct", Math.round(frac * 100), now), evRef("sla_breached", breached, now)],
         { expiresAt: user.operations.sla.dueAt },
       );
     }
@@ -200,7 +223,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     const deltaPct = ((required - user.financial.balanceUsd) / required) * 100;
     if (deltaPct <= t.checkpoint_approaching.deltaPct) {
       push("checkpoint_approaching", `До checkpoint L${user.progression.nextCheckpointLevel} осталось ${Math.round(deltaPct)}%.`, [
-        ev("delta % to checkpoint", Math.round(deltaPct), now),
+        ev("checkpoint_delta_pct", Math.round(deltaPct), now),
       ]);
     }
   }
@@ -211,7 +234,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     push(
       "checkpoint_grace_active",
       `Grace period активен${endsIn !== null ? `, завершится через ${Math.round(endsIn)}ч` : ""}.`,
-      [ev("confirmations below threshold", user.financial.grace.belowThresholdConfirmations, now)],
+      [ev("grace_confirmations_below_threshold", user.financial.grace.belowThresholdConfirmations, now)],
       { expiresAt: user.financial.grace.endsAt },
     );
   }
@@ -219,7 +242,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
   // financial_access_suspended (suppresses outbound learning nudges post-checkpoint)
   if (user.financial.accessSuspended) {
     push("financial_access_suspended", "Финансовый доступ после checkpoint приостановлен.", [
-      ev("access suspended", "yes", now),
+      evRef("financial_access_suspended", true, now),
     ], { suppressesOutbound: true });
   }
 
@@ -232,14 +255,14 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     (balAgeMin !== null && balAgeMin >= t.balance_data_stale.staleMinutes)
   ) {
     push("balance_data_stale", "Баланс устарел/недоступен.", [
-      ev("balance age (min)", balAgeMin === null ? "no timestamp" : Math.round(balAgeMin), now),
+      ev("balance_age_minutes", balAgeMin === null ? null : Math.round(balAgeMin), now),
     ]);
   }
 
   // pocket_data_conflict
   if (user.financial.pocketConflict) {
     push("pocket_data_conflict", "Расхождение данных баланса продукт↔Pocket.", [
-      ev("conflict", "yes", now),
+      evRef("pocket_data_conflict", true, now),
     ]);
   }
 
@@ -247,19 +270,19 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
   const days = actionHours === null ? null : actionHours / 24;
   if (days !== null) {
     if (actionHours! >= t.inactive_3_days.hours)
-      push("inactive_3_days", `Нет активности ${Math.round(days)}д.`, [ev("days inactive", Math.round(days), now)]);
+      push("inactive_3_days", `Нет активности ${Math.round(days)}д.`, [ev("days_inactive", Math.round(days), now)]);
     if (days >= t.inactive_7_days.days)
-      push("inactive_7_days", `Нет активности ${Math.round(days)}д.`, [ev("days inactive", Math.round(days), now)]);
+      push("inactive_7_days", `Нет активности ${Math.round(days)}д.`, [ev("days_inactive", Math.round(days), now)]);
     if (days >= t.dormant_14_days.days)
-      push("dormant_14_days", `Dormant ${Math.round(days)}д.`, [ev("days inactive", Math.round(days), now)]);
+      push("dormant_14_days", `Dormant ${Math.round(days)}д.`, [ev("days_inactive", Math.round(days), now)]);
     if (days >= t.dormant_30_days.days)
-      push("dormant_30_days", `Dormant ${Math.round(days)}д.`, [ev("days inactive", Math.round(days), now)]);
+      push("dormant_30_days", `Dormant ${Math.round(days)}д.`, [ev("days_inactive", Math.round(days), now)]);
   }
 
   // returned_after_absence
   if (user.state.engagementStatus === "returned") {
     push("returned_after_absence", "Пользователь вернулся после длительного отсутствия.", [
-      ev("engagement", "returned", now),
+      evRef("engagement_status", user.state.engagementStatus, now),
     ]);
   }
 
@@ -269,20 +292,20 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     user.operations.communications7d > t.communication_fatigue.max7d
   ) {
     push("communication_fatigue", `${user.operations.communications24h} сообщений за 24ч.`, [
-      ev("comms 24h", user.operations.communications24h, now),
-      ev("comms 7d", user.operations.communications7d, now),
+      ev("communications_24h", user.operations.communications24h, now),
+      ev("communications_7d", user.operations.communications7d, now),
     ], { suppressesOutbound: true });
   }
 
   // support_blocked
   if (user.operations.supportState === "blocked" || user.state.blockers.includes("support_blocked")) {
-    push("support_blocked", "Открыт support-блокер.", [ev("support state", user.operations.supportState, now)]);
+    push("support_blocked", "Открыт support-блокер.", [evRef("support_state", user.operations.supportState, now)]);
   }
 
   // frequent_redeposit_pattern
   if (user.financial.redeposits.length >= t.frequent_redeposit_pattern.minRedeposits) {
     push("frequent_redeposit_pattern", `${user.financial.redeposits.length} redeposit — предложить паузу.`, [
-      ev("redeposit count", user.financial.redeposits.length, now),
+      ev("redeposit_count", user.financial.redeposits.length, now),
     ]);
   }
 
@@ -297,7 +320,7 @@ export function computeSignals(user: MockUser, clock: Clock): ComputedSignal[] {
     const dropPct = ((user.financial.previousBalanceUsd - user.financial.balanceUsd) / user.financial.previousBalanceUsd) * 100;
     if (withinWindow && dropPct >= t.rapid_balance_decline.dropPct) {
       push("rapid_balance_decline", `Баланс упал на ${Math.round(dropPct)}% — образовательный ответ.`, [
-        ev("drop %", Math.round(dropPct), now),
+        ev("balance_drop_pct", Math.round(dropPct), now),
       ]);
     }
   }

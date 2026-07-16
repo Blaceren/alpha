@@ -1,6 +1,14 @@
-# TODAY_QUEUE_RULES.md — Alfa Trade Academy CRM (Phase 1B1)
+# TODAY_QUEUE_RULES.md — Alfa Trade Academy CRM (Phase 1B1, переосмыслено в 1B3)
 
 Правила вывода очередей Today. Реализация: `src/domain/today/builder.ts` (чистые функции, без React).
+
+> **Статус после Phase 1B3.** Всё ниже действует, но 13 «очередей» теперь называются
+> **основаниями** (`TodayBasisCode`) и отвечают на вопрос «почему пользователь в очереди».
+> «Насколько срочно» стало отдельной осью из 4 секций с canonical placement — пользователь
+> попадает ровно в одну. Предикаты членства не изменились. Изменилось два правила:
+> ценностные сегменты (`new_funded_users`, `repeat_funders`) **не дают** места в очереди (D-43),
+> а финансы показываются только там, где помогают триажу (D-49).
+> Экран и его правила: **`docs/TODAY_WORKSPACE.md`**. Решения: D-43…D-51.
 
 ## Priority model (`src/domain/priority/priority.ts`)
 Приоритет — одна из полос `critical / high / normal / low`, определяется **явными упорядоченными правилами** (без opaque score). Первое совпавшее правило выигрывает; каждый результат несёт `reasonCode` и `evidence`:
@@ -30,10 +38,22 @@
 ## Queue item
 Каждый элемент: `userId, displayName, queueCode, priority, reason, reasonCode, evidence, ownerId, dueAt, recommendedAction (top), signalCodes, freshness {asOf, isStale}, financial (permission-aware projection), identity (permission-aware projection)`.
 
-## Дедупликация
-Пользователь может быть в нескольких очередях (напр. 026 — critical_attention + sla_breached + support_blockers + checkpoint_attention). `distinctUserCount` в summary дедуплицирует пользователей по id. Тест проверяет `distinctUserCount < Σ placements`.
+## Дедупликация → canonical placement (изменено в 1B3)
+Пользователь по-прежнему может держать **несколько оснований** (напр. 026 — support_blockers +
+critical_attention + sla_breached + checkpoint_attention). Но на экране он появляется **ровно один
+раз**: `placeIn()` — единственное место, где решается секция, первое совпадение выигрывает
+(`overdue → critical_now → today → watch`). Прежний `distinctUserCount` больше не нужен: дубликата,
+который он считал, не существует. Тест: «puts each user in exactly ONE section».
 
 ## Permission projection
-Финансовое представление в каждом элементе строится через `projectFinancial(role, …)`: retention/manager/admin → exact; analyst → aggregated; mentor/support/moderator/content → bucket; иначе hidden. UI не решает сам, что показывать. Тест проверяет разные режимы для mentor vs retention.
+Финансовое представление строится через `projectFinancial(role, …)`: retention/manager/admin →
+exact; analyst → aggregated; mentor/support/moderator/content → bucket; иначе hidden. UI не решает
+сам, что показывать.
+
+**Уточнено в 1B3:** баланс проецируется только для оснований, где он помогает триажу
+(`TODAY_BASES_WITH_FINANCIALS`: checkpoint, качество данных) — иначе `financial: null`, и строка не
+показывает баланс вообще (D-49). Балансо-производные пояснения (`checkpoint_approaching`,
+`rapid_balance_decline`) заменяются нейтральным текстом для ролей без exact-прав — общее с User 360
+правило в `domain/financial/financially-derived.ts` (D-46).
 
 _Связано: SIGNAL_ENGINE.md, RECOMMENDATION_CATALOG.md, DATA_PROVIDER_CONTRACT.md._

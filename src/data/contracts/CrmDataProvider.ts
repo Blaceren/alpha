@@ -23,6 +23,8 @@ import type { FinancialBucket } from "@/domain/financial/financial";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
+import type { TodayWorkspace } from "@/domain/today/today";
+import type { TodayQuery } from "@/domain/today/today-query";
 import type { Paginated, PageParams, Result, SortParam } from "./result";
 
 /** Caller context for permission-aware operations. */
@@ -34,49 +36,34 @@ export interface CrmContext {
 
 /* ------------------------------------------------------------------ Today */
 
-export type TodayGroupKey =
-  | "today_tasks"
-  | "overdue"
-  | "no_progress"
-  | "mentor_sla"
-  | "support_blockers"
-  | "rejected_reports"
-  | "checkpoint_approaching"
-  | "checkpoint_grace"
-  | "suspended_access"
-  | "returned"
-  | "new_ftd"
-  | "repeat_funders"
-  | "communication_fatigue"
-  | "data_conflicts"
-  | "recommended_actions";
+/**
+ * The Today read model is defined in the domain (`@/domain/today/today`) and
+ * re-exported here, exactly as User 360 is: the provider returns an aggregate
+ * that is ALREADY projected for `ctx.role`.
+ *
+ * It replaces a Phase 1A placeholder whose `TodayGroupKey` list ("today_tasks",
+ * "no_progress", "new_ftd", …) never matched what the builder produced — the
+ * mock provider had to cast `key: q.code as never` to satisfy it, so the
+ * contract was documenting a shape nothing returned (Phase 1B3, D-42).
+ */
+export type {
+  TodayBasis,
+  TodayBasisCode,
+  TodayDue,
+  TodayEvent,
+  TodayFilterOptions,
+  TodayFreshness,
+  TodayQueueItem,
+  TodayQueueSection,
+  TodaySectionKey,
+  TodaySortField,
+  TodaySummary,
+  TodayWorkspace,
+} from "@/domain/today/today";
+export type { TodayFilters, TodayQuery } from "@/domain/today/today-query";
 
-export interface TodayItem {
-  userId: UserId;
-  reason: string;
-  priority: PriorityLevel;
-  recommendedAction: string | null;
-  owner: EmployeeId | null;
-  dueAt: ISODateString | null;
-  status: string;
-}
-
-export interface TodayGroup {
-  key: TodayGroupKey;
-  title: string;
-  priority: PriorityLevel;
-  items: TodayItem[];
-}
-
-export interface TodayWorkspace {
-  generatedAt: ISODateString;
-  groups: TodayGroup[];
-}
-
-export interface GetTodayInput {
-  scope?: "own" | "team";
-  groups?: TodayGroupKey[];
-}
+/** Input for `getTodayWorkspace`. Filtering and sorting are provider-owned. */
+export type GetTodayInput = TodayQuery;
 
 /* ------------------------------------------------------------------ Users */
 

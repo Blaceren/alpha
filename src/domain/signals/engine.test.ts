@@ -40,7 +40,7 @@ describe("signal engine (deterministic, FixedMockClock)", () => {
   it("flags mentor SLA breach for usr_mock_011", () => {
     const sig = computeSignals(byId("usr_mock_011"), clock).find((s) => s.code === "mentor_sla_risk");
     expect(sig).toBeTruthy();
-    expect(sig!.evidence.some((e) => e.label === "breached" && e.value === "yes")).toBe(true);
+    expect(sig!.evidence.some((e) => e.code === "sla_breached" && e.value === true)).toBe(true);
   });
 
   it("marks financial_access_suspended as critical", () => {
