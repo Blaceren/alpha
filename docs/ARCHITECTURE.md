@@ -92,9 +92,44 @@ components/*                # ячейки: identity/priority/state-badges/block
 
 Разделение обязанностей: провайдер = данные/фильтр/сортировка/пагинация/проекции; feature = presentation + локальный UI-state (видимость колонок, ввод фильтров). Financial/identity-видимость **не** пересчитывается в компонентах — рендерится готовая provider-проекция (exact/bucket/aggregated/hidden vs masked/pseudonymous/hidden). Лейблы — из `config/labels.ts` (raw enum-коды в UI не появляются).
 
+## Feature layer (Phase 1C — User 360, read-only)
+
+`/users/[id]` — полноценный read-only экран. Ключевое архитектурное решение: **одна** read-операция
+вместо композиции четырёх.
+
+```
+data/contracts/CrmDataProvider.getUser360(ctx, {userId}) → Result<User360>   # 14-я операция, read-only
+  └─ MockCrmDataProvider: derive(signals/priority/recommendations) + freshness + slaState
+       └─ domain/users/user-360-projection.projectUser360(...)   # ЕДИНСТВЕННОЕ место решений о правах
+            → domain/users/user-360.User360                      # уже спроецированная read-модель
+src/features/user-360/                                            # presentation + локальный UI-state
+```
+
+Почему агрегат, а не 4 вызова (`getUserById` + `getUserTimeline` + `getUserSignals` +
+`getRecommendedActions`): `getUserById` возвращает `UserSummary` — плоскую list-проекцию с
+`context: "list"` (identity всегда masked даже для admin), без learning/grace/SLA/сигналов/
+рекомендаций/событий. Композиция дала бы четыре loading/error-состояния и, главное, **сборку прав в
+UI**. Единый агрегат выполняет проекцию в провайдере **до** React, поэтому запрещённое значение
+физически отсутствует в payload, DOM, props, `title`/`aria`, data-атрибутах и сериализованных данных
+страницы — оно не «прячется CSS». Существующие 13 операций не менялись (D-35).
+
+**Permission boundary в User 360** (D-36): identity — `projectIdentity(context: "detail")` (полный
+email только ролям с `view_identity_full_email`); суммы — только `FinancialProjection`; плюс защита от
+**арифметической** утечки: публичная сетка checkpoint + «осталось N%» позволяли восстановить точный
+баланс, поэтому балансо-производные пояснения и `nextCheckpointRequiredUsd` скрываются вместе с
+суммами. HIGH-события не отдаются ролям без exact-финансов.
+
+Структура: `user-360-workspace.tsx` (композиция + состояния), `user-360-states.tsx`,
+`hooks/use-user-360-query.ts` (один read), `components/*` (header, identity-summary, attention-panel,
+recommendations, state-overview, blockers, signals, learning-progress, activity-timeline,
+financial-summary, owner-context, section-card). DOM-порядок = порядок чтения = mobile-порядок;
+на `lg+` контекст (финансы + ответственный) становится sticky-колонкой.
+
 ## Тестирование
 
 - **Unit/компонентные (Vitest):** permission matrix, section visibility, финансовые бакеты, provider error handling, sidebar active state, breadcrumbs, роль-видимость sidebar (render).
 - **E2E (Playwright, smoke):** `/today` грузится, sidebar доступен, переход в `/users`, dev role switch меняет видимость, 404, отсутствие console-ошибок.
 - **E2E (Playwright, screenshots — Phase 1B2):** `tests-e2e/users-screenshots.spec.ts` — реальный рендер `/users` в 5 сценариях (admin/support/filtered 1440×900, tablet 1024×768, mobile 390×844), точные размеры + assert чистой консоли. Артефакты — `screenshots/phase-1b2-users/`.
 - **Component (Vitest, Phase 1B2):** `use-users-query` (search/5 измерений/compound/registration/sort/pagination), `users-workspace` (рендер + состояния + отсутствие raw-кодов), `users-permissions` (exact отсутствует в DOM у support; masked identity).
+- **Provider/projection + component (Vitest, Phase 1C):** `user-360-projection` (25 — контракт результата, детерминизм, все 9 ролей, невозможность реконструкции баланса, «нет данных» vs «нет прав»), `user-360-permissions` (12 — для каждой роли разрешённое присутствует / запрещённое отсутствует в `innerHTML`), `user-360-workspace` (19 — один h1, секции, независимость осей, отсутствие тройного дублирования и mutation-контролов, loading/not-found/unauthorized/error+retry/stale, keyboard).
+- **E2E (Playwright, Phase 1C):** `tests-e2e/user-360.spec.ts` — 13 сценариев (admin/support/high-priority/calm/onboarding 1440×900, tablet 1024×768, mobile 390×844 с замером порядка блоков, 200% zoom = CSS-viewport 720×450, unknown id, навигация `/users → профиль → назад`, keyboard focus, analyst, read_only). Артефакты — `screenshots/phase-1c-user-360/{first-pass,final}/`. Итого E2E — **26** (прежние 13 сохранены).

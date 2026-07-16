@@ -9,9 +9,23 @@ export interface EmptyStateProps {
   icon?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
+  /**
+   * Render the title as the page heading. Use when this state IS the whole page
+   * (e.g. a not-found route), which would otherwise have no h1 at all.
+   * Defaults to a plain paragraph for in-page empty states.
+   */
+  titleAs?: "p" | "h1";
 }
 
-export function EmptyState({ title, description, icon, action, className }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+  className,
+  titleAs = "p",
+}: EmptyStateProps) {
+  const Title = titleAs;
   return (
     <div
       className={cn(
@@ -22,7 +36,7 @@ export function EmptyState({ title, description, icon, action, className }: Empt
       <div className="text-text-muted" aria-hidden>
         {icon ?? <Inbox className="h-6 w-6" />}
       </div>
-      <p className="text-sm font-medium text-text-primary">{title}</p>
+      <Title className="text-sm font-medium text-text-primary">{title}</Title>
       {description ? (
         <p className="max-w-sm text-xs text-text-secondary">{description}</p>
       ) : null}

@@ -4,7 +4,14 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1B2 — Users workspace** поверх Phase 1B1 mock-домена. Реализован полноценный экран `/users` (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive desktop/tablet/mobile) — данные только через `CrmDataProvider`. Экраны Today и User 360 ещё не реализованы (`/users/[id]` — placeholder). См. `docs/USERS_WORKSPACE.md`, `docs/IMPLEMENTATION_STATUS.md`.
+Статус реализации: **Phase 1C — User 360 (read-only)** поверх Phase 1B2 Users workspace и Phase 1B1 mock-домена.
+
+- `/users` — полноценный реестр (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive). См. `docs/USERS_WORKSPACE.md`.
+- `/users/[id]` — полноценная **read-only** карточка User 360: приоритет и причина внимания, рекомендуемое действие, 5 независимых осей состояния, обучение, блокеры, сигналы, недавние события, ответственный, permission-aware identity и финансы. См. `docs/USER_360.md`.
+
+Данные — только через `CrmDataProvider`; вся permission-проекция выполняется в провайдере **до** React.
+
+**Последовательность этапов (D-34):** следующим этапом намеренно выбран User 360 — каноническое название **Phase 1C — User 360** (не «Phase 1B3»). **Phase 1B3 — Today Workspace** и **Phase 1B4 — mutations overlay** **отложены** до отдельного решения и **не выполнены**. Экран User 360 — read-only: мутаций нет. Следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Стек
 
@@ -72,3 +79,7 @@ tests-e2e/             # Playwright smoke
 ```
 
 Подробнее — `docs/ARCHITECTURE.md`.
+
+## Отсутствие мутаций (Phase 1C)
+
+User 360 — **только чтение**. Редактирование пользователя, notes/tasks/cases, смена owner/статуса, ручное закрытие сигналов, финансовые операции и коммуникации **не реализованы**; действия, которые их потребовали бы, либо отсутствуют, либо явно помечены «Только просмотр» с честным объяснением. Fake success не создаётся. Права принадлежат провайдеру, а не компонентам.

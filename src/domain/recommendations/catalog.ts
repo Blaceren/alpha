@@ -199,8 +199,10 @@ export const RECOMMENDATION_CATALOG: Record<RecommendedActionCode, RecommendedAc
   },
   review_checkpoint_grace: {
     code: "review_checkpoint_grace",
-    title: "Разобрать checkpoint grace",
-    reason: "Активен grace period финансовой контрольной точки.",
+    // Triggered by BOTH checkpoint_approaching and checkpoint_grace_active, so
+    // the wording must not claim a grace period that may not exist.
+    title: "Разобрать контрольную точку",
+    reason: "Финансовая контрольная точка требует внимания: приближение или активный grace-период.",
     sourceSignalCodes: ["checkpoint_grace_active", "checkpoint_approaching"],
     allowedRoles: RETENTION,
     priority: "high",

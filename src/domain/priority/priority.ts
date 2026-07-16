@@ -9,6 +9,7 @@ import { hoursSince, hoursUntil } from "@/lib/clock";
 import type { StateEvidence } from "@/domain/shared/primitives";
 import type { MockUser } from "@/domain/users/mock-user";
 import type { ComputedSignal } from "@/domain/signals/engine";
+import type { SignalCode } from "@/domain/signals/signal";
 
 export type PriorityBand = "critical" | "high" | "normal" | "low";
 
@@ -16,6 +17,12 @@ export interface PriorityResult {
   level: PriorityBand;
   reasonCode: string;
   evidence: StateEvidence[];
+  /**
+   * The active signals the matched rule interpreted. Lets a UI link the priority
+   * back to its source instead of repeating the same fact as a separate badge.
+   * Empty when the priority came from state rather than a signal.
+   */
+  sourceSignalCodes: SignalCode[];
   /** Private ordering index (lower = more urgent). Not a public score. */
   ruleIndex: number;
 }
@@ -27,10 +34,18 @@ interface Rule {
   index: number;
   level: PriorityBand;
   reasonCode: string;
+  /** Signal codes this rule interprets, narrowed to the ones actually active. */
+  sources: (s: ComputedSignal[]) => SignalCode[];
   match: (u: MockUser, s: ComputedSignal[], clock: Clock) => StateEvidence[] | null;
 }
 
 const has = (s: ComputedSignal[], code: ComputedSignal["code"]) => s.find((x) => x.code === code) ?? null;
+
+/** Declares a rule's source signals; keeps the ladder the single source of truth. */
+const from =
+  (...codes: SignalCode[]) =>
+  (s: ComputedSignal[]): SignalCode[] =>
+    codes.filter((c) => s.some((x) => x.code === c));
 
 function evidenceFrom(sig: ComputedSignal | null, extra?: StateEvidence): StateEvidence[] {
   const base = sig ? sig.evidence : [];
@@ -43,6 +58,7 @@ const RULES: Rule[] = [
     index: 1,
     level: "critical",
     reasonCode: "critical_support_issue",
+    sources: from("support_blocked"),
     match: (u, s) => {
       const sig = has(s, "support_blocked");
       return sig || u.operations.supportState === "blocked" ? evidenceFrom(sig) : null;
@@ -52,6 +68,7 @@ const RULES: Rule[] = [
     index: 2,
     level: "critical",
     reasonCode: "financial_access_suspended",
+    sources: from("financial_access_suspended"),
     match: (_u, s) => {
       const sig = has(s, "financial_access_suspended");
       return sig ? evidenceFrom(sig) : null;
@@ -61,6 +78,7 @@ const RULES: Rule[] = [
     index: 3,
     level: "high",
     reasonCode: "financial_data_conflict",
+    sources: from("pocket_data_conflict"),
     match: (u, s) => {
       const sig = has(s, "pocket_data_conflict");
       return sig || u.financial.pocketConflict ? evidenceFrom(sig) : null;
@@ -70,6 +88,7 @@ const RULES: Rule[] = [
     index: 4,
     level: "high",
     reasonCode: "sla_breach",
+    sources: from("mentor_sla_risk"),
     match: (u, s, clock) => {
       const sig = has(s, "mentor_sla_risk");
       if (!u.operations.sla) return null;
@@ -81,6 +100,7 @@ const RULES: Rule[] = [
     index: 5,
     level: "high",
     reasonCode: "checkpoint_grace_near_expiration",
+    sources: from("checkpoint_grace_active"),
     match: (u, s, clock) => {
       const sig = has(s, "checkpoint_grace_active");
       if (!u.financial.grace?.active) return null;
@@ -92,6 +112,7 @@ const RULES: Rule[] = [
     index: 6,
     level: "high",
     reasonCode: "report_or_mentor_blocker",
+    sources: from("report_rejected_no_return", "mentor_sla_risk", "report_pending"),
     match: (_u, s) => {
       const sig = has(s, "report_rejected_no_return") ?? has(s, "mentor_sla_risk") ?? has(s, "report_pending");
       return sig ? evidenceFrom(sig) : null;
@@ -101,6 +122,7 @@ const RULES: Rule[] = [
     index: 7,
     level: "high",
     reasonCode: "rapid_balance_decline",
+    sources: from("rapid_balance_decline"),
     match: (_u, s) => {
       const sig = has(s, "rapid_balance_decline");
       return sig ? evidenceFrom(sig) : null;
@@ -110,6 +132,7 @@ const RULES: Rule[] = [
     index: 8,
     level: "normal",
     reasonCode: "returned_user",
+    sources: from("returned_after_absence"),
     match: (_u, s) => {
       const sig = has(s, "returned_after_absence");
       return sig ? evidenceFrom(sig) : null;
@@ -119,6 +142,7 @@ const RULES: Rule[] = [
     index: 9,
     level: "normal",
     reasonCode: "progression_stalled",
+    sources: from("progression_stalled", "inactive_7_days", "dormant_14_days", "dormant_30_days"),
     match: (_u, s) => {
       const sig = has(s, "progression_stalled") ?? has(s, "inactive_7_days") ?? has(s, "dormant_14_days") ?? has(s, "dormant_30_days");
       return sig ? evidenceFrom(sig) : null;
@@ -128,6 +152,7 @@ const RULES: Rule[] = [
     index: 10,
     level: "normal",
     reasonCode: "ordinary_follow_up",
+    sources: (s) => (s[0] ? [s[0].code] : []),
     match: (_u, s) => (s.length > 0 ? evidenceFrom(s[0]!) : null),
   },
 ];
@@ -136,9 +161,23 @@ const RULES: Rule[] = [
 export function computePriority(user: MockUser, signals: ComputedSignal[], clock: Clock): PriorityResult {
   for (const rule of RULES) {
     const evidence = rule.match(user, signals, clock);
-    if (evidence) return { level: rule.level, reasonCode: rule.reasonCode, evidence, ruleIndex: rule.index };
+    if (evidence) {
+      return {
+        level: rule.level,
+        reasonCode: rule.reasonCode,
+        evidence,
+        sourceSignalCodes: rule.sources(signals),
+        ruleIndex: rule.index,
+      };
+    }
   }
-  return { level: "low", reasonCode: "no_priority_signal", evidence: [], ruleIndex: 99 };
+  return {
+    level: "low",
+    reasonCode: "no_priority_signal",
+    evidence: [],
+    sourceSignalCodes: [],
+    ruleIndex: 99,
+  };
 }
 
 /**

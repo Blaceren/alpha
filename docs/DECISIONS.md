@@ -283,3 +283,89 @@ group-hover:bg-row-hover` строки), мягкий edge-separator (border), �
 действия не содержит финансовых данных.
 
 **ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alfa Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.
+
+---
+
+## Phase 1C — записи реализации (User 360, read-only)
+
+## D-34 · Следующий этап — Phase 1C User 360; 1B3/1B4 отложены — **Locked**
+
+Следующим этапом **намеренно выбран User 360**. Каноническое название — **Phase 1C — User 360**.
+Переименование в «Phase 1B3» запрещено: номер 1B3 закреплён за Today Workspace и не переиспользуется.
+
+- **Phase 1B3 — Today Workspace** — **отложен** до отдельного решения (не выполнен, не начат).
+- **Phase 1B4 — mutations overlay** — **отложен** до отдельного решения (не выполнен, не начат).
+
+- **Обоснование:** derivation-слой и permission-проекции готовы с Phase 1B1; `/users/[id]` оставался
+  единственным placeholder-ом внутри уже реализованного пути «Users → профиль». User 360 read-only
+  не требует mutations overlay, поэтому не зависит от 1B4.
+- **Влияние:** IMPLEMENTATION_STATUS (раздел «Последовательность этапов»), README, USER_360.md.
+  Следующий этап после 1C **не начинается автоматически** — только по отдельному заданию.
+
+## D-35 · `getUser360` — единственная read-операция User 360 — **Locked**
+
+Контракт `CrmDataProvider` расширен **одной read-only** операцией (14-й):
+`getUser360(ctx, { userId }) → Result<User360>`. Существующие 13 операций не менялись.
+
+- **Обоснование:** `getUserById` возвращает `UserSummary` — плоскую list-проекцию с
+  `context: "list"` (identity всегда masked даже для admin), без learning/grace/SLA-состояния/
+  сигналов/рекомендаций/событий. Сборка экрана из `getUserById` + `getUserTimeline` +
+  `getUserSignals` + `getRecommendedActions` дала бы четыре loading/error-состояния и, что важнее,
+  **композицию прав в UI**. Единый агрегат позволяет выполнить всю permission-проекцию внутри
+  провайдера до React.
+- **Правило:** вся проекция — в `domain/users/user-360-projection.ts`; UI рендерит полученное и
+  никогда не решает видимость сам. Мутирующего аналога у операции нет.
+- **Влияние:** DATA_PROVIDER_CONTRACT (§3 дополнен), USER_360.md, ARCHITECTURE.
+
+## D-36 · Балансо-производные пояснения скрываются вместе с суммами — **Locked**
+
+Для ролей без `view_exact_financials` провайдер отдаёт `learning.nextCheckpointRequiredUsd = null`,
+а у финансово-производных сигналов (`checkpoint_approaching`, `rapid_balance_decline`)
+`reason = null`, `evidence = []`. Сам сигнал роль по-прежнему видит.
+
+- **Обоснование:** сетка контрольных точек — **опубликованная константа** (L10 = $100,
+  PROJECT_CONTEXT §4.3), а `checkpoint_approaching` объясняет себя как «осталось 10%». Роль с
+  бакетом `$50–99` вычисляла точный баланс арифметикой: `100 − 10% = $90`. Строки `$90` в DOM при
+  этом не было — утечка **арифметическая**, а не текстовая. Маскирование только строк её не ловит.
+- **Также:** HIGH-события (депозиты) не попадают в `activity` ролям без exact-финансов
+  (DATA_PROVIDER_CONTRACT §4); отсутствие тихое, чтобы не раскрывать существование денежных событий.
+  Анонимизация — ось целиком: при identity `hidden`/`pseudonymous` не отдаются
+  `country/locale/timezone/acquisitionSource/campaign`.
+- **Долг:** существующая `getUserTimeline` по-прежнему игнорирует `ctx` и отдаёт HIGH-события любой
+  роли. В Phase 1C **не исправлялась** (не используется User 360; правка = не-нужная регрессия в
+  чужой операции). Подлежит исправлению вместе с Today/аудитом контракта.
+- **Влияние:** USER_360.md (§Financial privacy), visual-review PHASE_1C.
+
+## D-37 · Unauthorized реализован, но ни одна роль его не вызывает — **Noted**
+
+Состояние `unauthorized` реализовано, provider-driven и покрыто component-тестом со stub-провайдером.
+Однако при **текущей утверждённой** матрице (ROLE_PERMISSION_MATRIX §2: User 360 = F/F/F/L/L/L/L/L/L
+и PII_ACCESS_POLICY §5: `content_manager` — «без identity, обезличенный контекст обучения/контента»)
+User 360 доступен **всем девяти ролям** хотя бы в ограниченном/обезличенном виде.
+
+- **Следствие:** E2E-сценарий и скриншот `unauthorized` **не создавались** — это потребовало бы либо
+  debug-контрола в UI (запрещён), либо сужения утверждённых прав ради артефакта.
+- **Прецедент:** `UsersUnauthorized` в Users workspace (Phase 1B2) находится ровно в том же
+  положении — состояние существует как защитная обработка контракта, ролью не достигается.
+- **Открытый вопрос для заказчика:** нужно ли закрыть индивидуальную карточку пользователя для
+  `content_manager` (identity = hidden делает карточку малоосмысленной). Требует решения по политике,
+  а не кода.
+
+## D-38 · Точечные исправления домена, выявленные User 360 — **Locked**
+
+Экран показал три дефекта, которые не были видны в списочных экранах. Исправлены минимально:
+
+1. **`FinancialProjection.hiddenReason`** (`"no_data" | "not_permitted"`). `mode: "hidden"` смешивал
+   «нет данных» и «нет прав» → admin у пользователя без баланса видел ложное «Недоступно для роли».
+   Users workspace не менялся (его `FinancialCell` сохраняет прежний текст; latent-неточность там
+   зафиксирована как долг).
+2. **`PriorityResult.sourceSignalCodes`** — какие активные сигналы интерпретировало сработавшее
+   правило. Лестница правил остаётся единственным источником истины. Позволяет UI **ссылаться** на
+   основание приоритета вместо третьего бейджа с тем же фактом (D-20 не нарушается: score не вводится).
+3. **Текст `review_checkpoint_grace`** → «Разобрать контрольную точку / Финансовая контрольная точка
+   требует внимания: приближение или активный grace-период». Прежняя формулировка утверждала
+   «Активен grace period» пользователю **без** grace, т.к. действие триггерится и
+   `checkpoint_approaching`, и `checkpoint_grace_active`. Коды не менялись, только user-facing текст.
+
+- **Влияние:** projection.ts, priority.ts, catalog.ts, labels.ts, today/builder.ts (константа),
+  USER_360.md, visual-review PHASE_1C.

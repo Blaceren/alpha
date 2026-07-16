@@ -64,6 +64,7 @@ interface CrmDataProvider {
   getTodayWorkspace(ctx: CrmContext, input: GetTodayInput): Promise<Result<TodayWorkspace>>;
   searchUsers(ctx: CrmContext, input: SearchUsersInput): Promise<Result<Paginated<UserListRow>>>;
   getUserById(ctx: CrmContext, input: { userId: UserId }): Promise<Result<CrmUser>>;
+  getUser360(ctx: CrmContext, input: { userId: UserId }): Promise<Result<User360>>;  // Phase 1C, read-only (§3a)
   getUserTimeline(ctx: CrmContext, input: GetTimelineInput): Promise<Result<Paginated<UserTimelineEvent>>>;
   getUserTasks(ctx: CrmContext, input: GetUserTasksInput): Promise<Result<Paginated<CrmTask>>>;
   getUserCases(ctx: CrmContext, input: GetUserCasesInput): Promise<Result<Paginated<CrmCase>>>;
@@ -150,9 +151,33 @@ interface CrmDataProvider {
 
 ---
 
+## 3a. getUser360 (Phase 1C, read-only)
+
+- **Назначение:** единственный read экрана User 360 (`/users/[id]`). Композирует derivation-слой и
+  отдаёт **уже спроецированный под роль** агрегат одним результатом.
+- **Input:** `{ userId: UserId }`.
+- **Output:** `Result<User360>` (`src/domain/users/user-360.ts`): identity · attention
+  (priority/reasonCode/evidence/sourceSignalCodes) · states (5 осей + registrationStatus) · learning ·
+  financial (`FinancialProjection` + grace + freshness) · owner (+ SLA state) · signals ·
+  recommendations (+ `allowedForRole`) · activity · `generatedAt`.
+- **Pagination/Filters/Sort:** нет.
+- **Errors:** `not_found` (неизвестный id, `retriable: false`), `unauthorized`,
+  `upstream_unavailable`, `internal`.
+- **Loading/stale:** `stale` + данные при устаревшем балансе; `freshness` от `Clock` провайдера.
+- **Permission:** View User 360. Проекция выполняется **внутри провайдера** до отдачи в UI:
+  identity — `projectIdentity(context: "detail")`; суммы — только `FinancialProjection`;
+  балансо-производные пояснения и `nextCheckpointRequiredUsd` скрываются вместе с суммами
+  (арифметическая утечка, D-36); HIGH-события не отдаются без Exact financials.
+- **Почему отдельно от `getUserById`:** `getUserById` отдаёт `UserSummary` — плоскую **list**-проекцию
+  (`context: "list"`, identity всегда masked), без learning/grace/SLA/сигналов/рекомендаций/событий.
+  Композиция четырёх операций в UI означала бы сборку прав в React. См. DECISIONS D-35.
+- **Мутаций нет:** операция read-only, мутирующего аналога в Phase 1C не существует.
+
+---
+
 ## 3. getUserById
 
-- **Назначение:** полный агрегат для User 360.
+- **Назначение:** плоская проекция пользователя (используется списками). Для User 360 см. §3a.
 - **Input:** `{ userId: UserId }`.
 - **Output:** `Result<CrmUser>` (см. DOMAIN_MODEL §1). HIGH-поля внутри маскируются по роли.
 - **Pagination:** нет.
@@ -359,7 +384,8 @@ interface CrmDataProvider {
 |---|---|---|
 | getTodayWorkspace | View Today | scope=team → manager/retention/admin |
 | searchUsers | View Users | fin-сорт/фильтр → Exact financials |
-| getUserById | View User 360 | детализация по роли |
+| getUserById | View User 360 | плоская list-проекция |
+| getUser360 | View User 360 | вся проекция внутри провайдера; балансо-производные пояснения скрыты без Exact financials (D-36) |
 | getUserTimeline | View User 360 | HIGH-события маскируются |
 | getUserTasks | View Tasks | скоуп по типу задачи |
 | getUserCases | View Cases | тип кейса по роли |

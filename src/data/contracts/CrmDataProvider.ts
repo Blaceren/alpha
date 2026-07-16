@@ -22,6 +22,7 @@ import type { CrmCase, CaseStatus, CaseType } from "@/domain/cases/case";
 import type { FinancialBucket } from "@/domain/financial/financial";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { UserSummary } from "@/domain/users/user";
+import type { User360 } from "@/domain/users/user-360";
 import type { Paginated, PageParams, Result, SortParam } from "./result";
 
 /** Caller context for permission-aware operations. */
@@ -256,6 +257,13 @@ export interface CrmDataProvider {
   getTodayWorkspace(ctx: CrmContext, input: GetTodayInput): Promise<Result<TodayWorkspace>>;
   searchUsers(ctx: CrmContext, input: SearchUsersInput): Promise<Result<Paginated<UserSummary>>>;
   getUserById(ctx: CrmContext, input: { userId: UserId }): Promise<Result<UserSummary>>;
+  /**
+   * Read-only User 360 aggregate (Phase 1C). Composes the derivation layer and
+   * returns it ALREADY projected for `ctx.role` in a single result, so the UI
+   * never assembles permissions from several partial reads. Read-only: it has
+   * no mutating counterpart in this phase.
+   */
+  getUser360(ctx: CrmContext, input: { userId: UserId }): Promise<Result<User360>>;
   getUserTimeline(ctx: CrmContext, input: GetTimelineInput): Promise<Result<Paginated<UserTimelineEvent>>>;
   getUserTasks(ctx: CrmContext, input: GetUserTasksInput): Promise<Result<Paginated<CrmTask>>>;
   getUserCases(ctx: CrmContext, input: GetUserCasesInput): Promise<Result<Paginated<CrmCase>>>;

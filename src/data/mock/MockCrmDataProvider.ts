@@ -6,6 +6,8 @@
  */
 import type { UserId, Freshness } from "@/domain/shared/primitives";
 import type { UserSummary } from "@/domain/users/user";
+import type { User360 } from "@/domain/users/user-360";
+import { projectUser360 } from "@/domain/users/user-360-projection";
 import type { Paginated, Result } from "@/data/contracts/result";
 import { empty, fail, ok, stale } from "@/data/contracts/result";
 import type { CrmRole } from "@/domain/identity/roles";
@@ -343,6 +345,37 @@ export class MockCrmDataProvider implements CrmDataProvider {
       const summary = this.toSummary(this.derive(u), ctx.role);
       const fr = this.freshness(u);
       return fr.isStale ? stale(summary, fr) : ok(summary, fr);
+    });
+  }
+
+  /**
+   * Read-only User 360 aggregate. All permission projection happens here (via
+   * projectUser360) — an exact amount or full email is never produced for a role
+   * that may not see it, so it cannot reach the client at all.
+   */
+  getUser360(ctx: CrmContext, input: { userId: UserId }): Promise<Result<User360>> {
+    return this.gate(() => {
+      const u = this.users.find((x) => x.identity.userId === input.userId);
+      if (!u) {
+        return fail<User360>({
+          code: "not_found",
+          message: `No user ${input.userId}.`,
+          retriable: false,
+        });
+      }
+      const d = this.derive(u);
+      const fr = this.freshness(u);
+      const view = projectUser360({
+        user: u,
+        signals: d.signals,
+        priority: d.priority,
+        recommendations: deriveRecommendations(u, d.signals),
+        role: ctx.role,
+        clock: this.clock,
+        freshness: fr,
+        slaState: this.slaState(u),
+      });
+      return fr.isStale ? stale(view, fr) : ok(view, fr);
     });
   }
 

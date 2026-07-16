@@ -112,6 +112,8 @@ const HIDDEN_FINANCIAL: FinancialProjection = {
   amountUsd: null,
   bucket: null,
   label: "—",
+  // Withheld by queue policy (QUEUES_WITHOUT_FINANCIALS), not absent from source.
+  hiddenReason: "not_permitted",
   stale: false,
 };
 

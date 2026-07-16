@@ -19,6 +19,12 @@ import type { IdentityProjection } from "@/domain/identity/identity-projection";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { RecommendedActionCode } from "@/domain/recommendations/catalog";
 
+/**
+ * Pocket affiliate registration status — exactly three canonical values (D-27).
+ * `registered` means the backend accepted a confirmed Pocket registration event.
+ */
+export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
+
 export interface UserSummary {
   id: UserId;
   displayName: string;
@@ -27,7 +33,7 @@ export interface UserSummary {
   fundingStatus: FundingStatus;
   engagementStatus: EngagementStatus;
   /** Pocket affiliate registration status (backend-confirmed for `registered`). */
-  registrationStatus: "not_registered" | "registration_pending" | "registered";
+  registrationStatus: RegistrationStatus;
   /** ATA account email confirmation — separate from Pocket registration. */
   emailConfirmed: boolean;
   currentLevel: number;

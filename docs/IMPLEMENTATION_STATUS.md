@@ -152,5 +152,76 @@ Provider/domain/permissions/financial projection не менялись. Today, U
 Provider/domain/permissions/financial projection не менялись. Today, User 360, mutation overlay,
 `/users/[id]`, backend/DB/Pocket — не начинались.
 
-## Следующий этап (рекомендация)
-**Phase 1B3 — Today workspace** поверх готового провайдера (очереди/приоритеты), затем 1B4 mutations overlay, 1C User 360.
+## Phase 1C — User 360 (read-only) ✅ (текущий)
+
+### Выполнено
+- **`/users/[id]` больше не placeholder:** полноценный read-only User 360.
+  `src/features/user-360/` (`user-360-workspace.tsx`, `user-360-states.tsx`, `hooks/`,
+  `components/`: header, identity-summary, attention-panel, recommendations, state-overview,
+  blockers, signals, learning-progress, activity-timeline, financial-summary, owner-context,
+  section-card). Данные — только через `CrmDataProvider`.
+- **Data contract first (D-35):** аудит показал, что `getUserById` отдаёт плоскую list-проекцию
+  (identity всегда masked, нет learning/grace/SLA/сигналов/рекомендаций/событий). Добавлена **одна
+  read-only операция** `getUser360(ctx, {userId}) → Result<User360>`; существующие 13 не менялись.
+  Read-модель — `domain/users/user-360.ts`, проекция — `domain/users/user-360-projection.ts`.
+- **Permissions до React (D-36):** вся проекция — внутри провайдера. Запрещённые значения физически
+  отсутствуют в payload/DOM/props/`title`/`aria`/data-* и в сериализованных данных страницы.
+  Закрыта **арифметическая утечка**: сетка checkpoint (публичная константа L10=$100) + «осталось 10%»
+  давали support точный баланс $90 → для ролей без exact-финансов `nextCheckpointRequiredUsd = null`
+  и балансо-производные пояснения сигналов вырезаны. HIGH-события (депозиты) не отдаются.
+- **IA:** header (back, identity, ID, приоритет, ответственный, активность, статус данных) ·
+  «Почему требует внимания» (приоритет + причина + рекомендация с основанием/срочностью/адресатом) ·
+  5 независимых осей состояний · блокеры · сигналы · обучение · недавние события · sticky-контекст
+  (финансы + ответственный). Один факт представлен **дважды и по-разному** (состояние vs сигнал),
+  интерпретация ссылается бейджем «Основание приоритета» (`PriorityResult.sourceSignalCodes`, D-38).
+- **Read-only честно:** рекомендации помечены «Только просмотр», кнопок выполнения нет,
+  `allowedForRole` показывает «не для вашей роли». Fake success отсутствует (тест).
+- **States:** loading (skeleton в форме реального layout), not-found (с `h1`, ID, ссылкой назад,
+  без выдуманного профиля), unauthorized (provider-driven; ни одна роль его не вызывает — D-37),
+  error (retry только при `retriable`), stale (баннер + данные видимы, `Freshness` от `FixedMockClock`).
+- **Responsive:** 1440 (первый экран отвечает «почему открыт») · 1024 (намеренная компактность) ·
+  390 (собственный операционный порядок, проверен замером) · 200% zoom = CSS-viewport 720×450 (reflow).
+  Page overflow **0** на всех ширинах.
+- **A11y:** один h1 (в т.ч. в терминальных состояниях), `<section aria-labelledby>` + `useId`,
+  timeline как `<ol>`/`<time>`, статусы не только цветом, keyboard + focus-visible.
+- **Точечные исправления домена (D-38):** `FinancialProjection.hiddenReason` («нет данных» vs «нет
+  прав»), `PriorityResult.sourceSignalCodes`, нейтральный текст `review_checkpoint_grace`.
+- **Docs:** `USER_360.md`, `visual-reviews/PHASE_1C_USER_360.md`, DECISIONS D-34…D-38;
+  screenshots `screenshots/phase-1c-user-360/{first-pass,final}/`.
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **173/173** (117 прежних сохранены + 56 новых:
+  25 projection, 12 permissions-in-DOM, 19 workspace) · `build` ✅ (18 routes; `/users/[id]` —
+  8.55 kB / 167 kB, больше не placeholder) · `test:e2e` ✅ **26/26** одним прогоном
+  (5 smoke + 5 Users + 3 sticky сохранены + 13 новых User 360), консоль чистая, hydration-warnings нет.
+  `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26, `--force` не выполнялся).
+- Зависимости не менялись: `package.json` / `package-lock.json` не тронуты.
+
+### Не входит (сознательно)
+Редактирование, notes/tasks/cases mutations, смена owner/статуса, закрытие сигналов, финансовые
+операции, коммуникации, PII reveal-flow, полный финансовый history, **Today (Phase 1B3 — отложен)**,
+**mutations overlay (Phase 1B4 — отложен)**, backend/API/database/Prisma/Pocket, production auth,
+deploy. Следующий этап **не начинается автоматически**.
+
+### Известные долги (не скрыты)
+- `getUserTimeline` по-прежнему игнорирует `ctx` и отдаёт HIGH-события любой роли (D-36). User 360 её
+  не использует; исправление — вместе с Today/аудитом контракта.
+- `FinancialCell` в Users workspace показывает «Недоступно для роли» и при отсутствии данных
+  (не использует новый `hiddenReason`) — latent-неточность, вне scope 1C (D-38).
+- Русская карта подписей `StateEvidence` не сделана: raw evidence не рендерится в User 360.
+
+## Последовательность этапов (решение зафиксировано)
+
+Следующим этапом **намеренно выбран User 360**. Каноническое название — **Phase 1C — User 360**
+(не «Phase 1B3»; нумерация 1B3 закреплена за Today и не переиспользуется).
+
+| Этап | Каноническое название | Статус |
+|---|---|---|
+| Phase 1C | **User 360** | выполняется / выполнен (см. ниже) |
+| Phase 1B3 | Today Workspace | **отложен** до отдельного решения — не выполнен |
+| Phase 1B4 | Mutations overlay | **отложен** до отдельного решения — не выполнен |
+
+Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
+готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
+пути «Users → профиль». User 360 закрывает этот путь и не требует mutations overlay, т.к. read-only.
+Today (1B3) и mutations (1B4) остаются запланированными и не начинаются автоматически. См. D-34.

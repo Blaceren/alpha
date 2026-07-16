@@ -10,10 +10,10 @@ import type {
   OperationalBlocker,
   ValueSegment,
 } from "@/domain/lifecycle/state";
-import type { SignalCode } from "@/domain/signals/signal";
+import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { CheckpointStatus } from "@/domain/financial/financial";
-import type { RecommendedActionCode } from "@/domain/recommendations/catalog";
+import type { RecommendedActionCode, SuggestedChannel } from "@/domain/recommendations/catalog";
 
 export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
 
@@ -60,7 +60,7 @@ export const RECOMMENDATION_LABEL: Record<RecommendedActionCode, string> = {
   mentor_follow_up: "Follow-up ментора",
   support_follow_up: "Follow-up поддержки",
   verify_financial_data: "Проверить финансовые данные",
-  review_checkpoint_grace: "Разобрать checkpoint grace",
+  review_checkpoint_grace: "Разобрать контрольную точку",
   restore_learning_path: "Восстановить учебный доступ",
   reduce_communication_frequency: "Снизить частоту коммуникаций",
   review_risk_material: "Материал по управлению риском",
@@ -175,6 +175,102 @@ export const USERS_COLUMN_LABEL = {
   balance: "Баланс",
   netDeposits: "Чистые депозиты",
 } as const;
+
+/**
+ * User 360 (`/users/[id]`) user-facing labels. Same rule as the Users workspace:
+ * fully Russian terminology, single source, no raw enum codes in the UI.
+ * Domain terms (`Pocket`, `XP`, `Grace-период`, `SLA`) are kept intentionally.
+ */
+export const USER_360_LABEL = {
+  backToUsers: "Пользователи",
+  attention: "Почему требует внимания",
+  noAttention: "Активных причин для внимания нет",
+  recommendation: "Рекомендуемое действие",
+  recommendationBasis: "Основание",
+  states: "Состояния",
+  learning: "Обучение",
+  blockers: "Активные блокеры",
+  signals: "Системные сигналы",
+  activity: "Недавние события",
+  financial: "Финансы",
+  ownerContext: "Ответственный и работа",
+  identity: "Идентификация",
+  priorityBasis: "Основание приоритета",
+  readOnly: "Только просмотр",
+  userId: "ID пользователя",
+} as const;
+
+export const SIGNAL_SEVERITY_LABEL: Record<SignalSeverity, string> = {
+  critical: "Критическая",
+  high: "Высокая",
+  medium: "Средняя",
+  low: "Низкая",
+};
+
+/** Suggested channel of a recommended action (who/how it would be delivered). */
+export const CHANNEL_LABEL: Record<SuggestedChannel, string> = {
+  in_app: "В приложении",
+  email: "Email",
+  mentor: "Ментор",
+  support: "Поддержка",
+  none: "Без коммуникации",
+};
+
+export const REPORT_STATE_LABEL: Record<"none" | "pending" | "approved" | "rejected", string> = {
+  none: "Нет отчёта",
+  pending: "На проверке",
+  approved: "Принят",
+  rejected: "Отклонён",
+};
+
+export const MENTOR_REVIEW_LABEL: Record<
+  "none" | "queued" | "in_review" | "approved" | "rejected",
+  string
+> = {
+  none: "Нет проверки",
+  queued: "В очереди",
+  in_review: "На проверке",
+  approved: "Принято",
+  rejected: "Отклонено",
+};
+
+export const SUPPORT_STATE_LABEL: Record<"none" | "open" | "blocked" | "resolved", string> = {
+  none: "Нет обращений",
+  open: "Открыто обращение",
+  blocked: "Заблокирован",
+  resolved: "Решено",
+};
+
+export const MENTOR_STATE_LABEL: Record<"none" | "queued" | "reviewing" | "blocked", string> = {
+  none: "Нет проверки",
+  queued: "В очереди",
+  reviewing: "На проверке",
+  blocked: "Заблокирован",
+};
+
+/** SLA keys present in the mock dataset (docs/SLA_POLICY.md). */
+export const SLA_KEY_LABEL: Record<string, string> = {
+  mentor_review: "Проверка ментора",
+  support_high: "Поддержка (высокий)",
+  support_critical: "Поддержка (критический)",
+  support_normal: "Поддержка (обычный)",
+  retention_follow_up: "Retention follow-up",
+  financial_data_conflict: "Конфликт финансовых данных",
+};
+
+export const SLA_STATE_LABEL: Record<"on_track" | "warning" | "breached" | "none", string> = {
+  on_track: "В срок",
+  warning: "Под риском",
+  breached: "Нарушен",
+  none: "Без SLA",
+};
+
+/** Where a timeline event came from (User 360 activity). */
+export const ACTIVITY_SOURCE_LABEL: Record<"product" | "pocket" | "employee", string> = {
+  product: "Продукт",
+  pocket: "Pocket",
+  employee: "Сотрудник",
+};
 
 /** Human labels for mock employee (owner) ids. */
 export const OWNER_LABEL: Record<string, string> = {
