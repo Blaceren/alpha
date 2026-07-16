@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   CHANNEL_LABEL,
+  RECOMMENDATION_LABEL,
   SIGNAL_LABEL,
   USER_360_LABEL,
 } from "@/config/labels";
@@ -60,7 +61,10 @@ function RecommendationRow({ rec, primary = false }: { rec: User360Recommendatio
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-text-primary">{rec.title}</span>
+        {/* Worded from the code through the shared label map — the same string
+            Users and Today print for this action (D-52), not the read model's
+            own copy. */}
+        <span className="text-sm font-medium text-text-primary">{RECOMMENDATION_LABEL[rec.code]}</span>
         <Badge tone={ACTION_TONE[rec.priority]}>{ACTION_URGENCY_LABEL[rec.priority]}</Badge>
         {/* Honest read-only marker instead of a non-functional action button. */}
         <Tooltip content="Действия из CRM пока не выполняются — экран только для чтения" side="top">

@@ -11,6 +11,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
+import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
 import { SessionProvider } from "@/components/crm-shell/session-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TodayWorkspace } from "./today-workspace";
@@ -248,5 +249,40 @@ describe("TodayWorkspace — loading, error, stale", () => {
     expect(banner).toHaveTextContent(/Данные обновлены 75 мин назад/);
     // The work is still there to do.
     expect(screen.getAllByRole("link", { name: /Открыть профиль/ }).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * D-52: Today words an action from the code through the shared label map. The
+ * expectation comes from the catalog, so this asserts agreement with the
+ * canonical source rather than with a pasted string.
+ */
+describe("TodayWorkspace — recommendation wording (D-52)", () => {
+  it("prints the canonical catalog wording for every queued recommendation", async () => {
+    const p = provider();
+    const res = await p.getTodayWorkspace(
+      { actorId: "emp_mock_admin", role: "crm_admin", now: clock.nowIso() },
+      {},
+    );
+    const codes = [
+      ...new Set(
+        res
+          .data!.sections.flatMap((s) => s.items)
+          .map((i) => i.recommendation?.code)
+          .filter((c): c is NonNullable<typeof c> => Boolean(c)),
+      ),
+    ];
+    expect(codes.length).toBeGreaterThan(0);
+
+    const { container } = renderToday(p);
+    await queueReady();
+    const text = container.textContent ?? "";
+
+    for (const code of codes) {
+      expect(text, `Today must word ${code} as the catalog does`).toContain(
+        RECOMMENDATION_CATALOG[code].title,
+      );
+      expect(text).not.toContain(code);
+    }
   });
 });

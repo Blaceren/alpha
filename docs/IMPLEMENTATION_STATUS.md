@@ -315,8 +315,51 @@ drag-and-drop, коммуникации, автоматизации — **Phase 
 Backend / database / Prisma / Pocket API / production auth отсутствуют. Зависимости не добавлялись.
 
 ### Известный предсуществующий долг (вне scope 1B3)
-`RECOMMENDATION_CATALOG[code].title` и `RECOMMENDATION_LABEL[code]` содержат **две разные русские
-строки** на один код («Напомнить о подтверждении email» против «Напомнить подтвердить email»).
-Users рендерит `RECOMMENDATION_LABEL`, User 360 — `title` из проекции. Today встал на сторону
-объявленного единого источника (`config/labels.ts`) и не тащит вторую строку в read-модель.
-Само расхождение затрагивает User 360 и должно чиниться отдельно.
+~~`RECOMMENDATION_CATALOG[code].title` и `RECOMMENDATION_LABEL[code]` содержат **две разные русские
+строки** на один код~~ → закрыт в **Phase 1B3.1** (D-52). При закрытии выяснилось, что расхождений
+было **три**, а не одно, как записано здесь изначально: помимо `remind_email_confirmation`
+разошлись `review_risk_material` и `celebrate_learning_return`. См. раздел ниже.
+
+---
+
+## Phase 1B3.1 — Recommendation label consistency ✅
+
+Небольшой consistency prerequisite перед Phase 1B4. Только подписи рекомендаций: права, провайдер-семантика
+и layout всех трёх экранов не менялись. Решение — D-52.
+
+### Выполнено
+- **Один канонический источник.** `RECOMMENDATION_CATALOG[code].title` (`domain/recommendations/catalog.ts`) —
+  подпись рядом с кодом рекомендации. `config/labels.ts` → `RECOMMENDATION_LABEL` теперь **выводится**
+  из каталога (`Object.entries(...).map(...)`) и не содержит собственных литералов. Двух наборов из 18
+  русских строк больше нет — расхождение стало **непредставимым**, а не «проверяемым тестом».
+- **Три расхождения устранены** принятием более полной формулировки каталога. Строки не редактировались:
+  удалён второй набор, канон применился сам. Остальные 15 подписей не тронуты.
+  - `remind_email_confirmation` → «Напомнить о подтверждении email»
+  - `review_risk_material` → «Предложить материал по управлению риском»
+  - `celebrate_learning_return` → «Отметить возвращение к обучению»
+- **Потребители приведены к одному mapping.** Users (`misc-cells.tsx`) и Today (`today-next-step.tsx`)
+  уже читали `RECOMMENDATION_LABEL` — не изменились. User 360 (`user-recommendations.tsx`) печатал
+  `rec.title` из read-модели → теперь резолвит подпись из кода через тот же mapping. Read-модель и
+  провайдерский контракт не менялись: `User360Recommendation.title` остаётся и тождественен канону
+  по построению.
+- **Комментарий-источник в `domain/today/today.ts`** обновлён: он объявлял единым источником
+  `config/labels`, что после выведения стало неточным (источник — каталог, `config/labels` — единый
+  mapping для UI).
+- **Цикла нет:** `domain` не импортирует `@/config/labels`; `catalog.ts` тянет только `identity/roles`
+  и `signals/signal` (оба type-only), поэтому `labels.ts → catalog.ts` (value-импорт) безопасен —
+  тот же приём, что у `FINANCIAL_HIDDEN_LABEL` (D-40).
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **439/439** (все 425 прежних сохранены + 14 новых:
+  10 map-consistency, по 1–2 экранных на Users/Today/User 360) · `build` ✅ · `test:e2e` ✅ **41/41**
+  (прежний состав сохранён полностью, новых не добавлялось — layout не менялся, скриншоты не требуются).
+  `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26); `audit fix` не выполнялся.
+  `package.json` / `package-lock.json` не менялись.
+- Экранные тесты берут ожидаемую строку **из каталога**, а не из вставленного литерала — они проверяют
+  «экран согласен с каноном». Три конкретные строки дополнительно пиняются литералами, иначе
+  self-referential проверка `label === title` прошла бы и при откате к короткому варианту.
+
+### Не входит (сознательно)
+Mutations и Phase 1B4 — **не начаты**. Права, identity-проекция, exact-financial visibility, провайдер-семантика
+не менялись. `reason`/`urgency`/`permissions` рекомендаций не трогались, tone of voice не переписывался.
+Backend / database / Prisma / Pocket отсутствуют. Зависимости не добавлялись.

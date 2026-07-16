@@ -49,10 +49,11 @@ export interface TodayDue {
 /**
  * The single next action, as the domain recommends it. Today never performs it.
  *
- * Carries the CODE, not a title: `config/labels` is the declared single source
- * of user-facing wording (RECOMMENDATION_LABEL), and shipping a second Russian
- * string inside the read model is how the same action ends up worded two ways on
- * two screens.
+ * Carries the CODE, not a title: the wording is authored once in the
+ * recommendation catalog and reaches every screen through the single
+ * `config/labels`.RECOMMENDATION_LABEL mapping derived from it (D-52). Shipping a
+ * second Russian string inside the read model is how the same action ends up
+ * worded two ways on two screens — which is exactly what happened before D-52.
  */
 export interface TodayRecommendation {
   code: RecommendedActionCode;

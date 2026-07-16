@@ -8,6 +8,7 @@ import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
 import { fail, stale } from "@/data/contracts/result";
 import type { Result } from "@/data/contracts/result";
 import type { User360 } from "@/domain/users/user-360";
+import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
 import { mockSessionForRole } from "@/domain/identity/session";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { User360Workspace } from "./user-360-workspace";
@@ -249,5 +250,32 @@ describe("User360Workspace — keyboard", () => {
     const back = screen.getAllByRole("link", { name: "Пользователи" })[0]!;
     back.focus();
     expect(back).toHaveFocus();
+  });
+});
+
+/**
+ * D-52: User 360 used to render the read model's own `title`, which is how it
+ * came to word three actions differently from Users/Today. It now resolves the
+ * wording from the code through the shared label map, like every other screen.
+ */
+describe("User360Workspace — recommendation wording (D-52)", () => {
+  it("prints the canonical catalog wording for every recommendation", async () => {
+    const res = await provider.getUser360(
+      { actorId: "emp_mock_admin", role: "crm_admin", now: clock.nowIso() },
+      { userId: HIGH_PRIORITY },
+    );
+    const codes = res.data!.recommendations.map((r) => r.code);
+    expect(codes.length).toBeGreaterThan(0);
+
+    const { container } = renderWorkspace();
+    await screen.findByRole("heading", { level: 1 });
+    const text = container.textContent ?? "";
+
+    for (const code of codes) {
+      expect(text, `User 360 must word ${code} as the catalog does`).toContain(
+        RECOMMENDATION_CATALOG[code].title,
+      );
+      expect(text).not.toContain(code);
+    }
   });
 });

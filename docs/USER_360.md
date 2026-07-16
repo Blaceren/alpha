@@ -136,6 +136,13 @@ DOM-порядок = порядок чтения = mobile-порядок. На `
 явная пометка «не для вашей роли» (`allowedForRole`). Никаких deposit-encouragement и loss-chasing
 формулировок (D-21).
 
+**Название берётся из единого источника (D-52).** Экран печатает не `title` из read-модели, а
+резолвит подпись из `code` через `config/labels`.`RECOMMENDATION_LABEL`, которая выведена из
+`RECOMMENDATION_CATALOG[code].title` — того же канона, что читают Users и Today. Раньше User 360
+печатал `title` напрямую и расходился с ними на трёх кодах. `User360Recommendation.title` в
+read-модели сохранён (провайдерский контракт не менялся) и тождественен канону по построению.
+Будущие audit-записи Phase 1B4, называющие действие, обязаны брать подпись оттуда же.
+
 ## States
 
 - **loading** — skeleton, повторяющий реальный layout (header + две колонки), без layout shift.

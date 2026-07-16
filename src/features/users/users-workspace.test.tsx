@@ -7,9 +7,13 @@ import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
 import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
 import { fail, type Paginated } from "@/data/contracts/result";
 import type { UserSummary } from "@/domain/users/user";
+import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
 import { SessionProvider } from "@/components/crm-shell/session-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UsersWorkspace } from "./users-workspace";
+import { UsersTable } from "./users-table";
+import { DEFAULT_COLUMN_VISIBILITY } from "./columns/columns";
+import { RecommendationCell } from "./components/misc-cells";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/users",
@@ -86,5 +90,53 @@ describe("UsersWorkspace — states", () => {
     await userEvent.type(screen.getByPlaceholderText("Имя, email или ID"), "zzzzzz");
     expect(await screen.findByText(/пользователи не найдены/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Сбросить фильтры" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * D-52: Users must word an action exactly as Today and User 360 do. The
+ * expectation is read from the catalog rather than typed here, so this asserts
+ * "the screen agrees with the canonical source" — not "the screen prints the
+ * string I happened to paste".
+ */
+describe("UsersWorkspace — recommendation wording (D-52)", () => {
+  it("prints the canonical catalog wording for every recommended action", async () => {
+    const clock = new FixedMockClock();
+    const p = new MockCrmDataProvider({ clock, delayMs: 0 });
+    const res = await p.searchUsers(
+      { actorId: "emp_mock_admin", role: "crm_admin", now: clock.nowIso() },
+      { page: { cursor: null, pageSize: 30 } },
+    );
+    const users = res.data!.items;
+    const withRec = users.filter(
+      (u) => u.topRecommendationCode && u.topRecommendationCode !== "no_action_required",
+    );
+    expect(withRec.length).toBeGreaterThan(0);
+
+    const { container } = render(
+      <TooltipProvider>
+        <UsersTable
+          users={users}
+          columnVisibility={{ ...DEFAULT_COLUMN_VISIBILITY, recommendation: true }}
+          sort={{ field: "priority", dir: "asc" }}
+          onSort={() => {}}
+        />
+      </TooltipProvider>,
+    );
+    const text = container.textContent ?? "";
+
+    for (const u of withRec) {
+      const code = u.topRecommendationCode!;
+      expect(text, `Users must word ${code} as the catalog does`).toContain(
+        RECOMMENDATION_CATALOG[code].title,
+      );
+      // The label, never the raw code.
+      expect(text).not.toContain(code);
+    }
+  });
+
+  it("renders a safe placeholder when there is no recommendation to word", () => {
+    const { container } = render(<RecommendationCell code={null} />);
+    expect(container.textContent).toBe("—");
   });
 });

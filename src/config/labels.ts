@@ -16,7 +16,11 @@ import type { PriorityBand } from "@/domain/priority/priority";
 import type { CheckpointStatus } from "@/domain/financial/financial";
 import type { FinancialHiddenReason, FinancialProjectionMode } from "@/domain/financial/projection";
 import { HIDDEN_LABEL } from "@/domain/financial/projection";
-import type { RecommendedActionCode, SuggestedChannel } from "@/domain/recommendations/catalog";
+import {
+  RECOMMENDATION_CATALOG,
+  type RecommendedActionCode,
+  type SuggestedChannel,
+} from "@/domain/recommendations/catalog";
 import type { TodaySortField } from "@/domain/today/today";
 
 export type RegistrationStatus = "not_registered" | "registration_pending" | "registered";
@@ -75,26 +79,21 @@ export const PRIORITY_REASON_LABEL: Record<string, string> = {
   no_priority_signal: "Без активных сигналов",
 };
 
-export const RECOMMENDATION_LABEL: Record<RecommendedActionCode, string> = {
-  review_new_registration: "Разобрать нового пользователя",
-  help_complete_pocket_registration: "Помочь завершить регистрацию Pocket",
-  remind_email_confirmation: "Напомнить подтвердить email",
-  continue_current_lesson: "Подтолкнуть продолжить урок",
-  offer_learning_recap: "Предложить учебный recap",
-  review_failed_test: "Разобрать проваленный тест",
-  review_report: "Проверить отчёт",
-  request_report_revision: "Запросить доработку отчёта",
-  mentor_follow_up: "Follow-up ментора",
-  support_follow_up: "Follow-up поддержки",
-  verify_financial_data: "Проверить финансовые данные",
-  review_checkpoint_grace: "Разобрать контрольную точку",
-  restore_learning_path: "Восстановить учебный доступ",
-  reduce_communication_frequency: "Снизить частоту коммуникаций",
-  review_risk_material: "Материал по управлению риском",
-  open_pause_protocol: "Открыть протокол паузы",
-  celebrate_learning_return: "Отметить возвращение",
-  no_action_required: "Действие не требуется",
-};
+/**
+ * The single mapping every screen reads to word a recommendation (D-52).
+ *
+ * DERIVED from the catalog, never authored here. This used to be a hand-kept
+ * second copy of the same 18 strings, and it drifted: `remind_email_confirmation`
+ * read «Напомнить подтвердить email» on Users/Today and «Напомнить о подтверждении
+ * email» on User 360, which reads the catalog. Deriving makes divergence
+ * unrepresentable rather than merely tested for.
+ *
+ * The indirection stays (instead of components reaching into the catalog) so the
+ * UI keeps one labelling entry point, exactly like every other map in this file.
+ */
+export const RECOMMENDATION_LABEL: Record<RecommendedActionCode, string> = Object.fromEntries(
+  Object.entries(RECOMMENDATION_CATALOG).map(([code, def]) => [code, def.title]),
+) as Record<RecommendedActionCode, string>;
 
 export const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
   registered: "Зарегистрирован",

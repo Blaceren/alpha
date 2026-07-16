@@ -48,6 +48,16 @@ export type SuggestedChannel = "in_app" | "email" | "mentor" | "support" | "none
 
 export interface RecommendedActionDef {
   code: RecommendedActionCode;
+  /**
+   * THE canonical user-facing Russian wording for this code (D-52). Authored
+   * here and nowhere else: `config/labels`.RECOMMENDATION_LABEL is derived from
+   * it, so every screen — and every future audit record naming the action —
+   * resolves to this exact string.
+   *
+   * A second hand-written map of these 18 strings used to exist; three of them
+   * drifted, and the same action read one way on User 360 and another on
+   * Users/Today. Add a code here and both sides move together.
+   */
   title: string;
   reason: string;
   sourceSignalCodes: SignalCode[];
