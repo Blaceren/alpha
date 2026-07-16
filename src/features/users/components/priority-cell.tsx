@@ -15,9 +15,12 @@ const PRIORITY_TONE: Record<PriorityBand, NonNullable<BadgeProps["tone"]>> = {
 export function PriorityCell({
   priority,
   reasonCode,
+  fullReason = false,
 }: {
   priority: PriorityBand;
   reasonCode?: string;
+  /** When true (mobile card) the reason wraps and is fully readable without hover. */
+  fullReason?: boolean;
 }) {
   const reason = reasonCode ? PRIORITY_REASON_LABEL[reasonCode] ?? reasonCode : null;
   return (
@@ -28,7 +31,19 @@ export function PriorityCell({
           <StatusBadge tone={PRIORITY_TONE[priority]} label={PRIORITY_LABEL[priority]} />
         </span>
       </Tooltip>
-      {reason ? <span className="max-w-[8rem] truncate text-2xs text-text-muted">{reason}</span> : null}
+      {reason ? (
+        <span
+          className={
+            fullReason
+              ? "text-2xs text-text-muted"
+              : // Table: one truncated line on desktop; hidden at tablet (md..xl)
+                // to keep the compact table within the viewport — tooltip has it.
+                "hidden max-w-[8rem] truncate text-2xs text-text-muted xl:block"
+          }
+        >
+          {reason}
+        </span>
+      ) : null}
     </div>
   );
 }

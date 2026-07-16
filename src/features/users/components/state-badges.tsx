@@ -48,3 +48,26 @@ export function RegistrationBadge({ value }: { value: RegistrationStatus }) {
   const tone: Tone = value === "registered" ? "success" : value === "registration_pending" ? "warning" : "neutral";
   return <Badge tone={tone}>{REGISTRATION_STATUS_LABEL[value]}</Badge>;
 }
+
+/**
+ * Tablet-only compact representation of the three single-value state dimensions
+ * (Этап / Финансовый статус / Активность) stacked into one column. The axes stay
+ * independent — this is presentation only; filtering/data are unchanged.
+ */
+export function CompactStatesCell({
+  lifecycle,
+  funding,
+  engagement,
+}: {
+  lifecycle: LifecycleStage;
+  funding: FundingStatus;
+  engagement: EngagementStatus;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <LifecycleBadge value={lifecycle} />
+      <FundingBadge value={funding} />
+      <EngagementBadge value={engagement} />
+    </div>
+  );
+}

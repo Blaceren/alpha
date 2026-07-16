@@ -1,4 +1,5 @@
 import * as React from "react";
+import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -27,7 +28,7 @@ export function ProgressCell({
     checkpointStatus !== "not_reached";
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-text-primary">
+      <span className="whitespace-nowrap text-xs text-text-primary">
         Ур. <span className="font-medium tabular-nums">{level}</span>
         {xp != null ? <span className="text-text-muted"> · {xp} XP</span> : null}
       </span>
@@ -41,7 +42,12 @@ export function ProgressCell({
 export function OwnerCell({ ownerId }: { ownerId?: string | null }) {
   const assigned = Boolean(ownerId);
   return (
-    <span className={assigned ? "text-xs text-text-secondary" : "text-2xs text-text-muted"}>
+    <span
+      className={cn(
+        "whitespace-nowrap",
+        assigned ? "text-xs text-text-secondary" : "text-2xs text-text-muted",
+      )}
+    >
       {ownerLabel(ownerId)}
     </span>
   );

@@ -10,6 +10,7 @@ import {
   LIFECYCLE_LABEL,
   PRIORITY_LABEL,
   REGISTRATION_STATUS_LABEL,
+  USERS_COLUMN_LABEL,
   VALUE_SEGMENT_LABEL,
   ownerLabel,
 } from "@/config/labels";
@@ -33,10 +34,10 @@ const OWNER_IDS = ["emp_ret1", "emp_ret2", "emp_men1", "emp_sup1", "emp_mgr", "e
 
 /** The five canonical state dimensions (primary filters). */
 export const DIMENSION_FILTERS: FilterDef[] = [
-  { key: "lifecycleStage", label: "Lifecycle", options: opts(LIFECYCLE_LABEL) },
-  { key: "fundingStatus", label: "Финансовый статус", options: opts(FUNDING_LABEL) },
-  { key: "engagementStatus", label: "Engagement", options: opts(ENGAGEMENT_LABEL) },
-  { key: "valueSegment", label: "Value-сегменты", options: opts(VALUE_SEGMENT_LABEL) },
+  { key: "lifecycleStage", label: USERS_COLUMN_LABEL.lifecycle, options: opts(LIFECYCLE_LABEL) },
+  { key: "fundingStatus", label: USERS_COLUMN_LABEL.funding, options: opts(FUNDING_LABEL) },
+  { key: "engagementStatus", label: USERS_COLUMN_LABEL.engagement, options: opts(ENGAGEMENT_LABEL) },
+  { key: "valueSegment", label: USERS_COLUMN_LABEL.valueSegments, options: opts(VALUE_SEGMENT_LABEL) },
   { key: "blocker", label: "Блокеры", options: opts(BLOCKER_LABEL) },
 ];
 
@@ -54,7 +55,7 @@ export const SECONDARY_FILTERS: FilterDef[] = [
   },
   {
     key: "ownerId",
-    label: "Owner",
+    label: USERS_COLUMN_LABEL.owner,
     options: OWNER_IDS.map((id) => ({ value: id, label: ownerLabel(id) })),
   },
 ];

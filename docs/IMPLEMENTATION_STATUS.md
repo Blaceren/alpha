@@ -101,5 +101,56 @@
 ### Не входит в Phase 1B2 (сознательно)
 Today, User 360, localStorage mutation overlay и любые мутации, notes/tasks/cases, owner reassignment, saved-views persistence, bulk actions, export, PII reveal flow, communications, backend/API/БД/Prisma/Pocket, аутентификация, deploy. `/users/[id]` остаётся placeholder.
 
+## Phase 1B2.1 — Users visual hardening ✅ (текущий)
+
+### Выполнено (только presentation `/users`)
+- **Русская терминология** через `USERS_COLUMN_LABEL` (central config): Этап/Активность/Ответственный/
+  Ценностные сегменты/Регистрация Pocket/Чистые депозиты. `Lifecycle/Engagement/Owner` в UI нет;
+  TS enum-имена не тронуты.
+- **Responsive колонки:** merged «Состояния» (Этап+Финансовый+Активность одним стеком) на md..2xl;
+  индивидуальные оси на 2xl+; `Ответственный` — xl+. Замер overflow: **0 на 1024 и 1440**, page
+  overflow 0 на всех ширинах — намеренный компактный планшет без обрезанного правого края.
+- **Плотность строк:** owner nowrap («Support 1» одной строкой); blockers 2/1 + `+N` (tooltip);
+  priority reason 1 строка (desktop) / читаема без hover (mobile); planshet скрывает email + reason.
+- **Toolbar:** предсказуемые ряды (поиск+Колонки/Фильтры · фильтры desktop · chips+«Сбросить всё»).
+- **Row action:** доступное имя «Открыть профиль <имя>»; иконка desktop/tablet, кнопка mobile.
+- **Docs:** USERS_WORKSPACE обновлён; visual-review `PHASE_1B2_1_USERS_HARDENING.md`;
+  screenshots `screenshots/phase-1b2-1-users-hardening/` (7 шт).
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **116/116** (+6 hardening) · `build` ✅ (`/users` 22.8 kB;
+  `/users/[id]` placeholder) · `test:e2e` ✅ **12/12** одним прогоном (5 smoke + 7 screenshots),
+  консоль чистая. `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26).
+
+### Не входит (сознательно)
+Provider/domain/permissions/financial projection не менялись. Today, User 360, mutation overlay,
+`/users/[id]`, backend/DB/Pocket — не начинались.
+
+## Phase 1B2.2 — Users sticky row-action ✅ (текущий)
+
+### Выполнено (только presentation `/users`)
+- **Sticky edge-колонки:** идентичность sticky слева, действие «Открыть профиль» sticky справа
+  (`position: sticky`, непрозрачный фон + edge-separator + `group-hover`); опциональные колонки
+  скроллятся между ними внутри `overflow-x-auto`. Действие видно до/после горизонтального скролла
+  (та же правая зона, замер Δx < 6px), focus не обрезан, page overflow ≤ 1px на 1440 и 1024.
+- **Blocker/owner spacing:** blocker-бейджи — controlled truncation (`max-w` + tooltip с полным
+  значением), гарантированный зазор до «Ответственный» (e2e-замер gap > 2px). Дефолтный набор не
+  регрессировал (помещается без скролла).
+- **Tests:** +1 unit (`UsersTable` с включёнными опциональными колонками содержит действие) → **117**.
+- **E2E-состав восстановлен (1B2.2):** прежние 5 Users-сценариев сохранены отдельными тестами в
+  `tests-e2e/users-screenshots.spec.ts` (admin/support/filtered/tablet/mobile — каждый со своими
+  проверками console/viewport/permission), а 3 sticky-теста вынесены в отдельный
+  `tests-e2e/users-sticky-action.spec.ts` (default, before/after scroll, focus). Итог: **13/13**
+  (5 smoke + 5 Users + 3 sticky) одним прогоном.
+- **Docs:** USERS_WORKSPACE (sticky), DECISIONS D-33; screenshots `screenshots/phase-1b2-2-users-sticky-action/`.
+
+### Результаты проверок
+- `typecheck` ✅ · `lint` ✅ · `test:run` ✅ **117/117** · `build` ✅ · `test:e2e` ✅ **13/13** одним
+  прогоном, консоль чистая. `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26).
+
+### Не входит (сознательно)
+Provider/domain/permissions/financial projection не менялись. Today, User 360, mutation overlay,
+`/users/[id]`, backend/DB/Pocket — не начинались.
+
 ## Следующий этап (рекомендация)
 **Phase 1B3 — Today workspace** поверх готового провайдера (очереди/приоритеты), затем 1B4 mutations overlay, 1C User 360.

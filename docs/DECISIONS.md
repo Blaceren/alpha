@@ -244,4 +244,42 @@ UI-формулировки «Подключить Pocket», «Связать а
 - **`src/app/icon.svg`** добавлен: устраняет автоматический запрос `/favicon.ico` → 404 (требование «no failed assets» в консоли).
 - **Stale-флаг** у «Последней активности» убран: ранее ошибочно брался из `balance.stale` (staleness баланса ≠ staleness meaningful activity).
 
+## D-31 · Users search input mounted-gate (hydration) — **Locked**
+
+Поле поиска в `UsersToolbar` рендерится реальным `<input>` только после mount; на сервере/первом
+клиентском рендере — визуально идентичный placeholder-бокс. Причина: Chromium form/autofill-агент
+интермиттентно впрыскивает inline-`style` в SSR-узел input в окне гидратации → dev-warning
+«Extra attributes from the server: style» (сервер `style` не отдаёт, код не ставит — доказано).
+Клиентски создаваемый input не гидратируется, узла для сверки нет. Не `suppressHydrationWarning`,
+визуал не меняется.
+
+## D-32 · Phase 1B2.1 Users visual hardening — **Locked**
+
+Только пресентационная полировка `/users`; provider/domain/permissions/financial projection не
+менялись, `/users/[id]` — placeholder, User 360 и Today не начинались.
+- **Терминология:** user-facing термины единообразно русские через `USERS_COLUMN_LABEL`
+  (Этап/Активность/Ответственный/Ценностные сегменты/Регистрация Pocket/Чистые депозиты).
+  `Lifecycle/Engagement/Owner` в UI отсутствуют; TS enum-имена неизменны.
+- **Responsive колонки:** merged «Состояния» (три оси одним стеком) на md..2xl; индивидуальные
+  колонки — на 2xl+. `Ответственный` — с xl+. Причина: 9 отдельных колонок с русскими подписями не
+  помещались рядом с 240px-сайдбаром → горизонтальный overflow. Итог: page overflow = 0 на 1024/1440.
+- **Плотность строк:** owner `whitespace-nowrap` (одна строка); blockers 2 (desktop) / 1 (tablet) +
+  `+N` с tooltip; priority reason — одна строка (desktop) / полн. читаема без hover (mobile); planshet
+  скрывает email и reason ради компактности.
+- **Toolbar:** предсказуемые ряды (поиск+Колонки/Фильтры · группа фильтров desktop · chips+Сбросить
+  всё отдельным рядом).
+- **Row action:** доступное имя `Открыть профиль <имя>`; иконка на desktop/tablet, текстовая кнопка
+  на mobile; вся строка не является скрытой clickable-зоной.
+
+## D-33 · Users table sticky edge columns — **Locked**
+
+Колонка идентичности sticky слева, колонка действия sticky справа (`position: sticky`, не fixed);
+опциональные колонки прокручиваются между ними внутри `overflow-x-auto` (страница горизонтально не
+скроллится). Sticky-ячейки — непрозрачный фон (`bg-surface` header / `bg-background
+group-hover:bg-row-hover` строки), мягкий edge-separator (border), корректный z-index, ширина
+действия только под иконку. Причина: при включении опциональных колонок действие уходило за правый
+край viewport (blocker). Blocker-бейджи получили controlled truncation (`max-w` + tooltip с полным
+значением), чтобы не соприкасаться с «Ответственный». Permission-проекции не менялись; sticky-ячейка
+действия не содержит финансовых данных.
+
 **ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alfa Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.

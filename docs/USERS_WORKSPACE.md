@@ -36,10 +36,38 @@ Provider-sorting по: priority, registeredAt, lastMeaningfulActionAt, currentLe
 ## Pagination
 Provider cursor-pagination. Page size 20 (по умолчанию) / 50. Previous/next, диапазон «X–Y из N», disabled states. Сбрасывается при изменении search/filter. Не infinite scroll, не грузит весь датасет сразу.
 
-## Responsive
-- **1440×900** — полная таблица, основные колонки без горизонтального скролла; опциональные могут дать скролл.
-- **1024×768** — второстепенные колонки (Прогресс, Owner) скрываются (`hidden xl:table-cell`), toolbar переносится.
-- **390×844** — mobile cards с теми же данными (пользователь, priority, три single-value state, blockers, owner, last activity, «Открыть профиль»), фильтры — Sheet. Mobile — представление, не отдельный источник логики.
+## Terminology (Phase 1B2.1)
+User-facing термины — единообразно русские, из `USERS_COLUMN_LABEL` (central config): **Этап**
+(Lifecycle), **Активность** (Engagement), **Ответственный** (Owner), **Ценностные сегменты**,
+**Регистрация Pocket**, **Чистые депозиты**. `Lifecycle/Engagement/Owner` в UI отсутствуют.
+TS enum-имена не менялись. Доменные термины `Pocket`, `Grace-период`, `XP`, `FTD` сохранены.
+
+## Responsive (Phase 1B2.1)
+Стратегия колонок «состояний»: merged колонка **«Состояния»** (Этап + Финансовый статус +
+Активность одним компактным стеком) на планшете и стандартном десктопе (md..2xl); индивидуальные
+Этап/Финансовый/Активность — только на очень широких экранах (2xl+, ≥1536). `Ответственный` — с xl+.
+- **1440×900** — компактный десктоп: user, priority, «Состояния», progress, blockers, ответственный,
+  активность, действие; overflow 0 (замер), правый край не обрезан; опциональные колонки могут дать
+  внутренний скролл (page overflow не создают).
+- **1024×768** — намеренно компактный планшет: у пользователя скрыт email/локаль, priority reason —
+  в tooltip, blocker — 1 chip + `+N` (усечён), паддинг ячеек уплотнён; overflow 0, правый край цел.
+- **390×844** — mobile cards (пользователь, priority c читаемой причиной, три single-value state,
+  blockers, ответственный, последняя активность, «Открыть профиль»); фильтры — Sheet с счётчиком
+  «Фильтры (N)». Mobile — представление, не отдельный источник логики.
+
+## Sticky edge columns (Phase 1B2.2)
+Единственный контейнер горизонтального скролла — обёртка таблицы (`overflow-x-auto`); страница
+горизонтально не скроллится. При включении опциональных колонок: **колонка идентичности** («Пользователь»)
+остаётся sticky слева, **колонка действия** («Открыть профиль») — sticky справа с непрозрачным фоном,
+мягким edge-separator и корректным hover (`group-hover:bg-row-hover`); опциональные колонки
+прокручиваются между ними. Действие видно до и после скролла (в той же правой зоне), focus не
+обрезается. Дефолтный набор без опциональных колонок помещается без скролла. Ширина колонки действия —
+только под иконку.
+
+## Toolbar (Phase 1B2.1)
+Предсказуемые ряды: (1) поиск + `Колонки` (tablet/desktop) и `Фильтры`-Sheet (mobile/tablet);
+(2) группа фильтров-дропдаунов — только desktop (xl+); (3) active-chips + «Сбросить всё» — отдельный
+ряд на всех брейкпоинтах. `Колонки`/chips никогда не остаются одни на случайной строке.
 
 ## Roles
 Проверяются: admin, retention, mentor, support, analyst, read_only. Экран/данные фильтруются через существующий permission layer и provider-проекции. См. таблицу ролей в `docs/visual-reviews/PHASE_1B2_USERS.md`.
@@ -63,7 +91,16 @@ loading (skeleton header+rows, стабильная ширина), empty dataset
 Semantic `<table>` на desktop, `<th scope>`, `aria-sort`, keyboard-доступные фильтры, label для search, sr-текст для icon-кнопок, focus-visible, статусы не только цветом (всегда есть текст), accessible tooltips (Radix), row action через Tab, mobile cards с корректной иерархией.
 
 ## Screenshots
-`screenshots/phase-1b2-users/` (реальный рендер, headless Chromium 149 через `tests-e2e/users-screenshots.spec.ts`, перегенерация — `npm run test:e2e`): admin/support/filtered 1440×900, tablet 1024×768, mobile 390×844 — точных размеров, консоль чистая. Визуальное ревью, найденные проблемы и исправления — в `docs/visual-reviews/PHASE_1B2_USERS.md`.
+`screenshots/phase-1b2-1-users-hardening/` (реальный рендер, headless Chromium 149 через
+`tests-e2e/users-screenshots.spec.ts`, перегенерация — `npm run test:e2e`): admin, admin+колонки,
+support, filtered — 1440×900; tablet 1024×768; mobile и mobile-filtered 390×844 — точных размеров,
+консоль чистая. Ревью, найденные проблемы и исправления — `docs/visual-reviews/PHASE_1B2_1_USERS_HARDENING.md`.
+(Артефакты Phase 1B2 остаются в `screenshots/phase-1b2-users/`.)
+
+**Состав E2E (13):** `smoke.spec.ts` (5) + `users-screenshots.spec.ts` (5 канонических Users-сценариев:
+admin/support/filtered/tablet/mobile — каждый со своими console/viewport/permission проверками) +
+`users-sticky-action.spec.ts` (3: default, before/after horizontal scroll, keyboard focus). Sticky-тесты
+вынесены отдельно, чтобы не заменять основной screenshot-suite.
 
 ## Non-scope (Phase 1B2)
 Today, User 360, localStorage mutation overlay, notes/tasks/cases, owner reassignment, saved-views persistence, bulk actions, export, PII reveal, communications, backend/API/DB/Prisma/Pocket, auth, deploy. `/users/[id]` остаётся placeholder.

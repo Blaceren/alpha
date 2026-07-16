@@ -83,58 +83,72 @@ function MultiSelect({
   );
 }
 
-export function UsersFilters({ filters, setFilters, clearFilter, resetFilters, layout = "inline" }: FiltersProps) {
-  const toggle = (key: keyof UserFilters, value: string) => {
-    const cur = selectedOf(filters, key);
-    const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
-    if (next.length === 0) clearFilter(key);
-    else setFilters({ [key]: next } as unknown as Partial<UserFilters>);
-  };
+function toggleValue(
+  filters: UserFilters,
+  setFilters: (patch: Partial<UserFilters>) => void,
+  clearFilter: (key: keyof UserFilters) => void,
+  key: keyof UserFilters,
+  value: string,
+) {
+  const cur = selectedOf(filters, key);
+  const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+  if (next.length === 0) clearFilter(key);
+  else setFilters({ [key]: next } as unknown as Partial<UserFilters>);
+}
 
+/** Filter controls (the dropdown group only). Active chips live in their own row. */
+export function UsersFilters({ filters, setFilters, clearFilter, layout = "inline" }: FiltersProps) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2", layout === "stacked" && "flex-col items-stretch")}>
+      {ALL_FILTERS.map((def) => (
+        <MultiSelect
+          key={def.key as string}
+          def={def}
+          selected={selectedOf(filters, def.key)}
+          onToggle={(v) => toggleValue(filters, setFilters, clearFilter, def.key, v)}
+          onClear={() => clearFilter(def.key)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Active filter chips + "Сбросить всё" — rendered as its own toolbar row. */
+export function ActiveFilterChips({
+  filters,
+  setFilters,
+  clearFilter,
+  resetFilters,
+}: Omit<FiltersProps, "layout">) {
   const activeChips = ALL_FILTERS.flatMap((def) =>
     selectedOf(filters, def.key).map((value) => ({ key: def.key, value })),
   );
+  if (activeChips.length === 0) return null;
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", layout === "stacked" && "flex-col items-stretch")}>
-      <div className={cn("flex flex-wrap items-center gap-2", layout === "stacked" && "flex-col items-stretch")}>
-        {ALL_FILTERS.map((def) => (
-          <MultiSelect
-            key={def.key as string}
-            def={def}
-            selected={selectedOf(filters, def.key)}
-            onToggle={(v) => toggle(def.key, v)}
-            onClear={() => clearFilter(def.key)}
-          />
-        ))}
-      </div>
-
-      {activeChips.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {activeChips.map(({ key, value }) => (
-            <span key={`${String(key)}:${value}`} className="inline-flex items-center">
-              <Badge tone="accent" className="gap-1">
-                {optionLabel(key, value)}
-                <button
-                  type="button"
-                  aria-label={`Убрать фильтр ${optionLabel(key, value)}`}
-                  onClick={() => toggle(key, value)}
-                  className="rounded hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <X className="h-3 w-3" aria-hidden />
-                </button>
-              </Badge>
-            </span>
-          ))}
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-2xs text-text-secondary underline hover:text-text-primary"
-          >
-            Сбросить всё
-          </button>
-        </div>
-      ) : null}
+    <div className="flex flex-wrap items-center gap-1.5">
+      {activeChips.map(({ key, value }) => (
+        <span key={`${String(key)}:${value}`} className="inline-flex items-center">
+          <Badge tone="accent" className="gap-1 whitespace-nowrap">
+            {optionLabel(key, value)}
+            <button
+              type="button"
+              aria-label={`Убрать фильтр ${optionLabel(key, value)}`}
+              onClick={() => toggleValue(filters, setFilters, clearFilter, key, value)}
+              className="rounded hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          </Badge>
+        </span>
+      ))}
+      <button
+        type="button"
+        onClick={resetFilters}
+        className="text-2xs text-text-secondary underline hover:text-text-primary"
+      >
+        Сбросить всё
+      </button>
     </div>
   );
 }

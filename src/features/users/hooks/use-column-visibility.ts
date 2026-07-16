@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { USERS_COLUMN_LABEL } from "@/config/labels";
 
 /** Optional columns (hidden by default). Visibility lives in React state only. */
 export type OptionalColumnKey =
@@ -12,12 +13,12 @@ export type OptionalColumnKey =
   | "netDeposits";
 
 export const OPTIONAL_COLUMNS: { key: OptionalColumnKey; label: string }[] = [
-  { key: "valueSegments", label: "Value-сегменты" },
+  { key: "valueSegments", label: USERS_COLUMN_LABEL.valueSegments },
   { key: "recommendation", label: "Рекомендованное действие" },
-  { key: "registrationStatus", label: "Статус регистрации" },
-  { key: "campaign", label: "Кампания / источник" },
+  { key: "registrationStatus", label: USERS_COLUMN_LABEL.registrationStatus },
+  { key: "campaign", label: USERS_COLUMN_LABEL.campaign },
   { key: "balance", label: "Финансовое представление" },
-  { key: "netDeposits", label: "Net deposits" },
+  { key: "netDeposits", label: USERS_COLUMN_LABEL.netDeposits },
 ];
 
 export function useColumnVisibility() {

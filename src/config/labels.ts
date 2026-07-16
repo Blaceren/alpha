@@ -152,6 +152,30 @@ export const SIGNAL_LABEL: Record<SignalCode, string> = {
   rapid_balance_decline: "Резкое падение баланса",
 };
 
+/**
+ * User-facing column / control labels for the Users workspace. Single source —
+ * components must not hardcode these strings. Terminology is fully Russian
+ * (no `Lifecycle`/`Engagement`/`Owner` in the UI); TS enum names are unchanged.
+ */
+export const USERS_COLUMN_LABEL = {
+  user: "Пользователь",
+  priority: "Приоритет",
+  lifecycle: "Этап",
+  funding: "Финансовый статус",
+  engagement: "Активность",
+  states: "Состояния",
+  progress: "Прогресс",
+  blockers: "Активные блокеры",
+  owner: "Ответственный",
+  lastActivity: "Последняя активность",
+  valueSegments: "Ценностные сегменты",
+  recommendation: "Рекомендация",
+  registrationStatus: "Регистрация Pocket",
+  campaign: "Кампания / источник",
+  balance: "Баланс",
+  netDeposits: "Чистые депозиты",
+} as const;
+
 /** Human labels for mock employee (owner) ids. */
 export const OWNER_LABEL: Record<string, string> = {
   emp_admin: "Администратор",

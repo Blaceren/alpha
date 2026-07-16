@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { UsersFilters } from "./users-filters";
+import { ActiveFilterChips, UsersFilters } from "./users-filters";
 import { OPTIONAL_COLUMNS, type OptionalColumnKey } from "./hooks/use-column-visibility";
 
 interface ToolbarProps {
@@ -63,6 +63,34 @@ function ColumnsMenu({
   );
 }
 
+function FiltersSheet({
+  filters,
+  setFilters,
+  clearFilter,
+  resetFilters,
+  activeFilterCount,
+}: Pick<ToolbarProps, "filters" | "setFilters" | "clearFilter" | "resetFilters" | "activeFilterCount">) {
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="secondary" size="sm">
+          <Filter className="h-4 w-4" aria-hidden />
+          Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" title="Фильтры">
+        <div className="flex h-14 items-center border-b border-white/10 px-4 text-sm font-medium text-white">
+          Фильтры
+        </div>
+        <div className="space-y-3 overflow-y-auto bg-background p-4 text-text-primary">
+          <UsersFilters filters={filters} setFilters={setFilters} clearFilter={clearFilter} resetFilters={resetFilters} layout="stacked" />
+          <ActiveFilterChips filters={filters} setFilters={setFilters} clearFilter={clearFilter} resetFilters={resetFilters} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function UsersToolbar(props: ToolbarProps) {
   const { search, onSearch, activeFilterCount, columnVisible, onToggleColumn } = props;
   const searchId = React.useId();
@@ -70,39 +98,55 @@ export function UsersToolbar(props: ToolbarProps) {
   // Render the real <input> only after mount. Chromium's form/autofill agent
   // injects an inline `style` onto a server-rendered text input during the
   // hydration window (racing React), producing an intermittent dev warning
-  // "Extra attributes from the server: style". The server never emits `style`
-  // and our code never sets it — the browser mutates the SSR'd node before
-  // hydration. Rendering an identical placeholder box on the server/first
-  // client render (so both match) and mounting the input in an effect means the
-  // input is client-created, not hydrated, so there is no server node for React
-  // to reconcile and no attribute to mismatch. Visuals are unchanged.
+  // "Extra attributes from the server: style". Rendering an identical placeholder
+  // box on the server/first client render and mounting the input in an effect
+  // means the input is client-created, not hydrated — no node to mismatch.
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[220px] flex-1">
-        <label htmlFor={searchId} className="sr-only">
-          Поиск: имя, email или ID
-        </label>
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden />
-        {mounted ? (
-          <input
-            id={searchId}
-            type="search"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Имя, email или ID"
-            className="h-9 w-full rounded border border-border bg-surface pl-8 pr-3 text-sm text-text-primary placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <div className="space-y-2">
+      {/* Row 1 — search always on its own line; Колонки (tablet/desktop) and the
+          Фильтры sheet (mobile/tablet) sit beside it so neither wraps alone. */}
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <label htmlFor={searchId} className="sr-only">
+            Поиск: имя, email или ID
+          </label>
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden />
+          {mounted ? (
+            <input
+              id={searchId}
+              type="search"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Имя, email или ID"
+              className="h-9 w-full rounded border border-border bg-surface pl-8 pr-3 text-sm text-text-primary placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          ) : (
+            <div className="h-9 w-full rounded border border-border bg-surface" aria-hidden />
+          )}
+        </div>
+
+        {/* Mobile + tablet: filters live in a Sheet (below xl). */}
+        <div className="shrink-0 xl:hidden">
+          <FiltersSheet
+            filters={props.filters}
+            setFilters={props.setFilters}
+            clearFilter={props.clearFilter}
+            resetFilters={props.resetFilters}
+            activeFilterCount={activeFilterCount}
           />
-        ) : (
-          // Identical box during SSR / first client render (no layout shift).
-          <div className="h-9 w-full rounded border border-border bg-surface" aria-hidden />
-        )}
+        </div>
+
+        {/* Columns menu is useful only where a table renders (tablet + desktop). */}
+        <div className="hidden shrink-0 md:block">
+          <ColumnsMenu visible={columnVisible} onToggle={onToggleColumn} />
+        </div>
       </div>
 
-      {/* Desktop / tablet: inline filters */}
-      <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+      {/* Row 2 — inline filter group, desktop only (xl+). */}
+      <div className="hidden xl:block">
         <UsersFilters
           filters={props.filters}
           setFilters={props.setFilters}
@@ -111,33 +155,13 @@ export function UsersToolbar(props: ToolbarProps) {
         />
       </div>
 
-      {/* Mobile: filters in a Sheet */}
-      <div className="md:hidden">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="secondary" size="sm">
-              <Filter className="h-4 w-4" aria-hidden />
-              Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" title="Фильтры">
-            <div className="flex h-14 items-center border-b border-white/10 px-4 text-sm font-medium text-white">
-              Фильтры
-            </div>
-            <div className="overflow-y-auto bg-background p-4 text-text-primary">
-              <UsersFilters
-                filters={props.filters}
-                setFilters={props.setFilters}
-                clearFilter={props.clearFilter}
-                resetFilters={props.resetFilters}
-                layout="stacked"
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      <ColumnsMenu visible={columnVisible} onToggle={onToggleColumn} />
+      {/* Row 3 — active filter chips + «Сбросить всё» (own row, all breakpoints). */}
+      <ActiveFilterChips
+        filters={props.filters}
+        setFilters={props.setFilters}
+        clearFilter={props.clearFilter}
+        resetFilters={props.resetFilters}
+      />
     </div>
   );
 }
