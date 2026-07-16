@@ -375,9 +375,10 @@ async function main() {
         }, { evaluationTime: at("2026-03-03T10:20:00.000Z") }), "REPORT_STATE_CORRUPT");
       } finally { await prisma.reportSubmission.update({ where: { id: third.aggregate.id }, data: { claimedById: mentorTwo.id } }); }
     });
-    await check("23. approval command remains fail-closed and creates no durable approved state", async () => {
+    await check("23. approval remains fail-closed without the independently required XP flag", async () => {
       const before = { approved: await prisma.reportSubmission.count({ where: { status: "approved" } }), reviews: await prisma.reportReview.count({ where: { decision: "approved" } }), xp: await prisma.xPTransaction.count() };
-      await expectError(() => review.approveReportSubmission(), "REPORT_APPROVAL_ENGINE_UNAVAILABLE");
+      delete process.env.CURRICULUM_V2_XP_ENABLED;
+      await expectError(() => review.approveReportSubmission(mentorOne.id, {}, { evaluationTime: at("2026-03-03T10:30:00.000Z") }), "REPORT_DISABLED");
       assert.deepEqual({ approved: await prisma.reportSubmission.count({ where: { status: "approved" } }), reviews: await prisma.reportReview.count({ where: { decision: "approved" } }), xp: await prisma.xPTransaction.count() }, before);
     });
     await check("24. reject does not touch XP, completion, enrollment summary, V1, notifications or submitted revision history", async () => {

@@ -100,4 +100,5 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportClaimed: "REPORT_CLAIMED",
   reportReassigned: "REPORT_REASSIGNED",
   reportRejected: "REPORT_REJECTED",
+  reportApproved: "REPORT_APPROVED",
 } as const;

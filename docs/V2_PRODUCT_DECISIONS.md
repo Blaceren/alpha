@@ -266,6 +266,15 @@
 - Reject atomically creates immutable review/scores, transitions submission to rejected, clears claim, moves progress `pending_review -> in_progress`, stores receipt and writes awaited safe audit. It creates no revision and touches no XP, completion, enrollment summary, V1, notification/outbox or binding state. Exact reject retry is inert and remains durable after a later permissible correction draft.
 - Approval-readiness is read-only validation. Durable approved review/status is forbidden in B.4; approval stays fail-closed until B.5 performs approved review, `report_approval` XP, progress/enrollment completion and required audits in one transaction.
 
+## 26. Atomic report approval/completion split (Phase 5B.5a)
+
+- Phase 5B.5 is explicitly split into B.5a atomic approval/completion and B.5b private attachment runtime. B.5a is implemented; B.5b requires separate approval of storage, malware-scan, authorization and retention decisions. Existing attachment schema does not authorize runtime, and Phase 5B.5 is not complete until B.5b is done.
+- Approval requires dynamic READ + ENROLLMENT + REPORT + XP flags, all true. Only an active ADMIN or MENTOR may approve, self-review is forbidden, and the actor must own the exact active unexpired claim. Server-owned `evaluationTime`, exact workflow/claim/current-submitted-revision CAS, immutable pins, report pending-review progress and complete pinned rubric evidence are mandatory.
+- One outer transaction creates the immutable approved review and scores, uses `report-review:<reviewId>` as durable `report_approval` evidence, derives XP only from immutable `LevelDefinition.xpReward`, writes XP and completion audits, completes progress/enrollment, marks the submission approved, clears the claim, stores the receipt and writes awaited `REPORT_APPROVED`. No nested transaction is allowed and any failure rolls back every row and audit.
+- Completion accepts report ownership only from a durable approved review for the same submission, user, enrollment, curriculum, level, exact current submitted revision and assignment/rubric pins, with one valid score per pinned criterion and a non-author reviewer. Missing, rejected, wrong-revision or corrupt review evidence fails closed. A generic report completion endpoint is not introduced.
+- Exact retry verifies the full durable receipt, review, scores, approved pointers, XP/completion and report audit; it creates no row, audit or timestamp. Same key with another normalized payload conflicts. Competing approvals and approve/reject races have one winner; archived pins remain valid without repinning.
+- B.5a adds no schema/migration, attachments/storage, HTTP/UI, seed/backfill, V1 report/XP, notification/CRM/outbox or rollout behavior. All flags remain default false. Official Phase 5 remains 4/6 (66.7%) until B.5b is complete; Core backend is about 58% and roadmap Phase 1-13 about 36%.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

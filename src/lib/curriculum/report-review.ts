@@ -19,8 +19,14 @@ import {
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
   isCurriculumV2ReportEnabled,
+  isCurriculumV2XpEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import {
+  completeCurriculumLevelInTransaction,
+  isCurriculumLevelCompletionError,
+  type CurriculumLevelCompletedResult,
+} from "@/lib/curriculum/completion";
 
 const MAX_INT = 2_147_483_647;
 const CLAIM_LEASE_MS = 60 * 60 * 1_000;
@@ -39,7 +45,7 @@ const REASSIGN_REASONS = [
 type TransactionClient = Prisma.TransactionClient;
 type CommandDb = Pick<PrismaClient, "$transaction">;
 type ReviewerRole = "admin" | "mentor";
-type ReviewOperation = "claim" | "renew" | "release" | "reassign" | "reject";
+type ReviewOperation = "claim" | "renew" | "release" | "reassign" | "reject" | "approve";
 type CommandOptions = { db?: CommandDb; evaluationTime?: Date };
 
 const submissionRefSchema = z.string().trim().min(8).max(128);
@@ -86,6 +92,21 @@ const receiptResultSchema = z.strictObject({
   claimExpiresAt: z.string().datetime().nullable(),
   reviewerRole: z.enum(["admin", "mentor"]).nullable(),
   reasonCode: z.string().nullable(),
+});
+const approvalReceiptResultSchema = z.strictObject({
+  version: z.literal(1),
+  operation: z.literal("approve"),
+  submissionRef: submissionRefSchema,
+  submittedRevision: z.number().int().positive(),
+  workflowVersion: z.number().int().positive(),
+  claimVersion: z.number().int().positive(),
+  reviewId: z.number().int().positive(),
+  xpTransactionId: z.number().int().positive(),
+  xpAwarded: z.number().int().positive(),
+  levelNumber: z.number().int().positive(),
+  nextLevelNumber: z.number().int().positive().nullable(),
+  terminal: z.boolean(),
+  completedAt: z.string().datetime(),
 });
 
 const submissionInclude = Prisma.validator<Prisma.ReportSubmissionInclude>()({
@@ -177,8 +198,32 @@ export type ApprovalReadinessResult = {
   scoreCount: number;
 };
 
+export type SafeReportApprovalResult = {
+  operation: "approve";
+  created: boolean;
+  retry: boolean;
+  submissionRef: string;
+  submittedRevision: number;
+  workflowVersion: number;
+  claimVersion: number;
+  reviewId: number;
+  completion: {
+    xpTransactionId: number;
+    xpAwarded: number;
+    levelNumber: number;
+    nextLevelNumber: number | null;
+    terminal: boolean;
+    completedAt: string;
+  };
+  appliedAt: string;
+};
+
 function flagsEnabled() {
   return isCurriculumV2ReadEnabled() && isCurriculumV2EnrollmentEnabled() && isCurriculumV2ReportEnabled();
+}
+
+function approvalFlagsEnabled() {
+  return flagsEnabled() && isCurriculumV2XpEnabled();
 }
 
 function fail(code: ReportDomainErrorCode, message: string): never {
@@ -519,6 +564,11 @@ async function writeAudit(tx: TransactionClient, input: {
   claimVersion: number;
   targetReviewerId?: number;
   reasonCode?: string;
+  reviewId?: number;
+  xpTransactionId?: number;
+  xpAwarded?: number;
+  terminal?: boolean;
+  status?: "approved";
 }) {
   await tx.auditLog.create({ data: {
     userId: input.actor.id,
@@ -536,6 +586,11 @@ async function writeAudit(tx: TransactionClient, input: {
       claimVersion: input.claimVersion,
       ...(input.targetReviewerId ? { targetReviewerId: input.targetReviewerId } : {}),
       ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
+      ...(input.reviewId ? { reviewId: input.reviewId } : {}),
+      ...(input.xpTransactionId ? { xpTransactionId: input.xpTransactionId } : {}),
+      ...(input.xpAwarded ? { xpAwarded: input.xpAwarded } : {}),
+      ...(input.terminal !== undefined ? { terminal: input.terminal } : {}),
+      ...(input.status ? { status: input.status } : {}),
     },
   } });
 }
@@ -574,6 +629,154 @@ function normalizeScores(submission: ReviewSubmission, values: z.infer<typeof sc
     if (comment && UNSAFE_TEXT.test(comment)) fail("REPORT_REVIEW_INPUT_INVALID", "rubric comment is unsafe");
     return { criterion, option, comment, criterionCode: criterion.stableKey, scaleCode: option.stableKey };
   }).sort((left, right) => left.criterion.sortOrder - right.criterion.sortOrder || left.criterionCode.localeCompare(right.criterionCode));
+}
+
+function approvalReceiptResult(input: {
+  submission: ReviewSubmission;
+  workflowVersion: number;
+  claimVersion: number;
+  reviewId: number;
+  completion: CurriculumLevelCompletedResult;
+}) {
+  return {
+    version: 1 as const,
+    operation: "approve" as const,
+    submissionRef: submissionRef(input.submission.id),
+    submittedRevision: input.submission.submittedRevision!.revisionNumber,
+    workflowVersion: input.workflowVersion,
+    claimVersion: input.claimVersion,
+    reviewId: input.reviewId,
+    xpTransactionId: input.completion.xpTransactionId,
+    xpAwarded: input.completion.xpAwarded,
+    levelNumber: input.completion.levelNumber,
+    nextLevelNumber: input.completion.nextLevelNumber,
+    terminal: input.completion.terminal,
+    completedAt: input.completion.completedAt.toISOString(),
+  };
+}
+
+function approvalResultFromReceipt(
+  receipt: { safeResult: Prisma.JsonValue; appliedAt: Date },
+  retry: boolean,
+): SafeReportApprovalResult {
+  const parsed = approvalReceiptResultSchema.safeParse(receipt.safeResult);
+  if (!parsed.success) fail("REPORT_STATE_CORRUPT", "report approval receipt is corrupt");
+  const safe = parsed.data;
+  return {
+    operation: "approve",
+    created: !retry,
+    retry,
+    submissionRef: safe.submissionRef,
+    submittedRevision: safe.submittedRevision,
+    workflowVersion: safe.workflowVersion,
+    claimVersion: safe.claimVersion,
+    reviewId: safe.reviewId,
+    completion: {
+      xpTransactionId: safe.xpTransactionId,
+      xpAwarded: safe.xpAwarded,
+      levelNumber: safe.levelNumber,
+      nextLevelNumber: safe.nextLevelNumber,
+      terminal: safe.terminal,
+      completedAt: safe.completedAt,
+    },
+    appliedAt: receipt.appliedAt.toISOString(),
+  };
+}
+
+async function runReportCompletion(
+  tx: TransactionClient,
+  submission: ReviewSubmission,
+  reviewId: number,
+  actorUserId: number,
+  evaluationTime: Date,
+) {
+  try {
+    return await completeCurriculumLevelInTransaction(tx, {
+      enrollmentId: submission.enrollmentId,
+      levelDefinitionId: submission.levelDefinitionId,
+      sourceType: "report_approval",
+      sourceId: `report-review:${reviewId}`,
+      actorId: actorUserId,
+      evaluationTime,
+    });
+  } catch (error) {
+    if (!isCurriculumLevelCompletionError(error)) throw error;
+    if (error.code === "COMPLETION_DISABLED") fail("REPORT_DISABLED", "report approval is disabled");
+    if (error.code === "COMPLETION_CONFLICT" || error.code === "COMPLETION_IDEMPOTENCY_CONFLICT") {
+      fail("REPORT_REVISION_CONFLICT", "report completion changed concurrently");
+    }
+    if (error.code === "COMPLETION_INTERNAL_ERROR") fail("REPORT_INTERNAL_ERROR", "report completion failed");
+    fail("REPORT_STATE_CORRUPT", "report completion evidence is missing or corrupt");
+  }
+}
+
+async function exactApprovalRetry(input: {
+  tx: TransactionClient;
+  actorUserId: number;
+  command: z.infer<typeof reviewEvidenceSchema>;
+  submission: ReviewSubmission;
+  fingerprint: string;
+}) {
+  const receipt = await input.tx.reportCommandReceipt.findUnique({
+    where: { actorUserId_requestId: { actorUserId: input.actorUserId, requestId: input.command.requestId } },
+  });
+  if (!receipt) return null;
+  const safe = approvalReceiptResultSchema.safeParse(receipt.safeResult);
+  if (
+    receipt.submissionId !== input.submission.id || receipt.commandType !== "approve" ||
+    receipt.payloadFingerprint !== input.fingerprint || !FINGERPRINT.test(receipt.payloadFingerprint) ||
+    !safe.success || safe.data.submissionRef !== submissionRef(input.submission.id) ||
+    safe.data.submittedRevision !== input.command.expectedSubmittedRevision ||
+    receipt.targetRevisionId !== input.submission.submittedRevisionId ||
+    receipt.resultRevisionId !== input.submission.submittedRevisionId ||
+    receipt.resultingWorkflowVersion !== safe.data.workflowVersion
+  ) fail("REPORT_IDEMPOTENCY_CONFLICT", "request id was already used for a different report approval command");
+
+  const expectedScores = normalizeScores(input.submission, input.command.scores);
+  const review = await input.tx.reportReview.findUnique({ where: { id: safe.data.reviewId }, include: { scores: true } });
+  const durableScores = new Map(review?.scores.map((score) => [score.rubricCriterionId, score]));
+  if (
+    !review || review.submissionId !== input.submission.id ||
+    review.revisionId !== input.submission.submittedRevisionId ||
+    review.curriculumVersionId !== input.submission.curriculumVersionId ||
+    review.levelDefinitionId !== input.submission.levelDefinitionId ||
+    review.reportAssignmentVersionId !== input.submission.reportAssignmentVersionId ||
+    review.reportRubricVersionId !== input.submission.reportRubricVersionId ||
+    review.reviewerId !== input.actorUserId || review.decision !== "approved" ||
+    review.rejectionReasonId !== null || review.humanComment !== null || review.correctiveAction !== null ||
+    review.requestId !== input.command.requestId || review.payloadFingerprint !== input.fingerprint ||
+    review.reviewedAt.toISOString() !== safe.data.completedAt ||
+    durableScores.size !== expectedScores.length ||
+    expectedScores.some((score) => {
+      const durable = durableScores.get(score.criterion.id);
+      return !durable || durable.reportRubricVersionId !== input.submission.reportRubricVersionId ||
+        durable.rubricScaleOptionId !== score.option.id || durable.comment !== score.comment;
+    }) ||
+    input.submission.status !== "approved" ||
+    input.submission.approvedRevisionId !== input.submission.submittedRevisionId ||
+    input.submission.latestReviewId !== review.id || input.submission.approvedReviewId !== review.id ||
+    input.submission.workflowVersion !== safe.data.workflowVersion ||
+    input.submission.claimVersion !== safe.data.claimVersion ||
+    input.submission.reviewedAt?.toISOString() !== safe.data.completedAt ||
+    input.submission.approvedAt?.toISOString() !== safe.data.completedAt ||
+    input.submission.claimedById !== null || input.submission.claimedAt !== null ||
+    input.submission.claimExpiresAt !== null || input.submission.reviewStartedAt !== null ||
+    receipt.appliedAt.toISOString() !== safe.data.completedAt
+  ) fail("REPORT_STATE_CORRUPT", "durable report approval result is corrupt");
+
+  const completion = await runReportCompletion(
+    input.tx, input.submission, review.id, input.actorUserId, new Date(safe.data.completedAt),
+  );
+  if (
+    completion.created || completion.xpTransactionId !== safe.data.xpTransactionId ||
+    completion.xpAwarded !== safe.data.xpAwarded || completion.levelNumber !== safe.data.levelNumber ||
+    completion.nextLevelNumber !== safe.data.nextLevelNumber || completion.terminal !== safe.data.terminal ||
+    completion.completedAt.toISOString() !== safe.data.completedAt ||
+    await input.tx.auditLog.count({
+      where: { action: CURRICULUM_AUDIT_ACTIONS.reportApproved, entityType: "ReportSubmission", entityId: String(input.submission.id) },
+    }) !== 1
+  ) fail("REPORT_STATE_CORRUPT", "durable report approval completion is corrupt");
+  return approvalResultFromReceipt(receipt, true);
 }
 
 async function mutateClaim(
@@ -940,6 +1143,124 @@ export async function listReportReviewQueue(
   return prisma.$transaction(run);
 }
 
-export async function approveReportSubmission(): Promise<never> {
-  fail("REPORT_APPROVAL_ENGINE_UNAVAILABLE", "atomic report approval is unavailable until Phase 5B.5");
+export async function approveReportSubmission(
+  actorUserId: number,
+  input: unknown,
+  options: CommandOptions = {},
+): Promise<SafeReportApprovalResult> {
+  if (!approvalFlagsEnabled()) fail("REPORT_DISABLED", "report approval is disabled");
+  parseActorId(actorUserId);
+  const command = parseCommand(reviewEvidenceSchema, input);
+  return executeCommand(options.db ?? prisma, async (tx) => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const { actor, submission } = await getCommandContext(tx, actorUserId, command);
+    const normalizedPayload = command.scores.map((score) => ({
+      criterionCode: score.criterionCode,
+      scaleCode: score.scaleCode,
+      comment: score.comment?.trim() ?? null,
+    })).sort((left, right) => left.criterionCode.localeCompare(right.criterionCode));
+    const fingerprint = commandFingerprint({
+      operation: "approve",
+      actorUserId,
+      submission,
+      command,
+      payload: { scores: normalizedPayload },
+    });
+    const retry = await exactApprovalRetry({ tx, actorUserId, command, submission, fingerprint });
+    if (retry) return retry;
+
+    const readiness = await validateReadinessWithin(tx, actorUserId, command, evaluationTime);
+    const review = await tx.reportReview.create({ data: {
+      submissionId: submission.id,
+      revisionId: submission.submittedRevisionId!,
+      curriculumVersionId: submission.curriculumVersionId,
+      levelDefinitionId: submission.levelDefinitionId,
+      reportAssignmentVersionId: submission.reportAssignmentVersionId,
+      reportRubricVersionId: submission.reportRubricVersionId,
+      reviewerId: actorUserId,
+      reviewerRoleSnapshot: actor.role as UserRole,
+      decision: "approved",
+      humanComment: null,
+      correctiveAction: null,
+      rejectionReasonId: null,
+      requestId: command.requestId,
+      payloadFingerprint: fingerprint,
+      claimedAt: submission.claimedAt,
+      claimExpiresAt: submission.claimExpiresAt,
+      reviewStartedAt: submission.reviewStartedAt,
+      reviewedAt: evaluationTime,
+    } });
+    await tx.reportReviewScore.createMany({ data: readiness.scores.map((score) => ({
+      reportReviewId: review.id,
+      reportRubricVersionId: submission.reportRubricVersionId,
+      rubricCriterionId: score.criterion.id,
+      rubricScaleOptionId: score.option.id,
+      comment: score.comment,
+    })) });
+
+    const completion = await runReportCompletion(tx, submission, review.id, actorUserId, evaluationTime);
+    if (!completion.created) fail("REPORT_STATE_CORRUPT", "report completion existed before approval");
+    const workflowVersion = submission.workflowVersion + 1;
+    const claimVersion = submission.claimVersion + 1;
+    const updated = await tx.reportSubmission.updateMany({
+      where: {
+        id: submission.id,
+        status: "pending_review",
+        activeRevisionId: submission.submittedRevisionId,
+        submittedRevisionId: submission.submittedRevisionId,
+        approvedRevisionId: null,
+        approvedReviewId: null,
+        workflowVersion: submission.workflowVersion,
+        claimVersion: submission.claimVersion,
+        claimedById: actorUserId,
+        claimedAt: submission.claimedAt,
+        claimExpiresAt: submission.claimExpiresAt,
+      },
+      data: {
+        status: "approved",
+        workflowVersion: { increment: 1 },
+        claimVersion: { increment: 1 },
+        approvedRevisionId: submission.submittedRevisionId,
+        latestReviewId: review.id,
+        approvedReviewId: review.id,
+        reviewedAt: evaluationTime,
+        approvedAt: evaluationTime,
+        rejectedAt: null,
+        claimedById: null,
+        claimedAt: null,
+        claimExpiresAt: null,
+        reviewStartedAt: null,
+      },
+    });
+    if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "report approval changed concurrently");
+
+    const safeResult = approvalReceiptResult({
+      submission, workflowVersion, claimVersion, reviewId: review.id, completion,
+    });
+    const receipt = await tx.reportCommandReceipt.create({ data: {
+      actorUserId,
+      submissionId: submission.id,
+      commandType: "approve",
+      requestId: command.requestId,
+      payloadFingerprint: fingerprint,
+      targetRevisionId: submission.submittedRevisionId,
+      resultRevisionId: submission.submittedRevisionId,
+      resultingWorkflowVersion: workflowVersion,
+      safeResult,
+      appliedAt: evaluationTime,
+    } });
+    await writeAudit(tx, {
+      actor,
+      submission,
+      action: CURRICULUM_AUDIT_ACTIONS.reportApproved,
+      workflowVersion,
+      claimVersion,
+      reviewId: review.id,
+      xpTransactionId: completion.xpTransactionId,
+      xpAwarded: completion.xpAwarded,
+      terminal: completion.terminal,
+      status: "approved",
+    });
+    return approvalResultFromReceipt(receipt, false);
+  });
 }

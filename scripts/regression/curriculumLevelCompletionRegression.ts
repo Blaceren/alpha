@@ -497,13 +497,13 @@ async function main() {
     const result = await run(fixture, { sourceType: "assessment_pass", sourceId: "assessment-1" });
     assert.equal(result.kind, "completed");
   });
-  await check("valid report approval", async () => {
+  await check("report approval without durable approved review evidence is rejected", async () => {
     const fixture = await setup({
       progressStatus: "pending_review",
       levels: [{ type: "report", completionMethod: "report_approval" }, {}],
     });
     const result = await run(fixture, { sourceType: "report_approval", sourceId: "report-1" });
-    assert.equal(result.kind, "completed");
+    expectResult(result, "rejected", "COMPLETION_OWNER_MISMATCH");
   });
   await check("valid mentor completion", async () => {
     const fixture = await setup({

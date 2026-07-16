@@ -1231,12 +1231,14 @@ Verification policy for implementation stages:
 | 5B.2 authoring/publication | admin assignment, fields, localization, rubric, reason catalog, publish/archive/bind CAS | learner/reviewer runtime | lifecycle regressions; no migration unless a design omission is proven; ADMIN+REPORT | disable REPORT; drafts remain data |
 | 5B.3 draft/revisions/submit | self resolver, immutable autosave, receipts, submit/resubmit and progress review-state transition | reviewer decision, XP, attachments | idempotency/concurrency/history tests; READ+ENROLLMENT+REPORT | disable REPORT; retain history |
 | 5B.4 reviewer workflow | queue/detail, claim/start, rubric evidence, reject and review concurrency | approval XP until adapter accepted; attachment provider | permission/claim/reject/race tests; REPORT | disable review routes; retain reviews |
-| 5B.5 atomic approval and private attachments | Phase 3 transaction adapter; attachment metadata/runtime only with approved storage/scan policy | generic completion, public paths, unresolved provider fallback | rollback-injection/XP/attachment security; optional additive attachment migration; approval also XP | disable REPORT; forward repair after history |
+| 5B.5a atomic approval and completion | approved review/scores, durable `report_approval` evidence, Phase 3 transaction adapter, exact XP/progress/enrollment/submission/receipt/audits | attachment runtime, HTTP, generic completion | approval/idempotency/race/rollback/evidence tests; approval also XP | disable REPORT; retain immutable history |
+| 5B.5b private attachment runtime | attachment metadata/runtime only after a separately approved storage/scan contract | unresolved provider fallback, public paths | attachment authorization/quarantine/traversal/retention tests | disable REPORT; retain private metadata/history |
 | 5B.6 HTTP/completion gate | exact route matrix, security, docs, flat cumulative gate | UI, rollout, Phase 6 | full upgrade/HTTP/cumulative/lint/TS/build; all flags default false | no destructive rollback; flags off |
 
-If storage decisions remain unresolved, B.5 splits into B.5a atomic approval and
-B.5b attachment runtime. Attachment commands stay 404/fail closed; the gap is
-reported, not hidden.
+The design split is approved: B.5a is atomic approval/completion and B.5b is a
+separately authorized private attachment runtime. Attachment commands stay
+404/fail closed; open storage/scan/retention decisions are not inferred, and
+Phase 5B.5 is not complete until both halves are done.
 
 ## 33. Open decisions and deadlines
 
@@ -1452,11 +1454,10 @@ awaited in the same transaction; audit failure rolls back review, scores,
 submission, claim, progress and receipt. Exact retry creates none of them
 again, including after a later permissible correction draft.
 
-Approval-readiness is validation-only and performs no writes. The public
-approval adapter remains fail-closed with
-`REPORT_APPROVAL_ENGINE_UNAVAILABLE`. No durable approved review/status may be
-stored until Phase 5B.5 can atomically combine approved review, report XP,
-level/enrollment completion and all required audits.
+Approval-readiness remains validation-only and performs no writes. At the B.4
+boundary, durable approval was deliberately unavailable; the separately
+authorized B.5a implementation described below now owns that mutation without
+changing the B.4 claim/reject semantics.
 
 The B.4 runtime does not write XP, `XpEvent`, enrollment summaries, V1
 `TaskReport`, notifications/outbox, attachments, bindings or revisions. It
@@ -1466,10 +1467,66 @@ read-only pagination, archived pins, all lease operations, admin reassignment,
 claim races, CAS/idempotency, rubric validation, rejection atomicity, old exact
 retry, audit rollback, corruption, audit secrecy and the approval boundary.
 
-## 37. Design readiness verdict
+## 37. Implemented Phase 5B.5a atomic approval/completion contract
 
-Phase 5A and Phase 5B.1-B.4 are implemented in the isolated workspace. The
-safe rollout state remains `CURRICULUM_V2_REPORT_ENABLED=false`. Reviewer queue,
-claim ownership, rubric evidence and atomic rejection are ready for the next
-isolated stage. Final approval is deliberately unavailable until Phase 5B.5;
-no HTTP or rollout readiness is claimed.
+Phase 5B.5a adds only the server-side approval mutation. It requires the
+dynamic READ + ENROLLMENT + REPORT + XP matrix; all four flags must be true and
+the admin flag cannot substitute. The actor is a trusted service argument and
+must be an active admin or mentor who is not the author. Approval requires the
+exact `pending_review` aggregate, current submitted revision, workflow and
+claim versions, an active unexpired claim owned by the actor, an exact
+report/report_approval progress owner, archived-safe immutable
+curriculum/assignment/rubric pins, and complete normalized rubric evidence.
+
+One outer transaction fixes one server-owned `evaluationTime` and, without a
+nested transaction:
+
+1. creates one immutable approved `ReportReview` and its exact criterion
+   scores;
+2. uses `report-review:<reviewId>` as the durable `report_approval` source;
+3. calls the transaction-aware Phase 3 completion core, deriving positive XP
+   only from immutable `LevelDefinition.xpReward`;
+4. writes the XP transaction and XP/completion audits, moves progress
+   `pending_review -> completed`, advances the enrollment summary, and marks a
+   terminal enrollment completed where applicable;
+5. CAS-transitions the submission to approved, pins the approved revision and
+   review, clears the claim, stores the approval receipt, and writes the
+   awaited allowlisted `REPORT_APPROVED` audit.
+
+Any review, score, XP, progress, enrollment, submission, receipt or audit
+failure rolls the entire operation back. Durable approved status is never
+published before completion succeeds. The completion owner accepts a report
+source only when the referenced review is approved, belongs to the same
+submission/enrollment/curriculum/level and exact current submitted revision,
+matches the assignment/rubric pins, has one valid score per pinned criterion,
+and was not authored by its reviewer. Missing, rejected, cross-revision or
+otherwise corrupt evidence fails closed. No generic complete-level API was
+added.
+
+Canonical receipt identity includes actor, immutable scope, expected
+workflow/claim/revision and normalized scores. Exact retry verifies the full
+durable review, scores, approved pointers, completion, XP and report audit,
+returns `created=false`, and never repeats timestamps or writes. Key reuse with
+another payload conflicts. Competing approvals and approve/reject races have
+one winner; P2002 recovery is accepted only after durable verification.
+Archived pins remain usable without repinning.
+
+The dedicated approval regression passes 18/18 scenarios. The adjacent review
+regression passes 25/25, submission passes 34/34, and completion passes 76/76
+with the legacy generic report source assertion strengthened to require a
+durable approved review. The XP helper was not changed, so the XP ledger suite
+was intentionally not rerun. B.5a changes no schema/migration, V1 XP/report,
+notification/CRM/outbox, attachment, seed/backfill, HTTP/UI or rollout state.
+
+Phase 5B.5b remains pending separate approval of the private storage, scan,
+authorization and retention contract. Existing attachment tables do not
+authorize runtime behavior. Phase 5B.5 is therefore only partially complete,
+and the official Phase 5 indicator remains 4/6 (66.7%).
+
+## 38. Design readiness verdict
+
+Phase 5A, Phase 5B.1-B.4 and Phase 5B.5a are implemented in the isolated
+workspace. Atomic report approval, exact XP and level/enrollment completion are
+ready at the server-service layer. The safe rollout state remains all related
+flags default `false`. Private attachment runtime B.5b and HTTP/completion gate
+B.6 remain unstarted; no Phase 5 completion or rollout readiness is claimed.

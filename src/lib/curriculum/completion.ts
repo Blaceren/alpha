@@ -26,6 +26,7 @@ import {
 
 const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 const MAX_SOURCE_ID_LENGTH = 200;
+const UNSAFE_REVIEW_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
 
 export type CurriculumLevelCompletionSource = Extract<
   CurriculumXpSourceType,
@@ -412,6 +413,7 @@ function assertOwnerRule(
 }
 
 const ASSESSMENT_ATTEMPT_SOURCE = /^assessment-attempt:([1-9]\d*)$/;
+const REPORT_REVIEW_SOURCE = /^report-review:([1-9]\d*)$/;
 
 async function assertLessonAssessmentProof(
   tx: Prisma.TransactionClient,
@@ -464,6 +466,109 @@ async function assertLessonAssessmentProof(
       Math.floor((attempt.correctCount * 10_000) / attempt.totalQuestions)
   ) {
     failure("COMPLETION_STATE_CORRUPT", "lesson assessment proof is missing or corrupt");
+  }
+}
+
+async function assertReportApprovalProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+) {
+  if (input.sourceType !== "report_approval") return;
+  const match = REPORT_REVIEW_SOURCE.exec(input.sourceId);
+  const reviewId = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(reviewId) || reviewId <= 0) {
+    failure("COMPLETION_OWNER_MISMATCH", "report approval proof identity is invalid");
+  }
+  const review = await tx.reportReview.findUnique({
+    where: { id: reviewId },
+    include: {
+      reviewer: { select: { id: true, status: true } },
+      scores: true,
+      submission: {
+        include: {
+          rubric: { include: { criteria: true, scaleOptions: true } },
+          submittedRevision: { select: { id: true, submissionId: true } },
+        },
+      },
+    },
+  });
+  if (!review) {
+    failure("COMPLETION_STATE_CORRUPT", "report approval proof is missing or corrupt");
+  }
+  const submission = review.submission;
+  const pendingProof =
+    submission.status === "pending_review" &&
+    submission.approvedRevisionId === null &&
+    submission.approvedReviewId === null &&
+    submission.approvedAt === null &&
+    submission.claimedById === review.reviewerId &&
+    submission.claimedAt?.getTime() === review.claimedAt?.getTime() &&
+    submission.claimExpiresAt?.getTime() === review.claimExpiresAt?.getTime() &&
+    submission.claimExpiresAt !== null &&
+    submission.claimExpiresAt > input.evaluationTime;
+  const approvedProof =
+    submission.status === "approved" &&
+    submission.approvedRevisionId === review.revisionId &&
+    submission.latestReviewId === review.id &&
+    submission.approvedReviewId === review.id &&
+    submission.reviewedAt !== null &&
+    submission.approvedAt !== null &&
+    submission.reviewedAt.getTime() === review.reviewedAt.getTime() &&
+    submission.approvedAt.getTime() === review.reviewedAt.getTime() &&
+    submission.claimedById === null &&
+    submission.claimedAt === null &&
+    submission.claimExpiresAt === null &&
+    submission.reviewStartedAt === null;
+  const criteria = new Map(submission.rubric.criteria.map((criterion) => [criterion.id, criterion]));
+  const criterionIds = new Set(criteria.keys());
+  const scaleIds = new Set(submission.rubric.scaleOptions.map((option) => option.id));
+  const scoreCriterionIds = new Set(review.scores.map((score) => score.rubricCriterionId));
+  if (
+    review.decision !== "approved" ||
+    review.rejectionReasonId !== null ||
+    review.humanComment !== null ||
+    review.correctiveAction !== null ||
+    !review.claimedAt ||
+    !review.claimExpiresAt ||
+    review.reviewedAt < review.claimedAt ||
+    review.claimExpiresAt <= review.reviewedAt ||
+    !review.reviewer ||
+    review.reviewer.status !== "active" ||
+    review.reviewerId === submission.userId ||
+    review.reviewerRoleSnapshot !== "admin" && review.reviewerRoleSnapshot !== "mentor" ||
+    review.revisionId !== submission.submittedRevisionId ||
+    !submission.submittedRevision ||
+    submission.submittedRevision.id !== review.revisionId ||
+    submission.submittedRevision.submissionId !== submission.id ||
+    submission.activeRevisionId !== submission.submittedRevisionId ||
+    submission.userId !== context.enrollment.userId ||
+    submission.enrollmentId !== context.enrollment.id ||
+    submission.curriculumVersionId !== context.enrollment.curriculumVersionId ||
+    submission.levelDefinitionId !== context.level.id ||
+    submission.userLevelProgressId !== context.progress.id ||
+    review.curriculumVersionId !== submission.curriculumVersionId ||
+    review.levelDefinitionId !== submission.levelDefinitionId ||
+    review.reportAssignmentVersionId !== submission.reportAssignmentVersionId ||
+    review.reportRubricVersionId !== submission.reportRubricVersionId ||
+    submission.rubric.id !== submission.reportRubricVersionId ||
+    submission.rubric.reportAssignmentVersionId !== submission.reportAssignmentVersionId ||
+    !/^sha256:[a-f0-9]{64}$/.test(review.payloadFingerprint) ||
+    review.requestId.length < 8 ||
+    criterionIds.size === 0 ||
+    scaleIds.size === 0 ||
+    review.scores.length !== criterionIds.size ||
+    scoreCriterionIds.size !== criterionIds.size ||
+    review.scores.some((score) => {
+      const criterion = criteria.get(score.rubricCriterionId);
+      return score.reportRubricVersionId !== submission.reportRubricVersionId ||
+        !criterion || !scaleIds.has(score.rubricScaleOptionId) ||
+        (criterion.commentRequired && (!score.comment || score.comment.trim().length === 0)) ||
+        (score.comment !== null && (score.comment.length > 4_000 || UNSAFE_REVIEW_TEXT.test(score.comment)));
+    }) ||
+    (!pendingProof && !approvedProof)
+  ) {
+    failure("COMPLETION_STATE_CORRUPT", "report approval proof is missing or corrupt");
   }
 }
 
@@ -594,6 +699,7 @@ async function runCompletionTransaction(
   const context = await loadContext(tx, input);
   assertOwnerRule(context, input.sourceType);
   await assertLessonAssessmentProof(tx, context, input);
+  await assertReportApprovalProof(tx, context, input);
   assertReward(context);
 
   if (context.progress.status === "completed") {
