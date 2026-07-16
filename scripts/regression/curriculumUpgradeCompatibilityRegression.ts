@@ -26,6 +26,7 @@ const PHASE_3_PROMOCODE_MIGRATION = "20260714030000_promocode_redemption_idempot
 const PHASE_4_CONTENT_MIGRATION = "20260715000000_content_assessment_foundation";
 const PHASE_4_LESSON_PROGRESS_MIGRATION = "20260715010000_lesson_progress_autosave_idempotency";
 const PHASE_5_REPORT_MIGRATION = "20260716000000_report_workflow_foundation";
+const PHASE_5_ATTACHMENT_MIGRATION = "20260716010000_report_attachment_purge_receipt";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -254,6 +255,13 @@ async function main() {
       "Phase 4 lesson progress migration must follow the content migration",
     );
     assert.equal(phase5ReportIndex > phase4LessonProgressIndex, true, "Phase 5 migration must follow Phase 4");
+    const phase5AttachmentIndex = all.indexOf(PHASE_5_ATTACHMENT_MIGRATION);
+    assert.notEqual(phase5AttachmentIndex, -1, "Phase 5B.5b attachment migration missing");
+    assert.equal(
+      phase5AttachmentIndex > phase5ReportIndex,
+      true,
+      "Phase 5B.5b attachment migration must follow the report migration",
+    );
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -861,6 +869,34 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
+    const attachmentColumnsBefore = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      'PRAGMA table_info("ReportAttachment")',
+    )).map((column) => column.name);
+    const reportCountsBeforeAttachmentMigration = await Promise.all(reportTables.map(async (table) => Number((
+      await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+    )[0].count)));
+    await applyMigration(prisma, PHASE_5_ATTACHMENT_MIGRATION);
+
+    await check("16b. attachment purge-receipt migration adds only storagePurgedAt and preserves data", async () => {
+      const after = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        'PRAGMA table_info("ReportAttachment")',
+      )).map((column) => column.name);
+      assert.deepEqual(after, [...attachmentColumnsBefore, "storagePurgedAt"]);
+      const counts = await Promise.all(reportTables.map(async (table) => Number((
+        await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+      )[0].count)));
+      assert.deepEqual(counts, reportCountsBeforeAttachmentMigration);
+      const submissionRows = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        'SELECT "id" FROM "ReportSubmission" WHERE "id" = ?', reportSubmissionId,
+      );
+      assert.equal(submissionRows.length, 1);
+      const indexes = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='ReportAttachment'",
+      )).map((row) => row.name);
+      assert.equal(indexes.includes("ReportAttachment_status_createdAt_idx"), true);
+      assert.equal(indexes.includes("ReportAttachment_purge_pending_idx"), true);
+    });
+
     await check("17. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
@@ -1061,7 +1097,7 @@ async function main() {
     assert.equal((listener.stdout ?? "").trim(), "");
   });
 
-  assert.equal(passed + failed, 28, "upgrade regression scenario count drifted");
+  assert.equal(passed + failed, 29, "upgrade regression scenario count drifted");
 }
 
 main()

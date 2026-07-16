@@ -31,6 +31,14 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_CONTENT_ENABLED",
   "CURRICULUM_V2_ASSESSMENT_ENABLED",
   "CURRICULUM_V2_REPORT_ENABLED",
+  "CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED",
+  "REPORT_ATTACHMENT_S3_BUCKET",
+  "REPORT_ATTACHMENT_S3_REGION",
+  "REPORT_ATTACHMENT_S3_ENDPOINT",
+  "REPORT_ATTACHMENT_S3_FORCE_PATH_STYLE",
+  "REPORT_ATTACHMENT_S3_SSE",
+  "REPORT_ATTACHMENT_CLAMAV_HOST",
+  "REPORT_ATTACHMENT_CLAMAV_PORT",
 ] as const;
 
 const envSchema = z.object({
@@ -56,6 +64,14 @@ const envSchema = z.object({
   CURRICULUM_V2_CONTENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ASSESSMENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_REPORT_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED: z.enum(["true", "false"]).optional(),
+  REPORT_ATTACHMENT_S3_BUCKET: z.string().optional(),
+  REPORT_ATTACHMENT_S3_REGION: z.string().optional(),
+  REPORT_ATTACHMENT_S3_ENDPOINT: z.string().url().optional(),
+  REPORT_ATTACHMENT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  REPORT_ATTACHMENT_S3_SSE: z.string().optional(),
+  REPORT_ATTACHMENT_CLAMAV_HOST: z.string().optional(),
+  REPORT_ATTACHMENT_CLAMAV_PORT: z.string().regex(/^\d+$/).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -167,6 +183,12 @@ export function isCurriculumV2AssessmentEnabled(env: NodeJS.ProcessEnv = process
 // Independent dynamic gate for server-only V2 report-definition mutations.
 export function isCurriculumV2ReportEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_REPORT_ENABLED === "true";
+}
+
+// Independent dynamic gate for the private V2 report attachment runtime.
+// Read at call time; absent env is the safe disabled default.
+export function isCurriculumV2ReportAttachmentsEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED === "true";
 }
 
 export const envContract = {

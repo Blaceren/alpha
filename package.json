@@ -59,6 +59,7 @@
     "test:regression:curriculum-report-authoring": "tsx scripts/regression/curriculumReportAuthoringRegression.ts",
     "test:regression:curriculum-report-submission": "tsx scripts/regression/curriculumReportSubmissionRegression.ts",
     "test:regression:curriculum-report-review": "tsx scripts/regression/curriculumReportReviewRegression.ts",
+    "test:regression:curriculum-report-attachments": "tsx scripts/regression/curriculumReportAttachmentRegression.ts",
     "test:regression:curriculum-content-read-progress": "tsx scripts/regression/curriculumContentReadProgressRegression.ts",
     "test:regression:curriculum-assessment-runtime": "tsx scripts/regression/curriculumAssessmentRuntimeRegression.ts",
     "test:regression:curriculum-phase4-http": "tsx scripts/regression/curriculumPhase4HttpRegression.ts",
@@ -67,6 +68,7 @@
     "test:regression:curriculum-phase3": "tsx scripts/regression/curriculumPhase3Gate.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1089.0",
     "@gsap/react": "^2.1.2",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",

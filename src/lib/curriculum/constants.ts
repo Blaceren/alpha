@@ -101,4 +101,7 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportReassigned: "REPORT_REASSIGNED",
   reportRejected: "REPORT_REJECTED",
   reportApproved: "REPORT_APPROVED",
+  reportAttachmentAvailable: "CURRICULUM_REPORT_ATTACHMENT_AVAILABLE",
+  reportAttachmentDeleted: "CURRICULUM_REPORT_ATTACHMENT_DELETED",
+  reportAttachmentRejected: "CURRICULUM_REPORT_ATTACHMENT_REJECTED",
 } as const;

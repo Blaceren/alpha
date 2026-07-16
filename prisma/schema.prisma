@@ -1626,6 +1626,7 @@ model ReportAttachment {
   createdAt       DateTime               @default(now())
   availableAt     DateTime?
   deletedAt       DateTime?
+  storagePurgedAt DateTime?
   submission      ReportSubmission       @relation(fields: [submissionId, ownerUserId], references: [id, userId], onDelete: Restrict, onUpdate: Cascade)
   revision        ReportRevision         @relation(fields: [revisionId, submissionId], references: [id, submissionId], onDelete: Restrict, onUpdate: Cascade)
   owner           User                   @relation("ReportAttachmentOwner", fields: [ownerUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -1633,6 +1634,7 @@ model ReportAttachment {
   @@unique([id, revisionId, submissionId])
   @@index([revisionId, status])
   @@index([ownerUserId, createdAt])
+  @@index([status, createdAt])
 }
 
 model ReportCommandReceipt {

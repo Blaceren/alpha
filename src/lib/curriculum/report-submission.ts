@@ -617,6 +617,17 @@ function inspectSubmission(
   if (submission.status === "approved" && scope.access !== "completed") return "submission_corrupt";
   if (submission.status !== "approved" && scope.enrollmentStatus !== "active") return "submission_corrupt";
   for (const receipt of submission.receipts) {
+    // Attachment command receipts belong to the Phase 5B.5b attachment
+    // runtime, which validates their safe-result contract itself; here only
+    // the shared durable identity invariants are enforced.
+    if (receipt.commandType === "attachment_initiate" || receipt.commandType === "attachment_finalize") {
+      if (
+        receipt.actorUserId !== scope.actorUserId ||
+        receipt.submissionId !== submission.id ||
+        !FINGERPRINT.test(receipt.payloadFingerprint)
+      ) return "receipt_corrupt";
+      continue;
+    }
     const safe = receiptSafeResultSchema.safeParse(receipt.safeResult);
     const target = receipt.targetRevisionId ? byId.get(receipt.targetRevisionId) : null;
     const result = receipt.resultRevisionId ? byId.get(receipt.resultRevisionId) : null;
