@@ -253,8 +253,17 @@ test("Путь → lesson → Путь", async ({ page }) => {
   await expect(page.locator("h1")).toHaveText("Путь");
 });
 
-test("/lessons resolves to the current lesson instead of 404-ing", async ({ page }) => {
+test("/lessons is the library, and it reaches the current lesson", async ({ page }) => {
+  // Until D2C-B this route redirected to the current lesson: D2B built the lesson
+  // EXPERIENCE, not the library, so /lessons resolved to its documented default
+  // instead of the 404 the navigation used to hit. The library now owns the route
+  // and that default became its dominant action (DD-258) — the destination the
+  // user reaches is unchanged, so this test still guards the same guarantee.
   await open(page, "/lessons");
+  await expect(page).toHaveURL(/\/lessons$/);
+  await expect(page.locator("h1")).toHaveText("Уроки");
+
+  await page.locator(".lib-cont").getByRole("link", { name: /Продолжить урок/ }).click();
   await expect(page).toHaveURL(/\/lessons\/level\.018$/);
   await expect(page.locator("h1")).toHaveText("Поддержка и сопротивление");
 });

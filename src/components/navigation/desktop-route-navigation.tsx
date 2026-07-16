@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { MOBILE_NAV } from "@/config/navigation";
 
-/** Sections that exist as real routes (D2A: Главная + Путь). */
-const BUILT_ROUTES = new Set(["home", "path"]);
+/** Sections that exist as real routes (D2C-B: Главная + Путь + Уроки). */
+const BUILT_ROUTES = new Set(["home", "path", "lessons"]);
 
 /**
  * Desktop/tablet primary navigation — 5 items (Главная · Путь · Уроки · Инструменты · Ещё).

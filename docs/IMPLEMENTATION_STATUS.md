@@ -377,6 +377,41 @@ shell и шрифты продукта и лежат вне `src/`
 работает с D2B — противоречие DD-254. Первый пункт работ фазы реализации
 (`D2C_LESSONS_LIBRARY_SCOPE.md` §7).
 
-**Победитель не выбран — выбирает пользователь. D2C-B (реализация) не начата.**
-
 **Документы:** `D2C_LESSONS_LIBRARY_SCOPE.md`, `D2C_ART_DIRECTION.md`, DD-258…DD-260.
+
+
+## D2C-B — Lessons Library (завершена)
+
+**Пользователь выбрал Concept B «Curriculum Index»** (DD-261). `/lessons` перестал быть redirect'ом и
+стал полноценной библиотекой; контекстный дефолт «перейти к текущему уроку» повышен до доминирующего
+«Продолжить обучение». Навигация «Уроки» стала настоящим built route (`BUILT_ROUTES` + `aria-current`,
+подсказка «Скоро» убрана) — противоречие DD-254, найденное в D2C-A, устранено.
+
+**Композиция:** desktop — двухуровневый индекс (20 модулей слева, содержание выбранного модуля справа,
+уровни строками, ноль карточек); из Concept A перенесён **только mobile-переключатель модуля** +
+sheet со всеми 20; **Concept C отклонён** (дублировал бы Главную).
+
+**Архитектура:** один presentation projector (`lessons-library-model.ts`) объединяет curriculum fixture
++ общий marker + session resolver; React получает готовую модель и не считает progression сам (DD-262).
+Второго набора названий/thresholds/rewards/типов/статусов нет. Введён единственный владелец подписей
+типов — `kindLabel`. Module selection — обычное URL-состояние `?module=module.NN` (DD-263), не dev
+scenario; `/lessons` `?scenario` не читает.
+
+**Session progression (D2B.1):** после реального завершения уровня 18 в той же сессии библиотека
+показывает 18 завершённым, 19 — текущим practical, «3 из 5», CTA → `/lessons/level.019` по чистой
+ссылке; hard reload сохраняет; новый context — исходное состояние; битый marker безопасен. Ни один href
+не содержит `scenario`.
+
+**Проверки:** unit/component **308** (252 прежних сохранены + 56); E2E gate **88** в 6 файлах (78
+прежних сохранены + 10); полный discovery **134** в 13 файлах; lint/typecheck/build чисто; `npm audit`
+— 2 moderate, pre-existing (`next → postcss`), fix не запускался; после стандартного gate historical
+evidence не изменилось. Visual QA: 2 прохода, 7 findings (0 critical, 2 major, 5 minor), оба major
+исправлены до финальных кадров.
+
+**Границы:** Home / Path / Lesson визуально не менялись; curriculum fixtures, thresholds, XP-правила,
+completion rule и session progress schema — без изменений; зависимости не менялись (sheet без новой
+зависимости); backend/API/database/Pocket отсутствуют. **D3, отчёты, mentor feedback и инструменты не
+начаты.**
+
+**Документы:** `D2C_LESSONS_LIBRARY.md`, `design-memory/reviews/d2c-b-lessons-library-review.md`,
+DD-261…DD-263.

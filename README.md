@@ -4,14 +4,15 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D2C-A — Lessons Library Art Direction.** Реализованы Главная (`/`), Путь (`/path`) и
-> Урок (`/lessons/[levelCode]`). Backend / CRM / Pocket / database / deploy — не подключены; все данные
-> synthetic, прогресс не сохраняется. Отчёты, mentor review и инструменты **не начинались**.
+> **Статус: Phase D2C-B — Lessons Library.** Реализованы Главная (`/`), Путь (`/path`),
+> Урок (`/lessons/[levelCode]`) и **Библиотека уроков (`/lessons`)**. Backend / CRM / Pocket /
+> database / deploy — не подключены; все данные synthetic, прогресс живёт только в текущей сессии
+> браузера. Отчёты, mentor review и инструменты **не начинались**.
 >
-> **D2C определена** как Lessons Library & Module Overview (`/lessons` как самостоятельная страница —
-> обзор материала, в отличие от Пути, который показывает допуск). Предъявлены три направления;
-> **победитель не выбран, production React не написан** — реализация не начинается до явного выбора.
-> См. `docs/D2C_LESSONS_LIBRARY_SCOPE.md`, `docs/D2C_ART_DIRECTION.md`.
+> **`/lessons`** — обзор учебного материала (в отличие от Пути, который показывает допуск): выбранный
+> модуль, его уровни, доминирующее «Продолжить обучение», возврат к пройденному. Направление —
+> Concept B «Curriculum Index» (`docs/D2C_ART_DIRECTION.md`), реализация —
+> `docs/D2C_LESSONS_LIBRARY.md`. Выбор модуля — обычное URL-состояние `?module=module.NN`.
 
 ## Требования
 
@@ -35,8 +36,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок), 78 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (121) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека), 88 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (134) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в
@@ -83,9 +84,26 @@ Frontend-архитектура — `docs/FRONTEND_ARCHITECTURE.md`.
 Единственное денежное значение в UI — target ближайшей контрольной точки.
 
 
+## Библиотека уроков — `/lessons` (D2C)
+
+Обзор учебного **материала** — в отличие от Пути, который показывает **допуск**. Направление —
+Concept B «Curriculum Index»: curriculum как содержание книги, строками, без карточек и lock-иконок.
+
+- доминирующее «Продолжить обучение» ведёт на текущий урок (раньше `/lessons` был redirect'ом);
+- desktop: индекс всех 20 модулей + содержание выбранного (его пять уровней, статусы, checkpoint);
+- mobile: переключатель «Модуль NN из 20» + sheet со всеми модулями (не уменьшённый desktop);
+- выбор модуля — обычное URL-состояние `?module=module.NN` (shareable, Back/Forward, безопасный откат);
+  `/lessons` **не читает** `?scenario`;
+- длительность показывается только там, где она реально известна (сегодня — уровень 18);
+- checkpoint — **граница модуля**: только target и что открывает; Pocket не кликабелен.
+
+Детали — `docs/D2C_LESSONS_LIBRARY.md`, направления — `docs/D2C_ART_DIRECTION.md`,
+review — `design-memory/reviews/d2c-b-lessons-library-review.md`,
+screenshots — `design-memory/screenshots/d2c-lessons-library/final/`.
+
 ## Урок — Learning Spine (D2B)
 
-`/lessons/[levelCode]` — канонический маршрут урока (`level.018`; `/lessons` ведёт на текущий урок).
+`/lessons/[levelCode]` — канонический маршрут урока (`level.018`).
 Основная fixture — **уровень 18 «Поддержка и сопротивление»** (модуль 4).
 
 - видео **перед** проверкой (в DOM, на всех viewport);

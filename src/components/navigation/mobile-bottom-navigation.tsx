@@ -2,8 +2,8 @@ import Link from "next/link";
 import { MOBILE_NAV } from "@/config/navigation";
 import { Icon } from "@/components/ui/icon";
 
-/** Sections that exist as real routes (D2A: Главная + Путь). */
-const BUILT_ROUTES = new Set(["home", "path"]);
+/** Sections that exist as real routes (D2C-B: Главная + Путь + Уроки). */
+const BUILT_ROUTES = new Set(["home", "path", "lessons"]);
 
 /**
  * Mobile bottom navigation — 5 items. Fixed, safe-area padded, ≥54px targets,
