@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import type { CurriculumLevel } from "@/domain/curriculum";
+import { levelCodeFor } from "@/features/lesson/model/lesson";
 import { formatThresholdUsd } from "@/domain/curriculum";
 import { getModuleForLevel, getNextCheckpoint } from "@/data/curriculum/fixture";
 import {
@@ -147,7 +149,13 @@ export function PathDetailLayer({
   );
 }
 
-/** Development-safe primary action (no 404, no fake success — see DD-219). */
+/**
+ * Primary action for the selected level.
+ *
+ * Lesson destinations are real links since D2B built the lesson route; the
+ * checkpoint ones stay development-safe no-op buttons (no 404, no fake success —
+ * see DD-219). A locked level never gets a link into an unreachable lesson.
+ */
 function DetailAction({
   level,
   state,
@@ -155,13 +163,23 @@ function DetailAction({
   level: CurriculumLevel;
   state: ReturnType<typeof levelVisualState>;
 }) {
+  const href = `/lessons/${levelCodeFor(level.number)}`;
+
   switch (state) {
     case "current":
-      return <button type="button" className="d-cta">Продолжить урок</button>;
+      return (
+        <Link href={href} className="d-cta">
+          Продолжить урок
+        </Link>
+      );
     case "checkpoint-current":
       return <button type="button" className="d-cta">Проверить выполнение</button>;
     case "completed":
-      return <button type="button" className="d-cta quiet">Повторить урок</button>;
+      return (
+        <Link href={href} className="d-cta quiet">
+          Повторить урок
+        </Link>
+      );
     case "checkpoint-completed":
       return <button type="button" className="d-cta quiet">Открыть итог точки</button>;
     case "available":

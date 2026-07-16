@@ -282,3 +282,32 @@ D2A не менялись.
 Детали — `design-memory/reviews/d2a-r1-path-correction-review.md`, `docs/D2A_PATH_ARCHITECTURE.md` §12.
 
 **D2A закрыт (D2A + R1). D2B не начат.**
+
+
+## D2B — Core Lesson Experience (завершена)
+
+**Реализовано:** канонический маршрут `/lessons/[levelCode]`; `/lessons` → текущий урок (раньше 404);
+typed lesson content + assessment model; lesson state machine; deterministic simulated media adapter;
+video stage; watch progress; 50% unlock; locked test preview; один вопрос за раз; submit; correct/incorrect
+feedback; retry; progression; completion; next-lesson gate; возврат в Путь; интеграция Home и Path CTA;
+desktop/tablet/mobile/320/landscape/200% zoom; keyboard/a11y/reduced motion; tests; screenshots; visual QA.
+
+**Основная fixture:** уровень 18 «Поддержка и сопротивление» (модуль 4). Уровень 19 — только stub
+(practical-уровень, его опыт вне scope). Остальные 98 уровней намеренно не авторились.
+
+**Контент provisional:** утверждённого редакционного сценария нет; каноничны продуктовые правила и UX,
+а не формулировки (DD-243). Production lesson authoring не реализован.
+
+**Правила:** тест открывается ровно на 50% verified watch; полный просмотр не требуется; один вопрос за раз;
+ошибка ничего не отнимает; completion = 50% + все обязательные вопросы (provisional frontend rule, не
+backend-контракт, DD-245); следующий урок закрыт до completion.
+
+**Границы:** mock state не является backend persistence; XP не придуман (2 480 не меняются);
+report/mentor/tool фазы **не начинались**; backend/Pocket/database отсутствуют; **D2C автоматически
+не начинается**.
+
+**Проверки:** unit/component **203** (67 прежних сохранены + 136); E2E **116** (86 прежних сохранены + 30);
+lint/typecheck/build чисто; `npm audit` — 2 moderate, pre-existing (`next → postcss`), fix не запускался.
+
+**Документы:** `D2B_LESSON_EXPERIENCE.md`, `LESSON_STATE_MACHINE.md`, `LESSON_ACCESSIBILITY.md`,
+`design-memory/reviews/d2b-lesson-review.md`, DD-242…DD-254.

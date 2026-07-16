@@ -21,6 +21,15 @@ const CTA_LABEL: Record<(typeof SCENARIOS)[number], RegExp> = {
   checkpoint: /Проверить выполнение/,
 };
 
+/**
+ * Since D2B the active CTA is a real link into the lesson route; the checkpoint
+ * CTA stays a development-safe no-op button (its destination is not built yet).
+ */
+const CTA_ROLE: Record<(typeof SCENARIOS)[number], "link" | "button"> = {
+  active: "link",
+  checkpoint: "button",
+};
+
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (msg) => {
@@ -62,7 +71,7 @@ for (const scenario of SCENARIOS) {
       await expect(page.locator("h1")).toHaveCount(1);
 
       // Primary CTA present and visible.
-      const cta = page.getByRole("button", { name: CTA_LABEL[scenario] });
+      const cta = page.getByRole(CTA_ROLE[scenario], { name: CTA_LABEL[scenario] });
       await expect(cta).toBeVisible();
 
       // No horizontal overflow of the page.
@@ -91,7 +100,7 @@ test("mobile: the bottom nav does not cover the primary CTA", async ({ page }) =
   await page.goto("/?scenario=active", { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
 
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   const nav = page.locator("nav.bottomnav");
   await expect(nav).toBeVisible();
 
@@ -106,7 +115,7 @@ test("mobile: the bottom nav does not cover the primary CTA", async ({ page }) =
 test("keyboard: the CTA is reachable and activatable by keyboard", async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/?scenario=active", { waitUntil: "networkidle" });
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   await cta.focus();
   await expect(cta).toBeFocused();
 });
@@ -138,7 +147,7 @@ test("200% zoom reflows to the compact layout without horizontal overflow", asyn
 
   // Lesson title and CTA remain accessible; layout is compact (mobile bars, not desktop).
   await expect(page.locator("h1")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  await expect(page.getByRole("link", { name: CTA_LABEL.active })).toBeVisible();
   await expect(page.locator("nav.bottomnav")).toBeVisible();
   const disp = await routeDisplays(page);
   expect(disp.narrow, "compact route geometry at 200% zoom").not.toBe("none");
@@ -168,7 +177,7 @@ test("tablet active is a distinct 2-region composition (not stacked, not desktop
   expect(display).toBe("grid");
   // The checkpoint preview shares the top region and the CTA is above the fold.
   await expect(page.locator(".fcp")).toBeVisible();
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   const box = await cta.boundingBox();
   expect(box!.y).toBeLessThan(768);
 });
@@ -217,7 +226,7 @@ test("reduced motion: renders cleanly with motion disabled", async ({ page }) =>
   });
   expect(animName).toBe("none");
   await expect(page.locator("h1")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  await expect(page.getByRole("link", { name: CTA_LABEL.active })).toBeVisible();
   expect(errors, errors.join("\n")).toHaveLength(0);
 });
 
@@ -229,7 +238,7 @@ test("320px: CTA visible, five nav items, no horizontal overflow", async ({ page
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  await expect(page.getByRole("button", { name: CTA_LABEL.active })).toBeVisible();
+  await expect(page.getByRole("link", { name: CTA_LABEL.active })).toBeVisible();
   // Five bottom-nav destinations (accessible names present).
   const navItems = page.locator("nav.bottomnav li");
   await expect(navItems).toHaveCount(5);
@@ -250,7 +259,7 @@ test("200% zoom: CTA is fully above the bottom nav and focusable, no overflow", 
 
   // CTA is not covered by the fixed bottom nav at initial render.
   await assertElementAboveBottomNavigation(page, ".cta");
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   await expect(cta).toBeVisible();
   // Focusing the CTA must not scroll it under the nav.
   await cta.focus();
@@ -274,7 +283,7 @@ test("landscape: CTA is above the bottom nav, page scrollable, no overflow", asy
   );
   expect(scrollable).toBe(true);
   await assertElementAboveBottomNavigation(page, ".cta");
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   await cta.focus();
   await assertElementAboveBottomNavigation(page, ".cta");
 });
@@ -324,7 +333,7 @@ test("no focusable element lands under the bottom nav when focused (mobile)", as
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?scenario=active", { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
-  const cta = page.getByRole("button", { name: CTA_LABEL.active });
+  const cta = page.getByRole("link", { name: CTA_LABEL.active });
   await cta.focus();
   await assertElementAboveBottomNavigation(page, ".cta");
 });

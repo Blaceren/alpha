@@ -211,3 +211,26 @@ Model: `path-state.ts` (scenario adapter, состояния/traits/причин
 
 Инварианты: состояние = геометрия + текст (не только цвет); критический текст вне SVG;
 узлы ≥44px; ни один компонент не показывает баланс/«осталось»/Pocket CTA.
+
+
+## Реализовано в D2B — Урок (`src/features/lesson/components/`)
+
+`LessonWorkspace` (композиция Learning Spine + live region) · `LessonHeader` (единственный h1, back,
+уровень/модуль, цель, состояние словом) · `LessonVideoStage` (главный объект; simulated media) ·
+`LessonSchematic` (абстрактная учебная схема: зоны-полосы и точки реакции; `aria-hidden`, 3:1, `meet`) ·
+`LessonMediaControls` (нативные button + `input[type=range]`; слова вместо emoji; visible label = a11y name) ·
+`LessonWatchProgress` (progressbar подтверждённой границы + порог как место на шкале) ·
+`LessonContext` (тонкий rail: структура, длительность, требования, контрольная точка впереди — без сумм) ·
+`LessonOutline` (главы с таймкодами; read-only, не seek-ярлыки) · `LessonAssessment` (locked/ready/вопрос/
+completed) · `LessonAssessmentLocked` (видимая и объяснённая закрытая проверка, содержание не раскрыто) ·
+`LessonQuestion` (form/fieldset/legend, один вопрос в DOM, управление focus) · `LessonAnswerOption`
+(нативный radio; вердикт глифом и словами) · `LessonFeedback` (объяснение, принимает focus) ·
+`LessonCompletion` (сдержанное завершение, честно про сессию) · `LessonNavigation` (Путь всегда;
+следующий уровень — только после completion) · `LessonLockedScreen` / `LessonUnknown` (честные тупики,
+не 404 и не fake unlock) · `LessonAccessibleOutline` (sr-only сводка).
+
+Hooks: `useLessonExperience` (reducer → модель), `useLessonMedia` (единственный таймер, fixed delta).
+
+Инварианты: видео перед тестом в DOM на всех viewport; один вопрос за раз; состояние = слово + глиф,
+не цвет; правильный ответ не раскрывается до submit и при ошибке; таргеты ≥44px; ни один компонент не
+показывает XP, баланс, сумму контрольной точки или Pocket CTA.

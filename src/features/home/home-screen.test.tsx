@@ -15,8 +15,12 @@ describe("HomeScreen — active lesson", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Поддержка и сопротивление" }),
     ).toBeInTheDocument();
-    // CTA carries the exact spec label and is a control (button), not a fake link.
-    expect(screen.getByRole("button", { name: /Продолжить урок/ })).toBeInTheDocument();
+    // CTA carries the exact spec label and, since D2B, points at the canonical
+    // lesson route for the current level (it was a no-op button in D1B).
+    expect(screen.getByRole("link", { name: /Продолжить урок/ })).toHaveAttribute(
+      "href",
+      "/lessons/level.018",
+    );
     // Module progress is stated as text (route meaning is not icon-only).
     expect(screen.getByText(/Модуль 4 «Чтение графика» · пройдено 2 из 5/)).toBeInTheDocument();
     // Instrumentation is present as text (provisional rank + XP + streak).

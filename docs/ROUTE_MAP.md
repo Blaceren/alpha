@@ -28,9 +28,9 @@
 | `/` | Главная | Auth | контекстный дефолт входа в продукт |
 | `/path` | Путь | Auth | **реализован (D2A)**: открывается на текущем уровне; dev-сценарии `?scenario=` |
 | `/path/level/[levelCode]` | Уровень (деталь) | Auth · Gated | `[levelCode]` = `level.001`…`level.100`; locked → explainer |
-| `/lessons` | Уроки | Auth | список открытых уроков |
-| `/lessons/[levelCode]` | Урок | Auth · Gated | video + тест + связанный инструмент |
-| `/lessons/[levelCode]/test` | Тест | Auth · Gated | доступен после 50% видео |
+| `/lessons` | Уроки | Auth | список открытых уроков; **D2B: redirect на текущий урок** (`/lessons/level.018`) — библиотека в D3 |
+| `/lessons/[levelCode]` | Урок | Auth · Gated | **реализован (D2B)**: video + проверка понимания на одной странице; dev-сценарии `?scenario=` |
+| `/lessons/[levelCode]/test` | Тест | Auth · Gated | **в D2B не реализуется**: проверка живёт под видео на маршруте урока (правило «видео перед тестом»). Зарезервирован, пересматривается в D3 (DD-242) |
 | `/reports/[reportCode]` | Отчёт | Auth · Gated | `[reportCode]` привязан к уровню (напр. `report.003`) |
 | `/tools` | Инструменты | Auth | дефолт — последний редактируемый инструмент |
 | `/tools/[toolCode]` | Инструмент | Auth · Gated | `[toolCode]` = `tool.trading_journal`…`tool.pro_workspace`, `tool.secret` |
@@ -88,5 +88,5 @@
 | `/tools` с историей | последний редактируемый инструмент |
 | `/support` | активный тикет, иначе список |
 | `/path` | центрирование на текущем уровне |
-| `/lessons` | подсвечен активный урок |
+| `/lessons` | подсвечен активный урок; до появления библиотеки — redirect на текущий урок (D2B) |
 | открытие locked `/path/level/[levelCode]` | explainer (что / почему закрыто / что нужно / что откроется), без перепрыгивания |

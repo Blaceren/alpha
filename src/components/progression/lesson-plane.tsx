@@ -2,6 +2,7 @@ import type { HomeState } from "@/domain/home";
 import { RouteNode } from "@/components/progression/route-node";
 import { ModuleProgress } from "@/components/progression/module-progress";
 import { PrimaryRouteAction } from "@/components/progression/primary-route-action";
+import { levelCodeFor } from "@/features/lesson/model/lesson";
 
 /**
  * The lesson context as an OPEN field carved from the current node — bounded on
@@ -24,7 +25,10 @@ export function LessonPlane({ state }: { state: HomeState }) {
       </p>
       <ModuleProgress route={route} />
       <div className="cta-wrap">
-        <PrimaryRouteAction label={primaryAction.label} />
+        <PrimaryRouteAction
+          label={primaryAction.label}
+          href={`/lessons/${levelCodeFor(lesson.levelIndex)}`}
+        />
       </div>
     </section>
   );

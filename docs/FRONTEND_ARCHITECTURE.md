@@ -121,3 +121,20 @@ success/warning/danger/info, locked/completed/active/suspended, focus-ring, over
   `Путь` — реальный Link в обеих навигациях (BUILT_ROUTES = home, path).
 - Координатная модель Пути: проценты одного контейнера для DOM и SVG (`PATH_LAYOUT_ENGINE.md`).
 - Детали — `D2A_PATH_ARCHITECTURE.md`.
+
+## Дополнение D2B — Lesson Experience
+
+- `/lessons/[levelCode]` — production-страница: server `page.tsx` (async params/searchParams →
+  `parseLevelCode` + `resolveLessonScenario`) → client `LessonWorkspace`. `/lessons` — server-redirect
+  на текущий урок. `[levelCode]` = стабильный код (`level.018`), другой схемы URL нет (DD-242).
+- Слои: `features/lesson/model/` (чистая логика: `lesson.ts` типы, `lesson-progress.ts` media/watch,
+  `assessment.ts` вопросы, `lesson-state-machine.ts` композиция) → `features/lesson/data/lesson-fixtures.ts`
+  (контент уровня 18 + stub уровня 19) → `features/lesson/hooks/` (reducer + единственный таймер) →
+  `features/lesson/components/`. Curriculum fixture остаётся каноном структуры; тело урока в нём не живёт.
+- **Вся бизнес-логика — в `model/`**: чистые функции, без React, без `Date.now()`, без `Math.random()`,
+  без мутаций. Компоненты рендерят производное состояние и диспатчат события; giant component отсутствует.
+- Progress marker переиспользуется из `features/path/model/path-state.ts` — Главная, Путь и Урок читают
+  одну и ту же последовательность, поэтому подмена на backend не затронет UI.
+- `lesson-scenarios.ts` — dev adapter: **только seed** стартовой сессии, в production-модель не входит.
+- Сессия живёт в runtime страницы: без backend, без базы, без localStorage (DD-250).
+- Тесты: 136 unit/component + 30 E2E. Детали — `D2B_LESSON_EXPERIENCE.md`, `LESSON_STATE_MACHINE.md`.

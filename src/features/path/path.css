@@ -278,6 +278,7 @@
 
 .d-cta { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 16px;
   border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+  text-decoration: none; /* the lesson CTAs are links since D2B */
   color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--signal-active) 42%, transparent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 14%, transparent),
     color-mix(in srgb, var(--signal-active) 6%, transparent)); }

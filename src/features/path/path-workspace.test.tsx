@@ -118,7 +118,11 @@ describe("PathWorkspace — active scenario (current L18, module 4)", () => {
     const detail = screen.getByRole("complementary", { name: /Уровень 18 — детали/ });
     expect(within(detail).getByText("Поддержка и сопротивление")).toBeInTheDocument();
     expect(within(detail).getByText(/Видео-урок и тест/)).toBeInTheDocument();
-    expect(within(detail).getByRole("button", { name: "Продолжить урок" })).toBeInTheDocument();
+    // Since D2B the detail CTA is a real link to the canonical lesson route.
+    expect(within(detail).getByRole("link", { name: "Продолжить урок" })).toHaveAttribute(
+      "href",
+      "/lessons/level.018",
+    );
     // close
     await user.click(within(detail).getByRole("button", { name: "Закрыть детали уровня" }));
     expect(screen.queryByRole("complementary", { name: /детали/ })).toBeNull();

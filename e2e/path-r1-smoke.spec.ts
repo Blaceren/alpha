@@ -81,7 +81,7 @@ test("mobile detail: CTA sits above the bottom nav, sheet scrolls, focus returns
   await page.locator('.pnode[data-level="18"]').click();
   await page.waitForTimeout(300);
 
-  const cta = page.getByRole("button", { name: "Продолжить урок" });
+  const cta = page.getByRole("link", { name: "Продолжить урок" });
   await expect(cta).toBeVisible();
   const ctaBox = (await cta.boundingBox())!;
   const nav = await navTop(page);

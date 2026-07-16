@@ -160,7 +160,7 @@ test("home regression: / still renders with its CTA and clean console", async ({
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/?scenario=active", { waitUntil: "networkidle" });
   await expect(page.locator("h1")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /Продолжить урок/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Продолжить урок/ })).toBeVisible();
   // Путь is now a real link in the app bar
   const pathLink = page.locator('nav.rnav a[href="/path"]');
   await expect(pathLink).toBeVisible();
