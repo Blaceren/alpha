@@ -12,11 +12,17 @@ import {
 } from "@/features/path/model/path-state";
 
 /**
- * Contextual level detail. Desktop/tablet: an anchored side plane next to the
- * map (the map stays visible — not a centred modal). Mobile: a fixed sheet that
- * sits above the bottom navigation. Locked levels get an explainer (why locked,
- * what step is required) and never reveal lesson content beyond the brief.
- * No user balance, no Pocket CTA — ever.
+ * Contextual level detail (Phase D2A, presentation refined in D2A-R1).
+ *
+ * Desktop/tablet: a plane anchored to the selected node — the map stays visible
+ * and a leader line runs from the node to this panel's boundary edge, so the
+ * node is visibly the source of the context (not a floating SaaS card, not a
+ * centred modal, not an app sidebar). Mobile: an OPAQUE sheet above the bottom
+ * navigation over a soft scrim — the route beneath must never read through it.
+ *
+ * Content hierarchy: level → state → requirement → next boundary → action.
+ * Locked levels get an explainer and never reveal lesson content beyond the
+ * brief. No user balance, no Pocket CTA — ever.
  */
 export function PathDetailLayer({
   level,
@@ -48,8 +54,10 @@ export function PathDetailLayer({
 
   return (
     <aside className="path-detail" aria-label={`Уровень ${level.number} — детали`}>
+      {/* the boundary edge that the node's leader line lands on */}
+      <span className="d-edge" aria-hidden="true" />
       <button type="button" className="d-close" onClick={onClose} aria-label="Закрыть детали уровня">
-        ✕
+        <span aria-hidden="true">✕</span>
       </button>
       <p className="d-eyebrow">
         Уровень {level.number} · Модуль {mod.index} «{mod.title}»

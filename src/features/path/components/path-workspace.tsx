@@ -106,16 +106,24 @@ export function PathWorkspace({ scenario }: { scenario: PathScenario }) {
           window={win}
           progress={progress}
           selectedLevel={selectedLevel}
+          detailOpen={detailOpen}
           onSelectLevel={selectLevel}
           onSelectModule={selectModule}
           onKeyDown={onKeyDown}
         />
         {detailOpen && (
-          <PathDetailLayer
-            level={getLevel(selectedLevel)}
-            progress={progress}
-            onClose={closeDetail}
-          />
+          <>
+            {/* Mobile-only scrim: separates the opaque sheet from the workspace
+                without blur/glassmorphism. Tapping it closes the layer — a
+                redundant affordance, so it stays out of the accessibility tree
+                (Escape and the close button are the real controls). */}
+            <div className="path-scrim" aria-hidden="true" onClick={closeDetail} />
+            <PathDetailLayer
+              level={getLevel(selectedLevel)}
+              progress={progress}
+              onClose={closeDetail}
+            />
+          </>
         )}
       </div>
 

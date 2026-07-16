@@ -40,7 +40,13 @@ describe("PathWorkspace — active scenario (current L18, module 4)", () => {
 
   it("shows the nearest checkpoint L20 with the target only (no user balance)", () => {
     render(<PathWorkspace scenario="active" />);
-    expect(screen.getAllByText(/Контрольная точка · Уровень 20/).length).toBeGreaterThan(0);
+    // D2A-R1: the readable gate summary lives outside the pannable canvas, so
+    // the threshold and reward can never be edge-clipped by it.
+    const summary = document.querySelector(".cp-summary");
+    expect(summary?.textContent).toMatch(/Уровень 20/);
+    expect(summary?.textContent).toMatch(/от \$200/);
+    expect(summary?.textContent).toMatch(/Наблюдатель IV/);
+    expect(summary?.textContent).toMatch(/Chart Markup Tool/);
     const text = document.body.textContent ?? "";
     expect(text).toMatch(/от \$200/);
     // financial privacy: no user balance, no remaining, no Pocket CTA
@@ -54,6 +60,34 @@ describe("PathWorkspace — active scenario (current L18, module 4)", () => {
     const buttons = within(nav).getAllByRole("button");
     // 20 module segments (the meta line is not a button)
     expect(buttons).toHaveLength(20);
+  });
+
+  it("navigator states the scale and marks current vs viewed on separate attributes", () => {
+    render(<PathWorkspace scenario="active" />);
+    // scale marker: the full phrase stays available to assistive tech
+    expect(screen.getAllByText(/Модуль 4 из 20/).length).toBeGreaterThan(0);
+    // current and viewed are distinct data hooks, not one colour class
+    const current = document.querySelectorAll(".modseg[data-current]");
+    const viewed = document.querySelectorAll(".modseg[data-viewed]");
+    expect(current).toHaveLength(1);
+    expect(viewed).toHaveLength(1);
+    expect(current[0]?.getAttribute("aria-label")).toMatch(/Модуль 4/);
+    expect(current[0]?.getAttribute("aria-label")).toMatch(/здесь ты сейчас/);
+  });
+
+  it("the current module stays identifiable while a different module is viewed", async () => {
+    const user = userEvent.setup();
+    render(<PathWorkspace scenario="active" />);
+    const nav = screen.getByRole("navigation", { name: "Модули пути" });
+    await user.click(within(nav).getByRole("button", { name: /Модуль 12 «Исполнение»/ }));
+
+    const current = document.querySelector(".modseg[data-current]");
+    const viewed = document.querySelector(".modseg[data-viewed]");
+    expect(current?.getAttribute("aria-label")).toMatch(/Модуль 4/);
+    expect(viewed?.getAttribute("aria-label")).toMatch(/Модуль 12/);
+    expect(current).not.toBe(viewed);
+    // and the way back is offered
+    expect(screen.getByRole("button", { name: "К текущему уровню" })).toBeInTheDocument();
   });
 
   it("can open a completed module and a future module, then return to current", async () => {

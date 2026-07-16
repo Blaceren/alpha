@@ -257,3 +257,28 @@ lesson/test/report/tools/community страницы не реализованы;
 `docs/PATH_ACCESSIBILITY.md`, review — `design-memory/reviews/d2a-path-review.md`.
 
 **D2B не начинается автоматически.**
+
+---
+
+## 11. D2A-R1 — Path Visual Hierarchy & Responsive Correction (выполнено)
+
+Корректирующий этап: **только presentation layer**. Данные, layout engine, scenarios и a11y-архитектура
+D2A не менялись.
+
+| Пункт | Статус |
+|-------|--------|
+| Mobile detail непрозрачен (alpha = 1), scrim без blur, bottom nav остаётся рабочим | ✅ |
+| Desktop detail привязан к выбранному узлу leader-линией; не карточка/modal/sidebar | ✅ |
+| 200% zoom: узел + сводка КТ (порог, ранг, инструмент) целиком в первом экране | ✅ |
+| Landscape: маршрут и текущий узел ≥16px над bottom nav (факт 20px) | ✅ |
+| Pan discoverable (edge-fade + одноразовая метка), vertical scroll не блокируется | ✅ |
+| Навигатор: scale `N / 20`, главы по 5, current/viewed различимы геометрией, ≥44px | ✅ |
+| Path сильнее отличается от Home (viewport-рамка, scale, сводка, detail-стена) | ✅ |
+| Desktop/tablet/mobile/320 без регрессий; Home не тронута | ✅ |
+| Financial privacy сохранена (только target, без баланса/Pocket CTA) | ✅ |
+| Tests: 67 unit + 86 e2e; lint / typecheck / build | ✅ |
+| npm audit | ⚠️ 2 moderate (транзитивный postcss в Next; без изменений) |
+
+Детали — `design-memory/reviews/d2a-r1-path-correction-review.md`, `docs/D2A_PATH_ARCHITECTURE.md` §12.
+
+**D2A закрыт (D2A + R1). D2B не начат.**
