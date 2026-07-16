@@ -30,6 +30,7 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_XP_ENABLED",
   "CURRICULUM_V2_CONTENT_ENABLED",
   "CURRICULUM_V2_ASSESSMENT_ENABLED",
+  "CURRICULUM_V2_REPORT_ENABLED",
 ] as const;
 
 const envSchema = z.object({
@@ -54,6 +55,7 @@ const envSchema = z.object({
   CURRICULUM_V2_XP_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_CONTENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ASSESSMENT_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_REPORT_ENABLED: z.enum(["true", "false"]).optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -160,6 +162,11 @@ export function isCurriculumV2ContentEnabled(env: NodeJS.ProcessEnv = process.en
 // Independent dynamic gate for server-only V2 assessment authoring/publication mutations.
 export function isCurriculumV2AssessmentEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_ASSESSMENT_ENABLED === "true";
+}
+
+// Independent dynamic gate for server-only V2 report-definition mutations.
+export function isCurriculumV2ReportEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_REPORT_ENABLED === "true";
 }
 
 export const envContract = {

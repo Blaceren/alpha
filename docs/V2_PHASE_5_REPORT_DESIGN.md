@@ -1264,13 +1264,55 @@ reported, not hidden.
 | seed/backfill | explicitly excluded | none | approved definitions later | unintended activation/data rewrite | after Phase 5, separate authorization |
 | V1 report migration | no approved mapping; V1 lacks history/version | none; coexist | explicit audited one-time migration | fabricated pins/history, rollback risk | separate migration phase |
 
-## 34. Design readiness verdict
+## 34. Implemented Phase 5B.2 definition-authoring contract
 
-This contract is ready to guide **Phase 5B.1 schema foundation** only after the
-B.1-deadline open decisions are approved. It does not claim functional report
-support. The current safe rollout state is all existing flags unchanged and the
-future `CURRICULUM_V2_REPORT_ENABLED` absent/false.
+Phase 5B.2 adds server-only report-definition authoring behind the independent,
+dynamic `CURRICULUM_V2_REPORT_ENABLED` flag, which defaults to `false`. Every
+mutation requires an existing active admin and runs the ownership/lifecycle
+checks, write and awaited allowlisted audit in one interactive transaction.
+Mentors and all other roles cannot author definitions.
 
-Phase 5A is complete when this document is the only committed change. Phase
-5B.1, schema, migrations, source, API, uploads, runtime, seed and production
-rollout have not started.
+The command surface covers draft assignment metadata, explicit localizations,
+structured fields and field localizations; draft rubric versions, criteria,
+criterion localizations, neutral scale options and their localizations; and the
+rubric-owned rejection-reason catalog and localizations. The actual B.1 schema
+does not give rejection reasons an independent status/version lifecycle, so
+their lifecycle is inherited from the parent rubric. Published and archived
+graphs are immutable, and only empty unbound drafts can be deleted.
+
+Field rules use the approved version-1 allowlist only: bounded text lengths,
+bounded integer ranges, exact HTTPS URL policy, a boolean version marker, and
+stable choice codes with bounded selection counts. Regex, executable rules,
+HTML/unsafe URI content, arbitrary JSON Schema and caller-supplied lifecycle or
+ownership fields are rejected. Locales are explicit and normalized; there is no
+default locale or fallback.
+
+Publication loads the complete graph and returns all validation issues in one
+pass. A rubric needs localized criteria, neutral scale options and at least one
+localized active rejection reason with a common complete locale. Numeric
+weights, pass thresholds, automatic scoring and profit-only approval criteria
+remain forbidden. An assignment needs a complete assignment/field locale and
+the exact already-published rubric for the same assignment.
+
+Replacement requires the exact expected published ID. It atomically archives
+the old version, publishes the new version and, when a binding points at the old
+graph, moves that binding using `LevelReportBinding.revision` CAS. First publish
+does not create a binding. Standalone bind/unbind commands accept only the exact
+published assignment and rubric for the report/report_approval level. A bound
+published definition cannot be archived. Partial unique indexes remain the
+final race guard, and a constraint-race recovery is accepted only after durable
+state verification without a second audit.
+
+Audit metadata is limited to actor and definition IDs, stable codes, locale,
+order and version/revision numbers; presentation text, rules JSON, reviewer
+content and secrets are excluded. Phase 5B.2 does not implement submissions,
+revisions, autosave, reviewer workflow, approval, XP/completion, attachments,
+HTTP, seed/backfill, UI or rollout. The Phase 5B.1 schema and migration are
+unchanged.
+
+## 35. Design readiness verdict
+
+Phase 5A, Phase 5B.1 and the Phase 5B.2 definition-authoring lifecycle are
+implemented in the isolated workspace. The safe rollout state remains
+`CURRICULUM_V2_REPORT_ENABLED=false`. Functional learner report support is not
+claimed: Phase 5B.3 and later runtime stages have not started.
