@@ -90,6 +90,8 @@ delete serverEnv.CURRICULUM_V2_ADMIN_ENABLED;
 delete serverEnv.CURRICULUM_V2_READ_ENABLED;
 delete serverEnv.CURRICULUM_V2_ENROLLMENT_ENABLED;
 delete serverEnv.CURRICULUM_V2_XP_ENABLED;
+delete serverEnv.CURRICULUM_V2_CONTENT_ENABLED;
+delete serverEnv.CURRICULUM_V2_ASSESSMENT_ENABLED;
 delete serverEnv.NODE_ENV;
 Object.assign(serverEnv, {
   DATABASE_URL: dbUrl,
@@ -103,13 +105,15 @@ Object.assign(serverEnv, {
 });
 
 async function startServer(
-  flags: { admin?: boolean; read?: boolean; enrollment?: boolean; xp?: boolean } = {},
+  flags: { admin?: boolean; read?: boolean; enrollment?: boolean; xp?: boolean; content?: boolean; assessment?: boolean } = {},
 ): Promise<ChildProcess> {
   const env = { ...serverEnv };
   if (flags.admin) env.CURRICULUM_V2_ADMIN_ENABLED = "true";
   if (flags.read) env.CURRICULUM_V2_READ_ENABLED = "true";
   if (flags.enrollment) env.CURRICULUM_V2_ENROLLMENT_ENABLED = "true";
   if (flags.xp) env.CURRICULUM_V2_XP_ENABLED = "true";
+  if (flags.content) env.CURRICULUM_V2_CONTENT_ENABLED = "true";
+  if (flags.assessment) env.CURRICULUM_V2_ASSESSMENT_ENABLED = "true";
   const options: SpawnOptions = {
     cwd: process.cwd(),
     env: env as NodeJS.ProcessEnv,
@@ -883,6 +887,8 @@ async function main() {
       assert.equal(list.status, 404);
       const detail = await client.get(`/api/admin/curriculum/versions/${draftId}`);
       assert.equal(detail.status, 404);
+      assert.equal((await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/content-versions`)).status, 404);
+      assert.equal((await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/assessment-versions`)).status, 404);
     });
     await stopServer(server);
     server = null;
@@ -920,6 +926,8 @@ async function main() {
       assert.equal(env.isCurriculumV2ReadEnabled(defaults), false);
       assert.equal(env.isCurriculumV2EnrollmentEnabled(defaults), false);
       assert.equal(env.isCurriculumV2XpEnabled(defaults), false);
+      assert.equal(env.isCurriculumV2ContentEnabled(defaults), false);
+      assert.equal(env.isCurriculumV2AssessmentEnabled(defaults), false);
     });
 
     server = await startServer({ admin: true });
@@ -934,13 +942,27 @@ async function main() {
     });
     await stopServer(server);
     server = null;
+
+    server = await startServer({ admin: true, read: true, enrollment: true, content: true, assessment: true });
+    await check("24. Phase 4 admin profile flags expose safe list routes", async () => {
+      const client = new HttpClient(); await client.login(adminUser.email);
+      const content = await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/content-versions`);
+      const assessment = await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/assessment-versions`);
+      assert.equal(content.status, 200, content.text); assert.equal(assessment.status, 200, assessment.text);
+    });
+    await check("25. Phase 4 assessment history works on populated upgraded V1 runtime", async () => {
+      const client = new HttpClient(); await client.login(user.email);
+      const response = await client.get("/api/curriculum/v2/assessment/attempts?limit=20");
+      assert.equal(response.status, 200, response.text);
+    });
+    await stopServer(server); server = null;
   } finally {
     await stopServer(server);
     try { await prisma.$disconnect(); } catch { /* already closed */ }
     cleanupDb();
   }
 
-  await check("24. temporary DB, journals and listener removed after test", () => {
+  await check("26. temporary DB, journals and listener removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
@@ -953,7 +975,7 @@ async function main() {
     assert.equal((listener.stdout ?? "").trim(), "");
   });
 
-  assert.equal(passed + failed, 24, "upgrade regression scenario count drifted");
+  assert.equal(passed + failed, 26, "upgrade regression scenario count drifted");
 }
 
 main()

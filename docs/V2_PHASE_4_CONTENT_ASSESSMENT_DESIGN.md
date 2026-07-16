@@ -1,6 +1,6 @@
 # ATA V2 — Phase 4 Content, Assessments and Lesson Progress Design (Phase 4A)
 
-**Статус:** утверждённый design-контракт Phase 4; schema foundation реализована в Phase 4B.1, content/assessment authoring — в Phase 4B.2/4B.3, pinned content read и lesson autosave — в Phase 4B.4
+**Статус:** final Phase 4 contract; Phase 4B.1–4B.6 реализованы и completion-gated. HTTP-контракт Phase 4B.6 ниже заменяет предварительную route table Phase 4A.
 **Дата:** 2026-07-15
 **База:** commit `6e0c32df66089ab42855d2759c2361e2d6bdfafc` (Phase 3 завершена)
 **Связанные документы:** `V2_PRODUCT_DECISIONS.md`, `V2_GAP_ANALYSIS.md`, `V2_PHASE_1_SCHEMA_DESIGN.md`, `V2_PHASE_2_SCHEMA_DESIGN.md`, `V2_PHASE_3_XP_DESIGN.md`, `V2_PHASE_1_COMPLETION.md`, `V2_PHASE_2_COMPLETION.md`, `V2_PHASE_3_COMPLETION.md`
@@ -491,6 +491,58 @@ Matrix (`R`=READ, `E`=ENROLLMENT, `X`=XP, `C`=CONTENT, `A`=ASSESSMENT, `Adm`=ADM
 ---
 
 ## 13. API contracts (будущие routes; в Phase 4A не создаются)
+
+### 13.0 Phase 4B.6 final HTTP contract (normative override)
+
+Этот подраздел заменяет все несовместимые URL, методы, flags, request identity и response reveal из предварительной таблицы Phase 4A ниже. Старая таблица сохранена только как design history и не является нормативной.
+
+Все успешные ответы Phase 4 имеют форму `{ "data": ... }`. Ошибки имеют форму `{ "error": "STABLE_CODE" }`; `issues` присутствует только для безопасных structured validation/publication issues. Каждый ответ имеет `Cache-Control: no-store`. Route-модули не выполняют Prisma mutations. Admin GET используют read-only query services; attempt history использует `resolveOwnAssessmentAttemptHistory`.
+
+#### Admin content
+
+Все routes требуют `ADMIN+CONTENT` до authentication, затем session, active admin, общий curriculum-admin actor bucket, CSRF для mutations, strict path/query/body, ownership и domain command.
+
+- `GET/POST /api/admin/curriculum/versions/{id}/levels/{levelId}/content-versions`
+- `GET/PATCH/DELETE /api/admin/curriculum/versions/{id}/levels/{levelId}/content-versions/{contentVersionId}`
+- `POST .../content-versions/{contentVersionId}/publish` со strict `{expectedPublishedContentVersionId:number|null}`
+- `POST .../content-versions/{contentVersionId}/archive` с отсутствующим body или strict `{}`
+- `POST .../content-versions/{contentVersionId}/localizations`
+- `PATCH/DELETE .../content-versions/{contentVersionId}/localizations/{localizationId}`
+- `POST .../content-versions/{contentVersionId}/assets`
+- `PATCH/DELETE .../content-versions/{contentVersionId}/assets/{assetId}`
+- `PUT/DELETE /api/admin/curriculum/versions/{id}/levels/{levelId}/content-binding`; PUT — strict `{contentVersionId:number}`, DELETE — strict empty и сохраняет assessment side.
+
+Content version POST создаёт только draft version; nested localizations/assets отклоняются.
+
+#### Admin assessment
+
+Все routes требуют `ADMIN+ASSESSMENT` с тем же security order.
+
+- `GET/POST /api/admin/curriculum/versions/{id}/levels/{levelId}/assessment-versions`
+- `GET/PATCH/DELETE .../assessment-versions/{assessmentVersionId}`
+- `POST .../assessment-versions/{assessmentVersionId}/publish` со strict `{expectedPublishedAssessmentVersionId:number|null}`
+- `POST .../assessment-versions/{assessmentVersionId}/archive` с отсутствующим body или strict `{}`
+- `POST .../assessment-versions/{assessmentVersionId}/questions`
+- `PATCH/DELETE .../assessment-versions/{assessmentVersionId}/questions/{questionId}`
+- `POST .../questions/{questionId}/localizations`
+- `PATCH/DELETE .../questions/{questionId}/localizations/{localizationId}`
+- `PUT/DELETE /api/admin/curriculum/versions/{id}/levels/{levelId}/assessment-binding`; DELETE сохраняет content side.
+
+Assessment version POST создаёт только draft version; nested questions/localizations отклоняются. Admin reads никогда не возвращают raw `correctAnswer`; возвращается `correctAnswerConfigured`. Mutation responses, errors, audits и logs не повторяют grading secrets.
+
+#### Self content and assessment
+
+Security order mutations: profile flags, session, active user, один общий per-user mutation bucket, CSRF, strict header/path/body, self-only domain service. GET не требуют CSRF.
+
+- `GET /api/curriculum/v2/levels/{stableCode}/content?locale=...` требует `READ+ENROLLMENT+CONTENT`; `locale` — единственный query, route делегирует только `resolveUserLevelContent`.
+- `PATCH /api/curriculum/v2/levels/{stableCode}/lesson-progress` требует `READ+ENROLLMENT+CONTENT`; request identity — только `Idempotency-Key` (8–128 safe chars); body требует `expectedRevision` и утверждённые autosave fields. `requestId` в body запрещён. Response различает applied/exact retry и возвращает только accepted revision, applied time и safe progress.
+- `POST /api/curriculum/v2/levels/{stableCode}/assessment/attempts` требует `READ+ENROLLMENT+ASSESSMENT`; strict body — `{locale}`. XP не является route gate. Response содержит safe questions и attempt identity, но не answer keys, explanations, fingerprints или ownership.
+- `POST /api/curriculum/v2/assessment/attempts/{attemptId}/submit` требует `READ+ENROLLMENT+ASSESSMENT`; request identity — только `Idempotency-Key`; strict body — `{answers:[{questionKey,answer}]}`. Client score/status/XP/ownership отклоняются. Failed grading разрешён при XP off; только passing completion branch требует XP. Response aggregate-only и не раскрывает per-question correctness, answers или explanations.
+- `GET /api/curriculum/v2/assessment/attempts` требует `READ+ENROLLMENT+ASSESSMENT`; разрешены только `limit` (default 20, 1–50) и authenticated-encrypted `cursor`. Результаты self-only, pinned к active/completed enrollment, отсортированы `startedAt DESC,id DESC`, bounded и не содержат answers, grading secrets, fingerprints, internal ownership, XP или audit data.
+
+Final cancellations: batch content create, ambiguous assessment aliases, body `requestId` для autosave/start/submit, optional `expectedRevision`, XP start gate, per-question reveal, ADMIN-only authoring flags и combined resource-binding mutation не входят в Phase 4.
+
+### 13.1 Preliminary Phase 4A table (historical, superseded by §13.0)
 
 Общее: user-facing — порядок гейтов `flags → session → active user → strict query/body → resolver → allowlist mapper`; 404-неотличимость при любом отсутствующем флаге; `Cache-Control: no-store` на всех ответах; GET без CSRF, mutations — CSRF + rate limit; Prisma-объекты не сериализуются напрямую; internal IDs за пределами описанных полей, correctAnswer, email/role, audit, fingerprints, idempotency keys — запрещены в ответах. `attemptId` в path — единственный внешний internal-ID (self-ownership проверяется в tx; альтернатива opaque-токену отклонена как избыточная при строгом ownership-чеке).
 

@@ -1,0 +1,199 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { apiAuthErrorResponse, rateLimitedResponse, requireAdmin, requireUser } from "@/lib/apiAuth";
+import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
+import { AssessmentDomainError } from "./assessment-errors";
+import { AssessmentRuntimeError } from "./assessment-runtime";
+import { ContentDomainError } from "./content-errors";
+import { CurriculumDomainError } from "./errors";
+import { LessonProgressDomainError } from "./content-read-progress";
+import {
+  isCurriculumV2AdminEnabled,
+  isCurriculumV2AssessmentEnabled,
+  isCurriculumV2ContentEnabled,
+  isCurriculumV2EnrollmentEnabled,
+  isCurriculumV2ReadEnabled,
+} from "@/lib/env";
+import { rateLimit } from "@/lib/rateLimit";
+
+export const PHASE4_NO_STORE = { "Cache-Control": "no-store" } as const;
+export type Phase4Profile = "content" | "assessment";
+
+function withNoStore(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
+export function phase4Data(data: unknown, status = 200) {
+  return NextResponse.json({ data }, { status, headers: PHASE4_NO_STORE });
+}
+
+export function phase4Error(error: string, status: number, issues?: unknown[]) {
+  return NextResponse.json(
+    issues && issues.length ? { error, issues } : { error },
+    { status, headers: PHASE4_NO_STORE },
+  );
+}
+
+export function phase4Disabled() {
+  return phase4Error("NOT_FOUND", 404);
+}
+
+function profileEnabled(profile: Phase4Profile) {
+  return profile === "content"
+    ? isCurriculumV2ContentEnabled()
+    : isCurriculumV2AssessmentEnabled();
+}
+
+type AdminGate =
+  | { ok: true; actorId: number }
+  | { ok: false; response: NextResponse };
+
+export async function gatePhase4Admin(
+  request: Request,
+  profile: Phase4Profile,
+  write: boolean,
+): Promise<AdminGate> {
+  if (!isCurriculumV2AdminEnabled() || !profileEnabled(profile)) {
+    return { ok: false, response: phase4Disabled() };
+  }
+  try {
+    const admin = await requireAdmin();
+    const limit = rateLimit(`curriculum:admin:${admin.id}`, {
+      limit: 200,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!limit.allowed) return { ok: false, response: withNoStore(rateLimitedResponse()) };
+    if (write && !validateCsrfToken(request)) {
+      return { ok: false, response: withNoStore(await csrfFailureResponse(request)) };
+    }
+    return { ok: true, actorId: admin.id };
+  } catch (error) {
+    return { ok: false, response: withNoStore(await apiAuthErrorResponse(error, request)) };
+  }
+}
+
+type SelfGate =
+  | { ok: true; actorId: number }
+  | { ok: false; response: NextResponse };
+
+export async function gatePhase4Self(
+  request: Request,
+  profile: Phase4Profile,
+  write: boolean,
+): Promise<SelfGate> {
+  if (!isCurriculumV2ReadEnabled() || !isCurriculumV2EnrollmentEnabled() || !profileEnabled(profile)) {
+    return { ok: false, response: phase4Disabled() };
+  }
+  try {
+    const user = await requireUser();
+    if (write) {
+      const limit = rateLimit(`curriculum:self:mutation:${user.id}`, {
+        limit: 100,
+        windowMs: 10 * 60 * 1000,
+      });
+      if (!limit.allowed) return { ok: false, response: withNoStore(rateLimitedResponse()) };
+      if (!validateCsrfToken(request)) {
+        return { ok: false, response: withNoStore(await csrfFailureResponse(request)) };
+      }
+    }
+    return { ok: true, actorId: user.id };
+  } catch (error) {
+    return { ok: false, response: withNoStore(await apiAuthErrorResponse(error, request)) };
+  }
+}
+
+export function positivePathId(raw: string, reference = "id") {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Phase4HttpError("INPUT_INVALID", 400, [{ code: "INPUT_INVALID", reference }]);
+  }
+  return value;
+}
+
+export function strictQuery(request: Request, allowed: readonly string[]) {
+  const params = new URL(request.url).searchParams;
+  for (const key of params.keys()) {
+    if (!allowed.includes(key)) {
+      throw new Phase4HttpError("INVALID_QUERY", 400, [{ code: "INPUT_INVALID", reference: key }]);
+    }
+  }
+  return params;
+}
+
+export async function jsonBody(request: Request) {
+  const text = await request.text();
+  if (!text.trim()) return {};
+  try { return JSON.parse(text) as unknown; } catch { return null; }
+}
+
+export function strictBody<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new Phase4HttpError("INPUT_INVALID", 400, parsed.error.issues.map((issue) => ({
+      code: "INPUT_INVALID",
+      reference: issue.path.join(".") || "body",
+      message: issue.message,
+    })));
+  }
+  return parsed.data;
+}
+
+export function idempotencyKey(request: Request) {
+  const key = request.headers.get("Idempotency-Key");
+  if (!key || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$/.test(key)) {
+    throw new Phase4HttpError("IDEMPOTENCY_KEY_INVALID", 400, [
+      { code: "INPUT_INVALID", reference: "Idempotency-Key" },
+    ]);
+  }
+  return key;
+}
+
+export class Phase4HttpError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    readonly issues: unknown[] = [],
+  ) { super(code); }
+}
+
+const conflict = new Set([
+  "CONFLICT", "STALE", "IMMUTABLE", "VERSION_MISMATCH", "IDEMPOTENCY_CONFLICT",
+  "CONTENT_VERSION_CONFLICT", "CONTENT_VERSION_NOT_DRAFT", "CONTENT_PUBLISHED_IMMUTABLE",
+  "CONTENT_ARCHIVED_IMMUTABLE", "CONTENT_REPLACEMENT_REQUIRED", "CONTENT_REPLACEMENT_MISMATCH",
+  "CONTENT_LOCALIZATION_CONFLICT", "CONTENT_ASSET_CONFLICT", "CONTENT_BINDING_CONFLICT",
+  "CONTENT_VERSION_MISMATCH", "CONTENT_NOT_EMPTY", "CONTENT_NO_CHANGES",
+  "ASSESSMENT_VERSION_CONFLICT", "ASSESSMENT_VERSION_NOT_DRAFT", "ASSESSMENT_PUBLISHED_IMMUTABLE",
+  "ASSESSMENT_ARCHIVED_IMMUTABLE", "ASSESSMENT_QUESTION_CONFLICT", "ASSESSMENT_LOCALIZATION_CONFLICT",
+  "ASSESSMENT_REPLACEMENT_REQUIRED", "ASSESSMENT_REPLACEMENT_MISMATCH", "ASSESSMENT_BINDING_CONFLICT",
+  "ASSESSMENT_VERSION_MISMATCH", "ASSESSMENT_NOT_EMPTY", "ASSESSMENT_NO_CHANGES",
+  "ASSESSMENT_ATTEMPT_CONFLICT", "ASSESSMENT_ATTEMPT_IMMUTABLE", "ASSESSMENT_SUBMISSION_CONFLICT",
+  "ASSESSMENT_STATE_CORRUPT", "CONTENT_STATE_CORRUPT",
+]);
+
+const notFound = new Set([
+  "CONTENT_LEVEL_NOT_FOUND", "CONTENT_VERSION_NOT_FOUND", "CONTENT_LOCALIZATION_NOT_FOUND",
+  "CONTENT_ASSET_NOT_FOUND", "CONTENT_BINDING_NOT_FOUND", "ASSESSMENT_LEVEL_NOT_FOUND",
+  "ASSESSMENT_VERSION_NOT_FOUND", "ASSESSMENT_QUESTION_NOT_FOUND", "ASSESSMENT_LOCALIZATION_NOT_FOUND",
+  "ASSESSMENT_BINDING_NOT_FOUND", "ASSESSMENT_ATTEMPT_NOT_FOUND", "CONTENT_LEVEL_NOT_FOUND",
+]);
+
+const forbidden = new Set(["CONTENT_ACTOR_FORBIDDEN", "ASSESSMENT_ACTOR_FORBIDDEN", "CONTENT_USER_NOT_FOUND", "ASSESSMENT_USER_NOT_FOUND"]);
+const unprocessable = new Set(["CONTENT_PUBLICATION_INVALID", "ASSESSMENT_PUBLICATION_INVALID"]);
+
+export function phase4Exception(error: unknown, label = "phase4 api") {
+  if (error instanceof Phase4HttpError) return phase4Error(error.code, error.status, error.issues);
+  if (error instanceof ContentDomainError || error instanceof AssessmentDomainError || error instanceof CurriculumDomainError) {
+    const code = error.code;
+    const status = notFound.has(code) ? 404 : forbidden.has(code) ? 403 : conflict.has(code) ? 409 : unprocessable.has(code) ? 422 : code.endsWith("INPUT_INVALID") ? 400 : code.endsWith("DISABLED") ? 404 : code.endsWith("INTERNAL_ERROR") ? 500 : 409;
+    const issues = "issues" in error ? error.issues : [];
+    return phase4Error(code, status, issues);
+  }
+  if (error instanceof LessonProgressDomainError || error instanceof AssessmentRuntimeError) {
+    const code = error.code;
+    const status = code.includes("INPUT") || code.includes("SUBMISSION_INVALID") ? 400 : notFound.has(code) ? 404 : forbidden.has(code) ? 403 : conflict.has(code) || code.includes("CORRUPT") ? 409 : code.includes("DISABLED") ? 404 : code.includes("NOT_ENROLLED") || code.includes("NOT_STARTED") || code.includes("LOCKED") ? 409 : code.includes("LIMIT") ? 409 : 500;
+    return phase4Error(code, status);
+  }
+  console.error(`${label} internal error`);
+  return phase4Error("INTERNAL_ERROR", 500);
+}
