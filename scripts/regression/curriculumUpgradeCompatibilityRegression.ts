@@ -25,6 +25,7 @@ const PHASE_3_XP_MIGRATION = "20260714020000_xp_transaction_foundation";
 const PHASE_3_PROMOCODE_MIGRATION = "20260714030000_promocode_redemption_idempotency";
 const PHASE_4_CONTENT_MIGRATION = "20260715000000_content_assessment_foundation";
 const PHASE_4_LESSON_PROGRESS_MIGRATION = "20260715010000_lesson_progress_autosave_idempotency";
+const PHASE_5_REPORT_MIGRATION = "20260716000000_report_workflow_foundation";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -231,12 +232,14 @@ async function main() {
     const phase3PromocodeIndex = all.indexOf(PHASE_3_PROMOCODE_MIGRATION);
     const phase4ContentIndex = all.indexOf(PHASE_4_CONTENT_MIGRATION);
     const phase4LessonProgressIndex = all.indexOf(PHASE_4_LESSON_PROGRESS_MIGRATION);
+    const phase5ReportIndex = all.indexOf(PHASE_5_REPORT_MIGRATION);
     assert.notEqual(phase1Index, -1, "Phase 1 curriculum migration missing");
     assert.notEqual(phase2Index, -1, "Phase 2 enrollment migration missing");
     assert.notEqual(phase3XpIndex, -1, "Phase 3 XP migration missing");
     assert.notEqual(phase3PromocodeIndex, -1, "Phase 3 promocode migration missing");
     assert.notEqual(phase4ContentIndex, -1, "Phase 4 content migration missing");
     assert.notEqual(phase4LessonProgressIndex, -1, "Phase 4 lesson progress migration missing");
+    assert.notEqual(phase5ReportIndex, -1, "Phase 5 report migration missing");
     assert.equal(phase2Index > phase1Index, true, "Phase 2 migration must follow Phase 1");
     assert.equal(phase3XpIndex > phase2Index, true, "Phase 3 XP migration must follow Phase 2");
     assert.equal(
@@ -250,6 +253,7 @@ async function main() {
       true,
       "Phase 4 lesson progress migration must follow the content migration",
     );
+    assert.equal(phase5ReportIndex > phase4LessonProgressIndex, true, "Phase 5 migration must follow Phase 4");
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
     }
@@ -771,8 +775,84 @@ async function main() {
       assert.equal(fks.every((item) => item.on_update === "CASCADE"), true);
     });
 
+    const reportTables = [
+      "ReportAssignmentVersion", "ReportAssignmentLocalization", "ReportFieldDefinition",
+      "ReportFieldLocalization", "LevelReportBinding", "ReportRubricVersion",
+      "ReportRubricCriterion", "ReportRubricCriterionLocalization", "ReportRubricScaleOption",
+      "ReportRubricScaleOptionLocalization", "ReportRejectionReason",
+      "ReportRejectionReasonLocalization", "ReportSubmission", "ReportRevision",
+      "ReportReview", "ReportReviewScore", "ReportAttachment", "ReportCommandReceipt",
+    ];
+    const phase4BeforeReportMigration = await Promise.all([
+      "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+      "AssessmentVersion", "QuestionDefinition", "QuestionLocalization", "AssessmentAttempt",
+      "UserLessonProgress", "UserLessonProgressSaveReceipt",
+    ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+      `SELECT COUNT(*) AS count FROM "${table}"`,
+    ))[0].count)));
+    const parentColumnsBeforeReportMigration = new Map<string, string[]>();
+    for (const table of ["User", "CurriculumVersion", "LevelDefinition", "UserCurriculumEnrollment", "UserLevelProgress"]) {
+      parentColumnsBeforeReportMigration.set(table, (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        `PRAGMA table_info("${table}")`,
+      )).map((column) => column.name));
+    }
+    const taskReportBeforeReportMigration = await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } });
+    const progressBeforeReportMigration = await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: phase2Progress.id } });
+    await applyMigration(prisma, PHASE_5_REPORT_MIGRATION);
+
+    await check("14. Phase 5 report migration preserves V1 and Phase 1-4 data and creates empty tables", async () => {
+      assert.deepEqual(await prisma.taskReport.findUniqueOrThrow({ where: { id: report.id } }), taskReportBeforeReportMigration);
+      assert.deepEqual(await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: phase2Progress.id } }), progressBeforeReportMigration);
+      const phase4After = await Promise.all([
+        "ContentVersion", "ContentLocalization", "ContentAsset", "LevelResourceBinding",
+        "AssessmentVersion", "QuestionDefinition", "QuestionLocalization", "AssessmentAttempt",
+        "UserLessonProgress", "UserLessonProgressSaveReceipt",
+      ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+        `SELECT COUNT(*) AS count FROM "${table}"`,
+      ))[0].count)));
+      assert.deepEqual(phase4After, phase4BeforeReportMigration);
+      for (const table of reportTables) {
+        const count = Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) AS count FROM "${table}"`,
+        ))[0].count);
+        assert.equal(count, 0, `${table} must be empty after populated upgrade`);
+      }
+      for (const [table, before] of parentColumnsBeforeReportMigration) {
+        const after = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("${table}")`)).map((column) => column.name);
+        assert.deepEqual(after, before, `${table} SQL columns changed`);
+      }
+    });
+
+    let reportSubmissionId = 0;
+    await check("15. representative V2 assignment and submission coexist with V1 TaskReport CRUD", async () => {
+      const assignmentId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "ReportAssignmentVersion" (
+          "levelDefinitionId", "curriculumVersionId", "versionNumber", "createdById", "updatedAt"
+        ) VALUES (?, ?, 1, ?, ?) RETURNING "id"`,
+        phase1Level.id, phase1Version.id, adminUser.id, new Date(),
+      ))[0].id);
+      const rubricId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "ReportRubricVersion" (
+          "reportAssignmentVersionId", "versionNumber", "createdById", "updatedAt"
+        ) VALUES (?, 1, ?, ?) RETURNING "id"`,
+        assignmentId, adminUser.id, new Date(),
+      ))[0].id);
+      reportSubmissionId = Number((await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+        `INSERT INTO "ReportSubmission" (
+          "userId", "enrollmentId", "curriculumVersionId", "levelDefinitionId",
+          "userLevelProgressId", "reportAssignmentVersionId", "reportRubricVersionId", "updatedAt"
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING "id"`,
+        user.id, phase2Enrollment.id, phase1Version.id, phase1Level.id, phase2Progress.id,
+        assignmentId, rubricId, new Date(),
+      ))[0].id);
+      assert.equal(reportSubmissionId > 0, true);
+      const updatedReport = await prisma.taskReport.update({ where: { id: report.id }, data: { reportText: "done after phase 5" } });
+      assert.equal(updatedReport.reportText, "done after phase 5");
+      await prisma.taskReport.update({ where: { id: report.id }, data: { reportText: snapshot.reportRow.reportText } });
+    });
+
     let draftId = 0;
-    await check("14. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
+    await check("16. Phase 1 curriculum authoring still works on the upgraded DB", async () => {
       const authoring = await import("../../src/lib/curriculum/authoring");
       const draft = await authoring.createCurriculumDraft({
         actorId: adminUser.id, code: "upgrade-check", name: "Upgrade Check", versionNumber: 1,
@@ -781,7 +861,7 @@ async function main() {
       assert.equal(draft.status, "draft");
     });
 
-    await check("15. re-running the real migration runner does not duplicate schema or data", async () => {
+    await check("17. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
           'SELECT COUNT(*) as c FROM "_prisma_migrations"',
@@ -809,6 +889,9 @@ async function main() {
         ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
           `SELECT COUNT(*) AS count FROM "${table}"`,
         ))[0].count))),
+        phase5Counts: await Promise.all(reportTables.map(async (table) => Number((
+          await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+        )[0].count))),
       };
       const runner = spawnSync("npx", ["tsx", path.join("prisma", "migrate.ts")], {
         env: serverEnv as NodeJS.ProcessEnv, encoding: "utf8",
@@ -842,6 +925,9 @@ async function main() {
         ].map(async (table) => Number((await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
           `SELECT COUNT(*) AS count FROM "${table}"`,
         ))[0].count))),
+        phase5Counts: await Promise.all(reportTables.map(async (table) => Number((
+          await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+        )[0].count))),
       };
       assert.deepEqual(after, before, "re-run changed migration/data state");
     });
@@ -850,7 +936,7 @@ async function main() {
     await prisma.$disconnect();
 
     server = await startServer();
-    await check("16. flag OFF: /api/health OK and V1 authenticated read works", async () => {
+    await check("18. flag OFF: /api/health OK and V1 authenticated read works", async () => {
       assert.equal((await fetch(`${BASE_URL}/api/health`)).ok, true);
       const client = new HttpClient();
       const login = await client.login(user.email);
@@ -859,7 +945,7 @@ async function main() {
       assert.equal(me.status, 200, me.text);
     });
 
-    await check("17. all V2 flags off: V1 promocode route remains operational", async () => {
+    await check("19. all V2 flags off: V1 promocode route remains operational", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const csrf = await client.csrfToken();
@@ -873,14 +959,14 @@ async function main() {
       assert.equal(response.status, 200, response.text);
     });
 
-    await check("18. READ off hides current and XP history routes", async () => {
+    await check("20. READ off hides current and XP history routes", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       assert.equal((await client.get("/api/curriculum/v2/current")).status, 404);
       assert.equal((await client.get("/api/curriculum/v2/xp/history")).status, 404);
     });
 
-    await check("19. flag OFF: curriculum admin routes return 404", async () => {
+    await check("21. flag OFF: curriculum admin routes return 404", async () => {
       const client = new HttpClient();
       await client.login(adminUser.email);
       const list = await client.get("/api/admin/curriculum/versions");
@@ -894,7 +980,7 @@ async function main() {
     server = null;
 
     server = await startServer({ read: true });
-    await check("20. READ on and XP off returns current with disabled XP", async () => {
+    await check("22. READ on and XP off returns current with disabled XP", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const response = await client.get("/api/curriculum/v2/current");
@@ -908,7 +994,7 @@ async function main() {
     server = null;
 
     server = await startServer({ read: true, xp: true });
-    await check("21. READ and XP on return enrollment history", async () => {
+    await check("23. READ and XP on return enrollment history", async () => {
       const client = new HttpClient();
       await client.login(user.email);
       const response = await client.get("/api/curriculum/v2/xp/history");
@@ -920,7 +1006,7 @@ async function main() {
     await stopServer(server);
     server = null;
 
-    await check("22. curriculum feature flags default false", async () => {
+    await check("24. curriculum feature flags default false", async () => {
       const env = await import("../../src/lib/env");
       const defaults = { NODE_ENV: "test" } as NodeJS.ProcessEnv;
       assert.equal(env.isCurriculumV2ReadEnabled(defaults), false);
@@ -931,7 +1017,7 @@ async function main() {
     });
 
     server = await startServer({ admin: true });
-    await check("23. admin flag ON preserves authenticated curriculum admin read", async () => {
+    await check("25. admin flag ON preserves authenticated curriculum admin read", async () => {
       const client = new HttpClient();
       const login = await client.login(adminUser.email);
       assert.equal(login.status, 200, login.text);
@@ -944,13 +1030,13 @@ async function main() {
     server = null;
 
     server = await startServer({ admin: true, read: true, enrollment: true, content: true, assessment: true });
-    await check("24. Phase 4 admin profile flags expose safe list routes", async () => {
+    await check("26. Phase 4 admin profile flags expose safe list routes", async () => {
       const client = new HttpClient(); await client.login(adminUser.email);
       const content = await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/content-versions`);
       const assessment = await client.get(`/api/admin/curriculum/versions/${phase1Version.id}/levels/${phase1Level.id}/assessment-versions`);
       assert.equal(content.status, 200, content.text); assert.equal(assessment.status, 200, assessment.text);
     });
-    await check("25. Phase 4 assessment history works on populated upgraded V1 runtime", async () => {
+    await check("27. Phase 4 assessment history works on populated upgraded V1 runtime", async () => {
       const client = new HttpClient(); await client.login(user.email);
       const response = await client.get("/api/curriculum/v2/assessment/attempts?limit=20");
       assert.equal(response.status, 200, response.text);
@@ -962,7 +1048,7 @@ async function main() {
     cleanupDb();
   }
 
-  await check("26. temporary DB, journals and listener removed after test", () => {
+  await check("28. temporary DB, journals and listener removed after test", () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
@@ -975,7 +1061,7 @@ async function main() {
     assert.equal((listener.stdout ?? "").trim(), "");
   });
 
-  assert.equal(passed + failed, 26, "upgrade regression scenario count drifted");
+  assert.equal(passed + failed, 28, "upgrade regression scenario count drifted");
 }
 
 main()
