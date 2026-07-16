@@ -95,4 +95,6 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportReasonLocalizationDeleted: "REPORT_REASON_LOCALIZATION_DELETED",
   reportBound: "REPORT_BOUND",
   reportUnbound: "REPORT_UNBOUND",
+  reportSubmitted: "REPORT_SUBMITTED",
+  reportResubmitted: "REPORT_RESUBMITTED",
 } as const;

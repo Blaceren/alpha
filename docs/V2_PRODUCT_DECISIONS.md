@@ -245,6 +245,16 @@
 - Safe presentation never exposes correct answers, correctness flags, explanation, raw Prisma, internal ownership IDs or raw answers in audit. New transactional audit actions are `CURRICULUM_ASSESSMENT_ATTEMPT_STARTED` and `CURRICULUM_ASSESSMENT_ATTEMPT_GRADED`.
 - HTTP/UI/history, question randomization, active-attempt expiry, numeric/chart grading, notifications/outbox and rollout remain outside Phase 4B.5. Historical exact retry uses the immutable AssessmentVersion referenced by the attempt even after later binding replacement/archive.
 
+## 24. Self report drafts, immutable revisions and submit/resubmit (Phase 5B.3)
+
+- Self report runtime requires the dynamic READ + ENROLLMENT + REPORT flag matrix; every flag defaults to false and ADMIN/CONTENT/ASSESSMENT/XP cannot substitute. XP is intentionally not required because draft, submit and resubmit neither award XP nor complete a level.
+- The server resolves actor ownership through the pinned enrollment/curriculum/report level. Before aggregate creation it uses the exact published binding; afterwards the aggregate's assignment/rubric IDs are permanent historical pins and archived pinned definitions remain valid. Locale is exact with no fallback, and read never creates state.
+- Report content is a strict canonical stable-key object validated only against the pinned published field definitions. Incomplete drafts are permitted, while submit/resubmit require all required values and full validation. Every successful new save request creates a new immutable draft revision even when its normalized content equals the prior revision.
+- Receipt-first idempotency preserves old exact retries after newer revisions: the original accepted revision, workflow version and applied time are returned with the current safe snapshot. Key reuse across command/scope/payload conflicts. New writes use exact workflow/pointer CAS; stale and ahead revisions are distinct failures and competing payloads have one winner.
+- Initial submit creates an immutable `initial_submission` revision and atomically moves aggregate plus progress `in_progress -> pending_review`. Rejection policy adopts the Phase 5A recommendation: B.4 must move progress back to `in_progress`; correction drafts keep the aggregate rejected; resubmit requires a newer corrected draft and moves aggregate plus progress back to `pending_review` with an immutable `resubmission` revision.
+- Resubmissions are unlimited at schema/runtime level until a later explicit policy is approved. All historical revisions and rejected reviews remain retained. No SLA clock is invented: `submittedAt` is stored and `reviewDueAt` remains null.
+- Submit/resubmit audits are awaited and atomic but contain IDs and version/operation facts only. High-frequency draft audit is deferred. The runtime does not touch XP, completion, enrollment summaries, notifications/outbox, attachments, V1 reports, reviewer decisions, HTTP/UI, seed/backfill or rollout.
+
 ---
 
 *Документ не содержит secrets, паролей, реальных пользовательских данных и значений postback secret.*

@@ -1310,9 +1310,78 @@ revisions, autosave, reviewer workflow, approval, XP/completion, attachments,
 HTTP, seed/backfill, UI or rollout. The Phase 5B.1 schema and migration are
 unchanged.
 
-## 35. Design readiness verdict
+## 35. Implemented Phase 5B.3 self submission contract
 
-Phase 5A, Phase 5B.1 and the Phase 5B.2 definition-authoring lifecycle are
-implemented in the isolated workspace. The safe rollout state remains
-`CURRICULUM_V2_REPORT_ENABLED=false`. Functional learner report support is not
-claimed: Phase 5B.3 and later runtime stages have not started.
+Phase 5B.3 adds a server-only, actor-bound learner resolver and three commands:
+`resolveOwnReportContext`, `saveOwnReportDraft`, `submitOwnReport`, and
+`resubmitOwnReport`. They require the dynamic READ + ENROLLMENT + REPORT matrix;
+all three flags retain default `false`. ADMIN, CONTENT, ASSESSMENT and XP cannot
+substitute for any member of this matrix. The actor is a trusted parameter
+separate from each strict command DTO; target user, enrollment, curriculum,
+definition, submission and revision IDs are never caller authority.
+
+Resolution follows the actor's enrollment-pinned curriculum and exact report
+level. Before a submission exists it reads the exact current published
+assignment/rubric binding. Once an aggregate exists, its assignment and rubric
+IDs are permanent pins; their archived versions remain readable after binding
+replacement. Locale is an exact required match without fallback. Reads never
+create an aggregate or progress row and fail closed on broken definitions,
+revision pointers, receipts, ownership or progress/status disagreement.
+
+Draft values are a canonical object keyed by the published field stable keys.
+Unknown keys, wrong scalar/choice types, unsafe markup or URI forms, prototype
+keys and unbounded structures are rejected. Drafts may omit required fields;
+submit and resubmit revalidate the complete active draft. Each successful new
+save request creates a new immutable `draft_autosave` revision, including when
+the normalized values equal the prior draft. It advances `workflowVersion` and
+the active pointer by CAS and writes a same-transaction `save_draft` receipt.
+Draft saves do not change progress, enrollment, XP, submitted pointers or
+audit. High-frequency `REPORT_DRAFT_SAVED` audit remains deliberately deferred
+because Phase 5A did not approve it.
+
+Receipts are checked using `(actorUserId, requestId)`, operation, pinned scope,
+canonical payload fingerprint and expected workflow revision. Exact retry
+returns the original accepted revision, workflow version and applied time plus
+the current safe aggregate snapshot. This remains valid after later revisions
+and never rolls pointers back. Reusing a key for another command, scope or
+payload is an idempotency conflict. New operations require exact CAS:
+`expected < current` is stale, `expected > current` is a gap/conflict, and only
+one competing payload can win. Unique/SQLite-busy races retry the complete
+transaction a bounded number of times; success is accepted only from durable
+receipt/state evidence. Unknown database errors become a sanitized internal
+error.
+
+First submit copies the complete active draft into a new immutable
+`initial_submission` revision, moves active/submitted pointers and aggregate
+status to `pending_review`, CAS-transitions level progress from `in_progress`
+to `pending_review`, and writes the receipt plus awaited `REPORT_SUBMITTED`
+audit in one transaction. No review row is fabricated. Reject handling belongs
+to B.4, but the B.3 correction contract adopts the design recommendation:
+reject returns progress to `in_progress`; correction appends drafts while the
+aggregate remains `rejected`; resubmit requires a newer draft, exact rejection
+proof and no active claim. It creates a `resubmission` revision, returns the
+aggregate and progress to `pending_review`, preserves review history, and
+writes one receipt plus awaited `REPORT_RESUBMITTED` audit. `reviewDueAt`
+remains null because no SLA duration/business-hours policy is approved.
+
+Audit metadata is limited to actor/scope/submission IDs, operation, revision
+and workflow version. Report values, localized presentation, fingerprints,
+reviewer-private data and secrets are excluded. The runtime never writes XP,
+completion, enrollment summary, notification/outbox, attachments, V1
+`TaskReport`, reviewer decisions or HTTP/UI state. No schema, migration, seed,
+backfill or rollout change is part of B.3.
+
+The dedicated isolated regression covers 34 scenarios: dynamic gates,
+read-only exact resolution, strict validation, first and subsequent immutable
+save, old receipt retry after newer revisions, idempotency conflict, stale/gap
+CAS, a competing-save race, complete submit, duplicate submit, archived pin,
+rejected correction, resubmit, audit secrecy, out-of-scope invariants and safe
+unknown-error behavior.
+
+## 36. Design readiness verdict
+
+Phase 5A and Phase 5B.1-B.3 are implemented in the isolated workspace. The
+safe rollout state remains `CURRICULUM_V2_REPORT_ENABLED=false`. Learner draft
+and submit/resubmit domain support is ready for the next isolated stage, but no
+HTTP surface or reviewer decision/approval support is claimed. Phase 5B.4 has
+not started.
