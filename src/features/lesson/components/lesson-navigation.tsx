@@ -4,15 +4,16 @@ import { levelCodeFor } from "@/features/lesson/model/lesson";
 import type { LessonExperience } from "@/features/lesson/model/lesson-state-machine";
 
 /**
- * Where the lesson can lead (Phase D2B).
+ * Where the lesson can lead (Phase D2B, corrected in D2B.1).
  *
  * Путь is always reachable. The NEXT level is not: before completion there is no
  * link at all — only a sentence saying what opens it — so the gate cannot be
  * clicked past, and after completion the link appears here and nowhere else.
  *
- * The next-level link carries the dev scenario that represents "L18 finished",
- * because this prototype has no backend to advance the progress marker. That is
- * the documented dev adapter (see lesson-scenarios.ts), not fake persistence.
+ * The next-level link is a CLEAN canonical URL. It used to carry
+ * `?scenario=unlocked`, which made a development adapter the user's only
+ * progression mechanism; the completion is now recorded in the browser session
+ * instead, and the destination reads that (DD-255).
  */
 export function LessonNavigation({ experience }: { experience: LessonExperience }) {
   const { lessonComplete, nextLevelNumber, nextLessonUnlocked, lesson } = experience;
@@ -31,7 +32,7 @@ export function LessonNavigation({ experience }: { experience: LessonExperience 
         </Link>
 
         {next && nextLessonUnlocked && (
-          <Link href={`/lessons/${levelCodeFor(next.number)}?scenario=unlocked`} className="lnav-next">
+          <Link href={`/lessons/${levelCodeFor(next.number)}`} className="lnav-next">
             Перейти к уровню {next.number} «{next.title}»
             <span aria-hidden="true">→</span>
           </Link>

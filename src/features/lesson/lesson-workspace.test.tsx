@@ -262,10 +262,12 @@ describe("the next-lesson gate in the UI", () => {
     expect(screen.getByText(/Уровень 19 «Разметка графика» откроется после/)).toBeInTheDocument();
   });
 
-  it("offers the link only after completion", () => {
+  it("offers the link only after completion, with a clean canonical href", () => {
     renderScenario("completed");
     const next = screen.getByRole("link", { name: /Перейти к уровню 19 «Разметка графика»/ });
-    expect(next).toHaveAttribute("href", "/lessons/level.019?scenario=unlocked");
+    // D2B.1: no dev scenario in a user-facing link — progression is session-backed.
+    expect(next).toHaveAttribute("href", "/lessons/level.019");
+    expect(next.getAttribute("href")).not.toContain("scenario");
     expect(screen.queryByText(/откроется после/)).toBeNull();
   });
 

@@ -14,6 +14,9 @@ Raw enum-значения **никогда** не показываются по�
 | `src/features/lesson/model/assessment.ts` | вопросы, ответы, retry, completion (чистые функции) |
 | `src/features/lesson/model/lesson-state-machine.ts` | композиция → `LessonExperience` |
 | `src/features/lesson/model/lesson-scenarios.ts` | dev-scenario adapter (только seed) |
+| `src/features/lesson/model/lesson-session-progress.ts` | схема и правила session progress (D2B.1) |
+| `src/features/lesson/model/lesson-progress-store.ts` | единственный порт к Web Storage (D2B.1) |
+| `src/features/lesson/model/lesson-availability.ts` | route availability resolver (D2B.1) |
 | `src/features/lesson/hooks/use-lesson-experience.ts` | reducer: события → модель |
 | `src/features/lesson/hooks/use-lesson-media.ts` | единственный таймер (fixed delta) |
 
@@ -114,16 +117,32 @@ lessonComplete = verifiedWatchPercent >= 50  &&  каждый required-вопр�
 State machine **не** трогает XP. Единственный источник инструментария — общий marker; завершение урока
 его не меняет (2 480 XP). Канонического правила награды за урок нет — придумывать его нельзя (DD-250).
 
-## 7. Persistence
+## 7. Persistence и ownership состояния (уточнено в D2B.1)
 
-Сессия живёт **только в runtime страницы**: нет backend, нет базы, нет localStorage, нет claim
-«сохранено на сервере». Completion честно сообщает, что отметка держится в текущей сессии.
+Backend'а нет: ни базы, ни `localStorage`, ни claim «сохранено на сервере».
+
+Роли строго разделены — session store **не дублирует** state machine:
+
+- **lesson state machine** решает, завершён ли **текущий** урок (просмотр 50% + все вопросы);
+- **session progress adapter** хранит результат completion между navigation/reload
+  (`sessionStorage`, ключ `ata.lesson-progress.v1`, схема `{version, completed[], unlocked[]}`);
+- **route availability resolver** объединяет три источника: curriculum sequence → dev scenario override
+  (только dev/tests) → session completion.
+
+Сессия может только **открыть** недостигнутый уровень; закрыть уже открытое или дать перепрыгнуть — нет.
+Любой сбой (битый JSON, чужая версия, подделка, недоступное хранилище) деградирует в **locked**.
+
+Внутрисессионное состояние урока (media/assessment) по-прежнему живёт только в runtime страницы.
 
 Adapter сценариев только **seed'ит** стартовую сессию и в production-модель не вмешивается; неизвестный
-сценарий → `initial`, без исключений.
+сценарий → `initial`, без исключений. **Пользовательские ссылки `scenario` не содержат** (DD-255).
+
+Детали — `D2B_1_ACCEPTANCE_FIX.md`.
 
 ## 8. Тесты
 
 `lesson-progress.test.ts` (20) · `assessment.test.ts` (23) · `lesson-state-machine.test.ts` (26) ·
-`lesson-fixtures.test.ts` (28) · `lesson-workspace.test.tsx` (30) · `lesson-gates.test.tsx` (9).
-E2E: `e2e/lesson-smoke.spec.ts` (27) + `e2e/lesson-screenshots.spec.ts` (3).
+`lesson-fixtures.test.ts` (28) · `lesson-workspace.test.tsx` (30) · `lesson-gates.test.tsx` (9) ·
+`lesson-session-progress.test.ts` (31, D2B.1) · `lesson-session-progression.test.tsx` (18, D2B.1).
+E2E: `e2e/lesson-smoke.spec.ts` (27) + `e2e/lesson-session-smoke.spec.ts` (4, D2B.1) +
+`e2e/lesson-screenshots.spec.ts` (3) + `e2e/d2b-1-screenshots.spec.ts` (1).

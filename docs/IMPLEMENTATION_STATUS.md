@@ -311,3 +311,37 @@ lint/typecheck/build чисто; `npm audit` — 2 moderate, pre-existing (`next
 
 **Документы:** `D2B_LESSON_EXPERIENCE.md`, `LESSON_STATE_MACHINE.md`, `LESSON_ACCESSIBILITY.md`,
 `design-memory/reviews/d2b-lesson-review.md`, DD-242…DD-254.
+
+
+## D2B.1 — Lesson Acceptance Gate Fix (завершена)
+
+Техническая приёмка D2B выявила два несоответствия; D2B.1 чинит **только** их. Визуальный D2B принят и
+не переделывался.
+
+**Fix A — стандартный E2E gate был неполным.** `test:e2e` запускал один файл (21 из 116 тестов): Path и
+Lesson behavioral suites не проверялись вообще. Теперь `test:e2e` = **78** behavioral в 5 файлах,
+`test:e2e:all` = полный discovery (**121**). Специи разделены по naming convention: `*smoke.spec.ts` —
+behavioral (в gate), `*screenshots.spec.ts` — artifact capture (не в gate, пишет PNG). Причина не
+косметическая: screenshot-спека прошлой фазы **переписывает historical evidence** (DD-257). После
+стандартного gate дерево чисто.
+
+**Fix B — progression зависел от dev scenario.** CTA вёл на `/lessons/level.019?scenario=unlocked` —
+development-адаптер был единственным механизмом разблокировки. Теперь completion пишется в
+**session-scoped store** (`sessionStorage`, `ata.lesson-progress.v1`), CTA — чистый
+`/lessons/level.019`. Ownership разделён: state machine → завершённость урока; session adapter →
+хранение между navigation/reload; availability resolver → sequence + dev override + session (DD-255/256).
+
+**Поведение:** до completion CTA нет; без marker уровень 19 locked; после completion — unlocked practical
+placeholder по чистой ссылке; hard reload сохраняет; новый context locked; corrupt marker безопасен.
+
+**Границы:** это **не** backend persistence — закрытие сессии может потерять прогресс, и UI говорит
+ровно это. `scenario` остался development/test adapter; пользовательские ссылки его не содержат.
+Уровень 19 — по-прежнему честный practical placeholder, фальшивой реализации задания нет.
+
+**Проверки:** unit/component **252** (203 сохранены + 49); E2E **121** (116 сохранены + 5); стандартный
+gate **78**; lint/typecheck/build чисто; `npm audit` — 2 moderate, pre-existing (`next → postcss`), fix
+не запускался; `package-lock` не менялся, в `package.json` изменены только `scripts`.
+
+**Документы:** `D2B_1_ACCEPTANCE_FIX.md`, DD-255…DD-257.
+
+**D2C не начинался.**

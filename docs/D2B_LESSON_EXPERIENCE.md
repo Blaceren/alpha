@@ -119,8 +119,10 @@ Query — **development adapter**: он не показывается польз
 состояний, не смешивается с production domain model (только seed'ит стартовую сессию) и не является
 persistence. Имена приведены к существующей convention (`/path?scenario=`, `/?scenario=`).
 
-`?scenario=unlocked` — единственный, кто двигает progress marker (на уровень 19): это то, чем
-проверяется next-lesson gate с обеих сторон.
+`?scenario=unlocked` двигает progress marker (на уровень 19) и остаётся **исключительно** development/
+test adapter. **Скорректировано в D2B.1 (DD-255):** пользовательский переход его больше не использует —
+completion пишется в сессию браузера, а CTA ведёт на чистый `/lessons/level.019`. Ни одна
+пользовательская ссылка не содержит `scenario`. Детали — `D2B_1_ACCEPTANCE_FIX.md`.
 
 ## 9. Интеграция
 
@@ -136,19 +138,24 @@ persistence. Имена приведены к существующей conventio
 
 ## 10. Известная граница frontend-only
 
-Без backend страница уровня 19, открытая «с нуля», не может знать, что уровень 18 был завершён в сессии
-другой страницы. Поэтому:
+> **Скорректировано в D2B.1.** Ниже — актуальное состояние; исходное решение D2B (переход через
+> `?scenario=unlocked`) отклонено технической приёмкой: dev-адаптер не может быть механизмом
+> пользовательского progression (DD-255).
 
-- правило «следующий урок закрыт до completion» проверяется **на странице урока 18**: CTA отсутствует
-  до completion и появляется после;
-- сам переход несёт `?scenario=unlocked` — documented dev adapter вместо выдуманного persistence.
+Completion уровня 18 записывается в **сессию браузера** (`sessionStorage`, `ata.lesson-progress.v1`), и
+уровень 19 открывается по чистой ссылке `/lessons/level.019`. Hard reload в той же вкладке сохраняет
+доступ; новый context без marker остаётся locked.
 
-Это осознанная граница, а не недоделка: fake unlock был бы ложью.
+Граница остаётся честной: backend'а нет, поэтому **закрытие сессии браузера может потерять прогресс**, и
+UI говорит ровно это — «Отметка хранится только в текущей сессии браузера». Это не backend persistence и
+не выдаёт себя за неё.
+
+Детали — `D2B_1_ACCEPTANCE_FIX.md`.
 
 ## 11. Проверки
 
-- unit/component: **203** (67 прежних сохранены + 136 новых).
-- E2E: **116** (86 прежних сохранены + 30 новых lesson-сценариев).
+- unit/component: **203** (67 прежних сохранены + 136 новых). *D2B.1 → 252.*
+- E2E: **116** (86 прежних сохранены + 30 новых lesson-сценариев). *D2B.1 → 121.*
 - screenshots: `design-memory/screenshots/d2b-lesson/{first-pass,final}` (17 final).
 - review: `design-memory/reviews/d2b-lesson-review.md`.
 - gates: lint, typecheck, test:run, build, test:e2e, audit.

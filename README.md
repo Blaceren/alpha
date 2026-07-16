@@ -31,12 +31,14 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright smoke suite Главной (`e2e/smoke.spec.ts`) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок), 78 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (121) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
-> Полный E2E-прогон (116 тестов: Главная, Путь, Урок) — `npx playwright test e2e/`. `npm run test:e2e`
-> исторически ограничен `e2e/smoke.spec.ts`; расширение скрипта — отдельное решение (package.json в D2B
-> намеренно не менялся).
+> **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в
+> стандартный `npm run test:e2e`. `*screenshots.spec.ts` — artifact capture: пишет PNG в `design-memory/`
+> и в стандартный gate **не** входит, потому что перезапуск screenshot-спеки прошлой фазы переписывает
+> historical evidence. Новый behavioral spec попадает в gate автоматически, если назван `*smoke.spec.ts`.
 
 ## Главная — Route Field Home (D1B)
 
@@ -88,10 +90,14 @@ Frontend-архитектура — `docs/FRONTEND_ARCHITECTURE.md`.
 - один вопрос за раз; неверный ответ **ничего не отнимает** и не раскрывает правильный вариант;
 - completion = 50% + все обязательные вопросы (**provisional frontend rule, не backend-контракт**);
 - следующий уровень закрыт до completion; XP не начисляется; Pocket CTA и сумм внутри урока нет;
-- состояние живёт **только в текущей сессии страницы** — persistence нет и не имитируется.
+- прогресс хранится в **сессии браузера** (`sessionStorage`, `ata.lesson-progress.v1`) — это **не**
+  backend persistence: закрытие сессии может его потерять, и UI говорит ровно это;
+- пользовательские ссылки **не** используют `scenario`: после завершения CTA ведёт на чистый
+  `/lessons/level.019`, который открыт по записи сессии (новая вкладка без marker — снова locked).
 
-Dev-сценарии (query, пользователю не показывается): `?scenario=initial|watching|threshold-49|
-threshold-50|testing|incorrect|completed`, а для уровня 19 — `locked|unlocked`. Неизвестное → `initial`.
+Dev-сценарии — **только для разработки и тестов** (`?scenario=initial|watching|threshold-49|
+threshold-50|testing|incorrect|completed`; для уровня 19 — `locked|unlocked`; неизвестное → `initial`).
+Механизмом пользовательского progression они не являются.
 
 > **Контент урока — provisional development fixture.** Утверждённого редакционного сценария и записи нет.
 > Каноничны продуктовые правила и UX, а не формулировки; production lesson authoring не реализован.

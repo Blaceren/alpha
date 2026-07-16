@@ -336,9 +336,8 @@
 - **DD-250 (Locked, D2B).** Состояние урока живёт **только в текущем runtime страницы**: без backend,
   без localStorage, без claim «сохранено на сервере». Completion честно сообщает, что отметка держится в
   текущей сессии. XP **не** начисляется: канонического правила награды за урок нет, поэтому 2 480 XP
-  не меняются. Следующий уровень доступен только после completion; переход несёт dev-scenario
-  `?scenario=unlocked`, поскольку продвигать marker в прототипе нечему (это documented dev adapter, а не
-  fake persistence).
+  не меняются. Следующий уровень доступен только после completion. **Скорректировано в D2B.1 (DD-255):**
+  переход больше не несёт dev-scenario — completion пишется в сессию браузера, а ссылка чистая.
 - **DD-251 (Locked, D2B).** Урок использует систему **Learning Spine** (DD-190): одна вертикальная ось
   прошивает этапы одного учебного шага (видео → проверка → завершение → переходы). Урок — не ещё одна
   Route Field страница: Главная — текущий момент, Путь — пространственная карта, Урок — один шаг.
@@ -352,6 +351,36 @@
 - **DD-254 (Locked, D2B).** Расширение DD-219: адресаты, построенные в D2B, становятся настоящими
   ссылками (Главная и Путь → урок), непостроенные (checkpoint verification) остаются dev-safe no-op.
   Непостроенный или недостигнутый уровень резолвится в честный explainer, а не в 404 и не в fake unlock.
+
+
+## D2B.1 — Acceptance gate fix
+
+- **DD-255 (Locked, D2B.1).** Development scenario **не может быть механизмом пользовательского
+  progression**. Completion уровня записывается в **session-scoped store** (`sessionStorage`, ключ
+  `ata.lesson-progress.v1`, схема `{version, completed[], unlocked[]}`), а CTA следующего уровня — чистый
+  канонический URL `/lessons/level.019` без query. `?scenario=…` остаётся **исключительно** development/
+  test adapter: ни одна пользовательская ссылка его не содержит (проверяется тестом по всем `<a>`).
+  `sessionStorage`, а не `localStorage`: прогресс не должен переживать сессию — сверять его не с чем, а
+  долговечная запись подразумевала бы persistence, которой нет. Хранятся только коды уровней и версия;
+  XP, финансовые значения, ответы и curriculum copy — никогда. Любой сбой (битый JSON, чужая версия,
+  подделка, недоступное хранилище) деградирует в **locked**: подделанное значение может только закрыть.
+  Это **не** backend persistence, и UI этого не утверждает — «Отметка хранится только в текущей сессии
+  браузера». Закрытие сессии может потерять прогресс: честная граница frontend-only прототипа.
+- **DD-256 (Locked, D2B.1).** Ownership состояния разделён: **lesson state machine** решает, завершён ли
+  текущий урок; **session progress adapter** хранит результат между navigation/reload; **route
+  availability resolver** (`lesson-availability.ts`) объединяет curriculum sequence + dev scenario
+  override + session completion. Сессия может только **открыть** недостигнутый уровень — закрыть уже
+  открытое или дать перепрыгнуть она не может. Business rules в React-компоненты не переносятся.
+  SSR: сервер `sessionStorage` не читает и всегда рендерит locked/safe default; клиент резолвит через
+  `useSyncExternalStore` (server snapshot = `resolving`), поэтому нет ни hydration mismatch, ни кадра
+  неверного ответа. Оба исхода — server-rendered поддеревья, переданные пропсами.
+- **DD-257 (Locked, D2B.1).** E2E-специи делятся на два слоя по **naming convention**:
+  `*smoke.spec.ts` — behavioral regression (ничего не пишет на диск, входит в стандартный
+  `npm run test:e2e`); `*screenshots.spec.ts` — artifact capture (пишет PNG в `design-memory/`, в
+  стандартный gate **не** входит). Причина не косметическая: запуск screenshot-спеки прошлой фазы против
+  текущего кода **переписывает historical evidence** (спека D2A перегенерировала кадры уже с дизайном
+  D2A-R1), а шум антиалиасинга грязнит дерево. Полный discovery — `npm run test:e2e:all`. Стандартный
+  gate до D2B.1 покрывал 21 из 116 тестов; это было принято ошибочно и исправлено.
 
 
 ## Открытые вопросы (решаются позже)

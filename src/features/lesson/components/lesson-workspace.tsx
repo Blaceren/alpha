@@ -5,6 +5,8 @@ import type { LessonDefinition } from "@/features/lesson/model/lesson";
 import type { LessonSession } from "@/features/lesson/model/lesson-state-machine";
 import { lessonStateLabel } from "@/features/lesson/model/lesson-state-machine";
 import type { PathProgress } from "@/features/path/model/path-state";
+import { createLessonProgressStore } from "@/features/lesson/model/lesson-progress-store";
+import { withCompletedLevel } from "@/features/lesson/model/lesson-session-progress";
 import { useLessonExperience } from "@/features/lesson/hooks/use-lesson-experience";
 import { useLessonMedia } from "@/features/lesson/hooks/use-lesson-media";
 import { LessonHeader } from "@/features/lesson/components/lesson-header";
@@ -43,6 +45,7 @@ export function LessonWorkspace({
 }) {
   const { experience, dispatch } = useLessonExperience(lesson, initialSession, progress);
   useLessonMedia(experience.session.media.playback, dispatch);
+  useRecordCompletion(experience.lessonComplete, lesson.level.number);
 
   const announcement = useAnnouncement(experience.testUnlocked, experience.lessonComplete);
 
@@ -88,6 +91,22 @@ export function LessonWorkspace({
       </div>
     </div>
   );
+}
+
+/**
+ * Persist the completion into THIS browser session (D2B.1), so the next level is
+ * reachable by a clean link instead of a dev scenario query (DD-255).
+ *
+ * Runs only on completion and is idempotent, so re-renders cannot grow or
+ * corrupt the record. This is session-scoped state, not backend persistence —
+ * nothing is sent anywhere and the UI never claims it was saved.
+ */
+function useRecordCompletion(lessonComplete: boolean, levelNumber: number) {
+  useEffect(() => {
+    if (!lessonComplete) return;
+    const store = createLessonProgressStore();
+    store.write(withCompletedLevel(store.read(), levelNumber));
+  }, [lessonComplete, levelNumber]);
 }
 
 /**

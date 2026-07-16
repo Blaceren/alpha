@@ -48,7 +48,7 @@ export function LessonCompletion({ experience }: { experience: LessonExperience 
       </p>
 
       <p className="lcp-honest">
-        Отметка о прохождении держится в текущей сессии — сервер прогресса ещё не подключён.
+        Отметка хранится только в текущей сессии браузера — сервер прогресса ещё не подключён.
       </p>
     </section>
   );
