@@ -4,7 +4,7 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1B3 — Today Workspace (read-only)** поверх Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
+Статус реализации: **Phase 1B4-A — Mutation core + `addNote` (provider-only)** поверх Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
 
 - `/today` — полноценный **read-only** операционный центр смены: очередь внимания с конкретным доменным основанием у каждой строки, 4 секции по срочности с canonical placement, детерминированная сортировка, рекомендация, ответственный, SLA, фильтры/поиск по разрешённой проекции, состояния loading/empty/error/stale, desktop/tablet/mobile. См. `docs/TODAY_WORKSPACE.md`.
 - `/users` — полноценный реестр (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive). См. `docs/USERS_WORKSPACE.md`.
@@ -12,7 +12,7 @@
 
 Данные — только через `CrmDataProvider`; вся permission-проекция выполняется в провайдере **до** React.
 
-**Последовательность этапов (D-34):** Phase 1C — User 360 и **Phase 1B3 — Today Workspace** выполнены, оба read-only. **Phase 1B4 — mutations overlay** **отложен** до отдельного решения и **не выполнен**: мутаций нет ни на одном экране. Следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md`.
+**Последовательность этапов (D-34):** Phase 1C — User 360 и Phase 1B3 — Today Workspace выполнены, оба read-only. **Phase 1B4-A — mutation core** выполнен: есть отдельный контракт `CrmMutations` и одна реальная мутация `addNote` на уровне domain/provider/storage. **UI мутаций нет** — нажать «Добавить заметку» пока нельзя, ни один экран не изменился. Экранная часть — **Phase 1B4-B, не начата**; следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md` и `docs/MUTATION_OVERLAY.md`.
 
 ## Стек
 
@@ -69,10 +69,13 @@ src/
     states/            # empty / error / stale-data
   domain/              # framework-agnostic контракты (НЕ импортируют React/Next)
     identity/  lifecycle/  signals/  financial/  tasks/  cases/  users/  shared/
+    notes/             # CrmNote + единый canonical note projector
+    audit/             # AuditRecord (факт действия, без тела заметки)
   application/         # provider factory + context (boundary к данным)
   data/
-    contracts/         # CrmDataProvider + Result/Paginated/CrmError
+    contracts/         # CrmDataProvider + CrmMutations + Result/Paginated/CrmError
     mock/              # MockCrmDataProvider + synthetic fixtures
+      overlay/         # versioned localStorage mutation overlay + storage seam
   config/              # env-валидация, навигация
   lib/  styles/  test/
 docs/                  # блюпринты Phase 0/0.5 + ARCHITECTURE / IMPLEMENTATION_STATUS
@@ -81,8 +84,18 @@ tests-e2e/             # Playwright smoke
 
 Подробнее — `docs/ARCHITECTURE.md`.
 
-## Отсутствие мутаций (Phase 1C, Phase 1B3)
+## Мутации: что есть и чего нет (Phase 1B4-A)
 
-Today и User 360 — **только чтение**. Редактирование пользователя, notes/tasks/cases, смена owner/статуса, ручное закрытие сигналов и блокеров, выполнение рекомендаций, финансовые операции и коммуникации **не реализованы**; действия, которые их потребовали бы, либо отсутствуют, либо явно помечены «Только просмотр» с честным объяснением. Fake success не создаётся. Права принадлежат провайдеру, а не компонентам.
+**Все экраны по-прежнему только читают.** Today, Users и User 360 не изменились: формы добавления заметки нет, кнопки «Добавить заметку» нет, оптимистичного состояния в React нет. Рекомендации остаются с честной пометкой «Только просмотр» — нажимать по-прежнему нечего, и fake success не создаётся.
 
-В Today это означает, что «action-oriented» — про скорость понимания, а не про кнопки: быстро понять, быстро отсортировать, быстро открыть User 360. Рекомендация выводится текстом, а не кнопкой, потому что нажимать её нечему.
+Что появилось — **только под провайдером**:
+
+- отдельный контракт `CrmMutations` с **ровно одной** операцией `addNote(ctx, command)`; методов-заглушек на будущее нет;
+- versioned localStorage overlay `ata-crm.mutation-overlay.v1` — фикстуры остаются неизменяемыми;
+- `AuditRecord{mock:true}` на каждое действие — **без тела заметки**;
+- идемпотентность по ключу, детерминированные id/timestamp (без `Math.random()` и `Date.now()`);
+- централизованное право `canEditUserNotes` — admin/manager/retention/support (D-53).
+
+**Не реализованы:** редактирование/удаление заметок, tasks/cases mutations, смена owner/статуса, закрытие сигналов, выполнение рекомендаций, reveal PII, audit-экран, кнопка сброса, финансовые операции, коммуникации. Backend, база данных, Prisma и Pocket отсутствуют — мутация не покидает вкладку.
+
+Подробности: `docs/MUTATION_OVERLAY.md`.

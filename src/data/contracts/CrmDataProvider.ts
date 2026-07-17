@@ -23,6 +23,7 @@ import type { FinancialBucket } from "@/domain/financial/financial";
 import type { PriorityBand } from "@/domain/priority/priority";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
+import type { CrmNote } from "@/domain/notes/note";
 import type { TodayWorkspace } from "@/domain/today/today";
 import type { TodayQuery } from "@/domain/today/today-query";
 import type { Paginated, PageParams, Result, SortParam } from "./result";
@@ -175,16 +176,12 @@ export interface GetUserCasesInput {
   page?: PageParams;
 }
 
-export interface CrmNote {
-  id: string;
-  userId: UserId | null;
-  caseId: string | null;
-  authorId: EmployeeId;
-  body: string;
-  visibility: "team" | "role_restricted" | "private";
-  pinned: boolean;
-  createdAt: ISODateString;
-}
+/**
+ * The note model lives in the domain (`@/domain/notes/note`) and is re-exported
+ * here, exactly as Today and User 360 are: one CrmNote, not a contract copy and a
+ * domain copy to keep in sync (Phase 1B4-A).
+ */
+export type { CrmNote, NoteVisibility } from "@/domain/notes/note";
 
 export interface GetUserNotesInput {
   userId: UserId;

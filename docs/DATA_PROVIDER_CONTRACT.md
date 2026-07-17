@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все операции — read-only относительно продукта; мутации CRM (tasks/cases/notes) выносятся в отдельные `*Mutations` (вне обязательного минимума Phase 0, но контракт зарезервирован в §15).
+- Все **14** операций `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). На Phase 1B4-A там реализована ровно одна — `addNote`; остальные зарезервированы, но методов-заглушек не имеют.
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -301,17 +301,31 @@ interface CrmDataProvider {
   ```ts
   interface GetUserNotesInput {
     userId: UserId;
-    includePrivate?: boolean;       // только автору/manager+
     page?: PageParams;
   }
   ```
-- **Output:** `Paginated<CrmNote>`, `pinned` сверху, затем `createdAt desc`.
+- **Output:** `Paginated<CrmNote>`, `pinned` сверху, затем `createdAt desc`, затем `id` (устойчивый tie-break).
 - **Pagination:** курсорная, pageSize 50.
-- **Filters:** visibility по роли (`private` — только автор; `role_restricted` — по роли).
-- **Sort:** pinned desc, createdAt desc.
+- **Filters:** visibility по актору — единый canonical projector (см. ниже).
+- **Sort:** pinned desc, createdAt desc, id asc.
 - **Errors:** `unauthorized, not_found, internal`.
 - **Loading/stale:** CRM-owned.
-- **Permission:** View User 360; visibility соблюдается.
+- **Permission:** View User 360 (все 9 ролей по матрице §2) — отказа на уровне роли нет, видимость решается **на каждой заметке**.
+
+**Модель.** `CrmNote` живёт в домене (`@/domain/notes/note`) и ре-экспортируется контрактом — как `TodayWorkspace` и `User360`. Поля: `id, userId, caseId, authorEmployeeId, body, visibility, pinned, createdAt, updatedAt, mock: true`.
+
+**Приватность (Phase 1B4-A, D-55).** `ctx` больше **не игнорируется**. Единственный источник правила — `domain/notes/note-projection.ts`; проекция идёт **до пагинации**:
+
+| visibility | Правило |
+|---|---|
+| `team` | видна всем 9 ролям |
+| `private` | **только автору** (`authorEmployeeId === ctx.actorId`) |
+| `role_restricted` | **скрыта всегда** — в модели нет metadata о разрешённых ролях |
+
+- `includePrivate` **убран из описания входа**: в коде его никогда не было, а его комментарий («автору/manager+») противоречил строке Filters («только автор») — документ описывал флаг, которого нет, да ещё и с двумя несовместимыми правилами. Флаг не нужен: приватное отдаётся автору и так, а расширить это до manager+ на основании противоречия нельзя (D-55).
+- Скрытая заметка **удаляется, а не заменяется плейсхолдером**, и **не входит в `page.total`**: строка «скрыто» раскрыла бы факт существования записи.
+- Выдача объединяет fixture-generated и overlay-заметки (docs/MUTATION_OVERLAY.md) и детерминирована.
+- **User 360 заметки не читает** — второго пути чтения нет, поэтому расхождению правил неоткуда взяться.
 
 ---
 
@@ -431,7 +445,7 @@ interface CrmDataProvider {
 | getUserTimeline | View User 360 | HIGH-события маскируются |
 | getUserTasks | View Tasks | скоуп по типу задачи |
 | getUserCases | View Cases | тип кейса по роли |
-| getUserNotes | View User 360 | private/role visibility |
+| getUserNotes | View User 360 | ctx-aware: `team` всем; `private` — только автору; `role_restricted` — скрыта всегда (D-55); скрытые не входят в `total` |
 | getSegments | View Segments | — |
 | getMentorQueue | Mentor Queue | mentor/manager/admin/retention(L) |
 | getSupportQueue | Support Queue | support/manager/admin/retention(L) |
@@ -441,22 +455,46 @@ interface CrmDataProvider {
 
 ---
 
-## 15. Зарезервировано (вне обязательного минимума Phase 0)
+## 15. `CrmMutations` — мутации
 
-Мутации CRM понадобятся для интерактива, но не входят в 13 обязательных операций. Контракт фиксируется заранее, чтобы UI не переписывался:
+Мутации живут в **отдельном контракте** `src/data/contracts/CrmMutations.ts`, не в `CrmDataProvider`.
+`MockCrmDataProvider` реализует оба (`implements CrmDataProvider, CrmMutations`), без приведений типов.
+
+### 15.1 Реализовано (Phase 1B4-A)
 
 ```ts
 interface CrmMutations {
-  createTask; updateTask; createCase; updateCase; addNote;
-  assignPrimaryOwner;          // один primary owner на пользователя (D-08); история сохраняется
-  assignTaskAssignee; assignCaseAssignee;  // отдельные assignees (D-08)
-  resolveSignal; acceptRecommendedAction;
-  revealUserPii;               // PII reveal-flow (D-11): reason code → AuditRecord → autoHideAt
-  // все → пишут AuditRecord{mock:true} на Phase 0; реально исполняются позже через API
+  addNote(ctx: CrmContext, command: AddNoteCommand): Promise<Result<AddNoteResult>>;
 }
+
+interface AddNoteCommand { userId: UserId; body: string; idempotencyKey: string; }
+interface AddNoteResult  { note: CrmNote; audit: AuditRecord; replayed: boolean; }
 ```
 
-Каждая мутация: idempotency-ключ, permission requirement, evidence/reasonCode, возвращает обновлённую сущность + AuditRecord. `revealUserPii` дополнительно возвращает `autoHideAt` (см. PII_ACCESS_POLICY.md). На Phase 0.5/mock мутации пишутся в localStorage overlay (D-09), исходные фикстуры неизменяемы.
+- **Permission:** Edit → notes — `crm_admin`, `crm_manager`, `retention_manager`, `support` (D-53). Проверяется по `ctx`, не по команде.
+- **Actor и visibility в команду не входят:** actor — только из доверенного `CrmContext`; новая заметка всегда `team` (D-54).
+- **Errors:** `invalid_input` (пустое/длинное тело >2000, отсутствующий/длинный >200 ключ), `not_found` (нет пользователя), `unauthorized` (нет права — код `forbidden` не заводился, D-56), `conflict` (ключ переиспользован для другой команды), `internal` (overlay не записался).
+- **Idempotency:** тот же ключ + тот же нормализованный payload → исходный результат, `replayed: true`, без дублей. Тот же ключ + другой `userId`/`body`/actor → `conflict`.
+- **Детерминизм:** id и timestamp выводятся из персистентного `sequence`; ни `Math.random()`, ни `Date.now()` (D-57).
+- **AuditRecord** пишется всегда при успехе и **не содержит тела заметки** (ROLE_PERMISSION_MATRIX §4.2.6).
+
+Подробности: **docs/MUTATION_OVERLAY.md**.
+
+### 15.2 Зарезервировано (ещё не реализовано)
+
+Пустых методов на будущее в интерфейсе **нет** — член интерфейса без реализации обещает то, чего провайдер не делает, а `as never` ради placeholder-формы уже пришлось удалять из контракта Today (D-50). Каждая появится вместе со своей реализацией:
+
+```
+createTask; updateTask; createCase; updateCase;
+assignPrimaryOwner;                      // один primary owner (D-08); история сохраняется
+assignTaskAssignee; assignCaseAssignee;  // отдельные assignees (D-08)
+resolveSignal; acceptRecommendedAction;
+revealUserPii;                           // PII reveal-flow (D-11): reason code → AuditRecord → autoHideAt
+```
+
+Общие правила для них те же: idempotency-ключ, permission requirement, evidence/reasonCode, возврат обновлённой сущности + AuditRecord. `revealUserPii` дополнительно возвращает `autoHideAt` (см. PII_ACCESS_POLICY.md).
+
+**Все мутирующие действия — mock/local:** пишутся в versioned localStorage overlay (D-09), исходные фикстуры неизменяемы. Backend/API/база данных отсутствуют.
 
 ---
 

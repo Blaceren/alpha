@@ -49,3 +49,12 @@ export function canViewAudit(role: CrmRole): boolean {
 export function canManageSettings(role: CrmRole): boolean {
   return hasPermission(role, "manage_settings");
 }
+
+/**
+ * Edit dimension for notes (ROLE_PERMISSION_MATRIX §1, DECISIONS D-53). The only
+ * mutation permission Phase 1B4-A needs. It is deliberately NOT derived from
+ * financial visibility or from `assign_owner` — those are separate dimensions.
+ */
+export function canEditUserNotes(role: CrmRole): boolean {
+  return hasPermission(role, "edit_user_notes");
+}

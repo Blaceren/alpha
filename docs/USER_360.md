@@ -216,12 +216,30 @@ identity читается screen reader'ом; запрещённых значе�
 `npm run test:e2e`; в first-pass — `PHASE_1C_PASS=first npx playwright test tests-e2e/user-360.spec.ts`).
 Ревью, найденные проблемы и исправления — `docs/visual-reviews/PHASE_1C_USER_360.md`.
 
+## Заметки: User 360 их не читает (Phase 1B4-A)
+
+Экран **не отображает заметки и не вызывает `getUserNotes`**. Это зафиксировано намеренно: правило
+приватности заметок (`team` всем; `private` — только автору; `role_restricted` — скрыта всегда, D-55)
+живёт в единственном месте — `domain/notes/note-projection.ts`, и `getUserNotes` его единственный
+потребитель. Второго пути чтения заметок не существует, поэтому расхождению правил неоткуда взяться —
+ровно та ошибка, которую пришлось исправлять для timeline (D-39) и скрытых финансов (D-40).
+
+Если User 360 когда-нибудь начнёт показывать заметки, он обязан читать их через тот же projector,
+а не выводить видимость заново.
+
+Мутация `addNote` (Phase 1B4-A) существует только на уровне provider/domain: **UI-формы нет**, кнопки
+«Добавить заметку» на этом экране нет, «Только просмотр» остаётся честным. Экранная часть — Phase 1B4-B,
+**не начата**.
+
 ## Non-scope (Phase 1C-A)
 
-Редактирование пользователя, notes/tasks/cases mutations, смена owner/статуса, ручное закрытие
-сигналов, финансовые операции, коммуникации, отправка email, mentor chat, **Today workspace (Phase
-1B3 — отложен)**, **mutations overlay (Phase 1B4 — отложен)**, полный PII reveal-flow, полный
-финансовый history, backend/API/database/Prisma/Pocket, production auth, deploy. См. D-34.
+Редактирование пользователя, tasks/cases mutations, смена owner/статуса, ручное закрытие
+сигналов, финансовые операции, коммуникации, отправка email, mentor chat, полный PII reveal-flow,
+полный финансовый history, backend/API/database/Prisma/Pocket, production auth, deploy. См. D-34.
+
+**Обновлено:** Today workspace (Phase 1B3) и mutation core (Phase 1B4-A) с тех пор выполнены — оба
+не изменили этот экран. UI-мутации (Phase 1B4-B) не начаты.
 
 _Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, PII_ACCESS_POLICY.md,
-CRM_INFORMATION_ARCHITECTURE.md §5, DECISIONS.md (D-34…D-38), ARCHITECTURE.md._
+CRM_INFORMATION_ARCHITECTURE.md §5, MUTATION_OVERLAY.md, DECISIONS.md (D-34…D-38, D-53…D-57),
+ARCHITECTURE.md._

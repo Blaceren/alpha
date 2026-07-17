@@ -267,7 +267,8 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 |---|---|---|
 | Phase 1C | **User 360** | выполнен |
 | Phase 1B3 | **Today Workspace** | выполнен (read-only) — см. раздел ниже |
-| Phase 1B4 | Mutations overlay | **отложен** до отдельного решения — не выполнен |
+| Phase 1B4-A | **Mutation core + addNote (provider-only)** | выполнен — см. раздел ниже |
+| Phase 1B4-B | Mutation UI (форма заметки) | **не начат** |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -363,3 +364,100 @@ Backend / database / Prisma / Pocket API / production auth отсутствую�
 Mutations и Phase 1B4 — **не начаты**. Права, identity-проекция, exact-financial visibility, провайдер-семантика
 не менялись. `reason`/`urgency`/`permissions` рекомендаций не трогались, tone of voice не переписывался.
 Backend / database / Prisma / Pocket отсутствуют. Зависимости не добавлялись.
+
+---
+
+## Phase 1B4-A — Mutation core + addNote (provider-only) ✅
+
+Первая часть Phase 1B4. Mutation infrastructure и одна реальная мутация **только** на уровне
+domain/provider/storage. Подробности: `docs/MUTATION_OVERLAY.md`, решения D-53…D-57.
+
+**UI не создавался и не менялся.** Формы добавления заметки нет, кнопки нет, оптимистичного React-состояния нет.
+Пользователь пока не может нажать «Добавить заметку» — это **Phase 1B4-B, не начата**.
+
+### Permission preflight (до кода)
+Матрица позволила определить Edit-роли однозначно, поэтому этап не останавливался. §0 относит `notes`
+к измерению Edit; §1 задаёт объём. Решающее наблюдение: среди ролей с Edit=Limited **`support` —
+единственная**, в чьей скобке перечислены `notes` («support cases/tasks/**notes**»), тогда как у
+mentor («mentor tasks/cases, reports»), moderator («moderation cases») и content_manager
+(«content-related») их нет. Перечисление прочитано как **исчерпывающее** — это чтение матрицы, а не
+новая матрица (D-53).
+
+**Разрешено:** `crm_admin`, `crm_manager`, `retention_manager` (Edit=Full) + `support` (Limited, notes названы явно).
+**Запрещено:** `mentor`, `moderator`, `content_manager` (Limited без notes), `analyst`, `read_only` (Edit=None).
+
+### Выполнено
+- **Отдельный контракт `CrmMutations`** (`data/contracts/CrmMutations.ts`) с **ровно одной** операцией
+  `addNote(ctx, command)`. Пустых методов будущих мутаций не добавлено: член интерфейса без реализации —
+  обещание, которого провайдер не держит, а `as never` ради placeholder-формы уже удаляли в D-50.
+  `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов.
+- **Централизованное mutation-право.** `Permission` += `edit_user_notes`; `access.ts` → `canEditUserNotes(role)`.
+  Не выводится из видимости финансов и не переиспользует `assign_owner` — это другие измерения §1.
+  Существующие права просмотра identity/financials **не расширялись**.
+- **Notes domain** (`domain/notes/`). `CrmNote` перенесён из контракта в домен и **ре-экспортируется**
+  контрактом — как `TodayWorkspace` (D-50) и `User360` (D-35); второго несовместимого типа нет.
+  Поля: `id, userId, caseId, authorEmployeeId, body, visibility, pinned, createdAt, updatedAt, mock: true`
+  (`authorId` → `authorEmployeeId`, добавлены `updatedAt` и mock-маркер).
+- **Единый canonical note projector** (`domain/notes/note-projection.ts`) — единственное место правила
+  «кому видна заметка»: `team` — всем 9 ролям (User 360 доступен всем, §2); `private` — **только автору**;
+  `role_restricted` — **скрыта всегда**; неизвестное значение — скрыта (D-55).
+- **`getUserNotes` больше не игнорирует `ctx`.** Объединяет fixture-generated и overlay-заметки, проецирует
+  через тот же projector **до** пагинации, затем сортирует (`pinned` → `createdAt desc` → `id`).
+  Скрытые не входят в `page.total`, не заменяются плейсхолдером, их тело не протекает через `Result`.
+  **User 360 заметки не читает вообще** — второго пути чтения нет, расхождению правил неоткуда взяться.
+- **AuditRecord** (`domain/audit/`) — immutable, `action: "note_added"`, `reasonCode` — закрытый enum,
+  `mock: true`. **Тела заметки, email, телефона, финансовых значений и произвольного текста не содержит.**
+  Audit UI и read endpoint не создавались.
+- **Versioned overlay** `ata-crm.mutation-overlay.v1` (`version/sequence/notes/auditRecords/idempotencyReceipts`).
+  Не смешан с `ata-crm.mock-state.v1` и `ata-crm.mock-role.v1`. Fail-closed parse: corrupt JSON / unknown version /
+  invalid shape / потерянный `mock` / чужой `visibility` → **пустой overlay целиком**. SSR не обращается к
+  localStorage. Запись атомарно заменяет весь overlay; есть `clear()` для будущей кнопки сброса (**UI сброса не делался**).
+  Фикстуры неизменяемы.
+- **Storage ownership.** Один adapter на провайдер (создаётся в конструкторе, не на каждый вызов);
+  `getCrmDataProvider` кэширует провайдер → одна browser session = один adapter. Тесты внедряют
+  `MemoryKeyValueStorage` через `MockProviderOptions` — **ни один unit-тест не трогает настоящий localStorage**;
+  тот же путь даёт controlled initial overlay.
+- **Детерминизм (D-57).** `note_mock_0001` / `audit_mock_0001` из персистентного `sequence`;
+  timestamp = `clock.nowMs() + sequence`; tie-break по `id`. Ни `Math.random()`, ни случайных UUID,
+  ни настоящего `Date.now()`. `idempotencyKey` как entity id не используется.
+- **Идемпотентность.** Тот же ключ + тот же нормализованный payload → исходный результат, `replayed: true`,
+  без второй заметки и без второго audit. Тот же ключ + другой `userId`/`body`/actor → `conflict`.
+  Receipt хранит fingerprint (два прохода FNV-1a с префиксами длины), **не тело**; crypto-зависимость не добавлялась.
+- **Валидация.** `body`: trim, пустое → `invalid_input`, > **2000** → `invalid_input`, plain text (не HTML).
+  `idempotencyKey`: обязателен, trim, непустой, ≤ **200**.
+- **Коды ошибок.** Существующие `Result<T>`/`CrmError`; параллельной системы нет. Отказ по правам —
+  **`unauthorized`**, а не новый `forbidden`: такого кода в `CrmErrorCode` не существует, и второй код
+  с тем же смыслом — та самая рассинхронизация, которую закрывали D-40 и D-52 (**D-56**).
+
+### Результаты проверок
+- `typecheck` ✅ 0 ошибок · `lint` ✅ 0 warnings/errors
+- `test:run` ✅ **569/569** (все 439 прежних сохранены + 130 новых: 66 add-note, 23 overlay, 18 notes-privacy,
+  15 note-projection, 8 `canEditUserNotes`)
+- `build` ✅ production build успешна (18 routes; размеры страниц не изменились)
+- `test:e2e` ✅ **41/41** — прежний состав сохранён полностью, новых не добавлялось (UI не менялся, скриншоты не требуются)
+- `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26); `audit fix` не выполнялся.
+  `package.json` / `package-lock.json` не менялись.
+- **Regression доказан подменой:** projector «всё видно» роняет **15** тестов (включая явный
+  «getUserNotes — context actually matters»); permission-правило «всем можно» — **20**.
+- **Скриншоты не коммитятся.** Прогон E2E перезаписал 8 исторических PNG. Проверено декодированием в TIFF:
+  6 из них — шум (11–87 байт, дельта ≤ 3), а `today-filtered` расходится **сам с собой между двумя прогонами
+  одного и того же кода** (8.8%) → недетерминированный скриншот. Для `users-columns-after-scroll` (3.8%)
+  проведён контрольный опыт: E2E на **чистом HEAD** (мои изменения в stash) даёт байт-в-байт **тот же**
+  файл, что и с изменениями (0 байт разницы), и **то же** расхождение с закоммиченным PNG (148667 байт).
+  Вывод: расхождение предсуществующее и средовое (прежние фазы гоняли гейты в изолированной Linux-копии,
+  текущая машина — macOS), к изменениям Phase 1B4-A отношения не имеет. Все PNG восстановлены к HEAD.
+
+### Не входит (сознательно)
+UI-форма добавления заметки, кнопка, оптимистичное React-состояние, пересчёт очереди Today —
+**Phase 1B4-B, не начата**. Не реализованы: `createTask`, `updateTask`, `createCase`, `updateCase`,
+owner assignment, signal resolution, recommendation acceptance, reveal PII, audit-экран, reset-кнопка в UI,
+редактирование/удаление заметок. Матрица прав, identity-проекция и exact-financial visibility **не расширялись**
+(добавлено ровно одно право `edit_user_notes`). Today derivation и подписи рекомендаций не менялись.
+Backend / API / database / Prisma / Pocket отсутствуют. Зависимости не добавлялись. Secrets/.env не появлялись.
+
+### Известные ограничения (не скрыты)
+- `private` и `role_restricted` **невозможно создать** через `addNote` (D-54) и они fail-closed при чтении (D-55).
+  Полноценная поддержка требует metadata-контракта (владелец приватной записи, список разрешённых ролей) — отдельное решение.
+- Заметки **нигде не отображаются**: `getUserNotes` полностью реализован и permission-aware, но потребителя-экрана
+  у него пока нет. Это ожидаемо для provider-only фазы, а не упущение.
+- `AuditRecord` только пишется — читать его пока нечем (audit read endpoint/экран вне scope).

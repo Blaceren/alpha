@@ -39,6 +39,21 @@ import type {
   UserSortField,
   UserTimelineEvent,
 } from "@/data/contracts/CrmDataProvider";
+import type {
+  AddNoteCommand,
+  AddNoteResult,
+  CrmMutations,
+} from "@/data/contracts/CrmMutations";
+import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@/data/contracts/CrmMutations";
+import type { AuditRecord } from "@/domain/audit/audit";
+import { mockAuditId } from "@/domain/audit/audit";
+import type { NoteBodyError } from "@/domain/notes/note";
+import { mockNoteId, normalizeNoteBody, NOTE_BODY_MAX_LENGTH } from "@/domain/notes/note";
+import { projectNotes, sortNotes } from "@/domain/notes/note-projection";
+import type { MutationOverlay } from "./overlay/mutation-overlay";
+import { MUTATION_OVERLAY_VERSION, MutationOverlayStore } from "./overlay/mutation-overlay";
+import type { KeyValueStorage } from "./overlay/storage";
+import { fingerprintAddNote } from "./overlay/fingerprint";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
 import type { CrmCase } from "@/domain/cases/case";
 import type { UserSignal } from "@/domain/signals/signal";
@@ -51,7 +66,7 @@ import { deriveRecommendations } from "@/domain/recommendations/derive";
 import { projectFinancial } from "@/domain/financial/projection";
 import { projectIdentity } from "@/domain/identity/identity-projection";
 import { toFinancialBucket } from "@/domain/financial/financial";
-import { canViewExactFinancials } from "@/domain/identity/access";
+import { canEditUserNotes, canViewExactFinancials } from "@/domain/identity/access";
 import { computeSegments } from "@/domain/segments/segments";
 import { buildTodayWorkspace } from "@/domain/today/builder";
 
@@ -61,6 +76,12 @@ export interface MockProviderOptions {
   errorMode?: boolean;
   emptyMode?: boolean;
   staleMode?: boolean;
+  /**
+   * Where the mutation overlay is persisted. Defaults to localStorage in a
+   * browser and to memory elsewhere; tests inject a MemoryKeyValueStorage, which
+   * is also how they seed a controlled initial overlay.
+   */
+  storage?: KeyValueStorage;
 }
 
 interface Derived {
@@ -78,6 +99,12 @@ const TIMELINE_RANGE_MESSAGE: Record<TimelineRangeError, string> = {
   inverted_range: "Timeline range: `from` must not be later than `to`.",
 };
 
+/** Why a note body was rejected. Diagnostic text — never carries the body itself. */
+const NOTE_BODY_MESSAGE: Record<NoteBodyError, string> = {
+  empty: "Note body is empty.",
+  too_long: `Note body exceeds ${NOTE_BODY_MAX_LENGTH} characters.`,
+};
+
 const bandToLevel: Record<PriorityBand, PriorityLevel> = {
   critical: "critical",
   high: "high",
@@ -85,7 +112,7 @@ const bandToLevel: Record<PriorityBand, PriorityLevel> = {
   low: "low",
 };
 
-export class MockCrmDataProvider implements CrmDataProvider {
+export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
   private readonly clock: Clock;
   private readonly delayMs: number;
   private readonly errorMode: boolean;
@@ -93,6 +120,12 @@ export class MockCrmDataProvider implements CrmDataProvider {
   private readonly staleMode: boolean;
   private readonly users: MockUser[];
   private readonly derivedCache = new Map<string, Derived>();
+  /**
+   * One overlay adapter per provider, built once here rather than per method
+   * call. `getCrmDataProvider` caches the provider per demo state, so a browser
+   * session reads and writes through a single instance.
+   */
+  private readonly overlay: MutationOverlayStore;
 
   constructor(options: MockProviderOptions = {}) {
     this.clock = options.clock ?? new FixedMockClock();
@@ -101,6 +134,7 @@ export class MockCrmDataProvider implements CrmDataProvider {
     this.emptyMode = options.emptyMode ?? false;
     this.staleMode = options.staleMode ?? false;
     this.users = defaultDataset(this.clock);
+    this.overlay = new MutationOverlayStore(options.storage);
   }
 
   /* ------------------------------------------------------------- helpers */
@@ -487,23 +521,55 @@ export class MockCrmDataProvider implements CrmDataProvider {
     });
   }
 
-  getUserNotes(_ctx: CrmContext, input: GetUserNotesInput): Promise<Result<Paginated<CrmNote>>> {
+  /**
+   * Synthetic notes derived from a fixture. Rebuilt on every read from immutable
+   * fixture data — the fixture itself is never touched, and authored notes live in
+   * the overlay, so a mutation can never rewrite generated content.
+   */
+  private fixtureNotes(u: MockUser): CrmNote[] {
+    const at = this.clock.nowIso();
+    return [
+      {
+        id: `${u.identity.userId}_note_1`,
+        userId: u.identity.userId,
+        caseId: null,
+        authorEmployeeId: u.operations.primaryOwnerId ?? "emp_mock_admin",
+        body: `Синтетическая заметка: ${u.state.reasonCode}.`,
+        visibility: "team",
+        pinned: false,
+        createdAt: at,
+        updatedAt: at,
+        mock: true,
+      },
+    ];
+  }
+
+  /**
+   * Notes for a user: fixture-generated + overlay, projected for `ctx`.
+   *
+   * `ctx` is applied through the canonical projector (`domain/notes/note-projection`)
+   * rather than here, and projection runs BEFORE pagination so a note the role may
+   * not see is absent from `page.total` as well as from `items` — a hidden note must
+   * not be countable, only invisible.
+   *
+   * Every role may open User 360 (matrix §2), so there is no role-level refusal:
+   * visibility is decided per note.
+   */
+  getUserNotes(ctx: CrmContext, input: GetUserNotesInput): Promise<Result<Paginated<CrmNote>>> {
     return this.gate(() => {
       const u = this.users.find((x) => x.identity.userId === input.userId);
       if (!u) return empty(this.paginate<CrmNote>([]));
-      const notes: CrmNote[] = [
-        {
-          id: `${u.identity.userId}_note_1`,
-          userId: u.identity.userId,
-          caseId: null,
-          authorId: u.operations.primaryOwnerId ?? "emp_mock_admin",
-          body: `Синтетическая заметка: ${u.state.reasonCode}.`,
-          visibility: "team",
-          pinned: false,
-          createdAt: this.clock.nowIso(),
-        },
-      ];
-      return ok(this.paginate(notes, input.page?.cursor));
+
+      const authored = this.overlay.read().notes.filter((n) => n.userId === input.userId);
+      const visible = projectNotes([...this.fixtureNotes(u), ...authored], {
+        actorId: ctx.actorId,
+        role: ctx.role,
+      });
+      const ordered = sortNotes(visible);
+
+      return ordered.length === 0
+        ? empty(this.paginate<CrmNote>([]))
+        : ok(this.paginate(ordered, input.page?.cursor));
     });
   }
 
@@ -599,6 +665,145 @@ export class MockCrmDataProvider implements CrmDataProvider {
         }
       }
       return ok(out.slice(0, input.limit ?? out.length));
+    });
+  }
+
+  /* ---------------------------------------------------------- mutations */
+
+  /**
+   * Add a plain-text note (Phase 1B4-A — the only mutation that exists).
+   *
+   * Order is deliberate: validate → user exists → permission → idempotency →
+   * write. Permission is read from `ctx` and never from the command, so a caller
+   * cannot claim a role it does not hold. Error messages carry no note body.
+   *
+   * Nothing is persisted until the whole overlay is assembled, so a rejected call
+   * — for any reason, including a storage failure — leaves the overlay exactly as
+   * it was and writes no audit record.
+   */
+  addNote(ctx: CrmContext, command: AddNoteCommand): Promise<Result<AddNoteResult>> {
+    return this.gate(() => {
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<AddNoteResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<AddNoteResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      const normalized = normalizeNoteBody(command.body);
+      if (!normalized.ok) {
+        return fail<AddNoteResult>({
+          code: "invalid_input",
+          message: NOTE_BODY_MESSAGE[normalized.error],
+          retriable: false,
+        });
+      }
+
+      const user = this.users.find((x) => x.identity.userId === command.userId);
+      if (!user) {
+        return fail<AddNoteResult>({ code: "not_found", message: "User not found.", retriable: false });
+      }
+
+      if (!canEditUserNotes(ctx.role)) {
+        return fail<AddNoteResult>({
+          code: "unauthorized",
+          message: "Role may not edit notes.",
+          retriable: false,
+        });
+      }
+
+      const overlay = this.overlay.read();
+      const fingerprint = fingerprintAddNote({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        body: normalized.body,
+      });
+
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint) {
+          return fail<AddNoteResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const note = overlay.notes.find((n) => n.id === receipt.noteId);
+        const audit = overlay.auditRecords.find((a) => a.id === receipt.auditId);
+        if (!note || !audit) {
+          // A receipt without its records means the overlay was edited by hand.
+          return fail<AddNoteResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        return ok({ note, audit, replayed: true });
+      }
+
+      const sequence = overlay.sequence + 1;
+      // Offsetting by the sequence keeps several notes distinguishable and
+      // ordered under a fixed mock clock, where clock.now() alone repeats.
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      const note: CrmNote = {
+        id: mockNoteId(sequence),
+        userId: command.userId,
+        caseId: null,
+        authorEmployeeId: ctx.actorId,
+        body: normalized.body,
+        visibility: "team",
+        pinned: false,
+        createdAt: at,
+        updatedAt: at,
+        mock: true,
+      };
+
+      const audit: AuditRecord = {
+        id: mockAuditId(sequence),
+        action: "note_added",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "note",
+        entityId: note.id,
+        at,
+        reasonCode: "note_added_by_employee",
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        notes: [...overlay.notes, note],
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { key, fingerprint, noteId: note.id, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<AddNoteResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      return ok({ note, audit, replayed: false });
     });
   }
 }

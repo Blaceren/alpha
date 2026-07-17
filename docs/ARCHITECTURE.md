@@ -23,13 +23,17 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 ## Provider boundary
 
-Единственная граница между UI и данными — `CrmDataProvider` (13 операций, `docs/DATA_PROVIDER_CONTRACT.md`). Сейчас его реализует `MockCrmDataProvider`; позже — `ApiCrmDataProvider` с тем же интерфейсом. UI не переписывается при смене источника. Каждый результат — единый `Result<T>` со статусами `ok | loading | stale | empty | error`, `freshness` и дискриминированной ошибкой `CrmError`.
+Единственная граница между UI и данными — `CrmDataProvider` (14 read-операций, `docs/DATA_PROVIDER_CONTRACT.md`). Сейчас его реализует `MockCrmDataProvider`; позже — `ApiCrmDataProvider` с тем же интерфейсом. UI не переписывается при смене источника. Каждый результат — единый `Result<T>` со статусами `ok | loading | stale | empty | error`, `freshness` и дискриминированной ошибкой `CrmError`.
 
 Живое доказательство границы — `ProviderSmoke` на экране Today: данные приходят строго через провайдер; loading/empty/error-состояния отрабатываются реально.
 
+**Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализована ровно одна мутация (`addNote`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
+
 ## Permission boundary
 
-Централизованный слой прав `domain/identity/` (`roles.ts`, `permissions.ts`, `access.ts`) — единственное место проверок. Хелперы: `canViewSection`, `canViewExactFinancials`, `canViewIdentity`, `canRevealPii`, `canAssignOwner`, `canExport`, `canViewAudit`, `canManageSettings`. Соответствует `docs/ROLE_PERMISSION_MATRIX.md`.
+Централизованный слой прав `domain/identity/` (`roles.ts`, `permissions.ts`, `access.ts`) — единственное место проверок. Хелперы: `canViewSection`, `canViewExactFinancials`, `canViewIdentity`, `canRevealPii`, `canAssignOwner`, `canExport`, `canViewAudit`, `canManageSettings`, `canEditUserNotes`. Соответствует `docs/ROLE_PERMISSION_MATRIX.md`.
+
+**Мутационные права живут здесь же**, а не в провайдере: `canEditUserNotes` (Phase 1B4-A, D-53) — измерение Edit матрицы §1, суженное до заметок. Право не выводится из видимости финансов и не переиспользует `assign_owner` — это другие измерения. Провайдер только вызывает хелпер; React решения о правах не получает.
 
 Проверки не размазаны по JSX — компоненты вызывают хелперы (например, sidebar фильтрует разделы через `canViewSection`). **Это frontend-видимость, не production-безопасность** — реальный RBAC будет на backend (D-12).
 
@@ -55,7 +59,9 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 ## Почему нет базы данных
 
-Phase 1A — самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; будущий localStorage mutation overlay и подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
+Самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
+
+Начиная с Phase 1B4-A мутации существуют, но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
 
 ## Derivation layer (Phase 1B1)
 
@@ -205,4 +211,18 @@ src/features/today/
 - **E2E (Playwright, Phase 1C):** `tests-e2e/user-360.spec.ts` — 13 сценариев (admin/support/high-priority/calm/onboarding 1440×900, tablet 1024×768, mobile 390×844 с замером порядка блоков, 200% zoom = CSS-viewport 720×450, unknown id, навигация `/users → профиль → назад`, keyboard focus, analyst, read_only). Артефакты — `screenshots/phase-1c-user-360/{first-pass,final}/`.
 - **Domain/provider + component (Vitest, Phase 1B3):** `today/builder` (61 — членство, canonical placement, детерминизм сортировки, «один факт один раз», окно, freshness, все 9 ролей), `today/today-privacy` (53 — точные суммы/проценты/identity для каждой роли), `data/mock/today-provider` (11 — конверт результата, режимы, read-only), `today-workspace` (17 — один h1, порядок секций, причина, рекомендация, фильтры/сортировка, три разных empty-состояния, loading/error/stale), `today-permissions` (24 — запрещённое отсутствует в `innerHTML`/атрибутах, поиск только по разрешённой проекции), `config/evidence-labels` (11 — полнота карты, безопасный fallback), `user-timeline` (+17 — from/to).
 - **E2E (Playwright, Phase 1B3):** `tests-e2e/today-screenshots.spec.ts` — 11 сценариев (admin/support/retention/high-priority/filtered/empty/stale 1440×900, tablet 1024×768, mobile 390×844, mobile filter sheet, 200% zoom = 720×450). Артефакты — `screenshots/phase-1b3-today/{first-pass,final}/`.
-- **Итого:** unit/компонентные — **425**, E2E — **41** (прежние 30 сохранены; ни один suite не заменён).
+- **Domain/provider (Vitest, Phase 1B4-A):** `note-projection` (15 — team/private/role_restricted для всех 9 ролей, fail-closed, сортировка, нормализация тела), `overlay/mutation-overlay` (23 — ключ, fail-closed parse: corrupt/unknown version/invalid shape, пересоздание адаптера, отказ записи, fingerprint), `add-note` (66 — валидация, все 9 ролей, идемпотентность и conflict, детерминизм id/timestamp, персистентный sequence, неизменяемость фикстур, AuditRecord без тела), `notes-privacy` (18 — зависимость от ctx, скрытые вне `total`, отсутствие плейсхолдера и утечки тела, порядок), `access` (+8 — `canEditUserNotes` по матрице).
+- **Итого:** unit/компонентные — **569**, E2E — **41** (прежние 439 unit и все 41 E2E сохранены; ни один suite не заменён). Phase 1B4-A не добавляла E2E: UI не менялся.
+
+### Mutation layer (Phase 1B4-A)
+
+```
+domain/notes/       note.ts (модель + нормализация) · note-projection.ts (единое правило приватности)
+domain/audit/       audit.ts (AuditRecord, без тела заметки)
+data/contracts/     CrmMutations.ts (addNote)
+data/mock/overlay/  storage.ts (KeyValueStorage/Memory) · mutation-overlay.ts (схема+parse+store) · fingerprint.ts
+```
+
+Направление зависимостей не нарушено: `domain/notes` и `domain/audit` не знают ни про React, ни про storage; overlay-адаптер живёт в `data/mock` и внедряется в провайдер через опции. `CrmNote` определён в домене и ре-экспортируется контрактом — как `TodayWorkspace` (D-50) и `User360` (D-35), поэтому второго несовместимого типа заметки не существует.
+
+**Регрессия доказана подменой:** projector «всё видно» роняет 15 тестов, permission-правило «всем можно» — 20.

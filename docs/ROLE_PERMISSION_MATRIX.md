@@ -136,6 +136,33 @@
 | Approve/Reject report | ✓ | ✓ | – | ✓ | – | – | – | – | – |
 | Настроить роли/конфиг (mock) | ✓ | – | – | – | – | – | – | – | – |
 | Смотреть глобальный Audit | ✓ | ✓ | – | – | – | – | – | – | – |
+| **Добавить заметку о пользователе** | ✓ | ✓ | ✓ | – | ✓ | – | – | – | – |
+
+---
+
+## 5.1 Заметки: Edit → notes (Phase 1B4-A, DECISIONS D-53)
+
+Строка «Добавить заметку» выше — не новое право, а **прочтение измерения Edit из §1**. §0 определяет Edit как «изменение сущностей CRM (tasks/cases/**notes**/lifecycle override)», поэтому заметки уже входят в Edit; §1 определяет, у кого это Edit есть и в каком объёме:
+
+| Роль | Edit (§1) | Заметки входят? |
+|---|---|---|
+| crm_admin | Full | да — Full покрывает все сущности |
+| crm_manager | Full (team) | да |
+| retention_manager | Full (own+team retention) | да |
+| support | Limited (support cases/tasks/**notes**) | **да — названы явно** |
+| mentor | Limited (mentor tasks/cases, reports) | нет |
+| moderator | Limited (moderation cases) | нет |
+| content_manager | Limited (content-related) | нет |
+| analyst | None | нет |
+| read_only | None | нет |
+
+**Почему так.** Среди ролей с Edit=Limited `support` — единственная, в чьей скобке перечислены `notes`. Скобка задаёт, какие сущности допускает ограничение; будь она иллюстративной, слово `notes` было бы избыточным. Значит перечисление **исчерпывающее**, и там, где заметки не названы, права на них нет. При отсутствии положительного разрешения решение fail-closed.
+
+**Чем это право не является.** Не следует из видимости финансов (support пишет заметки, но точных сумм не видит — §4.1) и не переиспользует `assign_owner` (support заметки пишет, owner не назначает — §5). Это разные измерения §1, и добавление `edit_user_notes` **не расширило** ни одно существующее право просмотра.
+
+**Реализация:** `Permission` += `edit_user_notes`, хелпер `canEditUserNotes(role)` в `domain/identity/access.ts`. Проверяется по доверенному `CrmContext`, не по данным команды. Каждое успешное добавление → `AuditRecord{mock:true}` **без тела заметки** (§4.2.6, docs/MUTATION_OVERLAY.md).
+
+**Границы фазы.** Реализована только `addNote`. Заметка всегда создаётся как `team` (D-54); `private`/`role_restricted` не создаются — для них нет metadata-контракта, а при чтении они fail-closed (D-55). Редактирование/удаление заметок, а также мутации tasks/cases/owner/signals/recommendations и reveal PII — **не реализованы**.
 
 ---
 

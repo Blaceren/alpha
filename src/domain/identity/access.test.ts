@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   canAssignOwner,
+  canEditUserNotes,
   canManageSettings,
   canRevealPii,
   canViewAudit,
   canViewExactFinancials,
+  canViewIdentity,
   canViewSection,
   visibleSections,
 } from "./access";
@@ -65,5 +67,57 @@ describe("section visibility", () => {
     expect(readOnly).not.toContain("tasks");
     // Admin sees everything in the nav.
     expect(visibleSections("crm_admin", SECTION_ORDER)).toEqual(SECTION_ORDER);
+  });
+});
+
+/**
+ * Edit → notes (ROLE_PERMISSION_MATRIX §1, DECISIONS D-53). Phase 1B4-A reads the
+ * Edit column literally: Full covers every entity; among the Limited roles only
+ * `support` names notes in its scope.
+ */
+describe("canEditUserNotes", () => {
+  it("grants the three Edit=Full roles", () => {
+    expect(canEditUserNotes("crm_admin")).toBe(true);
+    expect(canEditUserNotes("crm_manager")).toBe(true);
+    expect(canEditUserNotes("retention_manager")).toBe(true);
+  });
+
+  it("grants support, the only Edit=Limited role whose scope names notes", () => {
+    expect(canEditUserNotes("support")).toBe(true);
+  });
+
+  it("denies Edit=Limited roles whose scope does not name notes", () => {
+    expect(canEditUserNotes("mentor")).toBe(false);
+    expect(canEditUserNotes("moderator")).toBe(false);
+    expect(canEditUserNotes("content_manager")).toBe(false);
+  });
+
+  it("denies the Edit=None roles", () => {
+    expect(canEditUserNotes("analyst")).toBe(false);
+    expect(canEditUserNotes("read_only")).toBe(false);
+  });
+
+  it("decides for all nine roles with no role left undefined", () => {
+    for (const role of CRM_ROLES) {
+      expect(typeof canEditUserNotes(role)).toBe("boolean");
+    }
+    expect(CRM_ROLES.filter(canEditUserNotes)).toHaveLength(4);
+  });
+
+  it("is not derived from financial visibility: support edits notes but sees no exact amounts", () => {
+    expect(canEditUserNotes("support")).toBe(true);
+    expect(canViewExactFinancials("support")).toBe(false);
+  });
+
+  it("is not derived from assign_owner: support edits notes but assigns no owner", () => {
+    expect(canEditUserNotes("support")).toBe(true);
+    expect(canAssignOwner("support")).toBe(false);
+  });
+
+  it("does not widen any existing view permission for support", () => {
+    expect(canViewIdentity("support")).toBe(false);
+    expect(canRevealPii("support")).toBe(false);
+    expect(canViewAudit("support")).toBe(false);
+    expect(canManageSettings("support")).toBe(false);
   });
 });

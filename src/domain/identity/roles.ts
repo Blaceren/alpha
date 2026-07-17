@@ -68,4 +68,11 @@ export type Permission =
   | "assign_owner"
   | "export"
   | "view_audit"
-  | "manage_settings";
+  | "manage_settings"
+  /**
+   * Edit dimension of ROLE_PERMISSION_MATRIX §1, narrowed to notes — the only
+   * entity Phase 1B4-A can write. Tasks, cases, lifecycle override and owner
+   * assignment get their own permissions when they get their own mutations;
+   * `assign_owner` is a different dimension and is never reused for editing.
+   */
+  | "edit_user_notes";

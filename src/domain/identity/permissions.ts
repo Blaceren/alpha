@@ -79,6 +79,14 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
  * Discrete permissions per role (ROLE_PERMISSION_MATRIX §1, §5; DECISIONS D-07/D-08/D-11).
  * `support` can gain exact financials / PII reveal only through a separate grant,
  * which is NOT modeled by default in Phase 1A.
+ *
+ * `edit_user_notes` reads the Edit column of §1 literally (DECISIONS D-53).
+ * Edit=Full covers every CRM entity, so admin/manager/retention hold it. Among the
+ * Edit=Limited roles the parenthetical enumerates which entities the limit admits,
+ * and `support` is the only one that names notes ("support cases/tasks/notes");
+ * mentor ("mentor tasks/cases, reports"), moderator ("moderation cases") and
+ * content_manager ("content-related") do not, so they do not get it. Edit=None
+ * (analyst, read_only) never does.
  */
 export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
   crm_admin: [
@@ -89,6 +97,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "export",
     "view_audit",
     "manage_settings",
+    "edit_user_notes",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -97,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "assign_owner",
     "export",
     "view_audit",
+    "edit_user_notes",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -104,9 +114,10 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "reveal_pii",
     "assign_owner",
     "export",
+    "edit_user_notes",
   ],
   mentor: [],
-  support: [],
+  support: ["edit_user_notes"],
   moderator: [],
   analyst: [],
   content_manager: [],
