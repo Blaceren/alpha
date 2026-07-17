@@ -1,6 +1,7 @@
-# REPORT_STATE_MACHINE — lifecycle отчёта (D3-B)
+# REPORT_STATE_MACHINE — lifecycle отчёта (D3-B; revision-цикл D3-C)
 
-Владелец: `src/features/report-level/model/report-experience.ts`.
+Владельцы: `src/features/report-level/model/report-experience.ts` (derivation) и
+`src/features/report-level/model/report-workspace-v2.ts` (хранимые статусы и переходы).
 Компоненты читают выведенное состояние отсюда и **не переопределяют ни одного правила** (принцип
 DD-256 / DD-262, применённый к отчёту).
 
@@ -30,9 +31,26 @@ DD-256 / DD-262, применённый к отчёту).
 `ready` намеренно **не персистится**: это утверждение о записях, и вывод его из записей исключает
 ситуацию, когда флаг расходится с тем, что описывает.
 
-`approved`, `rejected`, `revision-requested`, `resubmitted` **не введены** — все они производны от
-вердикта наставника, которого не существует и который **не имитируется** (DD-265). Отдельные будущие
-этапы: `D3_REPORT_SCOPE.md` §2.
+**D3-C добавил цикл доработки** (термин пользователя — «Нужна доработка», DD-284):
+
+```
+pending-review ──(dev/test verdict adapter, DD-291)──▶ revision-requested ──▶ editing (те же поля)
+      ▲                                                        │
+      └────────── withResubmitted (готовность ∧ изменение) ────┘
+```
+
+| Состояние D3-C | Природа | Смысл |
+|---|---|---|
+| `revision-requested` | **хранится** (+`review`) | проверка вернула работу; поля снова редактируемы |
+| `editing-revision` | **вычисляется** (mode `revision`) | пользователь правит тот же отчёт |
+| `ready-to-resubmit` | **вычисляется** | готовность (DD-274) ∧ `meaningfulRevision > review.atRevision` (DD-292) |
+
+Whitespace-правка (нормализация не меняет значение) автосохраняется, но изменением не считается.
+Отмеченные секции — направление внимания, **не валидатор**. Resubmit возвращает ровно в
+`pending-review`; `review` сохраняется как тихий исторический контекст.
+
+`approved` / `rejected` **не введены** — производны от вердикта наставника, которого не существует и
+который **не имитируется** (DD-265, DD-287). D3-D — отдельный будущий этап (`D3_REPORT_SCOPE.md` §2).
 
 ## 2. Правило готовности — prototype-only
 

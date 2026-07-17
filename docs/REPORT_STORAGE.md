@@ -1,8 +1,20 @@
-# REPORT_STORAGE — browser-local report persistence (D3-B)
+# REPORT_STORAGE — browser-local report persistence (D3-B; схема v2 — D3-C)
 
-Владельцы: `src/features/report-level/model/report-draft.ts` (форма и правила),
+Владельцы: `src/features/report-level/model/report-workspace-v2.ts` (актуальная схема v2, миграция),
+`src/features/report-level/model/report-draft.ts` (легаси-схема v1 — только чтение при миграции),
+`src/features/report-level/model/report-review.ts` (review-модель и section ids),
 `src/features/report-level/model/report-store.ts` (порт хранилища),
 `src/features/report-level/hooks/use-report-draft.ts` (autosave).
+
+> **D3-C: актуальный ключ — `ata.report-workspace.v2`** (DD-285/DD-290). Запись v2 добавляет
+> `status: "revision-requested"`, объект `review {comment, sections, receivedAt, atRevision}` и
+> счётчик `meaningfulRevision` (растёт только при содержательном изменении; `revision` остаётся
+> техническим ключом autosave). Миграция — при чтении, односторонняя, идемпотентная: валидный v2
+> авторитетен; битый v2 fail closed **без отката к v1**; v1 читается только при отсутствии v2 и
+> **никогда не удаляется и не перезаписывается**. Инварианты fail-closed v1 (§4) действуют и в v2;
+> дополнительно: forged `approved`/`rejected` → запись отброшена; битый `review` → вердикт отброшен,
+> работа сохранена как `pending-review`; неизвестный section ID → отброшен только ID. Разделы ниже
+> описывают v1-схему как основание — она остаётся точной для легаси-чтения.
 
 ---
 

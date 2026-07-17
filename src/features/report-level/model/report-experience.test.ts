@@ -10,6 +10,7 @@ import {
   withSummary,
   type ReportDraft,
 } from "@/features/report-level/model/report-draft";
+import type { ReportDraftV2 } from "@/features/report-level/model/report-workspace-v2";
 import {
   deriveReportExperience,
   deriveReportLifecycle,
@@ -33,8 +34,15 @@ function readyDraft(): ReportDraft {
   return withSummary(draft, "итог");
 }
 
+/** Lift a legacy v1 draft to the v2 shape — exactly what migration does. */
+const lift = (draft: ReportDraft): ReportDraftV2 => ({
+  ...draft,
+  review: null,
+  meaningfulRevision: draft.revision,
+});
+
 const derive = (draft: ReportDraft, marker = reportMarker) =>
-  deriveReportExperience({ definition, draft, marker, session });
+  deriveReportExperience({ definition, draft: lift(draft), marker, session });
 
 describe("report scenario marker", () => {
   it("puts the user on level 3 — the only marker the report story is true under", () => {
@@ -58,17 +66,17 @@ describe("report scenario marker", () => {
 
 describe("report lifecycle", () => {
   it("is draft while incomplete", () => {
-    expect(deriveReportLifecycle(createEmptyDraft(definition))).toBe("draft");
+    expect(deriveReportLifecycle(lift(createEmptyDraft(definition)))).toBe("draft");
   });
 
   it("is ready — computed, never stored — once the rule is satisfied", () => {
     const draft = readyDraft();
     expect(draft.status).toBe("draft");
-    expect(deriveReportLifecycle(draft)).toBe("ready");
+    expect(deriveReportLifecycle(lift(draft))).toBe("ready");
   });
 
   it("is pending-review after a local submit", () => {
-    expect(deriveReportLifecycle(withSubmitted(readyDraft(), "2026-07-17T10:00:00.000Z"))).toBe(
+    expect(deriveReportLifecycle(lift(withSubmitted(readyDraft(), "2026-07-17T10:00:00.000Z")))).toBe(
       "pending-review",
     );
   });

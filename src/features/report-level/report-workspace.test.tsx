@@ -6,13 +6,13 @@ import { ReportWorkspace } from "@/features/report-level/components/report-works
 import { createReportStore } from "@/features/report-level/model/report-store";
 import {
   createEmptyDraft,
-  getStoredDraft,
   withDraft,
   withEntryField,
   withSubmitted,
   withSummary,
   type ReportDraft,
 } from "@/features/report-level/model/report-draft";
+import { getStoredDraftV2 } from "@/features/report-level/model/report-workspace-v2";
 import { emptyReportWorkspace } from "@/features/report-level/model/report-draft";
 
 const definition = getReportDefinition(REPORT_LEVEL_NUMBER)!;
@@ -207,7 +207,7 @@ describe("report workspace — browser-local truth", () => {
     // Autosave is debounced; the flush is asserted through the store, not a timer.
     await new Promise((resolve) => setTimeout(resolve, 900));
 
-    const stored = getStoredDraft(createReportStore().read(), 3);
+    const stored = getStoredDraftV2(createReportStore().read(), 3);
     expect(stored?.entries[0]!.noticed).toBe("новое наблюдение");
   });
 
@@ -237,7 +237,7 @@ describe("report workspace — submit confirmation", () => {
       within(dialog).getByRole("heading", { name: "Отметить отчёт как отправленный?" }),
     ).toBeInTheDocument();
     // Still a draft — nothing was committed by opening the dialog.
-    expect(getStoredDraft(createReportStore().read(), 3)?.status).toBe("draft");
+    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("draft");
   });
 
   it("explains what submitting actually does, without lying", async () => {
@@ -276,7 +276,7 @@ describe("report workspace — submit confirmation", () => {
     await user.click(screen.getByRole("button", { name: "Продолжить редактирование" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(getStoredDraft(createReportStore().read(), 3)?.status).toBe("draft");
+    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("draft");
   });
 
   it("closes on Escape", async () => {
@@ -309,7 +309,7 @@ describe("report workspace — submit confirmation", () => {
     await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
     await user.click(screen.getByRole("button", { name: "Отметить как отправленный" }));
 
-    expect(getStoredDraft(createReportStore().read(), 3)?.status).toBe("pending-review");
+    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("pending-review");
   });
 });
 

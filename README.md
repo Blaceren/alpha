@@ -4,7 +4,7 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D3-B — First Report Level.** Реализованы Главная (`/`), Путь (`/path`),
+> **Статус: Phase D3-C — Report Revision Cycle.** Реализованы Главная (`/`), Путь (`/path`),
 > Урок (`/lessons/[levelCode]`), **Библиотека уроков (`/lessons`)** и **первый отчёт
 > (`/lessons/level.003`)**. Backend / CRM / Pocket / database / deploy — не подключены; все данные
 > synthetic. Прогресс урока живёт в сессии браузера, черновик отчёта — в `localStorage` этого
@@ -24,7 +24,8 @@ discipline и сопровождение. ATA не является торгов
 >
 > **`/lessons/level.003`** — отчёт является **самим уровнем** (`/reports/[reportCode]` не
 > используется). Пять записей по числу demo-сделок из артефакта курса, итоговое наблюдение, черновик в
-> `localStorage` (`ata.report-workspace.v1`), submit с подтверждением → локальный `pending-review`.
+> `localStorage` (с D3-C — ключ `ata.report-workspace.v2`; валидные v1-черновики мигрируют, v1 не
+> удаляется), submit с подтверждением → локальный `pending-review`.
 > **Вердикт наставника не имитируется**, `approved`/`rejected` отсутствуют, уровень 4 остаётся закрыт.
 >
 > Канон (Артём, L18) не менялся. Полный flow отчёта живёт только под dev/test сценарием
@@ -32,13 +33,17 @@ discipline и сопровождение. ATA не является торгов
 > (DD-272). Practical и уровень 19 не начинались; rubric — prototype-only;
 > `/lessons/[levelCode]/test` остаётся **зарезервированным**.
 >
-> **D3-C-A (art direction) выполнена:** зафиксирован цикл доработки
-> `pending-review → «Нужна доработка» → правка → повторная отправка → «На проверке»` без
-> `approved` (DD-282…DD-288, `docs/D3_REVISION_SCOPE.md`) и предъявлены **три структурно разных
-> направления** внутри Evidence Ledger — A «Margin Review», B «Revision Pass», C «Review Contract»
-> (`docs/D3_REVISION_ART_DIRECTION.md`, кадры в `design-memory/screenshots/d3-revision/concepts/`).
-> Хранилище будущей реализации — `ata.report-workspace.v2` с сохранением валидных v1-черновиков;
-> код миграции не писался. **Победитель не выбран — реализация D3-C-B ждёт явного выбора.**
+> **D3-C выполнена целиком.** D3-C-A предъявила три направления
+> (`docs/D3_REVISION_ART_DIRECTION.md`); выбран **B «Revision Pass»** + два элемента из A
+> (комментарий проверки над ледгером и ссылки-переходы; DD-289). D3-C-B реализовала цикл
+> `pending-review → «Нужна доработка» → правка того же отчёта → повторная отправка → «На проверке»`
+> без `approved`: хранилище **`ata.report-workspace.v2`** с односторонней миграцией валидных
+> v1-черновиков (v1 не удаляется; DD-290), вердикт — только dev/test adapter
+> `?verdict=revision-requested` при `?scenario=report` (DD-291), правило повторной отправки —
+> готовность ∧ содержательное изменение после вердикта (DD-292). Library/Path показывают
+> «Нужна доработка» / «Готов к повторной отправке»; канонический Артём (L18) не затронут.
+> Детали — `docs/D3_REVISION_EXPERIENCE.md`. **D3-D (approved), mentor thread и practical не
+> начинались.**
 
 ## Требования
 
@@ -62,8 +67,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт), 120 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (184) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт + Доработка), 146 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (224) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в

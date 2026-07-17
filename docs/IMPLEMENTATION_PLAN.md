@@ -124,14 +124,28 @@
   направлению revision/editing/ready/mobile; один сценарий (L3, два места требуют внимания,
   provisional feedback); реальные кадры 1440×900/390×844 + доска; self-review с исправленными
   critical/major; historical evidence не тронут.
-- **Stop condition:** направления предъявлены ✅ — **победитель не выбран, выбор за пользователем;
-  D3-C-B не начат.**
+- **Stop condition:** направления предъявлены ✅ — выбор сделан пользователем: **B «Revision
+  Pass»** + два элемента из A (DD-289).
+
+### D3-C-B — Report Revision Pass (выполнена)
+
+- **Scope:** production-реализация цикла `pending-review → revision-requested → editing →
+  ready-to-resubmit → pending-review` по направлению B; storage **v2**
+  (`ata.report-workspace.v2`) с односторонней миграцией v1 (DD-290); dev/test verdict adapter
+  `?verdict=revision-requested` (DD-291); правило resubmit «готовность ∧ содержательное изменение»
+  (DD-292); интеграция статусов в Library и Path.
+- **Non-scope:** approved (D3-D); mentor thread/identity (D3-E); practical (D3-F); version
+  history; section threads; rubric/score; backend; XP.
+- **Acceptance:** 518 unit (441 сохранены + 77) · E2E gate 146 (120 сохранены + 26) · lint/
+  typecheck/build чисто · geometry-проверки DD-281 на 390/320/720×450 · canonical L18 не понижен ·
+  raw section ID не рендерятся · visual QA first-pass → final (14 кадров) без critical/major.
+- **Реализовано:** `D3_REVISION_EXPERIENCE.md`, DD-289…DD-292.
+- **Stop condition:** QA закрыт ✅. **D3-D не начат.**
 
 ### Будущие отдельные этапы
 
 | Этап | Содержание | Почему отдельно |
 |------|-----------|-----------------|
-| D3-C-B | реализация revision/resubmit по выбранному направлению | ждёт явного выбора пользователя (D3-C-A) |
 | D3-D | `approved` state | требует внешнего события |
 | D3-E | Mentor feedback | требует mentor queue (OQ-4) |
 | D3-F | Practical assignments | гипотеза «practical = ручной прототип инструмента» не проверена |

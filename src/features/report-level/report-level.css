@@ -592,6 +592,154 @@
   .rl-btn { width: 100%; }
 }
 
+/* ---------------- revision cycle (D3-C) — Revision Pass ----------------
+ *
+ * The chosen direction B: feedback is an ORDER OF WORK. Blue (--gate-boundary /
+ * --route-upcoming) is the review family; green stays reserved for saving,
+ * readiness and the successful action (DD-284). Nothing here is red: needing
+ * another pass was never the user's error. No wizard, no stepper, no meter —
+ * the pass is carried by words.
+ */
+
+/* «Нужна доработка» chip: the same construction as «На проверке», but the dot
+   is HOLLOW — the review handed the work back; the next move is the user's. */
+.rl-status.is-revision::before {
+  background: transparent;
+  border: 1.5px solid var(--route-upcoming);
+}
+
+/* The reviewer's comment — a calm band above the ledger, the same edge
+   construction as rl-archive / rl-before: a boundary edge, never a card. */
+.rl-feedback {
+  border-left: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--surface-context) 70%, transparent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px 14px;
+  margin: 14px 0;
+}
+.rl-feedback-k {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+/* The comment is the main NEW text of this screen: full contrast, fully
+   visible, never clamped — a whispering verdict would be worse than a loud one. */
+.rl-feedback-c {
+  font-size: 14.5px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.rl-feedback-to {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+}
+.rl-feedback-to-k {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Jump links: real controls with HUMAN labels («Запись 03 · Что заметил после
+   сделки») — raw section ids never render (DD-288). */
+.rl-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--route-upcoming);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  min-height: 32px;
+  cursor: pointer;
+  text-align: left;
+}
+.rl-jump:hover { color: var(--text-primary); }
+.rl-jump-arr { color: var(--gate-boundary); }
+
+/* After a resubmit the same comment stays as QUIET history — words only, no
+   links, no edges: context, not a task list. */
+.rl-feedback.is-history {
+  border-left-color: var(--divider-strong);
+  background: none;
+  padding: 10px 12px;
+  margin: 14px 0 0;
+}
+.rl-feedback.is-history .rl-feedback-c {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+/* The pass line: words, not a meter (DD-274 applied to the revision). */
+.rl-pass {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.rl-pass b { color: var(--text-primary); font-weight: 600; }
+
+/* In-flow pass movement — a link in the text, never a step control. */
+.rl-pass-next {
+  font: inherit;
+  font-size: 13px;
+  color: var(--route-upcoming);
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 32px;
+  cursor: pointer;
+}
+.rl-pass-next:hover { color: var(--text-primary); }
+.rl-pass-hint { margin: 10px 0 0; }
+
+/* «требует внимания» — a fact among facts: the same metadata size as
+   «заполнена», in the review family. Never red, never shouting. */
+.rl-attn {
+  font-size: 11.5px;
+  color: var(--route-upcoming);
+  white-space: nowrap;
+}
+.rl-state.is-attn { color: var(--route-upcoming); }
+
+/* A flagged OPEN section keeps the D3-B construction — light instead of a
+   border — but the light is the review hue, not the signal hue. */
+.rl-open.is-attn { border-left-color: var(--gate-boundary); }
+
+/* The flagged reflection: the same cold review edge on the third material,
+   plus a small hollow marker beside its heading. */
+.rl-refl.is-attn {
+  border-left: 2px solid var(--gate-boundary);
+  border-radius: 0 12px 12px 0;
+}
+.rl-attn-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1.5px solid var(--gate-boundary);
+  background: transparent;
+}
+
+/* Mobile strip: an attention ring around a flagged entry's dot. The dot itself
+   stays a record indicator (filled/open) — «flagged» is an independent fact,
+   and the words on the section carry it too (DD-232). */
+.rl-sd.is-attn {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gate-boundary) 38%, transparent);
+}
+
 /* Screen-reader-only text (mirrors the shared VisuallyHidden primitive). */
 .rl-vh {
   position: absolute;

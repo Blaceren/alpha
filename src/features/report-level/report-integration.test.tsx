@@ -17,6 +17,27 @@ import {
   withSummary,
   type ReportDraft,
 } from "@/features/report-level/model/report-draft";
+import {
+  emptyReportWorkspaceV2,
+  migrateV1Workspace,
+  withDraftV2,
+  withResubmitted,
+  withRevisionRequested,
+  withSubmittedV2,
+  withSummaryV2,
+  type ReportDraftV2,
+} from "@/features/report-level/model/report-workspace-v2";
+import {
+  PROVISIONAL_REVIEW_COMMENT,
+  PROVISIONAL_REVIEW_SECTIONS,
+} from "@/features/report-level/data/report-review-fixtures";
+
+/** Lift a v1 draft into the v2 shape — the same defaults migration applies. */
+const liftToV2 = (draft: ReportDraft): ReportDraftV2 => ({
+  ...draft,
+  review: null,
+  meaningfulRevision: draft.revision,
+});
 
 const definition = getReportDefinition(REPORT_LEVEL_NUMBER)!;
 const session = emptyLessonProgress();
@@ -35,14 +56,15 @@ function seed(draft: ReportDraft) {
   createReportStore().write(withDraft(emptyReportWorkspace(), draft));
 }
 
-const workspaceOf = (draft: ReportDraft) => withDraft(emptyReportWorkspace(), draft);
+/** Lift through the REAL migration — the same path a legacy draft takes. */
+const workspaceOf = (draft: ReportDraft) => migrateV1Workspace(withDraft(emptyReportWorkspace(), draft));
 
 /* ------------------------------------------------------------------ *
  * Lessons library — model
  * ------------------------------------------------------------------ */
 
 describe("lessons library — report status (model)", () => {
-  const build = (reports = emptyReportWorkspace(), marker = reportMarker) =>
+  const build = (reports = emptyReportWorkspaceV2(), marker = reportMarker) =>
     buildLessonsLibraryModel({ moduleParam: "module.01", marker, session, reports });
 
   const level3Row = (model: ReturnType<typeof build>) =>
@@ -107,7 +129,7 @@ describe("lessons library — report status (model)", () => {
   });
 
   it("leaves the canonical L18 continue step untouched", () => {
-    const model = build(emptyReportWorkspace(), canonicalMarker);
+    const model = build(emptyReportWorkspaceV2(), canonicalMarker);
     expect(model.continueStep?.levelNumber).toBe(18);
     expect(model.continueStep?.actionLabel).toBe("Продолжить урок");
     expect(model.continueStep?.reportStatusLabel).toBeNull();
@@ -221,6 +243,118 @@ describe("path — report status", () => {
 
     const detail = screen.getByRole("complementary", { name: /Уровень 3 — детали/ });
     expect(within(detail).queryByText(/Отчёт: На проверке/)).not.toBeInTheDocument();
+    expect(within(detail).getByText(/Состояние: пройден/)).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Revision cycle statuses (D3-C) — library and path
+ * ------------------------------------------------------------------ */
+
+describe("library and path — revision statuses (D3-C)", () => {
+  const revisionDraft = (): ReportDraftV2 =>
+    withRevisionRequested(
+      withSubmittedV2(liftToV2(readyDraft()), "2026-07-17T10:00:00.000Z"),
+      definition,
+      {
+        comment: PROVISIONAL_REVIEW_COMMENT,
+        sections: PROVISIONAL_REVIEW_SECTIONS,
+        receivedAt: "2026-07-18T09:00:00.000Z",
+      },
+    );
+
+  const seedV2 = (draft: ReportDraftV2) =>
+    createReportStore().write(withDraftV2(emptyReportWorkspaceV2(), draft));
+
+  const buildV2 = (draft: ReportDraftV2, marker = reportMarker) =>
+    buildLessonsLibraryModel({
+      moduleParam: "module.01",
+      marker,
+      session,
+      reports: withDraftV2(emptyReportWorkspaceV2(), draft),
+    });
+
+  const level3Of = (model: ReturnType<typeof buildV2>) =>
+    model.selected.levels.find((l) => l.number === 3)!;
+
+  it("library says «Нужна доработка» for an unchanged revision", () => {
+    const row = level3Of(buildV2(revisionDraft()));
+    expect(row.statusLabel).toBe("Нужна доработка");
+    expect(row.href).toBe("/lessons/level.003");
+    expect(row.actionLabel).toBe("Перейти к отчёту");
+  });
+
+  it("library says «Готов к повторной отправке» once a real change landed", () => {
+    const changed = withSummaryV2(revisionDraft(), "итог, связанный со всеми записями");
+    const row = level3Of(buildV2(changed));
+    expect(row.statusLabel).toBe("Готов к повторной отправке");
+    expect(row.actionLabel).toBe("Перейти к отчёту");
+  });
+
+  it("library says «На проверке» again after the resubmit", () => {
+    const resubmitted = withResubmitted(
+      withSummaryV2(revisionDraft(), "итог, связанный со всеми записями"),
+      "2026-07-19T09:00:00.000Z",
+    );
+    expect(level3Of(buildV2(resubmitted)).statusLabel).toBe("На проверке");
+  });
+
+  it("the continue step carries the revision status", () => {
+    const model = buildV2(revisionDraft());
+    expect(model.continueStep?.reportStatusLabel).toBe("Нужна доработка");
+    expect(model.continueStep?.href).toBe("/lessons/level.003");
+  });
+
+  it("a revision never advances the current step and never re-labels canonical L18", () => {
+    const model = buildV2(revisionDraft(), canonicalMarker);
+    expect(model.continueStep?.levelNumber).toBe(18);
+    expect(model.continueStep?.reportStatusLabel).toBeNull();
+    expect(level3Of(model).statusLabel).toBe("Завершён");
+  });
+
+  it("rendered library emits no scenario and no verdict in any href", () => {
+    seedV2(revisionDraft());
+    render(<LessonsLibraryWorkspace moduleParam="module.01" scenario="report" />);
+    for (const link of Array.from(document.querySelectorAll("a"))) {
+      const href = link.getAttribute("href") ?? "";
+      expect(href).not.toContain("scenario");
+      expect(href).not.toContain("verdict");
+    }
+    expect(screen.getAllByText("Нужна доработка").length).toBeGreaterThan(0);
+  });
+
+  it("path detail says «Отчёт: Нужна доработка» and keeps level 4 locked", async () => {
+    seedV2(revisionDraft());
+    const user = userEvent.setup();
+    render(<PathWorkspace scenario="report" />);
+    await user.click(screen.getByRole("button", { name: /Уровень 3/ }));
+
+    const detail = screen.getByRole("complementary", { name: /Уровень 3 — детали/ });
+    expect(within(detail).getByText("Отчёт: Нужна доработка")).toBeInTheDocument();
+
+    const outline = screen.getByRole("navigation", { name: /Структура пути/i });
+    expect(within(outline).getByText(/Уровень 4.*контрольная точка впереди/i)).toBeInTheDocument();
+  });
+
+  it("path detail says «Отчёт: Готов к повторной отправке» after a change", async () => {
+    seedV2(withSummaryV2(revisionDraft(), "итог, связанный со всеми записями"));
+    const user = userEvent.setup();
+    render(<PathWorkspace scenario="report" />);
+    await user.click(screen.getByRole("button", { name: /Уровень 3/ }));
+
+    const detail = screen.getByRole("complementary", { name: /Уровень 3 — детали/ });
+    expect(within(detail).getByText("Отчёт: Готов к повторной отправке")).toBeInTheDocument();
+  });
+
+  it("path canonical profile never shows the revision", async () => {
+    seedV2(revisionDraft());
+    const user = userEvent.setup();
+    render(<PathWorkspace scenario="active" />);
+    await user.click(screen.getByRole("button", { name: /Модуль 1\b/ }));
+    await user.click(screen.getByRole("button", { name: /Уровень 3/ }));
+
+    const detail = screen.getByRole("complementary", { name: /Уровень 3 — детали/ });
+    expect(within(detail).queryByText(/Нужна доработка/)).not.toBeInTheDocument();
     expect(within(detail).getByText(/Состояние: пройден/)).toBeInTheDocument();
   });
 });

@@ -15,6 +15,7 @@ import { LessonResolving } from "@/features/lesson/components/lesson-resolving";
 import { LessonSessionGate } from "@/features/lesson/components/lesson-session-gate";
 import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
 import { ReportWorkspace } from "@/features/report-level/components/report-workspace";
+import { resolveReportVerdictAdapter } from "@/features/report-level/model/report-review";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import "@/features/lesson/lesson.css";
 import "@/features/report-level/report-level.css";
@@ -46,10 +47,10 @@ export default async function LessonPage({
   searchParams,
 }: {
   params: Promise<{ levelCode: string }>;
-  searchParams: Promise<{ scenario?: string }>;
+  searchParams: Promise<{ scenario?: string; verdict?: string }>;
 }) {
   const { levelCode } = await params;
-  const { scenario: rawScenario } = await searchParams;
+  const { scenario: rawScenario, verdict: rawVerdict } = await searchParams;
 
   const levelNumber = parseLevelCode(levelCode);
   const scenario = resolveLessonScenario(rawScenario);
@@ -86,6 +87,11 @@ export default async function LessonPage({
         <ReportWorkspace
           definition={reportDefinition}
           scenario={resolvePathScenario(rawScenario)}
+          /* `?verdict=` is the D3-C DEVELOPMENT AND TEST verdict adapter
+             (DD-286), the `?scenario` precedent applied to the review: typed,
+             fail-closed (only `revision-requested` resolves; "approved" and
+             everything else → null), never produced by a user-facing link. */
+          verdictAdapter={resolveReportVerdictAdapter(rawVerdict)}
         />
       </AppShell>
     );

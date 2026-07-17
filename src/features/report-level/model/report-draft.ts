@@ -114,11 +114,21 @@ export function isEntryFilled(entry: ReportEntryDraft): boolean {
   return entry[REQUIRED_ENTRY_FIELD].trim().length > 0;
 }
 
-export function filledEntryCount(draft: ReportDraft): number {
+/**
+ * What the readiness rule actually reads: the content, not the lifecycle.
+ * Structural on purpose — the v2 draft (D3-C) satisfies it too, and readiness
+ * stays ONE rule across schema versions instead of two copies.
+ */
+export interface ReportContent {
+  entries: ReportEntryDraft[];
+  summary: string;
+}
+
+export function filledEntryCount(draft: ReportContent): number {
   return draft.entries.filter(isEntryFilled).length;
 }
 
-export function hasSummary(draft: ReportDraft): boolean {
+export function hasSummary(draft: ReportContent): boolean {
   return draft.summary.trim().length > 0;
 }
 
@@ -131,7 +141,7 @@ export function hasSummary(draft: ReportDraft): boolean {
  * NOT a promise of approval (DD-268, DD-272). It answers one question only:
  * «is there something to review?»
  */
-export function isReportReady(draft: ReportDraft): boolean {
+export function isReportReady(draft: ReportContent): boolean {
   return draft.entries.every(isEntryFilled) && hasSummary(draft);
 }
 

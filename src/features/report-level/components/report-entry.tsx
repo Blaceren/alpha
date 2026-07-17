@@ -1,10 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { REPORT_ENTRY_FIELDS } from "@/features/report-level/model/report";
 import { isEntryFilled, type ReportEntryDraft } from "@/features/report-level/model/report-draft";
 
 /**
- * One evidence entry — collapsed row and open working surface (Phase D3-B).
+ * One evidence entry — collapsed row and open working surface (Phase D3-B;
+ * attention marking added in D3-C).
  *
  * A collapsed row is deliberately NOT a card: no border, no radius, no fill, only
  * a hairline and a signal point. What distinguishes the rows is their STATE, not
@@ -12,6 +14,12 @@ import { isEntryFilled, type ReportEntryDraft } from "@/features/report-level/mo
  *
  * State is carried by geometry (filled / hollow point) AND by text — never by
  * colour alone (the DD-232 rule, applied here).
+ *
+ * D3-C attention marking: a FLAGGED entry says «требует внимания» in words —
+ * on the collapsed row in place of the generic fill word, and in the open
+ * header with its pass position. Ordinary entries stay exactly as in D3-B; they
+ * are never labelled «без пометок» (a repeated non-status would be noise) and
+ * never dimmed into unavailability.
  */
 
 function SignalPoint({ filled, open }: { filled: boolean; open: boolean }) {
@@ -33,10 +41,13 @@ function collapsedSummary(entry: ReportEntryDraft): string {
 export function ReportCollapsedRow({
   entry,
   panelId,
+  flagged = false,
   onOpen,
 }: {
   entry: ReportEntryDraft;
   panelId: string;
+  /** True when the review flagged a field of this entry (D3-C). */
+  flagged?: boolean;
   onOpen: () => void;
 }) {
   const filled = isEntryFilled(entry);
@@ -44,9 +55,11 @@ export function ReportCollapsedRow({
   // An explicit accessible name, because the visible row carries the same fact
   // three times over (point, status word, action word) for sighted scanning.
   // Reading all of it aloud would be noise, so the name states it once.
-  const label = filled
-    ? `Запись ${entry.ordinal}: заполнена — ${collapsedSummary(entry)}`
-    : `Запись ${entry.ordinal}: не заполнена`;
+  const label = flagged
+    ? `Запись ${entry.ordinal}: требует внимания — ${collapsedSummary(entry)}`
+    : filled
+      ? `Запись ${entry.ordinal}: заполнена — ${collapsedSummary(entry)}`
+      : `Запись ${entry.ordinal}: не заполнена`;
 
   return (
     <button
@@ -64,8 +77,8 @@ export function ReportCollapsedRow({
       <span className="rl-sum" aria-hidden="true">
         {collapsedSummary(entry)}
       </span>
-      <span className="rl-state" aria-hidden="true">
-        {filled ? "заполнена" : "не заполнена"}
+      <span className={`rl-state${flagged ? " is-attn" : ""}`} aria-hidden="true">
+        {flagged ? "требует внимания" : filled ? "заполнена" : "не заполнена"}
       </span>
       <span className="rl-act" aria-hidden="true">
         {filled ? "Развернуть" : "Открыть"}
@@ -78,17 +91,23 @@ export function ReportOpenEntry({
   entry,
   panelId,
   editable,
+  attentionLabel = null,
+  passHint = null,
   onChange,
 }: {
   entry: ReportEntryDraft;
   panelId: string;
   editable: boolean;
+  /** e.g. «требует внимания · доработка 1 из 2» — the flagged wording (D3-C). */
+  attentionLabel?: string | null;
+  /** The in-flow pass movement, e.g. «дальше — Итоговое наблюдение ↓» (D3-C). */
+  passHint?: ReactNode;
   onChange: (key: "when" | "decided" | "noticed", value: string) => void;
 }) {
   const filled = isEntryFilled(entry);
 
   return (
-    <div className="rl-open">
+    <div className={`rl-open${attentionLabel ? " is-attn" : ""}`}>
       <div className="rl-open-head">
         <SignalPoint filled={filled} open />
         <span className="rl-n mono" aria-hidden="true">
@@ -97,7 +116,11 @@ export function ReportOpenEntry({
         <h3 className="rl-open-t" id={`${panelId}-title`}>
           Запись {entry.ordinal}
         </h3>
-        <span className="rl-state">{filled ? "заполнена" : "не заполнена"}</span>
+        {attentionLabel ? (
+          <span className="rl-attn">{attentionLabel}</span>
+        ) : (
+          <span className="rl-state">{filled ? "заполнена" : "не заполнена"}</span>
+        )}
         <span className="rl-proto">структура полей — prototype-only</span>
       </div>
 
@@ -156,6 +179,8 @@ export function ReportOpenEntry({
           );
         })}
       </div>
+
+      {passHint}
     </div>
   );
 }

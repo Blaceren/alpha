@@ -1,12 +1,18 @@
 /**
- * Report storage (Phase D3-B) — the only module in this feature that touches Web
- * Storage. Rules live in `report-draft.ts`; this is the port.
+ * Report storage (Phase D3-B, v2 in D3-C) — the only module in this feature that
+ * touches Web Storage. Rules live in `report-workspace-v2.ts`; this is the port.
  *
  * `localStorage`, deliberately NOT `sessionStorage` (DD-266). This is a
  * considered divergence from the lesson store (DD-255), and the reason is the
  * nature of the data: losing "watched 50%" is an inconvenience — the video can be
  * rewatched — whereas losing a report draft loses the user's WORK. Autosave on
  * top of sessionStorage would be a promise the storage does not keep.
+ *
+ * D3-C moves the schema to `ata.report-workspace.v2` (DD-285). Reads MIGRATE:
+ * a present v2 value is authoritative (corrupt v2 fails closed and never falls
+ * back to v1); only when no v2 value exists is the v1 key read through the
+ * untouched v1 parser and lifted into v2 shape. Writes go to the v2 key only —
+ * the v1 key is never deleted and never written again.
  *
  * It remains browser-local and the UI says exactly that. Nothing is sent
  * anywhere; no mentor sees it; there is no server.
@@ -18,18 +24,20 @@
  */
 
 import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
+import { REPORT_STORAGE_KEY } from "@/features/report-level/model/report-draft";
 import {
-  REPORT_STORAGE_KEY,
-  emptyReportWorkspace,
-  parseReportWorkspace,
-  serializeReportWorkspace,
-  type ReportWorkspaceState,
-} from "@/features/report-level/model/report-draft";
+  REPORT_STORAGE_KEY_V2,
+  emptyReportWorkspaceV2,
+  readReportWorkspaceV2,
+  serializeReportWorkspaceV2,
+  type ReportWorkspaceStateV2,
+  type ReportWorkspaceWritable,
+} from "@/features/report-level/model/report-workspace-v2";
 
 export interface ReportStore {
-  read(): ReportWorkspaceState;
+  read(): ReportWorkspaceStateV2;
   /** True when the write actually landed. False means the UI must say so. */
-  write(state: ReportWorkspaceState): boolean;
+  write(state: ReportWorkspaceWritable): boolean;
   clear(): void;
   /** False when this environment has no usable storage at all. */
   readonly durable: boolean;
@@ -44,19 +52,25 @@ export class BrowserLocalReportStore implements ReportStore {
     this.storage = storage;
   }
 
-  read(): ReportWorkspaceState {
-    let raw: string | null;
+  read(): ReportWorkspaceStateV2 {
+    let rawV2: string | null;
+    let rawV1: string | null;
     try {
-      raw = this.storage.getItem(REPORT_STORAGE_KEY);
+      rawV2 = this.storage.getItem(REPORT_STORAGE_KEY_V2);
+      // The legacy key is consulted ONLY when v2 is absent — the migration
+      // helper owns that rule, this port just hands both values over.
+      rawV1 = rawV2 === null ? this.storage.getItem(REPORT_STORAGE_KEY) : null;
     } catch {
-      return emptyReportWorkspace();
+      return emptyReportWorkspaceV2();
     }
-    return parseReportWorkspace(raw, getReportDefinition);
+    return readReportWorkspaceV2(rawV2, rawV1, getReportDefinition);
   }
 
-  write(state: ReportWorkspaceState): boolean {
+  write(state: ReportWorkspaceWritable): boolean {
     try {
-      this.storage.setItem(REPORT_STORAGE_KEY, serializeReportWorkspace(state));
+      // v2 only. The v1 key is deliberately left in place (DD-285): migration is
+      // one-way and non-destructive, and once a v2 value exists it wins forever.
+      this.storage.setItem(REPORT_STORAGE_KEY_V2, serializeReportWorkspaceV2(state));
       return true;
     } catch {
       // Quota exceeded, blocked storage, private mode. The draft simply does not
@@ -67,7 +81,9 @@ export class BrowserLocalReportStore implements ReportStore {
 
   clear(): void {
     try {
-      this.storage.removeItem(REPORT_STORAGE_KEY);
+      // Clears only what this store OWNS. The v1 key survives even a clear:
+      // deleting legacy data is not this feature's call to make (DD-285).
+      this.storage.removeItem(REPORT_STORAGE_KEY_V2);
     } catch {
       /* nothing to do */
     }
@@ -81,30 +97,22 @@ export class BrowserLocalReportStore implements ReportStore {
  */
 export class MemoryReportStore implements ReportStore {
   readonly durable = false;
-  private state: ReportWorkspaceState = emptyReportWorkspace();
+  private raw: string | null = null;
 
-  read(): ReportWorkspaceState {
-    return this.state;
+  read(): ReportWorkspaceStateV2 {
+    return readReportWorkspaceV2(this.raw, null, getReportDefinition);
   }
 
-  write(state: ReportWorkspaceState): boolean {
-    this.state = state;
+  write(state: ReportWorkspaceWritable): boolean {
+    this.raw = serializeReportWorkspaceV2(state);
     return true;
   }
 
   clear(): void {
-    this.state = emptyReportWorkspace();
+    this.raw = null;
   }
 }
 
-/**
- * The store for the current environment.
- *
- * On the server there is no localStorage, so this returns an in-memory store:
- * `localStorage` is never read during SSR, and the server therefore always
- * renders the empty-draft default. The client re-resolves after hydration, so
- * there is no mismatch.
- */
 /**
  * Whether a value actually implements the Storage API we rely on.
  *
@@ -124,6 +132,14 @@ function isUsableStorage(value: unknown): value is Storage {
   );
 }
 
+/**
+ * The store for the current environment.
+ *
+ * On the server there is no localStorage, so this returns an in-memory store:
+ * `localStorage` is never read during SSR, and the server therefore always
+ * renders the empty-draft default. The client re-resolves after hydration, so
+ * there is no mismatch.
+ */
 export function createReportStore(): ReportStore {
   if (typeof window === "undefined") return new MemoryReportStore();
   try {

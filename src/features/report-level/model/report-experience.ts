@@ -1,7 +1,7 @@
 /**
- * Report experience derivation (Phase D3-B). The single owner of report business
- * logic — components read derived state from here and never re-decide a rule
- * (the DD-256 / DD-262 principle, applied to the report).
+ * Report experience derivation (Phase D3-B, revision cycle in D3-C). The single
+ * owner of report business logic — components read derived state from here and
+ * never re-decide a rule (the DD-256 / DD-262 principle, applied to the report).
  *
  * Composition: the report definition + the browser-local draft + the shared
  * sequential marker + this session's completions → one derived ReportExperience.
@@ -12,7 +12,8 @@
  * claiming otherwise would be a lie the user could see through.
  *
  * Raw enum values are never rendered; every user-facing string comes from this
- * module's label helpers.
+ * module's label helpers. Raw section ids never render either — the review
+ * targets carry the human labels (`report-review.ts`).
  */
 
 import { getLevel } from "@/data/curriculum/fixture";
@@ -24,35 +25,55 @@ import {
   filledEntryCount,
   hasSummary,
   isReportReady,
-  type ReportDraft,
 } from "@/features/report-level/model/report-draft";
+import {
+  canResubmit,
+  hasChangeSinceReview,
+  type ReportDraftV2,
+} from "@/features/report-level/model/report-workspace-v2";
+import {
+  reviewTargets,
+  type ReportReview,
+  type ReviewTarget,
+} from "@/features/report-level/model/report-review";
 
 /**
- * Lifecycle as the UI sees it. `ready` is computed, not persisted: it is a
- * statement about the entries, so deriving it keeps it from ever disagreeing
- * with them (see `report-draft.ts`).
+ * Lifecycle as the UI sees it. `ready`, `revision-requested`-with-changes
+ * (`ready-to-resubmit`) are computed, not persisted: they are statements about
+ * the entries, so deriving them keeps them from ever disagreeing with the draft
+ * (see `report-workspace-v2.ts`).
+ *
+ * `approved` / `rejected` have no member here — they do not exist in D3-C
+ * (DD-287) and cannot be rendered even by accident.
  */
-export type ReportLifecycle = "draft" | "ready" | "pending-review";
+export type ReportLifecycle =
+  | "draft"
+  | "ready"
+  | "pending-review"
+  | "revision-requested"
+  | "ready-to-resubmit";
 
 /**
  * How the workspace behaves.
  *
- *  - `editing` — level 3 is the user's current step: the report is live work.
- *  - `pending` — submitted in THIS browser: read-only, awaiting a review that
+ *  - `editing`  — level 3 is the user's current step: the report is live work.
+ *  - `revision` — the review returned the report (D3-C): the SAME work is
+ *    editable again, with the reviewer's comment as the working order.
+ *  - `pending`  — submitted in THIS browser: read-only, awaiting a review that
  *    this prototype does not perform.
  *  - `archive`  — the sequence already carried the user past level 3 (the
  *    canonical profile). The report is not live work; whatever this browser
  *    holds is shown read-only, and nothing is claimed about a report the user
  *    may have filed before this workspace existed.
  */
-export type ReportMode = "editing" | "pending" | "archive";
+export type ReportMode = "editing" | "revision" | "pending" | "archive";
 
 export interface ReportExperience {
   definition: ReportDefinition;
-  draft: ReportDraft;
+  draft: ReportDraftV2;
   lifecycle: ReportLifecycle;
   mode: ReportMode;
-  /** True only in `editing` — the one place edits are accepted. */
+  /** True in `editing` and `revision` — the places edits are accepted. */
   editable: boolean;
   filledCount: number;
   totalCount: number;
@@ -61,7 +82,7 @@ export interface ReportExperience {
   readinessLabel: string;
   /** What is still missing, or null once ready. */
   remainingLabel: string | null;
-  /** e.g. «Можно отправить на проверку», shown only when ready. */
+  /** e.g. «Можно отправить на проверку», shown only when ready in `editing`. */
   readyLabel: string | null;
   canSubmit: boolean;
   /** RU status chip text. */
@@ -72,6 +93,19 @@ export interface ReportExperience {
   nextLevelLocked: boolean;
   /** The blocked-progression sentence, or null when the next level is NOT locked. */
   blockedNote: string | null;
+
+  /* ---------------- revision cycle (D3-C) ---------------- */
+
+  /** The verdict of the current iteration, or null before any verdict. */
+  review: ReportReview | null;
+  /** Flagged sections resolved to human-labelled targets, in ledger order. */
+  reviewTargets: ReviewTarget[];
+  /** True when a real content change landed after the verdict. */
+  changedSinceReview: boolean;
+  /** The resubmit rule: readiness ∧ change after verdict, in `revision` mode. */
+  canResubmit: boolean;
+  /** The calm line above the resubmit CTA — one truth at a time. */
+  revisionStateLabel: string | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -104,10 +138,14 @@ export function reportStatusLabel(lifecycle: ReportLifecycle): string {
       return "Готов к отправке";
     case "pending-review":
       return "На проверке";
+    case "revision-requested":
+      return "Нужна доработка";
+    case "ready-to-resubmit":
+      return "Готов к повторной отправке";
   }
 }
 
-function buildRemainingLabel(draft: ReportDraft, total: number): string | null {
+function buildRemainingLabel(draft: ReportDraftV2, total: number): string | null {
   const missingEntries = total - filledEntryCount(draft);
   const missingSummary = !hasSummary(draft);
 
@@ -127,7 +165,13 @@ function buildRemainingLabel(draft: ReportDraft, total: number): string | null {
  * Derivation
  * ------------------------------------------------------------------ */
 
-export function deriveReportLifecycle(draft: ReportDraft): ReportLifecycle {
+export function deriveReportLifecycle(draft: ReportDraftV2): ReportLifecycle {
+  if (draft.status === "revision-requested") {
+    // The stored status is the same; what changed is a computed fact about the
+    // draft. «Нужна доработка» and «Готов к повторной отправке» are two readings
+    // of one record, never two records.
+    return canResubmit(draft) ? "ready-to-resubmit" : "revision-requested";
+  }
   if (draft.status === "pending-review") return "pending-review";
   return isReportReady(draft) ? "ready" : "draft";
 }
@@ -139,7 +183,7 @@ export function deriveReportExperience({
   session,
 }: {
   definition: ReportDefinition;
-  draft: ReportDraft;
+  draft: ReportDraftV2;
   marker: PathProgress;
   session: LessonSessionProgress;
 }): ReportExperience {
@@ -147,19 +191,24 @@ export function deriveReportExperience({
   const lifecycle = deriveReportLifecycle(draft);
   const availability = resolveRouteAvailability(levelNumber, marker, session);
 
+  const isRevisionLifecycle =
+    lifecycle === "revision-requested" || lifecycle === "ready-to-resubmit";
+
   // The canonical sequence wins over the browser-local record: if it has already
   // carried the user past this level, the report is history, whatever the local
-  // marker says. Letting a stored `pending-review` override that would let a
-  // draft contradict progression the user already earned — the same rule the
-  // library and the path apply to a report status (DD-271).
+  // marker says. Letting a stored `pending-review` (or a verdict) override that
+  // would let a draft contradict progression the user already earned — the same
+  // rule the library and the path apply to a report status (DD-271).
   const mode: ReportMode =
     availability === "completed"
       ? "archive"
       : lifecycle === "pending-review"
         ? "pending"
-        : availability === "available"
-          ? "editing"
-          : "archive";
+        : availability !== "available"
+          ? "archive"
+          : isRevisionLifecycle
+            ? "revision"
+            : "editing";
 
   const total = definition.entryCount;
   const filled = filledEntryCount(draft);
@@ -180,23 +229,42 @@ export function deriveReportExperience({
       ? `Уровень ${nextLevel.number} «${nextLevel.title}» откроется после одобрения отчёта.`
       : null;
 
+  const changed = hasChangeSinceReview(draft);
+  const resubmitAllowed = mode === "revision" && canResubmit(draft);
+
+  // One truth at a time above the CTA: what stands between the user and the
+  // resubmit — nothing, a missing change, or missing content. Calm words, no
+  // «ошибка», no percentages (DD-274 applied to revision).
+  const revisionStateLabel =
+    mode !== "revision"
+      ? null
+      : resubmitAllowed
+        ? "Есть изменения после вердикта — можно отправить на проверку повторно."
+        : "Внесите изменения после комментария проверки.";
+
   return {
     definition,
     draft,
     lifecycle,
     mode,
-    editable: mode === "editing",
+    editable: mode === "editing" || mode === "revision",
     filledCount: filled,
     totalCount: total,
     summaryFilled: hasSummary(draft),
     readinessLabel: `Заполнено ${filled} из ${total} ${entriesWord(total)}`,
     remainingLabel: buildRemainingLabel(draft, total),
-    readyLabel: isReportReady(draft) ? "Можно отправить на проверку" : null,
+    readyLabel:
+      mode === "editing" && isReportReady(draft) ? "Можно отправить на проверку" : null,
     canSubmit: mode === "editing" && isReportReady(draft),
     statusLabel: reportStatusLabel(lifecycle),
     nextLevelNumber,
     nextLevelTitle: nextLevel?.title ?? null,
     nextLevelLocked,
     blockedNote,
+    review: draft.review,
+    reviewTargets: reviewTargets(definition, draft.review),
+    changedSinceReview: changed,
+    canResubmit: resubmitAllowed,
+    revisionStateLabel,
   };
 }

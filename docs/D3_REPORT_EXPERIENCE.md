@@ -125,6 +125,11 @@ profit/loss, entry price, exit price, volume, leverage, win/loss, финансо
 
 **Главная** визуально не переделана.
 
+> **D3-C-B реализовал цикл доработки** поверх этого экрана: `revision-requested` («Нужна
+> доработка») → правка того же отчёта → повторная отправка → `pending-review`. Хранилище переехало
+> на `ata.report-workspace.v2` с односторонней миграцией. Детали — `D3_REVISION_EXPERIENCE.md`;
+> границы ниже описывают состояние на момент D3-B.
+
 ## 8. Границы
 
 Не реализованы: `approved`, `rejected`, `revision requested`, `resubmit`, mentor comments, section

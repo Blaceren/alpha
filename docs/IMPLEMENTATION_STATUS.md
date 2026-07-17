@@ -605,3 +605,53 @@ dev/test provisional, resubmit возвращает в «На проверке»
 5 minor зафиксированы. Historical evidence `design-memory/screenshots/d3-report/**` не изменялся.
 
 **Победитель не выбран — выбор за пользователем. D3-C-B не начат.**
+
+
+## D3-C-B — Report Revision Pass (завершена)
+
+Production-реализация выбранного направления **B «Revision Pass»** (DD-289): feedback — порядок
+работы. Из A взяты ровно два элемента (полоса «Комментарий проверки» + человекочитаемые
+ссылки-переходы); margin rail A и Review Contract C отклонены. Blue — review, green — только
+сохранение/готовность/действие; красного нет; обычные записи спокойны и доступны, без «без пометок».
+
+**Storage v2 (DD-290):** `ata.report-workspace.v2` — status-союз + `revision-requested`, объект
+`review {comment, sections, receivedAt, atRevision}`, счётчик `meaningfulRevision` (whitespace-правка
+сохраняется, изменением не считается). Односторонняя миграция при чтении: валидный v2 авторитетен,
+битый v2 fail closed без отката к v1, v1 никогда не удаляется/не перезаписывается; битый review
+стоит вердикта, не работы. Raw section ID не рендерятся — только «Запись 03 · Что заметил после
+сделки» / «Итоговое наблюдение».
+
+**Verdict adapter (DD-291):** `?verdict=revision-requested` только вместе с `?scenario=report`,
+fail closed (approved/rejected невозможны по типу), один вердикт на итерацию, пишет только
+report-workspace; фиксированный provisional feedback с пометкой `dev/test · provisional`.
+
+**Revision Pass:** чип «Нужна доработка» (полая точка), kept-строка, browser-local правда;
+первая отмеченная секция открыта; pass словами «Доработка 1 из 2 · дальше — Итоговое наблюдение» →
+«Доработка 2 из 2 · просмотрены — работа снова целиком ваша»; отмеченные места — словесное
+состояние + холодная кромка. **Resubmit (DD-292):** готовность ∧ изменение после `review.atRevision`
+(любое поле — пометки не валидатор) → диалог «Отправить отчёт на проверку повторно?» («Продолжить
+доработку» / «Отправить повторно», focus trap/Escape/возврат фокуса) → ровно `pending-review`,
+review сохранён как «Комментарий последней проверки» (тихий контекст), «Исправления отмечены как
+отправленные только в этом браузере.» Library: «Нужна доработка» / «Готов к повторной отправке»;
+Path: «Отчёт: …»; CTA всегда чистый `/lessons/level.003`. Канонический Артём (L18) не понижен;
+`ata.lesson-progress.v1` не пишется; уровень 4 закрыт только настоящим резолвером.
+
+**Проверки:** unit/component **518** (441 прежних сохранены + 77); E2E gate **146** в 8 файлах
+(120 прежних сохранены + 26); полный discovery **224** в 18 файлах; lint/typecheck/build чисто;
+`npm audit` — 2 moderate, pre-existing, fix не запускался; horizontal overflow 0px; зазоры
+CTA/полей над bottom nav ≥12px реальными bounding boxes (DD-281) на 390×844, 320×720, 720×450;
+console errors и hydration warnings — 0.
+
+**Visual QA:** first-pass 14 кадров → ревью глазами: 0 critical, 0 major, 5 minor
+(зафиксированы) → final 14 кадров (`design-memory/screenshots/d3-revision/{first-pass,final}/`,
+`docs/visual-reviews/D3_C_REVISION_IMPLEMENTATION.md`). Historical evidence не перезаписан.
+
+**Границы:** approved / автоодобрение / mentor thread / identity / avatar / countdown /
+attachments / version history / section threads / rubric / score / practical / уровни 14, 19 /
+tools / backend / Pocket / XP — не реализованы. Curriculum fixture, thresholds, lesson progression
+schema, Home и D2B-урок не изменялись. Зависимости не менялись. **D3-D не начат.**
+
+**Документы:** `D3_REVISION_EXPERIENCE.md`, обновлены `D3_REVISION_SCOPE.md`,
+`D3_REVISION_ART_DIRECTION.md` (баннер выбора), `D3_REPORT_EXPERIENCE.md`,
+`REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`, `STATE_MATRIX.md`, `ROUTE_MAP.md`, README;
+DD-289…DD-292.
