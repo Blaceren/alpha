@@ -45,23 +45,35 @@ const SUMMARY =
   "Записанное заранее условие — единственное, что отличало обдуманные входы от случайных.";
 
 /**
- * Open one evidence entry, whichever viewport we are on.
+ * Entry navigation, whichever viewport we are on.
  *
  * Desktop exposes a collapsed row per entry; mobile hides them (they leave the
- * a11y tree entirely) and navigates with «Следующая запись». A helper that only
- * knew about rows silently filled entry 1 five times on mobile and produced
- * evidence that claimed more was filled than actually was.
+ * a11y tree entirely) and navigates with «Предыдущая/Следующая запись». A helper
+ * that only knew about rows silently filled entry 1 five times on mobile and
+ * produced evidence claiming more was filled than actually was.
  */
+
+/** Which entry is currently open, read from the page rather than assumed. */
+async function currentOpenOrdinal(page: Page): Promise<number | null> {
+  for (let i = 1; i <= 5; i += 1) {
+    if ((await page.getByRole("heading", { level: 3, name: `Запись ${i}` }).count()) > 0) return i;
+  }
+  return null;
+}
+
 async function openEntry(page: Page, ordinal: number) {
   const row = openRow(page, ordinal);
   if ((await row.count()) > 0) {
     await row.click();
     return;
   }
-  // Mobile: step forward until the wanted entry is the open one.
-  const heading = page.getByRole("heading", { level: 3, name: `Запись ${ordinal}` });
-  for (let guard = 0; guard < 6 && (await heading.count()) === 0; guard += 1) {
-    await page.getByRole("button", { name: /Следующая запись/ }).click();
+  // Mobile: step TOWARDS the wanted entry. A forward-only walk cannot come back
+  // from entry 2 to entry 1, and silently ran into the disabled end button.
+  for (let guard = 0; guard < 8; guard += 1) {
+    const current = await currentOpenOrdinal(page);
+    if (current === null || current === ordinal) return;
+    const label = current < ordinal ? /Следующая запись/ : /Предыдущая запись/;
+    await page.getByRole("button", { name: label }).click();
   }
 }
 

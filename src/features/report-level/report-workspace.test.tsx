@@ -371,6 +371,62 @@ describe("report workspace — pending review", () => {
     expect(body).not.toContain("Принят");
     expect(body).not.toContain("Отклонён");
   });
+
+  /* ---- D3-B.1: a read-only blank is not an input ---- */
+
+  it("states an unfilled optional field calmly instead of showing an empty box", () => {
+    renderPending();
+    // The ready fixture fills only the required field, so «Когда» and «Что решил»
+    // of the open entry are blank.
+    expect(screen.getAllByText("Не заполнено").length).toBeGreaterThan(0);
+  });
+
+  it("does not render an empty optional field as a textbox", () => {
+    renderPending();
+    // A box that cannot be typed into invites the user to try; there is nothing
+    // to focus here, so there is no control here.
+    expect(screen.queryByRole("textbox", { name: /Когда/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Что решил/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps a filled optional field readable", () => {
+    let draft = readyDraft();
+    draft = withEntryField(draft, 1, "when", "среда, вторая половина дня");
+    seed(withSubmitted(draft, "2026-07-17T10:00:00.000Z"));
+    renderReport();
+
+    expect(screen.getByDisplayValue("среда, вторая половина дня")).toBeInTheDocument();
+    // The filled one stays a real (read-only) control — only blanks collapse.
+    expect(screen.getByRole("textbox", { name: /Когда/ })).toHaveAttribute("readonly");
+  });
+
+  it("does not present the blank as an error", () => {
+    renderPending();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const blank = screen.getAllByText("Не заполнено")[0]!;
+    // Muted, not red: skipping optional context was never a mistake.
+    expect(blank.className).toContain("rl-empty");
+  });
+});
+
+describe("report workspace — optional fields stay editable while the work is live", () => {
+  it("keeps a draft optional field an input", () => {
+    renderReport();
+    const when = screen.getByLabelText(/Когда/);
+    expect(when.tagName).toBe("INPUT");
+    expect(when).not.toHaveAttribute("readonly");
+    expect(screen.queryByText("Не заполнено")).not.toBeInTheDocument();
+  });
+
+  it("keeps a ready optional field an input", () => {
+    seed(readyDraft());
+    renderReport();
+    expect(screen.getByRole("button", { name: "Отправить на проверку" })).toBeEnabled();
+    const when = screen.getByLabelText(/Когда/);
+    expect(when.tagName).toBe("INPUT");
+    expect(when).not.toHaveAttribute("readonly");
+    expect(screen.queryByText("Не заполнено")).not.toBeInTheDocument();
+  });
 });
 
 describe("report workspace — the canonical profile is not polluted", () => {

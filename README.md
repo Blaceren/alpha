@@ -54,8 +54,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт), 116 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (175) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт), 120 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (184) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в

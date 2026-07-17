@@ -9,8 +9,15 @@
  */
 
 .rl-page {
+  /* Bottom-nav compensation is deliberately NOT re-added here.
+     home.css defines it ONCE on `.home-main`, from the canonical
+     `--mobile-bottom-nav-height` token and including
+     env(safe-area-inset-bottom) — and `.home-main` wraps every (app) page.
+     This page used to add a second copy of its own, which (a) stacked 84px on
+     top of 84px and left a 108px dead pit under the last control, and (b) got
+     the formula wrong anyway by omitting the safe-area inset. One owner, one
+     formula. */
   padding: 0 clamp(16px, 4vw, 28px);
-  padding-bottom: calc(var(--mobile-bottom-nav-height) + 24px);
   /* The ledger has a measure: at full width a row summary drifts a screen away
      from its own action, and the open entry reads as a wide form. */
   max-width: 1100px;
@@ -258,8 +265,19 @@
 }
 .rl-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .rl-f.is-long { grid-column: 1 / -1; }
-.rl-f label { font-size: 11.5px; color: var(--text-muted); }
+.rl-f label,
+.rl-f-k { font-size: 11.5px; color: var(--text-muted); margin: 0; }
 .rl-opt { color: var(--route-locked); }
+
+/* Absence of optional context, stated calmly. No frame — there is nothing to
+   type into; no red — skipping it was never an error. */
+.rl-empty {
+  font-size: 14px;
+  color: var(--route-locked);
+  margin: 0;
+  padding: 9px 0;
+  line-height: 1.4;
+}
 
 .rl-in,
 .rl-ta,
@@ -563,7 +581,14 @@
   .rl-steps button:disabled { color: var(--route-locked); cursor: default; }
 
   .rl-before { max-width: none; }
+
   .rl-end { align-items: stretch; flex-direction: column; }
+  /* `flex: 1 1 280px` on .rl-end-txt is a WIDTH hint for the desktop ROW layout.
+     Here the container is a COLUMN, so flex-basis resolves against the main axis
+     — height — and silently reserved 280px for 79px of text. The result was a
+     201px hole between the explanation and its own CTA, which read as the button
+     having been abandoned at the bottom of the page. Measured, not guessed. */
+  .rl-end-txt { flex: 0 0 auto; }
   .rl-btn { width: 100%; }
 }
 

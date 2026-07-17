@@ -105,6 +105,23 @@ export function ReportOpenEntry({
         {REPORT_ENTRY_FIELDS.map((field) => {
           const fieldId = `${panelId}-${field.key}`;
           const value = entry[field.key];
+
+          /**
+           * A read-only optional field the user left blank is NOT an input.
+           * Rendering an empty bordered box that cannot be typed into invites the
+           * user to try, and a control that refuses input is worse than no
+           * control. It states the absence calmly instead — muted, never red:
+           * skipping optional context is not an error.
+           */
+          if (!editable && !field.required && value.trim().length === 0) {
+            return (
+              <div className={`rl-f${field.multiline ? " is-long" : ""}`} key={field.key}>
+                <p className="rl-f-k">{field.label}</p>
+                <p className="rl-empty">Не заполнено</p>
+              </div>
+            );
+          }
+
           return (
             <div
               className={`rl-f${field.multiline ? " is-long" : ""}`}

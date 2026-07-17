@@ -1,4 +1,4 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { test, expect, type Page, type BrowserContext, type Locator } from "@playwright/test";
 
 /**
  * D3-B — the report level (/lessons/level.003) behavioral suite.
@@ -48,23 +48,35 @@ const summaryField = (page: Page) => page.getByRole("textbox", { name: "Итог
 const submitButton = (page: Page) => page.getByRole("button", { name: "Отправить на проверку" });
 
 /**
- * Open one evidence entry, whichever viewport we are on.
+ * Entry navigation, whichever viewport we are on.
  *
  * Desktop exposes a collapsed row per entry; mobile hides them (they leave the
- * a11y tree entirely) and navigates with «Следующая запись». A helper that only
- * knew about rows silently filled entry 1 five times on mobile and produced
- * evidence that claimed more was filled than actually was.
+ * a11y tree entirely) and navigates with «Предыдущая/Следующая запись». A helper
+ * that only knew about rows silently filled entry 1 five times on mobile and
+ * produced evidence claiming more was filled than actually was.
  */
+
+/** Which entry is currently open, read from the page rather than assumed. */
+async function currentOpenOrdinal(page: Page): Promise<number | null> {
+  for (let i = 1; i <= 5; i += 1) {
+    if ((await page.getByRole("heading", { level: 3, name: `Запись ${i}` }).count()) > 0) return i;
+  }
+  return null;
+}
+
 async function openEntry(page: Page, ordinal: number) {
   const row = openRow(page, ordinal);
   if ((await row.count()) > 0) {
     await row.click();
     return;
   }
-  // Mobile: step forward until the wanted entry is the open one.
-  const heading = page.getByRole("heading", { level: 3, name: `Запись ${ordinal}` });
-  for (let guard = 0; guard < 6 && (await heading.count()) === 0; guard += 1) {
-    await page.getByRole("button", { name: /Следующая запись/ }).click();
+  // Mobile: step TOWARDS the wanted entry. A forward-only walk cannot come back
+  // from entry 2 to entry 1, and silently ran into the disabled end button.
+  for (let guard = 0; guard < 8; guard += 1) {
+    const current = await currentOpenOrdinal(page);
+    if (current === null || current === ordinal) return;
+    const label = current < ordinal ? /Следующая запись/ : /Предыдущая запись/;
+    await page.getByRole("button", { name: label }).click();
   }
 }
 
@@ -92,6 +104,36 @@ async function assertNoHorizontalOverflow(page: Page) {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+}
+
+/** The minimum breathing room a control must be able to claim above the bar. */
+const NAV_CLEARANCE_PX = 12;
+
+/**
+ * Assert a control can be scrolled ENTIRELY above the fixed bottom navigation.
+ *
+ * Measured from real bounding boxes, not from the presence of a `padding-bottom`
+ * rule: D3-B had the padding and still buried its CTA, because a `flex-basis`
+ * meant for the desktop row layout reserved 280px of HEIGHT in the mobile column
+ * one. Only geometry tells the truth here.
+ */
+async function assertClearsBottomNav(page: Page, target: Locator, label: string) {
+  await target.scrollIntoViewIfNeeded();
+  // Push to the very end of the document: "can it clear the bar" means at the
+  // furthest the page can actually scroll, not wherever it happens to rest.
+  await page.evaluate(() => window.scrollBy(0, 600));
+  await page.waitForTimeout(120);
+
+  const box = await target.boundingBox();
+  const nav = await page.locator(".bottomnav").boundingBox();
+  expect(box, `${label}: no bounding box`).not.toBeNull();
+  expect(nav, "bottom navigation missing").not.toBeNull();
+
+  const gap = nav!.y - (box!.y + box!.height);
+  expect(
+    gap,
+    `${label} must clear the bottom navigation by ≥${NAV_CLEARANCE_PX}px, got ${Math.round(gap)}px`,
+  ).toBeGreaterThanOrEqual(NAV_CLEARANCE_PX);
 }
 
 /* ------------------------------------------------------------------ *
@@ -598,6 +640,133 @@ test.describe("report level — responsive", () => {
     await page.setViewportSize(DESKTOP);
     await page.goto(REPORT);
     await assertNoHorizontalOverflow(page);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * D3-B.1 — mobile safe area: every control must clear the fixed bar
+ * ------------------------------------------------------------------ */
+
+test.describe("report level — bottom navigation never traps a control", () => {
+  const summaryOf = (page: Page) => page.getByRole("textbox", { name: "Итоговое наблюдение" });
+
+  test("390×844 — draft, ready and pending all clear the bar", async ({ page }) => {
+    await page.setViewportSize(MOBILE);
+    await page.goto(REPORT);
+
+    // --- partial draft ---
+    await fillEntry(page, 1, "первое наблюдение");
+    await fillEntry(page, 2, "второе наблюдение");
+    await assertClearsBottomNav(page, noticedField(page), "active textarea");
+    await assertClearsBottomNav(
+      page,
+      page.getByRole("button", { name: /Следующая запись/ }),
+      "next-entry button",
+    );
+    await assertClearsBottomNav(page, summaryOf(page), "итоговое наблюдение");
+    await assertClearsBottomNav(page, page.locator(".rl-before"), "блок «Перед отправкой»");
+    await assertClearsBottomNav(page, submitButton(page), "submit (draft)");
+
+    // --- ready ---
+    await makeReady(page);
+    await assertClearsBottomNav(page, submitButton(page), "submit (ready)");
+
+    // --- pending ---
+    await submitButton(page).click();
+    await page.getByRole("button", { name: "Отметить как отправленный" }).click();
+    await assertClearsBottomNav(
+      page,
+      page.getByRole("link", { name: /К списку уроков/ }),
+      "pending action «К списку уроков»",
+    );
+    await assertClearsBottomNav(
+      page,
+      page.getByRole("link", { name: /Посмотреть Путь/ }),
+      "pending action «Посмотреть Путь»",
+    );
+
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test("320×720 — the narrowest supported width keeps every control reachable", async ({
+    page,
+  }) => {
+    await page.setViewportSize(MOBILE_320);
+    await page.goto(REPORT);
+
+    await fillEntry(page, 1, "первое наблюдение");
+    await assertClearsBottomNav(page, noticedField(page), "active textarea");
+
+    // Entry navigation is the ONLY way to reach entries 2–5 at this width.
+    const prev = page.getByRole("button", { name: /Предыдущая запись/ });
+    const next = page.getByRole("button", { name: /Следующая запись/ });
+    await assertClearsBottomNav(page, next, "next-entry button");
+    await next.click();
+    await expect(page.getByRole("heading", { level: 3, name: "Запись 2" })).toBeVisible();
+    await assertClearsBottomNav(page, prev, "prev-entry button");
+    await prev.click();
+    await expect(page.getByRole("heading", { level: 3, name: "Запись 1" })).toBeVisible();
+
+    await assertClearsBottomNav(page, summaryOf(page), "итоговое наблюдение");
+    await assertClearsBottomNav(page, submitButton(page), "submit");
+
+    await makeReady(page);
+    await submitButton(page).click();
+    await page.getByRole("button", { name: "Отметить как отправленный" }).click();
+    await assertClearsBottomNav(
+      page,
+      page.getByRole("link", { name: /Посмотреть Путь/ }),
+      "pending action «Посмотреть Путь»",
+    );
+
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test("200% zoom — the last control stays reachable and nothing is lost", async ({ page }) => {
+    await page.setViewportSize(ZOOM_200);
+    await page.goto(REPORT);
+    await makeReady(page);
+
+    // The last control of the live work…
+    await assertClearsBottomNav(page, submitButton(page), "submit at 200% zoom");
+
+    // …and of the state it leads to.
+    await submitButton(page).click();
+    await page.getByRole("button", { name: "Отметить как отправленный" }).click();
+    await assertClearsBottomNav(
+      page,
+      page.getByRole("link", { name: /Посмотреть Путь/ }),
+      "pending action at 200% zoom",
+    );
+
+    // Reflow must not cost функции: the ledger and its statuses survive.
+    await expect(page.getByText("На проверке")).toBeVisible();
+    await expect(page.getByText("Обычно проверка занимает до одного дня.")).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test("the bottom gap is breathing room, not a pit", async ({ page }) => {
+    await page.setViewportSize(MOBILE);
+    await page.goto(REPORT);
+    await makeReady(page);
+
+    // Guards the regression this phase fixed from both sides: D3-B left 108px of
+    // dead padding under the CTA plus a 201px hole above it, because a desktop
+    // width hint became a height in the mobile column layout.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(150);
+
+    const btn = (await submitButton(page).boundingBox())!;
+    const nav = (await page.locator(".bottomnav").boundingBox())!;
+    const gap = nav.y - (btn.y + btn.height);
+    expect(gap).toBeGreaterThanOrEqual(NAV_CLEARANCE_PX);
+    expect(gap, `resting gap under the CTA should stay calm, got ${Math.round(gap)}px`).toBeLessThan(
+      64,
+    );
+
+    // The explanation must sit WITH its button, not a screen away from it.
+    const txt = (await page.locator(".rl-end-txt").boundingBox())!;
+    expect(btn.y - (txt.y + txt.height)).toBeLessThan(48);
   });
 });
 
