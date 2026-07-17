@@ -111,7 +111,15 @@ admin/support/filtered/tablet/mobile — каждый со своими console/
 `users-sticky-action.spec.ts` (3: default, before/after horizontal scroll, keyboard focus). Sticky-тесты
 вынесены отдельно, чтобы не заменять основной screenshot-suite.
 
+## Owner: согласованность (Phase 1B4-C)
+Назначение owner делается на **User 360**, не здесь (assignment UI в таблице Users **не** добавлен, D-74).
+Но колонка «Ответственный», owner-фильтр и сортировка `owner` читают **effective owner** — baseline
+fixture, перекрытый overlay (D-70). После назначения на User 360 Users показывает нового владельца при
+следующем provider read / navigation; live cross-tab обновление открытой таблицы не реализовано (D-72).
+Опции owner-фильтра теперь **выводятся** из canonical employee directory (D-67), а не из ручного списка
+(прежний `emp_mod1`, которым никто не владел, убран — фильтр не возвращает пусто).
+
 ## Non-scope (Phase 1B2)
-Today, User 360, localStorage mutation overlay, notes/tasks/cases, owner reassignment, saved-views persistence, bulk actions, export, PII reveal, communications, backend/API/DB/Prisma/Pocket, auth, deploy. `/users/[id]` остаётся placeholder.
+Today, User 360, localStorage mutation overlay, notes/tasks/cases, owner assignment UI в таблице (делается на User 360, 1B4-C), saved-views persistence, bulk actions, export, PII reveal, communications, backend/API/DB/Prisma/Pocket, auth, deploy.
 
 _Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, config/labels.ts, ARCHITECTURE.md._

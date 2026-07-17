@@ -3,6 +3,7 @@
  * labels come from the central config — raw codes are never shown to the user.
  */
 import type { UserFilters } from "@/data/contracts/CrmDataProvider";
+import { PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
 import {
   BLOCKER_LABEL,
   ENGAGEMENT_LABEL,
@@ -30,7 +31,17 @@ export interface FilterDef {
 const opts = <T extends string>(labels: Record<T, string>): FilterOption[] =>
   (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
 
-const OWNER_IDS = ["emp_ret1", "emp_ret2", "emp_men1", "emp_sup1", "emp_mgr", "emp_mod1"];
+/**
+ * Owner filter options — DERIVED from the canonical employee directory
+ * (Phase 1B4-C), where they used to be a hand-kept array.
+ *
+ * The set is the primary-owner candidates, which is exactly the set of values
+ * `ownerId` can ever hold: fixtures seed it and `assignPrimaryOwner` may only
+ * write a candidate. The old array additionally offered `emp_mod1`, who owns
+ * nobody and never could — a filter that always returns empty (Today builds its
+ * owner options from the real queue for the same reason).
+ */
+const OWNER_IDS: string[] = PRIMARY_OWNER_CANDIDATES.map((e) => e.employeeId);
 
 /** The five canonical state dimensions (primary filters). */
 export const DIMENSION_FILTERS: FilterDef[] = [

@@ -177,6 +177,37 @@ React списка ролей не держит. Остальным пяти ф�
 
 ---
 
+## 5.2 Назначение owner: Assign → primary owner (Phase 1B4-C, DECISIONS D-69)
+
+Строка «Назначить owner» из §5 наконец получила потребителя — мутацию `assignPrimaryOwner`. Это **не новое
+право**: измерение Assign существует с Phase 0, а `canAssignOwner(role)` — с Phase 1A (до 1B4-C без
+вызывающего). Матрица **не расширена**.
+
+| Роль | Assign (§1) | Может менять owner? |
+|---|---|---|
+| crm_admin | Full | да |
+| crm_manager | Full (team) | да |
+| retention_manager | Full (retention) | да |
+| support | Limited (support queue) | **нет** — Assign ≠ Edit (D-53) |
+| mentor / moderator / analyst / content_manager / read_only | Limited/None | нет |
+
+**Assign и Edit — разные измерения.** `support` пишет заметки (`edit_user_notes`) и owner **не** назначает;
+`canEditUserNotes` и `canAssignOwner` проверяют разные права и не выводятся друг из друга (тест
+«support edits notes but assigns no owner» это фиксирует). Добавление owner-мутации **не расширило** ни
+одно право просмотра: чтение owner — часть «View User 360» и видно всем девяти ролям.
+
+**На экране (D-74):** форму назначения в секции «Ответственный и работа» получают только три роли выше —
+решает единственный `canAssignOwner(role)`, списка ролей в React нет. Остальным шести форма **не
+рендерится вовсе** (ни select, ни disabled-контрол): строка «Ваша роль не может менять ответственного».
+Текущий owner виден всем. `getPrimaryOwnerCandidates` для запрещённых ролей возвращает `unauthorized`, а
+не пустой список, и их UI её не вызывает.
+
+**Границы фазы.** Реализованы `assignPrimaryOwner` (+ снятие через `ownerId: null`). Scope `own/team/all`
+не моделируется (D-69). Task/case assignees (D-08) — отдельные поля, не тронуты. Audit owner-change
+пишется всегда при успехе, **без** PII/финансов/свободного текста (§4.2.6, D-66).
+
+---
+
 ## 6. Замечания к реализации (Phase 0)
 
 - Роли и права хранятся как **fixture/enum** во frontend только для демонстрации UI и фильтрации отображения. Это **не** гарантирует безопасность.

@@ -46,7 +46,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Централизованный слой прав `domain/identity/` (`roles.ts`, `permissions.ts`, `access.ts`) — единственное место проверок. Хелперы: `canViewSection`, `canViewExactFinancials`, `canViewIdentity`, `canRevealPii`, `canAssignOwner`, `canExport`, `canViewAudit`, `canManageSettings`, `canEditUserNotes`. Соответствует `docs/ROLE_PERMISSION_MATRIX.md`.
 
-**Мутационные права живут здесь же**, а не в провайдере: `canEditUserNotes` (Phase 1B4-A, D-53) — измерение Edit матрицы §1, суженное до заметок. Право не выводится из видимости финансов и не переиспользует `assign_owner` — это другие измерения. Провайдер только вызывает хелпер; React решения о правах не получает.
+**Мутационные права живут здесь же**, а не в провайдере: `canEditUserNotes` (Phase 1B4-A, D-53) — измерение Edit матрицы §1, суженное до заметок; `canAssignOwner` (существует с Phase 1A, потребитель появился в 1B4-C) — измерение Assign. Это **разные** измерения: `edit_user_notes` не выводится из видимости финансов и не переиспользует `assign_owner`, а `support` пишет заметки, но owner не назначает. Провайдер только вызывает хелпер; React решения о правах не получает (и списка ролей не держит — форму owner показывает единственный `canAssignOwner`).
 
 Проверки не размазаны по JSX — компоненты вызывают хелперы (например, sidebar фильтрует разделы через `canViewSection`). **Это frontend-видимость, не production-безопасность** — реальный RBAC будет на backend (D-12).
 
@@ -74,7 +74,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
 
-Начиная с Phase 1B4-A мутации существуют, но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
+Начиная с Phase 1B4-A мутации существуют (заметки; owner — 1B4-C), но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`, схема расширена аддитивно в пределах v1), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
 
 ## Derivation layer (Phase 1B1)
 
@@ -225,7 +225,8 @@ src/features/today/
 - **Domain/provider + component (Vitest, Phase 1B3):** `today/builder` (61 — членство, canonical placement, детерминизм сортировки, «один факт один раз», окно, freshness, все 9 ролей), `today/today-privacy` (53 — точные суммы/проценты/identity для каждой роли), `data/mock/today-provider` (11 — конверт результата, режимы, read-only), `today-workspace` (17 — один h1, порядок секций, причина, рекомендация, фильтры/сортировка, три разных empty-состояния, loading/error/stale), `today-permissions` (24 — запрещённое отсутствует в `innerHTML`/атрибутах, поиск только по разрешённой проекции), `config/evidence-labels` (11 — полнота карты, безопасный fallback), `user-timeline` (+17 — from/to).
 - **E2E (Playwright, Phase 1B3):** `tests-e2e/today-screenshots.spec.ts` — 11 сценариев (admin/support/retention/high-priority/filtered/empty/stale 1440×900, tablet 1024×768, mobile 390×844, mobile filter sheet, 200% zoom = 720×450). Артефакты — `screenshots/phase-1b3-today/{first-pass,final}/`.
 - **Domain/provider (Vitest, Phase 1B4-A):** `note-projection` (15 — team/private/role_restricted для всех 9 ролей, fail-closed, сортировка, нормализация тела), `overlay/mutation-overlay` (23 — ключ, fail-closed parse: corrupt/unknown version/invalid shape, пересоздание адаптера, отказ записи, fingerprint), `add-note` (66 — валидация, все 9 ролей, идемпотентность и conflict, детерминизм id/timestamp, персистентный sequence, неизменяемость фикстур, AuditRecord без тела), `notes-privacy` (18 — зависимость от ctx, скрытые вне `total`, отсутствие плейсхолдера и утечки тела, порядок), `access` (+8 — `canEditUserNotes` по матрице).
-- **Итого:** unit/компонентные — **569**, E2E — **41** (прежние 439 unit и все 41 E2E сохранены; ни один suite не заменён). Phase 1B4-A не добавляла E2E: UI не менялся.
+- **Domain/provider/UI (Vitest, Phase 1B4-C):** `overlay/overlay-backcompat` (20 — raw overlay 1B4-B парсится без потерь, legacy+owner сосуществуют, fail-closed на битой owner-записи/receipt/version), `identity/employees` (13 — directory ↔ фикстуры ↔ derived-списки, unknown id не печатается), `assign-owner` (62 — assign/unassign, все 9 ролей, валидация кандидата, идемпотентность/conflict/expectedOwner, storage failure, неизменяемость фикстур, audit без PII), `owner-consistency` (13 — один owner во всех reads, derived-cache не скрывает изменение, автор заметки заморожен), `owner-assignment` UI (57 — 9 ролей, 6 состояний, refetch, conflict, role change, safe errors, a11y), + notes-regression (сброс ключа при смене роли).
+- **Итого:** unit/компонентные — **799**, E2E — **85** (прежние 633 unit и 59 E2E сохранены; ни один suite не заменён, ослаблений нет — расширены лишь ставшие неоднозначными локаторы/сканеры).
 
 ### Mutation layer (Phase 1B4-A)
 
@@ -239,3 +240,32 @@ data/mock/overlay/  storage.ts (KeyValueStorage/Memory) · mutation-overlay.ts (
 Направление зависимостей не нарушено: `domain/notes` и `domain/audit` не знают ни про React, ни про storage; overlay-адаптер живёт в `data/mock` и внедряется в провайдер через опции. `CrmNote` определён в домене и ре-экспортируется контрактом — как `TodayWorkspace` (D-50) и `User360` (D-35), поэтому второго несовместимого типа заметки не существует.
 
 **Регрессия доказана подменой:** projector «всё видно» роняет 15 тестов, permission-правило «всем можно» — 20.
+
+### Mutation layer (Phase 1B4-C — owner assignment)
+
+Вторая мутация — `assignPrimaryOwner` — легла на ту же инфраструктуру **аддитивно**:
+
+```
+domain/identity/    employees.ts (canonical employee directory: id, displayName, primaryOwnerCandidate)
+domain/audit/       audit.ts (AuditRecord → discriminated union по action; owner-запись с previous/next)
+data/contracts/     CrmMutations.ts (+assignPrimaryOwner) · CrmDataProvider.ts (+getPrimaryOwnerCandidates)
+data/mock/overlay/  mutation-overlay.ts (guard'ы приняли owner-action/receipt; схема не менялась) · fingerprint.ts (+owner)
+features/user-360/  components/owner-assign-form.tsx · hooks/use-assign-owner.ts · hooks/use-owner-candidates.ts · lib/owner-error.ts
+```
+
+- **Overlay расширен в пределах v1** (D-64): тот же ключ и `version`, история owner — записи
+  `primary_owner_changed` в `auditRecords` (D-65), отдельной структуры нет. Fail-closed сохранён:
+  приняты по одному новому допустимому значению action/entityType/reasonCode/receipt-kind, всё прочее
+  по-прежнему роняет overlay целиком. Regression-тест собирает raw overlay 1B4-B вручную и доказывает,
+  что заметки и owner-change сосуществуют.
+- **Один effective-owner resolver** в провайдере (D-70): baseline fixture, перекрытый последней
+  owner-записью; fixtures неизменяемы (мелкий клон, `defaultDataset` мемоизирован и общий для инстансов).
+  Все reads (User 360 / Users / Today / task-case / queue) берут owner отсюда — расходиться неоткуда
+  (тот же инвариант, что D-39/D-40 закрыли для timeline и финансов). Derived-cache сверяет owner и
+  инвалидируется при расхождении, в т.ч. когда overlay записан другим инстансом над тем же storage.
+- **Права не расширены** (D-69): `assign_owner` существовал с Phase 1A; owner-мутация — его первый
+  потребитель. `canAssignOwner` и `canEditUserNotes` — разные измерения; `support` пишет заметки, owner
+  не назначает. Автор засеянной заметки заморожен по baseline (D-71): переназначение не переписывает
+  авторство. Соседний дефект `useAddNote` (attempt не сбрасывался при смене роли) исправлен.
+- **Регрессия доказана подменой:** `canAssignOwner` → «всем можно» роняет owner permission-тесты
+  (по всем 9 ролям, сверка с `CRM_ROLES`).

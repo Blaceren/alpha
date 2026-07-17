@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все **14** операций `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). На Phase 1B4-A там реализована ровно одна — `addNote`; остальные зарезервированы, но методов-заглушек не имеют.
+- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A) и `assignPrimaryOwner` (1B4-C); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b).
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -75,6 +75,7 @@ interface CrmDataProvider {
   getFinancialOperationsSummary(ctx: CrmContext, input: GetFinOpsInput): Promise<Result<FinancialOperationsSummary>>;
   getUserSignals(ctx: CrmContext, input: { userId: UserId; includeExpired?: boolean }): Promise<Result<UserSignal[]>>;
   getRecommendedActions(ctx: CrmContext, input: GetRecommendedInput): Promise<Result<RecommendedAction[]>>;
+  getPrimaryOwnerCandidates(ctx: CrmContext): Promise<Result<PrimaryOwnerCandidate[]>>;  // Phase 1B4-C (§3b)
 }
 ```
 
@@ -198,6 +199,16 @@ interface CrmDataProvider {
   (`context: "list"`, identity всегда masked), без learning/grace/SLA/сигналов/рекомендаций/событий.
   Композиция четырёх операций в UI означала бы сборку прав в React. См. DECISIONS D-35.
 - **Мутаций нет:** операция read-only, мутирующего аналога в Phase 1C не существует.
+
+---
+
+## 3b. getPrimaryOwnerCandidates (Phase 1B4-C, read-only)
+
+- **Назначение:** сотрудники, которых можно назначить primary owner — источник опций для owner-picker на User 360.
+- **Input:** только `ctx`.
+- **Output:** `Result<PrimaryOwnerCandidate[]>`, `PrimaryOwnerCandidate { employeeId; displayName }`.
+- **Permission:** Assign — `canAssignOwner(ctx.role)`. Роли без Assign получают **`unauthorized`**, а не пустой список: пустой список утверждает «некого назначить» — другое и неверное. UI запрещённых ролей операцию не вызывает вовсе (D-68).
+- **Почему отдельно от `getUser360`:** список не про конкретного пользователя (один для всех), складывать его в агрегат — перечитывать профиль ради выпадающего списка. **Текущий** owner остаётся в `getUser360` (D-35). Mock берёт список из canonical employee directory (D-67); role/email/team/нагрузка/финансы **не** возвращаются.
 
 ---
 
@@ -456,6 +467,7 @@ interface CrmDataProvider {
 | getFinancialOperationsSummary | Financial Ops View | точные суммы → Exact financials; analyst → aggregated |
 | getUserSignals | View User 360 | evidence маскируется |
 | getRecommendedActions | View раздела | — |
+| getPrimaryOwnerCandidates | Assign (`canAssignOwner`) | иначе `unauthorized`, не пустой список (D-68) |
 
 ---
 
@@ -490,13 +502,29 @@ interface AddNoteResult  { note: CrmNote; audit: AuditRecord; replayed: boolean;
 
 Подробности: **docs/MUTATION_OVERLAY.md**.
 
+### 15.1a Реализовано (Phase 1B4-C) — `assignPrimaryOwner`
+
+```ts
+interface CrmMutations {
+  assignPrimaryOwner(ctx: CrmContext, command: AssignPrimaryOwnerCommand): Promise<Result<AssignPrimaryOwnerResult>>;
+}
+interface AssignPrimaryOwnerCommand { userId: UserId; ownerId: EmployeeId | null; expectedOwnerId: EmployeeId | null; idempotencyKey: string; }
+interface AssignPrimaryOwnerResult  { userId: UserId; ownerId: EmployeeId | null; audit: AuditRecord; replayed: boolean; }
+```
+
+- **Permission:** Assign (§1, §5) — `crm_admin`, `crm_manager`, `retention_manager`. Проверяется по `ctx` через `canAssignOwner`; матрица **не расширена** (право `assign_owner` есть с Phase 1A). `support` пишет заметки, owner не назначает (Edit ≠ Assign, D-53).
+- **`ownerId: null`** — снятие owner, first-class. **`expectedOwnerId`** — оптимистичная конкуренция без поля версии: расхождение с текущим effective owner → `conflict` (D-72). Scope `own/team/all` не моделируется (D-69, тот же довод, что D-44).
+- **Errors:** `invalid_input` (ключ; owner не из кандидатов), `not_found`, `unauthorized`, `conflict` (переиспользование ключа / `expectedOwnerId` не совпал), `internal`. Порядок: `invalid_input → not_found → unauthorized → conflict → write`.
+- **История** — записи `primary_owner_changed` в audit (D-65); отдельного `ownerAssignments[]` нет. Подробности — **docs/MUTATION_OVERLAY.md** §§ (1B4-C).
+
+Плюс узкая **read-операция** контракта (§3b ниже): `getPrimaryOwnerCandidates`.
+
 ### 15.2 Зарезервировано (ещё не реализовано)
 
 Пустых методов на будущее в интерфейсе **нет** — член интерфейса без реализации обещает то, чего провайдер не делает, а `as never` ради placeholder-формы уже пришлось удалять из контракта Today (D-50). Каждая появится вместе со своей реализацией:
 
 ```
 createTask; updateTask; createCase; updateCase;
-assignPrimaryOwner;                      // один primary owner (D-08); история сохраняется
 assignTaskAssignee; assignCaseAssignee;  // отдельные assignees (D-08)
 resolveSignal; acceptRecommendedAction;
 revealUserPii;                           // PII reveal-flow (D-11): reason code → AuditRecord → autoHideAt

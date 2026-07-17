@@ -37,6 +37,21 @@ function newProvider(storage: KeyValueStorage = new MemoryKeyValueStorage(), del
   return new MockCrmDataProvider({ clock, delayMs, storage });
 }
 
+/**
+ * The notes section drives exactly one mutation. `assignPrimaryOwner` joined the
+ * contract in Phase 1B4-C, so the stub has to supply it — and it throws rather
+ * than resolving quietly: nothing in this section has any business assigning an
+ * owner, and a silent no-op would let a future edit reach for it unnoticed.
+ */
+function notesMutations(addNote: CrmMutations["addNote"]): CrmMutations {
+  return {
+    addNote,
+    assignPrimaryOwner: () => {
+      throw new Error("the notes section must not call assignPrimaryOwner");
+    },
+  };
+}
+
 function renderNotes({
   userId = USER,
   provider,
@@ -44,14 +59,16 @@ function renderNotes({
 }: {
   userId?: string;
   provider: CrmDataProvider;
-  mutations?: CrmMutations;
+  mutations?: Pick<CrmMutations, "addNote">;
 }) {
   return render(
     <TooltipProvider>
       <UserNotes
         userId={userId}
         providerOverride={provider}
-        mutationsOverride={mutations ?? (provider as unknown as CrmMutations)}
+        mutationsOverride={
+          mutations ? notesMutations(mutations.addNote) : (provider as unknown as CrmMutations)
+        }
       />
     </TooltipProvider>,
   );
@@ -420,6 +437,53 @@ describe("User 360 notes — idempotency key lifecycle", () => {
     await waitFor(() => expect(addNote).toHaveBeenCalledTimes(2));
 
     expect(keyOf(addNote, 1)).not.toBe(keyOf(addNote, 0));
+  });
+
+  /**
+   * Regression (Phase 1B4-C). The provider fingerprints the actor's ROLE along with
+   * the body, so a key minted under crm_admin and submitted under crm_manager
+   * describes a different command and comes back as a `conflict` the employee did
+   * nothing to cause. Both roles may write notes, so the composer does not unmount on
+   * the switch and used to carry the spent key straight into the next submit.
+   */
+  it("mints a new key when the session identity changes", async () => {
+    // The first attempt fails to persist, which is the one case that deliberately
+    // KEEPS the key: nothing was written, so repeating it is what makes the retry
+    // safe. That is exactly the state in which a role switch used to carry a key
+    // minted under the old role into a command sent under the new one — after a
+    // success the key advances anyway, and the bug would hide.
+    const addNote = vi
+      .fn()
+      .mockResolvedValueOnce(fail({ code: "internal", message: "boom", retriable: true }))
+      .mockResolvedValue(addNoteOk("x"));
+    const provider = newProvider();
+    const { container, rerender } = renderNotes({ provider, mutations: { addNote } });
+    await screen.findByText(FIXTURE_NOTE);
+
+    setBody("Под админом");
+    await userEvent.click(submitIn(container));
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
+    await screen.findByRole("alert");
+
+    currentRole = "crm_manager";
+    rerender(
+      <TooltipProvider>
+        <UserNotes
+          userId={USER}
+          providerOverride={provider}
+          mutationsOverride={notesMutations(addNote)}
+        />
+      </TooltipProvider>,
+    );
+    await screen.findByText(FIXTURE_NOTE);
+
+    setBody("Под менеджером");
+    await userEvent.click(submitIn(container));
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(2));
+
+    expect(keyOf(addNote, 1)).not.toBe(keyOf(addNote, 0));
+    // The second call really did go out under the new role.
+    expect(addNote.mock.calls[1]![0].role).toBe("crm_manager");
   });
 
   it("mints a new key after a conflict, because the old one is spent", async () => {

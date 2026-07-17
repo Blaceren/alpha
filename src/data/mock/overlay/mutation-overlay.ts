@@ -26,19 +26,55 @@ export const MUTATION_OVERLAY_STORAGE_KEY = "ata-crm.mutation-overlay.v1";
 /** Only this exact version is accepted. Anything else → empty overlay. */
 export const MUTATION_OVERLAY_VERSION = 1;
 
+/** Discriminant of the owner-change receipt. Note receipts carry no `kind`. */
+export const PRIMARY_OWNER_RECEIPT_KIND = "primary_owner_change";
+
 /**
  * Proof that a key was already used, and for what. Holds a fingerprint rather
  * than the command: the body is already stored once on the note, and a receipt
  * repeating it in plain text would be a second copy of user-authored text with no
  * reader.
+ *
+ * Legacy/current form, written by Phase 1B4-A/B with no `kind` field. It is kept
+ * byte-identical rather than migrated: every overlay already in a browser
+ * contains receipts in exactly this shape, and rewriting them on read would be a
+ * migration with nothing to gain. Absence of `kind` IS the note discriminant.
  */
-export interface IdempotencyReceipt {
+export interface NoteIdempotencyReceipt {
+  kind?: undefined;
   key: string;
   fingerprint: string;
   noteId: string;
   auditId: string;
 }
 
+/**
+ * Owner-change receipt (Phase 1B4-C). It has an explicit discriminant because it
+ * is the new member and can afford one, and it has no `noteId`: tying the shared
+ * receipt type to a note id was what made the type note-only in the first place.
+ * The change it proves is recoverable from `auditId` alone.
+ */
+export interface PrimaryOwnerIdempotencyReceipt {
+  kind: typeof PRIMARY_OWNER_RECEIPT_KIND;
+  key: string;
+  fingerprint: string;
+  auditId: string;
+}
+
+export type IdempotencyReceipt = NoteIdempotencyReceipt | PrimaryOwnerIdempotencyReceipt;
+
+/**
+ * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately.
+ *
+ * Owner changes are audit records, so they land in the array that already exists.
+ * There is no `ownerAssignments[]`: the append-only audit log already answers
+ * "who owns this user" (latest record wins) and "how did we get here" (D-08's
+ * history requirement), and a second structure holding the same facts is a second
+ * structure that can disagree with the first.
+ *
+ * Consequence for compatibility: an overlay written by 1B4-B has no missing
+ * fields to tolerate, because 1B4-C added none.
+ */
 export interface MutationOverlay {
   version: number;
   /** Monotonic counter behind every generated id and timestamp offset. */
@@ -91,30 +127,63 @@ function isNote(value: unknown): value is CrmNote {
   );
 }
 
-function isAuditRecord(value: unknown): value is AuditRecord {
-  if (!isRecord(value)) return false;
+/**
+ * Fields shared by every audit record, whatever it records. The per-action guards
+ * below add what only their own member is allowed to carry.
+ */
+function hasAuditBase(value: Record<string, unknown>): boolean {
   return (
     isString(value.id) &&
-    value.action === "note_added" &&
     isString(value.actorEmployeeId) &&
     isString(value.actorRole) &&
     isString(value.targetUserId) &&
-    value.entityType === "note" &&
     isString(value.entityId) &&
     isString(value.at) &&
-    isString(value.reasonCode) &&
     value.mock === true
   );
 }
 
+/**
+ * Accepts the note record Phase 1B4-A/B wrote AND the owner record 1B4-C writes,
+ * and nothing else. `action`, `entityType` and `reasonCode` are checked against
+ * literals rather than `isString`, so an unknown action, a mismatched entity type
+ * or an invented reason code still fails closed — the widening is one new member,
+ * not a hole.
+ */
+function isAuditRecord(value: unknown): value is AuditRecord {
+  if (!isRecord(value)) return false;
+  if (!hasAuditBase(value)) return false;
+
+  switch (value.action) {
+    case "note_added":
+      return value.entityType === "note" && value.reasonCode === "note_added_by_employee";
+    case "primary_owner_changed":
+      return (
+        value.entityType === "user" &&
+        value.reasonCode === "primary_owner_changed_by_employee" &&
+        // `null` is a real value on both sides (unassigned), not missing data.
+        isNullableString(value.previousOwnerId) &&
+        isNullableString(value.nextOwnerId)
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Note receipts are recognised by the ABSENCE of `kind` — that is the shape
+ * already sitting in browsers, and accepting it unchanged is what keeps a 1B4-B
+ * overlay readable. A `kind` we do not know is not a tolerable unknown: it means
+ * the overlay was written by something we are not, so it fails closed.
+ */
 function isReceipt(value: unknown): value is IdempotencyReceipt {
   if (!isRecord(value)) return false;
-  return (
-    isString(value.key) &&
-    isString(value.fingerprint) &&
-    isString(value.noteId) &&
-    isString(value.auditId)
-  );
+  if (!isString(value.key) || !isString(value.fingerprint)) return false;
+
+  if (value.kind === PRIMARY_OWNER_RECEIPT_KIND) return isString(value.auditId);
+  if (value.kind !== undefined) return false;
+
+  return isString(value.noteId) && isString(value.auditId);
 }
 
 /**

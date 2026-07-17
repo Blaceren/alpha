@@ -553,6 +553,15 @@ interface OwnerAssignment {
 
 - **Связи:** 1:1 текущий owner на CrmUser; 1:N история.
 - **Источник:** `CRM`.
+- **Реализация (Phase 1B4-C).** Полный `UserOwner` (с `ownerRole`/`assignedBy`/`reasonCode`/`history`) —
+  будущая форма; mock хранит owner как скаляр `operations.primaryOwnerId` (baseline fixture), а изменения
+  — как записи `primary_owner_changed` в mutation-overlay audit. **История и есть этот append-only лог**
+  (D-65): отдельного `ownerAssignments[]` нет. Текущий effective owner = baseline, перекрытый последней
+  такой записью (единственный resolver в провайдере, D-70). Мутация — `assignPrimaryOwner` (+ снятие через
+  `ownerId: null`); `expectedOwnerId` защищает от потери обновления (D-72). Кандидаты — из canonical
+  employee directory (`src/domain/identity/employees.ts`, D-67), ограничены владельцами baseline. Задача/
+  кейс assignees (`CrmTask.owner`/`CrmCase.owner`) — отдельные поля, в 1B4-C синтетически производны от
+  primary owner, самостоятельных мутаций не имеют.
 - **Чувствительность:** `LOW`.
 
 ---

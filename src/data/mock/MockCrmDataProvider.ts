@@ -4,7 +4,7 @@
  * pagination, filtering, sorting, permission-aware projection, stale metadata,
  * controllable delay/error/empty modes. UI never imports fixtures directly.
  */
-import type { UserId, Freshness } from "@/domain/shared/primitives";
+import type { EmployeeId, UserId, Freshness } from "@/domain/shared/primitives";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
 import { projectUser360 } from "@/domain/users/user-360-projection";
@@ -30,6 +30,7 @@ import type {
   GetUserCasesInput,
   GetUserNotesInput,
   GetUserTasksInput,
+  PrimaryOwnerCandidate,
   QueueItem,
   RecommendedAction,
   SearchUsersInput,
@@ -42,18 +43,25 @@ import type {
 import type {
   AddNoteCommand,
   AddNoteResult,
+  AssignPrimaryOwnerCommand,
+  AssignPrimaryOwnerResult,
   CrmMutations,
 } from "@/data/contracts/CrmMutations";
 import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@/data/contracts/CrmMutations";
-import type { AuditRecord } from "@/domain/audit/audit";
+import type { AuditRecord, PrimaryOwnerChangedAuditRecord } from "@/domain/audit/audit";
 import { mockAuditId } from "@/domain/audit/audit";
+import { isPrimaryOwnerCandidate, PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
 import type { NoteBodyError } from "@/domain/notes/note";
 import { mockNoteId, normalizeNoteBody, NOTE_BODY_MAX_LENGTH } from "@/domain/notes/note";
 import { projectNotes, sortNotes } from "@/domain/notes/note-projection";
 import type { MutationOverlay } from "./overlay/mutation-overlay";
-import { MUTATION_OVERLAY_VERSION, MutationOverlayStore } from "./overlay/mutation-overlay";
+import {
+  MUTATION_OVERLAY_VERSION,
+  MutationOverlayStore,
+  PRIMARY_OWNER_RECEIPT_KIND,
+} from "./overlay/mutation-overlay";
 import type { KeyValueStorage } from "./overlay/storage";
-import { fingerprintAddNote } from "./overlay/fingerprint";
+import { fingerprintAddNote, fingerprintAssignPrimaryOwner } from "./overlay/fingerprint";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
 import type { CrmCase } from "@/domain/cases/case";
 import type { UserSignal } from "@/domain/signals/signal";
@@ -66,7 +74,7 @@ import { deriveRecommendations } from "@/domain/recommendations/derive";
 import { projectFinancial } from "@/domain/financial/projection";
 import { projectIdentity } from "@/domain/identity/identity-projection";
 import { toFinancialBucket } from "@/domain/financial/financial";
-import { canEditUserNotes, canViewExactFinancials } from "@/domain/identity/access";
+import { canAssignOwner, canEditUserNotes, canViewExactFinancials } from "@/domain/identity/access";
 import { computeSegments } from "@/domain/segments/segments";
 import { buildTodayWorkspace } from "@/domain/today/builder";
 
@@ -147,9 +155,79 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
     return produce();
   }
 
+  /* ------------------------------------------------- effective owner */
+
+  /**
+   * Owner overrides read from the overlay: the LATEST `primary_owner_changed`
+   * audit record per user. There is no separate owner store — the append-only
+   * audit log is the history D-08 requires be kept, and reading the current value
+   * off it means the value and its history cannot disagree.
+   *
+   * Latest = last matching record in array order. Records are only ever appended,
+   * and the store writes them in sequence order, so array order IS write order.
+   * `at` (clock.nowMs() + sequence) agrees with it; array order is used because it
+   * keeps holding once the zero-padded sequence in an id outgrows four digits and
+   * lexicographic id order stops matching numeric order.
+   */
+  private ownerOverrides(): Map<UserId, EmployeeId | null> {
+    const out = new Map<UserId, EmployeeId | null>();
+    for (const record of this.overlay.read().auditRecords) {
+      if (record.action !== "primary_owner_changed") continue;
+      out.set(record.targetUserId, record.nextOwnerId);
+    }
+    return out;
+  }
+
+  /**
+   * A user with the effective owner applied. The baseline fixture is NEVER
+   * mutated — `defaultDataset` memoizes one array per clock and hands the same
+   * `MockUser` objects to every provider instance, so assigning through one demo
+   * state would surface in all of them and the "fixtures are byte-identical after
+   * a mutation" invariant would be gone. A shallow clone costs nothing at 30 users
+   * and keeps the fixture the fixed point it is supposed to be.
+   */
+  private withEffectiveOwner(u: MockUser, overrides: Map<UserId, EmployeeId | null>): MockUser {
+    if (!overrides.has(u.identity.userId)) return u;
+    const ownerId = overrides.get(u.identity.userId) ?? null;
+    if (ownerId === u.operations.primaryOwnerId) return u;
+    return { ...u, operations: { ...u.operations, primaryOwnerId: ownerId } };
+  }
+
+  /**
+   * The dataset every read sees. This is the ONE place owner resolution happens:
+   * ten call sites used to read `operations.primaryOwnerId` straight off the
+   * fixture, and resolving in each of them is how User 360 and Users end up
+   * reporting different owners — the drift D-39/D-40 had to undo for financials
+   * and timeline.
+   */
+  private effectiveUsers(): MockUser[] {
+    const overrides = this.ownerOverrides();
+    if (overrides.size === 0) return this.users;
+    return this.users.map((u) => this.withEffectiveOwner(u, overrides));
+  }
+
+  /** Single-user counterpart of `effectiveUsers`. */
+  private effectiveUser(userId: UserId): MockUser | undefined {
+    const u = this.users.find((x) => x.identity.userId === userId);
+    if (!u) return undefined;
+    return this.withEffectiveOwner(u, this.ownerOverrides());
+  }
+
+  /**
+   * Signals and priority do not depend on the owner, so a reassignment cannot
+   * change them — but `Derived.user` is handed to the callers that read the owner
+   * off it, so a cache hit must not serve a user carrying a stale one.
+   *
+   * The guard compares the cached owner with the one asked for rather than
+   * tracking invalidation: that is correct even when the overlay was written by a
+   * different provider instance over the same storage, because the caller already
+   * resolved the owner from storage before calling in.
+   */
   private derive(user: MockUser): Derived {
     const cached = this.derivedCache.get(user.identity.userId);
-    if (cached) return cached;
+    if (cached && cached.user.operations.primaryOwnerId === user.operations.primaryOwnerId) {
+      return cached;
+    }
     const signals = computeSignals(user, this.clock);
     const priority = computePriority(user, signals, this.clock);
     const d = { user, signals, priority };
@@ -307,7 +385,7 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
         );
       }
       const workspace = buildTodayWorkspace({
-        users: this.users,
+        users: this.effectiveUsers(),
         clock: this.clock,
         role: ctx.role,
         query: input,
@@ -337,7 +415,7 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       }
 
       const filters: UserFilters = { ...input.filters, query: input.filters?.query ?? input.query };
-      let rows = this.users.map((u) => this.derive(u)).filter((d) => this.matches(d, filters));
+      let rows = this.effectiveUsers().map((u) => this.derive(u)).filter((d) => this.matches(d, filters));
       rows = this.sortRows(rows, input.sort);
       const summaries = rows.map((d) => this.toSummary(d, ctx.role));
       const page = this.paginate(summaries, input.page?.cursor, input.page?.pageSize);
@@ -391,7 +469,7 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
 
   getUserById(ctx: CrmContext, input: { userId: UserId }): Promise<Result<UserSummary>> {
     return this.gate(() => {
-      const u = this.users.find((x) => x.identity.userId === input.userId);
+      const u = this.effectiveUser(input.userId);
       if (!u) return fail<UserSummary>({ code: "not_found", message: `No user ${input.userId}.`, retriable: false });
       const summary = this.toSummary(this.derive(u), ctx.role);
       const fr = this.freshness(u);
@@ -406,7 +484,7 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
    */
   getUser360(ctx: CrmContext, input: { userId: UserId }): Promise<Result<User360>> {
     return this.gate(() => {
-      const u = this.users.find((x) => x.identity.userId === input.userId);
+      const u = this.effectiveUser(input.userId);
       if (!u) {
         return fail<User360>({
           code: "not_found",
@@ -471,8 +549,11 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
 
   getUserTasks(_ctx: CrmContext, input: GetUserTasksInput): Promise<Result<Paginated<CrmTask>>> {
     return this.gate(() => {
-      const u = this.users.find((x) => x.identity.userId === input.userId);
+      const u = this.effectiveUser(input.userId);
       if (!u) return empty(this.paginate<CrmTask>([]));
+      // Synthetic tasks derive their owner from the user's primary owner, so they
+      // follow a reassignment. Task assignees as an independent field are D-08's
+      // other half and are not modelled here.
       const tasks: CrmTask[] = Array.from({ length: u.operations.activeTaskCount }).map((_, i) => ({
         id: `${u.identity.userId}_task_${i + 1}`,
         title: `Follow-up: ${u.state.reasonCode}`,
@@ -498,7 +579,8 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
 
   getUserCases(_ctx: CrmContext, input: GetUserCasesInput): Promise<Result<Paginated<CrmCase>>> {
     return this.gate(() => {
-      const u = this.users.find((x) => x.identity.userId === input.userId);
+      // Synthetic cases carry the primary owner for the same reason tasks do.
+      const u = this.effectiveUser(input.userId);
       if (!u) return empty(this.paginate<CrmCase>([]));
       const type = u.operations.supportState === "blocked" ? "support" : u.financial.pocketConflict ? "financial_data_conflict" : "retention";
       const cases: CrmCase[] = Array.from({ length: u.operations.activeCaseCount }).map((_, i) => ({
@@ -543,12 +625,20 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
    */
   private fixtureNotes(u: MockUser): CrmNote[] {
     const at = new Date(this.clock.nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    // The author is the BASELINE fixture owner, looked up from the untouched
+    // dataset rather than read off `u` (Phase 1B4-C). Authorship is a historical
+    // fact: the employee who wrote a note two days ago wrote it, and reassigning
+    // the user today must not rewrite who wrote it. Reading `u` would do exactly
+    // that as soon as `u` carries an effective owner, which every list read now
+    // hands around — so the lookup is structural, not a convention to remember.
+    const baselineOwnerId =
+      this.users.find((x) => x.identity.userId === u.identity.userId)?.operations.primaryOwnerId ?? null;
     return [
       {
         id: `${u.identity.userId}_note_1`,
         userId: u.identity.userId,
         caseId: null,
-        authorEmployeeId: u.operations.primaryOwnerId ?? "emp_mock_admin",
+        authorEmployeeId: baselineOwnerId ?? "emp_mock_admin",
         body: "Синтетическая заметка: демонстрационная запись о работе с пользователем.",
         visibility: "team",
         pinned: false,
@@ -612,7 +702,7 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
 
   private queue(_ctx: CrmContext, input: GetQueueInput, pred: (u: MockUser) => boolean): Result<Paginated<QueueItem>> {
     if (this.emptyMode) return empty(this.paginate<QueueItem>([]));
-    const rows = this.users
+    const rows = this.effectiveUsers()
       .filter(pred)
       .map((u) => this.derive(u))
       .sort((a, b) => comparePriority(a, b, this.clock));
@@ -683,6 +773,34 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
     });
   }
 
+  /**
+   * Employees who may be assigned as a primary owner (Phase 1B4-C).
+   *
+   * Straight from the canonical directory — the mock does not compute, filter or
+   * rank it. Refused for roles without Assign: an empty list would claim there is
+   * nobody to pick, which is a different statement from "you may not pick".
+   *
+   * Only id and display name leave here. `errorMode` still applies through
+   * `gate`, so the dev demo-state switch can exercise the failure surface.
+   */
+  getPrimaryOwnerCandidates(ctx: CrmContext): Promise<Result<PrimaryOwnerCandidate[]>> {
+    return this.gate(() => {
+      if (!canAssignOwner(ctx.role)) {
+        return fail<PrimaryOwnerCandidate[]>({
+          code: "unauthorized",
+          message: "Role may not assign owners.",
+          retriable: false,
+        });
+      }
+      return ok(
+        PRIMARY_OWNER_CANDIDATES.map<PrimaryOwnerCandidate>((e) => ({
+          employeeId: e.employeeId,
+          displayName: e.displayName,
+        })),
+      );
+    });
+  }
+
   /* ---------------------------------------------------------- mutations */
 
   /**
@@ -746,7 +864,12 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
 
       const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
       if (receipt) {
-        if (receipt.fingerprint !== fingerprint) {
+        // The receipt KIND is checked alongside the fingerprint (Phase 1B4-C).
+        // Each command fingerprints four parts of its own, so a note and an owner
+        // change could in principle hash alike; only the receipt records which
+        // command the key was actually spent on. A key spent on an owner change is
+        // spent — replaying it as a note would answer a question nobody asked.
+        if (receipt.kind !== undefined || receipt.fingerprint !== fingerprint) {
           return fail<AddNoteResult>({
             code: "conflict",
             message: "Idempotency key was already used for a different command.",
@@ -819,6 +942,170 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       }
 
       return ok({ note, audit, replayed: false });
+    });
+  }
+
+  /**
+   * Set or clear a user's primary owner (Phase 1B4-C).
+   *
+   * Order matches `addNote` — validate → user exists → permission → idempotency →
+   * write — with one step notes never needed, `expectedOwnerId`, sitting between
+   * idempotency and the write.
+   *
+   * That position is load-bearing. A replay is checked FIRST, so re-sending a
+   * command that already succeeded returns the original result even though the
+   * current owner is now the value it assigned and its `expectedOwnerId` is
+   * therefore stale. Were the precondition checked first, every safe retry of a
+   * successful write would come back as `conflict` — the check meant to prevent a
+   * lost update would instead invent one.
+   *
+   * Nothing is persisted until the whole overlay is assembled: a refusal for any
+   * reason, storage failure included, leaves the previous overlay byte-for-byte
+   * intact and writes no audit record.
+   */
+  assignPrimaryOwner(
+    ctx: CrmContext,
+    command: AssignPrimaryOwnerCommand,
+  ): Promise<Result<AssignPrimaryOwnerResult>> {
+    return this.gate(() => {
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      // `null` clears the owner and is valid. Anything else must be an employee
+      // the directory actually offers: validating against the canonical candidate
+      // set is what stops a caller assigning an id the picker never showed it.
+      const ownerId = command.ownerId ?? null;
+      if (ownerId !== null && !isPrimaryOwnerCandidate(ownerId)) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "invalid_input",
+          message: "Owner is not an assignable employee.",
+          retriable: false,
+        });
+      }
+
+      const user = this.effectiveUser(command.userId);
+      if (!user) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "not_found",
+          message: "User not found.",
+          retriable: false,
+        });
+      }
+
+      if (!canAssignOwner(ctx.role)) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "unauthorized",
+          message: "Role may not assign owners.",
+          retriable: false,
+        });
+      }
+
+      const overlay = this.overlay.read();
+      const fingerprint = fingerprintAssignPrimaryOwner({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        ownerId,
+      });
+
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.kind !== PRIMARY_OWNER_RECEIPT_KIND || receipt.fingerprint !== fingerprint) {
+          return fail<AssignPrimaryOwnerResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const audit = overlay.auditRecords.find(
+          (a): a is PrimaryOwnerChangedAuditRecord =>
+            a.id === receipt.auditId && a.action === "primary_owner_changed",
+        );
+        if (!audit) {
+          // A receipt without its record means the overlay was edited by hand.
+          return fail<AssignPrimaryOwnerResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        return ok({
+          userId: command.userId,
+          ownerId: audit.nextOwnerId,
+          audit,
+          replayed: true,
+        });
+      }
+
+      // The precondition: refuse if the owner is no longer what the caller saw.
+      // Last-write-wins would silently discard whoever assigned in between.
+      const currentOwnerId = user.operations.primaryOwnerId;
+      if ((command.expectedOwnerId ?? null) !== currentOwnerId) {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "conflict",
+          message: "Primary owner changed since it was read.",
+          retriable: false,
+        });
+      }
+
+      const sequence = overlay.sequence + 1;
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      const audit: PrimaryOwnerChangedAuditRecord = {
+        id: mockAuditId(sequence),
+        action: "primary_owner_changed",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "user",
+        entityId: command.userId,
+        at,
+        reasonCode: "primary_owner_changed_by_employee",
+        previousOwnerId: currentOwnerId,
+        nextOwnerId: ownerId,
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        notes: overlay.notes,
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { kind: PRIMARY_OWNER_RECEIPT_KIND, key, fingerprint, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<AssignPrimaryOwnerResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      // The cached derivation still holds the user with the previous owner.
+      // `derive` would notice on its own, but dropping the entry here keeps the
+      // stale object from outliving the write that invalidated it.
+      this.derivedCache.delete(command.userId);
+
+      return ok({ userId: command.userId, ownerId, audit, replayed: false });
     });
   }
 }

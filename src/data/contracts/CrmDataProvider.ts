@@ -219,6 +219,22 @@ export interface GetFinOpsInput {
   aggregatedOnly?: boolean;
 }
 
+/* ----------------------------------------------------- Owner candidates */
+
+/**
+ * An employee who may be picked as a user's primary owner.
+ *
+ * Two fields on purpose. The picker needs an id to send and a caption to show,
+ * and nothing else it could show would be honest: role, team, workload and the
+ * employee's own users are either absent from the fixtures or would expose the
+ * shape of a role's book to a caller that has no right to it. Adding them "for
+ * later" would ship a field the mock has to invent.
+ */
+export interface PrimaryOwnerCandidate {
+  employeeId: EmployeeId;
+  displayName: string;
+}
+
 /* ----------------------------------------------------- Recommendations */
 
 export interface RecommendedAction {
@@ -258,4 +274,19 @@ export interface CrmDataProvider {
   getFinancialOperationsSummary(ctx: CrmContext, input: GetFinOpsInput): Promise<Result<FinancialOperationsSummary>>;
   getUserSignals(ctx: CrmContext, input: { userId: UserId; includeExpired?: boolean }): Promise<Result<UserSignal[]>>;
   getRecommendedActions(ctx: CrmContext, input: GetRecommendedInput): Promise<Result<RecommendedAction[]>>;
+  /**
+   * Employees who may be assigned as a primary owner (Phase 1B4-C).
+   *
+   * Permission: Assign — `canAssignOwner(ctx.role)`. Roles that cannot assign get
+   * `unauthorized` rather than an empty list: an empty list says "there is nobody
+   * to pick", which is a different and untrue statement. Their UI never calls it
+   * anyway — the control is not rendered at all (D-59).
+   *
+   * A read, not a mutation, so it lives here rather than in `CrmMutations`. It is
+   * separate from `getUser360` because it is not about a user: the same list
+   * serves every user, and folding it into the aggregate would refetch the whole
+   * profile to populate a dropdown. The user's CURRENT owner remains part of
+   * `getUser360` (D-35) — this operation only supplies what may be chosen.
+   */
+  getPrimaryOwnerCandidates(ctx: CrmContext): Promise<Result<PrimaryOwnerCandidate[]>>;
 }

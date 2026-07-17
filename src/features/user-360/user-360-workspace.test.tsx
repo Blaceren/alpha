@@ -1,13 +1,15 @@
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
 import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
-import { empty, fail, stale } from "@/data/contracts/result";
+import { empty, fail, ok, stale } from "@/data/contracts/result";
 import type { Result } from "@/data/contracts/result";
 import type { User360 } from "@/domain/users/user-360";
+import { PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
+import { USER_360_LABEL } from "@/config/labels";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
 import { mockSessionForRole } from "@/domain/identity/session";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -57,6 +59,11 @@ function renderWorkspace(userId = HIGH_PRIORITY, providerOverride: CrmDataProvid
  * Since Phase 1B4-B the screen also reads notes independently, so a stub of "the
  * provider this screen uses" has to answer that read too. It returns an empty
  * page: these cases are about the aggregate's states, not about notes.
+ *
+ * Phase 1B4-C added a second independent read for the same reason — the owner
+ * candidate list. It answers with the real candidates rather than an empty list,
+ * because an empty list would mean "there is nobody to assign" and these cases are
+ * not about that either.
  */
 function stubProvider(result: Result<User360>): CrmDataProvider {
   return {
@@ -64,6 +71,15 @@ function stubProvider(result: Result<User360>): CrmDataProvider {
     getUserNotes: () =>
       Promise.resolve(
         empty({ items: [], page: { cursor: null, nextCursor: null, total: 0, pageSize: 50 } }),
+      ),
+    getPrimaryOwnerCandidates: () =>
+      Promise.resolve(
+        ok(
+          PRIMARY_OWNER_CANDIDATES.map((e) => ({
+            employeeId: e.employeeId,
+            displayName: e.displayName,
+          })),
+        ),
       ),
   } as unknown as CrmDataProvider;
 }
@@ -130,9 +146,16 @@ describe("User360Workspace — attention and recommendation", () => {
     renderWorkspace();
     await screen.findByRole("heading", { level: 1 });
     expect(screen.getAllByText("Только просмотр").length).toBeGreaterThan(0);
-    // No mutating control exists — nothing can fake a success.
+
+    // Scoped to the block that holds the recommendations (Phase 1B4-C). This was a
+    // page-wide sweep, which was the same statement only while nothing on the screen
+    // mutated at all: owner assignment now owns a «Сохранить» in the operational
+    // context column, and banning the word page-wide would fail on a control that
+    // has nothing to do with recommendations. What is being asserted is unchanged —
+    // a recommendation still offers nothing to press, so nothing can fake a success.
+    const attention = screen.getByRole("region", { name: USER_360_LABEL.attention });
     for (const name of [/Выполнить/i, /Применить/i, /Назначить/i, /Сохранить/i, /Закрыть сигнал/i]) {
-      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+      expect(within(attention).queryByRole("button", { name })).not.toBeInTheDocument();
     }
   });
 });

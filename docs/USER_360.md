@@ -3,11 +3,19 @@
 Read-only карточка пользователя `/users/[id]`. Реализация: `src/features/user-360/`,
 read-модель: `src/domain/users/user-360.ts` + `user-360-projection.ts`.
 
-> **Почти read-only.** С Phase 1B4-B на экране есть **ровно одна** мутация — добавление заметки
-> (секция «Заметки», D-58…D-63). Всё остальное по-прежнему только читается: смена owner/статуса,
-> tasks/cases, закрытие сигналов, выполнение рекомендаций, финансовые операции и коммуникации
-> **не реализованы** — см. §Non-scope. Backend/database/Prisma/Pocket не подключены.
-> Следующий этап **не начинается автоматически**.
+> **Почти read-only.** На экране **две** мутации: добавление заметки (секция «Заметки», Phase 1B4-B,
+> D-58…D-63) и назначение primary owner (секция «Ответственный и работа», Phase 1B4-C, D-64…D-74).
+> Всё остальное по-прежнему только читается: смена статуса, tasks/cases, task/case assignees, закрытие
+> сигналов, выполнение рекомендаций, финансовые операции и коммуникации **не реализованы** — см.
+> §Non-scope. Backend/database/Prisma/Pocket не подключены. Следующий этап **не начинается автоматически**.
+>
+> **Назначение owner (Phase 1B4-C).** Форма в секции «Ответственный и работа» доступна трём ролям с Assign
+> (`crm_admin`/`crm_manager`/`retention_manager`), остальным — строка-объяснение без контрола (D-74).
+> Нативный `<select>` (пять кандидатов + «Без ответственного»), явная кнопка «Сохранить» (не auto-submit),
+> `expectedOwnerId` против потери обновления, никакого optimistic update — после успеха refetch **всего**
+> `getUser360` (owner в агрегате, D-35); кандидаты — отдельный read `getPrimaryOwnerCandidates`. Users и
+> Today видят нового owner при следующем read; live cross-tab sync нет. Ревью:
+> `docs/visual-reviews/PHASE_1B4_C_ASSIGN_OWNER.md`.
 
 ## Purpose
 
@@ -283,10 +291,10 @@ Inline, не dialog и не sheet (D-59): новая заметка сортир
 полный финансовый history, backend/API/database/Prisma/Pocket, production auth, deploy. См. D-34.
 
 **Обновлено:** Today workspace (Phase 1B3) и mutation core (Phase 1B4-A) с тех пор выполнены — оба
-не изменили этот экран. **Phase 1B4-B выполнен** и добавил ровно одну мутацию — секцию «Заметки»
-(D-58…D-63). Не начаты: редактирование/удаление заметок, pin/unpin, выбор visibility, tasks/cases,
-owner assignment, закрытие сигналов, выполнение рекомендаций, audit-экран, кнопка сброса overlay,
-backend.
+не изменили этот экран. **Phase 1B4-B** добавил секцию «Заметки» (D-58…D-63); **Phase 1B4-C** добавил
+назначение primary owner в секции «Ответственный и работа» (D-64…D-74). Не начаты: редактирование/
+удаление заметок, pin/unpin, выбор visibility, tasks/cases, task/case assignees, смена статуса,
+закрытие сигналов, выполнение рекомендаций, audit-экран, кнопка сброса overlay, backend.
 
 _Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, PII_ACCESS_POLICY.md,
 CRM_INFORMATION_ARCHITECTURE.md §5, MUTATION_OVERLAY.md, DECISIONS.md (D-34…D-38, D-53…D-57),

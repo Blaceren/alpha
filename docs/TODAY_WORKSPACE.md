@@ -135,4 +135,10 @@ Provider отдаёт уже спроецированный результат �
 
 Реализовано: read-only очередь, основания, группировка, сортировка, summary, фильтры, поиск, состояния, desktop/tablet/mobile/zoom, переход в User 360.
 
-Не реализовано (Phase 1B4+): любые мутации, выполнение рекомендаций, назначение owner, задачи, закрытие блокеров/сигналов, кейсы, заметки, массовые операции, drag-and-drop, коммуникации, автоматизации, backend, база, Prisma, Pocket API, production auth.
+Не реализовано (Phase 1B4+): любые мутации **на этом экране** (assignment UI в Today не добавлен, D-74), выполнение рекомендаций, задачи, закрытие блокеров/сигналов, кейсы, заметки, массовые операции, drag-and-drop, коммуникации, автоматизации, backend, база, Prisma, Pocket API, production auth.
+
+**Owner: согласованность (Phase 1B4-C).** Назначение owner делается на User 360. Today читает **effective
+owner** (baseline, перекрытый overlay, D-70) через `buildTodayWorkspace(effectiveUsers())`, поэтому row
+owner, owner-фильтр (включая `unassigned`), `summary.unassigned` и `filterOptions.owners` согласованно
+показывают нового владельца при следующем provider read. `filterOptions.owners` по-прежнему строятся из
+реальной очереди роли (мёртвых опций нет). Live cross-tab sync не реализован (D-72).

@@ -10,6 +10,7 @@ import type {
   OperationalBlocker,
   ValueSegment,
 } from "@/domain/lifecycle/state";
+import { EMPLOYEE_DIRECTORY } from "@/domain/identity/employees";
 import type { NoteVisibility } from "@/domain/notes/note";
 import type { StateEvidence, StateEvidenceCode } from "@/domain/shared/primitives";
 import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
@@ -229,6 +230,28 @@ export const USER_360_LABEL = {
 } as const;
 
 /**
+ * Owner assignment inside the "Ответственный и работа" section (Phase 1B4-C).
+ *
+ * Same rule as the notes section: one source for the strings, and none of them
+ * carries an employee id, an audit id or a diagnostic. `success` is deliberately
+ * the same sentence whether an owner was set, replaced or cleared — the employee
+ * asked for one thing ("this is who owns them now") and got it; three variants
+ * would describe our bookkeeping instead of their action.
+ */
+export const OWNER_ASSIGN_LABEL = {
+  fieldLabel: "Ответственный",
+  unassignedOption: "Без ответственного",
+  submit: "Сохранить",
+  submitPending: "Сохраняем…",
+  success: "Ответственный обновлён",
+  loadingCandidates: "Загрузка списка сотрудников",
+  /** Shown instead of a form — never as a disabled control (DECISIONS D-59). */
+  forbidden: "Ваша роль не может менять ответственного",
+  /** Someone else won the race; the screen now shows what is actually stored. */
+  conflict: "Ответственный уже изменён. Показаны актуальные данные.",
+} as const;
+
+/**
  * Notes section of the User 360 (Phase 1B4-B) — the first mutating surface in
  * the CRM. Same rule as everywhere else: one source for the strings, no raw
  * codes and no provider diagnostics on screen.
@@ -381,22 +404,28 @@ export const ACTIVITY_SOURCE_LABEL: Record<"product" | "pocket" | "employee", st
   employee: "Сотрудник",
 };
 
-/** Human labels for mock employee (owner) ids. */
-export const OWNER_LABEL: Record<string, string> = {
-  emp_admin: "Администратор",
-  emp_mgr: "Менеджер",
-  emp_ret1: "Retention 1",
-  emp_ret2: "Retention 2",
-  emp_men1: "Mentor 1",
-  emp_sup1: "Support 1",
-  emp_mod1: "Moderator 1",
-  emp_an1: "Analyst 1",
-  emp_mock_admin: "Demo Operator",
-};
+/**
+ * Human labels for mock employee (owner) ids — DERIVED from the canonical
+ * directory (Phase 1B4-C), not retyped here. A second hand-kept list is a list
+ * that drifts, and this one already had: it carried nine ids while the Users
+ * filter offered six and the fixtures used five.
+ */
+export const OWNER_LABEL: Record<string, string> = Object.fromEntries(
+  EMPLOYEE_DIRECTORY.map((e) => [e.employeeId, e.displayName]),
+);
 
+/** Shown instead of an id we have no caption for. */
+export const UNKNOWN_OWNER_LABEL = "Неизвестный сотрудник";
+
+/**
+ * `humanizeCode` is deliberately NOT the fallback here (Phase 1B4-C). It turns
+ * `emp_xyz` into "Emp xyz", which is the raw id with a capital letter — an
+ * employee id printed to the screen under the pretence of being a name. An
+ * unknown employee gets a neutral caption instead; the code stays internal.
+ */
 export function ownerLabel(ownerId: string | null | undefined): string {
   if (!ownerId) return "Не назначен";
-  return OWNER_LABEL[ownerId] ?? humanizeCode(ownerId);
+  return OWNER_LABEL[ownerId] ?? UNKNOWN_OWNER_LABEL;
 }
 
 /** Generic fallback: humanize an unknown code (never show raw snake_case). */

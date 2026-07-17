@@ -562,3 +562,70 @@ database / Prisma / Pocket отсутствуют. Зависимости не �
   нет), импакт нулевой (User 360 открыт всем девяти ролям), но свойство зафиксировано.
 - **Заметка «нигде больше не отображается»** — долг 1B4-A закрыт для User 360 и остаётся для Today и
   Users, где заметок нет и не планировалось.
+
+---
+
+## Phase 1B4-C — Primary Owner Assignment ✅
+
+Вторая мутация CRM: назначение/снятие primary owner на User 360. Решения D-64…D-74. Ревью:
+`docs/visual-reviews/PHASE_1B4_C_ASSIGN_OWNER.md`.
+
+### Выполнено
+- **Overlay расширен аддитивно в пределах v1** (D-64): тот же ключ `ata-crm.mutation-overlay.v1`, та же
+  `version: 1`. История владельца — записи `primary_owner_changed` в существующем `auditRecords`
+  (D-65), отдельного `ownerAssignments[]` нет. Guard'ы приняли по одному новому допустимому значению
+  action/entityType/reasonCode/receipt-kind; всё прочее по-прежнему fail-closed. Обязательный
+  regression-тест: raw overlay 1B4-B собран вручную, читается новым парсером без потерь, после
+  owner-мутации старые заметки и новый owner-change сосуществуют.
+- **AuditRecord → discriminated union** по `action` (D-66); owner-запись несёт `previousOwnerId`/
+  `nextOwnerId` (LOW/CRM-owned, сам факт изменения; `null` = снят). Без PII/финансов/свободного текста/
+  ключа/лейбла. Audit UI и read endpoint не создаются.
+- **Canonical employee directory** `src/domain/identity/employees.ts` (D-67): `employeeId`/`displayName`/
+  `primaryOwnerCandidate`. `OWNER_LABEL` и опции owner-фильтра Users **выводятся** из него; убран дрейф
+  (было 9/6/5 разных списков). Кандидаты === distinct non-null владельцы baseline (consistency-тест).
+  Raw id больше не fallback-подпись — неизвестный → «Неизвестный сотрудник».
+- **`getPrimaryOwnerCandidates`** (D-68): узкий permission-aware read, отдельно от `getUser360`; роли без
+  Assign → `unauthorized`, не пустой список. Возвращает только id и подпись.
+- **`assignPrimaryOwner`** (D-69): actor из ctx; `ownerId: null` = снятие; `expectedOwnerId` = оптимистичная
+  конкуренция (D-72). Права — `crm_admin`/`crm_manager`/`retention_manager`, матрица не расширена; `support`
+  пишет заметки, owner не назначает. Порядок `invalid_input → not_found → unauthorized → conflict → write`.
+- **Один effective-owner resolver** (D-70): baseline, перекрытый последней owner-записью; fixtures
+  неизменяемы (мелкий клон). User 360 / Users (колонка/фильтр/сортировка) / Today (row/фильтр/
+  `summary.unassigned`/`filterOptions.owners`) / task-case / queue — все читают отсюда. Derived-cache
+  сверяет owner и инвалидируется, в т.ч. при записи другим инстансом над тем же storage.
+- **Автор засеянной заметки заморожен** по baseline (D-71): переназначение не переписывает авторство.
+- **UI** в секции «Ответственный и работа» (D-74): нативный `<select>` (5 кандидатов + «Без
+  ответственного»), явная кнопка «Сохранить», три роли получают форму / шесть — строку без контрола.
+  Никакого optimistic update — refetch всего `getUser360`. Состояния: unchanged / pending / success /
+  conflict / forbidden / not_found / internal / upstream_unavailable. Тотальная `Record<CrmErrorCode,
+  string>` — raw `CrmError.message` в UI не рендерится. A11y: label, aria-live/role=alert, keyboard,
+  44px, focus-возврат, 200% zoom, no overflow.
+- **Соседний фикс** `useAddNote` (D-74): idempotency attempt сбрасывается при смене session identity.
+
+### Результаты проверок
+- `lint` ✅ 0 · `typecheck` ✅ 0 · `build` ✅ (19 routes; `/users/[id]` → 11.3 kB)
+- `test:run` ✅ **799/799** (прежние 633 сохранены + 166 новых: overlay-backcompat 20, employees 13,
+  assign-owner 62, owner-consistency 13, owner UI 57, notes-regression +1)
+- `test:e2e` ✅ **85/85** (прежние 59 сохранены + 26 новых; консоль чистая, hydration-warnings нет)
+- `npm audit` — те же не устранённые next-внутренние advisories (D-26); `audit fix` не выполнялся.
+  `package.json`/`package-lock.json` не менялись, зависимости не добавлялись.
+- **Адаптированы (не ослаблены) существующие тесты:** `today-provider` read-only-скан (теперь допускает
+  ровно `assignPrimaryOwner` и запрещает Today-мутаторы), `user-360-workspace` stub (+`getPrimaryOwnerCandidates`;
+  read-only-проверка рекомендаций сужена до своей секции), `user-notes.spec` локаторы формы (scoped к
+  форме заметок — на экране теперь две формы). Ни одна проверка не удалена, смысл сохранён.
+
+### Не входит (сознательно)
+Task/case mutations, task/case assignees, notes edit/delete/pin, signal resolution, recommendation
+completion, team management, scope `own/team/all`, bulk assignment, assignment UI в таблице Users и в
+Today, audit-экран и read endpoint, reset-overlay UI, reveal PII, backend/API/database/Prisma/Pocket.
+Матрица прав, identity-проекция, exact-financial visibility **не расширялись**. Зависимости не менялись.
+Secrets/.env не появлялись.
+
+### Известные ограничения (не скрыты)
+- **Live cross-tab sync нет** (D-72): открытая старая вкладка Users/Today/User 360 может остаться stale
+  до следующего read/remount/navigation; storage-listener не добавлен.
+- **`not_found` раньше `unauthorized`** — сохранённая mock-семантика (то же свойство, что у `addNote`):
+  запрещённая роль могла бы зондировать существование пользователя, но из UI путь недостижим (формы нет),
+  импакт нулевой (User 360 открыт всем).
+- **Полный `UserOwner`** (ownerRole/assignedBy/reasonCode/структурированная history) — будущая форма; mock
+  хранит owner скаляром + audit-лог как историю.

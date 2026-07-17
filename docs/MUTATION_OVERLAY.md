@@ -6,7 +6,12 @@
 > **Phase 1B4-B (выполнен): UI появился.** Секция «Заметки» на User 360 читает `getUserNotes` и пишет
 > через `addNote`; форма доступна четырём ролям с `edit_user_notes`. Решения D-58…D-63,
 > подробности — `docs/USER_360.md`, ревью — `docs/visual-reviews/PHASE_1B4_B_ADD_NOTE.md`.
-> Остальные мутации (tasks/cases/owner/signals/recommendations, reveal PII) по-прежнему не реализованы.
+>
+> **Phase 1B4-C (выполнен): назначение primary owner.** Вторая мутация — `assignPrimaryOwner` — и её
+> UI в секции «Ответственный и работа» на User 360. Overlay расширен **аддитивно в пределах v1**: тот же
+> ключ, та же `version: 1`, история владельца — записи `primary_owner_changed` в существующем
+> `auditRecords` (отдельного `ownerAssignments[]` нет). Решения D-64…D-74; §§ ниже помечены
+> «(1B4-C)». Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
 
 ---
 
@@ -43,13 +48,30 @@ interface MutationOverlay {
   idempotencyReceipts: IdempotencyReceipt[];
 }
 
-interface IdempotencyReceipt {
+// (1B4-C) Receipt — discriminated union. Legacy note-receipt без `kind`
+// (отсутствие дискриминанта = note); owner-receipt с явным `kind` и без `noteId`.
+type IdempotencyReceipt = NoteIdempotencyReceipt | PrimaryOwnerIdempotencyReceipt;
+
+interface NoteIdempotencyReceipt {
+  kind?: undefined;
   key: string;
   fingerprint: string;                    // не тело заметки
   noteId: string;
   auditId: string;
 }
+
+interface PrimaryOwnerIdempotencyReceipt {
+  kind: "primary_owner_change";
+  key: string;
+  fingerprint: string;
+  auditId: string;                        // owner-change восстановим из audit
+}
 ```
+
+**(1B4-C) Схема `MutationOverlay` не менялась.** Owner-мутация не добавила ни одного нового поля
+верхнего уровня: история владельца — записи `primary_owner_changed` в `auditRecords`. Поэтому overlay,
+записанному Phase 1B4-B, **нечего терять** — у него нет отсутствующих полей, которые пришлось бы
+«толерантно» дочитывать (D-64, D-65).
 
 Что в overlay **не хранится**: секреты, финансовые значения, PII — кроме текста заметки,
 который сотрудник явно ввёл сам.
@@ -71,6 +93,18 @@ interface IdempotencyReceipt {
 | **одна** запись из массива сломана | пустой overlay **целиком** |
 | запись потеряла `mock: true` | пустой overlay |
 | `visibility` вне enum | пустой overlay |
+| **(1B4-C)** неизвестный `action`/`entityType`/`reasonCode` | пустой overlay |
+| **(1B4-C)** неизвестный `receipt.kind` | пустой overlay |
+| **(1B4-C)** owner-запись без `previousOwnerId`/`nextOwnerId` (строка\|null) | пустой overlay |
+
+**(1B4-C) Обратная совместимость — что расширено, а что осталось fail-closed.** Guard'ы приняли **одно
+новое допустимое значение** в каждом измерении (action `primary_owner_changed`, entityType `user`,
+reasonCode `primary_owner_changed_by_employee`, receipt `kind: "primary_owner_change"`), и **ничего
+больше**. `action`/`entityType`/`reasonCode` сверяются с литералами, а не `isString`, поэтому неизвестный
+action или выдуманный reason по-прежнему роняют overlay целиком. Note-receipt распознаётся по
+**отсутствию** `kind` — ровно та форма, что уже лежит в браузерах; неизвестный `kind` — не толерируемый
+unknown, а признак «overlay записан не нами» → fail-closed. Отсутствие поля, которого в v1 никогда не
+было, — не повреждение (D-64).
 
 Overlay отвергается **целиком**, а не фильтруется до читаемых строк: молча выкинув одну сломанную
 заметку, мы оставили бы `sequence`, который больше не соответствует записям, и id начали бы
@@ -152,6 +186,14 @@ Sequence переживает пересоздание адаптера: нов�
 Receipt хранит **fingerprint, а не команду**: тело уже лежит на самой заметке, и повторять его
 открытым текстом второй раз — вторая копия пользовательского текста без читателя.
 
+**(1B4-C) Fingerprint owner-мутации** = `stableFingerprint([userId, actorId, role, ownerId ?? UNASSIGNED_OWNER_TOKEN])`.
+`expectedOwnerId` в него **не входит** (D-72, D-73): fingerprint отвечает «что попросили», а предусловие,
+под которым команду отправили, — не часть просьбы; иначе replay уже применённой команды (у которой
+`expectedOwnerId` устарел) стал бы `conflict`. Команды различаются **видом receipt**, а не префиксом
+имени во fingerprint: у note-мутации fingerprint не префиксован именем, и добавить префикс сейчас —
+ломающее изменение (каждый receipt в браузере считался без него). Ключ, потраченный на note, для
+owner-команды даёт `conflict`, и наоборот.
+
 ---
 
 ## 6. AuditRecord
@@ -171,9 +213,35 @@ interface AuditRecord {
 }
 ```
 
+**(1B4-C) `AuditRecord` — discriminated union по `action`:**
+
+```ts
+type AuditRecord = NoteAddedAuditRecord | PrimaryOwnerChangedAuditRecord;
+
+interface PrimaryOwnerChangedAuditRecord {
+  readonly id: string;                    // audit_mock_0001
+  readonly action: "primary_owner_changed";
+  readonly actorEmployeeId: EmployeeId;   // из ctx
+  readonly actorRole: CrmRole;            // из ctx
+  readonly targetUserId: UserId;
+  readonly entityType: "user";
+  readonly entityId: UserId;              // == targetUserId
+  readonly at: ISODateString;
+  readonly reasonCode: "primary_owner_changed_by_employee";
+  readonly previousOwnerId: EmployeeId | null;
+  readonly nextOwnerId: EmployeeId | null;
+  readonly mock: true;
+}
+```
+
+Union, а не плоская запись с `previousOwnerId?`/`nextOwnerId?`: плоская позволила бы note-записи нести
+owner-поля, а owner-записи — их опустить, и ничто бы это не поймало (D-66). Owner id здесь — **сам
+факт** изменения (LOW/CRM-owned), а не содержимое; `null` с любой стороны — реальное «снят».
+
 **Audit фиксирует факт действия, а не содержимое.** В нём нет и не может быть: тела заметки, email,
-телефона, финансовых значений, произвольного пользовательского текста. `reasonCode` — закрытый enum,
-а не свободная строка: свободный текст — ровно тот путь, которым тело заметки просочилось бы в журнал.
+телефона, имени пользователя, финансовых значений, произвольного текста, idempotency-ключа, UI-лейбла,
+диагностики storage. `reasonCode` — закрытый enum, а не свободная строка: свободный текст — ровно тот
+путь, которым тело заметки просочилось бы в журнал.
 
 Audit UI и read endpoint **не созданы** — записи только пишутся. UI заметок (1B4-B) audit не показывает:
 в success-подтверждении нет ни `auditId`, ни `noteId`, ни actor'а — сотруднику сообщается факт
@@ -183,22 +251,59 @@ Audit UI и read endpoint **не созданы** — записи только 
 
 ## 7. Мутации: что есть и чего нет
 
-Реализована **ровно одна**:
+Реализованы **ровно две**:
 
 ```ts
 interface CrmMutations {
   addNote(ctx: CrmContext, command: AddNoteCommand): Promise<Result<AddNoteResult>>;
+  // (1B4-C)
+  assignPrimaryOwner(ctx: CrmContext, command: AssignPrimaryOwnerCommand): Promise<Result<AssignPrimaryOwnerResult>>;
 }
 ```
 
 Пустых методов на будущее **не добавлено**. §15 контракта резервировал полный список
-(`createTask`, `updateTask`, `createCase`, `updateCase`, `assignPrimaryOwner`, `resolveSignal`,
+(`createTask`, `updateTask`, `createCase`, `updateCase`, `resolveSignal`,
 `acceptRecommendedAction`, `revealUserPii`), но член интерфейса без реализации — это обещание,
 которого провайдер не держит, а `as never` для удовлетворения placeholder-формы — ровно то,
 что D-50 пришлось удалять из контракта Today.
 
-**Не реализованы:** createTask, updateTask, createCase, updateCase, owner assignment,
+**Не реализованы:** createTask, updateTask, createCase, updateCase, task/case assignees,
 signal resolution, recommendation acceptance, reveal PII.
+
+### (1B4-C) `assignPrimaryOwner`
+
+```ts
+interface AssignPrimaryOwnerCommand {
+  userId: UserId;
+  ownerId: EmployeeId | null;             // null = снять; first-class значение
+  expectedOwnerId: EmployeeId | null;     // оптимистичная конкуренция (D-72)
+  idempotencyKey: string;
+}
+interface AssignPrimaryOwnerResult {
+  userId: UserId;
+  ownerId: EmployeeId | null;
+  audit: AuditRecord;
+  replayed: boolean;
+}
+```
+
+Actor — только из `CrmContext`. Порядок (совместим с `addNote`, D-69):
+
+1. Валидация ключа (`invalid_input`).
+2. `ownerId`: `null` разрешён; иначе обязан быть среди `primaryOwnerCandidate` (`invalid_input`).
+3. Существование пользователя (`not_found`).
+4. Permission `canAssignOwner(ctx.role)` (`unauthorized`) — `crm_admin`/`crm_manager`/`retention_manager`.
+5. Idempotency: тот же key + тот же fingerprint → replay; иначе `conflict`.
+6. **`expectedOwnerId`** сверяется с текущим **effective** owner; расхождение → `conflict`, ничего не пишется.
+7. Запись overlay (`internal` при отказе). Инвалидация derived-cache target-пользователя.
+
+**Порядок 5→6 load-bearing:** replay проверяется **до** предусловия, иначе безопасный retry уже
+успешной команды (у которой `expectedOwnerId` теперь устарел) вернул бы `conflict` (D-72).
+
+**Effective owner** = baseline fixture owner, перекрытый последней записью `primary_owner_changed`
+(D-65, D-70). Единственный resolver в провайдере (`effectiveUsers`/`effectiveUser`); fixtures
+неизменяемы (мелкий клон). Все reads — User 360 / Users / Today / task-case / queue — берут owner
+отсюда, поэтому расходиться неоткуда.
 
 ### Команда и результат
 

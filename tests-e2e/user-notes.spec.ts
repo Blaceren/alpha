@@ -89,15 +89,22 @@ async function pageOverflow(page: Page) {
   );
 }
 
-const composer = (page: Page) => page.locator("form textarea");
-const submit = (page: Page) => page.locator('form button[type="submit"]');
+/**
+ * The notes composer form. Since Phase 1B4-C the User 360 renders a second form —
+ * the owner picker in "Ответственный и работа" — so a bare `form` locator is
+ * ambiguous. The notes form is the only one with a textarea; scoping to it keeps
+ * every assertion below exactly as it was.
+ */
+const notesForm = (page: Page) => page.locator("form").filter({ has: page.locator("textarea") });
+const composer = (page: Page) => notesForm(page).locator("textarea");
+const submit = (page: Page) => notesForm(page).locator('button[type="submit"]');
 
 /**
- * The composer's own alert. Scoped to the form because Next.js keeps a permanent
- * empty `role="alert"` route announcer in the document, so an unscoped alert
- * query matches two elements.
+ * The composer's own alert. Scoped to the notes form because Next.js keeps a
+ * permanent empty `role="alert"` route announcer in the document, and the owner
+ * form has an alert of its own.
  */
-const formAlert = (page: Page) => page.locator("form").getByRole("alert");
+const formAlert = (page: Page) => notesForm(page).getByRole("alert");
 
 const notesHeading = (page: Page) => page.getByRole("heading", { level: 2, name: "Заметки" });
 const notesSection = (page: Page) =>

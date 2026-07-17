@@ -658,3 +658,94 @@ User 360 доступен **всем девяти ролям** хотя бы в 
 - **Raw-код.** Тело собиралось как `` `Синтетическая заметка: ${u.state.reasonCode}.` `` и печатало на экран `support_blocked` — то, что `config/labels` существует, чтобы не допускать. В отличие от остальных кодов экрана, у `state.reasonCode` **нет карты подписей** (её имеет только `priority.reasonCode` — `PRIORITY_REASON_LABEL`), а data-слой и не может резолвить лейблы: русский текст живёт в `config`, который зависит от `domain`, а не наоборот. Поэтому засеяна человеческая фраза. Существующий тест «shows no raw enum codes anywhere» ловил это.
 - **Дата.** `createdAt` был равен `clock.nowIso()`, поэтому засеянная заметка на каждой загрузке читалась как «только что» и была неотличима от заметки, которую сотрудник действительно только что написал. Теперь она датирована на два дня назад — по-прежнему детерминированно (от `FixedMockClock`), и порядок стал видимым: авторские заметки штампуются `nowMs + sequence` и встают выше.
 - Тела фикстурных заметок ни один тест не проверял (только `id`), схема overlay не менялась.
+
+---
+
+## Phase 1B4-C — записи реализации (Primary Owner Assignment)
+
+## D-64 · Overlay расширен аддитивно в пределах v1 — **Locked**
+
+Ключ `ata-crm.mutation-overlay.v1` и `version: 1` **не меняются**. Owner-мутация не добавила ни одного нового поля верхнего уровня в `MutationOverlay`: история владельца — это записи `primary_owner_changed` в уже существующем `auditRecords` (D-65), поэтому старому overlay Phase 1B4-B **нечего терять**.
+
+- **Fail-closed сохранён и остался fail-closed.** `parseOverlay` по-прежнему отвергает overlay целиком при любой сломанной записи, неизвестной `version`, неизвестном `action`/`entityType`/`reasonCode` и неизвестном `receipt.kind`. Расширение — это **одно новое допустимое значение** в каждом из этих измерений, а не дыра. Обоснование прямо из MUTATION_OVERLAY §2: fail-closed вводился против **повреждённых** данных, а не против **более старых, но целых**; отсутствие поля, которого в v1 никогда не было, — не повреждение.
+- **Не v2, не миграция, не новый key** (явное решение задачи). Толерантное чтение сохраняет заметки без кода миграции; §2 говорит «`version !== 1` → пустой overlay», и переход на v2 без миграции сам по себе стёр бы заметки.
+- Regression-тест обязателен и добавлен (`overlay-backcompat.test.ts`): raw overlay Phase 1B4-B собирается вручную, читается новым парсером (заметки/audit/receipts/sequence целы), выполняется owner-мутация, overlay перечитывается — старые заметки и новый owner-change сосуществуют.
+
+## D-65 · История владельца выводится из append-only audit, отдельного `ownerAssignments[]` нет — **Locked**
+
+Текущий primary owner = baseline fixture owner, перекрытый **последней** записью `primary_owner_changed` для пользователя. «Последняя» — по порядку в массиве (записи только добавляются, store пишет в порядке `sequence`).
+
+- **Почему не отдельная структура.** Append-only лог уже отвечает и на «кто владелец сейчас» (последняя запись), и на «как мы к этому пришли» (D-08 требует хранить историю). Вторая структура с теми же фактами — вторая структура, которая может разойтись с первой (прецедент D-39/D-40).
+- **Влияние:** `AuditRecord` стал discriminated union по `action`; `previousOwnerId`/`nextOwnerId` живут на owner-записи (D-66).
+
+## D-66 · `AuditRecord` — discriminated union; owner-запись несёт previous/next — **Locked**
+
+`AuditRecord = NoteAddedAuditRecord | PrimaryOwnerChangedAuditRecord`, дискриминант — `action`.
+
+- **Почему union, а не общая плоская запись с `previousOwnerId?`/`nextOwnerId?`.** Плоская запись позволила бы note-записи нести owner-поля, а owner-записи — их опустить, и ничто бы это не поймало. В union note-запись **не может** иметь owner-полей, а owner-запись **невозможно собрать** без них.
+- Owner employee id — LOW/CRM-owned (CRM_DOMAIN_MODEL §14) и здесь это **сам факт** изменения, а не содержимое: owner-change, не говорящий что изменилось, не фиксирует ничего. `null` с любой стороны — реальное значение (снят), а не отсутствие.
+- В audit по-прежнему нет: email, телефона, имени пользователя, финансов, свободного текста, idempotency-ключа, UI-лейбла, тела заметки, диагностики storage. `reasonCode` — закрытый enum (`primary_owner_changed_by_employee`). Audit UI и read endpoint не создаются.
+
+## D-67 · Canonical employee directory; `OWNER_LABEL`/owner-фильтр выводятся из него — **Locked**
+
+Один типизированный `EMPLOYEE_DIRECTORY` (`src/domain/identity/employees.ts`): `employeeId`, `displayName`, `primaryOwnerCandidate`. Убирает дрейф между `OWNER_LABEL` (было 9 id), `OWNER_IDS` Users-фильтра (было 6) и фактическими владельцами фикстур (5).
+
+- **Не HR-модель:** нет email, телефона, команды, нагрузки, role scope, fake active/inactive — ничего из этого нет в фикстурах, а выдумать значило бы показать поле, которое выглядит авторитетным и отвечает неверно (тот же довод, что в D-44).
+- `primaryOwnerCandidate: true` — только для владельцев, **реально присутствующих** в baseline (`emp_ret1`, `emp_ret2`, `emp_men1`, `emp_mgr`, `emp_sup1`). Consistency-тест: множество кандидатов === множество distinct non-null `primaryOwnerId` фикстур. Кандидат, которым никто не владеет, — опция, которую нельзя показать; владелец-фикстура без кандидата — владелец, которого picker не смог бы восстановить.
+- `OWNER_LABEL` и опции owner-фильтра Users теперь **выводятся** отсюда. Directory включает и не-кандидатов (`emp_admin`, `emp_mod1`, `emp_an1`, `emp_mock_admin`), чтобы `ownerLabel()` не потерял подписи.
+- **Raw id больше не fallback-подпись.** Прежний fallback `humanizeCode` печатал `emp_xyz` как «Emp xyz» — id с заглавной буквы. Неизвестный id теперь → нейтральное «Неизвестный сотрудник», код не выводится.
+
+## D-68 · `getPrimaryOwnerCandidates` — узкий permission-aware read, не часть `getUser360` — **Locked**
+
+Кандидаты назначения — отдельная read-операция контракта, возвращает `{ employeeId, displayName }[]`.
+
+- **Отдельно от `getUser360`** (D-35 остаётся в силе): список не про конкретного пользователя — он один для всех, и складывать его в агрегат значило бы перечитывать весь профиль ради выпадающего списка. **Текущий** owner остаётся частью `getUser360`.
+- **Permission-aware:** доступно только при `canAssignOwner(ctx.role)`; остальным — `unauthorized`, а не пустой список (пустой список утверждает «некого назначить» — другое и неверное утверждение). UI запрещённых ролей операцию не вызывает вовсе.
+- Возвращает только id и подпись: role, email, команда, нагрузка, пользователи сотрудника, финансы — **не** возвращаются. React список не собирает и не копирует.
+
+## D-69 · `assignPrimaryOwner`; scope не моделируется, boolean `canAssignOwner` — **Locked**
+
+`CrmMutations` += ровно один метод. Заглушек прочих мутаций нет (тот же принцип, что в D-50). Команда: `{ userId, ownerId: EmployeeId|null, expectedOwnerId: EmployeeId|null, idempotencyKey }`; actor — только из `CrmContext`.
+
+- **Права не расширены.** Назначают `crm_admin`/`crm_manager`/`retention_manager` — это уже существовавший с Phase 1A `assign_owner`, у которого до сих пор не было потребителя. Матрица не менялась. `support` пишет заметки и owner **не** назначает — Edit и Assign — разные измерения (D-53).
+- **Scope `own/team/all` не реализован** (решение задачи; тот же довод, что D-44): mock-сессия даёт всем один `emp_mock_admin`, employee→team-модели нет, поэтому team-проверка могла бы отвечать только угадыванием. Вернуть — когда у сессии появится настоящий actor/team из бэкенда.
+- **`ownerId: null`** (снятие) — first-class: «без ответственного» уже реальное состояние везде (фикстуры, фильтры Users/Today, `summary.unassigned`).
+- Порядок проверок совместим с `addNote`: `invalid_input` → `not_found` → `unauthorized` → (idempotency) → `conflict` → write. `not_found` раньше `unauthorized` — сохранённая mock-семантика (то же известное свойство, что у `addNote`).
+
+## D-70 · Один canonical effective-owner resolver; fixtures неизменяемы — **Locked**
+
+Единственная точка в провайдере (`effectiveUsers`/`effectiveUser`) накладывает overlay-owner поверх baseline. Fixture **никогда** не мутируется: `defaultDataset` мемоизирует один массив на `FixedMockClock` и раздаёт те же `MockUser` всем инстансам провайдера — in-place присваивание протекло бы между demo-состояниями и сломало бы инвариант «датасет побайтово равен себе после мутации». Клон мелкий (30 персон, стоимость незначима).
+
+- Все reads берут owner отсюда: `getUser360`, `searchUsers`, `getUserById`, task/case synthetic owner, mentor/support queue, и через `buildTodayWorkspace(effectiveUsers())` — Today row/фильтр/`summary.unassigned`/`filterOptions.owners`. Не дублируется в каждом методе.
+- **Derived cache** держал ссылку на user и мог отдать старого owner. Запись сравнивает закэшированный `primaryOwnerId` с запрошенным и пересчитывает при расхождении; мутация дополнительно инвалидирует запись target-пользователя. Работает и когда overlay записан **другим** инстансом провайдера над тем же storage (storage читается заново). Signals/priority от owner не зависят и не пересчитываются содержательно.
+
+## D-71 · Автор засеянной заметки заморожен по baseline fixture — **Locked**
+
+`fixtureNotes` берёт `authorEmployeeId` из **baseline** владельца (поиск по нетронутому датасету), а не из `u`, который теперь несёт effective owner.
+
+- Авторство — исторический факт: сотрудник, написавший заметку два дня назад, её и написал; переназначение сегодня не должно переписывать автора задним числом. Чтение с `u` делало бы ровно это, как только `u` начал носить effective owner. Тест: прочитать заметку → сменить owner → прочитать снова → `authorEmployeeId` тот же. Raw author id в User 360 по-прежнему не выводится.
+
+## D-72 · `expectedOwnerId` — оптимистичная конкуренция без поля версии — **Locked**
+
+Перед записью provider сравнивает `command.expectedOwnerId` с текущим effective owner; при расхождении — `conflict`, ничего не пишется, прежний overlay побайтово цел.
+
+- **Почему не синтетический revision.** Owner **и есть** состояние; сравнить его напрямую дешевле и честнее, чем заводить версию ради одного скаляра. Заметкам это не требовалось — добавление заметки не может её потерять; замена owner — может (вторая вкладка молча затёрла бы первую).
+- **Порядок critical:** replay уже совершённой команды проверяется **до** `expectedOwnerId`. После успеха текущий owner = назначенному, поэтому исходный `expectedOwnerId` устарел; проверь предусловие первым — и каждый безопасный retry успешной записи вернул бы `conflict`. `expectedOwnerId` по этой же причине **не входит** в fingerprint (D-73).
+- **Live cross-tab sync не реализован** (решение задачи): storage-listener не добавлен; открытая старая вкладка может остаться stale до следующего read/remount/navigation. Users/Today получают новое значение при следующем provider read.
+
+## D-73 · Idempotency owner-мутации: fingerprint + discriminated receipt — **Locked**
+
+Fingerprint через существующий `stableFingerprint` (length-prefix): `[userId, actorId, role, ownerId ?? UNASSIGNED_OWNER_TOKEN]`. `expectedOwnerId` в него **не входит** (D-72). Crypto нет (D-57).
+
+- Тот же key + та же command identity → `replayed: true`, второй audit не создаётся, возвращается исходный результат. Другой user/owner/actor → `conflict`. Snятие отличается от назначения. Storage failure **не сжигает** key (ничего не записано — повтор безопасен).
+- **Receipt — discriminated union:** legacy note-receipt (без `kind`, отсутствие дискриминанта = note) и owner-receipt (`kind: "primary_owner_change"`, `auditId`, без `noteId`). Общий тип **не** привязан к `noteId` — именно эта привязка делала его note-only. Ключ, потраченный на note, потрачен и для owner-команды даёт `conflict`, и наоборот.
+
+## D-74 · UI назначения — inline в «Ответственный и работа», нативный select, явный Save — **Locked**
+
+Контрол живёт в существующей секции `UserOwnerContext`, не в диалоге/шите/тулбаре/Users/Today.
+
+- **Нативный `<select>`**, не combobox/typeahead: кандидатов пять плюс «Без ответственного» — typeahead ничего не решает, но добавляет a11y-поверхность. Нативный бесплатно даёт клавиатуру, фокус и мобильный picker.
+- **Явный «Сохранить», не auto-submit:** в отличие от добавления заметки это **замена** значения; промах по списку из пяти молча затёр бы текущего владельца без отмены. Лишний клик — и есть отмена. Save disabled при unchanged (мутация, ничего не меняющая, — ложная запись в audit).
+- **Три роли** получают форму, **шесть** — спокойную строку «Ваша роль не может менять ответственного», без hidden/disabled-контрола (D-59); текущий owner виден всем девяти. Решает единственный `canAssignOwner(role)`; списка ролей в React нет.
+- **Никакого optimistic update** (D-60): success → refetch **всего** `getUser360` (owner в агрегате, D-35) → owner из canonical read-model; `retry` проброшен из `useUser360Query` в секцию. Состояния: unchanged / pending (`aria-busy`, ref-guard, один вызов) / success (`role=status`, без raw id и метаданных, фокус возвращается на select) / conflict (перечитать, показать актуального, сбросить выбор, новый attempt) / forbidden (формы нет) / not_found / internal (retry тем же ключом) / upstream_unavailable. `CrmError.message` в UI не рендерится — тотальная `Record<CrmErrorCode, string>` (`owner-error.ts`, тот же инвариант D-62).
+- **Смена роли:** кандидаты перечитываются, право переоценивается, форма у запрещённой роли исчезает, несохранённый выбор сбрасывается, success/error очищаются, attempt сбрасывается. Заодно исправлен соседний дефект `useAddNote`: attempt заметки тоже сбрасывается при смене session identity (иначе key, выписанный под прежней ролью, при fingerprint по роли дал бы ложный `conflict`).

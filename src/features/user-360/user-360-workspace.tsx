@@ -34,8 +34,12 @@ import {
  *
  * Notes (Phase 1B4-B) are the one part not served by the aggregate: they carry a
  * per-note privacy rule with its own canonical projector, so they keep their own
- * permission-aware read and their own local states. The rest of the screen stays
- * read-only — recommendations still offer no action control.
+ * permission-aware read and their own local states.
+ *
+ * Owner assignment (Phase 1B4-C) is served BY the aggregate and refetches it whole.
+ * Only the candidate list is a read of its own, because it is not about this user.
+ * The rest of the screen stays read-only — recommendations still offer no action
+ * control.
  *
  * `providerOverride` / `mutationsOverride` are for tests only; production uses
  * the app's single provider instance for both halves of the boundary.
@@ -104,7 +108,16 @@ export function User360Workspace({
           {/* Context stays in view while the main column scrolls. */}
           <div className="flex flex-col gap-4 lg:sticky lg:top-0">
             <UserFinancialSummary view={view} />
-            <UserOwnerContext view={view} />
+            {/* Owner assignment refetches the WHOLE aggregate: the owner is part of
+                `getUser360`, which is the screen's single read (D-35), so there is
+                no narrower re-read to give it without inventing a second owner
+                source that could disagree with the first. */}
+            <UserOwnerContext
+              view={view}
+              onOwnerAssigned={retry}
+              providerOverride={providerOverride}
+              mutationsOverride={mutationsOverride}
+            />
           </div>
         </aside>
       </div>

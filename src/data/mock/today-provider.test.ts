@@ -106,10 +106,18 @@ describe("getTodayWorkspace — modes", () => {
 });
 
 describe("getTodayWorkspace — read-only", () => {
+  /**
+   * Today still has no mutating counterpart — but the check can no longer be
+   * "the provider has no mutator at all", which only held while none existed.
+   * Phase 1B4-C added `assignPrimaryOwner`, which belongs to User 360. So the
+   * allowed set is named explicitly: a new mutator has to be admitted here on
+   * purpose, and none of them may be a Today operation.
+   */
   it("has no mutating counterpart on the contract", () => {
     const ops = Object.getOwnPropertyNames(MockCrmDataProvider.prototype);
     const mutators = ops.filter((o) => /^(create|update|assign|close|complete|resolve|delete|set)/i.test(o));
-    expect(mutators).toEqual([]);
+    expect(mutators.sort()).toEqual(["assignPrimaryOwner"]);
+    expect(mutators.filter((o) => /today/i.test(o))).toEqual([]);
   });
 
   it("does not mutate the dataset between calls", async () => {

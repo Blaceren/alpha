@@ -74,6 +74,22 @@ export function useAddNote(userId: string, options: UseAddNoteOptions = {}): Use
   const attemptRef = React.useRef(0);
   const pendingRef = React.useRef(false);
 
+  /**
+   * Advance the key when the session identity changes (Phase 1B4-C).
+   *
+   * The provider fingerprints the actor's role along with the body, so a key minted
+   * under crm_admin and submitted under crm_manager describes a different command
+   * and comes back as a `conflict` that has nothing to do with anything the employee
+   * did. Both roles may write notes, so the composer does not unmount on the switch
+   * and would otherwise carry the stale key straight into the next submit.
+   */
+  const sessionIdentity = `${session.employeeId}:${session.role}`;
+  const identityRef = React.useRef(sessionIdentity);
+  if (identityRef.current !== sessionIdentity) {
+    identityRef.current = sessionIdentity;
+    attemptRef.current += 1;
+  }
+
   const submit = React.useCallback(
     async (raw: string): Promise<boolean> => {
       if (pendingRef.current) return false;
