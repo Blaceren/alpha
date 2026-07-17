@@ -4,11 +4,13 @@
  * text ever enters this model (ROLE_PERMISSION_MATRIX §4.2).
  *
  * Phase 1B4-A wrote note records; Phase 1B4-C adds owner-change records and turns
- * the model into a discriminated union on `action`. The union is the point: a
- * single flat record with optional `previousOwnerId?`/`nextOwnerId?` would let a
- * note record carry owner fields and an owner record omit them, and nothing would
- * catch either. Here a note record cannot have owner fields at all, and an owner
- * record cannot be built without them.
+ * the model into a discriminated union on `action`; Phase 1B4-D adds pin-change
+ * records. The union is the point: a single flat record with optional
+ * `previousOwnerId?`/`nextOwnerId?`/`previousPinned?` would let a note record carry
+ * owner fields and an owner record omit them, and nothing would catch either. Here
+ * a note-add record cannot have owner or pin fields at all, an owner record cannot
+ * be built without its owner fields, and a pin record cannot be built without its
+ * pin fields.
  *
  * Reading these records (audit screen / read endpoint) is still not part of any
  * phase. Phase 1B4-C does consume them internally: the owner-change records ARE
@@ -19,7 +21,7 @@ import type { EmployeeId, ISODateString, UserId } from "@/domain/shared/primitiv
 import type { CrmRole } from "@/domain/identity/roles";
 
 /** Only the actions actually implemented. Future mutations extend this union. */
-export type AuditAction = "note_added" | "primary_owner_changed";
+export type AuditAction = "note_added" | "primary_owner_changed" | "note_pin_changed";
 
 export type AuditEntityType = "note" | "user";
 
@@ -29,7 +31,8 @@ export type AuditEntityType = "note" | "user";
  */
 export type AuditReasonCode =
   | "note_added_by_employee"
-  | "primary_owner_changed_by_employee";
+  | "primary_owner_changed_by_employee"
+  | "note_pin_changed_by_employee";
 
 /** Fields every record carries, whatever it records. */
 interface AuditRecordBase {
@@ -67,7 +70,29 @@ export interface PrimaryOwnerChangedAuditRecord extends AuditRecordBase {
   readonly nextOwnerId: EmployeeId | null;
 }
 
-export type AuditRecord = NoteAddedAuditRecord | PrimaryOwnerChangedAuditRecord;
+/**
+ * A note pin/unpin (Phase 1B4-D). `previousPinned`/`nextPinned` are the fact
+ * itself — a pin change that does not say which way it went records nothing — and
+ * neither is content: a boolean carries no note body, no PII and no financial
+ * value. The record is the ONLY place the effective pinned state is kept: there is
+ * no `pinned` column mutated on the note and no separate pin store, so the append-
+ * only log and the state it produces cannot disagree (the same choice D-65 made
+ * for ownership).
+ */
+export interface NotePinChangedAuditRecord extends AuditRecordBase {
+  readonly action: "note_pin_changed";
+  readonly entityType: "note";
+  /** The note whose pin changed — a fixture note id or an authored `note_mock_*`. */
+  readonly entityId: string;
+  readonly reasonCode: "note_pin_changed_by_employee";
+  readonly previousPinned: boolean;
+  readonly nextPinned: boolean;
+}
+
+export type AuditRecord =
+  | NoteAddedAuditRecord
+  | PrimaryOwnerChangedAuditRecord
+  | NotePinChangedAuditRecord;
 
 /** Audit id derived from the overlay sequence — deterministic, never random. */
 export function mockAuditId(sequence: number): string {

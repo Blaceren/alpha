@@ -13,6 +13,7 @@
 import type { EmployeeId } from "@/domain/shared/primitives";
 import type { CrmRole } from "@/domain/identity/roles";
 import type { CrmNote } from "@/domain/notes/note";
+import type { AuditRecord } from "@/domain/audit/audit";
 
 /** Who is asking. Comes from the trusted provider context, never from a command. */
 export interface NoteActor {
@@ -52,8 +53,49 @@ export function projectNotes(notes: readonly CrmNote[], actor: NoteActor): CrmNo
 }
 
 /**
+ * The single canonical way to know a note's CURRENT pinned state (Phase 1B4-D).
+ *
+ * `note.pinned` is the note's BASELINE — `false` on every fixture and authored
+ * note, since a note is never born pinned. A pin/unpin is recorded as a
+ * `note_pin_changed` audit entry, NOT by rewriting the note: fixtures are
+ * immutable and authored notes are not mutated for pin state either, so the
+ * effective value is the baseline overridden by the LATEST matching audit record.
+ * This mirrors D-65/D-70's owner resolver: the append-only log is the state, so a
+ * second store cannot disagree with it.
+ *
+ * "Latest" is resolved deterministically by `at`, then by audit `id` — never by
+ * array position. Every read that shows a note's pinned state must go through
+ * here, and it must run BEFORE `sortNotes`, or the pinned-first order would sort
+ * on the stale baseline. Neither the fixture nor the overlay note is mutated: a
+ * changed note is a shallow clone with the resolved `pinned`.
+ */
+export function resolveEffectivePins(
+  notes: readonly CrmNote[],
+  auditRecords: readonly AuditRecord[],
+): CrmNote[] {
+  const latest = new Map<string, { at: number; id: string; pinned: boolean }>();
+  for (const record of auditRecords) {
+    if (record.action !== "note_pin_changed") continue;
+    const at = Date.parse(record.at);
+    const prev = latest.get(record.entityId);
+    // Later `at` wins; an equal `at` is broken by the higher audit id, so the
+    // resolution is total and reproducible regardless of iteration order.
+    if (!prev || at > prev.at || (at === prev.at && record.id > prev.id)) {
+      latest.set(record.entityId, { at, id: record.id, pinned: record.nextPinned });
+    }
+  }
+  if (latest.size === 0) return [...notes];
+  return notes.map((note) => {
+    const override = latest.get(note.id);
+    if (!override || override.pinned === note.pinned) return note;
+    return { ...note, pinned: override.pinned };
+  });
+}
+
+/**
  * Contract order (§7): pinned first, then newest first. `id` breaks ties so that
  * notes created against a fixed mock clock keep a stable, reproducible order.
+ * Operates on the pinned state it is given — apply `resolveEffectivePins` first.
  */
 export function sortNotes(notes: readonly CrmNote[]): CrmNote[] {
   return [...notes].sort((a, b) => {

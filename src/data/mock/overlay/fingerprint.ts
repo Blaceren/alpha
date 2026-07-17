@@ -97,3 +97,34 @@ export function fingerprintAssignPrimaryOwner(input: {
     input.ownerId ?? UNASSIGNED_OWNER_TOKEN,
   ]);
 }
+
+/**
+ * The identity of a setNotePinned command (Phase 1B4-D): which user, which note,
+ * which actor, which role, which DESIRED pinned state.
+ *
+ * `expectedPinned` is deliberately NOT part of it, for the same reason
+ * `expectedOwnerId` is not part of the owner fingerprint: the fingerprint answers
+ * "what was asked", and the precondition a command was sent under is not part of
+ * what it asked for. Once a pin command has been applied the current state IS the
+ * value it set, so re-sending it with the original `expectedPinned` would be a
+ * stale precondition — and a repeat of an already-succeeded write must replay to
+ * the original result, not conflict.
+ *
+ * The desired state is length-prefixed like every other part, so the two tokens
+ * cannot collide with a note id or a role.
+ */
+export function fingerprintSetNotePinned(input: {
+  userId: string;
+  actorId: string;
+  role: string;
+  noteId: string;
+  pinned: boolean;
+}): string {
+  return stableFingerprint([
+    input.userId,
+    input.actorId,
+    input.role,
+    input.noteId,
+    input.pinned ? "pinned" : "unpinned",
+  ]);
+}

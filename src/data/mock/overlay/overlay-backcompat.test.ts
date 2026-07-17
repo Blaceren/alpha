@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { MockCrmDataProvider } from "../MockCrmDataProvider";
 import {
   MUTATION_OVERLAY_STORAGE_KEY,
+  NOTE_PIN_RECEIPT_KIND,
   parseOverlay,
   PRIMARY_OWNER_RECEIPT_KIND,
 } from "./mutation-overlay";
@@ -262,5 +263,159 @@ describe("overlay v1 — widening did not open a hole", () => {
     const o = legacy();
     (o.notes as Record<string, unknown>[])[0]!.visibility = "public";
     expect(parseOverlay(JSON.stringify(o)).notes).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------- Phase 1B4-D */
+
+/**
+ * A Phase 1B4-C overlay, written out literally: two notes, a note-add pair and an
+ * OWNER change, plus the owner receipt with its `kind`. This is what a browser that
+ * used owner assignment but never pinned a note holds.
+ */
+const OVERLAY_1B4C_JSON = JSON.stringify({
+  version: 1,
+  sequence: 3,
+  notes: JSON.parse(LEGACY_OVERLAY_JSON).notes,
+  auditRecords: [
+    ...JSON.parse(LEGACY_OVERLAY_JSON).auditRecords,
+    {
+      id: "audit_mock_0003",
+      action: "primary_owner_changed",
+      actorEmployeeId: "emp_mock_admin",
+      actorRole: "crm_admin",
+      targetUserId: USER_ID,
+      entityType: "user",
+      entityId: USER_ID,
+      at: "2026-07-12T09:00:00.003Z",
+      reasonCode: "primary_owner_changed_by_employee",
+      previousOwnerId: "emp_ret1",
+      nextOwnerId: "emp_ret2",
+      mock: true,
+    },
+  ],
+  idempotencyReceipts: [
+    ...JSON.parse(LEGACY_OVERLAY_JSON).idempotencyReceipts,
+    { kind: PRIMARY_OWNER_RECEIPT_KIND, key: "owner-legacy", fingerprint: "0000aaaa0000aaaa", auditId: "audit_mock_0003" },
+  ],
+});
+
+const FIXTURE_NOTE_ID = `${USER_ID}_note_1`;
+
+describe("overlay v1 — 1B4-B/1B4-C overlays survive a pin, and a pin coexists", () => {
+  it("a pin on a 1B4-B (notes-only) overlay leaves every note, audit and receipt intact", async () => {
+    const { provider, storage } = seeded();
+    const before = overlayIn(storage);
+
+    const res = await provider.setNotePinned(ctx, {
+      userId: USER_ID,
+      noteId: FIXTURE_NOTE_ID,
+      pinned: true,
+      expectedPinned: false,
+      idempotencyKey: "pin-key-1",
+    });
+    expect(res.status).toBe("ok");
+
+    const after = overlayIn(storage);
+    // Notes are untouched, by value — pin state is not written onto them.
+    expect(after.notes).toEqual(before.notes);
+    // The legacy audit records are untouched and the pin record was appended.
+    expect(after.auditRecords.slice(0, 2)).toEqual(before.auditRecords);
+    expect(after.auditRecords.at(-1)!.action).toBe("note_pin_changed");
+    // The legacy receipts are untouched and the pin receipt was appended.
+    expect(after.idempotencyReceipts.slice(0, 2)).toEqual(before.idempotencyReceipts);
+    expect(after.idempotencyReceipts.at(-1)!.kind).toBe(NOTE_PIN_RECEIPT_KIND);
+    // The sequence continued from the legacy value rather than restarting.
+    expect(after.sequence).toBe(3);
+  });
+
+  it("a 1B4-C overlay (notes + owner) parses and a pin coexists with the owner history", async () => {
+    const storage = new MemoryKeyValueStorage();
+    storage.setItem(MUTATION_OVERLAY_STORAGE_KEY, OVERLAY_1B4C_JSON);
+    const provider = new MockCrmDataProvider({ clock, storage });
+
+    // The owner record is readable before we touch anything.
+    const owner0 = await provider.getUser360(ctx, { userId: USER_ID });
+    expect(owner0.data!.owner.ownerId).toBe("emp_ret2");
+
+    const res = await provider.setNotePinned(ctx, {
+      userId: USER_ID,
+      noteId: FIXTURE_NOTE_ID,
+      pinned: true,
+      expectedPinned: false,
+      idempotencyKey: "pin-key-2",
+    });
+    expect(res.status).toBe("ok");
+
+    // A fresh provider over the same storage still sees notes, the owner AND the pin.
+    const fresh = new MockCrmDataProvider({ clock, storage });
+    const notes = await fresh.getUserNotes(ctx, { userId: USER_ID });
+    expect(notes.data!.items.map((n) => n.body)).toContain("Вторая заметка");
+    expect(notes.data!.items.find((n) => n.id === FIXTURE_NOTE_ID)!.pinned).toBe(true);
+    const owner = await fresh.getUser360(ctx, { userId: USER_ID });
+    expect(owner.data!.owner.ownerId).toBe("emp_ret2");
+
+    const reread = overlayIn(storage);
+    expect(reread.auditRecords.filter((a) => a.action === "note_added")).toHaveLength(2);
+    expect(reread.auditRecords.filter((a) => a.action === "primary_owner_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_pin_changed")).toHaveLength(1);
+  });
+});
+
+describe("overlay v1 — the pin widening did not open a hole", () => {
+  const legacy = () => JSON.parse(LEGACY_OVERLAY_JSON) as Record<string, unknown>;
+  const withAudit = (record: unknown) => {
+    const o = legacy();
+    (o.auditRecords as unknown[]).push(record);
+    return JSON.stringify(o);
+  };
+  const withReceipt = (receipt: unknown) => {
+    const o = legacy();
+    (o.idempotencyReceipts as unknown[]).push(receipt);
+    return JSON.stringify(o);
+  };
+
+  const validPinAudit = {
+    id: "audit_mock_0003",
+    action: "note_pin_changed",
+    actorEmployeeId: "emp_mock_admin",
+    actorRole: "crm_admin",
+    targetUserId: USER_ID,
+    entityType: "note",
+    entityId: "note_mock_0001",
+    at: "2026-07-13T09:00:00.003Z",
+    reasonCode: "note_pin_changed_by_employee",
+    previousPinned: false,
+    nextPinned: true,
+    mock: true,
+  };
+
+  it("accepts a well-formed pin audit record", () => {
+    expect(parseOverlay(withAudit(validPinAudit)).auditRecords).toHaveLength(3);
+  });
+
+  it("accepts a well-formed pin receipt", () => {
+    const receipt = { kind: NOTE_PIN_RECEIPT_KIND, key: "k", fingerprint: "f", auditId: "audit_mock_0003" };
+    expect(parseOverlay(withReceipt(receipt)).idempotencyReceipts).toHaveLength(3);
+  });
+
+  it.each([
+    ["a non-boolean previousPinned", { ...validPinAudit, previousPinned: "yes" }],
+    ["a missing nextPinned", { ...validPinAudit, nextPinned: undefined }],
+    ["a mismatched entity type", { ...validPinAudit, entityType: "user" }],
+    ["an invented reason code", { ...validPinAudit, reasonCode: "because" }],
+    ["a lost mock marker", { ...validPinAudit, mock: false }],
+  ])("fails closed on %s — the whole overlay, notes included", (_label, record) => {
+    const overlay = parseOverlay(withAudit(record));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.auditRecords).toEqual([]);
+    expect(overlay.sequence).toBe(0);
+  });
+
+  it("fails closed on a pin receipt without an auditId", () => {
+    const receipt = { kind: NOTE_PIN_RECEIPT_KIND, key: "k", fingerprint: "f" };
+    const overlay = parseOverlay(withReceipt(receipt));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.idempotencyReceipts).toEqual([]);
   });
 });

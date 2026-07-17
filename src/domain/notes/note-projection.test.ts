@@ -4,9 +4,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { CRM_ROLES } from "@/domain/identity/roles";
-import { canViewNote, projectNotes, sortNotes } from "./note-projection";
+import { canViewNote, projectNotes, resolveEffectivePins, sortNotes } from "./note-projection";
 import { normalizeNoteBody, NOTE_BODY_MAX_LENGTH, mockNoteId } from "./note";
 import type { CrmNote, NoteVisibility } from "./note";
+import type { AuditRecord, NotePinChangedAuditRecord } from "@/domain/audit/audit";
 
 function note(over: Partial<CrmNote> = {}): CrmNote {
   return {
@@ -124,6 +125,90 @@ describe("sortNotes", () => {
     const first = sortNotes(notes).map((n) => n.id);
     expect(sortNotes(notes).map((n) => n.id)).toEqual(first);
     expect(notes.map((n) => n.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("resolveEffectivePins", () => {
+  function pinAudit(over: Partial<NotePinChangedAuditRecord>): NotePinChangedAuditRecord {
+    return {
+      id: "audit_mock_0001",
+      action: "note_pin_changed",
+      actorEmployeeId: "emp_author",
+      actorRole: "crm_admin",
+      targetUserId: "u_001",
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T09:00:00.001Z",
+      reasonCode: "note_pin_changed_by_employee",
+      previousPinned: false,
+      nextPinned: true,
+      mock: true,
+      ...over,
+    };
+  }
+
+  it("returns notes unchanged when there are no pin records", () => {
+    const notes = [note({ id: "n1" }), note({ id: "n2" })];
+    expect(resolveEffectivePins(notes, [])).toEqual(notes);
+  });
+
+  it("ignores audit records that are not pin changes", () => {
+    const other: AuditRecord = {
+      id: "audit_mock_0009",
+      action: "note_added",
+      actorEmployeeId: "emp_author",
+      actorRole: "crm_admin",
+      targetUserId: "u_001",
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T09:00:00.001Z",
+      reasonCode: "note_added_by_employee",
+      mock: true,
+    };
+    expect(resolveEffectivePins([note({ id: "note_mock_0001" })], [other])[0]!.pinned).toBe(false);
+  });
+
+  it("applies the pin to the matching note only", () => {
+    const notes = [note({ id: "note_mock_0001" }), note({ id: "note_mock_0002" })];
+    const out = resolveEffectivePins(notes, [pinAudit({ entityId: "note_mock_0001" })]);
+    expect(out[0]!.pinned).toBe(true);
+    expect(out[1]!.pinned).toBe(false);
+  });
+
+  it("the latest record by `at` wins, whatever the array order", () => {
+    const records = [
+      pinAudit({ id: "audit_mock_0003", at: "2026-07-13T12:00:00.000Z", nextPinned: false }),
+      pinAudit({ id: "audit_mock_0001", at: "2026-07-13T09:00:00.000Z", nextPinned: true }),
+      pinAudit({ id: "audit_mock_0002", at: "2026-07-13T10:00:00.000Z", nextPinned: true }),
+    ];
+    expect(resolveEffectivePins([note({ id: "note_mock_0001" })], records)[0]!.pinned).toBe(false);
+  });
+
+  it("breaks an equal-`at` tie by the higher audit id", () => {
+    const at = "2026-07-13T09:00:00.000Z";
+    const records = [
+      pinAudit({ id: "audit_mock_0001", at, nextPinned: true }),
+      pinAudit({ id: "audit_mock_0002", at, nextPinned: false }),
+    ];
+    expect(resolveEffectivePins([note({ id: "note_mock_0001" })], records)[0]!.pinned).toBe(false);
+  });
+
+  it("does not mutate the input notes — a changed note is a clone", () => {
+    const original = note({ id: "note_mock_0001", pinned: false });
+    const out = resolveEffectivePins([original], [pinAudit({})]);
+    expect(original.pinned).toBe(false);
+    expect(out[0]).not.toBe(original);
+    expect(out[0]!.pinned).toBe(true);
+  });
+
+  it("returns the same note object when the resolved state equals the baseline", () => {
+    const unchanged = note({ id: "note_mock_0001", pinned: false });
+    // A pin then an unpin resolves back to false — same as the baseline.
+    const out = resolveEffectivePins([unchanged], [
+      pinAudit({ id: "audit_mock_0001", at: "2026-07-13T09:00:00.000Z", nextPinned: true }),
+      pinAudit({ id: "audit_mock_0002", at: "2026-07-13T10:00:00.000Z", nextPinned: false }),
+    ]);
+    expect(out[0]).toBe(unchanged);
   });
 });
 

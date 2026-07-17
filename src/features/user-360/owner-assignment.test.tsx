@@ -59,10 +59,13 @@ function renderScreen({
   const full: CrmMutations | undefined = mutations
     ? {
         assignPrimaryOwner: mutations.assignPrimaryOwner,
-        // This suite drives one mutation. A silent no-op for the other would let a
+        // This suite drives one mutation. A silent no-op for the others would let a
         // stray call through unnoticed.
         addNote: () => {
           throw new Error("the owner suite must not call addNote");
+        },
+        setNotePinned: () => {
+          throw new Error("the owner suite must not call setNotePinned");
         },
       }
     : undefined;
@@ -632,6 +635,9 @@ describe("owner assignment — role change", () => {
           mutationsOverride={{
             assignPrimaryOwner,
             addNote: () => {
+              throw new Error("unused");
+            },
+            setNotePinned: () => {
               throw new Error("unused");
             },
           }}

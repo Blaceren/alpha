@@ -269,6 +269,8 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1B3 | **Today Workspace** | выполнен (read-only) — см. раздел ниже |
 | Phase 1B4-A | **Mutation core + addNote (provider-only)** | выполнен — см. раздел ниже |
 | Phase 1B4-B | **User 360 Notes + Add Note UI** | выполнен — см. раздел ниже |
+| Phase 1B4-C | **Primary Owner Assignment** | выполнен — см. раздел ниже |
+| Phase 1B4-D | **User 360 Note Pin / Unpin** | выполнен — см. раздел ниже |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -663,3 +665,66 @@ regression против скрытия колонки и пустого поло
 - `npm audit` — те же baseline-advisories (D-26), fix не выполнялся; `package.json`/`package-lock.json` не менялись.
 - Скриншоты: `screenshots/phase-1b4-c-assign-owner/zoom-acceptance-fix/` (4 кадра 720×450); `final/` и
   прошлые фазы не перезаписаны.
+
+---
+
+## Phase 1B4-D — User 360 Note Pin / Unpin ✅
+
+Третья мутация CRM: закрепление/открепление заметки на User 360. Решения D-75…D-81. Ревью:
+`docs/visual-reviews/PHASE_1B4_D_NOTE_PIN.md`.
+
+### Выполнено
+- **`setNotePinned(ctx, command)`** в `CrmMutations` (теперь ровно `addNote` + `assignPrimaryOwner` +
+  `setNotePinned`). Actor из `ctx`, никогда из команды. Команда — конечное состояние `pinned` +
+  `expectedPinned` (D-78). Порядок: `invalid_input → not_found → unauthorized → idempotency → expectedPinned
+  → write`; отказ по правам — `unauthorized` (D-56).
+- **Право переиспользовано** `canEditUserNotes` / `edit_user_notes` (D-75): pin — это редактирование
+  заметки. Матрица не расширена, нового permission нет. Закрепляют `crm_admin`/`crm_manager`/
+  `retention_manager`/`support`; пять остальных ролей контрола не видят вовсе (D-59).
+- **Любая видимая заметка pinnable** (D-76): fixture, authored, `private` для автора. Поиск заметки в
+  мутации — через тот же `resolveEffectivePins → projectNotes`, что и чтение, поэтому скрытая заметка и
+  несуществующая дают один `not_found` — API нельзя использовать как зонд.
+- **Effective pin из audit-лога** (D-77): единый резолвер `resolveEffectivePins` (`domain/notes/
+  note-projection`): базовый `note.pinned` ⊕ последняя `note_pin_changed` для `note.id` (по `at`, затем
+  по audit id), применяется ДО `sortNotes`. Ни fixture, ни overlay-заметка не мутируются. Отдельного
+  `notePins[]` нет.
+- **Overlay расширен аддитивно в v1** (D-64/D-77): тот же ключ, `version:1`. Новый член union
+  `AuditRecord` (`note_pin_changed` c `previousPinned`/`nextPinned` — только факт, без body/PII/финансов/
+  ключа), новый receipt-kind `note_pin_change`. Guard'ы приняли по одному значению; всё прочее fail-closed.
+  Обязательный regression: raw 1B4-B и 1B4-C overlay читаются без потерь, pin сосуществует с заметками и
+  owner-историей.
+- **UI** в секции «Заметки»: у каждой видимой заметки нативная кнопка (pin-глиф, accessible name — полная
+  инструкция), `aria-pressed`, ≥44×44, клавиатура, focus-visible. Закреплённая — спокойный бейдж
+  «Закреплено» (info-тон, без toast/красного/glow). Никакого optimistic update — refetch `getUserNotes`
+  (D-79); порядок реально меняется. Состояния: idle/pending/success(«Заметка закреплена/откреплена»)/
+  conflict(перечитать + «Состояние заметки уже изменилось…»)/forbidden(нет контрола)/not_found/internal/
+  upstream_unavailable. `CrmError.message` в UI не рендерится — тотальный `Record<CrmErrorCode, string>`
+  (`note-pin-error.ts`, D-62).
+- **Фокус** возвращается на контрол той же заметки после settled refetch, даже если она всплыла наверх —
+  по `note.id`, не по DOM-позиции (D-81). Смена роли очищает pending/success/error и сбрасывает attempt.
+- **Pin не влияет** на Today/Users/priority/SLA/owner/tasks/cases/financials/visibility/body (D-80).
+
+### Результаты проверок
+- `lint` ✅ 0 · `typecheck` ✅ 0 · `build` ✅ (19 routes; `/users/[id]` → 12.4 kB)
+- `test:run` ✅ **872/872** (прежние 799 сохранены + 73 новых: set-note-pinned 37, note-pin UI 19,
+  note-projection resolver +7, overlay-backcompat +10). Адаптирован (не ослаблен) `today-provider`
+  read-only-скан: допускает ровно `assignPrimaryOwner` + `setNotePinned`, Today-мутаторы запрещены.
+- `test:e2e` ✅ **100/100** (прежние 86 сохранены + 14 новых; консоль чистая, hydration-warnings нет)
+- `npm audit` — те же baseline-advisories (D-26), fix не выполнялся; `package.json`/`package-lock.json`
+  не менялись, зависимости не добавлялись.
+- Скриншоты: `screenshots/phase-1b4-d-note-pin/{first-pass,final}/` (9 final-кадров); прошлые фазы не
+  перезаписаны (restored к HEAD после прогона).
+
+### Не входит (сознательно)
+Note body edit, note delete, note visibility change, `private`/`role_restricted` creation, task/case
+mutations, task/case assignees, signal resolution, recommendation completion, owner changes, bulk pin,
+pin в таблице Users и в Today, audit-экран и read endpoint, cross-tab listener, toast-инфраструктура,
+reset-overlay UI, backend/API/database. Матрица прав, identity-проекция, exact-financial visibility **не
+расширялись**. Зависимости не менялись. Secrets/.env не появлялись.
+
+### Известные ограничения (не скрыты)
+- **Live cross-tab sync нет** (как в 1B4-C): открытая старая вкладка может остаться stale до следующего
+  read/remount/navigation; storage-listener не добавлен.
+- **`not_found` раньше `unauthorized`** — сохранённая mock-семантика (та же, что у `addNote`/
+  `assignPrimaryOwner`): запрещённая роль могла бы зондировать существование, но из UI путь недостижим
+  (контрола нет), импакт нулевой (User 360 открыт всем).

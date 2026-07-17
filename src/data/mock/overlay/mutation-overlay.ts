@@ -29,6 +29,9 @@ export const MUTATION_OVERLAY_VERSION = 1;
 /** Discriminant of the owner-change receipt. Note receipts carry no `kind`. */
 export const PRIMARY_OWNER_RECEIPT_KIND = "primary_owner_change";
 
+/** Discriminant of the pin-change receipt (Phase 1B4-D). */
+export const NOTE_PIN_RECEIPT_KIND = "note_pin_change";
+
 /**
  * Proof that a key was already used, and for what. Holds a fingerprint rather
  * than the command: the body is already stored once on the note, and a receipt
@@ -61,19 +64,37 @@ export interface PrimaryOwnerIdempotencyReceipt {
   auditId: string;
 }
 
-export type IdempotencyReceipt = NoteIdempotencyReceipt | PrimaryOwnerIdempotencyReceipt;
+/**
+ * Pin-change receipt (Phase 1B4-D). Like the owner receipt it has an explicit
+ * discriminant and no `noteId`: the pin change it proves is recoverable from
+ * `auditId` alone (the audit record's `entityId` is the note), so tying the shared
+ * receipt type back to a note id would only re-introduce the note-only coupling
+ * that made `IdempotencyReceipt` awkward before D-73.
+ */
+export interface NotePinIdempotencyReceipt {
+  kind: typeof NOTE_PIN_RECEIPT_KIND;
+  key: string;
+  fingerprint: string;
+  auditId: string;
+}
+
+export type IdempotencyReceipt =
+  | NoteIdempotencyReceipt
+  | PrimaryOwnerIdempotencyReceipt
+  | NotePinIdempotencyReceipt;
 
 /**
- * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately.
+ * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately, through 1B4-D.
  *
- * Owner changes are audit records, so they land in the array that already exists.
- * There is no `ownerAssignments[]`: the append-only audit log already answers
- * "who owns this user" (latest record wins) and "how did we get here" (D-08's
- * history requirement), and a second structure holding the same facts is a second
+ * Owner changes AND pin changes are audit records, so they land in the array that
+ * already exists. There is no `ownerAssignments[]` and no `notePins[]`: the
+ * append-only audit log already answers "who owns this user" / "is this note
+ * pinned" (latest matching record wins) and "how did we get here" (D-08's history
+ * requirement), and a second structure holding the same facts is a second
  * structure that can disagree with the first.
  *
- * Consequence for compatibility: an overlay written by 1B4-B has no missing
- * fields to tolerate, because 1B4-C added none.
+ * Consequence for compatibility: an overlay written by 1B4-B/1B4-C has no missing
+ * fields to tolerate, because neither 1B4-C nor 1B4-D added a top-level field.
  */
 export interface MutationOverlay {
   version: number;
@@ -144,11 +165,11 @@ function hasAuditBase(value: Record<string, unknown>): boolean {
 }
 
 /**
- * Accepts the note record Phase 1B4-A/B wrote AND the owner record 1B4-C writes,
- * and nothing else. `action`, `entityType` and `reasonCode` are checked against
- * literals rather than `isString`, so an unknown action, a mismatched entity type
- * or an invented reason code still fails closed — the widening is one new member,
- * not a hole.
+ * Accepts the note-add record Phase 1B4-A/B wrote, the owner record 1B4-C writes
+ * AND the pin record 1B4-D writes, and nothing else. `action`, `entityType` and
+ * `reasonCode` are checked against literals rather than `isString`, so an unknown
+ * action, a mismatched entity type or an invented reason code still fails closed —
+ * each widening is one new member, not a hole.
  */
 function isAuditRecord(value: unknown): value is AuditRecord {
   if (!isRecord(value)) return false;
@@ -164,6 +185,13 @@ function isAuditRecord(value: unknown): value is AuditRecord {
         // `null` is a real value on both sides (unassigned), not missing data.
         isNullableString(value.previousOwnerId) &&
         isNullableString(value.nextOwnerId)
+      );
+    case "note_pin_changed":
+      return (
+        value.entityType === "note" &&
+        value.reasonCode === "note_pin_changed_by_employee" &&
+        typeof value.previousPinned === "boolean" &&
+        typeof value.nextPinned === "boolean"
       );
     default:
       return false;
@@ -181,6 +209,7 @@ function isReceipt(value: unknown): value is IdempotencyReceipt {
   if (!isString(value.key) || !isString(value.fingerprint)) return false;
 
   if (value.kind === PRIMARY_OWNER_RECEIPT_KIND) return isString(value.auditId);
+  if (value.kind === NOTE_PIN_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind !== undefined) return false;
 
   return isString(value.noteId) && isString(value.auditId);

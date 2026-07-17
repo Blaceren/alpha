@@ -6,10 +6,11 @@
  * Phase 0 with the full future list (createTask, updateTask, createCase,
  * updateCase, addNote, assignPrimaryOwner, resolveSignal, revealUserPii, …).
  * This file declares only the operations actually implemented — `addNote`
- * (Phase 1B4-A) and `assignPrimaryOwner` (Phase 1B4-C): an interface member with
- * no implementation is a promise the provider does not keep, and `as never` casts
- * to satisfy a placeholder shape are exactly what D-50 had to delete from the
- * Today contract. The rest arrive with their implementations, not before.
+ * (Phase 1B4-A), `assignPrimaryOwner` (Phase 1B4-C) and `setNotePinned`
+ * (Phase 1B4-D): an interface member with no implementation is a promise the
+ * provider does not keep, and `as never` casts to satisfy a placeholder shape are
+ * exactly what D-50 had to delete from the Today contract. The rest arrive with
+ * their implementations, not before.
  *
  * Every mutation writes an AuditRecord{mock:true} into a versioned localStorage
  * overlay (DECISIONS D-09); fixtures stay immutable. There is no backend.
@@ -83,6 +84,39 @@ export interface AssignPrimaryOwnerResult {
   replayed: boolean;
 }
 
+/**
+ * Pin or unpin a note (Phase 1B4-D). Like the two commands above, the actor is NOT
+ * part of it: role and employee id come only from the trusted `CrmContext`.
+ *
+ * `pinned` is the DESIRED end state, not a blind toggle — a toggle sent twice
+ * races itself, whereas an end-state command is idempotent and safe to retry.
+ *
+ * `expectedPinned` is the effective pinned state the caller believed was current
+ * when it built the command (optimistic concurrency without a version field, as
+ * `expectedOwnerId` is for owners — the boolean IS the state). The provider
+ * refuses two ways:
+ *   - `pinned === expectedPinned` is `invalid_input`: the command describes no
+ *     change, so it is malformed rather than a race;
+ *   - `expectedPinned` no longer matching the effective state is `conflict`:
+ *     someone else pinned or unpinned in between, and last-write-wins would
+ *     silently discard them.
+ */
+export interface SetNotePinnedCommand {
+  userId: UserId;
+  noteId: string;
+  pinned: boolean;
+  expectedPinned: boolean;
+  idempotencyKey: string;
+}
+
+export interface SetNotePinnedResult {
+  /** The note as it now is, with the effective `pinned` applied. */
+  note: CrmNote;
+  audit: AuditRecord;
+  /** Same meaning as on the other results: this command had already been applied. */
+  replayed: boolean;
+}
+
 export interface CrmMutations {
   /**
    * Add a plain-text note to a user.
@@ -119,4 +153,29 @@ export interface CrmMutations {
     ctx: CrmContext,
     command: AssignPrimaryOwnerCommand,
   ): Promise<Result<AssignPrimaryOwnerResult>>;
+
+  /**
+   * Pin or unpin a note, addressed by `noteId` under `userId`.
+   *
+   * Permission: Edit → notes (ROLE_PERMISSION_MATRIX §1) — the SAME dimension as
+   * `addNote`, checked with `canEditUserNotes(ctx.role)`: crm_admin, crm_manager,
+   * retention_manager, support. Pinning is editing a note, not a new capability, so
+   * the matrix is not widened and no new permission is minted (D-53).
+   *
+   * Any note the caller may SEE through the canonical note projector may be pinned
+   * — the seeded fixture note, an authored note, or a `private` note the caller
+   * authored. A note that is not visible to the caller is reported `not_found`, the
+   * same answer as a note that does not exist, so the mutation cannot be used to
+   * probe for hidden `private`/`role_restricted` notes.
+   *
+   * Errors: `invalid_input` (missing/over-long key, empty/invalid `noteId`,
+   * `pinned === expectedPinned`), `not_found` (unknown user, unknown note, or note
+   * not visible to the caller), `unauthorized` (role has no Edit for notes),
+   * `conflict` (key reused for a different command, or `expectedPinned` no longer
+   * matches the effective state), `internal` (overlay could not be persisted).
+   */
+  setNotePinned(
+    ctx: CrmContext,
+    command: SetNotePinnedCommand,
+  ): Promise<Result<SetNotePinnedResult>>;
 }

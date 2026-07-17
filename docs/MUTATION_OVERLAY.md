@@ -11,7 +11,14 @@
 > UI в секции «Ответственный и работа» на User 360. Overlay расширен **аддитивно в пределах v1**: тот же
 > ключ, та же `version: 1`, история владельца — записи `primary_owner_changed` в существующем
 > `auditRecords` (отдельного `ownerAssignments[]` нет). Решения D-64…D-74; §§ ниже помечены
-> «(1B4-C)». Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
+> «(1B4-C)».
+>
+> **Phase 1B4-D (выполнен): закрепление заметки.** Третья мутация — `setNotePinned` — и её UI в секции
+> «Заметки» на User 360. Overlay снова расширен **аддитивно в пределах v1**: тот же ключ, та же
+> `version: 1`, effective pinned выводится из записей `note_pin_changed` в существующем `auditRecords`
+> (отдельного `notePins[]` нет), receipt-kind `note_pin_change`. Право переиспользовано
+> `edit_user_notes` (D-75), матрица не расширена. Решения D-75…D-81; §§ ниже помечены «(1B4-D)».
+> Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
 
 ---
 
@@ -96,11 +103,14 @@ interface PrimaryOwnerIdempotencyReceipt {
 | **(1B4-C)** неизвестный `action`/`entityType`/`reasonCode` | пустой overlay |
 | **(1B4-C)** неизвестный `receipt.kind` | пустой overlay |
 | **(1B4-C)** owner-запись без `previousOwnerId`/`nextOwnerId` (строка\|null) | пустой overlay |
+| **(1B4-D)** pin-запись без `previousPinned`/`nextPinned` (boolean) | пустой overlay |
+| **(1B4-D)** pin-запись с неверным `entityType`/`reasonCode` | пустой overlay |
 
-**(1B4-C) Обратная совместимость — что расширено, а что осталось fail-closed.** Guard'ы приняли **одно
-новое допустимое значение** в каждом измерении (action `primary_owner_changed`, entityType `user`,
-reasonCode `primary_owner_changed_by_employee`, receipt `kind: "primary_owner_change"`), и **ничего
-больше**. `action`/`entityType`/`reasonCode` сверяются с литералами, а не `isString`, поэтому неизвестный
+**(1B4-C/1B4-D) Обратная совместимость — что расширено, а что осталось fail-closed.** Guard'ы приняли
+**по одному новому допустимому значению** в каждом измерении на фазу — 1B4-C: action
+`primary_owner_changed`, entityType `user`, reasonCode `primary_owner_changed_by_employee`, receipt
+`kind: "primary_owner_change"`; 1B4-D: action `note_pin_changed`, reasonCode
+`note_pin_changed_by_employee`, receipt `kind: "note_pin_change"` — и **ничего больше**. `action`/`entityType`/`reasonCode` сверяются с литералами, а не `isString`, поэтому неизвестный
 action или выдуманный reason по-прежнему роняют overlay целиком. Note-receipt распознаётся по
 **отсутствию** `kind` — ровно та форма, что уже лежит в браузерах; неизвестный `kind` — не толерируемый
 unknown, а признак «overlay записан не нами» → fail-closed. Отсутствие поля, которого в v1 никогда не
@@ -234,9 +244,35 @@ interface PrimaryOwnerChangedAuditRecord {
 }
 ```
 
-Union, а не плоская запись с `previousOwnerId?`/`nextOwnerId?`: плоская позволила бы note-записи нести
-owner-поля, а owner-записи — их опустить, и ничто бы это не поймало (D-66). Owner id здесь — **сам
-факт** изменения (LOW/CRM-owned), а не содержимое; `null` с любой стороны — реальное «снят».
+**(1B4-D) третий член union — `NotePinChangedAuditRecord`:**
+
+```ts
+type AuditRecord =
+  | NoteAddedAuditRecord
+  | PrimaryOwnerChangedAuditRecord
+  | NotePinChangedAuditRecord;
+
+interface NotePinChangedAuditRecord {
+  readonly id: string;                    // audit_mock_0001
+  readonly action: "note_pin_changed";
+  readonly actorEmployeeId: EmployeeId;   // из ctx
+  readonly actorRole: CrmRole;            // из ctx
+  readonly targetUserId: UserId;
+  readonly entityType: "note";
+  readonly entityId: string;              // id заметки (fixture или note_mock_*)
+  readonly at: ISODateString;
+  readonly reasonCode: "note_pin_changed_by_employee";
+  readonly previousPinned: boolean;
+  readonly nextPinned: boolean;
+  readonly mock: true;
+}
+```
+
+Union, а не плоская запись с `previousOwnerId?`/`nextOwnerId?`/`previousPinned?`: плоская позволила бы
+note-add-записи нести owner- или pin-поля, а owner/pin-записи — их опустить, и ничто бы это не поймало
+(D-66). Owner id и pin-boolean здесь — **сам факт** изменения (LOW/CRM-owned), а не содержимое; `null`
+владельца с любой стороны — реальное «снят». Эта запись — **единственный источник** effective pinned:
+отдельной `pinned`-колонки, переписываемой на заметке, нет — append-only лог и есть состояние (D-77).
 
 **Audit фиксирует факт действия, а не содержимое.** В нём нет и не может быть: тела заметки, email,
 телефона, имени пользователя, финансовых значений, произвольного текста, idempotency-ключа, UI-лейбла,
@@ -251,15 +287,42 @@ Audit UI и read endpoint **не созданы** — записи только 
 
 ## 7. Мутации: что есть и чего нет
 
-Реализованы **ровно две**:
+Реализованы **ровно три**:
 
 ```ts
 interface CrmMutations {
   addNote(ctx: CrmContext, command: AddNoteCommand): Promise<Result<AddNoteResult>>;
   // (1B4-C)
   assignPrimaryOwner(ctx: CrmContext, command: AssignPrimaryOwnerCommand): Promise<Result<AssignPrimaryOwnerResult>>;
+  // (1B4-D)
+  setNotePinned(ctx: CrmContext, command: SetNotePinnedCommand): Promise<Result<SetNotePinnedResult>>;
 }
 ```
+
+**(1B4-D) `setNotePinned`.** Закрепить/открепить заметку по `noteId` под `userId`. Команда задаёт
+конечное состояние `pinned` + `expectedPinned` (оптимистичная конкуренция, как `expectedOwnerId`):
+
+```ts
+interface SetNotePinnedCommand {
+  userId: UserId;
+  noteId: string;
+  pinned: boolean;          // желаемое конечное состояние, не blind toggle
+  expectedPinned: boolean;  // текущее effective pinned, как его видел вызывающий
+  idempotencyKey: string;
+}
+interface SetNotePinnedResult { note: CrmNote; audit: AuditRecord; replayed: boolean; }
+```
+
+Право — `canEditUserNotes(ctx.role)` (D-75), матрица не расширена. Порядок:
+`invalid_input` (пустой/длинный key, пустой `noteId`, `pinned === expectedPinned`) → `not_found`
+(нет user, нет заметки, заметка не видна роли через canonical projector — D-76) → `unauthorized` →
+idempotency (replay/`conflict`) → `expectedPinned` (`conflict` при рассинхроне) → append audit + receipt
+→ atomic write (`internal` при сбое storage). Fingerprint: `userId`/`noteId`/`actorId`/`role`/желаемое
+состояние (без `expectedPinned`). Receipt-kind `note_pin_change` (отдельный дискриминант, без `noteId`;
+receipt `addNote`/owner под pin переиспользовать нельзя). **Effective pinned** = базовый `note.pinned`
+(всегда `false`), перекрытый последней записью `note_pin_changed` для `note.id` (по `at`, затем по
+audit id) — единый резолвер `resolveEffectivePins`, применяется ДО `sortNotes`. Ни fixture, ни
+overlay-заметка при закреплении не мутируются.
 
 Пустых методов на будущее **не добавлено**. §15 контракта резервировал полный список
 (`createTask`, `updateTask`, `createCase`, `updateCase`, `resolveSignal`,

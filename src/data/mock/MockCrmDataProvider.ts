@@ -46,22 +46,33 @@ import type {
   AssignPrimaryOwnerCommand,
   AssignPrimaryOwnerResult,
   CrmMutations,
+  SetNotePinnedCommand,
+  SetNotePinnedResult,
 } from "@/data/contracts/CrmMutations";
 import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@/data/contracts/CrmMutations";
-import type { AuditRecord, PrimaryOwnerChangedAuditRecord } from "@/domain/audit/audit";
+import type {
+  AuditRecord,
+  NotePinChangedAuditRecord,
+  PrimaryOwnerChangedAuditRecord,
+} from "@/domain/audit/audit";
 import { mockAuditId } from "@/domain/audit/audit";
 import { isPrimaryOwnerCandidate, PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
 import type { NoteBodyError } from "@/domain/notes/note";
 import { mockNoteId, normalizeNoteBody, NOTE_BODY_MAX_LENGTH } from "@/domain/notes/note";
-import { projectNotes, sortNotes } from "@/domain/notes/note-projection";
+import { projectNotes, resolveEffectivePins, sortNotes } from "@/domain/notes/note-projection";
 import type { MutationOverlay } from "./overlay/mutation-overlay";
 import {
   MUTATION_OVERLAY_VERSION,
   MutationOverlayStore,
+  NOTE_PIN_RECEIPT_KIND,
   PRIMARY_OWNER_RECEIPT_KIND,
 } from "./overlay/mutation-overlay";
 import type { KeyValueStorage } from "./overlay/storage";
-import { fingerprintAddNote, fingerprintAssignPrimaryOwner } from "./overlay/fingerprint";
+import {
+  fingerprintAddNote,
+  fingerprintAssignPrimaryOwner,
+  fingerprintSetNotePinned,
+} from "./overlay/fingerprint";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
 import type { CrmCase } from "@/domain/cases/case";
 import type { UserSignal } from "@/domain/signals/signal";
@@ -665,8 +676,13 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       const u = this.users.find((x) => x.identity.userId === input.userId);
       if (!u) return empty(this.paginate<CrmNote>([]));
 
-      const authored = this.overlay.read().notes.filter((n) => n.userId === input.userId);
-      const visible = projectNotes([...this.fixtureNotes(u), ...authored], {
+      const overlay = this.overlay.read();
+      const authored = overlay.notes.filter((n) => n.userId === input.userId);
+      // Effective pinned state is resolved from the audit log (D-76) BEFORE
+      // projection and ordering: a note the role may not see is still dropped, and
+      // the pinned-first sort must see the current pin, not the `false` baseline.
+      const withPins = resolveEffectivePins([...this.fixtureNotes(u), ...authored], overlay.auditRecords);
+      const visible = projectNotes(withPins, {
         actorId: ctx.actorId,
         role: ctx.role,
       });
@@ -1106,6 +1122,190 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       this.derivedCache.delete(command.userId);
 
       return ok({ userId: command.userId, ownerId, audit, replayed: false });
+    });
+  }
+
+  /**
+   * Pin or unpin a note (Phase 1B4-D).
+   *
+   * Order matches the other mutators — validate → user exists → note exists AND is
+   * visible → permission → idempotency → precondition → write. Two properties are
+   * specific to pinning:
+   *
+   *   - The note is looked up through the SAME canonical projector every read uses
+   *     (`resolveEffectivePins` then `projectNotes`), so a note the caller may not
+   *     see is `not_found`, exactly like a note that does not exist — the mutation
+   *     cannot be turned into a probe for hidden `private`/`role_restricted` notes.
+   *
+   *   - Nothing on the note is rewritten. The pin change is an audit record; the
+   *     effective state is derived from the log (D-76). So pinning the immutable
+   *     fixture note works with no note in the overlay, and pinning an authored
+   *     note leaves the stored note byte-for-byte unchanged.
+   *
+   * Nothing is persisted until the whole overlay is assembled: a refusal for any
+   * reason, storage failure included, leaves the previous overlay intact and writes
+   * no audit record.
+   */
+  setNotePinned(
+    ctx: CrmContext,
+    command: SetNotePinnedCommand,
+  ): Promise<Result<SetNotePinnedResult>> {
+    return this.gate(() => {
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<SetNotePinnedResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<SetNotePinnedResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      const noteId = typeof command.noteId === "string" ? command.noteId.trim() : "";
+      if (noteId.length === 0) {
+        return fail<SetNotePinnedResult>({
+          code: "invalid_input",
+          message: "Note id is required.",
+          retriable: false,
+        });
+      }
+
+      // The command must describe a change. `pinned === expectedPinned` is not a
+      // race — it is a request to set the state to what the caller already believes
+      // it is, which is malformed, not a conflict.
+      if (typeof command.pinned !== "boolean" || typeof command.expectedPinned !== "boolean") {
+        return fail<SetNotePinnedResult>({
+          code: "invalid_input",
+          message: "Pin state must be a boolean.",
+          retriable: false,
+        });
+      }
+      if (command.pinned === command.expectedPinned) {
+        return fail<SetNotePinnedResult>({
+          code: "invalid_input",
+          message: "Pin command describes no change.",
+          retriable: false,
+        });
+      }
+
+      const user = this.users.find((x) => x.identity.userId === command.userId);
+      if (!user) {
+        return fail<SetNotePinnedResult>({ code: "not_found", message: "User not found.", retriable: false });
+      }
+
+      // The note as this caller sees it: fixture + authored, pins resolved from the
+      // log, then filtered by visibility. A note not in `visible` is either absent
+      // or hidden, and both answer `not_found`.
+      const overlay = this.overlay.read();
+      const authored = overlay.notes.filter((n) => n.userId === command.userId);
+      const withPins = resolveEffectivePins([...this.fixtureNotes(user), ...authored], overlay.auditRecords);
+      const visible = projectNotes(withPins, { actorId: ctx.actorId, role: ctx.role });
+      const note = visible.find((n) => n.id === noteId);
+      if (!note) {
+        return fail<SetNotePinnedResult>({ code: "not_found", message: "Note not found.", retriable: false });
+      }
+
+      if (!canEditUserNotes(ctx.role)) {
+        return fail<SetNotePinnedResult>({
+          code: "unauthorized",
+          message: "Role may not edit notes.",
+          retriable: false,
+        });
+      }
+
+      const fingerprint = fingerprintSetNotePinned({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        noteId,
+        pinned: command.pinned,
+      });
+
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.kind !== NOTE_PIN_RECEIPT_KIND || receipt.fingerprint !== fingerprint) {
+          return fail<SetNotePinnedResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const audit = overlay.auditRecords.find(
+          (a): a is NotePinChangedAuditRecord =>
+            a.id === receipt.auditId && a.action === "note_pin_changed",
+        );
+        if (!audit) {
+          // A receipt without its record means the overlay was edited by hand.
+          return fail<SetNotePinnedResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        // Return the result THIS command produced (its `nextPinned`), not the
+        // note's current effective state — a later command under a different key
+        // may have changed it since, exactly as the owner replay returns
+        // `audit.nextOwnerId`.
+        return ok({ note: { ...note, pinned: audit.nextPinned }, audit, replayed: true });
+      }
+
+      // The precondition: refuse if the pin is no longer what the caller saw.
+      // Last-write-wins would silently discard whoever pinned in between.
+      if (command.expectedPinned !== note.pinned) {
+        return fail<SetNotePinnedResult>({
+          code: "conflict",
+          message: "Note pin state changed since it was read.",
+          retriable: false,
+        });
+      }
+
+      const sequence = overlay.sequence + 1;
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      const audit: NotePinChangedAuditRecord = {
+        id: mockAuditId(sequence),
+        action: "note_pin_changed",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "note",
+        entityId: note.id,
+        at,
+        reasonCode: "note_pin_changed_by_employee",
+        previousPinned: note.pinned,
+        nextPinned: command.pinned,
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        // Notes are NOT mutated for pin state — the audit record is the state.
+        notes: overlay.notes,
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { kind: NOTE_PIN_RECEIPT_KIND, key, fingerprint, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<SetNotePinnedResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      return ok({ note: { ...note, pinned: command.pinned }, audit, replayed: false });
     });
   }
 }

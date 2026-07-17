@@ -275,6 +275,27 @@ export const NOTES_LABEL = {
 } as const;
 
 /**
+ * Note pin/unpin (Phase 1B4-D). The action labels are the controls' FULL
+ * accessible names — the button may render only a pin glyph, but a screen reader
+ * must hear the whole instruction, so these are used as `aria-label`, not just as
+ * a tooltip. Same single-source, no-raw-code, no-diagnostics rule as the rest.
+ */
+export const NOTE_PIN_LABEL = {
+  /** Accessible name when the note is NOT pinned — the action pins it. */
+  pinAction: "Закрепить заметку",
+  /** Accessible name when the note IS pinned — the action unpins it. */
+  unpinAction: "Открепить заметку",
+  /** Announced through the control while its own write is in flight. */
+  pending: "Сохраняем…",
+  /** Calm marker on a pinned note — never a hero accent, toast, red or glow. */
+  pinnedBadge: "Закреплено",
+  successPinned: "Заметка закреплена",
+  successUnpinned: "Заметка откреплена",
+  /** Someone else changed the pin first; the list now shows what is stored. */
+  conflict: "Состояние заметки уже изменилось. Показаны актуальные данные.",
+} as const;
+
+/**
  * Note visibility axis. Phase 1B4-A writes `team` only (D-54); `private` is
  * readable by its author and `role_restricted` is always hidden (D-55), so the
  * last entry exists for exhaustiveness rather than for a screen that shows it.

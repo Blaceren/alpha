@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A) и `assignPrimaryOwner` (1B4-C); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b).
+- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C) и `setNotePinned` (1B4-D); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b).
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -518,6 +518,22 @@ interface AssignPrimaryOwnerResult  { userId: UserId; ownerId: EmployeeId | null
 - **История** — записи `primary_owner_changed` в audit (D-65); отдельного `ownerAssignments[]` нет. Подробности — **docs/MUTATION_OVERLAY.md** §§ (1B4-C).
 
 Плюс узкая **read-операция** контракта (§3b ниже): `getPrimaryOwnerCandidates`.
+
+### 15.1b Реализовано (Phase 1B4-D) — `setNotePinned`
+
+```ts
+interface CrmMutations {
+  setNotePinned(ctx: CrmContext, command: SetNotePinnedCommand): Promise<Result<SetNotePinnedResult>>;
+}
+interface SetNotePinnedCommand { userId: UserId; noteId: string; pinned: boolean; expectedPinned: boolean; idempotencyKey: string; }
+interface SetNotePinnedResult  { note: CrmNote; audit: AuditRecord; replayed: boolean; }
+```
+
+- **Permission:** Edit → notes — `canEditUserNotes` (D-75). Pin — это редактирование заметки, а не новое право; матрица **не расширена**. Те же четыре роли, что и `addNote`.
+- **Любая видимая заметка** pinnable (fixture/authored/`private` автору); поиск идёт через тот же canonical projector, что и чтение, поэтому скрытая заметка и несуществующая дают один `not_found` (D-76) — API не зонд.
+- **Конечное состояние `pinned` + `expectedPinned`** (D-78): `pinned === expectedPinned` → `invalid_input` (нет изменения); рассинхрон `expectedPinned` с текущим effective → `conflict`.
+- **Errors:** `invalid_input` (ключ, пустой `noteId`, no-change), `not_found` (user/note/видимость), `unauthorized`, `conflict`, `internal`. Порядок: `invalid_input → not_found → unauthorized → idempotency → expectedPinned → write`.
+- **Effective pinned** = `note.pinned` (всегда `false`), перекрытый последней записью `note_pin_changed` для `note.id` — единый резолвер `resolveEffectivePins`, ДО `sortNotes` (D-77). Ни fixture, ни overlay-заметка не мутируются; отдельного `notePins[]` нет. Receipt-kind `note_pin_change`. Подробности — **docs/MUTATION_OVERLAY.md** §§ (1B4-D).
 
 ### 15.2 Зарезервировано (ещё не реализовано)
 

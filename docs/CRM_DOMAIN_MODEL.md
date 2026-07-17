@@ -524,6 +524,7 @@ interface CrmNote {
 - **Связи:** N:0..1 CrmUser; N:0..1 CrmCase; автор → сотрудник.
 - **Источник:** `CRM`.
 - **Чувствительность:** `MEDIUM` (может содержать деликатный контекст; уважать visibility).
+- **`pinned` (реализация 1B4-D):** `pinned` в самой записи — **базовое** значение (у fixture и authored заметок всегда `false`). Фактическое (effective) состояние закрепления НЕ хранится на заметке и не переписывается на ней: оно выводится единым резолвером `resolveEffectivePins` как `note.pinned` ⊕ последняя `note_pin_changed` audit-запись для `note.id` (по `at`, затем по audit id). Отдельного `notePins[]`/поля overlay нет — append-only audit-лог и есть состояние (D-77). Это единственный способ узнать pinned во всех note-reads; применяется до `sortNotes` (pinned-first). Мутация — `setNotePinned` (право `edit_user_notes`, D-75); закрепить можно любую **видимую** заметку, скрытая → `not_found` (D-76).
 
 ---
 
@@ -665,6 +666,7 @@ interface AuditRecord {
 - **Связи:** ссылается на любую сущность; в User 360 — audit-preview.
 - **Источник:** `CRM` (владеет; append-only).
 - **Чувствительность:** `MEDIUM` (before/after могут содержать HIGH — хранить с осторожностью, маскировать в UI).
+- **Реализация (1B4-A/C/D):** записанный `AuditRecord` — это **не** этот общий before/after-shape, а узкий **discriminated union** по `action`: `note_added` (entityType `note`), `primary_owner_changed` (entityType `user`, поля `previousOwnerId`/`nextOwnerId`) и `note_pin_changed` (entityType `note`, поля `previousPinned`/`nextPinned`). Каждая запись фиксирует **только факт** изменения; в неё не попадают тело заметки, PII, финансы, произвольный текст, idempotency-ключ, storage-ключ или диагностика (`reasonCode` — закрытый enum). Owner-история и effective pinned выводятся из этого лога — вторых структур нет (D-65/D-66/D-77). Audit UI и read endpoint не созданы.
 
 ---
 

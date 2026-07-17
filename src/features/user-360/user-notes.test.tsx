@@ -49,6 +49,11 @@ function notesMutations(addNote: CrmMutations["addNote"]): CrmMutations {
     assignPrimaryOwner: () => {
       throw new Error("the notes section must not call assignPrimaryOwner");
     },
+    // These tests never pin; a throwing stub keeps a stray pin call from passing
+    // unnoticed. Pin behaviour has its own suite (note-pin.test.tsx).
+    setNotePinned: () => {
+      throw new Error("this suite must not call setNotePinned");
+    },
   };
 }
 

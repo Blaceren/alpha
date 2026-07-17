@@ -27,7 +27,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Живое доказательство границы — `ProviderSmoke` на экране Today: данные приходят строго через провайдер; loading/empty/error-состояния отрабатываются реально.
 
-**Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализована ровно одна мутация (`addNote`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
+**Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализованы ровно три мутации (`addNote`, `assignPrimaryOwner`, `setNotePinned`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
 
 **Один инстанс на обе половины границы (Phase 1B4-B).** Провайдер владеет одним mutation-overlay
 адаптером, создаваемым в конструкторе, поэтому `getCrmDataProvider()` и `getCrmMutations()` обязаны
@@ -74,7 +74,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
 
-Начиная с Phase 1B4-A мутации существуют (заметки; owner — 1B4-C), но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`, схема расширена аддитивно в пределах v1), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
+Начиная с Phase 1B4-A мутации существуют (заметки; owner — 1B4-C; закрепление заметок — 1B4-D), но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`, схема расширена аддитивно в пределах v1 — owner- и pin-история выводятся из append-only `auditRecords`, отдельных структур нет), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
 
 ## Derivation layer (Phase 1B1)
 
@@ -269,3 +269,27 @@ features/user-360/  components/owner-assign-form.tsx · hooks/use-assign-owner.t
   авторство. Соседний дефект `useAddNote` (attempt не сбрасывался при смене роли) исправлен.
 - **Регрессия доказана подменой:** `canAssignOwner` → «всем можно» роняет owner permission-тесты
   (по всем 9 ролям, сверка с `CRM_ROLES`).
+
+### Mutation layer (Phase 1B4-D — note pin/unpin)
+
+Третья мутация — `setNotePinned` — легла на ту же инфраструктуру **аддитивно**:
+
+```
+domain/audit/       audit.ts (+NotePinChangedAuditRecord: третий член union, previous/nextPinned)
+domain/notes/       note-projection.ts (+resolveEffectivePins: единый резолвер effective pinned)
+data/contracts/     CrmMutations.ts (+setNotePinned)
+data/mock/overlay/  mutation-overlay.ts (+note_pin_changed action, +note_pin_change receipt-kind) · fingerprint.ts (+setNotePinned)
+features/user-360/  components/user-notes.tsx (pin-контрол) · hooks/use-set-note-pinned.ts · lib/note-pin-error.ts
+```
+
+- **Overlay расширен в пределах v1** (D-64/D-77): тот же ключ и `version`, effective pinned выводится из
+  записей `note_pin_changed` в `auditRecords`, отдельного `notePins[]` нет. Fail-closed сохранён; приняты
+  по одному новому значению action/reasonCode/receipt-kind. Regression: raw 1B4-B и 1B4-C overlay читаются
+  без потерь, pin сосуществует с заметками и owner-историей.
+- **Один effective-pin resolver** `resolveEffectivePins` (D-77): базовый `note.pinned` ⊕ последняя
+  `note_pin_changed` для `note.id` (по `at`, затем по audit id), применяется ДО `sortNotes`. Ни fixture,
+  ни overlay-заметка не мутируются. Единственный источник pinned во всех note-reads.
+- **Права не расширены** (D-75): pin — часть `edit_user_notes`; те же четыре роли, что и `addNote`.
+  Любая видимая заметка pinnable; скрытая → `not_found` через тот же canonical projector (D-76) — API не
+  зонд. UI без optimistic update — refetch `getUserNotes` (D-79); фокус возвращается на контрол той же
+  заметки после reorder (D-81). Pin не влияет на Today/Users/priority/SLA/owner/tasks/cases (D-80).
