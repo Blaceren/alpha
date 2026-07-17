@@ -188,6 +188,33 @@ export interface GetUserNotesInput {
   page?: PageParams;
 }
 
+/**
+ * A note plus the capabilities the CURRENT actor holds over it (Phase 1B4-E).
+ *
+ * The point is that authorship-and-storage facts stay provider-owned. Whether a
+ * note is body-editable depends on things the UI must not compute: that the note is
+ * physically in the mutation overlay (not the generated fixture note), that it is
+ * visible through the canonical projector, and that the actor authored it. A client
+ * detecting "editable" from an id prefix like `note_mock_*` would be a second,
+ * drifting copy of a rule the provider already owns — the exact failure D-39/D-40
+ * had to undo. So the provider annotates each visible note and the UI renders the
+ * flag.
+ *
+ * `getUserNotesView` returns these; the plain `getUserNotes` read is unchanged and
+ * still returns bare `CrmNote`s for callers that do not act on them.
+ */
+export interface CrmNoteListItem {
+  note: CrmNote;
+  capabilities: {
+    /**
+     * `true` only when ALL hold: the actor's role has `edit_user_notes`; the note
+     * is stored in the overlay `notes[]` (so never the immutable fixture note); the
+     * note is visible to the actor; and `note.authorEmployeeId === ctx.actorId`.
+     */
+    canEditBody: boolean;
+  };
+}
+
 /* --------------------------------------------------------------- Queues */
 
 export interface QueueItem {
@@ -268,6 +295,16 @@ export interface CrmDataProvider {
   getUserTasks(ctx: CrmContext, input: GetUserTasksInput): Promise<Result<Paginated<CrmTask>>>;
   getUserCases(ctx: CrmContext, input: GetUserCasesInput): Promise<Result<Paginated<CrmCase>>>;
   getUserNotes(ctx: CrmContext, input: GetUserNotesInput): Promise<Result<Paginated<CrmNote>>>;
+  /**
+   * The same visible, projected, ordered notes as `getUserNotes`, each annotated
+   * with the current actor's capabilities over it (Phase 1B4-E). This is the read
+   * the notes UI uses, so that "may I edit this note's body" is answered by the
+   * provider, not reconstructed in React from id shapes.
+   */
+  getUserNotesView(
+    ctx: CrmContext,
+    input: GetUserNotesInput,
+  ): Promise<Result<Paginated<CrmNoteListItem>>>;
   getSegments(ctx: CrmContext, input: { kind?: "system" | "saved" }): Promise<Result<Segment[]>>;
   getMentorQueue(ctx: CrmContext, input: GetQueueInput): Promise<Result<Paginated<QueueItem>>>;
   getSupportQueue(ctx: CrmContext, input: GetQueueInput): Promise<Result<Paginated<QueueItem>>>;

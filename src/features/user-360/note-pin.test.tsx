@@ -48,6 +48,9 @@ function pinMutations(setNotePinned: CrmMutations["setNotePinned"]): CrmMutation
       throw new Error("this suite must not call assignPrimaryOwner");
     },
     setNotePinned,
+    updateNoteBody: () => {
+      throw new Error("this suite must not call updateNoteBody");
+    },
   };
 }
 
@@ -285,7 +288,7 @@ describe("pin control — conflict and storage failure", () => {
     currentRole = "crm_admin";
     const user = userEvent.setup();
     const provider = newProvider();
-    const getSpy = vi.spyOn(provider, "getUserNotes");
+    const getSpy = vi.spyOn(provider, "getUserNotesView");
     const setNotePinned = vi.fn(async () =>
       fail<SetNotePinnedResult>({ code: "conflict", message: "raced", retriable: false }),
     );

@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { MockCrmDataProvider } from "../MockCrmDataProvider";
 import {
   MUTATION_OVERLAY_STORAGE_KEY,
+  NOTE_BODY_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
   parseOverlay,
   PRIMARY_OWNER_RECEIPT_KIND,
@@ -414,6 +415,169 @@ describe("overlay v1 — the pin widening did not open a hole", () => {
 
   it("fails closed on a pin receipt without an auditId", () => {
     const receipt = { kind: NOTE_PIN_RECEIPT_KIND, key: "k", fingerprint: "f" };
+    const overlay = parseOverlay(withReceipt(receipt));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.idempotencyReceipts).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------- Phase 1B4-E */
+
+/** The legacy notes were authored by `emp_mock_admin`; only that actor may edit them. */
+const ctxAuthor: CrmContext = { actorId: "emp_mock_admin", role: "crm_admin", now: MOCK_NOW };
+
+/**
+ * A Phase 1B4-D overlay written out literally: two notes, a note-add pair, an OWNER
+ * change AND a PIN change, with the owner and pin receipts carrying their `kind`.
+ * This is what a browser that assigned an owner and pinned a note — but never edited
+ * a body — holds. A body edit must slot in additively on top of all of it.
+ */
+const OVERLAY_1B4D_JSON = JSON.stringify({
+  version: 1,
+  sequence: 4,
+  notes: JSON.parse(LEGACY_OVERLAY_JSON).notes,
+  auditRecords: [
+    ...JSON.parse(OVERLAY_1B4C_JSON).auditRecords,
+    {
+      id: "audit_mock_0004",
+      action: "note_pin_changed",
+      actorEmployeeId: "emp_mock_admin",
+      actorRole: "crm_admin",
+      targetUserId: USER_ID,
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T09:00:00.004Z",
+      reasonCode: "note_pin_changed_by_employee",
+      previousPinned: false,
+      nextPinned: true,
+      mock: true,
+    },
+  ],
+  idempotencyReceipts: [
+    ...JSON.parse(OVERLAY_1B4C_JSON).idempotencyReceipts,
+    { kind: NOTE_PIN_RECEIPT_KIND, key: "pin-legacy", fingerprint: "1111bbbb1111bbbb", auditId: "audit_mock_0004" },
+  ],
+});
+
+describe("overlay v1 — 1B4-B/1B4-C/1B4-D overlays survive a body edit, and it coexists", () => {
+  it("a body edit on a 1B4-B (notes-only) overlay preserves every other note, audit and receipt", async () => {
+    const { provider, storage } = seeded();
+    const before = overlayIn(storage);
+
+    const res = await provider.updateNoteBody(ctxAuthor, {
+      userId: USER_ID,
+      noteId: "note_mock_0001",
+      body: "Изменённое тело первой заметки",
+      expectedUpdatedAt: "2026-07-11T09:00:00.001Z",
+      idempotencyKey: "edit-key-1",
+    });
+    expect(res.status).toBe("ok");
+
+    const after = overlayIn(storage);
+    // The edited note kept its identity; only body + updatedAt changed.
+    const edited = after.notes.find((n) => n.id === "note_mock_0001")!;
+    expect(edited.body).toBe("Изменённое тело первой заметки");
+    expect(edited.createdAt).toBe(before.notes[0]!.createdAt);
+    expect(edited.authorEmployeeId).toBe(before.notes[0]!.authorEmployeeId);
+    // The OTHER note is byte-identical.
+    expect(after.notes.find((n) => n.id === "note_mock_0002")).toEqual(before.notes[1]);
+    // Legacy audit records are untouched; the body record was appended.
+    expect(after.auditRecords.slice(0, 2)).toEqual(before.auditRecords);
+    expect(after.auditRecords.at(-1)!.action).toBe("note_body_changed");
+    // Legacy receipts are untouched; the body receipt was appended.
+    expect(after.idempotencyReceipts.slice(0, 2)).toEqual(before.idempotencyReceipts);
+    expect(after.idempotencyReceipts.at(-1)!.kind).toBe(NOTE_BODY_RECEIPT_KIND);
+    // The sequence continued from the legacy value.
+    expect(after.sequence).toBe(3);
+  });
+
+  it("old notes, owner records, pin records and a new body-edit record all coexist", async () => {
+    const storage = new MemoryKeyValueStorage();
+    storage.setItem(MUTATION_OVERLAY_STORAGE_KEY, OVERLAY_1B4D_JSON);
+    const provider = new MockCrmDataProvider({ clock, storage });
+
+    // The pin and owner history read correctly before we touch anything.
+    const owner0 = await provider.getUser360(ctx, { userId: USER_ID });
+    expect(owner0.data!.owner.ownerId).toBe("emp_ret2");
+    const notes0 = await provider.getUserNotes(ctx, { userId: USER_ID });
+    expect(notes0.data!.items.find((n) => n.id === "note_mock_0001")!.pinned).toBe(true);
+
+    const res = await provider.updateNoteBody(ctxAuthor, {
+      userId: USER_ID,
+      noteId: "note_mock_0001",
+      body: "Тело после апдейта схемы",
+      expectedUpdatedAt: "2026-07-11T09:00:00.001Z",
+      idempotencyKey: "edit-key-2",
+    });
+    expect(res.status).toBe("ok");
+
+    // A fresh provider over the same storage still sees notes, owner, pin AND the edit.
+    const fresh = new MockCrmDataProvider({ clock, storage });
+    const notes = await fresh.getUserNotes(ctx, { userId: USER_ID });
+    const edited = notes.data!.items.find((n) => n.id === "note_mock_0001")!;
+    expect(edited.body).toBe("Тело после апдейта схемы");
+    // The pin survived the body edit (pin state is audit-derived, not on the note).
+    expect(edited.pinned).toBe(true);
+    const owner = await fresh.getUser360(ctx, { userId: USER_ID });
+    expect(owner.data!.owner.ownerId).toBe("emp_ret2");
+
+    const reread = overlayIn(storage);
+    expect(reread.auditRecords.filter((a) => a.action === "note_added")).toHaveLength(2);
+    expect(reread.auditRecords.filter((a) => a.action === "primary_owner_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_pin_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_body_changed")).toHaveLength(1);
+  });
+});
+
+describe("overlay v1 — the body-edit widening did not open a hole", () => {
+  const legacy = () => JSON.parse(LEGACY_OVERLAY_JSON) as Record<string, unknown>;
+  const withAudit = (record: unknown) => {
+    const o = legacy();
+    (o.auditRecords as unknown[]).push(record);
+    return JSON.stringify(o);
+  };
+  const withReceipt = (receipt: unknown) => {
+    const o = legacy();
+    (o.idempotencyReceipts as unknown[]).push(receipt);
+    return JSON.stringify(o);
+  };
+
+  const validBodyAudit = {
+    id: "audit_mock_0003",
+    action: "note_body_changed",
+    actorEmployeeId: "emp_mock_admin",
+    actorRole: "crm_admin",
+    targetUserId: USER_ID,
+    entityType: "note",
+    entityId: "note_mock_0001",
+    at: "2026-07-14T09:00:00.003Z",
+    reasonCode: "note_body_changed_by_employee",
+    mock: true,
+  };
+
+  it("accepts a well-formed body audit record — base fields only", () => {
+    expect(parseOverlay(withAudit(validBodyAudit)).auditRecords).toHaveLength(3);
+  });
+
+  it("accepts a well-formed body receipt", () => {
+    const receipt = { kind: NOTE_BODY_RECEIPT_KIND, key: "k", fingerprint: "f", auditId: "audit_mock_0003" };
+    expect(parseOverlay(withReceipt(receipt)).idempotencyReceipts).toHaveLength(3);
+  });
+
+  it.each([
+    ["a mismatched entity type", { ...validBodyAudit, entityType: "user" }],
+    ["an invented reason code", { ...validBodyAudit, reasonCode: "because" }],
+    ["an unknown action", { ...validBodyAudit, action: "note_scribbled" }],
+    ["a lost mock marker", { ...validBodyAudit, mock: false }],
+  ])("fails closed on %s — the whole overlay, notes included", (_label, record) => {
+    const overlay = parseOverlay(withAudit(record));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.auditRecords).toEqual([]);
+    expect(overlay.sequence).toBe(0);
+  });
+
+  it("fails closed on a body receipt without an auditId", () => {
+    const receipt = { kind: NOTE_BODY_RECEIPT_KIND, key: "k", fingerprint: "f" };
     const overlay = parseOverlay(withReceipt(receipt));
     expect(overlay.notes).toEqual([]);
     expect(overlay.idempotencyReceipts).toEqual([]);

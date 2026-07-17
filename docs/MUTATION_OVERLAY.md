@@ -18,6 +18,17 @@
 > `version: 1`, effective pinned выводится из записей `note_pin_changed` в существующем `auditRecords`
 > (отдельного `notePins[]` нет), receipt-kind `note_pin_change`. Право переиспользовано
 > `edit_user_notes` (D-75), матрица не расширена. Решения D-75…D-81; §§ ниже помечены «(1B4-D)».
+>
+> **Phase 1B4-E (выполнен): редактирование тела заметки.** Четвёртая мутация — `updateNoteBody` — и её
+> inline-UI в секции «Заметки» на User 360. Overlay расширен **аддитивно в пределах v1**: тот же ключ,
+> та же `version: 1`. В отличие от pin/owner тело РЕАЛЬНО переписывается на месте в существующем
+> `notes[]` (тот же id/createdAt/author/visibility/baseline pinned; меняются только `body` и `updatedAt`) —
+> тело нельзя честно вывести из append-only лога, и оно не должно попасть в audit. Добавлены запись
+> `note_body_changed` (только базовые поля, без тела — D-84) и receipt-kind `note_body_change`.
+> Конкуренция — `expectedUpdatedAt`; один timestamp у `note.updatedAt` и `audit.at` (D-83). Право
+> переиспользовано `edit_user_notes`, но строже: только автор своей overlay-заметки (D-82). Возможность
+> отдаётся провайдером через `getUserNotesView` → `CrmNoteListItem.capabilities.canEditBody`. Фикстурная
+> заметка неизменна. Решения D-82…D-85; §§ ниже помечены «(1B4-E)».
 > Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
 
 ---
@@ -447,6 +458,37 @@ Raw storage state не возвращается — только эти три �
 
 Отказ ничего не меняет: ни заметки, ни audit, ни receipt, ни `sequence`. Тело заметки не попадает
 в текст ошибки.
+
+### (1B4-E) `updateNoteBody` — редактирование тела
+
+**Команда/результат.** `UpdateNoteBodyCommand { userId, noteId, body, expectedUpdatedAt, idempotencyKey }`
+→ `UpdateNoteBodyResult { noteId, updatedAt, audit, replayed }`. Result **без** `CrmNote` и **без** тела:
+после повторной правки старое тело не реконструируемо, а хранить его в receipt/audit запрещено — поэтому
+возвращаем только всегда-честное (id + timestamp правки = `note.updatedAt` = `audit.at`). См. **D-83/D-84**.
+
+**Порядок проверок** (тестируется): ключ → нормализация тела (`normalizeNoteBody`) → ISO-форма
+`expectedUpdatedAt` → user или `not_found` → видимость через канонический projector → невидимая/несуществующая
+→ `not_found` → `canEditUserNotes` или `unauthorized` → видимая non-overlay (фикстурная) → `invalid_input`
+(не `not_found`: визуально присутствует) → чужой автор (`authorEmployeeId !== actorId`) → `unauthorized` →
+replay по receipt → «нормализованное тело == хранимого» → `invalid_input` (без audit) → `expectedUpdatedAt !=
+stored.updatedAt` → `conflict` → один атомарный write. **Replay проверяется ДО** `expectedUpdatedAt`, иначе
+безопасный retry после сдвига `updatedAt` конфликтовал бы (**D-83**).
+
+**Запись в overlay.** Единственная мутация, которая переписывает `notes[]` на месте: тот же id/createdAt/
+authorEmployeeId/visibility/baseline `pinned`, меняются только `body` и `updatedAt` (= mutation-timestamp).
+Плюс запись `note_body_changed` в `auditRecords` и receipt в `idempotencyReceipts` — одним write.
+
+**Fingerprint/receipt.** `fingerprintUpdateNoteBody([userId, actorId, role, noteId, normalizedBody])` через
+`stableFingerprint` (FNV-1a, crypto нет — D-57). Receipt `{ kind: "note_body_change", key, fingerprint,
+auditId }` — без тела/фрагмента/длины/noteId. Один ключ + одинаковая команда → `replayed:true` (метаданные из
+audit A даже после более поздней правки под ключом B); один ключ + другое тело/user/note/actor/role или чужой
+receipt-kind → `conflict`. Storage-fail НЕ расходует ключ (ничего не записано → retry тем же ключом — новая
+запись, не replay). См. **D-84**.
+
+**Возможность — provider-owned.** `getUserNotesView(ctx, input) → Paginated<CrmNoteListItem>`, где
+`CrmNoteListItem { note, capabilities: { canEditBody } }`. `canEditBody = canEditUserNotes(role) &&
+(note ∈ overlay.notes[]) && visible && authorEmployeeId === actorId`. React читает флаг, не разбирает id
+(**D-82**). Плоский `getUserNotes` не изменён.
 
 ---
 

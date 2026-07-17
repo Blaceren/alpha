@@ -6,11 +6,11 @@
  * Phase 0 with the full future list (createTask, updateTask, createCase,
  * updateCase, addNote, assignPrimaryOwner, resolveSignal, revealUserPii, …).
  * This file declares only the operations actually implemented — `addNote`
- * (Phase 1B4-A), `assignPrimaryOwner` (Phase 1B4-C) and `setNotePinned`
- * (Phase 1B4-D): an interface member with no implementation is a promise the
- * provider does not keep, and `as never` casts to satisfy a placeholder shape are
- * exactly what D-50 had to delete from the Today contract. The rest arrive with
- * their implementations, not before.
+ * (Phase 1B4-A), `assignPrimaryOwner` (Phase 1B4-C), `setNotePinned`
+ * (Phase 1B4-D) and `updateNoteBody` (Phase 1B4-E): an interface member with no
+ * implementation is a promise the provider does not keep, and `as never` casts to
+ * satisfy a placeholder shape are exactly what D-50 had to delete from the Today
+ * contract. The rest arrive with their implementations, not before.
  *
  * Every mutation writes an AuditRecord{mock:true} into a versioned localStorage
  * overlay (DECISIONS D-09); fixtures stay immutable. There is no backend.
@@ -117,6 +117,49 @@ export interface SetNotePinnedResult {
   replayed: boolean;
 }
 
+/**
+ * Edit the plain-text body of an employee-authored note (Phase 1B4-E).
+ *
+ * Like the other commands the actor is NOT part of it: role and employee id come
+ * only from the trusted `CrmContext`. `body` is the DESIRED end state, not a diff.
+ *
+ * `expectedUpdatedAt` is the note's `updatedAt` the caller believed was current
+ * when it built the command — optimistic concurrency without a synthetic version
+ * field. A body edit genuinely rewrites the stored note (unlike pin/owner, which
+ * are audit-derived), so `updatedAt` really does advance on every edit and is a
+ * true version token. The provider refuses (`conflict`) if the stored `updatedAt`
+ * no longer matches. It is a string the caller reads back from the note, never
+ * content, so it is safe to carry in the command — unlike the previous body, which
+ * is exactly what must NOT be sent as a precondition (D-82).
+ */
+export interface UpdateNoteBodyCommand {
+  userId: UserId;
+  noteId: string;
+  body: string;
+  expectedUpdatedAt: string;
+  idempotencyKey: string;
+}
+
+/**
+ * The result deliberately carries NO note and NO body.
+ *
+ * A receipt stores only `auditId`, and the audit record carries no body either, so
+ * once a note has been edited again there is no way to reconstruct the CrmNote as
+ * it was at an earlier edit. Returning the CURRENT note on a replay would be
+ * dishonest — it is not the note the replayed command produced — and storing body
+ * content in the receipt or audit to make it honest is forbidden (D-84). So the
+ * result returns only what can always be reconstructed truthfully: the note id and
+ * the edit's timestamp, which equals both the note's new `updatedAt` and the audit
+ * record's `at` (D-83).
+ */
+export interface UpdateNoteBodyResult {
+  noteId: string;
+  updatedAt: string;
+  audit: AuditRecord;
+  /** Same meaning as on the other results: this command had already been applied. */
+  replayed: boolean;
+}
+
 export interface CrmMutations {
   /**
    * Add a plain-text note to a user.
@@ -178,4 +221,38 @@ export interface CrmMutations {
     ctx: CrmContext,
     command: SetNotePinnedCommand,
   ): Promise<Result<SetNotePinnedResult>>;
+
+  /**
+   * Edit the body of an employee-authored note, addressed by `noteId` under
+   * `userId`.
+   *
+   * Permission: Edit → notes (ROLE_PERMISSION_MATRIX §1) — the SAME dimension as
+   * `addNote` and `setNotePinned`, checked with `canEditUserNotes(ctx.role)`:
+   * crm_admin, crm_manager, retention_manager, support. Editing a note is editing a
+   * note, so the matrix is not widened and no new permission is minted (D-82).
+   *
+   * Beyond the role, TWO entity-level rules apply (stricter than pinning, because a
+   * body edit rewrites another employee's authored content — D-82):
+   *   - only a note physically stored in the overlay `notes[]` is body-editable; the
+   *     generated fixture note is immutable and returns `invalid_input`, NOT
+   *     `not_found` — it is visibly present, so pretending it is absent would be a
+   *     lie the caller can already see through;
+   *   - only the note's own author may edit it: `note.authorEmployeeId ===
+   *     ctx.actorId`, else `unauthorized`, even for a role that holds the permission.
+   *
+   * A note not visible to the caller is `not_found`, exactly like a note that does
+   * not exist, so the mutation cannot be used to probe for hidden notes.
+   *
+   * Errors: `invalid_input` (empty/whitespace-only/over-long body, missing/over-long
+   * key, malformed `expectedUpdatedAt`, normalized body equal to the stored body, or
+   * an immutable fixture/non-overlay note), `not_found` (unknown user, unknown note,
+   * or note not visible to the caller), `unauthorized` (role has no Edit for notes,
+   * or the note was authored by another employee), `conflict` (key reused for a
+   * different command, or `expectedUpdatedAt` no longer matches), `internal` (overlay
+   * could not be persisted).
+   */
+  updateNoteBody(
+    ctx: CrmContext,
+    command: UpdateNoteBodyCommand,
+  ): Promise<Result<UpdateNoteBodyResult>>;
 }

@@ -54,6 +54,11 @@ function notesMutations(addNote: CrmMutations["addNote"]): CrmMutations {
     setNotePinned: () => {
       throw new Error("this suite must not call setNotePinned");
     },
+    // Body editing has its own suite (user-notes-edit.test.tsx); a throwing stub
+    // keeps a stray edit call from passing unnoticed here.
+    updateNoteBody: () => {
+      throw new Error("this suite must not call updateNoteBody");
+    },
   };
 }
 
@@ -148,7 +153,7 @@ describe("User 360 notes — list states", () => {
 
   it("keeps a read failure inline and offers retry only when retriable", async () => {
     const provider = {
-      getUserNotes: () =>
+      getUserNotesView: () =>
         Promise.resolve(fail({ code: "internal", message: "Mock overlay exploded.", retriable: true })),
     } as unknown as CrmDataProvider;
     const { container } = renderNotes({ provider });
@@ -160,7 +165,7 @@ describe("User 360 notes — list states", () => {
 
   it("hides retry for an error the provider says is not retriable", async () => {
     const provider = {
-      getUserNotes: () =>
+      getUserNotesView: () =>
         Promise.resolve(fail({ code: "not_found", message: "gone", retriable: false })),
     } as unknown as CrmDataProvider;
     renderNotes({ provider });
@@ -169,12 +174,12 @@ describe("User 360 notes — list states", () => {
   });
 
   it("retry re-reads through the provider", async () => {
-    const getUserNotes = vi
+    const getUserNotesView = vi
       .fn()
       .mockResolvedValue(fail({ code: "internal", message: "boom", retriable: true }));
-    renderNotes({ provider: { getUserNotes } as unknown as CrmDataProvider });
+    renderNotes({ provider: { getUserNotesView } as unknown as CrmDataProvider });
     await userEvent.click(await screen.findByRole("button", { name: NOTES_LABEL.retry }));
-    await waitFor(() => expect(getUserNotes).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getUserNotesView).toHaveBeenCalledTimes(2));
   });
 
   it("never renders the author id or any storage bookkeeping", async () => {
@@ -381,12 +386,12 @@ describe("User 360 notes — submit behaviour", () => {
   });
 
   it("does not insert the created note itself — the list comes from the re-read", async () => {
-    const getUserNotes = vi.fn().mockResolvedValue(
+    const getUserNotesView = vi.fn().mockResolvedValue(
       empty({ items: [], page: { cursor: null, nextCursor: null, total: 0, pageSize: 50 } }),
     );
     const addNote = vi.fn().mockResolvedValue(addNoteOk("Невидимая"));
     const { container } = renderNotes({
-      provider: { getUserNotes } as unknown as CrmDataProvider,
+      provider: { getUserNotesView } as unknown as CrmDataProvider,
       mutations: { addNote },
     });
     await screen.findByText(NOTES_LABEL.empty);
@@ -396,7 +401,7 @@ describe("User 360 notes — submit behaviour", () => {
 
     // The provider kept saying "no notes", so the screen says "no notes". An
     // optimistic insert would have shown a note the provider does not report.
-    await waitFor(() => expect(getUserNotes).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getUserNotesView).toHaveBeenCalledTimes(2));
     expect(screen.getByText(NOTES_LABEL.empty)).toBeInTheDocument();
     expect(container.innerHTML).not.toContain("Невидимая");
   });

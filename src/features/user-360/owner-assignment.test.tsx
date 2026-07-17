@@ -67,6 +67,9 @@ function renderScreen({
         setNotePinned: () => {
           throw new Error("the owner suite must not call setNotePinned");
         },
+        updateNoteBody: () => {
+          throw new Error("the owner suite must not call updateNoteBody");
+        },
       }
     : undefined;
   return render(
@@ -638,6 +641,9 @@ describe("owner assignment — role change", () => {
               throw new Error("unused");
             },
             setNotePinned: () => {
+              throw new Error("unused");
+            },
+            updateNoteBody: () => {
               throw new Error("unused");
             },
           }}

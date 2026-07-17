@@ -72,6 +72,12 @@ function stubProvider(result: Result<User360>): CrmDataProvider {
       Promise.resolve(
         empty({ items: [], page: { cursor: null, nextCursor: null, total: 0, pageSize: 50 } }),
       ),
+    // The notes section reads the capability view (Phase 1B4-E). Same empty page:
+    // these cases are about the aggregate's states, not about notes.
+    getUserNotesView: () =>
+      Promise.resolve(
+        empty({ items: [], page: { cursor: null, nextCursor: null, total: 0, pageSize: 50 } }),
+      ),
     getPrimaryOwnerCandidates: () =>
       Promise.resolve(
         ok(

@@ -5,12 +5,18 @@
  *
  * Phase 1B4-A wrote note records; Phase 1B4-C adds owner-change records and turns
  * the model into a discriminated union on `action`; Phase 1B4-D adds pin-change
- * records. The union is the point: a single flat record with optional
- * `previousOwnerId?`/`nextOwnerId?`/`previousPinned?` would let a note record carry
- * owner fields and an owner record omit them, and nothing would catch either. Here
- * a note-add record cannot have owner or pin fields at all, an owner record cannot
- * be built without its owner fields, and a pin record cannot be built without its
- * pin fields.
+ * records; Phase 1B4-E adds body-change records. The union is the point: a single
+ * flat record with optional `previousOwnerId?`/`nextOwnerId?`/`previousPinned?` would
+ * let a note record carry owner fields and an owner record omit them, and nothing
+ * would catch either. Here a note-add record cannot have owner or pin fields at all,
+ * an owner record cannot be built without its owner fields, and a pin record cannot
+ * be built without its pin fields.
+ *
+ * The body-change record (1B4-E) is the strictest of all: it carries NO payload
+ * beyond the base fields — no old body, no new body, no fragment, no length, no
+ * diff. A note body is user-authored PII, so the record states only THAT the body
+ * changed, never anything about what it became (D-84). Unlike owner/pin, there is
+ * no `previous`/`next` pair, because those values would be the content itself.
  *
  * Reading these records (audit screen / read endpoint) is still not part of any
  * phase. Phase 1B4-C does consume them internally: the owner-change records ARE
@@ -21,7 +27,11 @@ import type { EmployeeId, ISODateString, UserId } from "@/domain/shared/primitiv
 import type { CrmRole } from "@/domain/identity/roles";
 
 /** Only the actions actually implemented. Future mutations extend this union. */
-export type AuditAction = "note_added" | "primary_owner_changed" | "note_pin_changed";
+export type AuditAction =
+  | "note_added"
+  | "primary_owner_changed"
+  | "note_pin_changed"
+  | "note_body_changed";
 
 export type AuditEntityType = "note" | "user";
 
@@ -32,7 +42,8 @@ export type AuditEntityType = "note" | "user";
 export type AuditReasonCode =
   | "note_added_by_employee"
   | "primary_owner_changed_by_employee"
-  | "note_pin_changed_by_employee";
+  | "note_pin_changed_by_employee"
+  | "note_body_changed_by_employee";
 
 /** Fields every record carries, whatever it records. */
 interface AuditRecordBase {
@@ -89,10 +100,28 @@ export interface NotePinChangedAuditRecord extends AuditRecordBase {
   readonly nextPinned: boolean;
 }
 
+/**
+ * A note body edit (Phase 1B4-E). It carries NOTHING beyond the base fields: the
+ * body is user-authored content, so unlike owner/pin there is deliberately no
+ * `previous`/`next` payload — recording the old or new body, a fragment, a length
+ * or a diff would put PII in the audit trail, which is exactly what this model
+ * exists to prevent (D-84). `entityId` is the note's id; `at` is the single
+ * mutation timestamp, shared with the note's new `updatedAt`, so a replay can
+ * reconstruct the result metadata from this record alone (D-83).
+ */
+export interface NoteBodyChangedAuditRecord extends AuditRecordBase {
+  readonly action: "note_body_changed";
+  readonly entityType: "note";
+  /** The note whose body changed — always an authored `note_mock_*` id. */
+  readonly entityId: string;
+  readonly reasonCode: "note_body_changed_by_employee";
+}
+
 export type AuditRecord =
   | NoteAddedAuditRecord
   | PrimaryOwnerChangedAuditRecord
-  | NotePinChangedAuditRecord;
+  | NotePinChangedAuditRecord
+  | NoteBodyChangedAuditRecord;
 
 /** Audit id derived from the overlay sequence — deterministic, never random. */
 export function mockAuditId(sequence: number): string {

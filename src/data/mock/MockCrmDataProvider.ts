@@ -21,6 +21,7 @@ import type {
   CrmContext,
   CrmDataProvider,
   CrmNote,
+  CrmNoteListItem,
   FinancialOperationsSummary,
   GetFinOpsInput,
   GetQueueInput,
@@ -48,10 +49,13 @@ import type {
   CrmMutations,
   SetNotePinnedCommand,
   SetNotePinnedResult,
+  UpdateNoteBodyCommand,
+  UpdateNoteBodyResult,
 } from "@/data/contracts/CrmMutations";
 import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@/data/contracts/CrmMutations";
 import type {
   AuditRecord,
+  NoteBodyChangedAuditRecord,
   NotePinChangedAuditRecord,
   PrimaryOwnerChangedAuditRecord,
 } from "@/domain/audit/audit";
@@ -64,6 +68,7 @@ import type { MutationOverlay } from "./overlay/mutation-overlay";
 import {
   MUTATION_OVERLAY_VERSION,
   MutationOverlayStore,
+  NOTE_BODY_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
   PRIMARY_OWNER_RECEIPT_KIND,
 } from "./overlay/mutation-overlay";
@@ -72,6 +77,7 @@ import {
   fingerprintAddNote,
   fingerprintAssignPrimaryOwner,
   fingerprintSetNotePinned,
+  fingerprintUpdateNoteBody,
 } from "./overlay/fingerprint";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
 import type { CrmCase } from "@/domain/cases/case";
@@ -661,15 +667,31 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
   }
 
   /**
-   * Notes for a user: fixture-generated + overlay, projected for `ctx`.
+   * The one canonical way to build a user's visible, pinned-resolved, ordered notes
+   * for `ctx`. Both `getUserNotes` and `getUserNotesView` go through here, so the
+   * bare read and the capability-annotated read cannot disagree about which notes
+   * exist or in what order.
    *
    * `ctx` is applied through the canonical projector (`domain/notes/note-projection`)
-   * rather than here, and projection runs BEFORE pagination so a note the role may
-   * not see is absent from `page.total` as well as from `items` — a hidden note must
-   * not be countable, only invisible.
+   * rather than here, and projection runs BEFORE ordering so a note the role may not
+   * see is dropped entirely. Effective pinned state is resolved from the audit log
+   * (D-76) BEFORE projection and ordering, so the pinned-first sort sees the current
+   * pin, not the `false` baseline.
+   */
+  private orderedVisibleNotes(ctx: CrmContext, u: MockUser, overlay: MutationOverlay): CrmNote[] {
+    const authored = overlay.notes.filter((n) => n.userId === u.identity.userId);
+    const withPins = resolveEffectivePins([...this.fixtureNotes(u), ...authored], overlay.auditRecords);
+    const visible = projectNotes(withPins, { actorId: ctx.actorId, role: ctx.role });
+    return sortNotes(visible);
+  }
+
+  /**
+   * Notes for a user: fixture-generated + overlay, projected for `ctx`.
    *
-   * Every role may open User 360 (matrix §2), so there is no role-level refusal:
-   * visibility is decided per note.
+   * Projection runs BEFORE pagination so a note the role may not see is absent from
+   * `page.total` as well as from `items` — a hidden note must not be countable, only
+   * invisible. Every role may open User 360 (matrix §2), so there is no role-level
+   * refusal: visibility is decided per note.
    */
   getUserNotes(ctx: CrmContext, input: GetUserNotesInput): Promise<Result<Paginated<CrmNote>>> {
     return this.gate(() => {
@@ -677,20 +699,52 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       if (!u) return empty(this.paginate<CrmNote>([]));
 
       const overlay = this.overlay.read();
-      const authored = overlay.notes.filter((n) => n.userId === input.userId);
-      // Effective pinned state is resolved from the audit log (D-76) BEFORE
-      // projection and ordering: a note the role may not see is still dropped, and
-      // the pinned-first sort must see the current pin, not the `false` baseline.
-      const withPins = resolveEffectivePins([...this.fixtureNotes(u), ...authored], overlay.auditRecords);
-      const visible = projectNotes(withPins, {
-        actorId: ctx.actorId,
-        role: ctx.role,
-      });
-      const ordered = sortNotes(visible);
+      const ordered = this.orderedVisibleNotes(ctx, u, overlay);
 
       return ordered.length === 0
         ? empty(this.paginate<CrmNote>([]))
         : ok(this.paginate(ordered, input.page?.cursor));
+    });
+  }
+
+  /**
+   * The same visible/ordered notes as `getUserNotes`, each wrapped with the current
+   * actor's capabilities (Phase 1B4-E). `canEditBody` is decided HERE, from facts the
+   * UI must not compute for itself: role permission, physical overlay membership (so
+   * never the generated fixture note), visibility, and authorship. React reads the
+   * flag; it never inspects a note id.
+   */
+  getUserNotesView(
+    ctx: CrmContext,
+    input: GetUserNotesInput,
+  ): Promise<Result<Paginated<CrmNoteListItem>>> {
+    return this.gate(() => {
+      const u = this.users.find((x) => x.identity.userId === input.userId);
+      if (!u) return empty(this.paginate<CrmNoteListItem>([]));
+
+      const overlay = this.overlay.read();
+      const ordered = this.orderedVisibleNotes(ctx, u, overlay);
+
+      // Ids physically stored in the overlay for THIS user. The fixture note is
+      // generated at read time and is never in this set, so it is never editable.
+      const overlayNoteIds = new Set(
+        overlay.notes.filter((n) => n.userId === input.userId).map((n) => n.id),
+      );
+      const roleMayEdit = canEditUserNotes(ctx.role);
+
+      const items: CrmNoteListItem[] = ordered.map((note) => ({
+        note,
+        capabilities: {
+          canEditBody:
+            roleMayEdit &&
+            overlayNoteIds.has(note.id) &&
+            note.authorEmployeeId === ctx.actorId,
+        },
+      }));
+
+      return items.length === 0
+        ? empty(this.paginate<CrmNoteListItem>([]))
+        : ok(this.paginate(items, input.page?.cursor));
     });
   }
 
@@ -1306,6 +1360,248 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       }
 
       return ok({ note: { ...note, pinned: command.pinned }, audit, replayed: false });
+    });
+  }
+
+  /**
+   * Edit the body of an employee-authored note (Phase 1B4-E).
+   *
+   * The order is deliberate and tested (docs/MUTATION_OVERLAY.md §7):
+   *   1. validate the idempotency key;
+   *   2. normalize and validate the body (empty/whitespace-only/over-long);
+   *   3. validate `expectedUpdatedAt` is a parseable instant;
+   *   4. resolve the user or `not_found`;
+   *   5. resolve the target through the SAME canonical projector every read uses
+   *      (`resolveEffectivePins` then `projectNotes`);
+   *   6. a note not visible to the caller is `not_found`, exactly like one that does
+   *      not exist — the mutation cannot be turned into a probe for hidden notes;
+   *   7. role permission (`canEditUserNotes`) or `unauthorized`;
+   *   8. a visible note that is NOT in the overlay is the immutable fixture note →
+   *      `invalid_input` (it is visibly present, so `not_found` would be a lie);
+   *   9. a note authored by someone else → `unauthorized`, even for a permitted role;
+   *  10. idempotency replay (BEFORE the precondition, so a safe retry of an applied
+   *      edit still replays after `updatedAt` has advanced — D-82);
+   *  11. a normalized body equal to the stored body describes no change →
+   *      `invalid_input`, and no audit record is written;
+   *  12. `expectedUpdatedAt` must still match the stored `updatedAt`, else `conflict`;
+   *  13. one atomic overlay write.
+   *
+   * The stored note is rewritten in place in `notes[]` — same id, createdAt,
+   * authorEmployeeId, visibility and baseline `pinned`; only `body` and `updatedAt`
+   * change. The single mutation timestamp is shared by the note's `updatedAt` and the
+   * audit `at`, so a replay reconstructs the result metadata from the audit alone
+   * (D-83). Nothing is persisted until the whole overlay is assembled, so any refusal
+   * — storage failure included — leaves the overlay untouched and writes no audit.
+   */
+  updateNoteBody(
+    ctx: CrmContext,
+    command: UpdateNoteBodyCommand,
+  ): Promise<Result<UpdateNoteBodyResult>> {
+    return this.gate(() => {
+      // 1. Idempotency key.
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      // 2. Body — normalized through the same domain rule as addNote, so the two
+      // cannot disagree about what an acceptable body is. The message never carries
+      // the body itself.
+      const normalized = normalizeNoteBody(command.body);
+      if (!normalized.ok) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: NOTE_BODY_MESSAGE[normalized.error],
+          retriable: false,
+        });
+      }
+
+      // 3. `expectedUpdatedAt` — a parseable instant, checked before any lookup. A
+      // garbage precondition is malformed input, not a race.
+      const expectedUpdatedAt =
+        typeof command.expectedUpdatedAt === "string" ? command.expectedUpdatedAt.trim() : "";
+      if (expectedUpdatedAt.length === 0 || Number.isNaN(Date.parse(expectedUpdatedAt))) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: "expectedUpdatedAt is not a valid instant.",
+          retriable: false,
+        });
+      }
+
+      const noteId = typeof command.noteId === "string" ? command.noteId.trim() : "";
+      if (noteId.length === 0) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: "Note id is required.",
+          retriable: false,
+        });
+      }
+
+      // 4. User.
+      const user = this.users.find((x) => x.identity.userId === command.userId);
+      if (!user) {
+        return fail<UpdateNoteBodyResult>({ code: "not_found", message: "User not found.", retriable: false });
+      }
+
+      // 5–6. The note as this caller sees it: fixture + authored, pins resolved,
+      // then filtered by visibility. A note absent from `visible` is either missing
+      // or hidden, and both answer `not_found`.
+      const overlay = this.overlay.read();
+      const visible = this.orderedVisibleNotes(ctx, user, overlay);
+      const visibleNote = visible.find((n) => n.id === noteId);
+      if (!visibleNote) {
+        return fail<UpdateNoteBodyResult>({ code: "not_found", message: "Note not found.", retriable: false });
+      }
+
+      // 7. Role permission.
+      if (!canEditUserNotes(ctx.role)) {
+        return fail<UpdateNoteBodyResult>({
+          code: "unauthorized",
+          message: "Role may not edit notes.",
+          retriable: false,
+        });
+      }
+
+      // 8. The stored, mutable note. A visible note that is NOT in the overlay is the
+      // generated fixture note: immutable, and visibly present, so `invalid_input`
+      // rather than `not_found`.
+      const stored = overlay.notes.find((n) => n.id === noteId && n.userId === command.userId);
+      if (!stored) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: "Note is not editable.",
+          retriable: false,
+        });
+      }
+
+      // 9. Authorship — only the note's own author may rewrite its text, even with the
+      // permission. This is stricter than pinning (D-76), because editing changes
+      // another employee's authored content (D-82).
+      if (stored.authorEmployeeId !== ctx.actorId) {
+        return fail<UpdateNoteBodyResult>({
+          code: "unauthorized",
+          message: "Only the note's author may edit its body.",
+          retriable: false,
+        });
+      }
+
+      const fingerprint = fingerprintUpdateNoteBody({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        noteId,
+        body: normalized.body,
+      });
+
+      // 10. Replay — before the precondition, so a safe retry of an already-applied
+      // edit still replays even though the stored `updatedAt` has advanced.
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.kind !== NOTE_BODY_RECEIPT_KIND || receipt.fingerprint !== fingerprint) {
+          return fail<UpdateNoteBodyResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const audit = overlay.auditRecords.find(
+          (a): a is NoteBodyChangedAuditRecord =>
+            a.id === receipt.auditId && a.action === "note_body_changed",
+        );
+        if (!audit) {
+          // A receipt without its record means the overlay was edited by hand.
+          return fail<UpdateNoteBodyResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        // Reconstruct the ORIGINAL result from the audit alone: its `at` was the
+        // note's `updatedAt` at the moment of that edit. The note may have been
+        // edited again since, so returning its current body/updatedAt would be a
+        // different edit's result — which is exactly why the result carries no note.
+        return ok({ noteId: audit.entityId, updatedAt: audit.at, audit, replayed: true });
+      }
+
+      // 11. No-change — a normalized body equal to what is stored describes nothing to
+      // do. Malformed rather than a race (mirrors setNotePinned's no-change rule), and
+      // it writes no audit record and does not touch `updatedAt`.
+      if (normalized.body === stored.body) {
+        return fail<UpdateNoteBodyResult>({
+          code: "invalid_input",
+          message: "Note body is unchanged.",
+          retriable: false,
+        });
+      }
+
+      // 12. Precondition — refuse if the note was edited since the caller read it.
+      // Last-write-wins would silently discard whoever edited in between.
+      if (expectedUpdatedAt !== stored.updatedAt) {
+        return fail<UpdateNoteBodyResult>({
+          code: "conflict",
+          message: "Note body changed since it was read.",
+          retriable: false,
+        });
+      }
+
+      // 13. One atomic write.
+      const sequence = overlay.sequence + 1;
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      const updatedNote: CrmNote = {
+        ...stored,
+        body: normalized.body,
+        updatedAt: at,
+      };
+
+      const audit: NoteBodyChangedAuditRecord = {
+        id: mockAuditId(sequence),
+        action: "note_body_changed",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "note",
+        entityId: stored.id,
+        at,
+        reasonCode: "note_body_changed_by_employee",
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        // The authored note is rewritten in place: same id, createdAt, author,
+        // visibility and baseline pinned — only body and updatedAt change.
+        notes: overlay.notes.map((n) => (n.id === stored.id ? updatedNote : n)),
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { kind: NOTE_BODY_RECEIPT_KIND, key, fingerprint, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<UpdateNoteBodyResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      return ok({ noteId: stored.id, updatedAt: at, audit, replayed: false });
     });
   }
 }

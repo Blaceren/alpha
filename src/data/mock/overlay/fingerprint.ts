@@ -128,3 +128,37 @@ export function fingerprintSetNotePinned(input: {
     input.pinned ? "pinned" : "unpinned",
   ]);
 }
+
+/**
+ * The identity of an updateNoteBody command (Phase 1B4-E): which user, which note,
+ * which actor, which role, which NORMALIZED body. Any difference in any part is a
+ * different command, and reusing a key across them is a conflict.
+ *
+ * The `body` part MUST be the already-normalized body — the same value that is
+ * stored on the note — so that "  text  " and "text" fingerprint identically and a
+ * retry that trims differently still replays. The receipt stores only this hash,
+ * never the body itself, so the body is not duplicated in plain text (D-84).
+ *
+ * `expectedUpdatedAt` is deliberately NOT part of it, for the same reason
+ * `expectedOwnerId`/`expectedPinned` are excluded (D-72/D-78): the fingerprint
+ * answers "what was asked", and the precondition a command was sent under is not
+ * part of what it asked for. Once an edit has been applied the note's `updatedAt`
+ * has advanced, so re-sending the command with the original `expectedUpdatedAt`
+ * would be a stale precondition — and a repeat of an already-succeeded write must
+ * replay to the original result, not conflict.
+ */
+export function fingerprintUpdateNoteBody(input: {
+  userId: string;
+  actorId: string;
+  role: string;
+  noteId: string;
+  body: string;
+}): string {
+  return stableFingerprint([
+    input.userId,
+    input.actorId,
+    input.role,
+    input.noteId,
+    input.body,
+  ]);
+}

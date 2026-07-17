@@ -296,6 +296,26 @@ export const NOTE_PIN_LABEL = {
 } as const;
 
 /**
+ * Note body editing (Phase 1B4-E). Same single-source, no-raw-code, no-diagnostics
+ * rule as the rest. The control labels are full instructions so a screen reader
+ * hears the whole action, not a glyph. No label here interpolates a note id, body
+ * or any bookkeeping.
+ */
+export const NOTE_EDIT_LABEL = {
+  /** Opens the inline editor for a note the actor authored. */
+  editAction: "Изменить заметку",
+  /** Textarea label inside the editor — distinct from the composer's «Текст заметки». */
+  editLabel: "Новый текст заметки",
+  save: "Сохранить",
+  cancel: "Отменить",
+  /** Announced through the Save control while its own write is in flight. */
+  pending: "Сохраняем…",
+  success: "Заметка обновлена",
+  /** Someone else edited first; the list now shows what is actually stored. */
+  conflict: "Заметка уже изменена. Показан актуальный текст.",
+} as const;
+
+/**
  * Note visibility axis. Phase 1B4-A writes `team` only (D-54); `private` is
  * readable by its author and `role_restricted` is always hidden (D-55), so the
  * last entry exists for exhaustiveness rather than for a screen that shows it.

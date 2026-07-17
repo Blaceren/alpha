@@ -271,6 +271,7 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1B4-B | **User 360 Notes + Add Note UI** | выполнен — см. раздел ниже |
 | Phase 1B4-C | **Primary Owner Assignment** | выполнен — см. раздел ниже |
 | Phase 1B4-D | **User 360 Note Pin / Unpin** | выполнен — см. раздел ниже |
+| Phase 1B4-E | **User 360 Note Body Edit** | выполнен — `updateNoteBody`, provider-owned `canEditBody`, inline-редактор; D-82…D-85, docs/MUTATION_OVERLAY.md §§ (1B4-E) |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном

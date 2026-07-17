@@ -27,7 +27,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 Живое доказательство границы — `ProviderSmoke` на экране Today: данные приходят строго через провайдер; loading/empty/error-состояния отрабатываются реально.
 
-**Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализованы ровно три мутации (`addNote`, `assignPrimaryOwner`, `setNotePinned`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
+**Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализованы ровно четыре мутации (`addNote`, `assignPrimaryOwner`, `setNotePinned`, `updateNoteBody`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
 
 **Один инстанс на обе половины границы (Phase 1B4-B).** Провайдер владеет одним mutation-overlay
 адаптером, создаваемым в конструкторе, поэтому `getCrmDataProvider()` и `getCrmMutations()` обязаны
@@ -293,3 +293,27 @@ features/user-360/  components/user-notes.tsx (pin-контрол) · hooks/use-
   Любая видимая заметка pinnable; скрытая → `not_found` через тот же canonical projector (D-76) — API не
   зонд. UI без optimistic update — refetch `getUserNotes` (D-79); фокус возвращается на контрол той же
   заметки после reorder (D-81). Pin не влияет на Today/Users/priority/SLA/owner/tasks/cases (D-80).
+
+### Mutation layer (Phase 1B4-E — note body edit)
+
+Четвёртая мутация — `updateNoteBody` — легла на ту же инфраструктуру **аддитивно**:
+
+```
+domain/audit/       audit.ts (+NoteBodyChangedAuditRecord: четвёртый член union, только базовые поля)
+data/contracts/     CrmMutations.ts (+updateNoteBody) · CrmDataProvider.ts (+getUserNotesView, CrmNoteListItem.canEditBody)
+data/mock/overlay/  mutation-overlay.ts (+note_body_changed action, +note_body_change receipt-kind) · fingerprint.ts (+updateNoteBody)
+features/user-360/  components/user-notes.tsx (inline-редактор) · hooks/use-update-note-body.ts · hooks/use-user-notes.ts (→getUserNotesView) · lib/note-edit-error.ts
+```
+
+- **Единственная мутация, переписывающая `notes[]` на месте** (тело нельзя честно вывести из append-only
+  лога и оно не должно попасть в audit): тот же id/createdAt/author/visibility/baseline pinned, меняются
+  только `body`+`updatedAt` (= mutation-timestamp = `audit.at`, D-83). Overlay в пределах v1; regression:
+  raw 1B4-B/1B4-C/1B4-D overlay читаются без потерь, body-edit сосуществует с owner/pin-историей.
+- **PII-безопасность** (D-84): `UpdateNoteBodyResult` без `CrmNote`/тела (после повторной правки старое тело
+  не реконструируемо — возвращаем только id + timestamp); audit `note_body_changed` — только факт; receipt
+  без тела/фрагмента/длины; fingerprint по нормализованному телу, но хранит лишь хеш (crypto нет).
+- **Права не расширены, но строже** (D-82): `edit_user_notes` + **только автор своей overlay-заметки**;
+  фикстурная неизменна (видимая non-overlay → `invalid_input`, не `not_found`). Возможность отдаётся
+  провайдером через `getUserNotesView.capabilities.canEditBody` — React не разбирает id заметки.
+- **Конкуренция `expectedUpdatedAt`** (D-83); UI без optimistic — refetch `getUserNotesView` (D-85);
+  Escape отменяет, фокус возвращается на «Изменить»; storage-fail держит черновик, retry тем же ключом.

@@ -32,6 +32,9 @@ export const PRIMARY_OWNER_RECEIPT_KIND = "primary_owner_change";
 /** Discriminant of the pin-change receipt (Phase 1B4-D). */
 export const NOTE_PIN_RECEIPT_KIND = "note_pin_change";
 
+/** Discriminant of the body-change receipt (Phase 1B4-E). */
+export const NOTE_BODY_RECEIPT_KIND = "note_body_change";
+
 /**
  * Proof that a key was already used, and for what. Holds a fingerprint rather
  * than the command: the body is already stored once on the note, and a receipt
@@ -78,10 +81,26 @@ export interface NotePinIdempotencyReceipt {
   auditId: string;
 }
 
+/**
+ * Body-change receipt (Phase 1B4-E). Like the owner and pin receipts it has an
+ * explicit discriminant and no `noteId`: the edit it proves is recoverable from
+ * `auditId` alone (the audit record's `entityId` is the note). Critically it holds
+ * only the fingerprint of the normalized body, never the body, a fragment or its
+ * length — a receipt repeating the text would be a second plain-text copy of
+ * user-authored PII with no reader (D-84).
+ */
+export interface NoteBodyIdempotencyReceipt {
+  kind: typeof NOTE_BODY_RECEIPT_KIND;
+  key: string;
+  fingerprint: string;
+  auditId: string;
+}
+
 export type IdempotencyReceipt =
   | NoteIdempotencyReceipt
   | PrimaryOwnerIdempotencyReceipt
-  | NotePinIdempotencyReceipt;
+  | NotePinIdempotencyReceipt
+  | NoteBodyIdempotencyReceipt;
 
 /**
  * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately, through 1B4-D.
@@ -193,6 +212,11 @@ function isAuditRecord(value: unknown): value is AuditRecord {
         typeof value.previousPinned === "boolean" &&
         typeof value.nextPinned === "boolean"
       );
+    case "note_body_changed":
+      // The strictest record: base fields only. It carries no body payload at all,
+      // so there is nothing extra to validate — and nothing extra is tolerated,
+      // because the switch fails closed on any unknown action.
+      return value.entityType === "note" && value.reasonCode === "note_body_changed_by_employee";
     default:
       return false;
   }
@@ -210,6 +234,7 @@ function isReceipt(value: unknown): value is IdempotencyReceipt {
 
   if (value.kind === PRIMARY_OWNER_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind === NOTE_PIN_RECEIPT_KIND) return isString(value.auditId);
+  if (value.kind === NOTE_BODY_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind !== undefined) return false;
 
   return isString(value.noteId) && isString(value.auditId);

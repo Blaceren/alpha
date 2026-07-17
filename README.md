@@ -4,7 +4,7 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1B4-D — Note Pin / Unpin** поверх Phase 1B4-C (Primary Owner Assignment), Phase 1B4-B (Notes UI), Phase 1B4-A (mutation core), Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
+Статус реализации: **Phase 1B4-E — Note Body Edit** поверх Phase 1B4-D (Note Pin / Unpin), Phase 1B4-C (Primary Owner Assignment), Phase 1B4-B (Notes UI), Phase 1B4-A (mutation core), Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
 
 - `/today` — полноценный **read-only** операционный центр смены: очередь внимания с конкретным доменным основанием у каждой строки, 4 секции по срочности с canonical placement, детерминированная сортировка, рекомендация, ответственный, SLA, фильтры/поиск по разрешённой проекции, состояния loading/empty/error/stale, desktop/tablet/mobile. См. `docs/TODAY_WORKSPACE.md`.
 - `/users` — полноценный реестр (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive). См. `docs/USERS_WORKSPACE.md`.
@@ -12,7 +12,7 @@
 
 Данные — только через `CrmDataProvider`; вся permission-проекция выполняется в провайдере **до** React.
 
-**Последовательность этапов (D-34):** Phase 1C — User 360 и Phase 1B3 — Today Workspace выполнены. **Phase 1B4-A — mutation core** дал контракт `CrmMutations` и мутацию `addNote`. **Phase 1B4-B — UI заметок** добавил секцию «Заметки». **Phase 1B4-C — назначение primary owner** добавило вторую мутацию `assignPrimaryOwner` и её UI в секции «Ответственный и работа»; overlay расширен обратно совместимо, owner согласован в User 360 / Users / Today. **Phase 1B4-D — закрепление заметки** добавило третью мутацию `setNotePinned` и контрол закрепления в секции «Заметки»; effective pinned выводится из append-only audit (та же схема overlay v1), закрепление — часть `edit_user_notes`. Других мутаций нет, следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md`, `docs/MUTATION_OVERLAY.md`, `docs/USER_360.md`, `docs/DECISIONS.md` (D-75…D-81).
+**Последовательность этапов (D-34):** Phase 1C — User 360 и Phase 1B3 — Today Workspace выполнены. **Phase 1B4-A — mutation core** дал контракт `CrmMutations` и мутацию `addNote`. **Phase 1B4-B — UI заметок** добавил секцию «Заметки». **Phase 1B4-C — назначение primary owner** добавило вторую мутацию `assignPrimaryOwner` и её UI в секции «Ответственный и работа»; overlay расширен обратно совместимо, owner согласован в User 360 / Users / Today. **Phase 1B4-D — закрепление заметки** добавило третью мутацию `setNotePinned` и контрол закрепления в секции «Заметки»; effective pinned выводится из append-only audit (та же схема overlay v1), закрепление — часть `edit_user_notes`. **Phase 1B4-E — редактирование тела заметки** добавило четвёртую мутацию `updateNoteBody` и inline-редактор в секции «Заметки»: правит только автор своей overlay-заметки (`edit_user_notes`, строже pin), конкуренция по `expectedUpdatedAt`, возможность отдаётся провайдером через `getUserNotesView.canEditBody`; тело не попадает в result/audit/receipt. Других мутаций нет, следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md`, `docs/MUTATION_OVERLAY.md`, `docs/USER_360.md`, `docs/DECISIONS.md` (D-82…D-85).
 
 ## Стек
 
@@ -84,22 +84,22 @@ tests-e2e/             # Playwright smoke
 
 Подробнее — `docs/ARCHITECTURE.md`.
 
-## Мутации: что есть и чего нет (Phase 1B4-D)
+## Мутации: что есть и чего нет (Phase 1B4-E)
 
-**Три мутации на всё приложение — добавление заметки, назначение primary owner и закрепление заметки.** Все живут на User 360; Today и Users только читают. Секция «Заметки» — список (`getUserNotes`), inline-композер (`addNote`) и контрол закрепления у каждой заметки (`setNotePinned`), видны четырём ролям с `canEditUserNotes`. Секция «Ответственный и работа» — смена/снятие owner (`assignPrimaryOwner`), видна трём ролям с `canAssignOwner` (`crm_admin`/`crm_manager`/`retention_manager`); остальным — строка без контрола, текущий owner виден всем. Assign и Edit — **разные** права: `support` пишет и закрепляет заметки, owner не назначает. Закрепление — часть Edit, а не новое право (D-75). Рекомендации остаются с честной пометкой «Только просмотр».
+**Четыре мутации на всё приложение — добавление заметки, назначение primary owner, закрепление и редактирование тела заметки.** Все живут на User 360; Today и Users только читают. Секция «Заметки» — список (`getUserNotesView`), inline-композер (`addNote`), контрол закрепления (`setNotePinned`) и inline-редактор тела (`updateNoteBody`), видны четырём ролям с `canEditUserNotes`; **редактировать тело** может только автор своей overlay-заметки — возможность отдаёт провайдер через `CrmNoteListItem.capabilities.canEditBody`, React не разбирает id (D-82). Секция «Ответственный и работа» — смена/снятие owner (`assignPrimaryOwner`), видна трём ролям с `canAssignOwner` (`crm_admin`/`crm_manager`/`retention_manager`); остальным — строка без контрола, текущий owner виден всем. Assign и Edit — **разные** права. Закрепление и редактирование — часть Edit, а не новые права (D-75/D-82). Рекомендации остаются с честной пометкой «Только просмотр».
 
-После успеха любой мутации read перечитывается через провайдер (никакого optimistic update): у owner это refetch всего `getUser360` (owner в агрегате, D-35), у заметок — `getUserNotes` (закреплённая всплывает наверх, порядком владеет `sortNotes`; фокус возвращается на контрол той же заметки — D-81). Диагностика (`CrmError.message`) на экран не попадает — тексты из локальных тотальных карт по `CrmErrorCode`.
+После успеха любой мутации read перечитывается через провайдер (никакого optimistic update): у owner это refetch всего `getUser360` (owner в агрегате, D-35), у заметок — `getUserNotesView` (закреплённая всплывает наверх, порядком владеет `sortNotes`; фокус возвращается на контрол той же заметки — D-81/D-85). Диагностика (`CrmError.message`) на экран не попадает — тексты из локальных тотальных карт по `CrmErrorCode`.
 
 Что появилось — **только под провайдером**:
 
-- контракт `CrmMutations` с **тремя** операциями (`addNote`, `assignPrimaryOwner`, `setNotePinned`) + read `getPrimaryOwnerCandidates`; методов-заглушек нет;
-- versioned localStorage overlay `ata-crm.mutation-overlay.v1` — фикстуры неизменяемы; в 1B4-C/1B4-D схема расширена **аддитивно в пределах v1**, старые заметки и owner-история не теряются (regression-тест);
-- `AuditRecord{mock:true}` — discriminated union; owner-запись несёт previous/next owner, pin-запись — previous/next pinned, **без** PII/финансов/свободного текста; история owner и effective pinned = append-only audit (отдельных `ownerAssignments[]`/`notePins[]` нет);
-- идемпотентность по ключу, `expectedOwnerId`/`expectedPinned` против потери обновления, детерминированные id/timestamp (без `Math.random()`/`Date.now()`/crypto);
+- контракт `CrmMutations` с **четырьмя** операциями (`addNote`, `assignPrimaryOwner`, `setNotePinned`, `updateNoteBody`) + read'ы `getPrimaryOwnerCandidates` и `getUserNotesView` (`canEditBody`); методов-заглушек нет;
+- versioned localStorage overlay `ata-crm.mutation-overlay.v1` — фикстуры неизменяемы; в 1B4-C/1B4-D/1B4-E схема расширена **аддитивно в пределах v1**, старые заметки, owner- и pin-история не теряются (regression-тест); редактирование тела — единственная мутация, переписывающая `notes[]` на месте (только `body`+`updatedAt`);
+- `AuditRecord{mock:true}` — discriminated union; owner-запись несёт previous/next owner, pin-запись — previous/next pinned, **body-запись — только факт** (без тела/фрагмента/длины, D-84), всё **без** PII/финансов/свободного текста; история owner и effective pinned = append-only audit (отдельных `ownerAssignments[]`/`notePins[]` нет);
+- идемпотентность по ключу, `expectedOwnerId`/`expectedPinned`/`expectedUpdatedAt` против потери обновления, детерминированные id/timestamp (без `Math.random()`/`Date.now()`/crypto); у body-edit один timestamp у `note.updatedAt` и `audit.at` — replay реконструирует метаданные из audit (D-83);
 - единый резолвер effective pinned (`resolveEffectivePins`) — базовый `note.pinned` ⊕ последняя `note_pin_changed`, до `sortNotes`; любая **видимая** заметка pinnable, скрытая → `not_found` (D-76);
 - canonical employee directory (`domain/identity/employees.ts`) — источник кандидатов, `OWNER_LABEL` и owner-фильтра Users;
-- права `canEditUserNotes` (D-53, покрывает и pin — D-75) и `canAssignOwner` (существует с Phase 1A) — разные измерения матрицы, не расширялись.
+- права `canEditUserNotes` (D-53, покрывает pin — D-75, и редактирование тела — D-82) и `canAssignOwner` (существует с Phase 1A) — разные измерения матрицы, не расширялись.
 
-**Не реализованы:** редактирование тела/удаление заметок, выбор visibility, пагинация заметок, tasks/cases mutations, task/case assignees, смена статуса, scope `own/team/all`, bulk pin/assignment, pin/assignment UI в Users/Today, закрытие сигналов, выполнение рекомендаций, reveal PII, audit-экран, кнопка сброса, финансовые операции, коммуникации, live cross-tab sync. Backend, база данных, Prisma и Pocket отсутствуют — мутация не покидает вкладку.
+**Не реализованы:** удаление заметок, редактирование чужих/фикстурных заметок, выбор visibility, пагинация заметок, tasks/cases mutations, task/case assignees, смена статуса, scope `own/team/all`, bulk pin/assignment/edit, pin/assignment UI в Users/Today, закрытие сигналов, выполнение рекомендаций, reveal PII, audit-экран, кнопка сброса, финансовые операции, коммуникации, live cross-tab sync. Backend, база данных, Prisma и Pocket отсутствуют — мутация не покидает вкладку.
 
 Подробности: `docs/MUTATION_OVERLAY.md`.
