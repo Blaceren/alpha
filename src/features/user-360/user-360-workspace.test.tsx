@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
 import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
-import { fail, stale } from "@/data/contracts/result";
+import { empty, fail, stale } from "@/data/contracts/result";
 import type { Result } from "@/data/contracts/result";
 import type { User360 } from "@/domain/users/user-360";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
@@ -51,9 +51,21 @@ function renderWorkspace(userId = HIGH_PRIORITY, providerOverride: CrmDataProvid
   );
 }
 
-/** Stub provider returning one canned result for getUser360. */
+/**
+ * Stub provider returning one canned result for getUser360.
+ *
+ * Since Phase 1B4-B the screen also reads notes independently, so a stub of "the
+ * provider this screen uses" has to answer that read too. It returns an empty
+ * page: these cases are about the aggregate's states, not about notes.
+ */
 function stubProvider(result: Result<User360>): CrmDataProvider {
-  return { getUser360: () => Promise.resolve(result) } as unknown as CrmDataProvider;
+  return {
+    getUser360: () => Promise.resolve(result),
+    getUserNotes: () =>
+      Promise.resolve(
+        empty({ items: [], page: { cursor: null, nextCursor: null, total: 0, pageSize: 50 } }),
+      ),
+  } as unknown as CrmDataProvider;
 }
 
 describe("User360Workspace — structure", () => {

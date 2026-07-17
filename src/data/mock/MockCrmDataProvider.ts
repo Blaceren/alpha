@@ -525,16 +525,31 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
    * Synthetic notes derived from a fixture. Rebuilt on every read from immutable
    * fixture data — the fixture itself is never touched, and authored notes live in
    * the overlay, so a mutation can never rewrite generated content.
+   *
+   * The body interpolated `state.reasonCode` until Phase 1B4-B gave notes a
+   * reader. That put a raw enum code (`support_blocked`) into user-facing text,
+   * which config/labels exists to prevent — and unlike every other code on this
+   * screen, `state.reasonCode` has no label map to resolve it through (only
+   * `priority.reasonCode` does, via PRIORITY_REASON_LABEL). Seeding a human
+   * sentence is the fix: a data-layer note cannot resolve labels anyway, since
+   * Russian copy lives in config and config depends on domain, not the reverse.
+   *
+   * The seeded note is dated two days back rather than "now". At `clock.nowIso()`
+   * it rendered as «только что» on every load — a note that claims it was just
+   * written, every time, and that a note the employee actually just wrote could
+   * not be told apart from. Two days is still fully deterministic (it is derived
+   * from the fixed mock clock) and it makes the ordering visible: authored notes
+   * are stamped `nowMs + sequence` and land above this one.
    */
   private fixtureNotes(u: MockUser): CrmNote[] {
-    const at = this.clock.nowIso();
+    const at = new Date(this.clock.nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
     return [
       {
         id: `${u.identity.userId}_note_1`,
         userId: u.identity.userId,
         caseId: null,
         authorEmployeeId: u.operations.primaryOwnerId ?? "emp_mock_admin",
-        body: `Синтетическая заметка: ${u.state.reasonCode}.`,
+        body: "Синтетическая заметка: демонстрационная запись о работе с пользователем.",
         visibility: "team",
         pinned: false,
         createdAt: at,

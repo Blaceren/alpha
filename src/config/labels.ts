@@ -10,6 +10,7 @@ import type {
   OperationalBlocker,
   ValueSegment,
 } from "@/domain/lifecycle/state";
+import type { NoteVisibility } from "@/domain/notes/note";
 import type { StateEvidence, StateEvidenceCode } from "@/domain/shared/primitives";
 import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
 import type { PriorityBand } from "@/domain/priority/priority";
@@ -224,7 +225,42 @@ export const USER_360_LABEL = {
   priorityBasis: "Основание приоритета",
   readOnly: "Только просмотр",
   userId: "ID пользователя",
+  notes: "Заметки",
 } as const;
+
+/**
+ * Notes section of the User 360 (Phase 1B4-B) — the first mutating surface in
+ * the CRM. Same rule as everywhere else: one source for the strings, no raw
+ * codes and no provider diagnostics on screen.
+ */
+export const NOTES_LABEL = {
+  title: USER_360_LABEL.notes,
+  /** Says what this role has to show, not that no note exists anywhere. */
+  empty: "Заметок пока нет",
+  loading: "Загрузка заметок",
+  loadError: "Не удалось загрузить заметки",
+  retry: "Повторить",
+  composerLabel: "Текст заметки",
+  composerPlaceholder: "Что важно знать о работе с этим пользователем",
+  submit: "Добавить заметку",
+  /** Mobile disclosure, open state — distinct from the submit control's name. */
+  collapse: "Свернуть",
+  submitPending: "Сохраняем…",
+  success: "Заметка добавлена",
+  /** Shown instead of a form — never as a disabled control (DECISIONS D-59). */
+  forbidden: "Ваша роль не может добавлять заметки",
+} as const;
+
+/**
+ * Note visibility axis. Phase 1B4-A writes `team` only (D-54); `private` is
+ * readable by its author and `role_restricted` is always hidden (D-55), so the
+ * last entry exists for exhaustiveness rather than for a screen that shows it.
+ */
+export const NOTE_VISIBILITY_LABEL: Record<NoteVisibility, string> = {
+  team: "Командная заметка",
+  private: "Личная заметка",
+  role_restricted: "Ограниченная заметка",
+};
 
 /**
  * Today workspace (`/today`) user-facing labels. Same rule as Users and User

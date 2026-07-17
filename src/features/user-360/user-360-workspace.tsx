@@ -3,6 +3,7 @@
 import * as React from "react";
 import { TriangleAlert } from "lucide-react";
 import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
+import type { CrmMutations } from "@/data/contracts/CrmMutations";
 import { useUser360Query } from "./hooks/use-user-360-query";
 import { User360Header } from "./components/user-360-header";
 import { UserAttentionPanel } from "./components/user-attention-panel";
@@ -13,6 +14,7 @@ import { UserLearningProgress } from "./components/user-learning-progress";
 import { UserActivityTimeline } from "./components/user-activity-timeline";
 import { UserFinancialSummary } from "./components/user-financial-summary";
 import { UserOwnerContext } from "./components/user-owner-context";
+import { UserNotes } from "./components/user-notes";
 import {
   User360Error,
   User360NotFound,
@@ -21,24 +23,31 @@ import {
 } from "./user-360-states";
 
 /**
- * Read-only User 360 (Phase 1C). One provider call returns the whole aggregate
- * already projected for the caller's role — this component makes no permission
- * decisions of its own and performs no mutations.
+ * User 360. One provider call returns the whole aggregate already projected for
+ * the caller's role — this component makes no permission decisions of its own.
  *
  * Composition (DOM order = mobile order = reading order):
  *   header → attention → states → blockers → signals → learning → activity
- *   → financial → owner
+ *   → notes → financial → owner
  * On lg+ the last two become a narrower sticky operational-context column beside
  * the wide main column.
  *
- * `providerOverride` is for tests only; production uses the app provider.
+ * Notes (Phase 1B4-B) are the one part not served by the aggregate: they carry a
+ * per-note privacy rule with its own canonical projector, so they keep their own
+ * permission-aware read and their own local states. The rest of the screen stays
+ * read-only — recommendations still offer no action control.
+ *
+ * `providerOverride` / `mutationsOverride` are for tests only; production uses
+ * the app's single provider instance for both halves of the boundary.
  */
 export function User360Workspace({
   userId,
   providerOverride,
+  mutationsOverride,
 }: {
   userId: string;
   providerOverride?: CrmDataProvider;
+  mutationsOverride?: CrmMutations;
 }) {
   const { result, loading, retry } = useUser360Query(userId, providerOverride);
 
@@ -82,6 +91,13 @@ export function User360Workspace({
           </div>
           <UserLearningProgress view={view} />
           <UserActivityTimeline activity={view.activity} />
+          {/* Notes sit after the timeline: recent events are what the profile
+              observed, notes are what the team wrote about it. */}
+          <UserNotes
+            userId={userId}
+            providerOverride={providerOverride}
+            mutationsOverride={mutationsOverride}
+          />
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4 lg:w-1/3">

@@ -268,7 +268,7 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1C | **User 360** | выполнен |
 | Phase 1B3 | **Today Workspace** | выполнен (read-only) — см. раздел ниже |
 | Phase 1B4-A | **Mutation core + addNote (provider-only)** | выполнен — см. раздел ниже |
-| Phase 1B4-B | Mutation UI (форма заметки) | **не начат** |
+| Phase 1B4-B | **User 360 Notes + Add Note UI** | выполнен — см. раздел ниже |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -372,8 +372,9 @@ Backend / database / Prisma / Pocket отсутствуют. Зависимос�
 Первая часть Phase 1B4. Mutation infrastructure и одна реальная мутация **только** на уровне
 domain/provider/storage. Подробности: `docs/MUTATION_OVERLAY.md`, решения D-53…D-57.
 
-**UI не создавался и не менялся.** Формы добавления заметки нет, кнопки нет, оптимистичного React-состояния нет.
-Пользователь пока не может нажать «Добавить заметку» — это **Phase 1B4-B, не начата**.
+**UI не создавался и не менялся в этой фазе.** Формы добавления заметки нет, кнопки нет, оптимистичного
+React-состояния нет. *Обновлено: экранная часть выполнена в **Phase 1B4-B** (см. раздел ниже) — заметку
+теперь можно добавить из секции «Заметки» на User 360.*
 
 ### Permission preflight (до кода)
 Матрица позволила определить Edit-роли однозначно, поэтому этап не останавливался. §0 относит `notes`
@@ -405,6 +406,7 @@ mentor («mentor tasks/cases, reports»), moderator («moderation cases») и co
   через тот же projector **до** пагинации, затем сортирует (`pinned` → `createdAt desc` → `id`).
   Скрытые не входят в `page.total`, не заменяются плейсхолдером, их тело не протекает через `Result`.
   **User 360 заметки не читает вообще** — второго пути чтения нет, расхождению правил неоткуда взяться.
+  *(Обновлено в Phase 1B4-B: читатель появился и использует тот же `getUserNotes` — D-58.)*
 - **AuditRecord** (`domain/audit/`) — immutable, `action: "note_added"`, `reasonCode` — закрытый enum,
   `mock: true`. **Тела заметки, email, телефона, финансовых значений и произвольного текста не содержит.**
   Audit UI и read endpoint не создавались.
@@ -449,7 +451,8 @@ mentor («mentor tasks/cases, reports»), moderator («moderation cases») и co
 
 ### Не входит (сознательно)
 UI-форма добавления заметки, кнопка, оптимистичное React-состояние, пересчёт очереди Today —
-**Phase 1B4-B, не начата**. Не реализованы: `createTask`, `updateTask`, `createCase`, `updateCase`,
+**Phase 1B4-B** (форма и список выполнены там; оптимистичного состояния не появилось и там — D-60;
+пересчёт очереди Today не делался). Не реализованы: `createTask`, `updateTask`, `createCase`, `updateCase`,
 owner assignment, signal resolution, recommendation acceptance, reveal PII, audit-экран, reset-кнопка в UI,
 редактирование/удаление заметок. Матрица прав, identity-проекция и exact-financial visibility **не расширялись**
 (добавлено ровно одно право `edit_user_notes`). Today derivation и подписи рекомендаций не менялись.
@@ -459,5 +462,103 @@ Backend / API / database / Prisma / Pocket отсутствуют. Зависи�
 - `private` и `role_restricted` **невозможно создать** через `addNote` (D-54) и они fail-closed при чтении (D-55).
   Полноценная поддержка требует metadata-контракта (владелец приватной записи, список разрешённых ролей) — отдельное решение.
 - Заметки **нигде не отображаются**: `getUserNotes` полностью реализован и permission-aware, но потребителя-экрана
-  у него пока нет. Это ожидаемо для provider-only фазы, а не упущение.
+  у него пока нет. Это ожидаемо для provider-only фазы, а не упущение. *Закрыто в Phase 1B4-B: потребитель —
+  секция «Заметки» на User 360.*
 - `AuditRecord` только пишется — читать его пока нечем (audit read endpoint/экран вне scope).
+
+
+---
+
+## Phase 1B4-B — User 360 Notes + Add Note UI ✅
+
+Вторая часть Phase 1B4: у заметок появился экран. Подробности: `docs/USER_360.md` §Заметки,
+ревью: `docs/visual-reviews/PHASE_1B4_B_ADD_NOTE.md`, решения D-58…D-63.
+
+**Это единственная мутация во всём приложении.** Today и Users не менялись; рекомендации по-прежнему
+без контрола выполнения.
+
+### Выполнено
+- **Композиционный корень отдаёт один инстанс.** `application/provider.ts`: внутренний
+  `resolveProvider(state)` + `getCrmDataProvider()` (read) и `getCrmMutations()` (мутации). Оба
+  **сужают один и тот же** закэшированный `CrmDataProvider & CrmMutations` — без `as unknown as`,
+  без `as never`, без `new MockCrmDataProvider()` в хуках. Это не эстетика: провайдер владеет одним
+  overlay-адаптером (MUTATION_OVERLAY §3), поэтому второй инстанс был бы вторым адаптером над тем же
+  storage, и запись через один могла бы не читаться через другой — недетерминированно и только в
+  браузере. Закреплено regression-тестом на идентичность (D-58, `provider.test.ts`).
+- **Секция «Заметки»** в основной колонке User 360 после «Недавних событий», на существующем
+  `SectionCard` (мутирующий контрол в `aside` не кладётся — контракт компонента это запрещает).
+  Файлы: `components/user-notes.tsx`, `components/note-composer.tsx`, `hooks/use-user-notes.ts`,
+  `hooks/use-add-note.ts`, `lib/note-error.ts`; строки — в `config/labels.ts` (`NOTES_LABEL`,
+  `NOTE_VISIBILITY_LABEL`).
+- **Заметки — отдельный permission-aware read (D-58),** а не поле агрегата: правило приватности
+  на каждой заметке живёт в одном projector'е, чей единственный потребитель — `getUserNotes`.
+  React список **не фильтрует и не сортирует**. Второе чтение изолировано: его loading не задерживает
+  профиль, его ошибка не подменяет экран `ErrorState`, retry действует только на секцию. Читается тот
+  же default-provider state, что и в `useUser360Query` (Today demo-state не читается — это был бы
+  другой инстанс).
+- **Права — только `canEditUserNotes(role)` (D-59).** Форма у `crm_admin`, `crm_manager`,
+  `retention_manager`, `support`. Пяти запрещённым ролям **не рендерится ни textarea, ни submit, ни
+  disabled-контрол** — только строка «Ваша роль не может добавлять заметки». Список заметок остаётся
+  виден всем девяти ролям (чтение — «View User 360», другое право). Матрица прав, identity- и
+  financial-проекции **не расширялись**. Смена роли при открытом композере убирает форму на том же
+  рендере; провайдер остаётся последней защитой.
+- **Inline-композер (D-59):** desktop — textarea в секции; mobile — свёрнут в кнопку 44 px с
+  `aria-expanded` и раскрытием inline (не Dialog, не Sheet). `maxLength` и клиентская валидация берут
+  `NOTE_BODY_MAX_LENGTH` и `normalizeNoteBody` **из домена** — литерала `2000` в UI нет. Тело —
+  plain text, HTML не интерпретируется.
+- **Idempotency-ключ (D-61):** `` `${useId()}:${userId}:${attempt}` `` — без `Math.random`, `Date.now`,
+  `crypto` и новых зависимостей. Повторяется на retry после `internal` и на двойном submit; обновляется
+  после success и после conflict; правка черновика ключ не создаёт; пользователю не показывается.
+- **Двойной submit** не создаёт дубль на обоих уровнях: `disabled` + ref-guard в UI и replay по тому же
+  ключу в провайдере (`produce()` после `gate` синхронен, поэтому второй вызов видит receipt первого).
+- **Никакого optimistic update (D-60):** submit → provider result → refetch `getUserNotes` → перерисовка.
+  Доказано тестом: провайдер продолжает отвечать «заметок нет» → экран говорит «заметок нет».
+  `replayed: true` обрабатывается как обычный успех, без техносообщений.
+- **Ошибки (D-62):** локальная **тотальная** `Record<CrmErrorCode, string>` — новый код союза не
+  скомпилируется. `ErrorState` намеренно не переиспользован: его ветка `internal` печатает
+  `error.message` сырым, а `addNote` возвращает там английское `"Mock overlay could not be persisted."`.
+- **A11y:** заголовок секции, видимая подпись поля, счётчик через `aria-describedby`, `aria-invalid`,
+  ошибка `role="alert"`, success `role="status"`/`aria-live` без таймера, pending словами
+  («Сохраняем…») и `aria-busy`, возврат фокуса в textarea, `aria-expanded` у мобильного раскрытия,
+  запрещённая роль не получает hidden/disabled контролов, keyboard submit, 200 % zoom.
+- **Исправлены два дефекта фикстуры (D-63),** ставшие видимыми, когда у заметок появился читатель:
+  тело засеянной заметки печатало **raw enum-код** `support_blocked` (ловилось существующим тестом
+  «shows no raw enum codes anywhere»), а `createdAt = now` делал её неотличимой от только что
+  написанной («только что» на каждой загрузке). Теперь — человеческая фраза и детерминированная дата
+  «2 дня назад». Схема overlay не менялась.
+
+### Результаты проверок
+- `typecheck` ✅ 0 ошибок · `lint` ✅ 0 warnings/errors
+- `test:run` ✅ **633/633** (все 569 прежних сохранены + 64 новых: 5 provider-composition,
+  20 permissions × 9 ролей, 39 notes UI — состояния списка, валидация, mutation, ключ, ошибки)
+- `build` ✅ production build успешна (19 routes; `/users/[id]` 8.55 kB → **10.4 kB** / 174 kB)
+- `test:e2e` ✅ **59/59** (все 41 прежний сохранён + 18 новых). Консоль чистая, hydration-warnings нет
+- `npm audit` — те же 11 не устранённых next-внутренних advisories (D-26); `audit fix` не выполнялся.
+  `package.json` / `package-lock.json` не менялись, зависимости не добавлялись
+- **Один существующий тест-хелпер поправлен:** `stubProvider` в `user-360-workspace.test.tsx` теперь
+  отвечает и на `getUserNotes`. Это следствие настоящего второго чтения экрана, а не ослабление:
+  ни одна проверка не удалена и не изменена, все 19 сценариев сохранили смысл
+- **Hydration:** client-mount pattern, необходимый `<input type="search">` в тулбарах (autofill-агент
+  Chromium), для `<textarea>` не понадобился — проверено эмпирически, 0 warnings в каждом E2E-сценарии
+
+### Не входит (сознательно)
+Редактирование и удаление заметок, pin/unpin, выбор `visibility` (новая заметка всегда `team`, D-54),
+пагинация заметок (рендерится первая страница, `pageSize: 50`), заметки в Today и в таблице Users,
+toast-инфраструктура, audit-экран и read endpoint, кнопка сброса overlay, `createTask`/`updateTask`/
+`createCase`/`updateCase`, owner assignment, signal resolution, recommendation completion, reveal PII.
+Матрица прав, identity-проекция и exact-financial visibility **не расширялись**. Backend / API /
+database / Prisma / Pocket отсутствуют. Зависимости не менялись. Secrets/.env не появлялись.
+
+### Известные ограничения (не скрыты)
+- **Пагинации нет:** если у пользователя когда-нибудь окажется больше 50 видимых заметок, UI покажет
+  первую страницу и не предложит подгрузить остальное.
+- **Ключ не воспроизводим между монтированиями композера** (`useId` берёт префикс из счётчика на
+  реалм). Для idempotency-ключа это правильно — свежий композер не должен наследовать израсходованный
+  ключ, — и ни на что не влияет: ключ не entity id и не рендерится (D-61).
+- **`conflict` из корректного UI практически недостижим** (ключ обновляется после успеха); ветка
+  реализована и покрыта тестами как защитная.
+- **`not_found` проверяется в провайдере раньше `unauthorized`**, поэтому запрещённая роль могла бы
+  зондировать существование пользователя через `addNote`. Из UI путь недостижим (формы у этих ролей
+  нет), импакт нулевой (User 360 открыт всем девяти ролям), но свойство зафиксировано.
+- **Заметка «нигде больше не отображается»** — долг 1B4-A закрыт для User 360 и остаётся для Today и
+  Users, где заметок нет и не планировалось.

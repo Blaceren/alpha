@@ -18,7 +18,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 - **domain/** — чистые типы и функции (enums, `UserStateProfile`, permissions, `toFinancialBucket`). Не импортирует React, Next или data-слой. Источник истины — документы Phase 0/0.5.
 - **data/contracts/** — интерфейс `CrmDataProvider`, `Result<T>`, `Paginated<T>`, `CrmError`. Зависит только от domain.
 - **data/mock/** — `MockCrmDataProvider` + synthetic fixtures. Реализует contract.
-- **application/** — композиционный корень: `getCrmDataProvider()` выбирает провайдера по `env.CRM_MODE`; `contextFromSession()` строит `CrmContext`.
+- **application/** — композиционный корень: внутренний `resolveProvider(state)` строит и кэширует провайдера по `env.CRM_MODE`; `getCrmDataProvider()` отдаёт read-интерфейс, `getCrmMutations()` — мутирующий, **оба сужают один и тот же закэшированный объект**; `contextFromSession()` строит `CrmContext`.
 - **components/**, **app/** — UI. Получают данные только через application/provider, **никогда** не импортируют `data/mock/*` напрямую (запрещено ESLint-правилом `no-restricted-imports`).
 
 ## Provider boundary
@@ -28,6 +28,19 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 Живое доказательство границы — `ProviderSmoke` на экране Today: данные приходят строго через провайдер; loading/empty/error-состояния отрабатываются реально.
 
 **Мутации — отдельный контракт** `CrmMutations` (Phase 1B4-A), тот же `Result<T>` / `CrmError`, без параллельной error system. `MockCrmDataProvider implements CrmDataProvider, CrmMutations` — без приведений типов. Реализована ровно одна мутация (`addNote`); методов-заглушек на будущее нет. См. `docs/MUTATION_OVERLAY.md`.
+
+**Один инстанс на обе половины границы (Phase 1B4-B).** Провайдер владеет одним mutation-overlay
+адаптером, создаваемым в конструкторе, поэтому `getCrmDataProvider()` и `getCrmMutations()` обязаны
+возвращать **один и тот же** объект: второй инстанс был бы вторым адаптером над тем же storage, и
+запись через один могла бы не читаться через другой — недетерминированно и только в браузере.
+Аксессоры **сужают** общий `CrmDataProvider & CrmMutations`, а не приводят типы (`as unknown as`
+компилировался бы и после того, как половины разошлись). Идентичность закреплена тестом
+`src/application/provider.test.ts`.
+
+**Единственный мутирующий экран — User 360** (Phase 1B4-B): секция «Заметки» читает `getUserNotes`
+**отдельным** permission-aware вызовом (не через `getUser360` — D-58) и пишет через `addNote`.
+После успеха выполняется refetch, а не optimistic insert: видимостью владеет projector, порядком —
+провайдер (D-60). `CrmError.message` — диагностика для разработчика и в UI не рендерится (D-62).
 
 ## Permission boundary
 

@@ -4,7 +4,7 @@
 
 > **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
-Статус реализации: **Phase 1B4-A — Mutation core + `addNote` (provider-only)** поверх Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
+Статус реализации: **Phase 1B4-B — User 360 Notes + Add Note UI** поверх Phase 1B4-A mutation core, Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
 
 - `/today` — полноценный **read-only** операционный центр смены: очередь внимания с конкретным доменным основанием у каждой строки, 4 секции по срочности с canonical placement, детерминированная сортировка, рекомендация, ответственный, SLA, фильтры/поиск по разрешённой проекции, состояния loading/empty/error/stale, desktop/tablet/mobile. См. `docs/TODAY_WORKSPACE.md`.
 - `/users` — полноценный реестр (TanStack Table: поиск/5 измерений/compound-фильтры/сортировка/пагинация, permission-safe финансы и identity, состояния loading/empty/no-results/error/stale/unauthorized, responsive). См. `docs/USERS_WORKSPACE.md`.
@@ -12,7 +12,7 @@
 
 Данные — только через `CrmDataProvider`; вся permission-проекция выполняется в провайдере **до** React.
 
-**Последовательность этапов (D-34):** Phase 1C — User 360 и Phase 1B3 — Today Workspace выполнены, оба read-only. **Phase 1B4-A — mutation core** выполнен: есть отдельный контракт `CrmMutations` и одна реальная мутация `addNote` на уровне domain/provider/storage. **UI мутаций нет** — нажать «Добавить заметку» пока нельзя, ни один экран не изменился. Экранная часть — **Phase 1B4-B, не начата**; следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md` и `docs/MUTATION_OVERLAY.md`.
+**Последовательность этапов (D-34):** Phase 1C — User 360 и Phase 1B3 — Today Workspace выполнены. **Phase 1B4-A — mutation core** дал отдельный контракт `CrmMutations` и одну реальную мутацию `addNote` на уровне domain/provider/storage. **Phase 1B4-B — UI заметок** выполнен: на User 360 появилась секция «Заметки» со списком и inline-композером; заметку теперь действительно можно добавить, и она переживает перезагрузку. Других мутаций нет, следующий этап не начинается автоматически. См. `docs/IMPLEMENTATION_STATUS.md`, `docs/MUTATION_OVERLAY.md`, `docs/USER_360.md`.
 
 ## Стек
 
@@ -84,9 +84,11 @@ tests-e2e/             # Playwright smoke
 
 Подробнее — `docs/ARCHITECTURE.md`.
 
-## Мутации: что есть и чего нет (Phase 1B4-A)
+## Мутации: что есть и чего нет (Phase 1B4-B)
 
-**Все экраны по-прежнему только читают.** Today, Users и User 360 не изменились: формы добавления заметки нет, кнопки «Добавить заметку» нет, оптимистичного состояния в React нет. Рекомендации остаются с честной пометкой «Только просмотр» — нажимать по-прежнему нечего, и fake success не создаётся.
+**Ровно одна мутация на всё приложение — добавление заметки.** Today и Users не изменились и только читают. На User 360 появилась секция «Заметки»: список (через `getUserNotes`) и inline-композер (через `addNote`). Форму видят только `crm_admin`, `crm_manager`, `retention_manager`, `support` — решает единственный хелпер `canEditUserNotes(role)`; остальным пяти ролям форма не рендерится вообще (ни disabled-кнопки), но список заметок им виден. Рекомендации остаются с честной пометкой «Только просмотр» — контрола выполнения у них нет, fake success не создаётся.
+
+После успеха список перечитывается через провайдер (никакого optimistic insert): видимостью владеет privacy-projector, порядком — провайдер. Диагностика провайдера (`CrmError.message`) на экран не попадает — тексты ошибок берутся из локальной тотальной карты по `CrmErrorCode`.
 
 Что появилось — **только под провайдером**:
 
@@ -96,6 +98,6 @@ tests-e2e/             # Playwright smoke
 - идемпотентность по ключу, детерминированные id/timestamp (без `Math.random()` и `Date.now()`);
 - централизованное право `canEditUserNotes` — admin/manager/retention/support (D-53).
 
-**Не реализованы:** редактирование/удаление заметок, tasks/cases mutations, смена owner/статуса, закрытие сигналов, выполнение рекомендаций, reveal PII, audit-экран, кнопка сброса, финансовые операции, коммуникации. Backend, база данных, Prisma и Pocket отсутствуют — мутация не покидает вкладку.
+**Не реализованы:** редактирование/удаление заметок, pin/unpin, выбор visibility (новая заметка всегда `team`), пагинация заметок, tasks/cases mutations, смена owner/статуса, закрытие сигналов, выполнение рекомендаций, reveal PII, audit-экран, кнопка сброса, финансовые операции, коммуникации, заметки в Today/Users. Backend, база данных, Prisma и Pocket отсутствуют — мутация не покидает вкладку.
 
 Подробности: `docs/MUTATION_OVERLAY.md`.
