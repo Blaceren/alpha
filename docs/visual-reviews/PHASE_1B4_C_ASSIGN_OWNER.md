@@ -109,3 +109,84 @@ Raw employee id (`emp_*`) в видимом тексте секции не вс�
 Секция читается как часть User 360; действие не доминирует; текущий/выбранный owner не путаются;
 снятие понятно; forbidden спокойный; success не рекламный; conflict честный; raw id нет; адаптив цел.
 Принято.
+
+---
+
+## Phase 1B4-C.1 — Zoom Reflow Acceptance Fix
+
+> Узкая acceptance-коррекция. Кадр `final/owner-zoom-200.png` показывал обрезанную правую
+> колонку, неполную секцию «Ответственный и работа» и столкновение текста в «Состояниях».
+> Новые кадры: `screenshots/phase-1b4-c-assign-owner/zoom-acceptance-fix/`.
+
+### Почему прежняя проверка «no overflow» пропустила дефект
+
+Zoom-тест 1B4-C снимал кадр так: `setViewportSize(1440×900)` + `documentElement.style.zoom = "2"`.
+Это **не** моделирует браузерный zoom — и 1C-suite прямо это задокументировала в комментарии
+(`user-360.spec.ts`: «Setting `body.zoom` would NOT do this — media queries would still see 1440, the
+layout could not reflow, and the test would pass while real users got a clipped, horizontally-scrolling
+page»). Owner-тест применил ровно этот анти-паттерн.
+
+Две причины ложного «зелёного»:
+
+1. **Layout не reflow'ился.** `zoom` не меняет CSS-viewport — media queries по-прежнему видят 1440px,
+   поэтому `lg:`-sidebar остаётся видимым, workspace остаётся 2/3+1/3, а грид «Состояний» остаётся
+   `xl:grid-cols-5`. Всё это масштабируется 2× и визуально обрезается/сталкивается.
+2. **Метрика мерила не то.** `pageOverflow` = `documentElement.scrollWidth − clientWidth`. Под CSS
+   `zoom` обе величины масштабируются вместе → **0**, тогда как реальный горизонтальный overflow сидит
+   во вложенном `#crm-content` (sw=514 > cw=480, **34px** скрытого overflow). Страничная метрика его не
+   видела; ловил только глаз на скриншоте.
+
+### Root cause
+
+**Некорректный метод capture в тесте, а не дефект продукта.** При принятой моделью 200% zoom = **halved
+viewport 720×450** продукт reflow'ится штатно уже существующим responsive-shell'ом.
+
+### Измерения до / после (реальная геометрия)
+
+| Метрика | `zoom:2` на 1440 (ложь) | 720×450 (истина) |
+|---|---|---|
+| `innerWidth` | 1440 | 720 |
+| `documentElement` scrollWidth − clientWidth | 0 *(ложный «ок»)* | 0 |
+| `#crm-content` scrollWidth − clientWidth | **34** *(скрытый overflow)* | **0** |
+| Sidebar | виден (масштабирован), ест левую половину | скрыт (`lg:` брейкпоинт) |
+| Workspace | 2/3 + 1/3, правая колонка обрезана | одна колонка |
+| «Состояния» грид | `xl:grid-cols-5`, текст сталкивается | `sm:grid-cols-3`, столкновений нет (bbox-проверка) |
+| Owner-секция bbox | x=1120…1408 (за кадром) | x=16…704 (в пределах 720) |
+| Owner-секция ширина | 288 (обрезана) | 688 (full-width) |
+
+### Почему это reflow, а не скрытие
+
+Правка **не** трогает продукт: изменён только метод capture в тесте (720×450). Reflow обеспечивает уже
+существующий shell — `Sidebar` = `hidden lg:flex` (скрывается ниже 1024px, D-15/1A), workspace
+`lg:flex-row → flex-col`, «Состояния» `grid-cols-2 sm:grid-cols-3 xl:grid-cols-5`. Ничего не спрятано:
+acceptance-тест проверяет, что owner-секция **присутствует** и её ширина > половины viewport (обратная
+regression против «прошло, потому что обрезали правую колонку»), что body не шире viewport (нет пустого
+горизонтального полотна), и что select/Save/success полностью в пределах viewport и ≥44px.
+
+### Запрещённые «исправления» не применялись
+
+Нет `overflow-x: hidden`, `transform: scale`, CSS `zoom` для уменьшения UI, уменьшения шрифтов, JS-детекта
+zoom, удаления полей/данных, скрытия `UserOwnerContext`, fixed/min-width, отдельной zoom-версии. Owner-
+domain, permissions, overlay, mutation semantics, fixtures — не тронуты.
+
+### Новые кадры (просмотрены лично)
+
+- `owner-zoom-200-top-720x450.png` — верхняя композиция после reflow: sidebar свёрнут в hamburger, одна
+  колонка, контент full-width, без обрезки.
+- `owner-zoom-200-states-720x450.png` — «Состояния» в 3 колонки, подписи над значениями, без столкновений.
+- `owner-zoom-200-assignment-720x450.png` — секция «Ответственный и работа» одной колонкой, full-width
+  select + «Сохранить», всё в пределах viewport.
+- `owner-zoom-200-success-720x450.png` — после сохранения: «Retention 1», «Ответственный обновлён», не
+  обрезано.
+
+Прежний `final/owner-zoom-200.png` намеренно **не перезаписан** (защищённая папка); корректное
+доказательство — в `zoom-acceptance-fix/`.
+
+### Тесты
+
+Zoom-тест переписан на 720×450 и усилен до проверки **результата**, а не наличия media query:
+document-overflow ≤1, **вложенный `#crm-content` overflow ≤1** (метрика, которую старый метод не видел),
+owner/states-секции в пределах viewport и не свёрнуты, отсутствие пересечения bbox подписей/значений
+«Состояний», select/Save достижимы вертикальным скроллом и ≥44px, доступность с клавиатуры,
+не-обрезанность success, чистые console/hydration. Второй тест снимает top/states-кадры. E2E: 85 → **86**
+(один тест заменён двумя; ни один прежний не удалён). Продуктовых/unit-изменений нет — 799 сохранены.

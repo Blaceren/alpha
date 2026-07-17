@@ -629,3 +629,37 @@ Secrets/.env не появлялись.
   импакт нулевой (User 360 открыт всем).
 - **Полный `UserOwner`** (ownerRole/assignedBy/reasonCode/структурированная history) — будущая форма; mock
   хранит owner скаляром + audit-лог как историю.
+
+---
+
+## Phase 1B4-C.1 — Zoom Reflow Acceptance Fix ✅
+
+Узкая acceptance-коррекция Phase 1B4-C: без изменения продукта. Mutation/overlay/permissions/fixtures не
+тронуты.
+
+### Root cause
+Acceptance-кадр 200% zoom (`final/owner-zoom-200.png`) снимался неверным методом — `documentElement.style.
+zoom = "2"` на viewport 1440×900. Это не моделирует браузерный zoom (media queries по-прежнему видят
+1440px, layout не reflow'ится — десктопная 2/3+1/3-композиция масштабируется 2× и обрезается), а
+использованная метрика `documentElement.scrollWidth − clientWidth` под CSS `zoom` даёт ложный 0, тогда как
+реальный overflow (34px) сидел во вложенном `#crm-content`. Ровно этот анти-паттерн 1C-suite задокументировала
+как неверный.
+
+### Правка
+Только метод capture в тесте: 200% zoom моделируется как **halved CSS-viewport 720×450** (принятая модель
+1C/Today-suite). При ней уже существующий responsive-shell reflow'ится штатно: `lg:`-sidebar скрыт,
+workspace одноколоночный, «Состояния» → `sm:grid-cols-3` (столкновение текста исчезает), owner-секция
+full-width в пределах viewport. Продуктовый CSS/layout не менялся — это была бы подгонка под ложную метрику.
+
+### Тесты
+Zoom-тест переписан и усилен до проверки реальной геометрии (document + вложенный `#crm-content` overflow,
+секции в пределах viewport и не свёрнуты, bbox-непересечение подписей/значений «Состояний», owner
+select/Save достижимы и ≥44px, keyboard, не-обрезанность success, чистые console/hydration; обратная
+regression против скрытия колонки и пустого полотна). E2E **85 → 86** (один тест заменён двумя; прежние
+сохранены). Unit/component — **799** без изменений.
+
+### Результаты проверок
+- `lint` ✅ 0 · `typecheck` ✅ 0 · `build` ✅ (19 routes) · `test:run` ✅ 799/799 · `test:e2e` ✅ 86/86
+- `npm audit` — те же baseline-advisories (D-26), fix не выполнялся; `package.json`/`package-lock.json` не менялись.
+- Скриншоты: `screenshots/phase-1b4-c-assign-owner/zoom-acceptance-fix/` (4 кадра 720×450); `final/` и
+  прошлые фазы не перезаписаны.

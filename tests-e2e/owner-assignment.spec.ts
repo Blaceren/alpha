@@ -17,6 +17,14 @@ const PASS = process.env.PHASE_1B4C_PASS === "first" ? "first-pass" : "final";
 const OUT = `screenshots/phase-1b4-c-assign-owner/${PASS}`;
 mkdirSync(OUT, { recursive: true });
 
+/**
+ * Phase 1B4-C.1 acceptance-fix screenshots live in their own folder and are NOT
+ * written into `final/` (which is protected). The zoom acceptance test below is the
+ * only writer here.
+ */
+const ZOOM_OUT = "screenshots/phase-1b4-c-assign-owner/zoom-acceptance-fix";
+mkdirSync(ZOOM_OUT, { recursive: true });
+
 const ROLE_STORAGE_KEY = "ata-crm.mock-role.v1";
 const OVERLAY_KEY = "ata-crm.mutation-overlay.v1";
 
@@ -402,15 +410,150 @@ test("tablet 1024x768 — the section stays inside the context column", async ({
   await shoot(page, "owner-tablet-1024x768.png");
 });
 
-test("200% zoom — the control reflows instead of scrolling sideways", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+/**
+ * 200% zoom acceptance (Phase 1B4-C.1).
+ *
+ * The original test set `documentElement.style.zoom = "2"` on a 1440×900 viewport.
+ * That does NOT model a browser at 200%: media queries still see 1440, so the layout
+ * never reflows — it renders the desktop 2/3+1/3 composition and scales it up, which
+ * clips the right column and squeezes the 5-column states grid until its text
+ * collides. Worse, the check it passed was a lie: under CSS `zoom`,
+ * `documentElement.scrollWidth - clientWidth` reports 0 even while the nested
+ * `#crm-content` region overflows by 34px — the page-level metric could not see it.
+ *
+ * A browser at 200% presents a HALVED CSS viewport. The accepted project model
+ * (user-360 / today suites) is therefore `setViewportSize(720×450)`, where the shell
+ * genuinely reflows: the `lg:` sidebar hides, the workspace goes single-column, and
+ * the states grid drops to `sm:grid-cols-3`. This test asserts that real geometry
+ * rather than the presence of a media query.
+ */
+test("200% zoom (720x450) reflows: no overflow, no text collision, owner control reachable", async ({ page }) => {
+  const errors = trackConsole(page);
+  const hydration = trackHydration(page);
+  await page.setViewportSize({ width: 720, height: 450 });
   await openWithPicker(page, "crm_admin");
-  await page.evaluate(() => {
-    document.documentElement.style.setProperty("zoom", "2");
-  });
-  await ownerSection(page).scrollIntoViewIfNeeded();
+
+  // (1) Document-level: no horizontal scrolling.
   expect(await pageOverflow(page)).toBeLessThanOrEqual(1);
-  await shoot(page, "owner-zoom-200.png");
+
+  // (2) The nested content region — the metric the old method could not see.
+  const contentOverflow = await page.evaluate(() => {
+    const el = document.querySelector("#crm-content");
+    return el ? el.scrollWidth - el.clientWidth : 0;
+  });
+  expect(contentOverflow).toBeLessThanOrEqual(1);
+
+  // (3) Neither the states section nor the owner section spills past the viewport,
+  //     and neither is hidden/collapsed to nothing (reverse regression: the fix must
+  //     not "pass" by clipping the right column away).
+  const sectionBox = async (title: string) =>
+    page.evaluate((t) => {
+      const s = Array.from(document.querySelectorAll("section")).find(
+        (el) => el.querySelector("h2")?.textContent?.trim() === t,
+      );
+      if (!s) return null;
+      const r = s.getBoundingClientRect();
+      return { left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width) };
+    }, title);
+
+  const vw = 720;
+  for (const title of ["Состояния", "Ответственный и работа"]) {
+    const b = await sectionBox(title);
+    expect(b, `${title} section present`).not.toBeNull();
+    expect(b!.left).toBeGreaterThanOrEqual(-1);
+    expect(b!.right).toBeLessThanOrEqual(vw + 1);
+    // Substantial width — proof it reflowed to the column, not that it was hidden.
+    expect(b!.width).toBeGreaterThan(vw / 2);
+  }
+
+  // (4) States labels/values do not overlap — measured by bounding boxes, the thing
+  //     the DOM-only overflow check missed and only the eye caught before.
+  const collision = await page.evaluate(() => {
+    const s = Array.from(document.querySelectorAll("section")).find(
+      (el) => el.querySelector("h2")?.textContent?.trim() === "Состояния",
+    );
+    if (!s) return true;
+    const cells = Array.from(s.querySelectorAll("dt, dd")).map((el) => el.getBoundingClientRect());
+    for (let i = 0; i < cells.length; i++) {
+      for (let j = i + 1; j < cells.length; j++) {
+        const a = cells[i]!, b = cells[j]!;
+        const yOverlap = a.top < b.bottom - 1 && b.top < a.bottom - 1;
+        const xOverlap = a.left < b.right - 1 && b.left < a.right - 1;
+        if (yOverlap && xOverlap) return true;
+      }
+    }
+    return false;
+  });
+  expect(collision, "states labels/values overlap").toBe(false);
+
+  // (5) The owner control is reachable by ordinary vertical scroll and fully visible.
+  await ownerSection(page).scrollIntoViewIfNeeded();
+  await expect(ownerSelect(page)).toBeVisible();
+  await expect(saveButton(page)).toBeVisible();
+  // The unassign option is offered inside the select.
+  await expect(
+    ownerSelect(page).getByRole("option", { name: "Без ответственного" }),
+  ).toHaveCount(1);
+  const selBox = await ownerSelect(page).boundingBox();
+  const btnBox = await saveButton(page).boundingBox();
+  // 44px touch target survives the zoom, and both sit within the viewport bottom.
+  expect(selBox!.height).toBeGreaterThanOrEqual(44);
+  expect(btnBox!.height).toBeGreaterThanOrEqual(44);
+  expect(selBox!.y + selBox!.height).toBeLessThanOrEqual(450 + 1);
+  expect(btnBox!.y + btnBox!.height).toBeLessThanOrEqual(450 + 1);
+  await page.screenshot({ path: `${ZOOM_OUT}/owner-zoom-200-assignment-720x450.png` });
+
+  // (6) Picking a new owner keeps Save reachable and enabled.
+  await ownerSelect(page).selectOption({ label: "Retention 1" });
+  await expect(saveButton(page)).toBeEnabled();
+  const btnBox2 = await saveButton(page).boundingBox();
+  expect(btnBox2!.y + btnBox2!.height).toBeLessThanOrEqual(450 + 1);
+
+  // (7) Keyboard reaches select and submit.
+  await ownerSelect(page).focus();
+  expect(await ownerSelect(page).evaluate((el) => el === document.activeElement)).toBe(true);
+  await saveButton(page).focus();
+  expect(await saveButton(page).evaluate((el) => el === document.activeElement)).toBe(true);
+
+  // (8) Success message is not clipped and stays within the viewport width.
+  await saveButton(page).click();
+  await expect(ownerSection(page).getByText("Ответственный обновлён")).toBeVisible();
+  await expect(statedOwner(page)).toHaveText("Retention 1");
+  const successBox = await ownerSection(page).getByText("Ответственный обновлён").boundingBox();
+  expect(successBox!.x).toBeGreaterThanOrEqual(-1);
+  expect(successBox!.x + successBox!.width).toBeLessThanOrEqual(vw + 1);
+  await ownerSection(page).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${ZOOM_OUT}/owner-zoom-200-success-720x450.png` });
+
+  // Reverse regression: no absurd empty horizontal canvas (body no wider than viewport).
+  const bodyWidth = await page.evaluate(() => document.body.getBoundingClientRect().width);
+  expect(bodyWidth).toBeLessThanOrEqual(vw + 1);
+
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(1);
+  expect(errors, errors.join("\n")).toHaveLength(0);
+  expect(hydration, hydration.join("\n")).toHaveLength(0);
+});
+
+/**
+ * Two more acceptance screenshots: the reflowed top composition and the states
+ * section with no colliding text. Kept separate so each frame is a clean capture.
+ */
+test("200% zoom (720x450) acceptance screenshots — top and states", async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 450 });
+  await openWithPicker(page, "crm_admin");
+
+  // Top of the page after reflow: sidebar gone, single column.
+  await page.evaluate(() => document.querySelector("#crm-content")?.scrollTo(0, 0));
+  await expect(page.getByRole("heading", { level: 1, name: /Nina Chmiel/ })).toBeVisible();
+  await page.screenshot({ path: `${ZOOM_OUT}/owner-zoom-200-top-720x450.png` });
+
+  // States section in view, labels and values clear of each other.
+  const states = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { level: 2, name: "Состояния" }) });
+  await states.scrollIntoViewIfNeeded();
+  await expect(states).toBeVisible();
+  await page.screenshot({ path: `${ZOOM_OUT}/owner-zoom-200-states-720x450.png` });
 });
 
 /* --------------------------------------------------------------- screenshots */
