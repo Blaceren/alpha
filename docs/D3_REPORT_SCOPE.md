@@ -4,7 +4,9 @@
 
 Baseline: `1a208b0756b56d64e5780d56db6ac609dd850530` (`feat: implement ATA lessons library`).
 
-**Статус: D3-A (scope + art direction) выполняется. Production-реализация не начата. Победитель не выбран.**
+**Статус: D3-A ✅ (scope + art direction) · D3-B ✅ (первый report-уровень реализован).**
+Направление выбрано пользователем: **Concept B «Evidence Ledger»** + компактный блок «Перед отправкой»
+из Concept C (DD-271). Реализация — `D3_REPORT_EXPERIENCE.md`. D3-C…D3-F не начаты.
 
 ---
 
@@ -46,13 +48,17 @@ backend-контракта (OQ-4).
 - реальные screenshots в точных вьюпортах;
 - **stop condition:** направления предъявлены, выбор — за пользователем. React не начинать.
 
-### D3-B — First Report Level (будущая production-фаза)
+### D3-B — First Report Level ✅ (выполнена)
 
 - **только уровень 3** — единственный curriculum-level с `kind: "report"`;
-- `draft` + browser-local autosave;
-- `submit`;
-- `pending-review`;
+- `draft` + browser-local autosave (`ata.report-workspace.v1`);
+- `submit` с подтверждением;
+- `pending-review` (read-only);
 - **без реального mentor verdict**.
+
+Реализовано на маркере-сценарии `report` (`currentLevel: 3`), введённом потому, что канон ставит
+Артёма на уровень 18 и история отчёта связна только для стоящего на уровне 3 (DD-272). Канон не
+менялся. Детали — `D3_REPORT_EXPERIENCE.md`, `REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`.
 
 ### Будущие отдельные этапы
 
@@ -312,6 +318,8 @@ Library · пересмотр `/lessons/[levelCode]/test` · новые зави
 - [x] lifecycle `pending-review` сравнён;
 - [x] curriculum content не выдуман;
 - [x] production code не изменён;
-- [ ] **победитель не выбран — выбор за пользователем.**
+- [x] победитель не выбирался автоматически — **выбор сделал пользователь: Concept B + блок из C** (DD-271).
 
-**Stop condition:** направления предъявлены. D3-B не начинается без явного выбора направления.
+**Stop condition:** направления предъявлены ✅, направление выбрано ✅, D3-B реализована ✅.
+**D3-C (revision/resubmit), D3-D (approved), D3-E (mentor feedback) и D3-F (practical) не начинаются
+без явного запроса.**

@@ -10,7 +10,13 @@
 import type { CurriculumLevel } from "@/domain/curriculum";
 import { getLevel, getModuleByIndex, getModuleForLevel } from "@/data/curriculum/fixture";
 
-export type PathScenario = "active" | "checkpoint" | "early" | "advanced" | "completed";
+export type PathScenario =
+  | "active"
+  | "checkpoint"
+  | "early"
+  | "advanced"
+  | "completed"
+  | "report";
 
 /** Sequential progress marker: everything below `currentLevel` is completed. */
 export interface PathProgress {
@@ -50,6 +56,7 @@ export function resolvePathScenario(raw: unknown): PathScenario {
     case "early":
     case "advanced":
     case "completed":
+    case "report":
       return raw;
     default:
       return "active";
@@ -90,6 +97,32 @@ const SCENARIOS: Record<PathScenario, PathProgress> = {
     rankLabel: "Архитектор рынка IV",
     xpLabel: "24 000 XP",
     streak: 21,
+  },
+  /**
+   * The report level (L3) is the current step — the ONLY marker under which the
+   * report story is coherent (D3-B).
+   *
+   * Why this exists: the canonical user (Артём) stands on level 18, so for him
+   * level 3 is long behind and level 4 is a passed checkpoint. «Submit → pending
+   * → level 4 stays closed» is only true for someone standing ON level 3. Rather
+   * than rewrite the locked canon (DD-234) or let a report retroactively close
+   * levels 4–18, D3-B adds this explicit scenario alongside the existing
+   * early/advanced/checkpoint ones (DD-271).
+   *
+   * It is a DEVELOPMENT AND TEST adapter, exactly like its siblings: invisible to
+   * the user, never emitted into a user-facing href, never a progression
+   * mechanism, and never enabled automatically.
+   *
+   * Instrumentation is copied verbatim from `early` rather than invented: there
+   * is no canonical XP rule for reaching level 3, and DD-250 forbids making one up.
+   */
+  report: {
+    scenario: "report",
+    currentLevel: 3,
+    allCompleted: false,
+    rankLabel: "Без ранга",
+    xpLabel: "40 XP",
+    streak: 1,
   },
 };
 

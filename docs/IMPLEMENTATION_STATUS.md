@@ -22,7 +22,7 @@
 | D1A-R2.2 | Final Production-Readiness Correction | ✅ Выполнен (mobile overlap устранён, route density, структурный checkpoint preview, rank/tool разделены, debug убран, **Route Knot** заменил Route Sigil; evidence matrix — все Pass; final+first-pass; React только после ручного review) |
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
-| D3 | ~~Урок, тест, report, mentor feedback~~ → **Report, Practical & Mentor Review** (переопределена в D3-A, DD-270) | ◻️ D3-A выполнена (scope + art direction); D3-B не начата |
+| D3 | ~~Урок, тест, report, mentor feedback~~ → **Report, Practical & Mentor Review** (переопределена в D3-A, DD-270) | ◻️ D3-A ✅ (scope + art direction) · D3-B ✅ (первый report-уровень) · D3-C…D3-F не начаты |
 | D4 | Tools L10–L30 | ⛔ Не начата |
 | D5 | Tools L35–L60 | ⛔ Не начата |
 | D6 | Tools L65–L100 | ⛔ Не начата |
@@ -466,3 +466,61 @@ fixture не менялся. Прототипы линкуют настоящи�
 
 **Документы:** `D3_REPORT_SCOPE.md`, `D3_REPORT_ART_DIRECTION.md`,
 `design-memory/reviews/d3-a-report-concepts-review.md`, DD-264…DD-270.
+
+
+## D3-B — First Report Level (завершена)
+
+**Пользователь выбрал Concept B «Evidence Ledger»** + компактный блок «Перед отправкой» из Concept C
+(DD-271). Concept A и полная правая плита Concept C отклонены. Реализован **только уровень 3** —
+единственный curriculum-уровень с `kind: "report"`.
+
+**Маршрут:** `/lessons/level.003` — отчёт является самим уровнем; `/reports/report.003` не создан
+(DD-264). Report-уровни перехватываются на существующем маршруте до логики урока; уровни 18 и 19 не
+затронуты.
+
+**Канон не тронут.** Артём остаётся на уровне 18. Поскольку единственный report-уровень — 3, история
+«submit → pending → уровень 4 закрыт» связна только для стоящего на уровне 3, поэтому введён
+**explicit dev/test сценарий `report`** (`currentLevel: 3`) рядом с early/advanced/checkpoint
+(DD-272). Полный flow живёт только под ним; он не включается автоматически и не появляется ни в одной
+пользовательской ссылке. Без сценария уровень 3 для канонического Артёма — завершённый (`archive`).
+
+**Резолвер доступности не менялся:** уровень 4 остаётся закрытым потому, что уровень 3 никогда не
+завершается (`pending-review` не пишет `ata.lesson-progress.v1`), а не потому, что отчёт его «запер».
+Фраза о закрытом уровне 4 **выводится** из резолвера и отсутствует, когда уровень действительно
+открыт. Последовательность побеждает локальную запись, поэтому pending не загрязняет канонический
+профиль (DD-272).
+
+**Реализовано:** ледгер из пяти записей (число диктует артефакт курса) · итоговое наблюдение ·
+browser-local черновик (`localStorage`, `ata.report-workspace.v1`) · autosave с четырьмя честными
+состояниями · readiness словами · submit с подтверждением · `pending-review` read-only · интеграции в
+Библиотеку и Путь · responsive desktop/tablet/mobile/320/zoom · тесты · screenshots · visual QA.
+
+**Prototype-only структура полей** (DD-274): «Когда» · «Что решил» · «Что заметил после сделки»
+(единственное обязательное) + «Итоговое наблюдение». Ни asset, ни amount, ни P/L, ни цен, ни объёма,
+ни плеча, ни финансовой оценки — закреплено тестами.
+
+**Попутно исправлено:** деталь Пути инлайнила собственные подписи типов, включая английское
+«Structured report» в пользовательском тексте (нарушение DD-172) — теперь единственный владелец
+`kindLabel` (DD-262). `/lessons` начал читать `?scenario=` как dev-адаптер — явная поправка к DD-263
+(DD-273). `src/test/setup.ts` получил рабочий `localStorage`: в связке jsdom/Node он был объектом без
+методов, из-за чего store никогда не проходил бы реальный путь в тестах.
+
+**Проверки:** unit/component **435** (308 прежних сохранены + 127); E2E gate **116** в 7 файлах (88
+прежних сохранены + 28); полный discovery **175** в 15 файлах; lint/typecheck/build чисто;
+`npm audit` — 2 moderate, pre-existing (`next → postcss`), fix не запускался; horizontal overflow 0px
+на 1440/1024/390/320/720; console errors и hydration warnings — 0.
+
+**Visual QA:** 2 прохода, 8 findings (2 critical, 3 major, 3 minor). Critical: блок «Перед отправкой»
+**лгал** о сохранении при отказе записи; pending-отчёт **загрязнял канонический профиль**. Major: блок
+доминировал над ледгером (641px против 429px); единственный CTA уходил на 450px под сгиб; кадры
+обрезали shell. Все исправлены — `design-memory/reviews/d3-b-report-review.md`.
+
+**Границы:** approved / rejected / revision / resubmit / mentor comments / section comments / version
+history / attachments / mentor thread / avatar / countdown / practical / уровень 19 / инструменты /
+backend / Pocket / XP / отдельный test-route — **не реализованы**. Curriculum fixtures, thresholds и
+XP-правила не изменялись. Урок 18 и Главная визуально не менялись. Зависимости не менялись.
+
+**D3-C, D3-D, D3-E и practical не начаты.**
+
+**Документы:** `D3_REPORT_EXPERIENCE.md`, `REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`,
+`design-memory/reviews/d3-b-report-review.md`, DD-271…DD-277.

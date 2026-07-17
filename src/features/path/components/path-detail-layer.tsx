@@ -12,6 +12,15 @@ import {
   stateLabel,
   type PathProgress,
 } from "@/features/path/model/path-state";
+import { kindLabel } from "@/features/lessons-library/model/lessons-library-model";
+import { isReportLevelNumber } from "@/features/report-level/model/report";
+import { getStoredDraft } from "@/features/report-level/model/report-draft";
+import {
+  deriveReportLifecycle,
+  reportStatusLabel,
+  type ReportLifecycle,
+} from "@/features/report-level/model/report-experience";
+import { useReportWorkspace } from "@/features/report-level/hooks/use-report-workspace";
 
 /**
  * Contextual level detail (Phase D2A, presentation refined in D2A-R1).
@@ -41,6 +50,18 @@ export function PathDetailLayer({
   const isCheckpoint = level.kind === "checkpoint";
   const cp = level.checkpoint ?? getNextCheckpoint(level.number);
 
+  // Browser-local report status (D3-B). Shown only for a level that is still live
+  // work: a draft must never re-label a level the sequence already carried the
+  // user past (DD-271).
+  const reports = useReportWorkspace();
+  const storedReport =
+    isReportLevelNumber(level.number) && state !== "completed"
+      ? getStoredDraft(reports, level.number)
+      : null;
+  const reportLifecycle: ReportLifecycle | null = storedReport
+    ? deriveReportLifecycle(storedReport)
+    : null;
+
   // Move reading focus to the layer when it opens / the level changes.
   useEffect(() => {
     headingRef.current?.focus();
@@ -68,6 +89,15 @@ export function PathDetailLayer({
         {isCheckpoint ? `Контрольная точка · Уровень ${level.number}` : level.title}
       </h2>
       <p className={`d-state ${stateClass}`}>Состояние: {stateLabel(state)}</p>
+      {reportLifecycle && (
+        <p className="d-state cold">Отчёт: {reportStatusLabel(reportLifecycle)}</p>
+      )}
+      {reportLifecycle === "pending-review" && (
+        <p className="d-note">
+          Обычно проверка занимает до одного дня. Проверка наставником в этом прототипе не
+          подключена.
+        </p>
+      )}
 
       {locked ? (
         <div className="d-sec">
@@ -88,10 +118,10 @@ export function PathDetailLayer({
               </li>
             ) : (
               <>
-                {level.kind === "video-test" && <li>Видео-урок и тест</li>}
-                {level.kind === "task" && <li>Задание</li>}
-                {level.kind === "report" && <li>Structured report</li>}
-                {level.kind === "practical" && <li>Практическое задание</li>}
+                {/* One owner for kind wording (DD-262). This line used to inline
+                    its own labels, including an English «Structured report» —
+                    English is code/domain language only, never user copy (DD-172). */}
+                <li>{kindLabel(level.kind)}</li>
                 {level.artifact && (
                   <li>
                     Артефакт: <b>{level.artifact}</b>
@@ -143,7 +173,7 @@ export function PathDetailLayer({
       )}
 
       <div className="d-actions">
-        <DetailAction level={level} state={state} />
+        <DetailAction level={level} state={state} reportLifecycle={reportLifecycle} />
       </div>
     </aside>
   );
@@ -159,9 +189,11 @@ export function PathDetailLayer({
 function DetailAction({
   level,
   state,
+  reportLifecycle,
 }: {
   level: CurriculumLevel;
   state: ReturnType<typeof levelVisualState>;
+  reportLifecycle: ReportLifecycle | null;
 }) {
   const href = `/lessons/${levelCodeFor(level.number)}`;
 
@@ -169,7 +201,11 @@ function DetailAction({
     case "current":
       return (
         <Link href={href} className="d-cta">
-          Продолжить урок
+          {level.kind === "report"
+            ? reportLifecycle === "pending-review"
+              ? "Открыть отчёт"
+              : "Перейти к отчёту"
+            : "Продолжить урок"}
         </Link>
       );
     case "checkpoint-current":

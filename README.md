@@ -4,11 +4,11 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D3-A — Report Level Scope & Art Direction (только документация и прототипы).**
-> В коде реализованы Главная (`/`), Путь (`/path`), Урок (`/lessons/[levelCode]`) и
-> **Библиотека уроков (`/lessons`)**. Backend / CRM / Pocket / database / deploy — не подключены; все
-> данные synthetic, прогресс живёт только в текущей сессии браузера. **Отчёты, mentor review и
-> инструменты в production-коде не начинались.**
+> **Статус: Phase D3-B — First Report Level.** Реализованы Главная (`/`), Путь (`/path`),
+> Урок (`/lessons/[levelCode]`), **Библиотека уроков (`/lessons`)** и **первый отчёт
+> (`/lessons/level.003`)**. Backend / CRM / Pocket / database / deploy — не подключены; все данные
+> synthetic. Прогресс урока живёт в сессии браузера, черновик отчёта — в `localStorage` этого
+> браузера. **Mentor verdict, practical и инструменты не начинались.**
 >
 > **`/lessons`** — обзор учебного материала (в отличие от Пути, который показывает допуск): выбранный
 > модуль, его уровни, доминирующее «Продолжить обучение», возврат к пройденному. Направление —
@@ -16,14 +16,20 @@ discipline и сопровождение. ATA не является торгов
 > `docs/D2C_LESSONS_LIBRARY.md`. Выбор модуля — обычное URL-состояние `?module=module.NN`.
 >
 > **D3 переопределена (DD-270): «Report, Practical & Mentor Review Experience».** Урок и тест в неё
-> **не входят** — они закрыты в D2B. D3-A зафиксировала scope и предъявила **три направления** отчёта;
-> **победитель не выбран**, production React не написан, D3-B не начата. Детали —
-> `docs/D3_REPORT_SCOPE.md`, `docs/D3_REPORT_ART_DIRECTION.md`.
+> **не входят** — они закрыты в D2B. D3-A зафиксировала scope и предъявила три направления; **выбран
+> Concept B «Evidence Ledger»** + компактный блок «Перед отправкой» из Concept C (DD-271). D3-B
+> реализовала **только уровень 3**. Детали — `docs/D3_REPORT_SCOPE.md`,
+> `docs/D3_REPORT_ART_DIRECTION.md`, `docs/D3_REPORT_EXPERIENCE.md`,
+> `docs/REPORT_STATE_MACHINE.md`, `docs/REPORT_STORAGE.md`.
 >
-> Ключевые решения D3-A: отчёт — **сам уровень** (`/lessons/level.003`, маршрут `/reports/[reportCode]`
-> **не используется**); `pending-review` **останавливает** progression и вердикт наставника **не
-> имитируется**; черновик хранится **browser-local** (`localStorage`, `ata.report-workspace.v1`);
-> practical отделён от отчёта и отложен; rubric — **prototype-only**;
+> **`/lessons/level.003`** — отчёт является **самим уровнем** (`/reports/[reportCode]` не
+> используется). Пять записей по числу demo-сделок из артефакта курса, итоговое наблюдение, черновик в
+> `localStorage` (`ata.report-workspace.v1`), submit с подтверждением → локальный `pending-review`.
+> **Вердикт наставника не имитируется**, `approved`/`rejected` отсутствуют, уровень 4 остаётся закрыт.
+>
+> Канон (Артём, L18) не менялся. Полный flow отчёта живёт только под dev/test сценарием
+> `?scenario=report` (`currentLevel: 3`) — он не появляется ни в одной пользовательской ссылке
+> (DD-272). Practical и уровень 19 не начинались; rubric — prototype-only;
 > `/lessons/[levelCode]/test` остаётся **зарезервированным**.
 
 ## Требования
@@ -48,8 +54,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека), 88 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (134) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт), 116 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (175) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в

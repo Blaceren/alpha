@@ -41,6 +41,17 @@ import {
 } from "@/features/lesson/model/lesson-session-progress";
 import { getLessonEntry } from "@/features/lesson/data/lesson-fixtures";
 import { formatDuration, levelCodeFor } from "@/features/lesson/model/lesson";
+import { isReportLevelNumber } from "@/features/report-level/model/report";
+import {
+  emptyReportWorkspace,
+  getStoredDraft,
+  type ReportWorkspaceState,
+} from "@/features/report-level/model/report-draft";
+import {
+  deriveReportLifecycle,
+  reportStatusLabel,
+  type ReportLifecycle,
+} from "@/features/report-level/model/report-experience";
 
 /* ------------------------------------------------------------------ *
  * Module code — the canonical identifier, reused (never a second id)
@@ -218,6 +229,10 @@ export interface LibraryContinueStep {
   href: string;
   /** RU eyebrow, e.g. "Продолжить обучение". */
   eyebrow: string;
+  /** RU CTA wording. Owned by the model — a component never re-decides it. */
+  actionLabel: string;
+  /** Report lifecycle label when the step is a report in progress; else null. */
+  reportStatusLabel: string | null;
 }
 
 export interface LessonsLibraryModel {
@@ -279,10 +294,42 @@ function buildCheckpointInfo(levelNumber: number): LibraryCheckpointInfo | null 
   };
 }
 
+/**
+ * The report lifecycle to DISPLAY for a level, or null when there is nothing to
+ * show.
+ *
+ * The guard that matters is `availability !== "completed"`: a report status may
+ * decorate a level that is still live work, but it must never touch a level the
+ * canonical sequence has already carried the user past. A browser-local draft is
+ * not allowed to downgrade progression that was already earned — which is what
+ * would happen if a `pending-review` marker written under the report scenario
+ * bled into the canonical L18 profile (DD-271).
+ */
+function displayedReportLifecycle(
+  levelNumber: number,
+  availability: "locked" | "available" | "completed",
+  reports: ReportWorkspaceState,
+): ReportLifecycle | null {
+  if (availability === "completed") return null;
+  if (!isReportLevelNumber(levelNumber)) return null;
+  const draft = getStoredDraft(reports, levelNumber);
+  return draft ? deriveReportLifecycle(draft) : null;
+}
+
+/** The row's action wording, owned here rather than re-decided in a component. */
+function actionLabelFor(level: CurriculumLevel, lifecycle: ReportLifecycle | null): string {
+  if (level.kind === "report") {
+    return lifecycle === "pending-review" ? "Открыть отчёт" : "Перейти к отчёту";
+  }
+  if (level.kind === "practical") return "Перейти к заданию";
+  return "Продолжить урок";
+}
+
 function buildLevelRow(
   level: CurriculumLevel,
   progress: PathProgress,
   session: LessonSessionProgress,
+  reports: ReportWorkspaceState,
 ): LibraryLevelRow {
   const isCheckpoint = level.kind === "checkpoint";
 
@@ -325,12 +372,20 @@ function buildLevelRow(
 
   if (availability === "available") {
     const isCurrent = level.number === progress.currentLevel;
+    const lifecycle = displayedReportLifecycle(level.number, availability, reports);
     return {
       ...base,
       state: isCurrent ? "current" : "available",
-      statusLabel: isCurrent ? "Текущий урок" : "Доступен",
+      // A report in progress says what it IS («Черновик» / «Готов к отправке» /
+      // «На проверке») rather than the generic row status — that is the fact the
+      // user came to the library for.
+      statusLabel: lifecycle
+        ? reportStatusLabel(lifecycle)
+        : isCurrent
+          ? "Текущий урок"
+          : "Доступен",
       href: lessonHref(level.number),
-      actionLabel: level.kind === "practical" ? "Перейти к заданию" : "Продолжить урок",
+      actionLabel: actionLabelFor(level, lifecycle),
       checkpoint: null,
     };
   }
@@ -348,6 +403,7 @@ function buildLevelRow(
 function buildContinueStep(
   progress: PathProgress,
   session: LessonSessionProgress,
+  reports: ReportWorkspaceState,
 ): { step: LibraryContinueStep | null; note: string | null } {
   if (progress.allCompleted) {
     return { step: null, note: "Все 100 уровней пройдены." };
@@ -365,11 +421,13 @@ function buildContinueStep(
     };
   }
 
-  if (resolveRouteAvailability(level.number, progress, session) === "locked") {
+  const availability = resolveRouteAvailability(level.number, progress, session);
+  if (availability === "locked") {
     return { step: null, note: "Следующий урок пока закрыт последовательностью." };
   }
 
   const mod = getModuleForLevel(level.number);
+  const lifecycle = displayedReportLifecycle(level.number, availability, reports);
   return {
     step: {
       levelNumber: level.number,
@@ -380,6 +438,10 @@ function buildContinueStep(
       durationLabel: durationLabelFor(level.number),
       href: lessonHref(level.number),
       eyebrow: "Продолжить обучение",
+      // A submitted report is not "continue" work any more — it is something to
+      // look at. The href is the same read-only workspace either way.
+      actionLabel: actionLabelFor(level, lifecycle),
+      reportStatusLabel: lifecycle ? reportStatusLabel(lifecycle) : null,
     },
     note: null,
   };
@@ -397,10 +459,17 @@ export function buildLessonsLibraryModel({
   moduleParam,
   marker,
   session,
+  reports = emptyReportWorkspace(),
 }: {
   moduleParam: unknown;
   marker: PathProgress;
   session: LessonSessionProgress;
+  /**
+   * Browser-local report drafts (D3-B). Optional and empty by default: the
+   * server has none, and the library must render its full answer without them.
+   * Reports only ever ADD a status to live work — see `displayedReportLifecycle`.
+   */
+  reports?: ReportWorkspaceState;
 }): LessonsLibraryModel {
   const progress = effectiveProgress(marker, session);
   const selection = resolveSelectedModule(moduleParam, progress);
@@ -424,9 +493,11 @@ export function buildLessonsLibraryModel({
   });
 
   const selectedModule = getModuleByIndex(selection.index);
-  const levels = selectedModule.levels.map((level) => buildLevelRow(level, progress, session));
+  const levels = selectedModule.levels.map((level) =>
+    buildLevelRow(level, progress, session, reports),
+  );
 
-  const { step, note } = buildContinueStep(progress, session);
+  const { step, note } = buildContinueStep(progress, session, reports);
 
   return {
     continueStep: step,

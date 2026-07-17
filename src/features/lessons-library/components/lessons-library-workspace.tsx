@@ -11,6 +11,7 @@ import { LibraryModuleIndex } from "@/features/lessons-library/components/librar
 import { LibraryModuleContent } from "@/features/lessons-library/components/library-module-content";
 import { LibraryModuleSwitcher } from "@/features/lessons-library/components/library-module-switcher";
 import { getPathProgress, type PathScenario } from "@/features/path/model/path-state";
+import { useReportWorkspace } from "@/features/report-level/hooks/use-report-workspace";
 
 /**
  * Уроки (/lessons) — the lessons library (Phase D2C-B), built on the selected
@@ -59,6 +60,12 @@ function ContinueBand({ model }: { model: LessonsLibraryModel }) {
           <span>{step.moduleTitle}</span>
           <i className="sep" aria-hidden="true" />
           <span>{step.kindLabel}</span>
+          {step.reportStatusLabel && (
+            <>
+              <i className="sep" aria-hidden="true" />
+              <span>{step.reportStatusLabel}</span>
+            </>
+          )}
           {step.durationLabel && (
             <>
               <i className="sep" aria-hidden="true" />
@@ -68,7 +75,7 @@ function ContinueBand({ model }: { model: LessonsLibraryModel }) {
         </p>
       </div>
       <Link className="cta" href={step.href}>
-        {step.kindLabel === "Практическое задание" ? "Перейти к заданию" : "Продолжить урок"}
+        {step.actionLabel}
         <span className="go" aria-hidden="true">
           <svg className="ic" viewBox="0 0 24 24">
             <path d="M5 12h14" />
@@ -98,9 +105,12 @@ export function LessonsLibraryWorkspace({
 }) {
   const marker = getPathProgress(scenario);
   const session = useSessionProgress();
+  // Browser-local report drafts (D3-B): the library only DISPLAYS their status,
+  // it never writes one — the workspace at /lessons/level.003 owns that.
+  const reports = useReportWorkspace();
   const model = useMemo(
-    () => buildLessonsLibraryModel({ moduleParam, marker, session }),
-    [moduleParam, marker, session],
+    () => buildLessonsLibraryModel({ moduleParam, marker, session, reports }),
+    [moduleParam, marker, session, reports],
   );
 
   return (

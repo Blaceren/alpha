@@ -13,7 +13,11 @@ import { LessonLockedScreen } from "@/features/lesson/components/lesson-locked-s
 import { LessonUnknown } from "@/features/lesson/components/lesson-unknown";
 import { LessonResolving } from "@/features/lesson/components/lesson-resolving";
 import { LessonSessionGate } from "@/features/lesson/components/lesson-session-gate";
+import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
+import { ReportWorkspace } from "@/features/report-level/components/report-workspace";
+import { resolvePathScenario } from "@/features/path/model/path-state";
 import "@/features/lesson/lesson.css";
+import "@/features/report-level/report-level.css";
 
 export const metadata: Metadata = {
   title: "Урок — Alfa Trade Academy",
@@ -57,6 +61,32 @@ export default async function LessonPage({
         <div className="lesson-page">
           <LessonUnknown />
         </div>
+      </AppShell>
+    );
+  }
+
+  /**
+   * Report levels (D3-B) — the report IS the level, so it lives on this very
+   * route; `/reports/[reportCode]` is never created and `report.NNN` is never an
+   * address (DD-264).
+   *
+   * A report reads a PATH scenario, not a lesson scenario, because what matters
+   * to it is where the sequential marker stands — `?scenario=report` puts the
+   * user ON level 3, which is the only marker under which the report story is
+   * coherent (DD-271). Anything else, including no query at all, resolves to the
+   * canonical marker, under which level 3 is simply already behind the user.
+   *
+   * The workspace itself decides nothing: it renders what
+   * `report-experience.ts` derives, including whether the next level is locked.
+   */
+  const reportDefinition = getReportDefinition(levelNumber);
+  if (reportDefinition) {
+    return (
+      <AppShell userName="Артём" activeId="lessons">
+        <ReportWorkspace
+          definition={reportDefinition}
+          scenario={resolvePathScenario(rawScenario)}
+        />
       </AppShell>
     );
   }

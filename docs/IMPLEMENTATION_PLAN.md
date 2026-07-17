@@ -95,7 +95,7 @@
 - **Tests:** production-тесты не запускаются (production-код не менялся).
 - **Stop condition:** направления предъявлены, выбор — за пользователем. React не начинать.
 
-### D3-B — First Report Level (будущая production-фаза)
+### D3-B — First Report Level (выполнена)
 
 - **Scope:** **только уровень 3** (единственный `kind: "report"`); `draft`; browser-local autosave
   (`ata.report-workspace.v1`); `submit`; `pending-review`. **Без реального mentor verdict.**
@@ -104,7 +104,12 @@
 - **Acceptance:** черновик переживает закрытие вкладки; submit ведёт только в локальный
   `pending-review`; уровень 4 остаётся закрыт; ни одной фразы о сервере/наставнике; без countdown/avatar.
 - **Risks:** фальшивый вердикт; autosave-обещание поверх ненадёжного хранилища; статус доминирует над работой.
-- **Stop condition:** QA-review закрыт.
+  Два из трёх материализовались и были исправлены: блок «Перед отправкой» хардкодил «Черновик
+  сохранён» и лгал при отказе записи; он же вырос до 641px и стал доминировать над ледгером
+  (`design-memory/reviews/d3-b-report-review.md`).
+- **Реализовано:** Concept B «Evidence Ledger» + компактный блок из C (DD-271); dev/test сценарий
+  `report` при неизменном каноне (DD-272); детали — `docs/D3_REPORT_EXPERIENCE.md`.
+- **Stop condition:** QA-review закрыт ✅.
 
 ### Будущие отдельные этапы
 
