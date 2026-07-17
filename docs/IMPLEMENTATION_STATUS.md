@@ -566,3 +566,42 @@ Safe area проверяется **реальными bounding boxes** с пор
 страницы, чтобы последний контрол, верхняя граница навигации и реальный зазор были видны в одном кадре.
 
 **Документы:** DD-278…DD-281.
+
+
+## D3-C-A — Revision Requested & Resubmit Art Direction (завершена)
+
+Documentation + art-direction этап поверх принятого D3-B. **Production-код не изменялся**
+(`git status --porcelain src package.json package-lock.json` — пусто); Evidence Ledger, lifecycle,
+storage v1 и progression не пересматривались; DD-271 остаётся базой.
+
+**Продуктовые решения (DD-282…DD-288):** report-kind сам по себе review-gated, `mentorReview` —
+флаг дополнительной practical-механики (fixture не менялся); канонический термин **«Нужна
+доработка»** (`revision-requested`), без «Отклонён»/«Провален», без красного и без изобретённого
+warm-оттенка; хранилище будущей реализации — **`ata.report-workspace.v2`** с односторонней
+миграцией валидных v1-данных (v1 не удаляется, битое — fail closed, код миграции не писался);
+единственный источник вердикта — explicit dev/test adapter; `approved` остаётся D3-D; mentor
+system не вводится (feedback = один комментарий + section IDs, raw ID не показываются).
+Контракты — `docs/D3_REVISION_SCOPE.md`, включая acceptance criteria D3-C-B.
+
+**Три направления внутри Evidence Ledger** (`docs/D3_REVISION_ART_DIRECTION.md`, 19-пунктовые
+брифы + ASCII): **A «Margin Review»** — feedback как слой (полоса комментария + margin rail с
+полыми узлами; ледгер не перестроен), **B «Revision Pass»** — feedback как порядок
+(инвертированное раскрытие: отмеченные места раскрыты, остальное приглушено, «Доработка 1 из 2»
+словами), **C «Review Contract»** — feedback как объект (блок DD-271 вырастает в контракт
+closing zone: без пометок · требует внимания · после повторной отправки; Λ-излом кромки).
+Один сценарий во всех: L3, все данные сохранены, два места требуют внимания
+(`report.003.entry.3.noticed`, `report.003.summary` — raw ID не рендерятся), feedback помечен
+dev/test provisional, resubmit возвращает в «На проверке», уровень 4 закрыт.
+
+**Прототипы** — `design-memory/proposals/d3-revision/` (линкуют продуктовые токены, shell и
+**реальный** `report-level.css`; состояния revision/editing/ready через `?state=` — capture-only
+условность). **Кадры** — `design-memory/screenshots/d3-revision/concepts/`: 13 PNG (по 4 на
+направление + доска 1920×1080), размеры точные, horizontal overflow 0px; зазор CTA↔bottom-nav
+24–25px на 390×844, 320×720 и 720×450 (200% zoom) — bounding boxes, прецедент DD-281.
+
+**Self-review** (`docs/visual-reviews/D3_C_REVISION_ART_DIRECTION.md`): 1 critical (state-переключатель
+показывал «изменений нет» и «есть изменения» одновременно — `[hidden]` перебивался
+`display:block`), 2 major (нечитаемый rail; пустая половина доски) — исправлены и пересняты;
+5 minor зафиксированы. Historical evidence `design-memory/screenshots/d3-report/**` не изменялся.
+
+**Победитель не выбран — выбор за пользователем. D3-C-B не начат.**

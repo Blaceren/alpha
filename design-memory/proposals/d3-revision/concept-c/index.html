@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Доработка отчёта · Concept C «Review Contract»</title>
+<!-- REAL product assets: fonts, tokens, shell, and the IMPLEMENTED Evidence Ledger. -->
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../../../../src/features/report-level/report-level.css">
+<link rel="stylesheet" href="../_shared/revision-base.css">
+<link rel="stylesheet" href="concept.css">
+</head>
+<body>
+<div class="home">
+  <a href="#main" class="skip">Перейти к содержимому</a>
+
+  <!-- ============ REAL SHELL — desktop/tablet command band ============ -->
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a>
+      <a href="#">Путь</a>
+      <a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <!-- ============ REAL SHELL — mobile top bar ============ -->
+  <div class="mtop">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    <div class="actions" style="display:inline-flex;align-items:center;gap:8px">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </div>
+
+  <main class="home-main" id="main">
+   <div class="rl-page">
+
+    <header class="rl-head">
+      <a class="rl-back" href="#">
+        <span aria-hidden="true">←</span> Уроки
+        <span class="rl-back-sep" aria-hidden="true">·</span>
+        <span class="rl-crumb">Модуль 01 · Первое знакомство</span>
+      </a>
+      <div class="rl-id">
+        <span class="rl-num mono" aria-hidden="true">03</span>
+        <h1 class="rl-h1">Первые пять demo-сделок</h1>
+        <span class="rl-kind">Отчёт</span>
+      </div>
+      <div class="rl-meta">
+        <p class="rl-req"><span class="rl-req-k">Требуется:</span> <b>Отчёт по 5 demo-сделкам</b></p>
+        <p class="rl-proto">Структура задания уточняется редакцией — поля ниже prototype-only</p>
+      </div>
+    </header>
+
+    <!-- Status band + the deixis to the contract in the closing zone. -->
+    <div class="rv-band">
+      <span class="rv-chip">Нужна доработка</span>
+      <div class="rv-band-txt">
+        <p class="rv-kept"><b>Все записи и итоговое наблюдение сохранены</b> — доработка правит ту же работу.
+          <a class="rvc-deixis" href="#c-contract">Условия доработки — в конце отчёта <span aria-hidden="true">↓</span></a></p>
+        <p class="rv-truth">Вердикт записан только в этом браузере. Серверная проверка пока не подключена.</p>
+      </div>
+    </div>
+
+    <div class="rl-progress">
+      <span class="rl-strip-dots" aria-hidden="true">
+        <span class="rl-sd is-filled"></span><span class="rl-sd is-filled"></span><span class="rl-sd is-filled is-open rv-ring"></span><span class="rl-sd is-filled"></span><span class="rl-sd is-filled"></span>
+      </span>
+      <p class="rl-count">Заполнено 5 из 5 записей</p>
+    </div>
+
+    <!-- The ledger stays the body of the screen; flagged places carry only a thin
+         attention edge that refers to the contract below. -->
+    <ol class="rl-ledger" aria-label="Журнал наблюдений — 5 demo-сделок">
+      <li class="is-collapsed">
+        <button type="button" class="rl-row" aria-expanded="false">
+          <span class="rl-sig is-filled" aria-hidden="true"></span>
+          <span class="rl-n mono" aria-hidden="true">01</span>
+          <span class="rl-sum" aria-hidden="true">Дождался записанного условия и вошёл, отметил это сразу</span>
+          <span class="rl-state" aria-hidden="true">заполнена</span>
+          <span class="rl-act" aria-hidden="true">Развернуть</span>
+        </button>
+      </li>
+      <li class="is-collapsed">
+        <button type="button" class="rl-row" aria-expanded="false">
+          <span class="rl-sig is-filled" aria-hidden="true"></span>
+          <span class="rl-n mono" aria-hidden="true">02</span>
+          <span class="rl-sum" aria-hidden="true">Отказался от входа — условие не сложилось до конца</span>
+          <span class="rl-state" aria-hidden="true">заполнена</span>
+          <span class="rl-act" aria-hidden="true">Развернуть</span>
+        </button>
+      </li>
+      <li class="is-open" id="c-open">
+        <div class="rl-open rv-edge">
+          <div class="rl-open-head">
+            <span class="rl-sig is-filled is-open" aria-hidden="true"></span>
+            <span class="rl-n mono" aria-hidden="true">03</span>
+            <h3 class="rl-open-t">Запись 3</h3>
+            <span class="rv-attn">требует внимания</span>
+            <span class="rl-proto">структура полей — prototype-only</span>
+          </div>
+          <div class="rl-fields">
+            <div class="rl-f">
+              <label for="c-when">Когда <span class="rl-opt">· необязательно</span></label>
+              <input id="c-when" class="rl-in" type="text" value="Среда, вторая половина дня">
+            </div>
+            <div class="rl-f">
+              <label for="c-decided">Что решил <span class="rl-opt">· необязательно</span></label>
+              <input id="c-decided" class="rl-in" type="text" value="Вошёл, не дождавшись условия">
+            </div>
+            <div class="rl-f is-long">
+              <label for="c-noticed">Что заметил после сделки</label>
+              <textarea id="c-noticed" class="rl-ta" rows="3">Вошёл раньше, чем собирался, и заметил это уже после входа.</textarea>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li class="is-collapsed">
+        <button type="button" class="rl-row" aria-expanded="false">
+          <span class="rl-sig is-filled" aria-hidden="true"></span>
+          <span class="rl-n mono" aria-hidden="true">04</span>
+          <span class="rl-sum" aria-hidden="true">Вышел по плану и записал наблюдение сразу после выхода</span>
+          <span class="rl-state" aria-hidden="true">заполнена</span>
+          <span class="rl-act" aria-hidden="true">Развернуть</span>
+        </button>
+      </li>
+      <li class="is-collapsed">
+        <button type="button" class="rl-row" aria-expanded="false">
+          <span class="rl-sig is-filled" aria-hidden="true"></span>
+          <span class="rl-n mono" aria-hidden="true">05</span>
+          <span class="rl-sum" aria-hidden="true">Пропустил сигнал и записал, что этому помешало</span>
+          <span class="rl-state" aria-hidden="true">заполнена</span>
+          <span class="rl-act" aria-hidden="true">Развернуть</span>
+        </button>
+      </li>
+    </ol>
+
+    <nav class="rl-steps" aria-label="Переход между записями">
+      <button type="button"><span aria-hidden="true">← Запись 2</span></button>
+      <button type="button"><span aria-hidden="true">Запись 4 →</span></button>
+    </nav>
+
+    <div class="rl-close rvc-close">
+      <section class="rl-refl rv-edge-refl" id="c-refl" aria-labelledby="c-refl-h">
+        <div class="rl-refl-head">
+          <span class="rv-mark" aria-hidden="true"></span>
+          <h2 class="rl-refl-h" id="c-refl-h">Итоговое наблюдение</h2>
+          <span class="rv-attn">требует внимания</span>
+          <span class="rl-proto">prototype-only</span>
+        </div>
+        <textarea id="c-summary" class="rl-w" rows="3">Чаще всего я отступал от записанного условия в начале сессии.</textarea>
+      </section>
+
+      <!-- =========== DIRECTION C — the review contract =========== -->
+      <aside class="rvc-contract" id="c-contract" aria-labelledby="c-ct-h">
+        <h2 class="rvc-h" id="c-ct-h">Условия доработки <span class="rv-dev">· dev/test · provisional</span></h2>
+
+        <div class="rvc-row">
+          <p class="rvc-k">Без пометок</p>
+          <p class="rvc-v">Записи <span class="mono">01</span>, <span class="mono">02</span>, <span class="mono">04</span> и <span class="mono">05</span> — проверка не оставила к ним пометок.</p>
+        </div>
+
+        <div class="rvc-row">
+          <p class="rvc-k">Требует внимания</p>
+          <p class="rv-comment">«Уточните, какое условие было записано до входа, и свяжите итоговое наблюдение со всеми пятью записями.»</p>
+          <p class="rv-pointers">
+            <a class="rv-pointer" href="#c-open"><span class="arr" aria-hidden="true">→</span> Запись 03 · Что заметил после сделки</a>
+            <a class="rv-pointer" href="#c-refl"><span class="arr" aria-hidden="true">→</span> Итоговое наблюдение</a>
+          </p>
+        </div>
+
+        <div class="rvc-row rvc-row-after">
+          <span class="rvc-kink" aria-hidden="true"></span>
+          <p class="rvc-k">После повторной отправки</p>
+          <ul class="rvc-ul">
+            <li>отчёт снова получит статус <b>«На проверке»</b>;</li>
+            <li>уровень 4 «Контрольная точка <span class="mono">$50</span>» останется закрыт до одобрения отчёта;</li>
+            <li>серверная проверка пока не подключена — вердикт и статус живут в этом браузере.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <div class="rl-end">
+      <div class="rl-end-txt">
+        <p class="rv-nochange" data-only="revision">Изменений после вердикта пока нет — доработайте отмеченные места.</p>
+        <p class="rv-canresubmit" data-only="editing ready">Есть изменения после вердикта — можно отправить на проверку повторно.</p>
+        <p class="rl-blocked">Уровень 4 <b>«Контрольная точка $50»</b> откроется после одобрения отчёта.</p>
+      </div>
+      <button id="c-resubmit" type="button" class="rl-btn" disabled>Отправить на проверку повторно</button>
+    </div>
+
+   </div>
+  </main>
+
+  <!-- ============ REAL SHELL — mobile bottom navigation ============ -->
+  <nav class="bottomnav" aria-label="Мобильная навигация">
+    <ul>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="lbl">Главная</span></a></li>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19h5a4 4 0 0 0 0-8h-3a4 4 0 0 1 0-8h5"/></svg><span class="lbl">Путь</span></a></li>
+      <li><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="lbl">Уроки</span></a></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/></svg><span class="lbl">Инструменты</span></button></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span class="lbl">Ещё</span></button></li>
+    </ul>
+  </nav>
+</div>
+
+<script>
+/* State switch for deterministic captures: ?state=revision|editing|ready.
+   Capture tooling only — not a user mechanism (scope §5). */
+(() => {
+  const st = new URLSearchParams(location.search).get("state") || "revision";
+  document.body.dataset.state = st;
+  document.querySelectorAll("[data-only]").forEach((el) => {
+    if (!el.dataset.only.split(" ").includes(st)) el.hidden = true;
+  });
+  const noticed = document.getElementById("c-noticed");
+  if (st !== "revision") {
+    noticed.value += " До входа было записано условие; перед сделкой я проверил его и отметил расхождение.";
+    if (st === "editing") noticed.classList.add("rv-focus");
+  }
+  if (st === "ready") {
+    document.getElementById("c-summary").value =
+      "Связал итог со всеми пятью записями: в записях 1, 4 и 5 записанное условие соблюдено, в записях 2 и 3 — нет; чаще всего я отступал от него в начале сессии.";
+  }
+  if (st !== "revision") document.getElementById("c-resubmit").disabled = false;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>D3-C-A — сравнение направлений «Доработка отчёта» (уровень 3)</title>
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../src/styles/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    padding: 26px 40px;
+    background:
+      radial-gradient(120% 90% at 38% 30%, color-mix(in srgb, var(--gate-boundary) 5%, transparent), transparent 55%),
+      radial-gradient(90% 120% at 88% 8%, color-mix(in srgb, var(--signal-active) 4%, transparent), transparent 60%),
+      var(--background-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  .board-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: 25px; letter-spacing: -0.4px; margin: 0; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin: 5px 0 0; }
+  .meta { font-size: 12.5px; color: var(--text-muted); text-align: right; margin: 0; line-height: 1.6; }
+  .meta b { color: var(--signal-active); font-weight: 600; }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; padding-top: 18px; }
+  .col { display: flex; flex-direction: column; min-width: 0; }
+
+  .shot { border: 1px solid var(--divider-strong); border-radius: 8px; overflow: hidden; background: var(--background-field); }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  .name { display: flex; align-items: baseline; gap: 10px; margin: 13px 0 0; }
+  .letter { font-family: var(--font-mono); font-size: 12px; color: #06120e; background: var(--signal-active); border-radius: 4px; padding: 2px 7px; font-weight: 700; }
+  .title { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 0; }
+
+  /* Lower band: the mobile frame stands beside the argument, so the 1080px
+     height carries evidence instead of empty field. */
+  .duo { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
+  .mshot { flex: 0 0 158px; border: 1px solid var(--divider-strong); border-radius: 8px; overflow: hidden; background: var(--background-field); }
+  .mshot img { display: block; width: 100%; height: auto; }
+
+  dl { margin: 0; display: grid; grid-template-columns: 118px 1fr; gap: 8px 12px; align-content: start; min-width: 0; }
+  dt { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.3px; padding-top: 1px; }
+  dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  dd b { color: var(--text-primary); font-weight: 600; }
+  .good { color: var(--route-completed); }
+  .warn { color: var(--route-upcoming); }
+
+  .foot { position: absolute; left: 40px; right: 40px; bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+          border-top: 1px solid var(--divider); padding-top: 12px; font-size: 12.5px; color: var(--text-muted); }
+  .foot b { color: var(--signal-active); }
+</style>
+</head>
+<body>
+  <div class="board-head">
+    <div>
+      <h1>D3-C-A · «Нужна доработка» — три направления</h1>
+      <p class="sub">Уровень 3 «Первые пять demo-сделок» · Evidence Ledger (DD-271) сохранён во всех трёх · вердикт revision-requested · два места требуют внимания · feedback — dev/test provisional</p>
+    </div>
+    <p class="meta">
+      Кадры: настоящий Chromium, <b>1440×900</b>, точный клип<br>
+      Shell, токены, ледгер — <b>продуктовые</b> (src/features/report-level)<br>
+      Состояние: <b>revision-requested</b> · resubmit возвращает в «На проверке»
+    </p>
+  </div>
+
+  <div class="cols">
+
+    <!-- ============ A ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-revision/concepts/concept-a-revision-desktop-1440x900.png" alt="Concept A — Margin Review, desktop 1440×900"></div>
+      <div class="name"><span class="letter">A</span><h2 class="title">Margin Review · Полоса пометок</h2></div>
+      <div class="duo">
+        <div class="mshot"><img src="../../screenshots/d3-revision/concepts/concept-a-revision-mobile-390x844.png" alt="Concept A — mobile 390×844"></div>
+        <dl>
+          <dt>FEEDBACK — ЭТО…</dt>
+          <dd><b>Слой поверх работы.</b> Полоса комментария над ледгером + тонкий margin rail с полыми узлами напротив отмеченных мест. Ледгер D3-B не перестроен вообще.</dd>
+          <dt>СИЛЬНАЯ СТОРОНА</dt>
+          <dd class="good">Работа остаётся <b>главной</b>; вердикт не отнимает экран. Масштабируется на любые report-levels — полоса и rail не зависят от кардинальности.</dd>
+          <dt>ГЛАВНЫЙ РИСК</dt>
+          <dd class="warn">Связь «комментарий → раздел» держится на <b>ссылках</b>; на длинном отчёте rail может потеряться из виду.</dd>
+          <dt>MOBILE</dt>
+          <dd>Rail исчезает; его роль берут указатели полосы + кольца в strip-точках. Одна запись за раз — как в D3-B.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- ============ B ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-revision/concepts/concept-b-revision-desktop-1440x900.png" alt="Concept B — Revision Pass, desktop 1440×900"></div>
+      <div class="name"><span class="letter">B</span><h2 class="title">Revision Pass · Рабочий проход</h2></div>
+      <div class="duo">
+        <div class="mshot"><img src="../../screenshots/d3-revision/concepts/concept-b-revision-mobile-390x844.png" alt="Concept B — mobile 390×844"></div>
+        <dl>
+          <dt>FEEDBACK — ЭТО…</dt>
+          <dd><b>Новый порядок работы.</b> Раскрытие ледгера инвертировано: отмеченные места раскрыты и освещены, остальные записи уходят на второй план, оставаясь доступными. «Доработка 1 из 2» — словами, не процентами.</dd>
+          <dt>СИЛЬНАЯ СТОРОНА</dt>
+          <dd class="good"><b>Кратчайший путь к действию</b> и лучший mobile: последовательность D3-B «одна запись за раз» сама сжимается до двух отмеченных мест.</dd>
+          <dt>ГЛАВНЫЙ РИСК</dt>
+          <dd class="warn">Приглушение <b>собственных записей</b> пользователя может прочитаться как «их отняли»; требует перечислимых мест.</dd>
+          <dt>MOBILE</dt>
+          <dd>Проход 1-из-2 в существующей ленте; prev/next ведут по отмеченным местам.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- ============ C ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-revision/concepts/concept-c-revision-desktop-1440x900.png" alt="Concept C — Review Contract, desktop 1440×900"></div>
+      <div class="name"><span class="letter">C</span><h2 class="title">Review Contract · Условия доработки</h2></div>
+      <div class="duo">
+        <div class="mshot"><img src="../../screenshots/d3-revision/concepts/concept-c-revision-mobile-390x844.png" alt="Concept C — mobile 390×844"></div>
+        <dl>
+          <dt>FEEDBACK — ЭТО…</dt>
+          <dd><b>Второй объект сцены.</b> Блок «Перед отправкой» (DD-271) вырастает в контракт в closing zone: без пометок · требует внимания · после повторной отправки. Λ-излом кромки — apertura-мотив CheckpointGate.</dd>
+          <dt>СИЛЬНАЯ СТОРОНА</dt>
+          <dd class="good">Единственное направление, где <b>цикл объяснён целиком до действия</b> — включая возвращение в «На проверке» и закрытый уровень 4.</dd>
+          <dt>ГЛАВНЫЙ РИСК</dt>
+          <dd class="warn">Комментарий <b>далеко от отмеченных полей</b>; контракт снова может вырасти и доминировать — риск, уже реализовавшийся однажды (DD-271).</dd>
+          <dt>MOBILE</dt>
+          <dd>Контракт — inline-этап перед resubmit, в точке решения. Не bottom sheet, не sticky.</dd>
+        </dl>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <span>Структурная разница: feedback как <b>слой</b> (A) · как <b>порядок</b> (B) · как <b>объект</b> (C). Все три сохраняют Evidence Ledger и некарательный тон: «Нужна доработка», ноль красного, все данные целы.</span>
+    <span><b>Победитель не выбран.</b> Выбор — за пользователем. Допустимо объединение названных элементов.</span>
+  </div>
+</body>
+</html>

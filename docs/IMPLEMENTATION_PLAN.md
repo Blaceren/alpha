@@ -111,11 +111,27 @@
   `report` при неизменном каноне (DD-272); детали — `docs/D3_REPORT_EXPERIENCE.md`.
 - **Stop condition:** QA-review закрыт ✅.
 
+### D3-C-A — Revision Requested & Resubmit Art Direction (выполнена)
+
+- **Scope:** продуктовые решения цикла доработки (report-kind review-gated; `mentorReview` =
+  practical-механика; термин «Нужна доработка»; storage v2 + контракт миграции v1→v2; dev/test
+  adapter как единственный источник вердикта; минимальная форма feedback) + три структурно разных
+  направления **внутри** Evidence Ledger (DD-271 не пересматривается): A «Margin Review»,
+  B «Revision Pass», C «Review Contract».
+- **Non-scope:** production React; изменение `src/`; approved; mentor thread; practical; version
+  history; section comments; rubric/score/XP; backend; код миграции; **D3-C-B**.
+- **Acceptance:** решения зафиксированы (`D3_REVISION_SCOPE.md`, DD-282…DD-288); по каждому
+  направлению revision/editing/ready/mobile; один сценарий (L3, два места требуют внимания,
+  provisional feedback); реальные кадры 1440×900/390×844 + доска; self-review с исправленными
+  critical/major; historical evidence не тронут.
+- **Stop condition:** направления предъявлены ✅ — **победитель не выбран, выбор за пользователем;
+  D3-C-B не начат.**
+
 ### Будущие отдельные этапы
 
 | Этап | Содержание | Почему отдельно |
 |------|-----------|-----------------|
-| D3-C | `revision requested` / `resubmit` | производные от вердикта, которого нет |
+| D3-C-B | реализация revision/resubmit по выбранному направлению | ждёт явного выбора пользователя (D3-C-A) |
 | D3-D | `approved` state | требует внешнего события |
 | D3-E | Mentor feedback | требует mentor queue (OQ-4) |
 | D3-F | Practical assignments | гипотеза «practical = ручной прототип инструмента» не проверена |

@@ -1,0 +1,241 @@
+/* PROTOTYPE-ONLY base — Phase D3-C-A (Revision requested & resubmit art direction).
+ *
+ * Same rationale as the D3-A base: globals.css uses Tailwind directives that
+ * cannot resolve over file://, so its @layer base block is reproduced here in
+ * meaning. Nothing is invented — every value resolves to src/styles/tokens.css.
+ *
+ * The prototypes link the REAL product assets:
+ *   src/styles/tokens.css                          → provisional semantic tokens
+ *   src/features/home/home.css                     → app bar / mobile bars / bottom nav
+ *   src/features/report-level/report-level.css     → the IMPLEMENTED Evidence Ledger (D3-B)
+ * so every revision state is drawn ON the product's own ledger surfaces, not on
+ * a redrawn imitation. DD-271 is the fixed baseline; these files only add the
+ * revision layer the three directions disagree about.
+ *
+ * NOTHING in this directory is production code. The review feedback shown in
+ * every state is DEVELOPMENT/TEST provisional content (D3_REVISION_SCOPE.md §7)
+ * and is marked as such on the page.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--background-field);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal-active) 34%, transparent);
+  color: var(--text-primary);
+}
+
+.ic {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* State-switch hiding must survive author display rules: .rl-before-sub carries
+   display:block, which outranks the UA [hidden] rule — found in the first-pass
+   ready capture, where «Изменений пока нет» and «Есть изменения» printed
+   TOGETHER and the agreement contradicted itself. */
+[hidden] { display: none !important; }
+
+/* ---------------------------------------------------------------------------
+   Shared revision primitives — product-canonical across ALL THREE directions,
+   because they are product decisions, not art direction:
+     · the status chip says «Нужна доработка» — never «Отклонён» / «Провален»;
+     · attention is a HOLLOW marker in the cold blue family (--gate-boundary):
+       the ball is back in the user's court, awaiting input — not an error.
+       No new hue is invented: the palette has no warm accent and final colors
+       stay with the prelanding (OQ-1); state is carried by WORDS + GEOMETRY
+       (DD-232), never by colour alone;
+     · green/cyan keeps meaning «filled / can act» exactly as in D3-B;
+     · nothing red: needing another pass was never the user's error.
+   --------------------------------------------------------------------------- */
+
+/* Status chip: same construction as .rl-status («На проверке»), but the dot is
+   HOLLOW — review handed the work back; the next move belongs to the user. */
+.rv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--route-upcoming);
+  border: 1px solid color-mix(in srgb, var(--gate-boundary) 45%, transparent);
+  background: color-mix(in srgb, var(--gate-boundary) 9%, transparent);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.rv-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--route-upcoming);
+  /* Static and hollow: pending's filled dot means «with review»; the hollow dot
+     means «with you». No pulsing — urgency is not the message. */
+}
+
+/* The revision status band (replaces the draft save-band / pending band). */
+.rv-band {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 14px;
+}
+.rv-band-txt { min-width: 0; flex: 1 1 320px; }
+
+/* «Nothing is lost» — the sentence that keeps the tone non-punitive. */
+.rv-kept {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+.rv-kept b { color: var(--text-primary); font-weight: 600; }
+
+/* The browser-local truth, restated for the verdict. */
+.rv-truth {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+/* Development/test provisional marker — every piece of invented feedback
+   carries it (scope §7). */
+.rv-dev {
+  font-size: 11px;
+  color: var(--route-locked);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* The general review comment — the main NEW text of this screen. It reads at
+   full primary contrast; a whispering verdict would be worse than a loud one. */
+.rv-comment {
+  font-size: 14.5px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.rv-plabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+/* Pointers from the comment to the flagged sections. The MODEL knows section
+   IDs (report.003.entry.3.noticed, report.003.summary); the USER sees named
+   places. Raw IDs never render. */
+.rv-pointers {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.rv-pointer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--route-upcoming);
+  text-decoration: none;
+  min-height: 24px;
+}
+.rv-pointer:hover { color: var(--text-primary); }
+.rv-pointer .arr { color: var(--gate-boundary); }
+
+/* «требует внимания» — row/section metadata, set in the same size as
+   «заполнена»: attention is a fact among facts, not an alarm. */
+.rv-attn {
+  font-size: 11.5px;
+  color: var(--route-upcoming);
+  white-space: nowrap;
+}
+
+/* Hollow attention marker next to a flagged section heading. */
+.rv-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--gate-boundary);
+  background: transparent;
+}
+
+/* A flagged OPEN entry keeps the D3-B construction — light instead of a border —
+   but the light is the attention hue, not the signal hue. */
+.rl-open.rv-edge { border-left-color: var(--gate-boundary); }
+
+/* Flagged reflection surface: the same attention edge on the third material. */
+.rl-refl.rv-edge-refl {
+  border-left: 2px solid var(--gate-boundary);
+  border-radius: 0 12px 12px 0;
+}
+
+/* Mobile strip: attention ring around a dot. The dot stays filled (the entry IS
+   filled) — «filled» and «needs attention» are independent facts. */
+.rl-sd.rv-ring {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gate-boundary) 38%, transparent);
+}
+
+/* Resubmit end-area texts (shared copy, scope §2):
+   the rule is structural — readiness ∧ changed-after-verdict. */
+.rv-nochange {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+.rv-canresubmit {
+  font-size: 13px;
+  color: var(--signal-active);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+/* Editing-state focus ring, made visible in a static capture. The real app gets
+   this from :focus-visible; a screenshot cannot hold keyboard focus. */
+.rv-focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

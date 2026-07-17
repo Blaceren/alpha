@@ -31,6 +31,14 @@ discipline и сопровождение. ATA не является торгов
 > `?scenario=report` (`currentLevel: 3`) — он не появляется ни в одной пользовательской ссылке
 > (DD-272). Practical и уровень 19 не начинались; rubric — prototype-only;
 > `/lessons/[levelCode]/test` остаётся **зарезервированным**.
+>
+> **D3-C-A (art direction) выполнена:** зафиксирован цикл доработки
+> `pending-review → «Нужна доработка» → правка → повторная отправка → «На проверке»` без
+> `approved` (DD-282…DD-288, `docs/D3_REVISION_SCOPE.md`) и предъявлены **три структурно разных
+> направления** внутри Evidence Ledger — A «Margin Review», B «Revision Pass», C «Review Contract»
+> (`docs/D3_REVISION_ART_DIRECTION.md`, кадры в `design-memory/screenshots/d3-revision/concepts/`).
+> Хранилище будущей реализации — `ata.report-workspace.v2` с сохранением валидных v1-черновиков;
+> код миграции не писался. **Победитель не выбран — реализация D3-C-B ждёт явного выбора.**
 
 ## Требования
 
