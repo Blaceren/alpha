@@ -1,0 +1,266 @@
+/* PROTOTYPE-ONLY base — Phase D3-A (Report level art direction).
+ *
+ * Same rationale as the D2C-A base: src/styles/globals.css uses Tailwind
+ * directives (@tailwind base/components/utilities) that cannot resolve over
+ * file://, so the @layer base block of globals.css is reproduced here verbatim
+ * in meaning. Nothing is invented — every value resolves to src/styles/tokens.css.
+ *
+ * The prototypes link the REAL product assets:
+ *   src/styles/tokens.css            → provisional semantic tokens
+ *   src/features/home/home.css       → app bar / mobile top bar / bottom nav
+ * so the shell in every screenshot is the product's own shell, not a redrawn one.
+ * The shell breakpoint (900px) is the product's own, not a prototype invention.
+ *
+ * NOTHING in this directory is production code. Every RU field label below the
+ * curriculum layer is PROTOTYPE-ONLY and is not canonical curriculum content
+ * (D3_REPORT_SCOPE.md §3.5).
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--background-field);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal-active) 34%, transparent);
+  color: var(--text-primary);
+}
+
+/* Prototype stand-in for the real <Icon> (lucide) / <BrandMark> React components:
+   inline SVG with the same geometry role. Icons stay SECONDARY metadata next to
+   text — never the identity (ata-brand-language). */
+.ic {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared report primitives — the parts that MUST look identical across the
+   three directions because they are product-canonical, not art direction:
+   the breadcrumb, the level identity line, and the browser-local save notice.
+   The workspace below them is where the three directions actually diverge.
+   --------------------------------------------------------------------------- */
+
+.rp-main {
+  padding: 0 clamp(16px, 4vw, 28px);
+  padding-bottom: calc(var(--mobile-bottom-nav-height) + 24px);
+}
+
+@media (min-width: 900px) {
+  .rp-main {
+    padding: 0 40px 48px;
+  }
+}
+
+/* breadcrumb back-link — same affordance as the lesson header (lhd-back) */
+.rp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 10px 0;
+  min-height: 44px;
+}
+.rp-back:hover { color: var(--text-secondary); }
+.rp-back .sep { color: var(--route-locked); }
+
+/* level identity: number is utility metadata, the title is the statement */
+.rp-id {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.rp-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--signal-active);
+  letter-spacing: 0.5px;
+}
+.rp-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 22px;
+}
+@media (min-width: 900px) {
+  .rp-title { font-size: 28px; }
+}
+.rp-kind {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  border: 1px solid var(--divider-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* browser-local save notice — canonical copy (DD-266). Calm, present, not alarming. */
+.rp-save {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.rp-save .ic {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  stroke: var(--route-upcoming);
+}
+.rp-save b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* prototype-only marker — every invented RU label carries it */
+.rp-proto {
+  font-size: 11.5px;
+  color: var(--route-locked);
+  font-style: italic;
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* Writing surfaces grow with their content.
+ *
+ * Found in the D3-A first-pass mobile capture (CRITICAL): a fixed `rows` value
+ * silently CLIPS the written text at narrow widths — the user's own words were
+ * cut mid-sentence with no scrollbar and no affordance. A report screen that
+ * hides what the user wrote is not a report screen. `field-sizing: content`
+ * makes the control size to its text; the per-state min-heights below keep an
+ * empty surface readable as a writable surface.
+ */
+textarea {
+  field-sizing: content;
+}
+
+/* the single primary action; disabled state explains itself in adjacent text,
+   never in a tooltip */
+.rp-submit {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #06120e;
+  background: var(--signal-active);
+  border: 0;
+  border-radius: 10px;
+  padding: 13px 26px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.rp-submit[aria-disabled="true"] {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+  cursor: default;
+}
+
+/* the blocked-progression explanation — the sentence this whole phase exists for */
+.rp-blocked {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+.rp-blocked b { color: var(--text-secondary); font-weight: 600; }
+
+/* ---------------------------------------------------------------------------
+   pending-review primitives (shared copy, NOT shared composition).
+   The three directions compose pending differently; the WORDS are canonical
+   and identical, because they are product decisions, not art direction:
+     · «На проверке»
+     · «Обычно проверка занимает до одного дня»  (DD-071)
+     · no countdown, no avatar, no named reviewer, no automatic approval
+   The status is NOT red and NOT an error — pending is a normal outcome.
+   --------------------------------------------------------------------------- */
+
+.rp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--route-upcoming);
+  border: 1px solid color-mix(in srgb, var(--gate-boundary) 45%, transparent);
+  background: color-mix(in srgb, var(--gate-boundary) 9%, transparent);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+.rp-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--route-upcoming);
+  /* static: a pulsing dot would read as a countdown */
+}
+
+.rp-wait {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* read-only work surface after submit: legible, explicitly not editable */
+.rp-ro {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-context) 60%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(150, 175, 210, 0.05);
+  cursor: default;
+}
+
+/* honest exits — pending must never be a dead end */
+.rp-exits {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rp-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13.5px;
+}
+.rp-exit:hover { color: var(--text-primary); border-color: var(--route-upcoming); }

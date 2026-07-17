@@ -4,15 +4,27 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D2C-B — Lessons Library.** Реализованы Главная (`/`), Путь (`/path`),
-> Урок (`/lessons/[levelCode]`) и **Библиотека уроков (`/lessons`)**. Backend / CRM / Pocket /
-> database / deploy — не подключены; все данные synthetic, прогресс живёт только в текущей сессии
-> браузера. Отчёты, mentor review и инструменты **не начинались**.
+> **Статус: Phase D3-A — Report Level Scope & Art Direction (только документация и прототипы).**
+> В коде реализованы Главная (`/`), Путь (`/path`), Урок (`/lessons/[levelCode]`) и
+> **Библиотека уроков (`/lessons`)**. Backend / CRM / Pocket / database / deploy — не подключены; все
+> данные synthetic, прогресс живёт только в текущей сессии браузера. **Отчёты, mentor review и
+> инструменты в production-коде не начинались.**
 >
 > **`/lessons`** — обзор учебного материала (в отличие от Пути, который показывает допуск): выбранный
 > модуль, его уровни, доминирующее «Продолжить обучение», возврат к пройденному. Направление —
 > Concept B «Curriculum Index» (`docs/D2C_ART_DIRECTION.md`), реализация —
 > `docs/D2C_LESSONS_LIBRARY.md`. Выбор модуля — обычное URL-состояние `?module=module.NN`.
+>
+> **D3 переопределена (DD-270): «Report, Practical & Mentor Review Experience».** Урок и тест в неё
+> **не входят** — они закрыты в D2B. D3-A зафиксировала scope и предъявила **три направления** отчёта;
+> **победитель не выбран**, production React не написан, D3-B не начата. Детали —
+> `docs/D3_REPORT_SCOPE.md`, `docs/D3_REPORT_ART_DIRECTION.md`.
+>
+> Ключевые решения D3-A: отчёт — **сам уровень** (`/lessons/level.003`, маршрут `/reports/[reportCode]`
+> **не используется**); `pending-review` **останавливает** progression и вердикт наставника **не
+> имитируется**; черновик хранится **browser-local** (`localStorage`, `ata.report-workspace.v1`);
+> practical отделён от отчёта и отложен; rubric — **prototype-only**;
+> `/lessons/[levelCode]/test` остаётся **зарезервированным**.
 
 ## Требования
 

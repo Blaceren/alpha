@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept C «Submission Contract» — состояние «На проверке»</title>
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+<style>
+  /* pending in C: the contract does not disappear — it becomes the RECORD of
+     what was agreed. Same plane, same four slots, past tense. The agreement was
+     kept, so the plane stays; only the tense changes. */
+  .rpc-plane.is-pending .rpc-ap::before { background: var(--route-upcoming); }
+  .rpc-plane.is-pending .rpc-glow { background: radial-gradient(closest-side, color-mix(in srgb, var(--gate-boundary) 22%, transparent), transparent); }
+</style>
+</head>
+<body>
+<div class="home">
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a><a href="#">Путь</a><a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <main class="home-main rp-main" id="main">
+    <header class="rpc-head">
+      <a class="rp-back" href="#"><span aria-hidden="true">←</span> Уроки <span class="sep" aria-hidden="true">·</span> <span class="rpc-crumb">Модуль 01 · Первое знакомство</span></a>
+      <div class="rp-id">
+        <span class="rp-num">03</span>
+        <h1 class="rp-title">Первые пять demo-сделок</h1>
+        <span class="rp-kind">Отчёт</span>
+      </div>
+    </header>
+
+    <div class="rpc-split">
+      <div class="rpc-work">
+        <section class="rpc-sec">
+          <div class="rpc-rule"><h2 class="rpc-h">Наблюдение</h2><span class="rpc-state">отправлено</span></div>
+          <textarea class="rpc-w rp-ro" rows="2" readonly>Провёл пять demo-сделок на разных активах в течение недели, каждую записывал сразу после закрытия.</textarea>
+        </section>
+        <section class="rpc-sec">
+          <div class="rpc-rule"><h2 class="rpc-h">Что делал</h2><span class="rpc-state">отправлено</span></div>
+          <textarea class="rpc-w rp-ro" rows="2" readonly>В двух случаях дождался условия и вошёл, в одном отказался от входа, ещё в двух вошёл раньше, чем собирался.</textarea>
+        </section>
+        <section class="rpc-sec">
+          <div class="rpc-rule"><h2 class="rpc-h">Что заметил</h2><span class="rpc-state">отправлено</span></div>
+          <textarea class="rpc-w rp-ro" rows="2" readonly>Решение принимал быстрее, когда заранее записывал условие входа.</textarea>
+        </section>
+        <section class="rpc-sec">
+          <div class="rpc-rule"><h2 class="rpc-h">Вывод</h2><span class="rpc-state">отправлено</span></div>
+          <textarea class="rpc-w rp-ro" rows="2" readonly>Записанное заранее условие — единственное, что отличало обдуманные входы от случайных.</textarea>
+        </section>
+        <section class="rpc-sec">
+          <div class="rpc-rule"><h2 class="rpc-h">Что изменю</h2><span class="rpc-state">отправлено</span></div>
+          <textarea class="rpc-w rp-ro" rows="2" readonly>Перед следующей серией буду записывать условие до открытия сделки, а не после.</textarea>
+        </section>
+      </div>
+
+      <aside class="rpc-plane is-pending" aria-label="Соглашение — отчёт отправлен">
+        <span class="rpc-ap" aria-hidden="true"></span>
+        <span class="rpc-glow" aria-hidden="true"></span>
+
+        <h2 class="rpc-plane-t">Соглашение выполнено</h2>
+        <p class="rpc-plane-s">Отчёт отправлен — вот что это значит</p>
+
+        <div class="rpc-as">
+          <p class="rpc-as-k">СТАТУС</p>
+          <p style="margin:2px 0 8px"><span class="rp-status">На проверке</span></p>
+          <p class="rp-wait">Обычно проверка занимает до одного дня.</p>
+        </div>
+
+        <div class="rpc-as">
+          <p class="rpc-as-k">ГДЕ ОТЧЁТ</p>
+          <p class="rpc-as-v soft">Отчёт сохранён в этом браузере. Синхронизация с сервером пока не подключена.</p>
+        </div>
+
+        <div class="rpc-as">
+          <p class="rpc-as-k">ЧТО ДАЛЬШЕ</p>
+          <ul>
+            <li>уровень 04 «Контрольная точка&nbsp;<span class="rpc-thr">$50</span>» <b>останется закрыт</b> до результата проверки;</li>
+            <li>всё, что уже открыто, остаётся доступным;</li>
+            <li>отчёт больше нельзя редактировать.</li>
+          </ul>
+        </div>
+
+        <div class="rpc-as rpc-exits">
+          <p class="rpc-as-k">ПОКА ИДЁТ ПРОВЕРКА</p>
+          <div class="rp-exits" style="margin-top:6px">
+            <a class="rp-exit" href="#"><span aria-hidden="true">←</span> К списку уроков</a>
+            <a class="rp-exit" href="#">Посмотреть путь</a>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>

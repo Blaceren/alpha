@@ -22,7 +22,7 @@
 | D1A-R2.2 | Final Production-Readiness Correction | ✅ Выполнен (mobile overlap устранён, route density, структурный checkpoint preview, rank/tool разделены, debug убран, **Route Knot** заменил Route Sigil; evidence matrix — все Pass; final+first-pass; React только после ручного review) |
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
-| D3 | Урок, тест, report, mentor feedback | ⛔ Не начата |
+| D3 | ~~Урок, тест, report, mentor feedback~~ → **Report, Practical & Mentor Review** (переопределена в D3-A, DD-270) | ◻️ D3-A выполнена (scope + art direction); D3-B не начата |
 | D4 | Tools L10–L30 | ⛔ Не начата |
 | D5 | Tools L35–L60 | ⛔ Не начата |
 | D6 | Tools L65–L100 | ⛔ Не начата |
@@ -415,3 +415,54 @@ completion rule и session progress schema — без изменений; зав
 
 **Документы:** `D2C_LESSONS_LIBRARY.md`, `design-memory/reviews/d2c-b-lessons-library-review.md`,
 DD-261…DD-263.
+
+
+## D3-A — Report Level Scope & Art Direction (завершена)
+
+**D3 переопределена (DD-270).** Прежнее определение — «Урок, тест, report и mentor feedback» — писалось
+в D0, до появления D2B и D2C. **Урок и тест реализованы в D2B и в новый D3 не входят**; два из четырёх
+прежних acceptance-критериев («тест открывается на 50%», «просмотр 50% не завершает уровень») уже
+закрыты и покрыты тестами (DD-245, DD-249). Актуально:
+**D3 = Report, Practical & Mentor Review Experience** (`docs/D3_REPORT_SCOPE.md`), разбитая на этапы:
+**D3-A** (scope + art direction, эта фаза) → **D3-B** (только уровень 3: draft · browser-local autosave ·
+submit · pending-review, без вердикта) → отдельные будущие этапы (revision/resubmit, approved, mentor
+feedback, practical, practical ↔ Tools).
+
+**Шесть продуктовых решений зафиксированы (DD-264…DD-269):**
+
+| # | Решение |
+|---|---------|
+| 1 | Отчёт — **сам curriculum-level**: `/lessons/level.003`; `/reports/[reportCode]` **не используется**, код `report.NNN` не вводится |
+| 2 | **`pending-review` останавливает progression**: уровень 4 закрыт до вердикта; без countdown; фальшивый вердикт запрещён; dev-adapter — только для screenshots |
+| 3 | **Browser-local `localStorage`**, ключ `ata.report-workspace.v1` (не `sessionStorage`): потеря черновика — потеря работы пользователя |
+| 4 | **Practical ≠ report-форма**; гипотеза «practical = ручной прототип будущего инструмента» зафиксирована, но не утверждена; уровень 19 остаётся placeholder |
+| 5 | **Rubric — структурная и prototype-only** (completeness · evidence · reflection); торговая методология не выдумывается |
+| 6 | **`/lessons/[levelCode]/test`** остаётся зарезервированным; inline-тест D2B — канон; судьба маршрута — отдельным DD |
+
+**Сценарий:** уровень 3 «Первые пять demo-сделок» — единственный `kind: "report"` в curriculum.
+Данные (артефакт «Отчёт по 5 demo-сделкам», модуль 01, следующий уровень 4 «Контрольная точка $50»)
+взяты из fixture **дословно**. Текста задания в fixture нет — canonical instructions не выдуманы,
+используется пометка «Структура задания уточняется редакцией».
+
+**Предъявлено три структурно разных направления** (`docs/D3_REPORT_ART_DIRECTION.md`, 19-пунктовый бриф
+на каждое): **A — Report Desk** (один непрерывный учебный документ + Learning-Spine ось разделов),
+**B — Evidence Ledger** (артефакт раскрыт собственной структурой: пять записей, одна открыта),
+**C — Submission Contract** (две встречные плоскости: работа и плита-соглашение с apertura-кромкой).
+Пространственные системы различны: документ · перечислимый артефакт · соглашение.
+
+**Проверки:** реальные Chromium-кадры в точных вьюпортах (1440×900, 390×844, две доски 1920×1080);
+horizontal overflow **0px** во всех шести кадрах концептов; **15 findings** (2 critical, 7 major,
+6 minor) — все critical и major исправлены до финальных кадров, minor перечислены открыто
+(`design-memory/reviews/d3-a-report-concepts-review.md`). Critical: рабочая поверхность обрезала текст
+пользователя на mobile; у Concept B на mobile отсутствовала рабочая поверхность целиком.
+
+**Границы:** production React **не написан**; `src/`, `package.json`, `package-lock.json`, `e2e/` не
+изменялись; production-тесты не запускались (production-код не менялся); screenshot-спеки прошлых фаз
+не запускались, historical evidence не перезаписан (DD-257); зависимости не добавлялись; curriculum
+fixture не менялся. Прототипы линкуют настоящие токены, shell и шрифты и лежат вне `src/` (DD-260):
+`design-memory/proposals/d3-report/`.
+
+**Победитель не выбран — выбор за пользователем. D3-B не начинается без явного выбора направления.**
+
+**Документы:** `D3_REPORT_SCOPE.md`, `D3_REPORT_ART_DIRECTION.md`,
+`design-memory/reviews/d3-a-report-concepts-review.md`, DD-264…DD-270.

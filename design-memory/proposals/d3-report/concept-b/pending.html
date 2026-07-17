@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept B «Evidence Ledger» — состояние «На проверке»</title>
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+<style>
+  /* pending in B: the ledger CLOSES — every entry collapses to a submitted line.
+     There is no open row any more, and that absence is the state. */
+  .rpb-pendbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 0 14px; }
+  .rpb-row.is-sent .rpb-sig { background: var(--route-completed); border-color: var(--route-completed); }
+  .rpb-row.is-sent .rpb-n { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="home">
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a><a href="#">Путь</a><a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <main class="home-main rp-main" id="main">
+   <div class="rpb-wrap">
+    <header class="rpb-head">
+      <a class="rp-back" href="#"><span aria-hidden="true">←</span> Уроки <span class="sep" aria-hidden="true">·</span> <span class="rpb-crumb">Модуль 01 · Первое знакомство</span></a>
+      <div class="rp-id">
+        <span class="rp-num">03</span>
+        <h1 class="rp-title">Первые пять demo-сделок</h1>
+        <span class="rp-kind">Отчёт</span>
+      </div>
+    </header>
+
+    <div class="rpb-pendbar">
+      <span class="rp-status">На проверке</span>
+      <p class="rp-wait">Обычно проверка занимает до одного дня.</p>
+    </div>
+
+    <section class="rpb-ledger" aria-label="Журнал наблюдений — отправлен, только для чтения">
+      <div class="rpb-row is-sent"><span class="rpb-sig" aria-hidden="true"></span><span class="rpb-n">01</span><span class="rpb-sum">Дождался условия, вошёл</span><span class="rpb-act">отправлено</span></div>
+      <div class="rpb-row is-sent"><span class="rpb-sig" aria-hidden="true"></span><span class="rpb-n">02</span><span class="rpb-sum">Отказался от входа</span><span class="rpb-act">отправлено</span></div>
+      <div class="rpb-row is-sent"><span class="rpb-sig" aria-hidden="true"></span><span class="rpb-n">03</span><span class="rpb-sum">Вошёл раньше, чем собирался</span><span class="rpb-act">отправлено</span></div>
+      <div class="rpb-row is-sent"><span class="rpb-sig" aria-hidden="true"></span><span class="rpb-n">04</span><span class="rpb-sum">Дождался условия, вошёл</span><span class="rpb-act">отправлено</span></div>
+      <div class="rpb-row is-sent"><span class="rpb-sig" aria-hidden="true"></span><span class="rpb-n">05</span><span class="rpb-sum">Закрыл раньше плана</span><span class="rpb-act">отправлено</span></div>
+    </section>
+
+    <section class="rpb-refl" aria-label="Итоговое наблюдение">
+      <div class="rpb-refl-h">
+        <h2 class="rpb-refl-t">Итоговое наблюдение</h2>
+        <span class="rpb-refl-s">отправлено</span>
+      </div>
+      <textarea class="rpb-w rp-ro" rows="2" readonly>Записанное заранее условие — единственное, что отличало обдуманные входы от случайных.</textarea>
+    </section>
+
+    <div class="rpb-end">
+      <div class="rpb-endtxt">
+        <p class="rp-blocked">Уровень 04 «Контрольная точка $50» откроется <b>после результата проверки</b>. Всё, что уже открыто, остаётся доступным.</p>
+      </div>
+      <div class="rp-exits">
+        <a class="rp-exit" href="#"><span aria-hidden="true">←</span> К списку уроков</a>
+        <a class="rp-exit" href="#">Посмотреть путь</a>
+      </div>
+    </div>
+   </div>
+  </main>
+</div>
+</body>
+</html>

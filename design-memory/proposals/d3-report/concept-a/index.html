@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Отчёт · Concept A «Report Desk»</title>
+<!-- REAL product assets: self-hosted variable fonts, semantic tokens, app shell. -->
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+</head>
+<body>
+<div class="home">
+  <a href="#main" class="skip">Перейти к содержимому</a>
+
+  <!-- ============ REAL SHELL — desktop/tablet command band ============ -->
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a>
+      <a href="#">Путь</a>
+      <a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <!-- ============ REAL SHELL — mobile top bar ============ -->
+  <div class="mtop">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    <div class="actions" style="display:inline-flex;align-items:center;gap:8px">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </div>
+
+  <main class="home-main rp-main" id="main">
+   <div class="rpa-wrap">
+
+    <!-- ---------- identity: curriculum data ONLY (fixture-exact) ---------- -->
+    <header class="rpa-head">
+      <a class="rp-back" href="#">
+        <span aria-hidden="true">←</span> Уроки
+        <span class="sep" aria-hidden="true">·</span>
+        <span class="rpa-crumb">Модуль 01 · Первое знакомство</span>
+      </a>
+      <div class="rp-id">
+        <span class="rp-num">03</span>
+        <h1 class="rp-title">Первые пять demo-сделок</h1>
+        <span class="rp-kind">Отчёт</span>
+      </div>
+      <p class="rpa-req">Требуется: <b>Отчёт по 5 demo-сделкам</b></p>
+      <p class="rpa-note rp-proto">Структура задания уточняется редакцией — названия разделов ниже prototype-only.</p>
+    </header>
+
+    <!-- ---------- browser-local save: canonical copy, calm ---------- -->
+    <div class="rpa-savebar">
+      <p class="rp-save">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+        <span><b>Черновик сохранён в этом браузере.</b> Синхронизация с сервером пока не подключена.</span>
+      </p>
+    </div>
+
+    <!-- ---------- mobile: the spine collapses into a disclosure ---------- -->
+    <details class="rpa-disc">
+      <summary>Разделы <span class="cnt">2 из 5</span></summary>
+      <ol>
+        <li class="is-done"><span class="d" aria-hidden="true"></span><span class="mono">01</span> Наблюдение <span class="s">заполнен</span></li>
+        <li class="is-done"><span class="d" aria-hidden="true"></span><span class="mono">02</span> Что делал <span class="s">заполнен</span></li>
+        <li class="is-open"><span class="d" aria-hidden="true"></span><span class="mono">03</span> Что заметил <span class="s">открыт</span></li>
+        <li><span class="d" aria-hidden="true"></span><span class="mono">04</span> Вывод <span class="s">пусто</span></li>
+        <li><span class="d" aria-hidden="true"></span><span class="mono">05</span> Что изменю <span class="s">пусто</span></li>
+      </ol>
+    </details>
+
+    <!-- ---------- THE DESK — one sheet, one spine ---------- -->
+    <section class="rpa-desk" aria-label="Отчёт — рабочая поверхность">
+
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">01</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Наблюдение</h2><span class="rp-proto">prototype-only</span><span class="rpa-state">заполнен</span></div>
+        <textarea class="rpa-w" rows="2" aria-label="Раздел 01 — наблюдение">Провёл пять demo-сделок на разных активах в течение недели, каждую записывал сразу после закрытия, чтобы не полагаться на память.</textarea>
+      </div>
+
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">02</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Что делал</h2><span class="rp-proto">prototype-only</span><span class="rpa-state">заполнен</span></div>
+        <textarea class="rpa-w" rows="2" aria-label="Раздел 02 — что делал">В двух случаях дождался условия и вошёл, в одном отказался от входа, ещё в двух вошёл раньше, чем собирался.</textarea>
+      </div>
+
+      <div class="rpa-node is-open"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">03</span></div>
+      <div class="rpa-sec is-open">
+        <div class="rpa-rule"><h2 class="rpa-h">Что заметил</h2><span class="rp-proto">prototype-only</span><span class="rpa-state">открыт</span></div>
+        <textarea class="rpa-w" rows="3" aria-label="Раздел 03 — что заметил" placeholder="Опиши, что заметил за эти пять сделок…">Заметил, что решение принимал быстрее, когда </textarea>
+      </div>
+
+      <div class="rpa-node is-empty"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">04</span></div>
+      <div class="rpa-sec is-empty">
+        <div class="rpa-rule"><h2 class="rpa-h">Вывод</h2><span class="rp-proto">prototype-only</span><span class="rpa-state">пусто</span></div>
+        <textarea class="rpa-w" rows="1" aria-label="Раздел 04 — вывод" placeholder="Ещё не заполнено"></textarea>
+      </div>
+
+      <div class="rpa-node is-empty"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">05</span></div>
+      <div class="rpa-sec is-empty">
+        <div class="rpa-rule"><h2 class="rpa-h">Что изменю</h2><span class="rp-proto">prototype-only</span><span class="rpa-state">пусто</span></div>
+        <textarea class="rpa-w" rows="1" aria-label="Раздел 05 — что изменю" placeholder="Ещё не заполнено"></textarea>
+      </div>
+
+      <!-- submit at the NATURAL END of the work, not in a sticky bar -->
+      <div class="rpa-end">
+        <div class="rpa-endtxt">
+          <p class="rpa-left">Осталось <b>3 раздела из 5</b></p>
+          <p class="rp-blocked">После отправки уровень получит статус <b>«На проверке»</b>, а уровень 04 «Контрольная точка $50» останется закрыт до результата проверки.</p>
+        </div>
+        <button class="rp-submit" type="button" aria-disabled="true">Отправить</button>
+      </div>
+
+    </section>
+   </div>
+  </main>
+
+  <!-- ============ REAL SHELL — mobile bottom navigation ============ -->
+  <nav class="bottomnav" aria-label="Мобильная навигация">
+    <ul>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="lbl">Главная</span></a></li>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19h5a4 4 0 0 0 0-8h-3a4 4 0 0 1 0-8h5"/></svg><span class="lbl">Путь</span></a></li>
+      <li><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="lbl">Уроки</span></a></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/></svg><span class="lbl">Инструменты</span></button></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span class="lbl">Ещё</span></button></li>
+    </ul>
+  </nav>
+</div>
+</body>
+</html>

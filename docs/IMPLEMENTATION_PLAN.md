@@ -69,16 +69,52 @@
 - **Risks:** дублирование Пути; «вторая Главная»; стена из 100 карточек; generic LMS.
 - **Stop condition (D2C-A):** три направления предъявлены, выбор за пользователем — React не начинать.
 
-## D3 — Урок, тест, report и mentor feedback
+## D3 — Report, Practical & Mentor Review Experience (переопределена в D3-A)
 
-- **Scope:** Урок (player, subtitles, 50%-gate), Тест (single question, scenario/chart, explanation, fail-flow), Report (autosave/draft/rubric/статусы/секц. комментарии/версии), Mentor feedback базово.
-- **Non-scope:** полноценный mentor backend; support.
-- **Dependencies:** D1, D2.
-- **Acceptance:** тест открывается на 50%; просмотр 50% не завершает уровень; report статусы и resubmit; без mentor avatar/countdown.
-- **Screenshots:** Урок/Тест/Report (+состояния) в 3 размерах + landscape видео.
-- **Tests:** 50%-gate; autosave; статусные переходы report/test.
-- **Risks:** утечка next lesson до completion; таймер в тесте.
+> **Фаза переопределена.** Прежнее определение («Урок, тест, report и mentor feedback») писалось в D0,
+> когда фаз D2B и D2C не существовало. **Урок и тест реализованы в D2B** и в новый D3 **не входят**:
+> два из четырёх прежних acceptance-критериев («тест открывается на 50%», «просмотр 50% не завершает
+> уровень») уже закрыты и покрыты тестами (DD-249, DD-245). Полное определение —
+> `docs/D3_REPORT_SCOPE.md` (DD-264…DD-270).
+
+- **Scope (общий):** Report, Practical и Mentor review — три линии разной готовности, поэтому фаза
+  разбита на этапы.
+- **Non-scope (общий):** Урок и Тест (закрыты в D2B); mentor backend; support.
+- **Dependencies:** D1, D2A, D2B/D2B.1, D2C.
+
+### D3-A — Report Level Scope & Art Direction (выполнена)
+
+- **Scope:** переопределение D3; продуктовые решения (route, pending-progression, browser-local
+  storage, practical, rubric, test-route); art direction отчёта; три структурно разных направления;
+  lifecycle-сравнение `pending-review`.
+- **Non-scope:** production React; production route; изменение curriculum; practical; mentor backend; D3-B.
+- **Acceptance:** D3 переопределён; шесть решений зафиксированы; три направления с desktop+mobile;
+  pending сравнён; curriculum content не выдуман; production code не изменён; **победитель не выбран**.
+- **Screenshots:** desktop 1440×900 + mobile 390×844 на каждое направление + comparison board и
+  lifecycle board 1920×1080.
+- **Tests:** production-тесты не запускаются (production-код не менялся).
+- **Stop condition:** направления предъявлены, выбор — за пользователем. React не начинать.
+
+### D3-B — First Report Level (будущая production-фаза)
+
+- **Scope:** **только уровень 3** (единственный `kind: "report"`); `draft`; browser-local autosave
+  (`ata.report-workspace.v1`); `submit`; `pending-review`. **Без реального mentor verdict.**
+- **Non-scope:** approved/rejected/resubmitted; вложения; version history; секционные комментарии;
+  practical; mentor-тред; XP за отчёт.
+- **Acceptance:** черновик переживает закрытие вкладки; submit ведёт только в локальный
+  `pending-review`; уровень 4 остаётся закрыт; ни одной фразы о сервере/наставнике; без countdown/avatar.
+- **Risks:** фальшивый вердикт; autosave-обещание поверх ненадёжного хранилища; статус доминирует над работой.
 - **Stop condition:** QA-review закрыт.
+
+### Будущие отдельные этапы
+
+| Этап | Содержание | Почему отдельно |
+|------|-----------|-----------------|
+| D3-C | `revision requested` / `resubmit` | производные от вердикта, которого нет |
+| D3-D | `approved` state | требует внешнего события |
+| D3-E | Mentor feedback | требует mentor queue (OQ-4) |
+| D3-F | Practical assignments | гипотеза «practical = ручной прототип инструмента» не проверена |
+| D3-F ↔ D4 | связь practical с Tools | проектируется совместно, не раньше |
 
 ## D4 — Tools L10–L30
 

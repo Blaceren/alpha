@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>D3-A — сравнение состояния «На проверке» (pending-review)</title>
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../src/styles/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    padding: 26px 40px;
+    background:
+      radial-gradient(110% 90% at 42% 26%, color-mix(in srgb, var(--gate-boundary) 7%, transparent), transparent 58%),
+      var(--background-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  .board-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: 25px; letter-spacing: -0.4px; margin: 0; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin: 5px 0 0; }
+  .meta { font-size: 12.5px; color: var(--text-muted); text-align: right; margin: 0; line-height: 1.6; }
+  .meta b { color: var(--route-upcoming); font-weight: 600; }
+  .meta .no { color: var(--text-secondary); }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; padding-top: 18px; }
+  .col { display: flex; flex-direction: column; min-width: 0; }
+
+  /* live pending states — real prototypes, scaled, not redrawn */
+  .shot { border: 1px solid var(--divider-strong); border-radius: 8px; overflow: hidden; height: 360px; background: var(--background-field); }
+  .shot iframe { width: 1440px; height: 900px; border: 0; transform: scale(0.4); transform-origin: top left; }
+
+  .name { display: flex; align-items: baseline; gap: 10px; margin: 13px 0 0; }
+  .letter { font-family: var(--font-mono); font-size: 12px; color: #06120e; background: var(--route-upcoming); border-radius: 4px; padding: 2px 7px; font-weight: 700; }
+  .title { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 0; }
+
+  dl { margin: 12px 0 0; display: grid; grid-template-columns: 118px 1fr; gap: 9px 12px; }
+  dt { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.3px; padding-top: 1px; }
+  dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  dd b { color: var(--text-primary); font-weight: 600; }
+
+  .foot { position: absolute; left: 40px; right: 40px; bottom: 20px; border-top: 1px solid var(--divider); padding-top: 12px;
+          display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--text-muted); }
+  .chk { display: inline-flex; gap: 18px; }
+  .chk span::before { content: "✕ "; color: var(--route-completed); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="board-head">
+    <div>
+      <h1>D3-A · «На проверке» — три решения одного состояния</h1>
+      <p class="sub">Отчёт отправлен · поля read-only · уровень 04 «Контрольная точка $50» закрыт · вердикта наставника нет и не имитируется</p>
+    </div>
+    <p class="meta">
+      Живые прототипы, <b>1440×900</b>, масштаб 0.4<br>
+      Копирайт статуса <span class="no">одинаков во всех трёх</span> — это продуктовое решение, не арт-дирекшн<br>
+      Различается <b>композиция</b>, а не слова
+    </p>
+  </div>
+
+  <div class="cols">
+
+    <div class="col">
+      <div class="shot"><iframe src="concept-a/pending.html" title="Concept A — pending"></iframe></div>
+      <div class="name"><span class="letter">A</span><h2 class="title">Report Desk</h2></div>
+      <dl>
+        <dt>СТАТУС</dt>
+        <dd>Плашка «На проверке» встаёт <b>в тот же слот</b>, где был индикатор сохранения: одна правда за раз, экран не копит статусы.</dd>
+        <dt>BROWSER-LOCAL</dt>
+        <dd>Строка сохранения <b>исчезает</b> — черновика больше нет, есть отправленный отчёт. Это честно, но <b>уводит факт локальности</b> из виду.</dd>
+        <dt>БЛОКИРОВКА</dt>
+        <dd>Объяснение — в конце документа, там же, где был submit. Спайн <b>дозаполняется</b>: работа завершена, путь — нет.</dd>
+        <dt>ВОЗВРАТ</dt>
+        <dd>«К списку уроков» и «Посмотреть путь» — на месте кнопки отправки.</dd>
+      </dl>
+    </div>
+
+    <div class="col">
+      <div class="shot"><iframe src="concept-b/pending.html" title="Concept B — pending"></iframe></div>
+      <div class="name"><span class="letter">B</span><h2 class="title">Evidence Ledger</h2></div>
+      <dl>
+        <dt>СТАТУС</dt>
+        <dd>Плашка под заголовком; главное — <b>ledger закрылся</b>: открытой записи больше нет, и это отсутствие само по себе состояние.</dd>
+        <dt>BROWSER-LOCAL</dt>
+        <dd>Строка сохранения тоже уходит. <b>Слабое место направления</b>: локальность отправленного отчёта нигде не заявлена.</dd>
+        <dt>БЛОКИРОВКА</dt>
+        <dd>Объяснение внизу. Пять completed-точек читаются как «работа сделана» — и <b>сильнее конкурируют</b> с сообщением о закрытом уровне.</dd>
+        <dt>ВОЗВРАТ</dt>
+        <dd>«К списку уроков» и «Посмотреть путь» в подвале.</dd>
+      </dl>
+    </div>
+
+    <div class="col">
+      <div class="shot"><iframe src="concept-c/pending.html" title="Concept C — pending"></iframe></div>
+      <div class="name"><span class="letter">C</span><h2 class="title">Submission Contract</h2></div>
+      <dl>
+        <dt>СТАТУС</dt>
+        <dd>Плита <b>не исчезает</b>, а меняет время: «Соглашение выполнено». Те же четыре слота, статус — первый из них.</dd>
+        <dt>BROWSER-LOCAL</dt>
+        <dd>Единственное направление, где локальность <b>сохраняется после отправки</b>: слот «Где отчёт» прямо говорит, что он в этом браузере.</dd>
+        <dt>БЛОКИРОВКА</dt>
+        <dd>Слот «Что дальше» повторяет то, что обещал до submit. Пользователь <b>получает ровно то, о чём его предупредили</b>.</dd>
+        <dt>ВОЗВРАТ</dt>
+        <dd>Возвраты — внутри плиты, под заголовком «Пока идёт проверка»: у ожидания есть занятие.</dd>
+      </dl>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <span class="chk">
+      <span>countdown</span>
+      <span>avatar наставника</span>
+      <span>имя проверяющего</span>
+      <span>автоматический approved</span>
+      <span>«отправлено наставнику»</span>
+      <span>красный/ошибочный тон</span>
+    </span>
+    <span>Ключевое различие: <b>только C</b> удерживает browser-local правду после отправки. <b>Победитель не выбран.</b></span>
+  </div>
+</body>
+</html>
