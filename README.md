@@ -4,7 +4,7 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D3-C — Report Revision Cycle.** Реализованы Главная (`/`), Путь (`/path`),
+> **Статус: Phase D3-D — Approved Report State.** Реализованы Главная (`/`), Путь (`/path`),
 > Урок (`/lessons/[levelCode]`), **Библиотека уроков (`/lessons`)** и **первый отчёт
 > (`/lessons/level.003`)**. Backend / CRM / Pocket / database / deploy — не подключены; все данные
 > synthetic. Прогресс урока живёт в сессии браузера, черновик отчёта — в `localStorage` этого
@@ -26,7 +26,8 @@ discipline и сопровождение. ATA не является торгов
 > используется). Пять записей по числу demo-сделок из артефакта курса, итоговое наблюдение, черновик в
 > `localStorage` (с D3-C — ключ `ata.report-workspace.v2`; валидные v1-черновики мигрируют, v1 не
 > удаляется), submit с подтверждением → локальный `pending-review`.
-> **Вердикт наставника не имитируется**, `approved`/`rejected` отсутствуют, уровень 4 остаётся закрыт.
+> **Вердикт наставника не имитируется** (в D3-B `approved`/`rejected` отсутствовали; `approved` добавлен
+> терминальным dev/test-вердиктом в D3-D — см. ниже); уровень 4 закрыт, пока отчёт не одобрен.
 >
 > Канон (Артём, L18) не менялся. Полный flow отчёта живёт только под dev/test сценарием
 > `?scenario=report` (`currentLevel: 3`) — он не появляется ни в одной пользовательской ссылке
@@ -42,8 +43,21 @@ discipline и сопровождение. ATA не является торгов
 > `?verdict=revision-requested` при `?scenario=report` (DD-291), правило повторной отправки —
 > готовность ∧ содержательное изменение после вердикта (DD-292). Library/Path показывают
 > «Нужна доработка» / «Готов к повторной отправке»; канонический Артём (L18) не затронут.
-> Детали — `docs/D3_REVISION_EXPERIENCE.md`. **D3-D (approved), mentor thread и practical не
-> начинались.**
+> Детали — `docs/D3_REVISION_EXPERIENCE.md`.
+>
+> **D3-D выполнена целиком.** Терминальный вердикт `approved`: хранилище поднято до **v3**
+> (`ata.report-workspace.v3`) с односторонней миграцией v1 → v2 → v3 (v1/v2 не удаляются; DD-296),
+> вердикт — только dev/test adapter `?verdict=approved` при `?scenario=report` (exact-match; DD-298).
+> `approved` терминален (read-only, review сохранён как история, XP не меняется; DD-297); completion
+> уровня 3 **выводится** из report workspace и проецируется на сессию через
+> `sessionWithApprovedReports` — `ata.lesson-progress.v1` **не** пишется, следующий уровень открывает
+> существующий резолвер. Ключевая граница — **base-completed vs approval-induced** (DD-300): «Одобрено»
+> показывается только на report-экране при approval-induced completion; Library/Path показывают L3
+> «Завершён» (не «Одобрено»), следующий шаг — контрольная точка · Уровень 4; primary CTA «Посмотреть
+> Путь» → чистый `/path` (DD-293, DD-294). При каноническом L18 локальный approved ничего не
+> переименовывает. Home не тронут (DD-295); это provisional frontend prototype state, не
+> аутентифицированная backend-истина (DD-299). Детали — `docs/D3_APPROVED_EXPERIENCE.md`. **Mentor
+> thread, practical и D4 не начинались.**
 
 ## Требования
 
@@ -67,8 +81,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт + Доработка), 146 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (224) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт + Доработка + Одобрение), 169 тестов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (252) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в

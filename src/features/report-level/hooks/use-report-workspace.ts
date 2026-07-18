@@ -5,11 +5,11 @@ import { useSyncExternalStore } from "react";
 import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
 import { createReportStore } from "@/features/report-level/model/report-store";
 import {
-  emptyReportWorkspaceV2,
-  parseReportWorkspaceV2,
-  serializeReportWorkspaceV2,
-  type ReportWorkspaceStateV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  emptyReportWorkspaceV3,
+  parseReportWorkspaceV3,
+  serializeReportWorkspaceV3,
+  type ReportWorkspaceStateV3,
+} from "@/features/report-level/model/report-workspace-v3";
 
 /**
  * Read-only view of the browser-local report workspace, safe for SSR (D3-B;
@@ -30,15 +30,15 @@ import {
  */
 const subscribe = () => () => {};
 
-const EMPTY_SNAPSHOT = serializeReportWorkspaceV2(emptyReportWorkspaceV2());
+const EMPTY_SNAPSHOT = serializeReportWorkspaceV3(emptyReportWorkspaceV3());
 
-export function useReportWorkspace(): ReportWorkspaceStateV2 {
+export function useReportWorkspace(): ReportWorkspaceStateV3 {
   const getSnapshot = useCallback(
-    () => serializeReportWorkspaceV2(createReportStore().read()),
+    () => serializeReportWorkspaceV3(createReportStore().read()),
     [],
   );
   const getServerSnapshot = useCallback(() => EMPTY_SNAPSHOT, []);
 
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return useMemo(() => parseReportWorkspaceV2(raw, getReportDefinition), [raw]);
+  return useMemo(() => parseReportWorkspaceV3(raw, getReportDefinition), [raw]);
 }

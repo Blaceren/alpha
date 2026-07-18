@@ -195,3 +195,16 @@ Secret tool до открытия: silhouette, прозрачные услови
 | reset | пропуск → начинается заново, лучший результат сохранён, без красного наказания, «Продолжим с текущего этапа» |
 
 Продлевают: lesson, test, report, journal, weekly review, practical task. Не продлевают: login, открытие страницы, trading, deposit.
+
+---
+
+## 12. Report approved (D3-D)
+
+| State | Значение |
+|-------|----------|
+| pending-review → approved | терминальный вердикт dev/test-adapter `?verdict=approved`; чип «Одобрено», ledger read-only, review сохранён как история, XP не меняется |
+| approval-induced completion | base ≠ completed ∧ status approved → completion L3 выведена в сессию; L4 открыт настоящим резолвером; approved archive, CTA «Посмотреть Путь» → `/path` |
+| canonical completion (L18) | base уже completed → нейтральный archive; «Одобрено» и approved-CTA **не** показываются; уровень не переименовывается (DD-300) |
+| storage write failure при approve | остаётся `pending-review` — без fake success (DD-298) |
+
+Library/Path после approval: L3 «Завершён · Пересмотреть» (не «Одобрено»), L4 — контрольная точка / current (DD-293). Home не меняется (DD-295).

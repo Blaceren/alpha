@@ -158,3 +158,57 @@ Report store **не участвует** в резолвере доступно�
   сам маршрут применяют одно правило: `availability === "completed"` побеждает локальную запись).
 
 См. `REPORT_STATE_MACHINE.md` §4 и DD-271.
+
+## 9. Storage v3 — approved (D3-D, DD-296)
+
+Схема получает **новый ключ**, а не тихую in-place миграцию:
+
+```
+v1  ata.report-workspace.v1  — draft | pending-review                (D3-B)
+v2  ata.report-workspace.v2  — + revision-requested, review          (D3-C)
+v3  ata.report-workspace.v3  — + approved, approvedAt                 (D3-D)
+```
+
+Минимальная запись v3: `levelCode`, `entries`, `summary`, `status`
+(`draft|pending-review|revision-requested|approved`), `submittedAt`, `revision`,
+`meaningfulRevision`, `review`, `approvedAt: string | null`.
+
+### Чтение (односторонняя read-time миграция v1 → v2 → v3)
+
+1. Есть v3 → читать только v3; битый v3 fail closed, **без** отката к v2/v1.
+2. Нет v3 → валидный v2 (сам поднимающий v1 при отсутствии v2) поднять в v3 дословно, `approvedAt =
+   null`.
+3. v1/v2-парсеры **не тронуты**: подделанный `approved` в v2-ключе по-прежнему отвергается v2-
+   парсером до подъёма.
+4. v1/v2 не удаляются и не перезаписываются; `clear()` v3-store стирает **только** v3; первая
+   пользовательская запись после подъёма пишет только v3.
+
+### Нормализация approved (fail closed, но работа сохраняется)
+
+Approved допустим только когда: report-level существует, статус `approved`, отчёт structurally ready,
+`submittedAt` валиден, `approvedAt` — валидный ISO timestamp. Иначе:
+
+| Случай | Результат |
+|--------|-----------|
+| approved + missing `submittedAt` | → `draft` (работа сохранена, progression не открывается) |
+| approved + невалидный/отсутствующий `approvedAt` | → `pending-review` (сохранены и работа, и `review`) |
+| approved + неполный отчёт | → `draft`, progression не открывается |
+| unknown review section ids | отбрасываются поодиночке (не работа) |
+| unknown/forged статус (`rejected`, `auto-approved`, …) | запись не становится approved и не открывает L4 |
+
+Валидный пользовательский текст **не** уничтожается из-за битой verdict-метаданной.
+
+### Честная граница (DD-299)
+
+Structurally valid browser-local approved — **provisional frontend prototype state**, не
+аутентифицированная backend-истина. Подписи/токены/хеши не добавляются (их проверял бы тот же
+клиент — это не security boundary). Реальный authoritative mentor verdict потребует backend.
+
+## 10. Progression augmentation (D3-D, DD-297)
+
+Completion L3 **выводится** из workspace, `ata.lesson-progress.v1` **не пишется**. Чистый слой
+`report-progression.ts`: `approvedReportLevelNumbers(workspace)` и `sessionWithApprovedReports(session,
+workspace)` (через канонический `withCompletedLevel`) проецируют completion на сессию; существующий
+резолвер открывает следующий уровень. Второго store / route-resolver / ключа completion нет;
+augmentation идемпотентна и никогда не понижает progression. Подключено в report route/experience,
+Lessons Library, Path; **не** в Home.

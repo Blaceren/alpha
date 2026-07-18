@@ -12,10 +12,11 @@ import {
   withDraft,
   withEntryField,
 } from "@/features/report-level/model/report-draft";
+import { REPORT_STORAGE_KEY_V2 } from "@/features/report-level/model/report-workspace-v2";
 import {
-  REPORT_STORAGE_KEY_V2,
-  getStoredDraftV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  REPORT_STORAGE_KEY_V3,
+  getStoredDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
 
 const definition = getReportDefinition(REPORT_LEVEL_NUMBER)!;
 
@@ -46,10 +47,11 @@ describe("report store", () => {
     store.write(withDraft(emptyReportWorkspace(), draft));
 
     // Written to localStorage, not sessionStorage: this is the whole divergence
-    // from the lesson store, so it is pinned rather than assumed. Since D3-C the
-    // store writes the v2 key (DD-285) — and never writes the v1 key again.
-    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).toContain("переживу вкладку");
-    expect(window.sessionStorage.getItem(REPORT_STORAGE_KEY_V2)).toBeNull();
+    // from the lesson store, so it is pinned rather than assumed. Since D3-D the
+    // store writes the v3 key (DD-296) — and never writes the v1 or v2 keys.
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V3)).toContain("переживу вкладку");
+    expect(window.sessionStorage.getItem(REPORT_STORAGE_KEY_V3)).toBeNull();
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).toBeNull();
     expect(window.localStorage.getItem(REPORT_STORAGE_KEY)).toBeNull();
   });
 
@@ -65,7 +67,7 @@ describe("report store", () => {
     const draft = withEntryField(createEmptyDraft(definition), 2, "noticed", "вторая запись");
     store.write(withDraft(emptyReportWorkspace(), draft));
 
-    const reread = getStoredDraftV2(createReportStore().read(), 3);
+    const reread = getStoredDraftV3(createReportStore().read(), 3);
     expect(reread?.entries[1]!.noticed).toBe("вторая запись");
   });
 

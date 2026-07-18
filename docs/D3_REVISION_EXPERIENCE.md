@@ -136,3 +136,12 @@ session progression schema не изменялись. Home и D2B-урок не 
 Visual QA: first-pass 14 кадров → ревью глазами (0 critical, 0 major, 5 minor) → final 14 кадров —
 `docs/visual-reviews/D3_C_REVISION_IMPLEMENTATION.md`,
 `design-memory/screenshots/d3-revision/{first-pass,final}/`.
+
+---
+
+## D3-D — от resubmit к approved
+
+После resubmit (`pending-review`, `review` как история) следующий вердикт может быть `approved` —
+терминальный, сохраняющий последний `review` как тихий «Комментарий последней проверки». Полностью
+см. [D3_APPROVED_EXPERIENCE.md](D3_APPROVED_EXPERIENCE.md) (DD-297, DD-298). Adapter `?verdict=approved`
+допускает approved на resubmitted pending-review с сохранённым review.

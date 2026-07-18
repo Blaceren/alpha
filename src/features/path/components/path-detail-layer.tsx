@@ -14,7 +14,7 @@ import {
 } from "@/features/path/model/path-state";
 import { kindLabel } from "@/features/lessons-library/model/lessons-library-model";
 import { isReportLevelNumber } from "@/features/report-level/model/report";
-import { getStoredDraftV2 } from "@/features/report-level/model/report-workspace-v2";
+import { getStoredDraftV3 } from "@/features/report-level/model/report-workspace-v3";
 import {
   deriveReportLifecycle,
   reportStatusLabel,
@@ -56,7 +56,7 @@ export function PathDetailLayer({
   const reports = useReportWorkspace();
   const storedReport =
     isReportLevelNumber(level.number) && state !== "completed"
-      ? getStoredDraftV2(reports, level.number)
+      ? getStoredDraftV3(reports, level.number)
       : null;
   const reportLifecycle: ReportLifecycle | null = storedReport
     ? deriveReportLifecycle(storedReport)

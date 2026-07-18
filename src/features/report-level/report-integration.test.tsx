@@ -17,26 +17,28 @@ import {
   withSummary,
   type ReportDraft,
 } from "@/features/report-level/model/report-draft";
+import { migrateV1Workspace } from "@/features/report-level/model/report-workspace-v2";
 import {
-  emptyReportWorkspaceV2,
-  migrateV1Workspace,
-  withDraftV2,
-  withResubmitted,
-  withRevisionRequested,
-  withSubmittedV2,
-  withSummaryV2,
-  type ReportDraftV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  emptyReportWorkspaceV3,
+  migrateV2WorkspaceToV3,
+  withDraftV3,
+  withResubmittedV3,
+  withRevisionRequestedV3,
+  withSubmittedV3,
+  withSummaryV3,
+  type ReportDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
 import {
   PROVISIONAL_REVIEW_COMMENT,
   PROVISIONAL_REVIEW_SECTIONS,
 } from "@/features/report-level/data/report-review-fixtures";
 
-/** Lift a v1 draft into the v2 shape — the same defaults migration applies. */
-const liftToV2 = (draft: ReportDraft): ReportDraftV2 => ({
+/** Lift a v1 draft into the v3 shape — the same defaults migration applies. */
+const liftToV3 = (draft: ReportDraft): ReportDraftV3 => ({
   ...draft,
   review: null,
   meaningfulRevision: draft.revision,
+  approvedAt: null,
 });
 
 const definition = getReportDefinition(REPORT_LEVEL_NUMBER)!;
@@ -56,15 +58,16 @@ function seed(draft: ReportDraft) {
   createReportStore().write(withDraft(emptyReportWorkspace(), draft));
 }
 
-/** Lift through the REAL migration — the same path a legacy draft takes. */
-const workspaceOf = (draft: ReportDraft) => migrateV1Workspace(withDraft(emptyReportWorkspace(), draft));
+/** Lift through the REAL migration — the same path a legacy draft takes (v1→v2→v3). */
+const workspaceOf = (draft: ReportDraft) =>
+  migrateV2WorkspaceToV3(migrateV1Workspace(withDraft(emptyReportWorkspace(), draft)));
 
 /* ------------------------------------------------------------------ *
  * Lessons library — model
  * ------------------------------------------------------------------ */
 
 describe("lessons library — report status (model)", () => {
-  const build = (reports = emptyReportWorkspaceV2(), marker = reportMarker) =>
+  const build = (reports = emptyReportWorkspaceV3(), marker = reportMarker) =>
     buildLessonsLibraryModel({ moduleParam: "module.01", marker, session, reports });
 
   const level3Row = (model: ReturnType<typeof build>) =>
@@ -129,7 +132,7 @@ describe("lessons library — report status (model)", () => {
   });
 
   it("leaves the canonical L18 continue step untouched", () => {
-    const model = build(emptyReportWorkspaceV2(), canonicalMarker);
+    const model = build(emptyReportWorkspaceV3(), canonicalMarker);
     expect(model.continueStep?.levelNumber).toBe(18);
     expect(model.continueStep?.actionLabel).toBe("Продолжить урок");
     expect(model.continueStep?.reportStatusLabel).toBeNull();
@@ -252,9 +255,9 @@ describe("path — report status", () => {
  * ------------------------------------------------------------------ */
 
 describe("library and path — revision statuses (D3-C)", () => {
-  const revisionDraft = (): ReportDraftV2 =>
-    withRevisionRequested(
-      withSubmittedV2(liftToV2(readyDraft()), "2026-07-17T10:00:00.000Z"),
+  const revisionDraft = (): ReportDraftV3 =>
+    withRevisionRequestedV3(
+      withSubmittedV3(liftToV3(readyDraft()), "2026-07-17T10:00:00.000Z"),
       definition,
       {
         comment: PROVISIONAL_REVIEW_COMMENT,
@@ -263,15 +266,15 @@ describe("library and path — revision statuses (D3-C)", () => {
       },
     );
 
-  const seedV2 = (draft: ReportDraftV2) =>
-    createReportStore().write(withDraftV2(emptyReportWorkspaceV2(), draft));
+  const seedV2 = (draft: ReportDraftV3) =>
+    createReportStore().write(withDraftV3(emptyReportWorkspaceV3(), draft));
 
-  const buildV2 = (draft: ReportDraftV2, marker = reportMarker) =>
+  const buildV2 = (draft: ReportDraftV3, marker = reportMarker) =>
     buildLessonsLibraryModel({
       moduleParam: "module.01",
       marker,
       session,
-      reports: withDraftV2(emptyReportWorkspaceV2(), draft),
+      reports: withDraftV3(emptyReportWorkspaceV3(), draft),
     });
 
   const level3Of = (model: ReturnType<typeof buildV2>) =>
@@ -285,15 +288,15 @@ describe("library and path — revision statuses (D3-C)", () => {
   });
 
   it("library says «Готов к повторной отправке» once a real change landed", () => {
-    const changed = withSummaryV2(revisionDraft(), "итог, связанный со всеми записями");
+    const changed = withSummaryV3(revisionDraft(), "итог, связанный со всеми записями");
     const row = level3Of(buildV2(changed));
     expect(row.statusLabel).toBe("Готов к повторной отправке");
     expect(row.actionLabel).toBe("Перейти к отчёту");
   });
 
   it("library says «На проверке» again after the resubmit", () => {
-    const resubmitted = withResubmitted(
-      withSummaryV2(revisionDraft(), "итог, связанный со всеми записями"),
+    const resubmitted = withResubmittedV3(
+      withSummaryV3(revisionDraft(), "итог, связанный со всеми записями"),
       "2026-07-19T09:00:00.000Z",
     );
     expect(level3Of(buildV2(resubmitted)).statusLabel).toBe("На проверке");
@@ -337,7 +340,7 @@ describe("library and path — revision statuses (D3-C)", () => {
   });
 
   it("path detail says «Отчёт: Готов к повторной отправке» after a change", async () => {
-    seedV2(withSummaryV2(revisionDraft(), "итог, связанный со всеми записями"));
+    seedV2(withSummaryV3(revisionDraft(), "итог, связанный со всеми записями"));
     const user = userEvent.setup();
     render(<PathWorkspace scenario="report" />);
     await user.click(screen.getByRole("button", { name: /Уровень 3/ }));

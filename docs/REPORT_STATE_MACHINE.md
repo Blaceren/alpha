@@ -150,3 +150,49 @@ Submit необратим в этом прототипе: нет `rejected`, н�
 
 **Запрещено:** countdown · avatar наставника · имя проверяющего · автоматический вердикт · пульсация
 точки статуса (читалась бы как countdown).
+
+## 8. Approved — терминальный вердикт (D3-D, DD-297)
+
+Хранимая машина расширяется одним терминальным переходом:
+
+```
+pending-review → approved
+```
+
+и существующим путём `revision-requested → …resubmit… → pending-review → approved`.
+
+`approved` **терминален**: поля read-only по конструкции (`withEntryFieldV3`/`withSummaryV3`
+возвращают тот же объект), resubmit невозможен, revision-adapter не применяется, повторный approved —
+no-op; `review` сохраняется как история; `approvedAt` хранится, но пользователю не показывается; XP
+не меняется.
+
+Переход выполняет **только** dev/test-adapter `?verdict=approved` (DD-298): `scenario === "report"`
+∧ статус `pending-review` ∧ отчёт ready ∧ вердикт не применён; resubmitted pending-review с
+сохранённым review допускается. Ни пользовательского href с `scenario`/`verdict`, ни кнопки
+«Одобрить», ни автоматического approved. При storage failure отчёт **остаётся** `pending-review` —
+без фальшивого успеха.
+
+### Base-completed vs approval-induced (DD-300)
+
+Presentation approved **не** определяется одним итоговым `completed`. Вычисляются **base** (marker +
+обычная сессия) и **effective** (после augmentation) availability:
+
+- **canonical completion** (base уже `completed`, Артём L18) → нейтральный archive: локальный approved
+  **не** переименовывает уровень, «Одобрено» и approved-CTA **не** показываются;
+- **approval-induced** (base current/available ∧ status approved) → approved archive, «Одобрено»,
+  ledger read-only, следующий шаг → `/path`.
+
+## 9. Копирайт approved (D3-D)
+
+- статус-чип: **«Одобрено»** (спокойный, семья успеха — green, DD-284; не красный);
+- строка: **«Отчёт принят. Уровень 3 завершён.»**;
+- browser-local/provisional пояснение (`dev/test · provisional`), без обещания серверной проверки;
+- если есть `review` — тихий блок **«Комментарий последней проверки»** (без ссылок, кромок,
+  pass-counter);
+- следующий шаг: **«Уровень 4 · Контрольная точка»**, **«Требуется: Баланс Pocket от $50»** (только
+  цель);
+- primary CTA **«Посмотреть Путь» → `/path`**; secondary **«К списку уроков» → `/lessons`**.
+
+**Запрещено:** баланс Pocket · внесённая сумма · остаток · progress % · Pocket CTA/link · XP · mentor
+identity/avatar · countdown · celebration hero · confetti · большая зелёная поверхность · dashboard-
+card справа · rubric/score/grade. `approvedAt` не показывается.

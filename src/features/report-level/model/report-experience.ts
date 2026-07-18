@@ -17,6 +17,7 @@
  */
 
 import { getLevel } from "@/data/curriculum/fixture";
+import { formatThresholdUsd } from "@/domain/curriculum";
 import { resolveRouteAvailability } from "@/features/lesson/model/lesson-availability";
 import type { LessonSessionProgress } from "@/features/lesson/model/lesson-session-progress";
 import type { PathProgress } from "@/features/path/model/path-state";
@@ -27,10 +28,11 @@ import {
   isReportReady,
 } from "@/features/report-level/model/report-draft";
 import {
-  canResubmit,
-  hasChangeSinceReview,
-  type ReportDraftV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  canResubmitV3,
+  hasChangeSinceReviewV3,
+  type ReportDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
+import { sessionWithApprovedReports } from "@/features/report-level/model/report-progression";
 import {
   reviewTargets,
   type ReportReview,
@@ -43,15 +45,16 @@ import {
  * the entries, so deriving them keeps them from ever disagreeing with the draft
  * (see `report-workspace-v2.ts`).
  *
- * `approved` / `rejected` have no member here — they do not exist in D3-C
- * (DD-287) and cannot be rendered even by accident.
+ * `rejected` has no member here — it does not exist (DD-297). `approved` is the
+ * D3-D terminal verdict.
  */
 export type ReportLifecycle =
   | "draft"
   | "ready"
   | "pending-review"
   | "revision-requested"
-  | "ready-to-resubmit";
+  | "ready-to-resubmit"
+  | "approved";
 
 /**
  * How the workspace behaves.
@@ -61,16 +64,20 @@ export type ReportLifecycle =
  *    editable again, with the reviewer's comment as the working order.
  *  - `pending`  — submitted in THIS browser: read-only, awaiting a review that
  *    this prototype does not perform.
- *  - `archive`  — the sequence already carried the user past level 3 (the
- *    canonical profile). The report is not live work; whatever this browser
- *    holds is shown read-only, and nothing is claimed about a report the user
- *    may have filed before this workspace existed.
+ *  - `approved` — an APPROVAL-INDUCED completion (D3-D): the report was the
+ *    user's live step, the verdict is approved, and folding it into the session
+ *    completed level 3. The calm approved archive, read-only, next step = Path.
+ *  - `archive`  — the sequence already carried the user past level 3 BEFORE any
+ *    approval (the canonical profile). The report is not live work; whatever this
+ *    browser holds is shown read-only. A local `approved` here does NOT rename the
+ *    level and shows no «Одобрено» — the canonical completion owns the level
+ *    (DD-300, base-completed vs approval-induced distinction).
  */
-export type ReportMode = "editing" | "revision" | "pending" | "archive";
+export type ReportMode = "editing" | "revision" | "pending" | "archive" | "approved";
 
 export interface ReportExperience {
   definition: ReportDefinition;
-  draft: ReportDraftV2;
+  draft: ReportDraftV3;
   lifecycle: ReportLifecycle;
   mode: ReportMode;
   /** True in `editing` and `revision` — the places edits are accepted. */
@@ -106,6 +113,21 @@ export interface ReportExperience {
   canResubmit: boolean;
   /** The calm line above the resubmit CTA — one truth at a time. */
   revisionStateLabel: string | null;
+
+  /* ---------------- approved (D3-D) ---------------- */
+
+  /**
+   * True ONLY for an APPROVAL-INDUCED completion (`mode === "approved"`): base
+   * availability was current/available, the verdict is approved, and folding the
+   * approval into the session completed the level. A canonical completion (base
+   * already completed) is `false` here even with a stored approved — the level is
+   * the sequence's, not the verdict's (DD-300).
+   */
+  approvalInduced: boolean;
+  /** e.g. «Отчёт принят. Уровень 3 завершён.» — only in approved mode, else null. */
+  approvedHeadline: string | null;
+  /** The next curriculum step when it is a checkpoint: its number + $-requirement. */
+  nextStepCheckpoint: { levelNumber: number; requirement: string } | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -142,10 +164,12 @@ export function reportStatusLabel(lifecycle: ReportLifecycle): string {
       return "Нужна доработка";
     case "ready-to-resubmit":
       return "Готов к повторной отправке";
+    case "approved":
+      return "Одобрено";
   }
 }
 
-function buildRemainingLabel(draft: ReportDraftV2, total: number): string | null {
+function buildRemainingLabel(draft: ReportDraftV3, total: number): string | null {
   const missingEntries = total - filledEntryCount(draft);
   const missingSummary = !hasSummary(draft);
 
@@ -165,12 +189,14 @@ function buildRemainingLabel(draft: ReportDraftV2, total: number): string | null
  * Derivation
  * ------------------------------------------------------------------ */
 
-export function deriveReportLifecycle(draft: ReportDraftV2): ReportLifecycle {
+export function deriveReportLifecycle(draft: ReportDraftV3): ReportLifecycle {
+  // Terminal verdict wins over every computed reading.
+  if (draft.status === "approved") return "approved";
   if (draft.status === "revision-requested") {
     // The stored status is the same; what changed is a computed fact about the
     // draft. «Нужна доработка» and «Готов к повторной отправке» are two readings
     // of one record, never two records.
-    return canResubmit(draft) ? "ready-to-resubmit" : "revision-requested";
+    return canResubmitV3(draft) ? "ready-to-resubmit" : "revision-requested";
   }
   if (draft.status === "pending-review") return "pending-review";
   return isReportReady(draft) ? "ready" : "draft";
@@ -183,28 +209,50 @@ export function deriveReportExperience({
   session,
 }: {
   definition: ReportDefinition;
-  draft: ReportDraftV2;
+  draft: ReportDraftV3;
   marker: PathProgress;
   session: LessonSessionProgress;
 }): ReportExperience {
   const levelNumber = definition.level.number;
   const lifecycle = deriveReportLifecycle(draft);
-  const availability = resolveRouteAvailability(levelNumber, marker, session);
+
+  /* --------- the mandatory architectural boundary (DD-300) --------- */
+
+  // BASE availability — the canonical marker + THIS lesson session, BEFORE any
+  // approved-report augmentation. Under the canonical profile (Артём on L18) this
+  // is already `completed`; under the report scenario it is `available`.
+  const baseAvailability = resolveRouteAvailability(levelNumber, marker, session);
+
+  // EFFECTIVE — after folding THIS report's approval into the session, through the
+  // shared augmentation helper (never a bespoke rule). The next level opens via
+  // the same resolver, so the augmented session is what `nextLevelLocked` reads.
+  const augmentedSession = sessionWithApprovedReports(session, {
+    version: 3,
+    reports: [draft],
+  });
+  const approvedVerdict = draft.status === "approved";
+
+  // Approval-INDUCED completion, the precise distinction: the level was NOT
+  // already completed by the sequence, the verdict is approved, so the approval
+  // is what completes it. A canonical completion (base already completed) is
+  // deliberately NOT approval-induced — never rename the sequence's level.
+  const approvalInduced = baseAvailability !== "completed" && approvedVerdict;
 
   const isRevisionLifecycle =
     lifecycle === "revision-requested" || lifecycle === "ready-to-resubmit";
 
   // The canonical sequence wins over the browser-local record: if it has already
   // carried the user past this level, the report is history, whatever the local
-  // marker says. Letting a stored `pending-review` (or a verdict) override that
-  // would let a draft contradict progression the user already earned — the same
-  // rule the library and the path apply to a report status (DD-271).
-  const mode: ReportMode =
-    availability === "completed"
+  // marker says (DD-271). Approval-induced completion is the one case where the
+  // local verdict legitimately advances the level — and it is decided from the
+  // base/effective distinction above, never from the final availability alone.
+  const mode: ReportMode = approvalInduced
+    ? "approved"
+    : baseAvailability === "completed"
       ? "archive"
       : lifecycle === "pending-review"
         ? "pending"
-        : availability !== "available"
+        : baseAvailability !== "available"
           ? "archive"
           : isRevisionLifecycle
             ? "revision"
@@ -217,20 +265,35 @@ export function deriveReportExperience({
   const nextLevel = nextLevelNumber !== null ? getLevel(nextLevelNumber) : null;
 
   // THE derivation that matters: is the next level actually locked right now?
-  // We ask the one resolver that owns the answer instead of assuming it. The
-  // report never closes a level — it simply never completes level 3, so under a
-  // marker that has already passed level 3 this is false and no claim is made.
+  // We ask the one resolver that owns the answer, reading the AUGMENTED session —
+  // so once the report is approved the resolver reports the next level open, and
+  // the blocked note disappears (DD-297). Before approval nothing is augmented,
+  // so this is identical to the D3-C behaviour.
   const nextLevelLocked =
     nextLevelNumber !== null &&
-    resolveRouteAvailability(nextLevelNumber, marker, session) === "locked";
+    resolveRouteAvailability(nextLevelNumber, marker, augmentedSession) === "locked";
 
   const blockedNote =
     nextLevelLocked && nextLevel
       ? `Уровень ${nextLevel.number} «${nextLevel.title}» откроется после одобрения отчёта.`
       : null;
 
-  const changed = hasChangeSinceReview(draft);
-  const resubmitAllowed = mode === "revision" && canResubmit(draft);
+  // The next step's checkpoint requirement (target only — never a balance), for
+  // the approved screen's «следующий шаг». Present whenever the next level is a
+  // checkpoint, regardless of mode; the component reads it only when approved.
+  const nextStepCheckpoint =
+    nextLevel && nextLevel.kind === "checkpoint" && nextLevel.checkpoint
+      ? {
+          levelNumber: nextLevel.number,
+          requirement: `Баланс Pocket от ${formatThresholdUsd(nextLevel.checkpoint.thresholdUsd)}`,
+        }
+      : null;
+
+  const approvedHeadline =
+    mode === "approved" ? `Отчёт принят. Уровень ${levelNumber} завершён.` : null;
+
+  const changed = hasChangeSinceReviewV3(draft);
+  const resubmitAllowed = mode === "revision" && canResubmitV3(draft);
 
   // One truth at a time above the CTA: what stands between the user and the
   // resubmit — nothing, a missing change, or missing content. Calm words, no
@@ -266,5 +329,8 @@ export function deriveReportExperience({
     changedSinceReview: changed,
     canResubmit: resubmitAllowed,
     revisionStateLabel,
+    approvalInduced,
+    approvedHeadline,
+    nextStepCheckpoint,
   };
 }

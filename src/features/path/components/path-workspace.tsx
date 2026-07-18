@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getLevel, getModuleForLevel } from "@/data/curriculum/fixture";
 import {
   getPathProgress,
   type PathScenario,
 } from "@/features/path/model/path-state";
+import { effectiveProgress } from "@/features/lessons-library/model/lessons-library-model";
+import { useSessionProgress } from "@/features/lessons-library/hooks/use-session-progress";
+import { useReportWorkspace } from "@/features/report-level/hooks/use-report-workspace";
+import { sessionWithApprovedReports } from "@/features/report-level/model/report-progression";
 import { computeVisibleWindow } from "@/features/path/model/visible-window";
 import { usePathKeyboard } from "@/features/path/hooks/use-path-keyboard";
 import { PathHeader } from "@/features/path/components/path-header";
@@ -20,7 +24,18 @@ import { PathAccessibleOutline } from "@/features/path/components/path-accessibl
  * fixture through the scenario adapter — no backend, no stored progress.
  */
 export function PathWorkspace({ scenario }: { scenario: PathScenario }) {
-  const progress = getPathProgress(scenario);
+  const marker = getPathProgress(scenario);
+  // Session completions and APPROVED reports (D3-D) advance the marker through the
+  // SAME shared helpers the library uses — no special "after approved open L4"
+  // rule. Under the canonical profile (Артём on L18) both are no-ops, so the path
+  // is unchanged; under the report scenario an approved L3 moves the current step
+  // to the L4 checkpoint via the real resolver.
+  const session = useSessionProgress();
+  const reports = useReportWorkspace();
+  const progress = useMemo(
+    () => effectiveProgress(marker, sessionWithApprovedReports(session, reports)),
+    [marker, session, reports],
+  );
   const currentModuleIndex = getModuleForLevel(progress.currentLevel).index;
 
   const [moduleIndex, setModuleIndex] = useState(currentModuleIndex);

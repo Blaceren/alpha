@@ -87,10 +87,10 @@ export default async function LessonPage({
         <ReportWorkspace
           definition={reportDefinition}
           scenario={resolvePathScenario(rawScenario)}
-          /* `?verdict=` is the D3-C DEVELOPMENT AND TEST verdict adapter
-             (DD-286), the `?scenario` precedent applied to the review: typed,
-             fail-closed (only `revision-requested` resolves; "approved" and
-             everything else → null), never produced by a user-facing link. */
+          /* `?verdict=` is the DEVELOPMENT AND TEST verdict adapter (DD-286,
+             DD-298), the `?scenario` precedent applied to the review: typed,
+             fail-closed (only `revision-requested` and `approved` resolve; every
+             alias and "rejected" → null), never produced by a user-facing link. */
           verdictAdapter={resolveReportVerdictAdapter(rawVerdict)}
         />
       </AppShell>

@@ -8,12 +8,13 @@ import { useSessionProgress } from "@/features/lessons-library/hooks/use-session
 import type { ReportDefinition } from "@/features/report-level/model/report";
 import { isEntryFilled } from "@/features/report-level/model/report-draft";
 import {
-  withEntryFieldV2,
-  withResubmitted,
-  withRevisionRequested,
-  withSubmittedV2,
-  withSummaryV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  withApproved,
+  withEntryFieldV3,
+  withResubmittedV3,
+  withRevisionRequestedV3,
+  withSubmittedV3,
+  withSummaryV3,
+} from "@/features/report-level/model/report-workspace-v3";
 import type { ReportVerdictAdapter, ReviewTarget } from "@/features/report-level/model/report-review";
 import {
   PROVISIONAL_REVIEW_COMMENT,
@@ -66,18 +67,19 @@ export function ReportWorkspace({
    */
   scenario?: PathScenario;
   /**
-   * DEVELOPMENT AND TEST verdict adapter (DD-286) — the resolved `?verdict=`
-   * value, or null. It can only be `revision-requested` (the resolver fails
-   * closed on everything else, including "approved"), applies only under the
-   * explicit `report` scenario to a pending report that has no verdict yet, and
-   * writes only the report workspace — never `ata.lesson-progress.v1`. No user
-   * link or CTA ever carries it.
+   * DEVELOPMENT AND TEST verdict adapter (DD-286, DD-298) — the resolved
+   * `?verdict=` value, or null. It resolves ONLY to `revision-requested` or
+   * `approved` (the resolver fails closed on everything else, including any
+   * "auto-approved"/"mentor-approved" alias), applies only under the explicit
+   * `report` scenario to a pending report, and writes only the report workspace —
+   * never `ata.lesson-progress.v1`. No user link or CTA ever carries it, and no
+   * user button produces an approval.
    */
   verdictAdapter?: ReportVerdictAdapter | null;
 }) {
   const marker = getPathProgress(scenario);
   const session = useSessionProgress();
-  const { draft, saveState, update, flush } = useReportDraft(definition);
+  const { draft, saveState, update, flush, applyVerdict } = useReportDraft(definition);
 
   const experience = useMemo(
     () => deriveReportExperience({ definition, draft, marker, session }),
@@ -93,29 +95,46 @@ export function ReportWorkspace({
   const isRevision = experience.mode === "revision";
   const isPending = experience.mode === "pending";
   const isArchive = experience.mode === "archive";
+  const isApproved = experience.mode === "approved";
   const targets = experience.reviewTargets;
 
-  /* ---------------- dev/test verdict adapter (DD-286) ---------------- */
+  /* ---------------- dev/test verdict adapters (DD-286, DD-298) ---------------- */
 
   useEffect(() => {
-    if (verdictAdapter !== "revision-requested") return;
     // Only under the explicit dev/test marker: under any other marker level 3
     // is not the user's live step and a verdict would be meaningless anyway.
     if (scenario !== "report") return;
+    // Both adapters act ONLY on a pending report — never on a draft, a
+    // revision-requested, or an already-approved (terminal) one. This makes
+    // repeated `?verdict=…` on a settled report a no-op.
     if (draft.status !== "pending-review") return;
-    // One verdict per iteration: a resubmitted report (pending + review) is not
-    // re-verdicted automatically — nothing here is automatic beyond the query
-    // the developer explicitly typed.
-    if (draft.review !== null) return;
-    flush(
-      withRevisionRequested(draft, definition, {
-        comment: PROVISIONAL_REVIEW_COMMENT,
-        sections: PROVISIONAL_REVIEW_SECTIONS,
-        // The clock is injected at the edge; stored, never rendered.
-        receivedAt: new Date().toISOString(),
-      }),
-    );
-  }, [verdictAdapter, scenario, draft, definition, flush]);
+
+    if (verdictAdapter === "revision-requested") {
+      // One verdict per iteration: a resubmitted report (pending + review) is not
+      // re-verdicted automatically — nothing here is automatic beyond the query
+      // the developer explicitly typed.
+      if (draft.review !== null) return;
+      flush(
+        withRevisionRequestedV3(draft, definition, {
+          comment: PROVISIONAL_REVIEW_COMMENT,
+          sections: PROVISIONAL_REVIEW_SECTIONS,
+          // The clock is injected at the edge; stored, never rendered.
+          receivedAt: new Date().toISOString(),
+        }),
+      );
+      return;
+    }
+
+    if (verdictAdapter === "approved") {
+      // Approval is allowed on a pending report WHETHER OR NOT it carries a review
+      // (a resubmitted pending-review keeps its last comment as history — the
+      // adapter does not require review === null, unlike the revision adapter).
+      // `applyVerdict` persists first and advances the UI only on success, so a
+      // storage failure leaves the report pending — no fabricated approval.
+      applyVerdict(withApproved(draft, new Date().toISOString()));
+      return;
+    }
+  }, [verdictAdapter, scenario, draft, definition, flush, applyVerdict]);
 
   /* ---------------- the revision pass (D3-C) ---------------- */
 
@@ -187,26 +206,26 @@ export function ReportWorkspace({
 
   const onFieldChange = useCallback(
     (ordinal: number, key: "when" | "decided" | "noticed", value: string) => {
-      update(withEntryFieldV2(draft, ordinal, key, value));
+      update(withEntryFieldV3(draft, ordinal, key, value));
     },
     [draft, update],
   );
 
   const onSummaryChange = useCallback(
     (value: string) => {
-      update(withSummaryV2(draft, value));
+      update(withSummaryV3(draft, value));
     },
     [draft, update],
   );
 
   const onConfirmSubmit = useCallback(() => {
     // The clock is injected here, at the edge — the model stays deterministic.
-    flush(withSubmittedV2(draft, new Date().toISOString()));
+    flush(withSubmittedV3(draft, new Date().toISOString()));
     setConfirming(null);
   }, [draft, flush]);
 
   const onConfirmResubmit = useCallback(() => {
-    flush(withResubmitted(draft, new Date().toISOString()));
+    flush(withResubmittedV3(draft, new Date().toISOString()));
     setConfirming(null);
   }, [draft, flush]);
 
@@ -270,8 +289,21 @@ export function ReportWorkspace({
       </header>
 
       {/* Status band: one truth at a time. Draft → the local save state;
-          pending → the review status; revision → the verdict, non-punitively. */}
-      {isPending ? (
+          pending → the review status; revision → the verdict, non-punitively;
+          approved → the calm terminal verdict (D3-D). */}
+      {isApproved ? (
+        <div className="rl-band is-approved">
+          <span className="rl-status is-approved">Одобрено</span>
+          <div className="rl-band-txt">
+            <p className="rl-approved-line">{experience.approvedHeadline}</p>
+            <p className="rl-truth">
+              Отметка об одобрении хранится только в этом браузере{" "}
+              <span className="rl-proto">dev/test · provisional</span>. Это прототип: серверная
+              проверка наставником пока не подключена.
+            </p>
+          </div>
+        </div>
+      ) : isPending ? (
         <div className="rl-band is-pending">
           <span className="rl-status">На проверке</span>
           <div className="rl-band-txt">
@@ -507,10 +539,11 @@ export function ReportWorkspace({
         )}
       </div>
 
-      {/* Pending after a resubmit: the former feedback stays visible as quiet
-          context of what was addressed — words only, no jump links, no edges,
-          not an active task list again. */}
-      {isPending && experience.review && (
+      {/* Pending after a resubmit, or approved with prior feedback: the former
+          comment stays visible as quiet history of what was addressed — words
+          only, no jump links, no edges, no pass counter, not an active task list
+          again. */}
+      {(isPending || isApproved) && experience.review && (
         <aside className="rl-feedback is-history" aria-labelledby="rl-feedback-hist-h">
           <p className="rl-feedback-k" id="rl-feedback-hist-h">
             Комментарий последней проверки <span className="rl-proto">dev/test · provisional</span>
@@ -519,7 +552,32 @@ export function ReportWorkspace({
         </aside>
       )}
 
-      {isPending ? (
+      {isApproved ? (
+        <div className="rl-end is-approved">
+          <div className="rl-end-txt">
+            {/* The next step — a checkpoint requirement, target only. No balance,
+                no remainder, no percentage, no Pocket link, no XP. */}
+            {experience.nextStepCheckpoint && (
+              <p className="rl-next">
+                <span className="rl-next-k">
+                  Уровень {experience.nextStepCheckpoint.levelNumber} · Контрольная точка
+                </span>
+                <span className="rl-next-req">
+                  Требуется: {experience.nextStepCheckpoint.requirement}
+                </span>
+              </p>
+            )}
+          </div>
+          <div className="rl-exits">
+            <Link className="rl-btn" href="/path">
+              Посмотреть Путь
+            </Link>
+            <Link className="rl-exit" href="/lessons">
+              <span aria-hidden="true">←</span> К списку уроков
+            </Link>
+          </div>
+        </div>
+      ) : isPending ? (
         <div className="rl-end">
           <div className="rl-end-txt">
             {experience.blockedNote && <p className="rl-blocked">{experience.blockedNote}</p>}

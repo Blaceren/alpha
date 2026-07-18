@@ -12,6 +12,7 @@ import { LibraryModuleContent } from "@/features/lessons-library/components/libr
 import { LibraryModuleSwitcher } from "@/features/lessons-library/components/library-module-switcher";
 import { getPathProgress, type PathScenario } from "@/features/path/model/path-state";
 import { useReportWorkspace } from "@/features/report-level/hooks/use-report-workspace";
+import { sessionWithApprovedReports } from "@/features/report-level/model/report-progression";
 
 /**
  * Уроки (/lessons) — the lessons library (Phase D2C-B), built on the selected
@@ -108,9 +109,19 @@ export function LessonsLibraryWorkspace({
   // Browser-local report drafts (D3-B): the library only DISPLAYS their status,
   // it never writes one — the workspace at /lessons/level.003 owns that.
   const reports = useReportWorkspace();
+  // An APPROVED report projects a completion onto the session (D3-D), through the
+  // shared augmentation helper — so the existing resolver advances the current
+  // step from L3 to the L4 checkpoint and shows L3 «Завершён» (never «Одобрено»,
+  // which lives only on the report screen). Under the canonical profile this is a
+  // no-op: L3 is already behind the marker.
+  const augmentedSession = useMemo(
+    () => sessionWithApprovedReports(session, reports),
+    [session, reports],
+  );
   const model = useMemo(
-    () => buildLessonsLibraryModel({ moduleParam, marker, session, reports }),
-    [moduleParam, marker, session, reports],
+    () =>
+      buildLessonsLibraryModel({ moduleParam, marker, session: augmentedSession, reports }),
+    [moduleParam, marker, augmentedSession, reports],
   );
 
   return (

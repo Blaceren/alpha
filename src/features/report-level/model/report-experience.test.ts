@@ -10,7 +10,11 @@ import {
   withSummary,
   type ReportDraft,
 } from "@/features/report-level/model/report-draft";
-import type { ReportDraftV2 } from "@/features/report-level/model/report-workspace-v2";
+import {
+  withApproved,
+  withSubmittedV3,
+  type ReportDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
 import {
   deriveReportExperience,
   deriveReportLifecycle,
@@ -34,15 +38,24 @@ function readyDraft(): ReportDraft {
   return withSummary(draft, "итог");
 }
 
-/** Lift a legacy v1 draft to the v2 shape — exactly what migration does. */
-const lift = (draft: ReportDraft): ReportDraftV2 => ({
+/** Lift a legacy v1 draft to the v3 shape — exactly what migration does. */
+const lift = (draft: ReportDraft): ReportDraftV3 => ({
   ...draft,
   review: null,
   meaningfulRevision: draft.revision,
+  approvedAt: null,
 });
 
 const derive = (draft: ReportDraft, marker = reportMarker) =>
   deriveReportExperience({ definition, draft: lift(draft), marker, session });
+
+/** A fully approved v3 draft, built through the real transitions. */
+function approvedDraftV3(): ReportDraftV3 {
+  const pending = withSubmittedV3(lift(readyDraft()), "2026-07-17T10:00:00.000Z");
+  return withApproved(pending, "2026-07-18T12:00:00.000Z");
+}
+const deriveV3 = (draft: ReportDraftV3, marker = reportMarker) =>
+  deriveReportExperience({ definition, draft, marker, session });
 
 describe("report scenario marker", () => {
   it("puts the user on level 3 — the only marker the report story is true under", () => {
@@ -207,5 +220,71 @@ describe("report experience — mode", () => {
     const experience = derive(submitted, canonicalMarker);
     expect(experience.mode).toBe("archive");
     expect(experience.editable).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * D3-D — approved: base-completed vs approval-induced distinction
+ * ------------------------------------------------------------------ */
+
+describe("approved lifecycle", () => {
+  it("derives the approved lifecycle and «Одобрено» label", () => {
+    expect(deriveReportLifecycle(approvedDraftV3())).toBe("approved");
+    expect(reportStatusLabel("approved")).toBe("Одобрено");
+  });
+});
+
+describe("approval-induced completion (report marker)", () => {
+  const exp = deriveV3(approvedDraftV3());
+
+  it("enters approved mode, not archive — the verdict advanced the level", () => {
+    expect(exp.mode).toBe("approved");
+    expect(exp.approvalInduced).toBe(true);
+    expect(exp.editable).toBe(false);
+  });
+
+  it("shows the approved headline with the level number", () => {
+    expect(exp.approvedHeadline).toBe("Отчёт принят. Уровень 3 завершён.");
+  });
+
+  it("exposes the next step as the L4 checkpoint with the $50 target", () => {
+    expect(exp.nextStepCheckpoint).toEqual({
+      levelNumber: 4,
+      requirement: "Баланс Pocket от $50",
+    });
+  });
+
+  it("drops the blocked note — the next level is now open (DD-297)", () => {
+    expect(exp.blockedNote).toBeNull();
+    expect(exp.nextLevelLocked).toBe(false);
+  });
+});
+
+describe("canonical completion (L18) is NOT approval-induced", () => {
+  const exp = deriveV3(approvedDraftV3(), canonicalMarker);
+
+  it("stays a neutral archive — the sequence owns the level, not the verdict", () => {
+    expect(exp.mode).toBe("archive");
+    expect(exp.approvalInduced).toBe(false);
+    // «Одобрено» is never surfaced under the canonical profile.
+    expect(exp.approvedHeadline).toBeNull();
+  });
+
+  it("is decided by base vs effective, not by final availability alone", () => {
+    // Both the canonical case and the approval-induced case END at completed;
+    // only the base distinguishes them.
+    const induced = deriveV3(approvedDraftV3());
+    expect(induced.mode).toBe("approved");
+    expect(exp.mode).toBe("archive");
+  });
+});
+
+describe("blockedNote disappears only after a valid approval", () => {
+  it("is present while pending, absent once approved", () => {
+    const pending = derive(withSubmitted(readyDraft(), "2026-07-17T10:00:00.000Z"));
+    expect(pending.blockedNote).not.toBeNull();
+
+    const approved = deriveV3(approvedDraftV3());
+    expect(approved.blockedNote).toBeNull();
   });
 });

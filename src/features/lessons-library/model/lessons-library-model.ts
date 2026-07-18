@@ -43,10 +43,10 @@ import { getLessonEntry } from "@/features/lesson/data/lesson-fixtures";
 import { formatDuration, levelCodeFor } from "@/features/lesson/model/lesson";
 import { isReportLevelNumber } from "@/features/report-level/model/report";
 import {
-  emptyReportWorkspaceV2,
-  getStoredDraftV2,
-  type ReportWorkspaceStateV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  emptyReportWorkspaceV3,
+  getStoredDraftV3,
+  type ReportWorkspaceStateV3,
+} from "@/features/report-level/model/report-workspace-v3";
 import {
   deriveReportLifecycle,
   reportStatusLabel,
@@ -308,11 +308,11 @@ function buildCheckpointInfo(levelNumber: number): LibraryCheckpointInfo | null 
 function displayedReportLifecycle(
   levelNumber: number,
   availability: "locked" | "available" | "completed",
-  reports: ReportWorkspaceStateV2,
+  reports: ReportWorkspaceStateV3,
 ): ReportLifecycle | null {
   if (availability === "completed") return null;
   if (!isReportLevelNumber(levelNumber)) return null;
-  const draft = getStoredDraftV2(reports, levelNumber);
+  const draft = getStoredDraftV3(reports, levelNumber);
   return draft ? deriveReportLifecycle(draft) : null;
 }
 
@@ -329,7 +329,7 @@ function buildLevelRow(
   level: CurriculumLevel,
   progress: PathProgress,
   session: LessonSessionProgress,
-  reports: ReportWorkspaceStateV2,
+  reports: ReportWorkspaceStateV3,
 ): LibraryLevelRow {
   const isCheckpoint = level.kind === "checkpoint";
 
@@ -403,7 +403,7 @@ function buildLevelRow(
 function buildContinueStep(
   progress: PathProgress,
   session: LessonSessionProgress,
-  reports: ReportWorkspaceStateV2,
+  reports: ReportWorkspaceStateV3,
 ): { step: LibraryContinueStep | null; note: string | null } {
   if (progress.allCompleted) {
     return { step: null, note: "Все 100 уровней пройдены." };
@@ -459,7 +459,7 @@ export function buildLessonsLibraryModel({
   moduleParam,
   marker,
   session,
-  reports = emptyReportWorkspaceV2(),
+  reports = emptyReportWorkspaceV3(),
 }: {
   moduleParam: unknown;
   marker: PathProgress;
@@ -469,7 +469,7 @@ export function buildLessonsLibraryModel({
    * server has none, and the library must render its full answer without them.
    * Reports only ever ADD a status to live work — see `displayedReportLifecycle`.
    */
-  reports?: ReportWorkspaceStateV2;
+  reports?: ReportWorkspaceStateV3;
 }): LessonsLibraryModel {
   const progress = effectiveProgress(marker, session);
   const selection = resolveSelectedModule(moduleParam, progress);

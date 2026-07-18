@@ -35,6 +35,10 @@ import {
   type ReportDraftV2,
 } from "@/features/report-level/model/report-workspace-v2";
 import {
+  REPORT_STORAGE_KEY_V3,
+  getStoredDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
+import {
   entryFieldSectionId,
   summarySectionId,
 } from "@/features/report-level/model/report-review";
@@ -157,33 +161,37 @@ describe("store-level migration behaviour", () => {
     window.localStorage.clear();
   });
 
-  it("reads a legacy v1 value when no v2 exists — and leaves v1 on disk", () => {
+  it("reads a legacy v1 value when no v2/v3 exists — and leaves v1 on disk", () => {
     window.localStorage.setItem(REPORT_STORAGE_KEY, rawV1(readyV1Draft()));
 
-    const read = getStoredDraftV2(createReportStore().read(), 3);
+    // The store now lifts v1 → v2 → v3 on read (DD-296); the v2 record round-trips.
+    const read = getStoredDraftV3(createReportStore().read(), 3);
     expect(read?.summary).toBe("итог по пяти записям");
-    // The v1 key is NEVER deleted by reading (DD-285).
+    // The v1 key is NEVER deleted by reading (DD-285/DD-296).
     expect(window.localStorage.getItem(REPORT_STORAGE_KEY)).not.toBeNull();
-    // Reading alone writes nothing.
+    // Reading alone writes nothing — no v2 and no v3 key appears.
     expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).toBeNull();
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V3)).toBeNull();
   });
 
-  it("writing lands in v2 and does not delete v1", () => {
+  it("writing lands in v3 and does not delete v1", () => {
     window.localStorage.setItem(REPORT_STORAGE_KEY, rawV1(readyV1Draft()));
     const store = createReportStore();
     store.write(withDraftV2(emptyReportWorkspaceV2(), readyV2Draft()));
 
-    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).not.toBeNull();
+    // Since D3-D writes go to v3 only; the v1 (and any v2) key are left untouched.
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V3)).not.toBeNull();
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).toBeNull();
     expect(window.localStorage.getItem(REPORT_STORAGE_KEY)).not.toBeNull();
   });
 
-  it("clear() removes only the v2 key — deleting legacy data is not our call", () => {
+  it("clear() removes only the v3 key — deleting legacy data is not our call", () => {
     window.localStorage.setItem(REPORT_STORAGE_KEY, rawV1(readyV1Draft()));
     const store = createReportStore();
     store.write(withDraftV2(emptyReportWorkspaceV2(), readyV2Draft()));
     store.clear();
 
-    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V2)).toBeNull();
+    expect(window.localStorage.getItem(REPORT_STORAGE_KEY_V3)).toBeNull();
     expect(window.localStorage.getItem(REPORT_STORAGE_KEY)).not.toBeNull();
   });
 

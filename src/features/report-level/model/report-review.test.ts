@@ -79,15 +79,18 @@ describe("review targets — human labels, never raw ids", () => {
   });
 });
 
-describe("dev/test verdict adapter resolver (DD-286)", () => {
-  it("resolves only the explicit revision-requested value", () => {
+describe("dev/test verdict adapter resolver (DD-286, DD-298)", () => {
+  it("resolves the two explicit verdict values exactly", () => {
     expect(resolveReportVerdictAdapter("revision-requested")).toBe("revision-requested");
+    // D3-D adds the approved verdict — an exact match, never an alias.
+    expect(resolveReportVerdictAdapter("approved")).toBe("approved");
   });
 
-  it("fails closed on everything else — approved and rejected can never resolve", () => {
+  it("fails closed on everything else — no alias, no rejected, ever resolves", () => {
     for (const raw of [
-      "approved",
       "rejected",
+      "auto-approved",
+      "mentor-approved",
       "APPROVED",
       "revision",
       "",

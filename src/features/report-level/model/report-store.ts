@@ -8,11 +8,12 @@
  * rewatched — whereas losing a report draft loses the user's WORK. Autosave on
  * top of sessionStorage would be a promise the storage does not keep.
  *
- * D3-C moves the schema to `ata.report-workspace.v2` (DD-285). Reads MIGRATE:
- * a present v2 value is authoritative (corrupt v2 fails closed and never falls
- * back to v1); only when no v2 value exists is the v1 key read through the
- * untouched v1 parser and lifted into v2 shape. Writes go to the v2 key only —
- * the v1 key is never deleted and never written again.
+ * D3-D moves the schema to `ata.report-workspace.v3` (DD-296). Reads MIGRATE
+ * one-way: a present v3 value is authoritative (corrupt v3 fails closed and never
+ * falls back to v2/v1); only when no v3 value exists is the v2 key read (which
+ * itself lifts v1 when v2 is absent) through the untouched lower-version parsers
+ * and raised into v3 shape with `approvedAt = null`. Writes go to the v3 key
+ * only — the v1 and v2 keys are never deleted and never written again.
  *
  * It remains browser-local and the UI says exactly that. Nothing is sent
  * anywhere; no mentor sees it; there is no server.
@@ -25,19 +26,20 @@
 
 import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
 import { REPORT_STORAGE_KEY } from "@/features/report-level/model/report-draft";
+import { REPORT_STORAGE_KEY_V2 } from "@/features/report-level/model/report-workspace-v2";
 import {
-  REPORT_STORAGE_KEY_V2,
-  emptyReportWorkspaceV2,
-  readReportWorkspaceV2,
-  serializeReportWorkspaceV2,
-  type ReportWorkspaceStateV2,
-  type ReportWorkspaceWritable,
-} from "@/features/report-level/model/report-workspace-v2";
+  REPORT_STORAGE_KEY_V3,
+  emptyReportWorkspaceV3,
+  readReportWorkspaceV3,
+  serializeReportWorkspaceV3,
+  type ReportWorkspaceStateV3,
+  type ReportWorkspaceWritableV3,
+} from "@/features/report-level/model/report-workspace-v3";
 
 export interface ReportStore {
-  read(): ReportWorkspaceStateV2;
+  read(): ReportWorkspaceStateV3;
   /** True when the write actually landed. False means the UI must say so. */
-  write(state: ReportWorkspaceWritable): boolean;
+  write(state: ReportWorkspaceWritableV3): boolean;
   clear(): void;
   /** False when this environment has no usable storage at all. */
   readonly durable: boolean;
@@ -52,25 +54,28 @@ export class BrowserLocalReportStore implements ReportStore {
     this.storage = storage;
   }
 
-  read(): ReportWorkspaceStateV2 {
+  read(): ReportWorkspaceStateV3 {
+    let rawV3: string | null;
     let rawV2: string | null;
     let rawV1: string | null;
     try {
-      rawV2 = this.storage.getItem(REPORT_STORAGE_KEY_V2);
-      // The legacy key is consulted ONLY when v2 is absent — the migration
-      // helper owns that rule, this port just hands both values over.
-      rawV1 = rawV2 === null ? this.storage.getItem(REPORT_STORAGE_KEY) : null;
+      rawV3 = this.storage.getItem(REPORT_STORAGE_KEY_V3);
+      // Each lower key is consulted ONLY when the one above is absent — the
+      // migration helper owns that rule, this port just hands the values over.
+      rawV2 = rawV3 === null ? this.storage.getItem(REPORT_STORAGE_KEY_V2) : null;
+      rawV1 =
+        rawV3 === null && rawV2 === null ? this.storage.getItem(REPORT_STORAGE_KEY) : null;
     } catch {
-      return emptyReportWorkspaceV2();
+      return emptyReportWorkspaceV3();
     }
-    return readReportWorkspaceV2(rawV2, rawV1, getReportDefinition);
+    return readReportWorkspaceV3(rawV3, rawV2, rawV1, getReportDefinition);
   }
 
-  write(state: ReportWorkspaceWritable): boolean {
+  write(state: ReportWorkspaceWritableV3): boolean {
     try {
-      // v2 only. The v1 key is deliberately left in place (DD-285): migration is
-      // one-way and non-destructive, and once a v2 value exists it wins forever.
-      this.storage.setItem(REPORT_STORAGE_KEY_V2, serializeReportWorkspaceV2(state));
+      // v3 only. The v1/v2 keys are deliberately left in place (DD-296): migration
+      // is one-way and non-destructive, and once a v3 value exists it wins forever.
+      this.storage.setItem(REPORT_STORAGE_KEY_V3, serializeReportWorkspaceV3(state));
       return true;
     } catch {
       // Quota exceeded, blocked storage, private mode. The draft simply does not
@@ -81,9 +86,9 @@ export class BrowserLocalReportStore implements ReportStore {
 
   clear(): void {
     try {
-      // Clears only what this store OWNS. The v1 key survives even a clear:
-      // deleting legacy data is not this feature's call to make (DD-285).
-      this.storage.removeItem(REPORT_STORAGE_KEY_V2);
+      // Clears only what this store OWNS. The v1/v2 keys survive even a clear:
+      // deleting legacy data is not this feature's call to make (DD-296).
+      this.storage.removeItem(REPORT_STORAGE_KEY_V3);
     } catch {
       /* nothing to do */
     }
@@ -99,12 +104,12 @@ export class MemoryReportStore implements ReportStore {
   readonly durable = false;
   private raw: string | null = null;
 
-  read(): ReportWorkspaceStateV2 {
-    return readReportWorkspaceV2(this.raw, null, getReportDefinition);
+  read(): ReportWorkspaceStateV3 {
+    return readReportWorkspaceV3(this.raw, null, null, getReportDefinition);
   }
 
-  write(state: ReportWorkspaceWritable): boolean {
-    this.raw = serializeReportWorkspaceV2(state);
+  write(state: ReportWorkspaceWritableV3): boolean {
+    this.raw = serializeReportWorkspaceV3(state);
     return true;
   }
 

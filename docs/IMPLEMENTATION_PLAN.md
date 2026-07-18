@@ -140,13 +140,28 @@
   typecheck/build чисто · geometry-проверки DD-281 на 390/320/720×450 · canonical L18 не понижен ·
   raw section ID не рендерятся · visual QA first-pass → final (14 кадров) без critical/major.
 - **Реализовано:** `D3_REVISION_EXPERIENCE.md`, DD-289…DD-292.
-- **Stop condition:** QA закрыт ✅. **D3-D не начат.**
+- **Stop condition:** QA закрыт ✅.
+
+### D3-D-B — Approved Report State (выполнена)
+
+- **Scope:** production-реализация терминального перехода `pending-review → approved`; storage **v3**
+  (`ata.report-workspace.v3`) с односторонней миграцией v1 → v2 → v3 (DD-296); dev/test verdict
+  adapter `?verdict=approved` (DD-298); completion L3 выведена из workspace через
+  `sessionWithApprovedReports` (DD-297, `ata.lesson-progress.v1` не пишется); base-completed vs
+  approval-induced distinction (DD-300); интеграция в Library и Path (L3 «Завершён», DD-293).
+- **Non-scope:** rejected; mentor thread/identity/avatar (D3-E); practical (D3-F); attachments;
+  section comments; rubric/score; audit-history; checkpoint page; Pocket CTA; backend; XP.
+- **Acceptance:** 644 unit (571 сохранены + 73) · E2E smoke gate 169 (151 сохранены + 18) · lint/
+  typecheck/build чисто · geometry-проверки на 390/320/720×450 · canonical L18 не понижен · Home не
+  тронут · storage failure остаётся pending · visual QA first-pass → final (10 кадров) без
+  critical/major.
+- **Реализовано:** `D3_APPROVED_EXPERIENCE.md`, DD-293…DD-300.
+- **Stop condition:** QA закрыт ✅. **D3-E / D3-F / D4 не начаты.**
 
 ### Будущие отдельные этапы
 
 | Этап | Содержание | Почему отдельно |
 |------|-----------|-----------------|
-| D3-D | `approved` state | требует внешнего события |
 | D3-E | Mentor feedback | требует mentor queue (OQ-4) |
 | D3-F | Practical assignments | гипотеза «practical = ручной прототип инструмента» не проверена |
 | D3-F ↔ D4 | связь practical с Tools | проектируется совместно, не раньше |

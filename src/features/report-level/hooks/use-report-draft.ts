@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { getReportDefinition } from "@/features/report-level/data/report-fixtures";
 import { createReportStore } from "@/features/report-level/model/report-store";
 import {
-  createEmptyDraftV2,
-  emptyReportWorkspaceV2,
-  getStoredDraftV2,
-  parseReportWorkspaceV2,
-  serializeReportWorkspaceV2,
-  withDraftV2,
-  type ReportDraftV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  createEmptyDraftV3,
+  emptyReportWorkspaceV3,
+  getStoredDraftV3,
+  parseReportWorkspaceV3,
+  serializeReportWorkspaceV3,
+  withDraftV3,
+  type ReportDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
 import type { ReportDefinition } from "@/features/report-level/model/report";
 
 /**
@@ -36,18 +36,25 @@ export const SAVE_STATE_LABEL: Record<ReportSaveState, string> = {
 };
 
 export interface ReportDraftController {
-  draft: ReportDraftV2;
+  draft: ReportDraftV3;
   saveState: ReportSaveState;
-  /** Apply a pure transition from `report-workspace-v2.ts`. Never mutates. */
-  update: (next: ReportDraftV2) => void;
+  /** Apply a pure transition from `report-workspace-v3.ts`. Never mutates. */
+  update: (next: ReportDraftV3) => void;
   /** Commit immediately, bypassing the debounce (used by submit/resubmit). */
-  flush: (next: ReportDraftV2) => boolean;
+  flush: (next: ReportDraftV3) => boolean;
+  /**
+   * Apply an external verdict (the dev/test approved adapter, DD-298) with NO
+   * optimistic UI: the local draft advances ONLY if the write actually landed,
+   * so a storage failure leaves the report exactly where it was (pending-review)
+   * instead of showing a fabricated success. Returns whether it persisted.
+   */
+  applyVerdict: (next: ReportDraftV3) => boolean;
 }
 
 /** Storage does not change under us within this tab, so there is nothing to watch. */
 const subscribe = () => () => {};
 
-const EMPTY_SNAPSHOT = serializeReportWorkspaceV2(emptyReportWorkspaceV2());
+const EMPTY_SNAPSHOT = serializeReportWorkspaceV3(emptyReportWorkspaceV3());
 
 /**
  * The browser-local report draft (Phase D3-B; v2 storage since D3-C).
@@ -71,7 +78,7 @@ const EMPTY_SNAPSHOT = serializeReportWorkspaceV2(emptyReportWorkspaceV2());
  */
 export function useReportDraft(definition: ReportDefinition): ReportDraftController {
   const getSnapshot = useCallback(
-    () => serializeReportWorkspaceV2(createReportStore().read()),
+    () => serializeReportWorkspaceV3(createReportStore().read()),
     [],
   );
   const getServerSnapshot = useCallback(() => EMPTY_SNAPSHOT, []);
@@ -86,24 +93,24 @@ export function useReportDraft(definition: ReportDefinition): ReportDraftControl
   );
 
   const stored = useMemo(() => {
-    const workspace = parseReportWorkspaceV2(rawWorkspace, getReportDefinition);
-    return getStoredDraftV2(workspace, definition.level.number);
+    const workspace = parseReportWorkspaceV3(rawWorkspace, getReportDefinition);
+    return getStoredDraftV3(workspace, definition.level.number);
   }, [rawWorkspace, definition.level.number]);
 
-  const [local, setLocal] = useState<ReportDraftV2 | null>(null);
+  const [local, setLocal] = useState<ReportDraftV3 | null>(null);
   const [writeState, setWriteState] = useState<ReportSaveState>("saved");
 
-  const draft = local ?? stored ?? createEmptyDraftV2(definition);
+  const draft = local ?? stored ?? createEmptyDraftV3(definition);
 
   // The revision we have already written. Guards against re-saving an unchanged
   // draft when an unrelated re-render happens.
   const savedRevision = useRef<number | null>(null);
 
   const commit = useCallback(
-    (next: ReportDraftV2): boolean => {
+    (next: ReportDraftV3): boolean => {
       const store = createReportStore();
       if (!store.durable) return false;
-      const ok = store.write(withDraftV2(store.read(), next));
+      const ok = store.write(withDraftV3(store.read(), next));
       savedRevision.current = next.revision;
       // A rejected write (quota, blocked origin) is NOT "unsaved changes" the
       // user can fix by waiting — local saving is simply not working, and the
@@ -114,18 +121,41 @@ export function useReportDraft(definition: ReportDefinition): ReportDraftControl
     [],
   );
 
-  const update = useCallback((next: ReportDraftV2) => {
+  const update = useCallback((next: ReportDraftV3) => {
     setLocal(next);
     setWriteState("dirty");
   }, []);
 
   const flush = useCallback(
-    (next: ReportDraftV2): boolean => {
+    (next: ReportDraftV3): boolean => {
       setLocal(next);
       setWriteState("saving");
       return commit(next);
     },
     [commit],
+  );
+
+  const applyVerdict = useCallback(
+    (next: ReportDraftV3): boolean => {
+      const store = createReportStore();
+      // No optimistic paint: the verdict is an external fact, so the UI must not
+      // show it before storage confirms it. A failed (or non-durable) write keeps
+      // the current draft — the caller stays pending-review, honestly.
+      if (!store.durable) {
+        setWriteState("unavailable");
+        return false;
+      }
+      const ok = store.write(withDraftV3(store.read(), next));
+      if (!ok) {
+        setWriteState("unavailable");
+        return false;
+      }
+      savedRevision.current = next.revision;
+      setLocal(next);
+      setWriteState("saved");
+      return true;
+    },
+    [],
   );
 
   // Debounced autosave. Keyed on the revision counter rather than on the draft
@@ -146,5 +176,5 @@ export function useReportDraft(definition: ReportDefinition): ReportDraftControl
 
   const saveState: ReportSaveState = durable ? writeState : "unavailable";
 
-  return { draft, saveState, update, flush };
+  return { draft, saveState, update, flush, applyVerdict };
 }

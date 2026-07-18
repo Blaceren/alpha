@@ -157,18 +157,22 @@ export function reviewTargets(
  * ------------------------------------------------------------------ */
 
 /**
- * The single verdict the adapter may produce. `approved` and `rejected` do not
- * exist in D3-C (DD-287) — there is no member for them, so the adapter cannot
- * emit one even by mistake.
+ * The verdicts the adapter may produce (DD-298). D3-D adds `approved`, the
+ * terminal external verdict. `rejected` still does not exist — there is no member
+ * for it, so the adapter cannot emit one even by mistake, and no alias
+ * ("auto-approved", "mentor-approved") resolves to `approved`.
  */
-export type ReportVerdictAdapter = "revision-requested";
+export type ReportVerdictAdapter = "revision-requested" | "approved";
 
 /**
  * Resolve the `?verdict=` DEVELOPMENT AND TEST query (the `?scenario` precedent,
- * DD-234/DD-272). Unknown values — including "approved" and "rejected" — fail
- * closed to null. This is capture/E2E instrumentation: it never appears in a
- * user-facing link, and no user CTA produces it (asserted by tests).
+ * DD-234/DD-272). EXACT MATCH only — every unknown value, including "rejected"
+ * and any approved alias, fails closed to null. This is capture/E2E
+ * instrumentation: it never appears in a user-facing link, and no user CTA
+ * produces it (asserted by tests).
  */
 export function resolveReportVerdictAdapter(raw: unknown): ReportVerdictAdapter | null {
-  return raw === "revision-requested" ? "revision-requested" : null;
+  if (raw === "revision-requested") return "revision-requested";
+  if (raw === "approved") return "approved";
+  return null;
 }

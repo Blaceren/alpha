@@ -12,42 +12,42 @@ import {
 import { ReportWorkspace } from "@/features/report-level/components/report-workspace";
 import { createReportStore } from "@/features/report-level/model/report-store";
 import {
-  createEmptyDraftV2,
-  emptyReportWorkspaceV2,
-  getStoredDraftV2,
-  withDraftV2,
-  withEntryFieldV2,
-  withRevisionRequested,
-  withSubmittedV2,
-  withSummaryV2,
-  type ReportDraftV2,
-} from "@/features/report-level/model/report-workspace-v2";
+  createEmptyDraftV3,
+  emptyReportWorkspaceV3,
+  getStoredDraftV3,
+  withDraftV3,
+  withEntryFieldV3,
+  withRevisionRequestedV3,
+  withSubmittedV3,
+  withSummaryV3,
+  type ReportDraftV3,
+} from "@/features/report-level/model/report-workspace-v3";
 
 const definition = getReportDefinition(REPORT_LEVEL_NUMBER)!;
 
-function readyDraft(): ReportDraftV2 {
-  let draft = createEmptyDraftV2(definition);
+function readyDraft(): ReportDraftV3 {
+  let draft = createEmptyDraftV3(definition);
   for (const entry of draft.entries) {
-    draft = withEntryFieldV2(draft, entry.ordinal, "noticed", `наблюдение ${entry.ordinal}`);
+    draft = withEntryFieldV3(draft, entry.ordinal, "noticed", `наблюдение ${entry.ordinal}`);
   }
-  return withSummaryV2(draft, "итог по пяти записям");
+  return withSummaryV3(draft, "итог по пяти записям");
 }
 
-function pendingDraft(): ReportDraftV2 {
-  return withSubmittedV2(readyDraft(), "2026-07-17T10:00:00.000Z");
+function pendingDraft(): ReportDraftV3 {
+  return withSubmittedV3(readyDraft(), "2026-07-17T10:00:00.000Z");
 }
 
 /** The report exactly as the dev/test adapter would leave it. */
-function revisionDraft(): ReportDraftV2 {
-  return withRevisionRequested(pendingDraft(), definition, {
+function revisionDraft(): ReportDraftV3 {
+  return withRevisionRequestedV3(pendingDraft(), definition, {
     comment: PROVISIONAL_REVIEW_COMMENT,
     sections: PROVISIONAL_REVIEW_SECTIONS,
     receivedAt: "2026-07-18T09:00:00.000Z",
   });
 }
 
-function seed(draft: ReportDraftV2) {
-  createReportStore().write(withDraftV2(emptyReportWorkspaceV2(), draft));
+function seed(draft: ReportDraftV3) {
+  createReportStore().write(withDraftV3(emptyReportWorkspaceV3(), draft));
 }
 
 const renderReport = (verdictAdapter: "revision-requested" | null = null) =>
@@ -274,7 +274,7 @@ describe("resubmit", () => {
     await user.click(screen.getByRole("button", { name: "Продолжить доработку" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("revision-requested");
+    expect(getStoredDraftV3(createReportStore().read(), 3)?.status).toBe("revision-requested");
   });
 
   it("confirming returns the report to «На проверке», read-only, review preserved", async () => {
@@ -298,7 +298,7 @@ describe("resubmit", () => {
     );
 
     // The stored record: pending again, submittedAt moved, review kept.
-    const stored = getStoredDraftV2(createReportStore().read(), 3)!;
+    const stored = getStoredDraftV3(createReportStore().read(), 3)!;
     expect(stored.status).toBe("pending-review");
     expect(stored.review?.comment).toBe(PROVISIONAL_REVIEW_COMMENT);
     expect(stored.submittedAt).not.toBe("2026-07-17T10:00:00.000Z");
@@ -335,7 +335,7 @@ describe("verdict adapter", () => {
     renderReport("revision-requested");
 
     expect(screen.getByText("Нужна доработка")).toBeInTheDocument();
-    const stored = getStoredDraftV2(createReportStore().read(), 3)!;
+    const stored = getStoredDraftV3(createReportStore().read(), 3)!;
     expect(stored.status).toBe("revision-requested");
     expect(stored.review?.comment).toBe(PROVISIONAL_REVIEW_COMMENT);
     // The verdict writes the report workspace ONLY.
@@ -347,7 +347,7 @@ describe("verdict adapter", () => {
     renderReport("revision-requested");
 
     expect(screen.queryByText("Нужна доработка")).not.toBeInTheDocument();
-    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("draft");
+    expect(getStoredDraftV3(createReportStore().read(), 3)?.status).toBe("draft");
   });
 
   it("does not re-verdict a resubmitted report — one verdict per explicit query", async () => {
@@ -361,7 +361,7 @@ describe("verdict adapter", () => {
 
     // Still pending: the adapter saw review !== null and stayed out.
     expect(screen.getByText("На проверке")).toBeInTheDocument();
-    expect(getStoredDraftV2(createReportStore().read(), 3)?.status).toBe("pending-review");
+    expect(getStoredDraftV3(createReportStore().read(), 3)?.status).toBe("pending-review");
   });
 });
 

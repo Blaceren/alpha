@@ -655,3 +655,44 @@ schema, Home и D2B-урок не изменялись. Зависимости �
 `D3_REVISION_ART_DIRECTION.md` (баннер выбора), `D3_REPORT_EXPERIENCE.md`,
 `REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`, `STATE_MATRIX.md`, `ROUTE_MAP.md`, README;
 DD-289…DD-292.
+
+## D3-D-B — Approved Report State (реализовано)
+
+Терминальный вердикт `approved` для отчёта уровня 3 и его проекция на прогрессию.
+
+**Storage v3** (`ata.report-workspace.v3`, version 3): `approved` + `approvedAt`; односторонняя
+read-time миграция v1 → v2 → v3 (валидный v3 авторитетен, битый v3 fail closed без отката; v2/v1
+поднимаются с `approvedAt = null`; v1/v2-парсеры не тронуты, ключи не удаляются, `clear()` только v3).
+Нормализация approved fail closed, но сохраняет работу (DD-296).
+
+**Approved lifecycle** (DD-297): `pending-review → approved`, терминальный (read-only по конструкции,
+не resubmit-абелен, повторно не аппрувится, review сохранён, XP не меняется). Completion L3 выведена
+из workspace чистым слоем `report-progression.ts` (`approvedReportLevelNumbers`,
+`sessionWithApprovedReports` через канонический `withCompletedLevel`); `ata.lesson-progress.v1` **не**
+пишется; следующий уровень открывает существующий резолвер. **Base-completed vs approval-induced**
+distinction (DD-300): approved-презентация — не по итоговому `completed`, а по base ≠ completed ∧
+approved.
+
+**Adapter** (DD-298): `ReportVerdictAdapter = "revision-requested" | "approved"`, exact-match; работает
+только на pending-review под `scenario=report`; при storage failure остаётся pending; повторный
+verdict — no-op; ни href/кнопки/автоодобрения.
+
+**UI:** чип «Одобрено», «Отчёт принят. Уровень 3 завершён.», browser-local/provisional пояснение,
+ledger read-only, тихий «Комментарий последней проверки», следующий шаг «Уровень 4 · Контрольная
+точка / Требуется: Баланс Pocket от $50», primary CTA «Посмотреть Путь» → `/path`. Library/Path
+показывают L3 «Завершён» (не «Одобрено»), L4 — контрольная точка (DD-293). Home не тронут (DD-295).
+
+**Гейты:** lint ✓ · typecheck ✓ · vitest 571 → +73 новых (report-workspace-v3, report-progression,
+report-experience approved, report-approved component/integration) ✓ · build ✓ · e2e smoke 151 → +18
+(`report-approved-smoke.spec.ts`) ✓. **Visual QA** двухпроходная: 10 final кадров
+(`design-memory/screenshots/d3-approved/{first-pass,final}/`,
+`docs/visual-reviews/D3_D_APPROVED_IMPLEMENTATION.md`); historical evidence не перезаписан.
+
+**Границы:** rejected / mentor thread / identity / avatar / countdown / attachments / section comments
+/ rubric / score / audit-history / XP reward / checkpoint page / Pocket CTA / backend — не создавались.
+Curriculum fixture, thresholds, XP-правила, Home, lesson video/test, practical (L14/L19), Pocket,
+`package.json`/lock, зависимости — не изменялись. **D3-E / D3-F / D4 не начаты.**
+
+**Документы:** `D3_APPROVED_EXPERIENCE.md` (новый); обновлены `D3_REPORT_EXPERIENCE.md`,
+`D3_REVISION_EXPERIENCE.md`, `REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`, `STATE_MATRIX.md`,
+`ROUTE_MAP.md`, `DESIGN_DECISIONS.md` (DD-293…DD-300), `IMPLEMENTATION_PLAN.md`, README.

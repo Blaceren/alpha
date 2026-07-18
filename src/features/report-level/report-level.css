@@ -752,3 +752,80 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ---------------- approved (D3-D) — the calm terminal verdict ----------------
+ *
+ * The approved state stays inside the Evidence Ledger world: NO celebration
+ * hero, NO confetti, NO large green surface, NO dashboard card. Green is the
+ * successful-action family (DD-284), used here only as a small chip and a thin
+ * boundary edge — the report is simply, quietly, accepted. Nothing financial is
+ * shown (no balance, no amount, no remainder, no percentage, no Pocket link) and
+ * approvedAt is stored but never rendered.
+ */
+
+.rl-band.is-approved {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 14px;
+}
+
+/* «Одобрено» chip: the «На проверке» construction, in the completed/success
+   family, with a SOLID filled dot — the verdict has landed. Calm, not loud. */
+.rl-status.is-approved {
+  color: var(--route-completed);
+  border-color: color-mix(in srgb, var(--route-completed) 42%, transparent);
+  background: color-mix(in srgb, var(--route-completed) 10%, transparent);
+}
+.rl-status.is-approved::before {
+  background: var(--route-completed);
+}
+
+.rl-approved-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* The next step on the approved screen: the checkpoint requirement, target only.
+   A thin boundary edge — never a card, never a green panel. */
+.rl-next {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--divider-strong);
+}
+.rl-next-k {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.rl-next-req {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* The approved end area reuses .rl-end (row on desktop, stacked on mobile). The
+   exits column stacks the primary CTA above the quiet secondary link. */
+.rl-end.is-approved .rl-exits {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.rl-end.is-approved .rl-exit {
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .rl-end.is-approved .rl-exits { width: 100%; }
+  .rl-end.is-approved .rl-btn { width: 100%; }
+}

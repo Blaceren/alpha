@@ -675,6 +675,59 @@
   активный список задач), «Исправления отмечены как отправленные только в этом браузере.»;
   `ata.lesson-progress.v1` не пишется, уровень 4 закрыт только настоящим резолвером.
 
+## D3-D-B — Approved Report State (реализация)
+
+- **DD-293 (Locked, D3-D-B).** **Library и Path показывают L3 «Завершён»; «Одобрено» — только на
+  самом report-экране.** После approval-induced completion строка библиотеки читает «Завершён ·
+  Пересмотреть», деталь Пути — «пройден»; локальный report-label скрыт правилом `completed`
+  (`displayedReportLifecycle` возвращает null при `availability === "completed"`; деталь Пути
+  гейтит на `state !== "completed"`). «Одобрено» не протекает ни в библиотеку, ни в Путь.
+- **DD-294 (Locked, D3-D-B).** **Primary CTA approved-экрана — чистый `/path`** («Посмотреть
+  Путь»); допустима вторичная ссылка «К списку уроков» → `/lessons`. Ни один пользовательский href
+  не несёт `scenario`/`verdict` (закреплено тестами). Pocket CTA/link отсутствует.
+- **DD-295 (Locked, D3-D-B).** **Home вне scope.** `src/features/home/**`, Home-проекции, Home-
+  сценарий и канонический Artem не изменяются и не получают report-workspace/session augmentation.
+- **DD-296 (Locked, D3-D-B).** **Storage v3** (`ata.report-workspace.v3`, version 3) добавляет
+  терминальный статус `approved` и `approvedAt`. Односторонняя read-time миграция v1 → v2 → v3:
+  валидный v3 авторитетен, битый v3 fail closed **без** отката к v2/v1; при отсутствии v3 валидный
+  v2 (сам поднимающий v1) поднимается дословно с `approvedAt = null`. v1/v2-парсеры **не тронуты** —
+  подделанный `approved` в v2-ключе по-прежнему отвергается v2-парсером. Ключи v1/v2 не удаляются и
+  не перезаписываются; `clear()` v3-store стирает только v3. **Нормализация approved fail closed:**
+  approved без submittedAt или с неполным отчётом → draft (работа сохранена, progression не
+  открывается); approved с невалидным/отсутствующим ISO `approvedAt` → pending-review (сохранены и
+  работа, и review); unknown review section ids отбрасываются поодиночке; unknown/forged статус →
+  запись не становится approved. Валидный пользовательский текст не уничтожается из-за битой
+  verdict-метаданной.
+- **DD-297 (Locked, D3-D-B).** **`approved` — терминальный внешний вердикт; completion выводится из
+  report workspace, `ata.lesson-progress.v1` не пишется.** Хранимая машина `pending-review →
+  approved`; approved read-only по конструкции (`withEntryField`/`withSummary` возвращают тот же
+  объект), не resubmit-абелен, повторно не аппрувится, revision-adapter на него не действует; review
+  сохраняется как история; XP не меняется. Completion L3 проецируется на сессию чистым слоем
+  (`approvedReportLevelNumbers`, `sessionWithApprovedReports` через канонический `withCompletedLevel`)
+  — второго store/route-resolver/ключа completion нет, следующий уровень открывает существующий
+  резолвер, augmentation только добавляет completion и идемпотентна. `blockedNote` исчезает только
+  после валидного approval. Подключено в report route/experience, Lessons Library и Path; Home — нет.
+- **DD-298 (Locked, D3-D-B).** **Approved verdict adapter — `?verdict=approved`** (расширение
+  DD-291). `ReportVerdictAdapter = "revision-requested" | "approved"`; резолвер exact-match, всё
+  неизвестное (включая `rejected`, `auto-approved`, `mentor-approved`) → null. Adapter работает
+  только при `scenario === "report"` ∧ статус `pending-review` ∧ отчёт ready ∧ вердикт ещё не
+  применён; допускает approved на resubmitted pending-review с сохранённым review. Пишет только
+  workspace v3, не создаёт mentor identity/feedback, ставит `approvedAt` детерминированным clock-
+  адаптером, при storage failure **остаётся pending-review** (никакого fake success), повторный
+  запрос — no-op. Ни одного пользовательского href/кнопки «Одобрить»; автоматического approved нет.
+- **DD-299 (Locked, D3-D-B).** **Browser-local verdict — provisional frontend prototype state, не
+  аутентифицированная backend-истина.** Frontend не может криптографически подтвердить происхождение
+  structurally valid localStorage-вердикта и не притворяется: подписи/токены/хеши не добавляются
+  (тот же клиент их бы и проверял — это не security boundary). Malformed/unsupported/inconsistent
+  approved fail closed; `dev/test · provisional` остаётся видимым в approval-контексте; реальный
+  authoritative mentor verdict потребует backend.
+- **DD-300 (Locked, D3-D-B).** **Base-completed vs approval-induced distinction.** Вычисляются
+  **base availability** (канонический marker + обычная сессия, до report-augmentation) и **effective
+  availability** (после). Approved-презентация определяется **не** только итоговым `completed`:
+  approval-induced ⇔ base ≠ completed ∧ status approved. При canonical completed L3 (Artem L18) —
+  обычный нейтральный archive: локальный approved не переименовывает уровень, «Одобрено» и approved-
+  CTA не показываются, currentLevel=18 неизменен. Закреплено unit- и E2E-регрессиями.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

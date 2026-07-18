@@ -155,3 +155,14 @@ Curriculum fixtures, checkpoint thresholds и XP-правила не измен�
 
 Visual QA: 2 прохода, 8 findings (2 critical, 3 major, 3 minor) —
 `design-memory/reviews/d3-b-report-review.md`.
+
+---
+
+## D3-D — Approved (расширение)
+
+Терминальный вердикт `approved` и его проекция на прогрессию описаны отдельно —
+см. [D3_APPROVED_EXPERIENCE.md](D3_APPROVED_EXPERIENCE.md). Кратко: `pending-review → approved`
+(терминальный, read-only, review сохранён, XP не меняется, DD-297); completion L3 выведена из
+report workspace, `ata.lesson-progress.v1` не пишется; storage поднят до **v3**
+(`ata.report-workspace.v3`, DD-296); «Одобрено» показывается только на report-экране при
+approval-induced completion, Library/Path показывают L3 «Завершён» (DD-293, DD-300).
