@@ -70,6 +70,9 @@ function renderScreen({
         updateNoteBody: () => {
           throw new Error("the owner suite must not call updateNoteBody");
         },
+        setNoteVisibility: () => {
+          throw new Error("the owner suite must not call setNoteVisibility");
+        },
       }
     : undefined;
   return render(
@@ -644,6 +647,9 @@ describe("owner assignment — role change", () => {
               throw new Error("unused");
             },
             updateNoteBody: () => {
+              throw new Error("unused");
+            },
+            setNoteVisibility: () => {
               throw new Error("unused");
             },
           }}

@@ -29,6 +29,15 @@
 > переиспользовано `edit_user_notes`, но строже: только автор своей overlay-заметки (D-82). Возможность
 > отдаётся провайдером через `getUserNotesView` → `CrmNoteListItem.capabilities.canEditBody`. Фикстурная
 > заметка неизменна. Решения D-82…D-85; §§ ниже помечены «(1B4-E)».
+>
+> **Phase 1B5-C (выполнен): смена видимости заметки.** Пятая мутация — `setNoteVisibility` (team ↔ private)
+> — и её inline-UI. Overlay расширен **аддитивно в пределах v1**: тот же ключ, та же `version: 1`. Как у
+> `updateNoteBody`, note переписывается на месте (меняются только `visibility` и `updatedAt`). Добавлены
+> пятый union-член `note_visibility_changed` (`previousVisibility`/`nextVisibility` ∈ {team,private}) и
+> receipt-kind `note_visibility_change`. `role_restricted` НЕ writable (нет allowed-roles модели, D-91):
+> команда его отвергает `invalid_input`, guard fail-closed. Право — `edit_user_notes`, только автор своей
+> overlay-заметки (D-91); private по identity актора, не по роли (D-92). `AuditRecordView` направление
+> team/private НЕ раскрывает (D-94). Решения D-91…D-95; §§ ниже помечены «(1B5-C)».
 > Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
 
 ---
@@ -292,6 +301,12 @@ note-add-записи нести owner- или pin-поля, а owner/pin-зап
 
 **(1B5-B) четвёртый член union — `NoteBodyChangedAuditRecord`** (базовые поля + `action: "note_body_changed"`,
 `reasonCode: "note_body_changed_by_employee"`; никакого previous/next, фрагмента, длины или тела — D-84).
+
+**(1B5-C) пятый член union — `NoteVisibilityChangedAuditRecord`** (базовые поля + `action:
+"note_visibility_changed"`, `entityType: "note"`, `reasonCode: "note_visibility_changed_by_employee"`,
+`previousVisibility`/`nextVisibility` ∈ {team,private}). Оба значения — сам факт (LOW/закрытый enum), не
+контент; `role_restricted` на любой стороне не принимается (D-91), guard fail-closed. Новый receipt kind
+`note_visibility_change` (только kind/key/fingerprint/auditId). `AuditRecordView` направление НЕ несёт (D-94).
 
 **(1B5-B) read endpoint появился, write-семантика неизменна.** Global Audit Workspace (`/audit`) читает
 существующий `auditRecords` через новую read-операцию `getAuditRecords` (DATA_PROVIDER_CONTRACT §3c) — это

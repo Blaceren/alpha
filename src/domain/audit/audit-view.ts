@@ -13,11 +13,14 @@
  * rendered. It is the audit record's own id (`audit_mock_*`) and MUST NOT reach
  * the DOM as text — the component uses it as `key` and nothing else.
  *
- * Privacy note (D3): the four current actions are all owner/note facts on `team`
- * notes, visible to the two Full roles that alone may open this screen, so no
- * note-visibility-aware filtering is applied here yet. The moment a
- * `private`/`role_restricted` note or a Limited audit-preview appears, note-scoped
- * records must pass a canonical privacy projection BEFORE reaching this view.
+ * Privacy note (D3, D-91): the global `/audit` is gated to the two Full roles, who
+ * may see every note, so no note-visibility-aware filtering is applied to this
+ * global view. Phase 1B5-C lets a note become `private`, and the
+ * `note_visibility_changed` view carries base fields only — never the direction —
+ * so the log never discloses that a note is now hidden. The moment a
+ * note-scoped audit surface is shown to a Limited role (a User 360 audit-preview,
+ * still deferred — D-90/D-91), those records must pass a canonical note-visibility
+ * projection BEFORE reaching a view.
  */
 import type { EmployeeId, ISODateString, UserId } from "@/domain/shared/primitives";
 import type { AuditRecord } from "./audit";
@@ -59,6 +62,14 @@ export type AuditRecordView =
   | {
       id: string;
       action: "note_body_changed";
+      at: ISODateString;
+      actorName: string;
+      targetUserName: string;
+      mock: true;
+    }
+  | {
+      id: string;
+      action: "note_visibility_changed";
       at: ISODateString;
       actorName: string;
       targetUserName: string;
@@ -132,6 +143,11 @@ export function projectAuditRecord(
     case "note_body_changed":
       // The strictest: base fields only. No old or new body, no fragment, no length.
       return { ...base, action: "note_body_changed" };
+    case "note_visibility_changed":
+      // Base fields only. The `previous`/`next` visibility direction is deliberately
+      // NOT projected — the global log states only THAT access changed, never which
+      // way, so it can never disclose that a note is now hidden (D-91).
+      return { ...base, action: "note_visibility_changed" };
   }
 }
 

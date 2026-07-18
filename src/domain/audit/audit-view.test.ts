@@ -17,6 +17,7 @@ import type {
   NoteAddedAuditRecord,
   NoteBodyChangedAuditRecord,
   NotePinChangedAuditRecord,
+  NoteVisibilityChangedAuditRecord,
   PrimaryOwnerChangedAuditRecord,
 } from "./audit";
 import { ownerLabel, UNKNOWN_USER_LABEL } from "@/config/labels";
@@ -97,6 +98,28 @@ function bodyChanged(id: string, at: string): NoteBodyChangedAuditRecord {
     entityId: "note_mock_0003",
     at,
     reasonCode: "note_body_changed_by_employee",
+    mock: true,
+  };
+}
+
+function visibilityChanged(
+  id: string,
+  at: string,
+  previousVisibility: "team" | "private",
+  nextVisibility: "team" | "private",
+): NoteVisibilityChangedAuditRecord {
+  return {
+    id,
+    action: "note_visibility_changed",
+    actorEmployeeId: KNOWN_ACTOR,
+    actorRole: "crm_admin",
+    targetUserId: KNOWN_TARGET,
+    entityType: "note",
+    entityId: "note_mock_0004",
+    at,
+    reasonCode: "note_visibility_changed_by_employee",
+    previousVisibility,
+    nextVisibility,
     mock: true,
   };
 }
@@ -199,6 +222,27 @@ describe("projectAuditRecord — all four actions", () => {
       targetUserName: "Иван Пример",
       mock: true,
     });
+  });
+
+  it("projects note_visibility_changed WITHOUT the direction — base fields only", () => {
+    const view = projectAuditRecord(
+      visibilityChanged("audit_mock_0006", "2026-07-01T00:00:00.000Z", "team", "private"),
+      resolvers,
+    );
+    // The previous/next visibility MUST NOT reach the view: the global log never
+    // discloses that a note is now hidden (D-91).
+    expect(view).toEqual({
+      id: "audit_mock_0006",
+      action: "note_visibility_changed",
+      at: "2026-07-01T00:00:00.000Z",
+      actorName: "Retention 1",
+      targetUserName: "Иван Пример",
+      mock: true,
+    });
+    expect(JSON.stringify(view)).not.toContain("private");
+    expect(JSON.stringify(view)).not.toContain("team");
+    expect("previousVisibility" in view).toBe(false);
+    expect("nextVisibility" in view).toBe(false);
   });
 });
 

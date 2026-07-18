@@ -385,6 +385,13 @@ export function auditRowText(view: AuditRecordView): AuditRowText {
         primary: `${view.actorName} изменил текст заметки у ${view.targetUserName}`,
         detail: null,
       };
+    case "note_visibility_changed":
+      // Fact only — never the direction (team/private), so the global log cannot
+      // disclose that a note is now hidden (D-91).
+      return {
+        primary: `${view.actorName} изменил доступ к заметке у ${view.targetUserName}`,
+        detail: null,
+      };
   }
 }
 
@@ -395,9 +402,33 @@ export function auditRowText(view: AuditRecordView): AuditRowText {
  */
 export const NOTE_VISIBILITY_LABEL: Record<NoteVisibility, string> = {
   team: "Командная заметка",
-  private: "Личная заметка",
+  private: "Приватная заметка",
   role_restricted: "Ограниченная заметка",
 };
+
+/**
+ * Note visibility editing (Phase 1B5-C). Same single-source, no-raw-code,
+ * no-diagnostics rule as the rest. The control label is a full instruction so a
+ * screen reader hears the whole action, not a glyph. Nothing here interpolates a
+ * note id, body or any bookkeeping. Only the two WRITABLE visibilities are offered
+ * (D-91); `role_restricted` has no option.
+ */
+export const NOTE_VISIBILITY_EDIT_LABEL = {
+  /** Opens the inline visibility editor for a note the actor authored. */
+  editAction: "Изменить доступ к заметке",
+  /** Select label inside the editor — distinct from the composer/body labels. */
+  fieldLabel: "Доступ к заметке",
+  /** Option captions — the enum values stay internal. */
+  optionTeam: "Командная",
+  optionPrivate: "Приватная",
+  save: "Сохранить",
+  cancel: "Отменить",
+  /** Announced through the Save control while its own write is in flight. */
+  pending: "Сохраняем…",
+  success: "Доступ к заметке обновлён",
+  /** Someone else changed it first; the list now shows what is actually stored. */
+  conflict: "Доступ к заметке уже изменён. Показаны актуальные данные.",
+} as const;
 
 /**
  * Today workspace (`/today`) user-facing labels. Same rule as Users and User

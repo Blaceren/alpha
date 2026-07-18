@@ -160,6 +160,46 @@ export interface UpdateNoteBodyResult {
   replayed: boolean;
 }
 
+/**
+ * Change the visibility of an employee-authored note (Phase 1B5-C).
+ *
+ * Like the other commands the actor is NOT part of it: role and employee id come
+ * only from the trusted `CrmContext`. `visibility` is the DESIRED end state, one of
+ * exactly two values — `team` or `private`. `role_restricted` is NOT accepted: it
+ * has no allowed-roles metadata contract yet, so it stays readable-but-not-writable
+ * and any attempt to set it is `invalid_input` (D-91).
+ *
+ * `expectedUpdatedAt` is optimistic concurrency, exactly as for `updateNoteBody`: a
+ * visibility change rewrites the stored note (`visibility` + `updatedAt`), so
+ * `updatedAt` is a true version token the caller reads back from the note. It is a
+ * string, never content, so it is safe to carry in the command.
+ */
+export interface SetNoteVisibilityCommand {
+  userId: UserId;
+  noteId: string;
+  visibility: "team" | "private";
+  expectedUpdatedAt: string;
+  idempotencyKey: string;
+}
+
+/**
+ * The result deliberately carries NO note, NO body, and NO visibility read-model.
+ *
+ * Mirrors `UpdateNoteBodyResult` (D-84): a receipt stores only `auditId`, so once a
+ * note has changed again there is no truthful way to reconstruct an earlier state.
+ * The result returns only what is always reconstructable — the note id and the
+ * change's timestamp, which equals both the note's new `updatedAt` and the audit
+ * record's `at` (D-83). The audit record it carries is the safe visibility-change
+ * record (fact + direction as a closed enum, never a body).
+ */
+export interface SetNoteVisibilityResult {
+  noteId: string;
+  updatedAt: string;
+  audit: AuditRecord;
+  /** Same meaning as on the other results: this command had already been applied. */
+  replayed: boolean;
+}
+
 export interface CrmMutations {
   /**
    * Add a plain-text note to a user.
@@ -255,4 +295,40 @@ export interface CrmMutations {
     ctx: CrmContext,
     command: UpdateNoteBodyCommand,
   ): Promise<Result<UpdateNoteBodyResult>>;
+
+  /**
+   * Change the visibility of an employee-authored note between `team` and `private`,
+   * addressed by `noteId` under `userId` (Phase 1B5-C).
+   *
+   * Permission: Edit → notes (ROLE_PERMISSION_MATRIX §1) — the SAME dimension as
+   * `addNote`/`setNotePinned`/`updateNoteBody`, checked with `canEditUserNotes`:
+   * crm_admin, crm_manager, retention_manager, support. Changing a note's own
+   * visibility is editing a note, so the matrix is not widened and no new permission
+   * is minted (D-91).
+   *
+   * The SAME two entity-level rules as `updateNoteBody` apply, because a visibility
+   * change also rewrites an employee's authored note:
+   *   - only a note physically stored in the overlay `notes[]` is changeable; the
+   *     generated fixture note is immutable and returns `invalid_input`, NOT
+   *     `not_found` — it is visibly present;
+   *   - only the note's own author may change it: `note.authorEmployeeId ===
+   *     ctx.actorId`, else `unauthorized`, even for a role that holds the permission.
+   *     `private` is author-identity-based, not role-based (D-92).
+   *
+   * A note not visible to the caller is `not_found`, exactly like a note that does
+   * not exist, so the mutation cannot be used to probe for hidden notes.
+   *
+   * Errors: `invalid_input` (missing/over-long key, empty/invalid `noteId`, a
+   * visibility that is not `team`/`private` — including `role_restricted`, malformed
+   * `expectedUpdatedAt`, requested visibility equal to the stored one, or an
+   * immutable fixture/non-overlay note), `not_found` (unknown user, unknown note, or
+   * note not visible to the caller), `unauthorized` (role has no Edit for notes, or
+   * the note was authored by another employee), `conflict` (key reused for a
+   * different command, or `expectedUpdatedAt` no longer matches), `internal` (overlay
+   * could not be persisted).
+   */
+  setNoteVisibility(
+    ctx: CrmContext,
+    command: SetNoteVisibilityCommand,
+  ): Promise<Result<SetNoteVisibilityResult>>;
 }

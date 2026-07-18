@@ -31,7 +31,8 @@ export type AuditAction =
   | "note_added"
   | "primary_owner_changed"
   | "note_pin_changed"
-  | "note_body_changed";
+  | "note_body_changed"
+  | "note_visibility_changed";
 
 export type AuditEntityType = "note" | "user";
 
@@ -43,7 +44,8 @@ export type AuditReasonCode =
   | "note_added_by_employee"
   | "primary_owner_changed_by_employee"
   | "note_pin_changed_by_employee"
-  | "note_body_changed_by_employee";
+  | "note_body_changed_by_employee"
+  | "note_visibility_changed_by_employee";
 
 /** Fields every record carries, whatever it records. */
 interface AuditRecordBase {
@@ -117,11 +119,32 @@ export interface NoteBodyChangedAuditRecord extends AuditRecordBase {
   readonly reasonCode: "note_body_changed_by_employee";
 }
 
+/**
+ * A note visibility change (Phase 1B5-C). `previousVisibility`/`nextVisibility` are
+ * the fact itself — a visibility change that does not say which way it went records
+ * nothing — and neither is content: the visibility axis is a closed enum (`team` or
+ * `private` only in this phase), never a note body, PII or a financial value. Only
+ * the two writable visibilities appear here; `role_restricted` has no allowed-roles
+ * model yet and is not writable (D-91), so it can never be a `previous`/`next`.
+ * `entityId` is the note's id; `at` is the single mutation timestamp, shared with
+ * the note's new `updatedAt`, mirroring the body-change record (D-83).
+ */
+export interface NoteVisibilityChangedAuditRecord extends AuditRecordBase {
+  readonly action: "note_visibility_changed";
+  readonly entityType: "note";
+  /** The note whose visibility changed — always an authored `note_mock_*` id. */
+  readonly entityId: string;
+  readonly reasonCode: "note_visibility_changed_by_employee";
+  readonly previousVisibility: "team" | "private";
+  readonly nextVisibility: "team" | "private";
+}
+
 export type AuditRecord =
   | NoteAddedAuditRecord
   | PrimaryOwnerChangedAuditRecord
   | NotePinChangedAuditRecord
-  | NoteBodyChangedAuditRecord;
+  | NoteBodyChangedAuditRecord
+  | NoteVisibilityChangedAuditRecord;
 
 /** Audit id derived from the overlay sequence — deterministic, never random. */
 export function mockAuditId(sequence: number): string {

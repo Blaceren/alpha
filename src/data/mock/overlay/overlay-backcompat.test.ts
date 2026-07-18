@@ -17,6 +17,7 @@ import {
   MUTATION_OVERLAY_STORAGE_KEY,
   NOTE_BODY_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
+  NOTE_VISIBILITY_RECEIPT_KIND,
   parseOverlay,
   PRIMARY_OWNER_RECEIPT_KIND,
 } from "./mutation-overlay";
@@ -578,6 +579,164 @@ describe("overlay v1 — the body-edit widening did not open a hole", () => {
 
   it("fails closed on a body receipt without an auditId", () => {
     const receipt = { kind: NOTE_BODY_RECEIPT_KIND, key: "k", fingerprint: "f" };
+    const overlay = parseOverlay(withReceipt(receipt));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.idempotencyReceipts).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------- Phase 1B5-C */
+
+/**
+ * A Phase 1B4-E overlay written out literally: two notes, a note-add pair, an owner
+ * change, a pin change AND a body change, with every typed receipt. This is what a
+ * browser that used every prior notes mutation holds. A visibility change must slot
+ * in additively on top of all of it.
+ */
+const OVERLAY_1B4E_JSON = JSON.stringify({
+  version: 1,
+  sequence: 5,
+  notes: JSON.parse(LEGACY_OVERLAY_JSON).notes,
+  auditRecords: [
+    ...JSON.parse(OVERLAY_1B4D_JSON).auditRecords,
+    {
+      id: "audit_mock_0005",
+      action: "note_body_changed",
+      actorEmployeeId: "emp_mock_admin",
+      actorRole: "crm_admin",
+      targetUserId: USER_ID,
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T09:00:00.005Z",
+      reasonCode: "note_body_changed_by_employee",
+      mock: true,
+    },
+  ],
+  idempotencyReceipts: [
+    ...JSON.parse(OVERLAY_1B4D_JSON).idempotencyReceipts,
+    { kind: NOTE_BODY_RECEIPT_KIND, key: "body-legacy", fingerprint: "2222cccc2222cccc", auditId: "audit_mock_0005" },
+  ],
+});
+
+describe("overlay v1 — 1B4-B…1B4-E overlays survive a visibility change, and it coexists", () => {
+  it("a visibility change on a 1B4-B (notes-only) overlay preserves every other note, audit and receipt", async () => {
+    const { provider, storage } = seeded();
+    const before = overlayIn(storage);
+
+    const res = await provider.setNoteVisibility(ctxAuthor, {
+      userId: USER_ID,
+      noteId: "note_mock_0001",
+      visibility: "private",
+      expectedUpdatedAt: "2026-07-11T09:00:00.001Z",
+      idempotencyKey: "vis-key-1",
+    });
+    expect(res.status).toBe("ok");
+
+    const after = overlayIn(storage);
+    // The changed note kept its identity; only visibility + updatedAt changed.
+    const changed = after.notes.find((n) => n.id === "note_mock_0001")!;
+    expect(changed.visibility).toBe("private");
+    expect(changed.body).toBe(before.notes[0]!.body);
+    expect(changed.createdAt).toBe(before.notes[0]!.createdAt);
+    expect(changed.authorEmployeeId).toBe(before.notes[0]!.authorEmployeeId);
+    // The OTHER note is byte-identical.
+    expect(after.notes.find((n) => n.id === "note_mock_0002")).toEqual(before.notes[1]);
+    // Legacy audit records untouched; the visibility record was appended.
+    expect(after.auditRecords.slice(0, 2)).toEqual(before.auditRecords);
+    expect(after.auditRecords.at(-1)!.action).toBe("note_visibility_changed");
+    // Legacy receipts untouched; the visibility receipt was appended.
+    expect(after.idempotencyReceipts.slice(0, 2)).toEqual(before.idempotencyReceipts);
+    expect(after.idempotencyReceipts.at(-1)!.kind).toBe(NOTE_VISIBILITY_RECEIPT_KIND);
+    expect(after.sequence).toBe(3);
+  });
+
+  it("notes, owner, pin, body AND a new visibility record all coexist and round-trip", async () => {
+    const storage = new MemoryKeyValueStorage();
+    storage.setItem(MUTATION_OVERLAY_STORAGE_KEY, OVERLAY_1B4E_JSON);
+    const provider = new MockCrmDataProvider({ clock, storage });
+
+    const res = await provider.setNoteVisibility(ctxAuthor, {
+      userId: USER_ID,
+      noteId: "note_mock_0001",
+      visibility: "private",
+      expectedUpdatedAt: "2026-07-11T09:00:00.001Z",
+      idempotencyKey: "vis-key-2",
+    });
+    expect(res.status).toBe("ok");
+
+    // A fresh provider over the same storage sees the private note as its author…
+    const fresh = new MockCrmDataProvider({ clock, storage });
+    const asAuthor = await fresh.getUserNotes(ctxAuthor, { userId: USER_ID });
+    const changed = asAuthor.data!.items.find((n) => n.id === "note_mock_0001")!;
+    expect(changed.visibility).toBe("private");
+    expect(changed.pinned).toBe(true); // pin survived (audit-derived)
+    // …but a DIFFERENT actor no longer sees it.
+    const asOther = await fresh.getUserNotes(ctx, { userId: USER_ID });
+    expect(asOther.data!.items.some((n) => n.id === "note_mock_0001")).toBe(false);
+
+    const reread = overlayIn(storage);
+    expect(reread.auditRecords.filter((a) => a.action === "note_added")).toHaveLength(2);
+    expect(reread.auditRecords.filter((a) => a.action === "primary_owner_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_pin_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_body_changed")).toHaveLength(1);
+    expect(reread.auditRecords.filter((a) => a.action === "note_visibility_changed")).toHaveLength(1);
+  });
+});
+
+describe("overlay v1 — the visibility widening did not open a hole", () => {
+  const legacy = () => JSON.parse(LEGACY_OVERLAY_JSON) as Record<string, unknown>;
+  const withAudit = (record: unknown) => {
+    const o = legacy();
+    (o.auditRecords as unknown[]).push(record);
+    return JSON.stringify(o);
+  };
+  const withReceipt = (receipt: unknown) => {
+    const o = legacy();
+    (o.idempotencyReceipts as unknown[]).push(receipt);
+    return JSON.stringify(o);
+  };
+
+  const validVisibilityAudit = {
+    id: "audit_mock_0003",
+    action: "note_visibility_changed",
+    actorEmployeeId: "emp_mock_admin",
+    actorRole: "crm_admin",
+    targetUserId: USER_ID,
+    entityType: "note",
+    entityId: "note_mock_0001",
+    at: "2026-07-15T09:00:00.003Z",
+    reasonCode: "note_visibility_changed_by_employee",
+    previousVisibility: "team",
+    nextVisibility: "private",
+    mock: true,
+  };
+
+  it("accepts a well-formed visibility audit record", () => {
+    expect(parseOverlay(withAudit(validVisibilityAudit)).auditRecords).toHaveLength(3);
+  });
+
+  it("accepts a well-formed visibility receipt", () => {
+    const receipt = { kind: NOTE_VISIBILITY_RECEIPT_KIND, key: "k", fingerprint: "f", auditId: "audit_mock_0003" };
+    expect(parseOverlay(withReceipt(receipt)).idempotencyReceipts).toHaveLength(3);
+  });
+
+  it.each([
+    ["a role_restricted previousVisibility", { ...validVisibilityAudit, previousVisibility: "role_restricted" }],
+    ["a role_restricted nextVisibility", { ...validVisibilityAudit, nextVisibility: "role_restricted" }],
+    ["an unknown visibility value", { ...validVisibilityAudit, nextVisibility: "public" }],
+    ["a missing previousVisibility", { ...validVisibilityAudit, previousVisibility: undefined }],
+    ["a mismatched entity type", { ...validVisibilityAudit, entityType: "user" }],
+    ["an invented reason code", { ...validVisibilityAudit, reasonCode: "because" }],
+    ["a lost mock marker", { ...validVisibilityAudit, mock: false }],
+  ])("fails closed on %s — the whole overlay, notes included", (_label, record) => {
+    const overlay = parseOverlay(withAudit(record));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.auditRecords).toEqual([]);
+    expect(overlay.sequence).toBe(0);
+  });
+
+  it("fails closed on a visibility receipt without an auditId", () => {
+    const receipt = { kind: NOTE_VISIBILITY_RECEIPT_KIND, key: "k", fingerprint: "f" };
     const overlay = parseOverlay(withReceipt(receipt));
     expect(overlay.notes).toEqual([]);
     expect(overlay.idempotencyReceipts).toEqual([]);

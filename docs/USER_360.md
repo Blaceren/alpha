@@ -346,13 +346,22 @@ Inline, не dialog и не sheet (D-59): новая заметка сортир
 
 **Обновлено:** Today workspace (Phase 1B3) и mutation core (Phase 1B4-A) с тех пор выполнены — оба
 не изменили этот экран. **Phase 1B4-B** добавил секцию «Заметки» (D-58…D-63); **Phase 1B4-C** добавил
-назначение primary owner в секции «Ответственный и работа» (D-64…D-74). Не начаты: редактирование/
-удаление заметок, pin/unpin, выбор visibility, tasks/cases, task/case assignees, смена статуса,
+назначение primary owner в секции «Ответственный и работа» (D-64…D-74); **1B4-D/1B4-E** — pin/unpin и
+редактирование тела заметки; **Phase 1B5-C** — смену видимости заметки team ↔ private (D-91…D-95). Не
+начаты: удаление заметок, создание `role_restricted`, tasks/cases, task/case assignees, смена статуса,
 закрытие сигналов, выполнение рекомендаций, кнопка сброса overlay, backend.
+
+**Смена видимости (Phase 1B5-C).** В секции «Заметки» автор своей overlay-заметки (право `edit_user_notes`)
+меняет её видимость `team ↔ private` через inline visibility-editor (контрол-«щит», отдельный от pencil/pin;
+один редактор на строку). `private` — по **identity автора**, не по роли (D-92): смена роли при том же
+`actorEmployeeId` не скрывает свою private-заметку, а другой сотрудник (включая admin) её не видит.
+`role_restricted` не создаётся (D-91). Возможность отдаётся провайдером через
+`getUserNotesView.capabilities.canChangeVisibility`.
 
 **Audit (Phase 1B5-B).** Глобальный Audit Workspace реализован отдельным экраном `/audit` (read-only,
 `getAuditRecords`, gated `canViewAudit`), НЕ как preview внутри User 360. Limited audit-preview по своим
-пользователям/действиям в User 360 остаётся будущей фазой (D-90) — в этой фазе в профиль ничего не добавлено.
+пользователям/действиям в User 360 остаётся будущей фазой (D-90/D-95) — в профиль ничего не добавлено;
+`/audit` показывает `note_visibility_changed` фактом, без направления team/private (D-94).
 
 _Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, PII_ACCESS_POLICY.md,
 CRM_INFORMATION_ARCHITECTURE.md §5, MUTATION_OVERLAY.md, DECISIONS.md (D-34…D-38, D-53…D-57),

@@ -213,6 +213,17 @@ export interface CrmNoteListItem {
      * note is visible to the actor; and `note.authorEmployeeId === ctx.actorId`.
      */
     canEditBody: boolean;
+    /**
+     * `true` under the SAME four conditions as `canEditBody` (Phase 1B5-C): the
+     * actor's role has `edit_user_notes`; the note is stored in the overlay
+     * `notes[]` (never the fixture note); the note is visible to the actor; and
+     * `note.authorEmployeeId === ctx.actorId`. Changing a note's visibility is
+     * author-only, exactly like editing its body (D-91/D-92) — the two capabilities
+     * currently coincide, but they are separate fields so the UI never has to
+     * assume they do. React reads the flag; it never inspects a note id or compares
+     * an employee id.
+     */
+    canChangeVisibility: boolean;
   };
 }
 

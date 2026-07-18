@@ -341,3 +341,29 @@ app/(crm)/audit/    page.tsx (заменил SectionPlaceholder на AuditWorksp
   error с retry, raw diagnostics в DOM не попадают. Один h1, реальный 200% reflow, zero horizontal overflow.
 - **Направление зависимостей не нарушено:** `domain/audit/audit-view` не знает про React/storage/fixtures —
   резолверы имён внедряются провайдером (из `ownerLabel` и dataset). `config/labels` зависит от домена.
+
+### Phase 1B5-C — User 360 Note Visibility Change
+
+```
+domain/audit/       audit.ts (+NoteVisibilityChangedAuditRecord: пятый член union, previous/nextVisibility ∈ {team,private})
+                    audit-view.ts (+note_visibility_changed — базовые поля, направление НЕ проецируется)
+data/contracts/     CrmMutations.ts (+setNoteVisibility) · CrmDataProvider.ts (+CrmNoteListItem.canChangeVisibility)
+data/mock/overlay/  mutation-overlay.ts (+note_visibility_changed action, +note_visibility_change receipt-kind, isWritableVisibility guard) · fingerprint.ts (+setNoteVisibility)
+data/mock/          MockCrmDataProvider.ts (+setNoteVisibility; getUserNotesView отдаёт canChangeVisibility)
+config/             labels.ts (+NOTE_VISIBILITY_EDIT_LABEL, +auditRowText note_visibility_changed; private → «Приватная заметка»)
+features/user-360/  components/user-notes.tsx (inline visibility-editor; один редактор на строку) · hooks/use-set-note-visibility.ts · lib/note-visibility-error.ts
+```
+
+- **Как `updateNoteBody`** (D-93): переписывает authored-заметку в `notes[]` на месте — тот же
+  id/createdAt/author/userId/body/baseline pinned, меняются только `visibility`+`updatedAt`
+  (= mutation-timestamp = `audit.at`, D-83). Overlay в пределах v1; regression: raw 1B4-B…1B5-B overlay
+  читается без потерь, visibility-запись сосуществует с owner/pin/body-историей.
+- **role_restricted не writable** (D-91): команда и guard fail-closed на нём и на неизвестных значениях.
+- **Private — по identity, не по роли** (D-92): `canViewNote` сверяет `authorEmployeeId === actorId`;
+  смена роли при том же actorId не скрывает свою private-заметку; foreign (включая admin) не видит.
+  Возможность — `getUserNotesView.capabilities.canChangeVisibility` (те же 4 условия, что `canEditBody`).
+- **Global audit fact-only** (D-94): `AuditRecordView` для `note_visibility_changed` несёт только базовые
+  поля — направление team/private не раскрывается; `/audit` рендерит «изменил доступ к заметке» без изменений.
+- **UI**: один inline-editor на строку (body XOR visibility, контролы скрыты при открытом редакторе, draft не
+  теряется молча); контрол-«щит» отличается от pencil/pin; реальный 200% reflow, zero overflow.
+- **Направление зависимостей не нарушено:** `domain` не знает про React/storage; `config/labels` зависит от домена.

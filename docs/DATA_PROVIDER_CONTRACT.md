@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D) и `updateNoteBody` (1B4-E); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`); Phase 1B5-B — read `getAuditRecords` (§3c, provider-owned safe `AuditRecordView`).
+- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D), `updateNoteBody` (1B4-E) и `setNoteVisibility` (1B5-C); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`, +`canChangeVisibility` в 1B5-C); Phase 1B5-B — read `getAuditRecords` (§3c, provider-owned safe `AuditRecordView`).
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -566,7 +566,24 @@ interface UpdateNoteBodyResult  { noteId: string; updatedAt: string; audit: Audi
 - **Result без `CrmNote` и без тела** — только id + timestamp правки (= `note.updatedAt` = `audit.at`); replay реконструирует метаданные из audit-записи (D-83/D-84).
 - **Конкуренция `expectedUpdatedAt`** (D-83): правка переписывает `notes[]` на месте (только `body`+`updatedAt`), поэтому `updatedAt` — настоящий version-токен; mismatch → `conflict`. Replay проверяется ДО предусловия.
 - **Errors:** `invalid_input` (ключ, тело empty/whitespace/too_long, `expectedUpdatedAt` не-ISO, no-change, фикстурная), `not_found` (user/note/видимость), `unauthorized` (роль или чужой автор), `conflict`, `internal`. Полный порядок и fingerprint/receipt — **docs/MUTATION_OVERLAY.md** §§ (1B4-E).
-- **Возможность provider-owned:** read `getUserNotesView` возвращает `CrmNoteListItem { note, capabilities: { canEditBody } }`; React не разбирает id (D-82). Плоский `getUserNotes` не изменён.
+- **Возможность provider-owned:** read `getUserNotesView` возвращает `CrmNoteListItem { note, capabilities: { canEditBody, canChangeVisibility } }`; React не разбирает id (D-82/D-92). Плоский `getUserNotes` не изменён.
+
+### 15.1d Реализовано (Phase 1B5-C) — `setNoteVisibility`
+
+```ts
+interface CrmMutations {
+  setNoteVisibility(ctx: CrmContext, command: SetNoteVisibilityCommand): Promise<Result<SetNoteVisibilityResult>>;
+}
+interface SetNoteVisibilityCommand { userId: UserId; noteId: string; visibility: "team" | "private"; expectedUpdatedAt: string; idempotencyKey: string; }
+interface SetNoteVisibilityResult  { noteId: string; updatedAt: string; audit: AuditRecord; replayed: boolean; }
+```
+
+- **Permission:** Edit → notes — `canEditUserNotes`; смена видимости своей заметки — не новое право, матрица **не расширена** (D-91). Те же четыре роли. **Как `updateNoteBody`**: только автор своей overlay-заметки (`authorEmployeeId === actorId`), иначе `unauthorized`.
+- **Только team ↔ private.** `role_restricted` и любое неизвестное значение → `invalid_input` — нет модели allowed-roles, не writable (D-91).
+- **Private — по identity актора, не по роли (D-92):** private-заметку видит только автор; смена роли при том же `actorEmployeeId` её не скрывает; другой сотрудник (включая admin) не видит. Возможность — `getUserNotesView.capabilities.canChangeVisibility`.
+- **Result без `CrmNote`/тела/visibility-read-model** — только id + timestamp (= `note.updatedAt` = `audit.at`, D-83/D-84).
+- **Конкуренция `expectedUpdatedAt`** (D-93): переписывает `notes[]` на месте (только `visibility`+`updatedAt`); mismatch → `conflict`; replay ДО предусловия. Аудит `note_visibility_changed` несёт `previousVisibility`/`nextVisibility` ∈ {team,private}, но `AuditRecordView` их **не** раскрывает (D-94).
+- **Errors:** `invalid_input` (ключ, visibility не team/private, `expectedUpdatedAt` не-ISO, no-change, фикстурная), `not_found` (user/note/видимость), `unauthorized` (роль или чужой автор), `conflict`, `internal`. Полный порядок/fingerprint/receipt — **docs/MUTATION_OVERLAY.md** §§ (1B5-C).
 
 ### 15.2 Зарезервировано (ещё не реализовано)
 

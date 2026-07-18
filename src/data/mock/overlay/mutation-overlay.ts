@@ -35,6 +35,9 @@ export const NOTE_PIN_RECEIPT_KIND = "note_pin_change";
 /** Discriminant of the body-change receipt (Phase 1B4-E). */
 export const NOTE_BODY_RECEIPT_KIND = "note_body_change";
 
+/** Discriminant of the visibility-change receipt (Phase 1B5-C). */
+export const NOTE_VISIBILITY_RECEIPT_KIND = "note_visibility_change";
+
 /**
  * Proof that a key was already used, and for what. Holds a fingerprint rather
  * than the command: the body is already stored once on the note, and a receipt
@@ -96,11 +99,26 @@ export interface NoteBodyIdempotencyReceipt {
   auditId: string;
 }
 
+/**
+ * Visibility-change receipt (Phase 1B5-C). Like the owner, pin and body receipts it
+ * has an explicit discriminant and no `noteId`: the change it proves is recoverable
+ * from `auditId` alone (the audit record's `entityId` is the note). It holds only
+ * the fingerprint of the command — never the body, the visibility labels or any
+ * diagnostics.
+ */
+export interface NoteVisibilityIdempotencyReceipt {
+  kind: typeof NOTE_VISIBILITY_RECEIPT_KIND;
+  key: string;
+  fingerprint: string;
+  auditId: string;
+}
+
 export type IdempotencyReceipt =
   | NoteIdempotencyReceipt
   | PrimaryOwnerIdempotencyReceipt
   | NotePinIdempotencyReceipt
-  | NoteBodyIdempotencyReceipt;
+  | NoteBodyIdempotencyReceipt
+  | NoteVisibilityIdempotencyReceipt;
 
 /**
  * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately, through 1B4-D.
@@ -148,6 +166,16 @@ function isString(value: unknown): value is string {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
+}
+
+/**
+ * The two WRITABLE visibilities (Phase 1B5-C). `role_restricted` is a valid
+ * `NoteVisibility` for a stored note but is NOT a legal side of a visibility-change
+ * audit record: it is not writable (no allowed-roles model, D-91), so a record
+ * naming it fails closed.
+ */
+function isWritableVisibility(value: unknown): value is "team" | "private" {
+  return value === "team" || value === "private";
 }
 
 function isNote(value: unknown): value is CrmNote {
@@ -217,6 +245,16 @@ function isAuditRecord(value: unknown): value is AuditRecord {
       // so there is nothing extra to validate — and nothing extra is tolerated,
       // because the switch fails closed on any unknown action.
       return value.entityType === "note" && value.reasonCode === "note_body_changed_by_employee";
+    case "note_visibility_changed":
+      // Phase 1B5-C. Both visibilities must be one of the two WRITABLE values
+      // (`team`/`private`); a `role_restricted` or unknown value on either side
+      // fails closed, so an overlay written by something we are not is rejected.
+      return (
+        value.entityType === "note" &&
+        value.reasonCode === "note_visibility_changed_by_employee" &&
+        isWritableVisibility(value.previousVisibility) &&
+        isWritableVisibility(value.nextVisibility)
+      );
     default:
       return false;
   }
@@ -235,6 +273,7 @@ function isReceipt(value: unknown): value is IdempotencyReceipt {
   if (value.kind === PRIMARY_OWNER_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind === NOTE_PIN_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind === NOTE_BODY_RECEIPT_KIND) return isString(value.auditId);
+  if (value.kind === NOTE_VISIBILITY_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind !== undefined) return false;
 
   return isString(value.noteId) && isString(value.auditId);

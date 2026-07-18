@@ -273,6 +273,7 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1B4-D | **User 360 Note Pin / Unpin** | выполнен — см. раздел ниже |
 | Phase 1B4-E | **User 360 Note Body Edit** | выполнен — `updateNoteBody`, provider-owned `canEditBody`, inline-редактор; D-82…D-85, docs/MUTATION_OVERLAY.md §§ (1B4-E) |
 | Phase 1B5-B | **Global Audit Workspace** | выполнен — read-only `/audit`, `getAuditRecords`, provider-owned safe `AuditRecordView`, canonical sorter/projector; `canViewAudit` — единственный data-gate (crm_admin/crm_manager), section-visible Limited-роли → restricted-state; D-86…D-90 |
+| Phase 1B5-C | **User 360 Note Visibility Change** | выполнен — `setNoteVisibility` (team↔private), provider-owned `canChangeVisibility`, inline visibility-editor, пятый audit-член `note_visibility_changed`; private по identity актора, не по роли; role_restricted отложен; D-91…D-95 |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -762,3 +763,36 @@ browser-local mutation-overlay audit-записей. Подробности ре
   реальный 200% reflow (720×450), zero horizontal overflow.
 - **Отложено (D-90):** note-visibility-aware audit projection и User 360 Limited audit-preview — будущие фазы;
   текущая фаза не создаёт private/role_restricted notes.
+
+---
+
+## Phase 1B5-C — User 360 Note Visibility Change ✅
+
+Автор заметки (с правом `edit_user_notes`) меняет видимость своей overlay-заметки
+team ↔ private в секции «Заметки» User 360. Решения: D-91…D-95; ревью:
+`docs/visual-reviews/PHASE_1B5_C_NOTE_VISIBILITY.md`.
+
+- **Mutation:** `setNoteVisibility(ctx, { userId, noteId, visibility: "team"|"private",
+  expectedUpdatedAt, idempotencyKey })`. Порядок и инварианты — как `updateNoteBody`
+  (D-93): desired end-state, `expectedUpdatedAt` concurrency, replay до предусловия,
+  один mutation-timestamp, атомарный write; переписываются только `visibility`+`updatedAt`.
+- **role_restricted отложен (D-91):** не в UI, не принимается командой → `invalid_input`;
+  остаётся будущей фазой до появления модели allowed roles.
+- **Authored + author-only (D-91):** менять можно только заметку в overlay `notes[]`,
+  созданную тем же `actorEmployeeId`; фикстурная → `invalid_input`; чужая → `unauthorized`.
+- **Private — по identity (D-92):** private-заметку видит только автор; смена **роли**
+  при неизменном `actorEmployeeId` её не скрывает; другой сотрудник (включая admin)
+  не видит; провайдер отдаёт `getUserNotesView.capabilities.canChangeVisibility`.
+- **Overlay/audit аддитивны (D-93):** ключ/version/поля неизменны; пятый union-член
+  `note_visibility_changed`, receipt kind `note_visibility_change`; guard'ы fail-closed
+  на role_restricted/неизвестных значениях; legacy 1B4-B…1B5-B читается без потерь.
+- **Global audit (D-94):** `/audit` показывает факт «изменил доступ к заметке», без
+  направления team/private, без тела/id/diagnostics; permission и pagination не тронуты.
+- **UI:** inline visibility-editor (native select) в строке заметки; один редактор на
+  строку (body/visibility взаимоисключающи, draft не теряется молча); контрол-«щит»,
+  отличный от pencil/pin; «Приватная заметка» спокойным тоном, словами. Состояния:
+  idle/editing/unchanged/pending/success/conflict/invalid/not_found/forbidden/storage/role-change.
+- **User 360 Audit Preview НЕ реализован (D-95):** ни read-op, ни permission/helper,
+  ни секция; отложен до реального actorId + team/owner scope.
+- **Тесты:** unit/component 1087 (было 1021, +66), E2E 143 (было 130, +13), discovery
+  143 в 12 файлах.

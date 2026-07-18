@@ -51,6 +51,8 @@ import type {
   CrmMutations,
   SetNotePinnedCommand,
   SetNotePinnedResult,
+  SetNoteVisibilityCommand,
+  SetNoteVisibilityResult,
   UpdateNoteBodyCommand,
   UpdateNoteBodyResult,
 } from "@/data/contracts/CrmMutations";
@@ -59,6 +61,7 @@ import type {
   AuditRecord,
   NoteBodyChangedAuditRecord,
   NotePinChangedAuditRecord,
+  NoteVisibilityChangedAuditRecord,
   PrimaryOwnerChangedAuditRecord,
 } from "@/domain/audit/audit";
 import { mockAuditId } from "@/domain/audit/audit";
@@ -73,6 +76,7 @@ import {
   MutationOverlayStore,
   NOTE_BODY_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
+  NOTE_VISIBILITY_RECEIPT_KIND,
   PRIMARY_OWNER_RECEIPT_KIND,
 } from "./overlay/mutation-overlay";
 import type { KeyValueStorage } from "./overlay/storage";
@@ -80,6 +84,7 @@ import {
   fingerprintAddNote,
   fingerprintAssignPrimaryOwner,
   fingerprintSetNotePinned,
+  fingerprintSetNoteVisibility,
   fingerprintUpdateNoteBody,
 } from "./overlay/fingerprint";
 import type { CrmTask, PriorityLevel } from "@/domain/tasks/task";
@@ -739,15 +744,17 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       );
       const roleMayEdit = canEditUserNotes(ctx.role);
 
-      const items: CrmNoteListItem[] = ordered.map((note) => ({
-        note,
-        capabilities: {
-          canEditBody:
-            roleMayEdit &&
-            overlayNoteIds.has(note.id) &&
-            note.authorEmployeeId === ctx.actorId,
-        },
-      }));
+      const items: CrmNoteListItem[] = ordered.map((note) => {
+        // Body edit and visibility change share the SAME four conditions: role,
+        // overlay membership (never the fixture note), visibility, and authorship.
+        // They are two fields so the UI never assumes they coincide.
+        const canAct =
+          roleMayEdit && overlayNoteIds.has(note.id) && note.authorEmployeeId === ctx.actorId;
+        return {
+          note,
+          capabilities: { canEditBody: canAct, canChangeVisibility: canAct },
+        };
+      });
 
       return items.length === 0
         ? empty(this.paginate<CrmNoteListItem>([]))
@@ -1659,6 +1666,254 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
         this.overlay.write(next);
       } catch {
         return fail<UpdateNoteBodyResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      return ok({ noteId: stored.id, updatedAt: at, audit, replayed: false });
+    });
+  }
+
+  /**
+   * Change the visibility of an employee-authored note between `team` and `private`
+   * (Phase 1B5-C).
+   *
+   * The order is `updateNoteBody`'s, step for step (docs/MUTATION_OVERLAY.md §7),
+   * because the same invariants apply — it rewrites an authored note in place and it
+   * must not become an oracle for hidden notes:
+   *   1. validate the idempotency key;
+   *   2. validate the desired visibility is exactly `team` or `private` — a
+   *      `role_restricted` or unknown value is `invalid_input` (D-91);
+   *   3. validate `expectedUpdatedAt` is a parseable instant;
+   *   4. resolve the user or `not_found`;
+   *   5. resolve the target through the SAME canonical projector every read uses;
+   *   6. a note not visible to the caller is `not_found`, exactly like one that does
+   *      not exist — the mutation cannot be turned into a probe for hidden notes;
+   *   7. role permission (`canEditUserNotes`) or `unauthorized`;
+   *   8. a visible note NOT in the overlay is the immutable fixture note →
+   *      `invalid_input`;
+   *   9. a note authored by someone else → `unauthorized`, even for a permitted role
+   *      (`private` is author-identity-based, not role-based — D-92);
+   *  10. idempotency replay (BEFORE the precondition, so a safe retry of an applied
+   *      change still replays after `updatedAt` has advanced — D-83);
+   *  11. a requested visibility equal to the stored one describes no change →
+   *      `invalid_input`, and no audit record is written;
+   *  12. `expectedUpdatedAt` must still match the stored `updatedAt`, else `conflict`;
+   *  13. one atomic overlay write.
+   *
+   * The stored note is rewritten in place — same id, createdAt, authorEmployeeId,
+   * userId, body and baseline `pinned`; only `visibility` and `updatedAt` change. The
+   * single mutation timestamp is shared by the note's `updatedAt` and the audit `at`
+   * (D-83). Nothing is persisted until the whole overlay is assembled, so any refusal
+   * — storage failure included — leaves the overlay untouched and writes no audit.
+   */
+  setNoteVisibility(
+    ctx: CrmContext,
+    command: SetNoteVisibilityCommand,
+  ): Promise<Result<SetNoteVisibilityResult>> {
+    return this.gate(() => {
+      // 1. Idempotency key.
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      // 2. Desired visibility — exactly `team` or `private`. `role_restricted` and any
+      // unknown value are rejected: `role_restricted` has no allowed-roles model and
+      // is not writable (D-91).
+      const visibility = command.visibility;
+      if (visibility !== "team" && visibility !== "private") {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "Visibility must be `team` or `private`.",
+          retriable: false,
+        });
+      }
+
+      // 3. `expectedUpdatedAt` — a parseable instant, checked before any lookup.
+      const expectedUpdatedAt =
+        typeof command.expectedUpdatedAt === "string" ? command.expectedUpdatedAt.trim() : "";
+      if (expectedUpdatedAt.length === 0 || Number.isNaN(Date.parse(expectedUpdatedAt))) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "expectedUpdatedAt is not a valid instant.",
+          retriable: false,
+        });
+      }
+
+      const noteId = typeof command.noteId === "string" ? command.noteId.trim() : "";
+      if (noteId.length === 0) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "Note id is required.",
+          retriable: false,
+        });
+      }
+
+      // 4. User.
+      const user = this.users.find((x) => x.identity.userId === command.userId);
+      if (!user) {
+        return fail<SetNoteVisibilityResult>({ code: "not_found", message: "User not found.", retriable: false });
+      }
+
+      // 5–6. The note as this caller sees it. A note absent from `visible` is either
+      // missing or hidden, and both answer `not_found`.
+      const overlay = this.overlay.read();
+      const visible = this.orderedVisibleNotes(ctx, user, overlay);
+      const visibleNote = visible.find((n) => n.id === noteId);
+      if (!visibleNote) {
+        return fail<SetNoteVisibilityResult>({ code: "not_found", message: "Note not found.", retriable: false });
+      }
+
+      // 7. Role permission.
+      if (!canEditUserNotes(ctx.role)) {
+        return fail<SetNoteVisibilityResult>({
+          code: "unauthorized",
+          message: "Role may not edit notes.",
+          retriable: false,
+        });
+      }
+
+      // 8. The stored, mutable note. A visible note NOT in the overlay is the fixture
+      // note: immutable, visibly present → `invalid_input`, not `not_found`.
+      const stored = overlay.notes.find((n) => n.id === noteId && n.userId === command.userId);
+      if (!stored) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "Note is not editable.",
+          retriable: false,
+        });
+      }
+
+      // 9. Authorship — only the note's own author may change its visibility, even
+      // with the permission. `private` is author-identity-based, not role-based (D-92).
+      if (stored.authorEmployeeId !== ctx.actorId) {
+        return fail<SetNoteVisibilityResult>({
+          code: "unauthorized",
+          message: "Only the note's author may change its visibility.",
+          retriable: false,
+        });
+      }
+
+      const fingerprint = fingerprintSetNoteVisibility({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        noteId,
+        visibility,
+      });
+
+      // 10. Replay — before the precondition, so a safe retry of an already-applied
+      // change still replays even though the stored `updatedAt` has advanced.
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.kind !== NOTE_VISIBILITY_RECEIPT_KIND || receipt.fingerprint !== fingerprint) {
+          return fail<SetNoteVisibilityResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const audit = overlay.auditRecords.find(
+          (a): a is NoteVisibilityChangedAuditRecord =>
+            a.id === receipt.auditId && a.action === "note_visibility_changed",
+        );
+        if (!audit) {
+          return fail<SetNoteVisibilityResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        // Reconstruct the ORIGINAL result from the audit alone: its `at` was the
+        // note's `updatedAt` at the moment of that change. A later change may have
+        // moved it since, so the note's current `updatedAt` would be a different
+        // change's result — which is why the result carries no note.
+        return ok({ noteId: audit.entityId, updatedAt: audit.at, audit, replayed: true });
+      }
+
+      // 11. No-change — a requested visibility equal to the stored one describes
+      // nothing to do. Malformed rather than a race (mirrors updateNoteBody), and it
+      // writes no audit record and does not touch `updatedAt`.
+      if (visibility === stored.visibility) {
+        return fail<SetNoteVisibilityResult>({
+          code: "invalid_input",
+          message: "Note visibility is unchanged.",
+          retriable: false,
+        });
+      }
+
+      // 12. Precondition — refuse if the note changed since the caller read it.
+      if (expectedUpdatedAt !== stored.updatedAt) {
+        return fail<SetNoteVisibilityResult>({
+          code: "conflict",
+          message: "Note changed since it was read.",
+          retriable: false,
+        });
+      }
+
+      // 13. One atomic write.
+      const sequence = overlay.sequence + 1;
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      // The stored visibility must be one of the two writable values for the audit
+      // record's `previousVisibility`. A note can only have reached `private` through
+      // THIS mutation (nothing else writes non-`team`), and fixtures/authored notes
+      // are born `team`, so `stored.visibility` is always `team` or `private` here.
+      const previousVisibility: "team" | "private" =
+        stored.visibility === "private" ? "private" : "team";
+
+      const updatedNote: CrmNote = {
+        ...stored,
+        visibility,
+        updatedAt: at,
+      };
+
+      const audit: NoteVisibilityChangedAuditRecord = {
+        id: mockAuditId(sequence),
+        action: "note_visibility_changed",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "note",
+        entityId: stored.id,
+        at,
+        reasonCode: "note_visibility_changed_by_employee",
+        previousVisibility,
+        nextVisibility: visibility,
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        // The authored note is rewritten in place: same id, createdAt, author,
+        // userId, body and baseline pinned — only visibility and updatedAt change.
+        notes: overlay.notes.map((n) => (n.id === stored.id ? updatedNote : n)),
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { kind: NOTE_VISIBILITY_RECEIPT_KIND, key, fingerprint, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<SetNoteVisibilityResult>({
           code: "internal",
           message: "Mock overlay could not be persisted.",
           retriable: true,

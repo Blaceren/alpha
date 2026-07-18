@@ -59,6 +59,10 @@ function notesMutations(addNote: CrmMutations["addNote"]): CrmMutations {
     updateNoteBody: () => {
       throw new Error("this suite must not call updateNoteBody");
     },
+    // Visibility change has its own suite (note-visibility.test.tsx).
+    setNoteVisibility: () => {
+      throw new Error("this suite must not call setNoteVisibility");
+    },
   };
 }
 

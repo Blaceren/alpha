@@ -162,3 +162,33 @@ export function fingerprintUpdateNoteBody(input: {
     input.body,
   ]);
 }
+
+/**
+ * The identity of a setNoteVisibility command (Phase 1B5-C): which user, which
+ * note, which actor, which role, which DESIRED visibility. Any difference in any
+ * part is a different command, and reusing a key across them is a conflict.
+ *
+ * `expectedUpdatedAt` is deliberately NOT part of it, for the same reason
+ * `expectedOwnerId`/`expectedPinned`/`expectedUpdatedAt` are excluded from the
+ * owner/pin/body fingerprints (D-72/D-78/D-83): the fingerprint answers "what was
+ * asked", and the precondition a command was sent under is not part of that. Once a
+ * visibility change has been applied the note's `updatedAt` has advanced, so a safe
+ * retry with the original precondition must still replay, not conflict. The
+ * visibility token is length-prefixed like every other part, so it cannot collide
+ * with a note id or a role.
+ */
+export function fingerprintSetNoteVisibility(input: {
+  userId: string;
+  actorId: string;
+  role: string;
+  noteId: string;
+  visibility: "team" | "private";
+}): string {
+  return stableFingerprint([
+    input.userId,
+    input.actorId,
+    input.role,
+    input.noteId,
+    input.visibility,
+  ]);
+}
