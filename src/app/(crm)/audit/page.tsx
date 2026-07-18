@@ -1,15 +1,10 @@
-import { SectionPlaceholder } from "@/components/navigation/section-placeholder";
+import { AuditWorkspace } from "@/features/audit/audit-workspace";
 
+/**
+ * Global Audit Workspace (Phase 1B5-B). A read-only ledger of the browser-local
+ * mutation-overlay audit records, gated by `canViewAudit`. Data comes only via the
+ * CrmDataProvider — never the overlay or fixtures directly.
+ */
 export default function AuditPage() {
-  return (
-    <SectionPlaceholder
-      title="Audit"
-      purpose="Неизменяемый журнал действий сотрудников и системы."
-      plannedFeatures={[
-        "Глобальный журнал с фильтрами",
-        "Actor/action/entity/before-after",
-        "Audit-preview в User 360",
-      ]}
-    />
-  );
+  return <AuditWorkspace />;
 }

@@ -18,11 +18,13 @@ import type { Paginated, Result } from "@/data/contracts/result";
 import { empty, fail, ok, stale } from "@/data/contracts/result";
 import type { CrmRole } from "@/domain/identity/roles";
 import type {
+  AuditRecordView,
   CrmContext,
   CrmDataProvider,
   CrmNote,
   CrmNoteListItem,
   FinancialOperationsSummary,
+  GetAuditRecordsInput,
   GetFinOpsInput,
   GetQueueInput,
   GetRecommendedInput,
@@ -60,6 +62,7 @@ import type {
   PrimaryOwnerChangedAuditRecord,
 } from "@/domain/audit/audit";
 import { mockAuditId } from "@/domain/audit/audit";
+import { projectAuditRecords } from "@/domain/audit/audit-view";
 import { isPrimaryOwnerCandidate, PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
 import type { NoteBodyError } from "@/domain/notes/note";
 import { mockNoteId, normalizeNoteBody, NOTE_BODY_MAX_LENGTH } from "@/domain/notes/note";
@@ -91,7 +94,8 @@ import { deriveRecommendations } from "@/domain/recommendations/derive";
 import { projectFinancial } from "@/domain/financial/projection";
 import { projectIdentity } from "@/domain/identity/identity-projection";
 import { toFinancialBucket } from "@/domain/financial/financial";
-import { canAssignOwner, canEditUserNotes, canViewExactFinancials } from "@/domain/identity/access";
+import { canAssignOwner, canEditUserNotes, canViewAudit, canViewExactFinancials } from "@/domain/identity/access";
+import { ownerLabel, UNKNOWN_USER_LABEL } from "@/config/labels";
 import { computeSegments } from "@/domain/segments/segments";
 import { buildTodayWorkspace } from "@/domain/today/builder";
 
@@ -116,6 +120,9 @@ interface Derived {
 }
 
 const PAGE_DEFAULT = 50;
+
+/** Audit Workspace page size (Phase 1B5-B, contract §6): newest 20 per page. */
+const PAGE_AUDIT = 20;
 
 /** Why a timeline range was rejected. Diagnostic text — never shown raw to users. */
 const TIMELINE_RANGE_MESSAGE: Record<TimelineRangeError, string> = {
@@ -868,6 +875,63 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
           displayName: e.displayName,
         })),
       );
+    });
+  }
+
+  /**
+   * The global Audit Workspace read (Phase 1B5-B).
+   *
+   * Order is exactly the contract's (§1): permission → read → project → sort →
+   * paginate. `canViewAudit` is checked FIRST and BEFORE the overlay is touched, so
+   * a role that may not view the log neither reads storage nor receives a record —
+   * `unauthorized` is returned without ever building a view. Only `crm_admin` and
+   * `crm_manager` hold `view_audit` (matrix §1), so every other role stops here.
+   *
+   * The overlay read is fail-closed by existing design (docs/MUTATION_OVERLAY.md):
+   * a corrupt overlay degrades to an EMPTY one, so this read shows an honest
+   * empty-state rather than partial or reconstructed records. A genuine storage
+   * failure is surfaced through `gate` (errorMode) as `upstream_unavailable`, which
+   * the UI renders as a localized error with retry — no raw diagnostics leave here.
+   *
+   * Projection and ordering are the canonical `projectAuditRecords`: newest-first,
+   * `id` descending as tie-break, on a COPY of the append-only log. Every raw id is
+   * resolved to a caption before it can leave — actor and owner through the
+   * canonical `ownerLabel` (unknown → «Неизвестный сотрудник», null owner → «Не
+   * назначен»), the target user through the dataset's display name (absent →
+   * «Неизвестный пользователь»). No employee/note/user id, no note body, no reason
+   * code and no storage metadata is ever placed in the view.
+   */
+  getAuditRecords(
+    ctx: CrmContext,
+    input: GetAuditRecordsInput,
+  ): Promise<Result<Paginated<AuditRecordView>>> {
+    return this.gate(() => {
+      // 1. Permission — before any storage read. A refused role gets no data.
+      if (!canViewAudit(ctx.role)) {
+        return fail<Paginated<AuditRecordView>>({
+          code: "unauthorized",
+          message: "Role may not view the global audit log.",
+          retriable: false,
+        });
+      }
+
+      // 2. Read the append-only overlay (fail-closed empty on corruption).
+      const overlay = this.overlay.read();
+
+      // 3–5. Project + sort through the canonical reader. Target names come from the
+      // untouched dataset; actor/owner names from the canonical directory.
+      const targetNames = new Map<UserId, string>(
+        this.users.map((u) => [u.identity.userId, u.identity.displayName]),
+      );
+      const views = projectAuditRecords(overlay.auditRecords, {
+        employeeName: (id) => ownerLabel(id),
+        ownerName: (id) => ownerLabel(id),
+        userName: (id) => targetNames.get(id) ?? UNKNOWN_USER_LABEL,
+      });
+
+      // 6. Paginate — page size 20, newest first (already ordered above).
+      const page = this.paginate(views, input.page?.cursor, input.page?.pageSize ?? PAGE_AUDIT);
+      return page.items.length === 0 ? empty(page) : ok(page);
     });
   }
 

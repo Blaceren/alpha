@@ -317,3 +317,27 @@ features/user-360/  components/user-notes.tsx (inline-редактор) · hooks
   провайдером через `getUserNotesView.capabilities.canEditBody` — React не разбирает id заметки.
 - **Конкуренция `expectedUpdatedAt`** (D-83); UI без optimistic — refetch `getUserNotesView` (D-85);
   Escape отменяет, фокус возвращается на «Изменить»; storage-fail держит черновик, retry тем же ключом.
+
+### Phase 1B5-B — Global Audit Workspace (read-only)
+
+```
+domain/audit/       audit-view.ts (AuditRecordView — safe discriminated union; sortAuditRecords + projectAuditRecords)
+data/contracts/     CrmDataProvider.ts (+getAuditRecords, GetAuditRecordsInput; ре-экспорт AuditRecordView)
+data/mock/          MockCrmDataProvider.ts (+getAuditRecords: canViewAudit → read → project → sort → paginate)
+config/             labels.ts (+AUDIT_LABEL, auditRowText, UNKNOWN_USER_LABEL)
+features/audit/     audit-workspace.tsx · audit-ledger.tsx · audit-states.tsx · audit-pagination.tsx · hooks/use-audit-query.ts
+app/(crm)/audit/    page.tsx (заменил SectionPlaceholder на AuditWorkspace)
+```
+
+- **Только новый reader** существующих `auditRecords`: storage key/`version`/структура overlay/guards/
+  receipts/sequence/owner-pin resolvers не тронуты, лог append-only. `CrmMutations` неизменен.
+- **Safe read-model** (D-87): UI получает не сырой `AuditRecord`, а provider-owned `AuditRecordView` —
+  только резолвнутые имена, `at`, direction pin (`pinned`), owner before/after имена; никаких raw id,
+  тела/фрагмента, PII, финансов, idempotency key, reasonCode, storage diagnostics. `id` — только React
+  key и tie-break. Canonical `sortAuditRecords` (`at` DESC → `id` DESC) на копии, без мутации массива.
+- **Единственный data-gate — `canViewAudit`** (D-86): данные у crm_admin/crm_manager; проверка ПЕРВОЙ, до
+  чтения overlay. Семь section-visible ролей видят пункт навигации; пять Limited → restricted-state.
+- **Fail-closed** (D-88): corrupt overlay → empty-state; storage failure (`gate`/errorMode) → локализованный
+  error с retry, raw diagnostics в DOM не попадают. Один h1, реальный 200% reflow, zero horizontal overflow.
+- **Направление зависимостей не нарушено:** `domain/audit/audit-view` не знает про React/storage/fixtures —
+  резолверы имён внедряются провайдером (из `ownerLabel` и dataset). `config/labels` зависит от домена.

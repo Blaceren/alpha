@@ -171,6 +171,11 @@ ata-crm/                          # отдельный репозиторий
 - **Риски:** без утверждённых SLA-порогов логика приблизительна (см. вопросы).
 
 ### Этап 11 — Financial Operations + Analytics/Audit (частично) + placeholders
+> **Обновление (Phase 1B5-B, D-86…D-90):** глобальный Audit-журнал реализован раньше этого этапа —
+> read-only экран `/audit` (`getAuditRecords`, provider-owned safe `AuditRecordView`, gated `canViewAudit`).
+> Первая версия — без фильтров (D-89). Audit-preview в User 360 остаётся будущей фазой (D-90). Остальной
+> scope этапа 11 (Financial Ops, Analytics/Communications/Automations placeholder'ы) не начат.
+
 - **Scope:** Financial Ops (approaching/grace/suspended/restored/conflicts/агрегаты) с freshness и маскированием; Audit-журнал (просмотр mock-записей) + preview в User 360; Analytics/Communications/Automations как продуманные placeholder'ы с контрактами и mock-историей в Timeline.
 - **Не входит:** реальные графики Analytics; реальное исполнение Automations/Communications.
 - **Dependencies:** этапы 3, 6, `getFinancialOperationsSummary`.

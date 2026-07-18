@@ -272,6 +272,7 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1B4-C | **Primary Owner Assignment** | выполнен — см. раздел ниже |
 | Phase 1B4-D | **User 360 Note Pin / Unpin** | выполнен — см. раздел ниже |
 | Phase 1B4-E | **User 360 Note Body Edit** | выполнен — `updateNoteBody`, provider-owned `canEditBody`, inline-редактор; D-82…D-85, docs/MUTATION_OVERLAY.md §§ (1B4-E) |
+| Phase 1B5-B | **Global Audit Workspace** | выполнен — read-only `/audit`, `getAuditRecords`, provider-owned safe `AuditRecordView`, canonical sorter/projector; `canViewAudit` — единственный data-gate (crm_admin/crm_manager), section-visible Limited-роли → restricted-state; D-86…D-90 |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -729,3 +730,35 @@ reset-overlay UI, backend/API/database. Матрица прав, identity-про
 - **`not_found` раньше `unauthorized`** — сохранённая mock-семантика (та же, что у `addNote`/
   `assignPrimaryOwner`): запрещённая роль могла бы зондировать существование, но из UI путь недостижим
   (контрола нет), импакт нулевой (User 360 открыт всем).
+
+---
+
+## Phase 1B5-B — Global Audit Workspace (read-only) ✅
+
+`/audit` перестал быть `SectionPlaceholder` и стал полноценным read-only ledger-экраном
+browser-local mutation-overlay audit-записей. Подробности решений: D-86…D-90; ревью:
+`docs/visual-reviews/PHASE_1B5_B_AUDIT_WORKSPACE.md`.
+
+- **Provider contract:** новая read-операция `getAuditRecords(ctx, { page? }) → Result<Paginated<AuditRecordView>>`.
+  Порядок: `canViewAudit` → unauthorized при false (до чтения storage) → read overlay → project → sort → paginate.
+  `CrmMutations` не изменён (ровно addNote/assignPrimaryOwner/setNotePinned/updateNoteBody).
+- **Safe read-model:** `AuditRecordView` (`domain/audit/audit-view`) — discriminated union, provider-owned;
+  никаких raw employee/note/user id, тела/фрагмента заметки, email/телефона/финансов, idempotency key,
+  reasonCode, storage diagnostics. `id` — только React key и tie-break, не рендерится.
+- **Canonical sorter/projector:** `sortAuditRecords` (`at` DESC, затем `id` DESC, на копии, без мутации
+  append-only массива) + `projectAuditRecord`/`projectAuditRecords`. Имена: actor/owner через `ownerLabel`
+  (unknown → «Неизвестный сотрудник», null → «Не назначен»), target через dataset display name
+  (unknown → «Неизвестный пользователь»); raw id никогда не fallback.
+- **Permissions:** данные — только crm_admin/crm_manager (`canViewAudit`). Семь section-visible ролей видят
+  пункт навигации; пять Limited (retention_manager/mentor/support/moderator/analyst) на `/audit` получают
+  restricted-state; content_manager/read_only не видят пункт и при прямом заходе тоже получают restricted-state.
+  Матрица/`SECTION_VISIBILITY`/`canViewAudit` не изменены.
+- **Overlay safety:** только новый reader существующих `auditRecords`; storage key/`version`/структура/guards/
+  receipts/sequence/resolvers не тронуты. Corrupt overlay → fail-closed empty-state; storage failure
+  (`gate`/errorMode → `upstream_unavailable`) → локализованный error-state с retry, без raw diagnostics.
+- **UI:** одна плотная chronological ledger-секция (не dashboard, не карточка-на-событие); pin direction
+  словами; page size 20, pagination только при наличии следующей страницы; browser-local demo-подпись,
+  без дублирования верхнего DEMO MODE. Один h1, headings у empty/restricted/error, клавиатурная pagination,
+  реальный 200% reflow (720×450), zero horizontal overflow.
+- **Отложено (D-90):** note-visibility-aware audit projection и User 360 Limited audit-preview — будущие фазы;
+  текущая фаза не создаёт private/role_restricted notes.

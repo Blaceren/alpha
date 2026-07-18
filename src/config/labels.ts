@@ -11,6 +11,7 @@ import type {
   ValueSegment,
 } from "@/domain/lifecycle/state";
 import { EMPLOYEE_DIRECTORY } from "@/domain/identity/employees";
+import type { AuditRecordView } from "@/domain/audit/audit-view";
 import type { NoteVisibility } from "@/domain/notes/note";
 import type { StateEvidence, StateEvidenceCode } from "@/domain/shared/primitives";
 import type { SignalCode, SignalSeverity } from "@/domain/signals/signal";
@@ -316,6 +317,78 @@ export const NOTE_EDIT_LABEL = {
 } as const;
 
 /**
+ * Global Audit Workspace (`/audit`, Phase 1B5-B). Same single-source, no-raw-code,
+ * no-diagnostics rule as the rest. Nothing here interpolates a raw id, a note body
+ * or any bookkeeping — the action sentences take already-resolved names, and the
+ * pin direction is rendered as WORDS (закрепил/открепил), never a colour.
+ *
+ * The header copy is deliberately honest about what this log is: a browser-local
+ * demo journal, NOT an immutable system/compliance record. Every string that
+ * describes it says so.
+ */
+export const AUDIT_LABEL = {
+  title: "Audit",
+  subtitle: "Последние действия, сохранённые в этом браузере.",
+  /** Calm demo caption — pairs with the top-level DEMO MODE badge, never repeats it. */
+  demoNote: "Локальный demo-журнал. Серверная история пока не подключена.",
+  loading: "Загрузка журнала",
+  /** Section heading over the ledger; the count sits beside it. */
+  ledgerHeading: "Журнал действий",
+  totalLabel: "Всего записей",
+  emptyTitle: "Действий ещё не было",
+  emptyText:
+    "Изменения заметок и ответственного, выполненные в этом браузере, появятся здесь.",
+  restrictedTitle: "Глобальный журнал недоступен",
+  restrictedText: "Ваша роль не может просматривать глобальный журнал действий.",
+  errorTitle: "Не удалось загрузить журнал",
+  retry: "Повторить",
+  /** Owner before→after connector, e.g. «Не назначен → Менеджер». */
+  ownerTransitionLabel: "Ответственный",
+} as const;
+
+/** One rendered audit row: the primary sentence and an optional detail line. */
+export interface AuditRowText {
+  /** Human-readable sentence. Already contains the resolved actor and target. */
+  primary: string;
+  /** Owner before→after (owner changes only), else null. */
+  detail: string | null;
+}
+
+/**
+ * The single source of an audit row's human text (Phase 1B5-B). Takes the safe,
+ * already-resolved `AuditRecordView` — it never sees a raw id, a note body or a
+ * reason code — and returns the exact copy the contract specifies (§5). The pin
+ * direction is rendered as WORDS (закрепил/открепил), so it never depends on
+ * colour, and the body-change sentence never reveals any text.
+ */
+export function auditRowText(view: AuditRecordView): AuditRowText {
+  switch (view.action) {
+    case "note_added":
+      return {
+        primary: `${view.actorName} добавил заметку для ${view.targetUserName}`,
+        detail: null,
+      };
+    case "primary_owner_changed":
+      return {
+        primary: `${view.actorName} изменил ответственного у ${view.targetUserName}`,
+        detail: `${view.previousOwnerName} → ${view.nextOwnerName}`,
+      };
+    case "note_pin_changed":
+      return {
+        primary: view.pinned
+          ? `${view.actorName} закрепил заметку у ${view.targetUserName}`
+          : `${view.actorName} открепил заметку у ${view.targetUserName}`,
+        detail: null,
+      };
+    case "note_body_changed":
+      return {
+        primary: `${view.actorName} изменил текст заметки у ${view.targetUserName}`,
+        detail: null,
+      };
+  }
+}
+
+/**
  * Note visibility axis. Phase 1B4-A writes `team` only (D-54); `private` is
  * readable by its author and `role_restricted` is always hidden (D-55), so the
  * last entry exists for exhaustiveness rather than for a screen that shows it.
@@ -457,6 +530,13 @@ export const OWNER_LABEL: Record<string, string> = Object.fromEntries(
 
 /** Shown instead of an id we have no caption for. */
 export const UNKNOWN_OWNER_LABEL = "Неизвестный сотрудник";
+
+/**
+ * Shown instead of a target user id the dataset cannot place (Phase 1B5-B). A raw
+ * user id is never printed as a fallback — the audit view resolves the target's
+ * display name, and this neutral caption stands in when there is none.
+ */
+export const UNKNOWN_USER_LABEL = "Неизвестный пользователь";
 
 /**
  * `humanizeCode` is deliberately NOT the fallback here (Phase 1B4-C). It turns

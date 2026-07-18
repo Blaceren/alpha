@@ -45,7 +45,7 @@
 Примечания:
 ¹ Export — только разрешённые наборы, с audit-логом каждой выгрузки; personal financial exports требуют Exact financials.
 ² Settings у manager — управление saved views/справочниками команды, **без** ролевого администрирования.
-³ Audit «Limited» = видит audit-preview по своим пользователям/действиям в User 360, но не глобальный журнал.
+³ Audit «Limited» = задуманный audit-preview по своим пользователям/действиям в User 360, но не глобальный журнал. **(Phase 1B5-B, D-86/D-90)** глобальный Audit Workspace на `/audit` гейтится ТОЛЬКО `canViewAudit` (право `view_audit`) → данные у crm_admin/crm_manager. Навигационная видимость раздела шире (7 ролей по `SECTION_VISIBILITY.audit`), но пять section-visible Limited-ролей (retention_manager/mentor/support/moderator/analyst) на `/audit` получают спокойный restricted-state, а не данные и не empty-state; content_manager/read_only не видят пункт и при прямом заходе тоже получают restricted-state. Матрица/`SECTION_VISIBILITY`/`canViewAudit` не менялись. Limited audit-preview в User 360 остаётся будущей фазой (D-90).
 ⁴ Support видит финансовый **факт-контекст** (funded/suspended, freshness), но не точные суммы, если нет отдельного гранта.
 ⁵ Analyst видит финансы только **агрегированно**; сырые персональные суммы — None.
 

@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D) и `updateNoteBody` (1B4-E); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`).
+- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D) и `updateNoteBody` (1B4-E); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`); Phase 1B5-B — read `getAuditRecords` (§3c, provider-owned safe `AuditRecordView`).
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -76,6 +76,7 @@ interface CrmDataProvider {
   getUserSignals(ctx: CrmContext, input: { userId: UserId; includeExpired?: boolean }): Promise<Result<UserSignal[]>>;
   getRecommendedActions(ctx: CrmContext, input: GetRecommendedInput): Promise<Result<RecommendedAction[]>>;
   getPrimaryOwnerCandidates(ctx: CrmContext): Promise<Result<PrimaryOwnerCandidate[]>>;  // Phase 1B4-C (§3b)
+  getAuditRecords(ctx: CrmContext, input: GetAuditRecordsInput): Promise<Result<Paginated<AuditRecordView>>>;  // Phase 1B5-B (§3c)
 }
 ```
 
@@ -209,6 +210,20 @@ interface CrmDataProvider {
 - **Output:** `Result<PrimaryOwnerCandidate[]>`, `PrimaryOwnerCandidate { employeeId; displayName }`.
 - **Permission:** Assign — `canAssignOwner(ctx.role)`. Роли без Assign получают **`unauthorized`**, а не пустой список: пустой список утверждает «некого назначить» — другое и неверное. UI запрещённых ролей операцию не вызывает вовсе (D-68).
 - **Почему отдельно от `getUser360`:** список не про конкретного пользователя (один для всех), складывать его в агрегат — перечитывать профиль ради выпадающего списка. **Текущий** owner остаётся в `getUser360` (D-35). Mock берёт список из canonical employee directory (D-67); role/email/team/нагрузка/финансы **не** возвращаются.
+
+---
+
+## 3c. getAuditRecords (Phase 1B5-B, read-only)
+
+- **Назначение:** глобальный Audit Workspace (`/audit`) — read существующих browser-local mutation-overlay audit-записей.
+- **Input:** `GetAuditRecordsInput { page?: PageParams }`. Только pagination — фильтров/поиска/date range/actor/user-filter нет (D-89).
+- **Output:** `Result<Paginated<AuditRecordView>>`. `AuditRecordView` — provider-owned safe discriminated union (`domain/audit/audit-view`): `note_added` / `primary_owner_changed` (+`previousOwnerName`/`nextOwnerName`) / `note_pin_changed` (+`pinned` из `nextPinned`) / `note_body_changed`; каждая несёт `id, action, at, actorName, targetUserName, mock`. Сырой `AuditRecord` в UI **не** попадает: нет raw employee/note/user id, тела/фрагмента, email/телефона/финансов, idempotency key, reasonCode, storage diagnostics. `id` — только React key и tie-break.
+- **Порядок операций (§1 плана фазы):** `canViewAudit(ctx.role)` → `unauthorized` при false (**до** чтения overlay) → read overlay → project → sort → paginate.
+- **Sort:** canonical `sortAuditRecords` — `at` DESC, затем `id` DESC как стабильный tie-break; на копии, без мутации append-only массива, без опоры на позицию в `overlay.auditRecords`.
+- **Имена:** actor/owner через `ownerLabel` (unknown → «Неизвестный сотрудник», null owner → «Не назначен»), target через dataset display name (unknown → «Неизвестный пользователь»). Raw id никогда не fallback.
+- **Pagination:** page size 20, newest first, `total` в `page`.
+- **Permission:** **`canViewAudit(ctx.role)`** — единственный data-gate; данные только у crm_admin/crm_manager, остальные → `unauthorized` без чтения/выдачи (D-86).
+- **Errors/loading:** corrupt overlay → fail-closed `empty` (parser отдаёт пустой overlay); storage failure (`gate`/errorMode) → `upstream_unavailable` (retriable) → локализованный error-state с retry; raw `CrmError.message` в DOM не рендерится (D-88).
 
 ---
 
@@ -468,6 +483,7 @@ interface CrmDataProvider {
 | getUserSignals | View User 360 | evidence маскируется |
 | getRecommendedActions | View раздела | — |
 | getPrimaryOwnerCandidates | Assign (`canAssignOwner`) | иначе `unauthorized`, не пустой список (D-68) |
+| getAuditRecords | **`canViewAudit`** (crm_admin/crm_manager) | единственный data-gate; иначе `unauthorized` без чтения overlay; safe `AuditRecordView` (D-86/D-87) |
 
 ---
 

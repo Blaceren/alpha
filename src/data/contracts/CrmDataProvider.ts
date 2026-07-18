@@ -24,6 +24,7 @@ import type { PriorityBand } from "@/domain/priority/priority";
 import type { UserSummary } from "@/domain/users/user";
 import type { User360 } from "@/domain/users/user-360";
 import type { CrmNote } from "@/domain/notes/note";
+import type { AuditRecordView } from "@/domain/audit/audit-view";
 import type { TodayWorkspace } from "@/domain/today/today";
 import type { TodayQuery } from "@/domain/today/today-query";
 import type { Paginated, PageParams, Result, SortParam } from "./result";
@@ -215,6 +216,26 @@ export interface CrmNoteListItem {
   };
 }
 
+/* ---------------------------------------------------------------- Audit */
+
+/**
+ * The safe, UI-facing audit read model lives in the domain
+ * (`@/domain/audit/audit-view`) and is re-exported here, exactly as Today, User
+ * 360 and CrmNote are: one `AuditRecordView`, projected and ordered by the
+ * provider, never a raw storage `AuditRecord` and never a contract copy to keep in
+ * sync (Phase 1B5-B).
+ */
+export type { AuditRecordView } from "@/domain/audit/audit-view";
+
+/**
+ * Input for `getAuditRecords`. Only pagination — the first version has no filters,
+ * no search, no date range and no actor/user filter (D4), so nothing else is
+ * added "for later".
+ */
+export interface GetAuditRecordsInput {
+  page?: PageParams;
+}
+
 /* --------------------------------------------------------------- Queues */
 
 export interface QueueItem {
@@ -326,4 +347,19 @@ export interface CrmDataProvider {
    * `getUser360` (D-35) — this operation only supplies what may be chosen.
    */
   getPrimaryOwnerCandidates(ctx: CrmContext): Promise<Result<PrimaryOwnerCandidate[]>>;
+  /**
+   * The global Audit Workspace read (Phase 1B5-B). Returns the browser-local
+   * mutation-overlay audit records, already projected to the safe `AuditRecordView`
+   * and ordered newest-first, for a role that may see them.
+   *
+   * Permission: the SINGLE global gate is `canViewAudit(ctx.role)` — only
+   * `crm_admin` and `crm_manager`. Every other role gets `unauthorized`, checked
+   * BEFORE the overlay is read, so a role that may not view the log neither reads
+   * nor receives any record. This is a read, not a mutation, so it lives here; it
+   * never writes and it never touches the append-only log's write semantics.
+   */
+  getAuditRecords(
+    ctx: CrmContext,
+    input: GetAuditRecordsInput,
+  ): Promise<Result<Paginated<AuditRecordView>>>;
 }

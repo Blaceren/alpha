@@ -290,9 +290,19 @@ note-add-записи нести owner- или pin-поля, а owner/pin-зап
 диагностики storage. `reasonCode` — закрытый enum, а не свободная строка: свободный текст — ровно тот
 путь, которым тело заметки просочилось бы в журнал.
 
-Audit UI и read endpoint **не созданы** — записи только пишутся. UI заметок (1B4-B) audit не показывает:
-в success-подтверждении нет ни `auditId`, ни `noteId`, ни actor'а — сотруднику сообщается факт
-«Заметка добавлена», а не наша бухгалтерия.
+**(1B5-B) четвёртый член union — `NoteBodyChangedAuditRecord`** (базовые поля + `action: "note_body_changed"`,
+`reasonCode: "note_body_changed_by_employee"`; никакого previous/next, фрагмента, длины или тела — D-84).
+
+**(1B5-B) read endpoint появился, write-семантика неизменна.** Global Audit Workspace (`/audit`) читает
+существующий `auditRecords` через новую read-операцию `getAuditRecords` (DATA_PROVIDER_CONTRACT §3c) — это
+**только reader**: storage key, `version`, структура overlay, guards audit-actions, receipts, sequence и
+owner/pin effective resolvers не тронуты, лог остаётся append-only. UI получает не сырой `AuditRecord`, а
+provider-owned safe `AuditRecordView` (`domain/audit/audit-view`, D-87): canonical `sortAuditRecords`
+(`at` DESC → `id` DESC, на копии) + projector, резолвящий actor/owner через `ownerLabel` и target через
+dataset. Данные — только crm_admin/crm_manager (`canViewAudit`, D-86). Corrupt overlay → тот же fail-closed
+empty (§2), storage failure → локализованный error с retry; raw diagnostics в DOM не попадают (D-88). UI
+заметок (1B4-B) по-прежнему audit не показывает: в success-подтверждении нет ни `auditId`, ни `noteId`, ни
+actor'а — сотруднику сообщается факт «Заметка добавлена», а не наша бухгалтерия.
 
 ---
 

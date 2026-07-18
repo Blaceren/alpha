@@ -348,7 +348,11 @@ Inline, не dialog и не sheet (D-59): новая заметка сортир
 не изменили этот экран. **Phase 1B4-B** добавил секцию «Заметки» (D-58…D-63); **Phase 1B4-C** добавил
 назначение primary owner в секции «Ответственный и работа» (D-64…D-74). Не начаты: редактирование/
 удаление заметок, pin/unpin, выбор visibility, tasks/cases, task/case assignees, смена статуса,
-закрытие сигналов, выполнение рекомендаций, audit-экран, кнопка сброса overlay, backend.
+закрытие сигналов, выполнение рекомендаций, кнопка сброса overlay, backend.
+
+**Audit (Phase 1B5-B).** Глобальный Audit Workspace реализован отдельным экраном `/audit` (read-only,
+`getAuditRecords`, gated `canViewAudit`), НЕ как preview внутри User 360. Limited audit-preview по своим
+пользователям/действиям в User 360 остаётся будущей фазой (D-90) — в этой фазе в профиль ничего не добавлено.
 
 _Связано: DATA_PROVIDER_CONTRACT.md, ROLE_PERMISSION_MATRIX.md, PII_ACCESS_POLICY.md,
 CRM_INFORMATION_ARCHITECTURE.md §5, MUTATION_OVERLAY.md, DECISIONS.md (D-34…D-38, D-53…D-57),
