@@ -11,6 +11,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import {
   NOTES_LABEL,
+  NOTE_DELETE_LABEL,
   NOTE_EDIT_LABEL,
   NOTE_PIN_LABEL,
   NOTE_VISIBILITY_EDIT_LABEL,
@@ -27,13 +28,20 @@ import { useUserNotes } from "../hooks/use-user-notes";
 import { useSetNotePinned, type UseSetNotePinned } from "../hooks/use-set-note-pinned";
 import { useUpdateNoteBody, type UseUpdateNoteBody } from "../hooks/use-update-note-body";
 import { useSetNoteVisibility, type UseSetNoteVisibility } from "../hooks/use-set-note-visibility";
+import { useDeleteNote, type UseDeleteNote } from "../hooks/use-delete-note";
 import { noteErrorMessage } from "../lib/note-error";
 import { notePinErrorMessage } from "../lib/note-pin-error";
 import { noteEditErrorMessage } from "../lib/note-edit-error";
 import { noteVisibilityErrorMessage } from "../lib/note-visibility-error";
+import { noteDeleteErrorMessage } from "../lib/note-delete-error";
 
-/** Which inline editor a row has open. Exactly one per row, and one per list. */
-type EditorMode = "body" | "visibility";
+/**
+ * Which inline surface a row has open. Exactly one per row, and one per list — body
+ * edit, visibility edit and the delete confirm can never be open at the same time
+ * (D-96). `delete` is a confirmation, not a draft editor, but it takes the same
+ * single slot so opening it cannot silently discard an open editor's draft.
+ */
+type EditorMode = "body" | "visibility" | "delete";
 interface ActiveEditor {
   noteId: string;
   mode: EditorMode;
@@ -80,6 +88,7 @@ export function UserNotes({
   const pin = useSetNotePinned(userId, { mutationsOverride });
   const edit = useUpdateNoteBody(userId, { mutationsOverride });
   const visibility = useSetNoteVisibility(userId, { mutationsOverride });
+  const del = useDeleteNote(userId, { mutationsOverride });
 
   // Which row (if any) has an editor open, and in which mode. Single-valued, so only
   // one editor of one mode is ever open at a time.
@@ -90,9 +99,36 @@ export function UserNotes({
   const pinButtonRefs = React.useRef(new Map<string, HTMLButtonElement>());
   const editButtonRefs = React.useRef(new Map<string, HTMLButtonElement>());
   const visibilityButtonRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const deleteButtonRefs = React.useRef(new Map<string, HTMLButtonElement>());
   const pinFocusRef = React.useRef<string | null>(null);
   const editFocusRef = React.useRef<string | null>(null);
   const visibilityFocusRef = React.useRef<string | null>(null);
+  const deleteFocusRef = React.useRef<string | null>(null);
+  // Set when the row is expected to be gone (success / not_found): focus the fallback
+  // rather than a delete-control that is about to unmount.
+  const deleteFallbackFocusRef = React.useRef(false);
+
+  // Post-delete focus targets: the composer textarea (natural next place to act), and
+  // a section-level status line as the fallback when the composer is off-screen (the
+  // mobile collapsed state) or the note vanished (D-96).
+  const composerInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const deleteStatusRef = React.useRef<HTMLParagraphElement>(null);
+
+  /**
+   * Focus the composer if it can actually take focus (it is hidden on mobile when the
+   * disclosure is collapsed), else the section status line, else leave focus where the
+   * browser puts it (<body> — safe and non-trapping). Detected by attempting the focus
+   * and checking whether it landed, rather than reading layout, so it holds whether or
+   * not a stylesheet is applied.
+   */
+  const focusAfterDelete = React.useCallback(() => {
+    const composer = composerInputRef.current;
+    if (composer) {
+      composer.focus();
+      if (document.activeElement === composer) return;
+    }
+    deleteStatusRef.current?.focus();
+  }, []);
 
   const items = result?.data?.items ?? [];
 
@@ -147,6 +183,34 @@ export function UserNotes({
       visibilityFocusRef.current = null;
     }
   }, [result, visibility.status, activeEditor]);
+
+  /**
+   * After a delete resolves, focus goes to the note's delete-control if the note is
+   * still there (a `conflict` that kept it), or to a safe fallback if it is gone (a
+   * success, or a `not_found` that removed it): the composer, else the section status
+   * (D-96). Runs after the confirm closes and the refetch lands.
+   */
+  React.useEffect(() => {
+    if (del.status === "pending" || activeEditor !== null) return;
+    // Success / not_found: the row is (or is about to be) gone, so focus the composer
+    // directly — never a delete-control that a refetch is about to unmount.
+    if (deleteFallbackFocusRef.current) {
+      deleteFallbackFocusRef.current = false;
+      focusAfterDelete();
+      return;
+    }
+    // Conflict / cancel: the note survives, so focus returns to its delete-control; if
+    // it is somehow gone, the safe fallback stands in.
+    const target = deleteFocusRef.current;
+    if (!target) return;
+    deleteFocusRef.current = null;
+    const btn = deleteButtonRefs.current.get(target);
+    if (btn) {
+      btn.focus();
+    } else {
+      focusAfterDelete();
+    }
+  }, [result, del.status, activeEditor, focusAfterDelete]);
 
   const onTogglePin = React.useCallback(
     async (note: CrmNote) => {
@@ -230,16 +294,89 @@ export function UserNotes({
     [visibility, refetch],
   );
 
+  const onStartDelete = React.useCallback(
+    (noteId: string) => {
+      del.clearFeedback();
+      setActiveEditor({ noteId, mode: "delete" });
+    },
+    [del],
+  );
+
+  const onCancelDelete = React.useCallback((noteId: string) => {
+    deleteFocusRef.current = noteId;
+    setActiveEditor(null);
+  }, []);
+
+  const onConfirmDelete = React.useCallback(
+    async (note: CrmNote) => {
+      const { ok, code } = await del.submit({
+        noteId: note.id,
+        // The note's `updatedAt` as this actor last read it — the concurrency
+        // precondition, so a delete never discards an intervening edit (D-96).
+        expectedUpdatedAt: note.updatedAt,
+      });
+      if (ok || code === "conflict" || code === "not_found") {
+        // Close the confirm and re-read: success drops the row, a conflict/vanish must
+        // show what is actually stored now.
+        if (ok || code === "not_found") {
+          // The row is gone — focus a safe fallback (composer / section status).
+          deleteFallbackFocusRef.current = true;
+        } else {
+          // Conflict: the note survives; focus returns to its delete-control.
+          deleteFocusRef.current = note.id;
+        }
+        setActiveEditor(null);
+        refetch();
+        return;
+      }
+      // internal / invalid_input / upstream — nothing was deleted; keep the confirm
+      // open for a retry under the SAME key.
+    },
+    [del, refetch],
+  );
+
+  // The section-level delete outcome — a per-row line has nowhere to render once the
+  // row is gone (success/not_found), and a conflict closes the confirm too. A storage
+  // failure is the exception: it keeps the confirm open and shows its error THERE, so
+  // the section line stays quiet while the confirm for this note is still open.
+  const deleteConfirmOpen = activeEditor?.mode === "delete";
+  const deleteFeedback: { tone: "success" | "error"; text: string } | null =
+    del.status === "success"
+      ? { tone: "success", text: NOTE_DELETE_LABEL.success }
+      : del.status === "error" && !deleteConfirmOpen
+        ? { tone: "error", text: noteDeleteErrorMessage(del.errorCode ?? undefined) }
+        : null;
+
   return (
     <SectionCard
       title={NOTES_LABEL.title}
       aside={items.length > 0 ? String(items.length) : undefined}
     >
       {canWrite ? (
-        <NoteComposer userId={userId} onAdded={refetch} mutationsOverride={mutationsOverride} />
+        <NoteComposer
+          userId={userId}
+          onAdded={refetch}
+          mutationsOverride={mutationsOverride}
+          inputRef={composerInputRef}
+        />
       ) : (
         <p className="mb-3 text-xs text-text-muted">{NOTES_LABEL.forbidden}</p>
       )}
+
+      {deleteFeedback ? (
+        <p
+          ref={deleteStatusRef}
+          tabIndex={-1}
+          role={deleteFeedback.tone === "success" ? "status" : "alert"}
+          aria-live={deleteFeedback.tone === "success" ? "polite" : undefined}
+          className={cn(
+            "mb-3 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            deleteFeedback.tone === "success" ? "text-success" : "text-danger",
+          )}
+        >
+          {deleteFeedback.text}
+        </p>
+      ) : null}
 
       <NotesList
         result={result}
@@ -249,6 +386,7 @@ export function UserNotes({
         pin={pin}
         edit={edit}
         visibility={visibility}
+        del={del}
         activeEditor={activeEditor}
         onTogglePin={onTogglePin}
         onStartEdit={onStartEdit}
@@ -257,6 +395,9 @@ export function UserNotes({
         onStartVisibility={onStartVisibility}
         onCancelVisibility={onCancelVisibility}
         onSaveVisibility={onSaveVisibility}
+        onStartDelete={onStartDelete}
+        onCancelDelete={onCancelDelete}
+        onConfirmDelete={onConfirmDelete}
         registerPinButton={(id, el) => {
           if (el) pinButtonRefs.current.set(id, el);
           else pinButtonRefs.current.delete(id);
@@ -268,6 +409,10 @@ export function UserNotes({
         registerVisibilityButton={(id, el) => {
           if (el) visibilityButtonRefs.current.set(id, el);
           else visibilityButtonRefs.current.delete(id);
+        }}
+        registerDeleteButton={(id, el) => {
+          if (el) deleteButtonRefs.current.set(id, el);
+          else deleteButtonRefs.current.delete(id);
         }}
       />
     </SectionCard>
@@ -282,9 +427,13 @@ interface RowCallbacks {
   onStartVisibility: (noteId: string) => void;
   onCancelVisibility: (noteId: string) => void;
   onSaveVisibility: (note: CrmNote, next: "team" | "private") => void;
+  onStartDelete: (noteId: string) => void;
+  onCancelDelete: (noteId: string) => void;
+  onConfirmDelete: (note: CrmNote) => void;
   registerPinButton: (id: string, el: HTMLButtonElement | null) => void;
   registerEditButton: (id: string, el: HTMLButtonElement | null) => void;
   registerVisibilityButton: (id: string, el: HTMLButtonElement | null) => void;
+  registerDeleteButton: (id: string, el: HTMLButtonElement | null) => void;
 }
 
 function NotesList({
@@ -295,6 +444,7 @@ function NotesList({
   pin,
   edit,
   visibility,
+  del,
   activeEditor,
   ...callbacks
 }: {
@@ -305,6 +455,7 @@ function NotesList({
   pin: UseSetNotePinned;
   edit: UseUpdateNoteBody;
   visibility: UseSetNoteVisibility;
+  del: UseDeleteNote;
   activeEditor: ActiveEditor | null;
 } & RowCallbacks) {
   if (loading && !result) {
@@ -345,6 +496,7 @@ function NotesList({
           pin={pin}
           edit={edit}
           visibility={visibility}
+          del={del}
           activeMode={activeEditor?.noteId === item.note.id ? activeEditor.mode : null}
           {...callbacks}
         />
@@ -359,6 +511,7 @@ function NoteRow({
   pin,
   edit,
   visibility,
+  del,
   activeMode,
   onTogglePin,
   onStartEdit,
@@ -367,21 +520,27 @@ function NoteRow({
   onStartVisibility,
   onCancelVisibility,
   onSaveVisibility,
+  onStartDelete,
+  onCancelDelete,
+  onConfirmDelete,
   registerPinButton,
   registerEditButton,
   registerVisibilityButton,
+  registerDeleteButton,
 }: {
   item: CrmNoteListItem;
   canPin: boolean;
   pin: UseSetNotePinned;
   edit: UseUpdateNoteBody;
   visibility: UseSetNoteVisibility;
-  /** Which editor this row has open, or null if none. */
+  del: UseDeleteNote;
+  /** Which inline surface this row has open, or null if none. */
   activeMode: EditorMode | null;
 } & RowCallbacks) {
   const note = item.note;
   const canEditBody = item.capabilities.canEditBody;
   const canChangeVisibility = item.capabilities.canChangeVisibility;
+  const canDelete = item.capabilities.canDelete;
   const isEditing = activeMode !== null;
 
   const pinActive = pin.active?.noteId === note.id;
@@ -465,6 +624,18 @@ function NoteRow({
                 registerButton={registerPinButton}
               />
             ) : null}
+            {canDelete ? (
+              <button
+                type="button"
+                ref={(el) => registerDeleteButton(note.id, el)}
+                onClick={() => onStartDelete(note.id)}
+                aria-label={NOTE_DELETE_LABEL.deleteAction}
+                title={NOTE_DELETE_LABEL.deleteAction}
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-transparent text-text-muted hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <TrashGlyph />
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -486,10 +657,20 @@ function NoteRow({
       ) : (
         <>
           {/* Plain text: React escapes it, so a body is never interpreted as markup.
-              No author id, no note id, no storage metadata. */}
+              No author id, no note id, no storage metadata. The body stays visible
+              under the delete confirm — nothing is hidden before it is removed. */}
           <p className="mt-1 whitespace-pre-wrap break-words text-xs text-text-primary">
             {note.body}
           </p>
+
+          {activeMode === "delete" ? (
+            <NoteDeleteConfirm
+              note={note}
+              del={del}
+              onCancel={() => onCancelDelete(note.id)}
+              onConfirm={() => onConfirmDelete(note)}
+            />
+          ) : null}
 
           {pinFeedback ? (
             <FeedbackLine tone={pinFeedback.tone} text={pinFeedback.text} />
@@ -503,6 +684,101 @@ function NoteRow({
         </>
       )}
     </li>
+  );
+}
+
+/**
+ * Inline delete confirmation — appears inside the note row, never a dialog, sheet,
+ * toast or `window.confirm` (D-96). Destructive tone (danger border + danger commit
+ * button) appears ONLY here, in the confirm state; the idle trash control is calm and
+ * neutral. Escape cancels without deleting; a storage failure keeps the confirm open
+ * with a safe Russian error and retries under the same key.
+ */
+function NoteDeleteConfirm({
+  note,
+  del,
+  onCancel,
+  onConfirm,
+}: {
+  note: CrmNote;
+  del: UseDeleteNote;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = React.useId();
+  const bodyId = React.useId();
+  const feedbackId = React.useId();
+  const confirmRef = React.useRef<HTMLButtonElement>(null);
+
+  const isActive = del.active?.noteId === note.id;
+  const pending = isActive && del.status === "pending";
+  // Only an error that KEEPS the confirm open reaches here (conflict/not_found close
+  // it and refetch). So this is a storage/internal/upstream failure — retriable, same
+  // key. `invalid_input`/`unauthorized` are defensive: the control is not offered.
+  const errorText =
+    isActive && del.status === "error" && del.errorCode
+      ? noteDeleteErrorMessage(del.errorCode)
+      : null;
+
+  // Move focus onto the destructive commit when the confirm opens, so keyboard users
+  // land on the action the confirm is about (Escape still cancels from anywhere in it).
+  React.useEffect(() => {
+    confirmRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+    }
+  }
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={titleId}
+      aria-describedby={[bodyId, errorText ? feedbackId : null].filter(Boolean).join(" ")}
+      onKeyDown={handleKeyDown}
+      className="mt-2 space-y-2 rounded-md border border-danger/40 bg-danger/5 p-2.5"
+    >
+      <p id={titleId} className="text-xs font-medium text-text-primary">
+        {NOTE_DELETE_LABEL.confirmTitle}
+      </p>
+      <p id={bodyId} className="text-2xs text-text-muted">
+        {NOTE_DELETE_LABEL.confirmBody}
+      </p>
+
+      {errorText ? (
+        <p id={feedbackId} role="alert" className="text-xs text-danger">
+          {errorText}
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-11 sm:h-8"
+          onClick={onCancel}
+        >
+          {NOTE_DELETE_LABEL.cancel}
+        </Button>
+        <Button
+          ref={confirmRef}
+          type="button"
+          variant="danger"
+          size="sm"
+          className="h-11 sm:h-8"
+          onClick={onConfirm}
+          disabled={pending}
+          aria-busy={pending}
+        >
+          {pending ? NOTE_DELETE_LABEL.pending : NOTE_DELETE_LABEL.confirm}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -822,6 +1098,34 @@ function VisibilityGlyph() {
     >
       <path d="M8 1.5 13 3.2v4.1c0 3.2-2.1 5.6-5 7.2-2.9-1.6-5-4-5-7.2V3.2L8 1.5Z" />
       <path d="M5.8 8.1 7.3 9.6l3-3.4" />
+    </svg>
+  );
+}
+
+/**
+ * A small trash can — distinct from the pencil (edit), the shield (visibility) and
+ * the pushpin (pin), so the four controls never read alike. Decorative; the button
+ * carries the accessible name «Удалить заметку». Neutral in idle; the destructive
+ * tone lives in the confirm, not the glyph.
+ */
+function TrashGlyph() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 4h11" />
+      <path d="M6 4V2.6h4V4" />
+      <path d="M3.6 4l.6 9.1a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L12.4 4" />
+      <path d="M6.5 6.6v4.8M9.5 6.6v4.8" />
     </svg>
   );
 }

@@ -32,7 +32,8 @@ export type AuditAction =
   | "primary_owner_changed"
   | "note_pin_changed"
   | "note_body_changed"
-  | "note_visibility_changed";
+  | "note_visibility_changed"
+  | "note_deleted";
 
 export type AuditEntityType = "note" | "user";
 
@@ -45,7 +46,8 @@ export type AuditReasonCode =
   | "primary_owner_changed_by_employee"
   | "note_pin_changed_by_employee"
   | "note_body_changed_by_employee"
-  | "note_visibility_changed_by_employee";
+  | "note_visibility_changed_by_employee"
+  | "note_deleted_by_employee";
 
 /** Fields every record carries, whatever it records. */
 interface AuditRecordBase {
@@ -139,12 +141,33 @@ export interface NoteVisibilityChangedAuditRecord extends AuditRecordBase {
   readonly nextVisibility: "team" | "private";
 }
 
+/**
+ * A note deletion (Phase 1B6). Like the body-change record it carries NOTHING
+ * beyond the base fields — the deleted body is user-authored content, so recording
+ * it, a fragment, its length or its former visibility would put PII into the audit
+ * trail, which is exactly what this model exists to prevent (D-96). The record is
+ * append-only: a delete does NOT remove the note's own `note_added`/edit records, it
+ * adds this one on top of them. It is the DEFENSIVE source of truth for a note's
+ * absence — a hard delete removes the note row from the overlay, but this record
+ * survives, so a corrupt/legacy overlay that still carries the row is projected as
+ * deleted anyway (D-97). `entityId` is the deleted note's id; `at` is the single
+ * deletion timestamp, shared with the result's `deletedAt` (D-98).
+ */
+export interface NoteDeletedAuditRecord extends AuditRecordBase {
+  readonly action: "note_deleted";
+  readonly entityType: "note";
+  /** The deleted note's id — always an authored `note_mock_*` id (fixtures are immutable). */
+  readonly entityId: string;
+  readonly reasonCode: "note_deleted_by_employee";
+}
+
 export type AuditRecord =
   | NoteAddedAuditRecord
   | PrimaryOwnerChangedAuditRecord
   | NotePinChangedAuditRecord
   | NoteBodyChangedAuditRecord
-  | NoteVisibilityChangedAuditRecord;
+  | NoteVisibilityChangedAuditRecord
+  | NoteDeletedAuditRecord;
 
 /** Audit id derived from the overlay sequence — deterministic, never random. */
 export function mockAuditId(sequence: number): string {

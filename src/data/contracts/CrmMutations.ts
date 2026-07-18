@@ -7,10 +7,11 @@
  * updateCase, addNote, assignPrimaryOwner, resolveSignal, revealUserPii, …).
  * This file declares only the operations actually implemented — `addNote`
  * (Phase 1B4-A), `assignPrimaryOwner` (Phase 1B4-C), `setNotePinned`
- * (Phase 1B4-D) and `updateNoteBody` (Phase 1B4-E): an interface member with no
- * implementation is a promise the provider does not keep, and `as never` casts to
- * satisfy a placeholder shape are exactly what D-50 had to delete from the Today
- * contract. The rest arrive with their implementations, not before.
+ * (Phase 1B4-D), `updateNoteBody` (Phase 1B4-E), `setNoteVisibility` (Phase 1B5-C)
+ * and `deleteNote` (Phase 1B6): an interface member with no implementation is a
+ * promise the provider does not keep, and `as never` casts to satisfy a placeholder
+ * shape are exactly what D-50 had to delete from the Today contract. The rest arrive
+ * with their implementations, not before.
  *
  * Every mutation writes an AuditRecord{mock:true} into a versioned localStorage
  * overlay (DECISIONS D-09); fixtures stay immutable. There is no backend.
@@ -200,6 +201,44 @@ export interface SetNoteVisibilityResult {
   replayed: boolean;
 }
 
+/**
+ * Delete an employee-authored note, addressed by `noteId` under `userId` (Phase
+ * 1B6). Like the other commands the actor is NOT part of it: role and employee id
+ * come only from the trusted `CrmContext`.
+ *
+ * `expectedUpdatedAt` is optimistic concurrency, exactly as for `updateNoteBody` and
+ * `setNoteVisibility`: a delete is refused (`conflict`) if the note was edited since
+ * the caller read it, so a delete never silently discards an intervening change. It
+ * is a string the caller reads back from the note, never content, so it is safe to
+ * carry in the command; it is deliberately NOT part of the delete fingerprint (D-98),
+ * so a safe retry of an already-applied delete still replays.
+ */
+export interface DeleteNoteCommand {
+  userId: UserId;
+  noteId: string;
+  expectedUpdatedAt: string;
+  idempotencyKey: string;
+}
+
+/**
+ * The result deliberately carries NO note, NO body, NO previous body, NO visibility
+ * and NO pin state.
+ *
+ * A delete is a hard delete (D-96): after it succeeds the note no longer exists, so
+ * there is nothing to return but the fact it is gone. The result carries only what is
+ * always reconstructable from the append-only `note_deleted` audit record — the note
+ * id and the deletion timestamp, which equals both the record's `at` and
+ * `result.deletedAt` (D-98). This is what lets a replay after the entity has vanished
+ * still answer truthfully.
+ */
+export interface DeleteNoteResult {
+  noteId: string;
+  deletedAt: string;
+  audit: AuditRecord;
+  /** Same meaning as on the other results: this command had already been applied. */
+  replayed: boolean;
+}
+
 export interface CrmMutations {
   /**
    * Add a plain-text note to a user.
@@ -331,4 +370,45 @@ export interface CrmMutations {
     ctx: CrmContext,
     command: SetNoteVisibilityCommand,
   ): Promise<Result<SetNoteVisibilityResult>>;
+
+  /**
+   * Permanently delete an employee-authored note, addressed by `noteId` under
+   * `userId` (Phase 1B6).
+   *
+   * Permission: Edit → notes (ROLE_PERMISSION_MATRIX §1) — the SAME dimension as
+   * `addNote`/`setNotePinned`/`updateNoteBody`/`setNoteVisibility`, checked with
+   * `canEditUserNotes`: crm_admin, crm_manager, retention_manager, support. Deleting a
+   * note is editing a note, so the matrix is not widened and no new permission is
+   * minted (D-96).
+   *
+   * The SAME two entity-level rules as `updateNoteBody`/`setNoteVisibility` apply,
+   * because a delete removes an employee's authored note:
+   *   - only a note physically stored in the overlay `notes[]` is deletable; the
+   *     generated fixture note is immutable and returns `invalid_input`, NOT
+   *     `not_found` — it is visibly present;
+   *   - only the note's own author may delete it: `note.authorEmployeeId ===
+   *     ctx.actorId`, else `unauthorized`, even for a role that holds the permission.
+   *     This holds for `private` notes too — no extra exception (D-96).
+   *
+   * The check order differs from the edit mutations in one load-bearing way: the
+   * idempotency replay is resolved BEFORE the note is looked up. After a successful
+   * delete the note is gone, so a retry that looked the note up first would answer
+   * `not_found` instead of replaying the original result. A note not visible to the
+   * caller is `not_found`, exactly like a note that does not exist, so the mutation
+   * cannot be used to probe for hidden notes.
+   *
+   * The delete is HARD: the note row is removed from the overlay `notes[]`, no
+   * tombstone or body is retained, and there is no undo (D-96). An append-only
+   * `note_deleted` audit record is added on top of the note's existing records (which
+   * are NOT removed), and it is the defensive source of truth for the note's absence
+   * (D-97).
+   *
+   * Errors: `invalid_input` (missing/over-long key, empty/invalid `noteId`, malformed
+   * `expectedUpdatedAt`, or an immutable fixture/non-overlay note), `not_found`
+   * (unknown user, unknown note, or note not visible to the caller), `unauthorized`
+   * (role has no Edit for notes, or the note was authored by another employee),
+   * `conflict` (key reused for a different command, or `expectedUpdatedAt` no longer
+   * matches), `internal` (overlay could not be persisted).
+   */
+  deleteNote(ctx: CrmContext, command: DeleteNoteCommand): Promise<Result<DeleteNoteResult>>;
 }

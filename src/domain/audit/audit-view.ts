@@ -74,6 +74,14 @@ export type AuditRecordView =
       actorName: string;
       targetUserName: string;
       mock: true;
+    }
+  | {
+      id: string;
+      action: "note_deleted";
+      at: ISODateString;
+      actorName: string;
+      targetUserName: string;
+      mock: true;
     };
 
 /**
@@ -148,6 +156,11 @@ export function projectAuditRecord(
       // NOT projected — the global log states only THAT access changed, never which
       // way, so it can never disclose that a note is now hidden (D-91).
       return { ...base, action: "note_visibility_changed" };
+    case "note_deleted":
+      // Base fields only (Phase 1B6). The deleted note's body, former visibility, pin
+      // state and id are all withheld — the log states only THAT a note was removed
+      // and by whom, never what it contained (D-99).
+      return { ...base, action: "note_deleted" };
   }
 }
 

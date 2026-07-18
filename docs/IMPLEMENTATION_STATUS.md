@@ -274,6 +274,7 @@ Backend/database/Prisma/Pocket отсутствуют. Зависимости н
 | Phase 1B4-E | **User 360 Note Body Edit** | выполнен — `updateNoteBody`, provider-owned `canEditBody`, inline-редактор; D-82…D-85, docs/MUTATION_OVERLAY.md §§ (1B4-E) |
 | Phase 1B5-B | **Global Audit Workspace** | выполнен — read-only `/audit`, `getAuditRecords`, provider-owned safe `AuditRecordView`, canonical sorter/projector; `canViewAudit` — единственный data-gate (crm_admin/crm_manager), section-visible Limited-роли → restricted-state; D-86…D-90 |
 | Phase 1B5-C | **User 360 Note Visibility Change** | выполнен — `setNoteVisibility` (team↔private), provider-owned `canChangeVisibility`, inline visibility-editor, пятый audit-член `note_visibility_changed`; private по identity актора, не по роли; role_restricted отложен; D-91…D-95 |
+| Phase 1B6 | **User 360 Note Delete** | выполнен — `deleteNote` (hard delete authored overlay-note), provider-owned `canDelete`, inline delete-confirm, шестой audit-член `note_deleted`; append-only audit — защитный источник истины (canonical `hideDeletedNotes`); replay до entity-lookup; add-replay после удаления не воскрешает; D-96…D-101 |
 
 Обоснование: провайдер, derivation-слой (signals/priority/recommendations) и permission-проекции
 готовы с Phase 1B1, а `/users/[id]` оставался единственным placeholder-ом в уже реализованном
@@ -796,3 +797,50 @@ team ↔ private в секции «Заметки» User 360. Решения: D-
   ни секция; отложен до реального actorId + team/owner scope.
 - **Тесты:** unit/component 1087 (было 1021, +66), E2E 143 (было 130, +13), discovery
   143 в 12 файлах.
+
+## Phase 1B6 — User 360 Note Delete ✅
+
+Автор заметки (с правом `edit_user_notes`) удаляет свою overlay-заметку в секции
+«Заметки» User 360. Решения: D-96…D-101; ревью:
+`docs/visual-reviews/PHASE_1B6_NOTE_DELETE.md`.
+
+- **Mutation:** `deleteNote(ctx, { userId, noteId, expectedUpdatedAt, idempotencyKey })`
+  → `Result<DeleteNoteResult{ noteId, deletedAt, audit, replayed }>` (без CrmNote/тела).
+  **Hard delete** (D-96): row физически уходит из overlay `notes[]`, tombstone/`deletedAt`
+  в `CrmNote` не добавляется, тело в localStorage не остаётся, undo нет.
+- **Порядок с replay ДО entity-lookup (D-98):** ключ → ISO `expectedUpdatedAt` → noteId →
+  fingerprint → replay(receipt) → user → видимость → `canEditUserNotes` → фикстурная →
+  автор → `expectedUpdatedAt` → атомарный write. Replay перед lookup'ом — иначе retry
+  после успешного удаления вернул бы `not_found`.
+- **Authored + author-only (D-96):** удалять можно только заметку в overlay `notes[]`,
+  созданную тем же `actorEmployeeId`; фикстурная → `invalid_input`; чужая видимая →
+  `unauthorized`; скрытая чужая/неизвестная → `not_found`. Private удаляется автором по
+  тем же правилам, что team.
+- **Audit — защитный источник истины (D-97):** append-only `note_deleted` (шестой
+  union-член, базовые поля); canonical `hideDeletedNotes` в projection скрывает заметку
+  с валидным поздним delete-record (даже в corrupt/legacy overlay с уцелевшим row);
+  stale/corrupt delete-record не скрывает; структурно битая запись валит парс fail-closed;
+  фикстуру через нормальный путь скрыть нельзя. Старые audit-записи заметки не удаляются.
+- **Add-replay после удаления (D-98):** повтор исходного `addNote` ключа возвращает
+  original result с `replayed:true`, но заметку НЕ воскрешает (реконструкция из
+  audit + payload, без записи row обратно); тело не попадает в receipt/audit; ровно один
+  `note_added` и один `note_deleted` в журнале.
+- **Overlay аддитивен (D-98):** ключ/version/поля неизменны; receipt kind `note_delete`
+  (kind/key/fingerprint/auditId); все шесть audit-actions сосуществуют; legacy
+  1B4-B…1B5-C читается без потерь.
+- **Global audit (D-99):** `/audit` показывает факт «удалил заметку у …», `detail=null`,
+  без тела/visibility/pin/id/diagnostics; permission/pagination/sorting/page-size(20)
+  не тронуты.
+- **UI (D-100):** provider-owned `canDelete`; отдельный destructive Trash-контрол
+  (≥44px, отличим от pencil/shield/pin), нейтральный в idle; inline confirm в строке
+  («Удалить заметку?» + «Действие нельзя отменить. История изменения останется в Audit.»,
+  «Отменить»/«Удалить»), destructive-тон только в confirm; один active mode на строку;
+  без Dialog/Sheet/toast/`confirm()`/undo/bulk. Состояния idle/confirming/pending
+  (aria-busy, «Удаляем…», single-call)/success (строка исчезает, `page.total`−1, «Заметка
+  удалена», focus → composer)/conflict/not_found/unauthorized/invalid_input/storage
+  (confirm остаётся, retry тем же ключом)/role-change; raw `CrmError.message` не рендерится
+  (exhaustive `Record<CrmErrorCode, string>`).
+- **Tasks/Cases/Signals/Recommendations остаются отложенными (D-101):** до честной
+  identity/policy-модели (реальный actorId + scope).
+- **Тесты:** unit/component 1155 (было 1087, +68), E2E 156 (было 143, +13), discovery
+  156 в 13 файлах.

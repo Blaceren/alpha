@@ -55,7 +55,7 @@ interface SortParam<F extends string> { field: F; dir: 'asc' | 'desc'; }
 
 **Общие принципы:**
 - Пагинация — **курсорная** (стабильна при изменяющихся данных), с опциональным `total`.
-- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D), `updateNoteBody` (1B4-E) и `setNoteVisibility` (1B5-C); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`, +`canChangeVisibility` в 1B5-C); Phase 1B5-B — read `getAuditRecords` (§3c, provider-owned safe `AuditRecordView`).
+- Все read-операции `CrmDataProvider` — read-only относительно продукта; мутации CRM живут в отдельном контракте `CrmMutations` (§15). Реализованы `addNote` (1B4-A), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D), `updateNoteBody` (1B4-E), `setNoteVisibility` (1B5-C) и `deleteNote` (1B6); остальные зарезервированы, но методов-заглушек не имеют. Phase 1B4-C добавил read `getPrimaryOwnerCandidates` (§3b); Phase 1B4-E — read `getUserNotesView` (`CrmNoteListItem` с provider-owned `canEditBody`, +`canChangeVisibility` в 1B5-C, +`canDelete` в 1B6); Phase 1B5-B — read `getAuditRecords` (§3c, provider-owned safe `AuditRecordView`).
 - `status: 'stale'` + `data` вместе → UI показывает данные с бейджем «устарело».
 - `unauthorized` возвращается, если `CrmContext.role` не проходит **permission requirement** операции (см. ROLE_PERMISSION_MATRIX.md). HIGH-поля маскируются в маппинге до отдачи, если у роли нет Exact financials.
 
@@ -584,6 +584,22 @@ interface SetNoteVisibilityResult  { noteId: string; updatedAt: string; audit: A
 - **Result без `CrmNote`/тела/visibility-read-model** — только id + timestamp (= `note.updatedAt` = `audit.at`, D-83/D-84).
 - **Конкуренция `expectedUpdatedAt`** (D-93): переписывает `notes[]` на месте (только `visibility`+`updatedAt`); mismatch → `conflict`; replay ДО предусловия. Аудит `note_visibility_changed` несёт `previousVisibility`/`nextVisibility` ∈ {team,private}, но `AuditRecordView` их **не** раскрывает (D-94).
 - **Errors:** `invalid_input` (ключ, visibility не team/private, `expectedUpdatedAt` не-ISO, no-change, фикстурная), `not_found` (user/note/видимость), `unauthorized` (роль или чужой автор), `conflict`, `internal`. Полный порядок/fingerprint/receipt — **docs/MUTATION_OVERLAY.md** §§ (1B5-C).
+
+### 15.1e Реализовано (Phase 1B6) — `deleteNote`
+
+```ts
+interface CrmMutations {
+  deleteNote(ctx: CrmContext, command: DeleteNoteCommand): Promise<Result<DeleteNoteResult>>;
+}
+interface DeleteNoteCommand { userId: UserId; noteId: string; expectedUpdatedAt: string; idempotencyKey: string; }
+interface DeleteNoteResult  { noteId: string; deletedAt: string; audit: AuditRecord; replayed: boolean; }
+```
+
+- **Permission:** Edit → notes — `canEditUserNotes`; удаление — не новое право, матрица **не расширена** (D-96). Те же четыре роли. Только автор своей overlay-заметки (`authorEmployeeId === actorId`), иначе `unauthorized`; фикстурная → `invalid_input`; скрытая/неизвестная → `not_found`. Private удаляется автором по тем же правилам.
+- **Hard delete (D-96):** row физически убирается из `notes[]`; tombstone/тело не остаётся; undo нет. Append-only `note_deleted` audit — защитный источник истины: canonical `hideDeletedNotes` скрывает заметку с валидным поздним delete-record до пагинации (D-97).
+- **Replay ДО entity-lookup (D-98):** порядок — ключ → ISO `expectedUpdatedAt` → noteId → fingerprint `[userId,actorId,role,noteId]` → **replay(receipt)** → user → видимость → роль → фикстурная → автор → `expectedUpdatedAt` → атомарный write. Retry после успешного удаления replay-ится, а не `not_found`. Повтор исходного `addNote` ключа после удаления не воскрешает заметку (D-98).
+- **Result без `CrmNote`/тела** — только `noteId` + `deletedAt` (= `audit.at`, D-98) + audit + replayed.
+- **Errors:** `invalid_input` (ключ, `expectedUpdatedAt` не-ISO, пустой noteId, фикстурная/non-overlay), `not_found` (user/note/видимость), `unauthorized` (роль или чужой автор), `conflict` (ключ на другую команду или stale `expectedUpdatedAt`), `internal`. Полный порядок/fingerprint/receipt — **docs/MUTATION_OVERLAY.md** §§ (1B6).
 
 ### 15.2 Зарезервировано (ещё не реализовано)
 

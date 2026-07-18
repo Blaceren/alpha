@@ -54,6 +54,9 @@ function pinMutations(setNotePinned: CrmMutations["setNotePinned"]): CrmMutation
     setNoteVisibility: () => {
       throw new Error("this suite must not call setNoteVisibility");
     },
+    deleteNote: () => {
+      throw new Error("this suite must not call deleteNote");
+    },
   };
 }
 

@@ -38,6 +38,9 @@ export const NOTE_BODY_RECEIPT_KIND = "note_body_change";
 /** Discriminant of the visibility-change receipt (Phase 1B5-C). */
 export const NOTE_VISIBILITY_RECEIPT_KIND = "note_visibility_change";
 
+/** Discriminant of the delete receipt (Phase 1B6). */
+export const NOTE_DELETE_RECEIPT_KIND = "note_delete";
+
 /**
  * Proof that a key was already used, and for what. Holds a fingerprint rather
  * than the command: the body is already stored once on the note, and a receipt
@@ -113,12 +116,28 @@ export interface NoteVisibilityIdempotencyReceipt {
   auditId: string;
 }
 
+/**
+ * Delete receipt (Phase 1B6). Like the owner, pin, body and visibility receipts it
+ * has an explicit discriminant and no `noteId`: the delete it proves is recoverable
+ * from `auditId` alone (the audit record's `entityId` is the deleted note). It holds
+ * only the fingerprint of the command — never the deleted body, its former visibility
+ * or any diagnostics. This is the receipt that lets a retry after the note has
+ * physically vanished still replay the original result (D-98).
+ */
+export interface NoteDeleteIdempotencyReceipt {
+  kind: typeof NOTE_DELETE_RECEIPT_KIND;
+  key: string;
+  fingerprint: string;
+  auditId: string;
+}
+
 export type IdempotencyReceipt =
   | NoteIdempotencyReceipt
   | PrimaryOwnerIdempotencyReceipt
   | NotePinIdempotencyReceipt
   | NoteBodyIdempotencyReceipt
-  | NoteVisibilityIdempotencyReceipt;
+  | NoteVisibilityIdempotencyReceipt
+  | NoteDeleteIdempotencyReceipt;
 
 /**
  * The overlay shape is UNCHANGED from Phase 1B4-B — deliberately, through 1B4-D.
@@ -255,6 +274,12 @@ function isAuditRecord(value: unknown): value is AuditRecord {
         isWritableVisibility(value.previousVisibility) &&
         isWritableVisibility(value.nextVisibility)
       );
+    case "note_deleted":
+      // Phase 1B6. Base fields only — like the body-change record it carries no
+      // payload, so there is nothing extra to validate and nothing extra is tolerated.
+      // An unknown action, a mismatched entity type or an invented reason code fails
+      // closed, so a corrupt delete record cannot smuggle a note out of view.
+      return value.entityType === "note" && value.reasonCode === "note_deleted_by_employee";
     default:
       return false;
   }
@@ -274,6 +299,7 @@ function isReceipt(value: unknown): value is IdempotencyReceipt {
   if (value.kind === NOTE_PIN_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind === NOTE_BODY_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind === NOTE_VISIBILITY_RECEIPT_KIND) return isString(value.auditId);
+  if (value.kind === NOTE_DELETE_RECEIPT_KIND) return isString(value.auditId);
   if (value.kind !== undefined) return false;
 
   return isString(value.noteId) && isString(value.auditId);

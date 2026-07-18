@@ -38,6 +38,18 @@
 > команда его отвергает `invalid_input`, guard fail-closed. Право — `edit_user_notes`, только автор своей
 > overlay-заметки (D-91); private по identity актора, не по роли (D-92). `AuditRecordView` направление
 > team/private НЕ раскрывает (D-94). Решения D-91…D-95; §§ ниже помечены «(1B5-C)».
+>
+> **Phase 1B6 (выполнен): удаление заметки.** Шестая мутация — `deleteNote` — и её inline-confirm. Это
+> **hard delete**: authored-заметка физически убирается из overlay `notes[]` (единственная мутация,
+> УДАЛЯЮЩАЯ row; тело не остаётся, undo нет). Overlay расширен **аддитивно в пределах v1**: тот же ключ,
+> та же `version: 1`. Добавлены шестой union-член `note_deleted` (базовые поля) и receipt-kind `note_delete`
+> (kind/key/fingerprint/auditId). Append-only `note_deleted` — **защитный источник истины** отсутствия:
+> canonical `hideDeletedNotes` скрывает заметку с валидным поздним delete-record даже в corrupt/legacy
+> overlay с уцелевшим row (D-97); guard fail-closed на битой записи. Право — `edit_user_notes`, только автор
+> своей overlay-заметки (D-96). **Отличие порядка:** idempotency-replay разрешается ДО entity-lookup (иначе
+> retry после удаления вернул бы `not_found`); `expectedUpdatedAt` в fingerprint не входит; повтор исходного
+> `addNote` ключа после удаления НЕ воскрешает заметку (D-98). `AuditRecordView` для `note_deleted` несёт
+> только факт (D-99). Решения D-96…D-101; §§ ниже помечены «(1B6)».
 > Остальные мутации (tasks/cases/signals/recommendations, reveal PII) по-прежнему не реализованы.
 
 ---
@@ -307,6 +319,20 @@ note-add-записи нести owner- или pin-поля, а owner/pin-зап
 `previousVisibility`/`nextVisibility` ∈ {team,private}). Оба значения — сам факт (LOW/закрытый enum), не
 контент; `role_restricted` на любой стороне не принимается (D-91), guard fail-closed. Новый receipt kind
 `note_visibility_change` (только kind/key/fingerprint/auditId). `AuditRecordView` направление НЕ несёт (D-94).
+
+**(1B6) шестой член union — `NoteDeletedAuditRecord`** (базовые поля + `action: "note_deleted"`,
+`entityType: "note"`, `entityId` = id удалённой заметки, `reasonCode: "note_deleted_by_employee"`; никакого
+тела/фрагмента/visibility/pin — как body-запись, D-96/D-99). Guard принимает точный action/entityType/
+reasonCode, fail-closed на неизвестных значениях. Новый receipt kind `note_delete` (только kind/key/
+fingerprint/auditId). Он **защитный источник истины** отсутствия: canonical `hideDeletedNotes`
+(`domain/notes/note-projection`) выполняется ПЕРВОЙ в `orderedVisibleNotes` и убирает заметку с валидным
+поздним delete-record (latest by `at` DESC → `id` DESC; скрывает только если delete `at` ≥ note `updatedAt`)
+даже в corrupt/legacy overlay с уцелевшим row (D-97). `deleteNote` физически удаляет row из `notes[]`, но
+прежние записи заметки (note_added/edit/pin/visibility) сохраняются — лог append-only. Порядок отличается
+одним местом: replay(receipt) — ДО user/entity lookup (D-98), иначе retry после удаления вернул бы
+`not_found`; fingerprint `[userId, actorId, role, noteId]`, без `expectedUpdatedAt`. Отдельная lifecycle-ветка:
+повтор исходного `addNote` ключа после удаления реконструирует original result из audit + payload (тело — то
+же по fingerprint-совпадению), НЕ записывая row обратно и не добавляя тело в receipt/audit (D-98).
 
 **(1B5-B) read endpoint появился, write-семантика неизменна.** Global Audit Workspace (`/audit`) читает
 существующий `auditRecords` через новую read-операцию `getAuditRecords` (DATA_PROVIDER_CONTRACT §3c) — это

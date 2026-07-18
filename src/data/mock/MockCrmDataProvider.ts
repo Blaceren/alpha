@@ -49,6 +49,8 @@ import type {
   AssignPrimaryOwnerCommand,
   AssignPrimaryOwnerResult,
   CrmMutations,
+  DeleteNoteCommand,
+  DeleteNoteResult,
   SetNotePinnedCommand,
   SetNotePinnedResult,
   SetNoteVisibilityCommand,
@@ -60,6 +62,7 @@ import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@/data/contracts/CrmMutations";
 import type {
   AuditRecord,
   NoteBodyChangedAuditRecord,
+  NoteDeletedAuditRecord,
   NotePinChangedAuditRecord,
   NoteVisibilityChangedAuditRecord,
   PrimaryOwnerChangedAuditRecord,
@@ -69,12 +72,18 @@ import { projectAuditRecords } from "@/domain/audit/audit-view";
 import { isPrimaryOwnerCandidate, PRIMARY_OWNER_CANDIDATES } from "@/domain/identity/employees";
 import type { NoteBodyError } from "@/domain/notes/note";
 import { mockNoteId, normalizeNoteBody, NOTE_BODY_MAX_LENGTH } from "@/domain/notes/note";
-import { projectNotes, resolveEffectivePins, sortNotes } from "@/domain/notes/note-projection";
+import {
+  hideDeletedNotes,
+  projectNotes,
+  resolveEffectivePins,
+  sortNotes,
+} from "@/domain/notes/note-projection";
 import type { MutationOverlay } from "./overlay/mutation-overlay";
 import {
   MUTATION_OVERLAY_VERSION,
   MutationOverlayStore,
   NOTE_BODY_RECEIPT_KIND,
+  NOTE_DELETE_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
   NOTE_VISIBILITY_RECEIPT_KIND,
   PRIMARY_OWNER_RECEIPT_KIND,
@@ -83,6 +92,7 @@ import type { KeyValueStorage } from "./overlay/storage";
 import {
   fingerprintAddNote,
   fingerprintAssignPrimaryOwner,
+  fingerprintDeleteNote,
   fingerprintSetNotePinned,
   fingerprintSetNoteVisibility,
   fingerprintUpdateNoteBody,
@@ -686,13 +696,16 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
    *
    * `ctx` is applied through the canonical projector (`domain/notes/note-projection`)
    * rather than here, and projection runs BEFORE ordering so a note the role may not
-   * see is dropped entirely. Effective pinned state is resolved from the audit log
-   * (D-76) BEFORE projection and ordering, so the pinned-first sort sees the current
-   * pin, not the `false` baseline.
+   * see is dropped entirely. A note removed by a valid `note_deleted` record is
+   * dropped FIRST (D-97), so a hard-deleted note — or a legacy/corrupt overlay that
+   * still carries the row — never reaches pinning, projection or `page.total`.
+   * Effective pinned state is resolved from the audit log (D-76) BEFORE projection and
+   * ordering, so the pinned-first sort sees the current pin, not the `false` baseline.
    */
   private orderedVisibleNotes(ctx: CrmContext, u: MockUser, overlay: MutationOverlay): CrmNote[] {
     const authored = overlay.notes.filter((n) => n.userId === u.identity.userId);
-    const withPins = resolveEffectivePins([...this.fixtureNotes(u), ...authored], overlay.auditRecords);
+    const alive = hideDeletedNotes([...this.fixtureNotes(u), ...authored], overlay.auditRecords);
+    const withPins = resolveEffectivePins(alive, overlay.auditRecords);
     const visible = projectNotes(withPins, { actorId: ctx.actorId, role: ctx.role });
     return sortNotes(visible);
   }
@@ -745,14 +758,17 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       const roleMayEdit = canEditUserNotes(ctx.role);
 
       const items: CrmNoteListItem[] = ordered.map((note) => {
-        // Body edit and visibility change share the SAME four conditions: role,
+        // Body edit, visibility change AND delete share the SAME conditions: role,
         // overlay membership (never the fixture note), visibility, and authorship.
-        // They are two fields so the UI never assumes they coincide.
+        // A note that reached this list already survived the canonical projection, so
+        // it is not hidden by a `note_deleted` record — the delete-specific condition
+        // is therefore already satisfied here. They are three fields so the UI never
+        // assumes they coincide.
         const canAct =
           roleMayEdit && overlayNoteIds.has(note.id) && note.authorEmployeeId === ctx.actorId;
         return {
           note,
-          capabilities: { canEditBody: canAct, canChangeVisibility: canAct },
+          capabilities: { canEditBody: canAct, canChangeVisibility: canAct, canDelete: canAct },
         };
       });
 
@@ -1017,16 +1033,41 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
             retriable: false,
           });
         }
-        const note = overlay.notes.find((n) => n.id === receipt.noteId);
         const audit = overlay.auditRecords.find((a) => a.id === receipt.auditId);
-        if (!note || !audit) {
-          // A receipt without its records means the overlay was edited by hand.
+        if (!audit) {
+          // A receipt without its audit record means the overlay was edited by hand.
+          // The note row may legitimately be absent — see the reconstruction below —
+          // but the append-only audit record is never removed by any mutation.
           return fail<AddNoteResult>({
             code: "internal",
             message: "Overlay receipt refers to a missing record.",
             retriable: false,
           });
         }
+        const existing = overlay.notes.find((n) => n.id === receipt.noteId);
+        if (existing) {
+          return ok({ note: existing, audit, replayed: true });
+        }
+        // Lifecycle compatibility (Phase 1B6, D-98): the note was DELETED after this
+        // add. A delete is a hard remove, so the row is gone — and replaying this key
+        // must NOT write it back (that would resurrect a deleted note). The original
+        // add result is reconstructed from the audit record (id/at/actor) and this
+        // retry's command payload, whose normalized body is guaranteed identical to the
+        // original by the fingerprint match above; nothing here is persisted, and the
+        // body is never taken from storage (it is not there to take). `at` was shared
+        // by the note's createdAt/updatedAt and the audit `at` at add time.
+        const note: CrmNote = {
+          id: receipt.noteId,
+          userId: command.userId,
+          caseId: null,
+          authorEmployeeId: ctx.actorId,
+          body: normalized.body,
+          visibility: "team",
+          pinned: false,
+          createdAt: audit.at,
+          updatedAt: audit.at,
+          mock: true,
+        };
         return ok({ note, audit, replayed: true });
       }
 
@@ -1921,6 +1962,221 @@ export class MockCrmDataProvider implements CrmDataProvider, CrmMutations {
       }
 
       return ok({ noteId: stored.id, updatedAt: at, audit, replayed: false });
+    });
+  }
+
+  /**
+   * Permanently delete an employee-authored note (Phase 1B6).
+   *
+   * The order is DELIBERATELY different from the edit mutations in one place: the
+   * idempotency replay is resolved BEFORE the note is looked up. After a successful
+   * delete the note is gone, so a retry that looked it up first would answer
+   * `not_found` — the check meant to make retries safe would instead break them. So
+   * (docs/MUTATION_OVERLAY.md §7, D-98):
+   *   1. validate the idempotency key;
+   *   2. validate `expectedUpdatedAt` is a parseable instant;
+   *   3. validate `noteId` is present;
+   *   4. compute the delete fingerprint (userId, noteId, actorId, role — never
+   *      `expectedUpdatedAt`);
+   *   5. resolve the receipt by key: a matching kind+fingerprint replays the original
+   *      result; a different kind or fingerprint is `conflict`. THIS IS BEFORE THE
+   *      ENTITY LOOKUP;
+   *   6. resolve the user or `not_found`;
+   *   7. resolve the target through the SAME canonical projector every read uses — a
+   *      note not visible to the caller is `not_found`, exactly like one that does not
+   *      exist, so the mutation cannot probe for hidden notes;
+   *   8. role permission (`canEditUserNotes`) or `unauthorized`;
+   *   9. a visible note NOT in the overlay is the immutable fixture note →
+   *      `invalid_input`;
+   *  10. a note authored by someone else → `unauthorized`, even for a permitted role,
+   *      and for `private` notes too (no extra exception — D-96);
+   *  11. `expectedUpdatedAt` must still match the stored `updatedAt`, else `conflict`;
+   *  12. one atomic overlay write: remove the note row, append the `note_deleted`
+   *      audit record and the delete receipt.
+   *
+   * The delete is HARD: the note row leaves `notes[]`, no tombstone or body is kept,
+   * and the note's earlier records (note_added, edits, pin/visibility changes) are NOT
+   * removed. The single deletion timestamp is shared by the audit `at` and
+   * `result.deletedAt` (D-98). Nothing is persisted until the whole overlay is
+   * assembled, so any refusal — storage failure included — leaves the overlay
+   * byte-for-byte intact and writes no audit record, and the same key may be retried.
+   */
+  deleteNote(ctx: CrmContext, command: DeleteNoteCommand): Promise<Result<DeleteNoteResult>> {
+    return this.gate(() => {
+      // 1. Idempotency key.
+      const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : "";
+      if (key.length === 0) {
+        return fail<DeleteNoteResult>({
+          code: "invalid_input",
+          message: "Idempotency key is required.",
+          retriable: false,
+        });
+      }
+      if (key.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+        return fail<DeleteNoteResult>({
+          code: "invalid_input",
+          message: `Idempotency key exceeds ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`,
+          retriable: false,
+        });
+      }
+
+      // 2. `expectedUpdatedAt` — a parseable instant, checked before any lookup. A
+      // garbage precondition is malformed input, not a race. It gates the precondition
+      // check (step 11), not the fingerprint, so a replay never depends on it.
+      const expectedUpdatedAt =
+        typeof command.expectedUpdatedAt === "string" ? command.expectedUpdatedAt.trim() : "";
+      if (expectedUpdatedAt.length === 0 || Number.isNaN(Date.parse(expectedUpdatedAt))) {
+        return fail<DeleteNoteResult>({
+          code: "invalid_input",
+          message: "expectedUpdatedAt is not a valid instant.",
+          retriable: false,
+        });
+      }
+
+      // 3. Note id.
+      const noteId = typeof command.noteId === "string" ? command.noteId.trim() : "";
+      if (noteId.length === 0) {
+        return fail<DeleteNoteResult>({
+          code: "invalid_input",
+          message: "Note id is required.",
+          retriable: false,
+        });
+      }
+
+      const overlay = this.overlay.read();
+
+      // 4. Fingerprint — from the command's identity alone (never the deleted note's
+      // contents), so it survives the entity vanishing.
+      const fingerprint = fingerprintDeleteNote({
+        userId: command.userId,
+        actorId: ctx.actorId,
+        role: ctx.role,
+        noteId,
+      });
+
+      // 5. Replay — BEFORE the entity lookup. This is the property that makes a retry
+      // after a successful delete return the original result instead of `not_found`.
+      const receipt = overlay.idempotencyReceipts.find((r) => r.key === key);
+      if (receipt) {
+        if (receipt.kind !== NOTE_DELETE_RECEIPT_KIND || receipt.fingerprint !== fingerprint) {
+          return fail<DeleteNoteResult>({
+            code: "conflict",
+            message: "Idempotency key was already used for a different command.",
+            retriable: false,
+          });
+        }
+        const audit = overlay.auditRecords.find(
+          (a): a is NoteDeletedAuditRecord =>
+            a.id === receipt.auditId && a.action === "note_deleted",
+        );
+        if (!audit) {
+          return fail<DeleteNoteResult>({
+            code: "internal",
+            message: "Overlay receipt refers to a missing record.",
+            retriable: false,
+          });
+        }
+        // The original result, reconstructed from the audit alone: its `at` was the
+        // deletion timestamp, and `entityId` the deleted note's id. No second audit or
+        // receipt is written.
+        return ok({ noteId: audit.entityId, deletedAt: audit.at, audit, replayed: true });
+      }
+
+      // 6. User.
+      const user = this.users.find((x) => x.identity.userId === command.userId);
+      if (!user) {
+        return fail<DeleteNoteResult>({ code: "not_found", message: "User not found.", retriable: false });
+      }
+
+      // 7. The note as this caller sees it. A note absent from `visible` is either
+      // missing or hidden, and both answer `not_found`.
+      const visible = this.orderedVisibleNotes(ctx, user, overlay);
+      const visibleNote = visible.find((n) => n.id === noteId);
+      if (!visibleNote) {
+        return fail<DeleteNoteResult>({ code: "not_found", message: "Note not found.", retriable: false });
+      }
+
+      // 8. Role permission.
+      if (!canEditUserNotes(ctx.role)) {
+        return fail<DeleteNoteResult>({
+          code: "unauthorized",
+          message: "Role may not edit notes.",
+          retriable: false,
+        });
+      }
+
+      // 9. The stored, mutable note. A visible note NOT in the overlay is the fixture
+      // note: immutable, visibly present → `invalid_input`, not `not_found`.
+      const stored = overlay.notes.find((n) => n.id === noteId && n.userId === command.userId);
+      if (!stored) {
+        return fail<DeleteNoteResult>({
+          code: "invalid_input",
+          message: "Note is not deletable.",
+          retriable: false,
+        });
+      }
+
+      // 10. Authorship — only the note's own author may delete it, even with the
+      // permission, and for `private` notes on the same rule (no extra exception).
+      if (stored.authorEmployeeId !== ctx.actorId) {
+        return fail<DeleteNoteResult>({
+          code: "unauthorized",
+          message: "Only the note's author may delete it.",
+          retriable: false,
+        });
+      }
+
+      // 11. Precondition — refuse if the note changed since the caller read it, so a
+      // delete never silently discards an intervening edit.
+      if (expectedUpdatedAt !== stored.updatedAt) {
+        return fail<DeleteNoteResult>({
+          code: "conflict",
+          message: "Note changed since it was read.",
+          retriable: false,
+        });
+      }
+
+      // 12. One atomic write: remove the row, append the audit and the receipt.
+      const sequence = overlay.sequence + 1;
+      const at = new Date(this.clock.nowMs() + sequence).toISOString();
+
+      const audit: NoteDeletedAuditRecord = {
+        id: mockAuditId(sequence),
+        action: "note_deleted",
+        actorEmployeeId: ctx.actorId,
+        actorRole: ctx.role,
+        targetUserId: command.userId,
+        entityType: "note",
+        entityId: stored.id,
+        at,
+        reasonCode: "note_deleted_by_employee",
+        mock: true,
+      };
+
+      const next: MutationOverlay = {
+        version: MUTATION_OVERLAY_VERSION,
+        sequence,
+        // Hard delete: the note row is physically removed. Its earlier audit records
+        // (note_added, edits, pin/visibility) stay — the log is append-only.
+        notes: overlay.notes.filter((n) => n.id !== stored.id),
+        auditRecords: [...overlay.auditRecords, audit],
+        idempotencyReceipts: [
+          ...overlay.idempotencyReceipts,
+          { kind: NOTE_DELETE_RECEIPT_KIND, key, fingerprint, auditId: audit.id },
+        ],
+      };
+
+      try {
+        this.overlay.write(next);
+      } catch {
+        return fail<DeleteNoteResult>({
+          code: "internal",
+          message: "Mock overlay could not be persisted.",
+          retriable: true,
+        });
+      }
+
+      return ok({ noteId: stored.id, deletedAt: at, audit, replayed: false });
     });
   }
 }

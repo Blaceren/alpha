@@ -392,6 +392,13 @@ export function auditRowText(view: AuditRecordView): AuditRowText {
         primary: `${view.actorName} изменил доступ к заметке у ${view.targetUserName}`,
         detail: null,
       };
+    case "note_deleted":
+      // Neutral fact only (Phase 1B6) — never the deleted body, its former visibility,
+      // pin state or id. The log states THAT a note was removed and by whom (D-99).
+      return {
+        primary: `${view.actorName} удалил заметку у ${view.targetUserName}`,
+        detail: null,
+      };
   }
 }
 
@@ -428,6 +435,31 @@ export const NOTE_VISIBILITY_EDIT_LABEL = {
   success: "Доступ к заметке обновлён",
   /** Someone else changed it first; the list now shows what is actually stored. */
   conflict: "Доступ к заметке уже изменён. Показаны актуальные данные.",
+} as const;
+
+/**
+ * Note deletion (Phase 1B6). Same single-source, no-raw-code, no-diagnostics rule as
+ * the rest. The delete control's label is a full instruction so a screen reader hears
+ * the whole action, not a glyph. The confirm copy is honest about permanence — there
+ * is no undo — while pointing at the Audit trail that survives (D-96). Nothing here
+ * interpolates a note id, body, visibility or any bookkeeping.
+ */
+export const NOTE_DELETE_LABEL = {
+  /** Accessible name of the destructive control in a note row. */
+  deleteAction: "Удалить заметку",
+  /** Inline confirmation heading. */
+  confirmTitle: "Удалить заметку?",
+  /** Inline confirmation body — permanence + Audit survives. */
+  confirmBody: "Действие нельзя отменить. История изменения останется в Audit.",
+  /** Confirm button — the destructive commit. */
+  confirm: "Удалить",
+  cancel: "Отменить",
+  /** Announced through the confirm control while its own write is in flight. */
+  pending: "Удаляем…",
+  /** Calm outcome line shown at the section level after the row vanishes. */
+  success: "Заметка удалена",
+  /** Someone else changed it first; the list now shows what is actually stored. */
+  conflict: "Заметка уже изменена. Показаны актуальные данные.",
 } as const;
 
 /**

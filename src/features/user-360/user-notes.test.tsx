@@ -63,6 +63,10 @@ function notesMutations(addNote: CrmMutations["addNote"]): CrmMutations {
     setNoteVisibility: () => {
       throw new Error("this suite must not call setNoteVisibility");
     },
+    // Deletion has its own suite (note-delete.test.tsx).
+    deleteNote: () => {
+      throw new Error("this suite must not call deleteNote");
+    },
   };
 }
 

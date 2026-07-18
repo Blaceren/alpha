@@ -93,6 +93,57 @@ export function resolveEffectivePins(
 }
 
 /**
+ * Drop every note that a valid `note_deleted` audit record has removed (Phase 1B6).
+ *
+ * A delete is a HARD delete — the note row is physically removed from the overlay
+ * `notes[]` (D-96) — so in the ordinary case there is no row left for this to hide.
+ * But the append-only audit log is the DEFENSIVE source of truth (D-97): a
+ * corrupt/legacy overlay that still carries a note row AND a later `note_deleted`
+ * record for it must present the note as gone, not resurrected. This is the single
+ * place that resolves that, mirroring `resolveEffectivePins`: the log wins, so a
+ * second opinion cannot disagree with it.
+ *
+ * "Later" is meant literally: a note is hidden only when the latest `note_deleted`
+ * record for its id (resolved by `at` DESC, then audit `id` DESC — total and
+ * reproducible, never array position) is at or after the note's own `updatedAt`. A
+ * delete record that predates the note's last-known state is stale/corrupt and does
+ * NOT hide it — the note was demonstrably written after that delete claim. Records
+ * with an unparseable `at`, and notes with an unparseable `updatedAt`, are treated
+ * conservatively: they never drive a hide.
+ *
+ * Runs BEFORE projection and ordering, so a deleted note is absent from `page.total`
+ * as well as from `items` — exactly like a note the actor may not see. Fixture notes
+ * are never deleted through the mutation path (it refuses them — D-96), so no
+ * `note_deleted` record naming a fixture id is ever written, and a fixture cannot be
+ * hidden this way. The input notes are never mutated: filtered, never cloned.
+ */
+export function hideDeletedNotes(
+  notes: readonly CrmNote[],
+  auditRecords: readonly AuditRecord[],
+): CrmNote[] {
+  const latestDelete = new Map<string, { at: number; id: string }>();
+  for (const record of auditRecords) {
+    if (record.action !== "note_deleted") continue;
+    const at = Date.parse(record.at);
+    if (Number.isNaN(at)) continue; // a corrupt timestamp never drives a hide
+    const prev = latestDelete.get(record.entityId);
+    if (!prev || at > prev.at || (at === prev.at && record.id > prev.id)) {
+      latestDelete.set(record.entityId, { at, id: record.id });
+    }
+  }
+  if (latestDelete.size === 0) return [...notes];
+  return notes.filter((note) => {
+    const del = latestDelete.get(note.id);
+    if (!del) return true;
+    const noteAt = Date.parse(note.updatedAt);
+    // Hide only when the delete is at or after the note's last-known state. A delete
+    // that predates a later write of the same id is stale and leaves the note visible.
+    if (Number.isNaN(noteAt)) return true;
+    return del.at < noteAt;
+  });
+}
+
+/**
  * Contract order (§7): pinned first, then newest first. `id` breaks ties so that
  * notes created against a fixed mock clock keep a stable, reproducible order.
  * Operates on the pinned state it is given — apply `resolveEffectivePins` first.

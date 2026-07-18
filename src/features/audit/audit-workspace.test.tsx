@@ -199,6 +199,33 @@ describe("AuditWorkspace — populated ledger", () => {
     expect(screen.getByText(new RegExp(`${AUDIT_LABEL.totalLabel}: 6`))).toBeInTheDocument();
   });
 
+  it("renders a note_deleted row as a neutral fact, without the deleted body or id", async () => {
+    const provider = newProvider();
+    const add = await provider.addNote(ctx(), {
+      userId: USER_ID,
+      body: "Секретное тело удалённой заметки",
+      idempotencyKey: "d1",
+    });
+    const noteId = add.data!.note.id;
+    await provider.deleteNote(ctx(), {
+      userId: USER_ID,
+      noteId,
+      expectedUpdatedAt: add.data!.note.updatedAt,
+      idempotencyKey: "d2",
+    });
+    const { container } = renderWorkspace(provider);
+
+    // The neutral delete sentence appears; the note_added record for the same note
+    // survives too (append-only), so both rows are present.
+    expect(await screen.findByText(/удалил заметку у/)).toBeInTheDocument();
+    expect(screen.getByText(/добавил заметку для/)).toBeInTheDocument();
+
+    const html = container.innerHTML;
+    expect(html).not.toContain("Секретное тело удалённой заметки");
+    expect(html).not.toContain(noteId);
+    expect(html).not.toContain("audit_mock_");
+  });
+
   it("never prints a raw id, note body or overlay key", async () => {
     const provider = newProvider();
     await seedRich(provider);

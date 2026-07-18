@@ -25,17 +25,36 @@ export function NoteComposer({
   userId,
   onAdded,
   mutationsOverride,
+  inputRef,
 }: {
   userId: string;
   /** Called after a note exists, so the section can re-read through the provider. */
   onAdded: () => void;
   mutationsOverride?: CrmMutations;
+  /**
+   * Optional external ref to the composer's textarea. The section uses it as the
+   * post-delete focus target (Phase 1B6): after a note row vanishes, focus lands on
+   * the composer, the natural next place to act.
+   */
+  inputRef?: React.RefObject<HTMLTextAreaElement>;
 }) {
   const [body, setBody] = React.useState("");
   const [expanded, setExpanded] = React.useState(false);
   const { status, error, submit, clearFeedback } = useAddNote(userId, { mutationsOverride });
 
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const localRef = React.useRef<HTMLTextAreaElement | null>(null);
+  // Merge the internal ref (used for the composer's own focus behaviour) with the
+  // optional external one, so the parent can focus the same node.
+  const textareaRef = localRef;
+  const setTextareaNode = React.useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      localRef.current = node;
+      if (inputRef) {
+        (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+      }
+    },
+    [inputRef],
+  );
   const fieldId = React.useId();
   const counterId = React.useId();
   const feedbackId = React.useId();
@@ -110,7 +129,7 @@ export function NoteComposer({
           </label>
           <textarea
             id={fieldId}
-            ref={textareaRef}
+            ref={setTextareaNode}
             value={body}
             onChange={(e) => handleChange(e.target.value)}
             placeholder={NOTES_LABEL.composerPlaceholder}

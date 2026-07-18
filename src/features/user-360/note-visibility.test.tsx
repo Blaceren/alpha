@@ -58,6 +58,9 @@ function visMutations(setNoteVisibility: CrmMutations["setNoteVisibility"]): Crm
     updateNoteBody: () => {
       throw new Error("this suite must not call updateNoteBody");
     },
+    deleteNote: () => {
+      throw new Error("this suite must not call deleteNote");
+    },
     setNoteVisibility,
   };
 }
@@ -145,7 +148,7 @@ async function seedAuthoredNote(provider: MockCrmDataProvider, body = "Перв�
 describe("note visibility — capability is provider-owned", () => {
   it("renders the control only when canChangeVisibility is true", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
     expect(await findVisButton()).toBeInTheDocument();
@@ -153,7 +156,7 @@ describe("note visibility — capability is provider-owned", () => {
 
   it("does not render the control when canChangeVisibility is false", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note({ body: "Видна, но не редактируется" }), capabilities: { canEditBody: false, canChangeVisibility: false } },
+      { note: note({ body: "Видна, но не редактируется" }), capabilities: { canEditBody: false, canChangeVisibility: false, canDelete: false } },
     ];
     renderNotes({ provider: viewProvider(items) });
     await screen.findByText("Видна, но не редактируется");
@@ -176,7 +179,7 @@ describe("note visibility — capability is provider-owned", () => {
     // A note whose id LOOKS like a fixture note but is marked changeable is still
     // changeable; the component reads the flag, not the id shape.
     const items: CrmNoteListItem[] = [
-      { note: note({ id: `${USER}_note_1` }), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note({ id: `${USER}_note_1` }), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
     expect(await findVisButton()).toBeInTheDocument();
@@ -188,7 +191,7 @@ describe("note visibility — capability is provider-owned", () => {
 describe("note visibility — inline editor", () => {
   it("opens a native select with team/private options and Save disabled while unchanged", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note({ visibility: "team" }), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note({ visibility: "team" }), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
 
@@ -206,7 +209,7 @@ describe("note visibility — inline editor", () => {
   it("does not auto-submit on selection — only an explicit Save writes", async () => {
     const submit = vi.fn(() => Promise.resolve(visOk()));
     const items: CrmNoteListItem[] = [
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items), mutations: visMutations(submit) });
 
@@ -219,7 +222,7 @@ describe("note visibility — inline editor", () => {
 
   it("hides the body-edit and pin controls of the row while the visibility editor is open", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
 
@@ -234,7 +237,7 @@ describe("note visibility — inline editor", () => {
   it("Escape cancels the editor without saving and restores the control", async () => {
     const submit = vi.fn(() => Promise.resolve(visOk()));
     const items: CrmNoteListItem[] = [
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items), mutations: visMutations(submit) });
 
@@ -248,7 +251,7 @@ describe("note visibility — inline editor", () => {
 
   it("Cancel closes the editor and returns focus to the control", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
 
@@ -265,7 +268,7 @@ describe("note visibility — states", () => {
     let resolve!: (r: Result<SetNoteVisibilityResult>) => void;
     const submit = vi.fn(() => new Promise<Result<SetNoteVisibilityResult>>((r) => (resolve = r)));
     const provider = viewProvider([
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ]);
     renderNotes({ provider, mutations: visMutations(submit) });
 
@@ -286,7 +289,7 @@ describe("note visibility — states", () => {
       Promise.resolve(fail<SetNoteVisibilityResult>({ code: "conflict", message: "x", retriable: false })),
     );
     const provider = viewProvider([
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ]);
     renderNotes({ provider, mutations: visMutations(submit) });
 
@@ -306,7 +309,7 @@ describe("note visibility — states", () => {
       Promise.resolve(fail<SetNoteVisibilityResult>({ code: "internal", message: "x", retriable: true })),
     );
     const provider = viewProvider([
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ]);
     renderNotes({ provider, mutations: visMutations(submit) });
 
@@ -326,7 +329,7 @@ describe("note visibility — states", () => {
       ),
     );
     const provider = viewProvider([
-      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note(), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ]);
     const { container } = renderNotes({ provider, mutations: visMutations(submit) });
 
@@ -343,7 +346,7 @@ describe("note visibility — states", () => {
 describe("note visibility — badge and role change", () => {
   it("shows a calm «Приватная заметка» badge for a private note", async () => {
     const items: CrmNoteListItem[] = [
-      { note: note({ visibility: "private" }), capabilities: { canEditBody: true, canChangeVisibility: true } },
+      { note: note({ visibility: "private" }), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
     ];
     renderNotes({ provider: viewProvider(items) });
     expect(await screen.findByText(NOTE_VISIBILITY_LABEL.private)).toBeInTheDocument();

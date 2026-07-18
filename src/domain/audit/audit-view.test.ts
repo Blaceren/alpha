@@ -16,6 +16,7 @@ import type {
   AuditRecord,
   NoteAddedAuditRecord,
   NoteBodyChangedAuditRecord,
+  NoteDeletedAuditRecord,
   NotePinChangedAuditRecord,
   NoteVisibilityChangedAuditRecord,
   PrimaryOwnerChangedAuditRecord,
@@ -120,6 +121,21 @@ function visibilityChanged(
     reasonCode: "note_visibility_changed_by_employee",
     previousVisibility,
     nextVisibility,
+    mock: true,
+  };
+}
+
+function noteDeleted(id: string, at: string): NoteDeletedAuditRecord {
+  return {
+    id,
+    action: "note_deleted",
+    actorEmployeeId: KNOWN_ACTOR,
+    actorRole: "crm_admin",
+    targetUserId: KNOWN_TARGET,
+    entityType: "note",
+    entityId: "note_mock_0005",
+    at,
+    reasonCode: "note_deleted_by_employee",
     mock: true,
   };
 }
@@ -243,6 +259,21 @@ describe("projectAuditRecord — all four actions", () => {
     expect(JSON.stringify(view)).not.toContain("team");
     expect("previousVisibility" in view).toBe(false);
     expect("nextVisibility" in view).toBe(false);
+  });
+
+  it("projects note_deleted with base fields only — no body, visibility or entity id", () => {
+    const view = projectAuditRecord(noteDeleted("audit_mock_0007", "2026-07-01T00:00:00.000Z"), resolvers);
+    expect(view).toEqual({
+      id: "audit_mock_0007",
+      action: "note_deleted",
+      at: "2026-07-01T00:00:00.000Z",
+      actorName: "Retention 1",
+      targetUserName: "Иван Пример",
+      mock: true,
+    });
+    // The deleted note's id is never projected as visible text.
+    expect(JSON.stringify(view)).not.toContain("note_mock_0005");
+    expect("entityId" in view).toBe(false);
   });
 });
 

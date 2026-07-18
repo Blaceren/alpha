@@ -58,6 +58,9 @@ function editMutations(updateNoteBody: CrmMutations["updateNoteBody"]): CrmMutat
     setNoteVisibility: () => {
       throw new Error("this suite must not call setNoteVisibility");
     },
+    deleteNote: () => {
+      throw new Error("this suite must not call deleteNote");
+    },
   };
 }
 
@@ -138,8 +141,8 @@ describe("note body edit — capability is provider-owned", () => {
     // If React parsed ids it would get both backwards; it must trust the provider.
     renderNotes({
       provider: viewProvider([
-        { note: note({ id: FIXTURE_NOTE_ID, body: "Похоже на фикстуру" }), capabilities: { canEditBody: true, canChangeVisibility: true } },
-        { note: note({ id: "note_mock_0001", body: "Похоже на авторскую" }), capabilities: { canEditBody: false, canChangeVisibility: false } },
+        { note: note({ id: FIXTURE_NOTE_ID, body: "Похоже на фикстуру" }), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } },
+        { note: note({ id: "note_mock_0001", body: "Похоже на авторскую" }), capabilities: { canEditBody: false, canChangeVisibility: false, canDelete: false } },
       ]),
     });
     await screen.findByText("Похоже на фикстуру");
@@ -180,7 +183,7 @@ describe("note body edit — capability is provider-owned", () => {
   it("shows no edit control on a note authored by someone else", async () => {
     renderNotes({
       provider: viewProvider([
-        { note: note({ authorEmployeeId: "emp_someone_else", body: "Чужая заметка" }), capabilities: { canEditBody: false, canChangeVisibility: false } },
+        { note: note({ authorEmployeeId: "emp_someone_else", body: "Чужая заметка" }), capabilities: { canEditBody: false, canChangeVisibility: false, canDelete: false } },
       ]),
     });
     await screen.findByText("Чужая заметка");
@@ -360,7 +363,7 @@ describe("note body edit — submit outcomes", () => {
     // screen show the typed text on its own.
     const getUserNotesView = vi.fn().mockResolvedValue(
       ok({
-        items: [{ note: note({ body: "Всегда старое" }), capabilities: { canEditBody: true, canChangeVisibility: true } }],
+        items: [{ note: note({ body: "Всегда старое" }), capabilities: { canEditBody: true, canChangeVisibility: true, canDelete: true } }],
         page: { cursor: null, nextCursor: null, total: 1, pageSize: 50 },
       }),
     );

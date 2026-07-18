@@ -131,11 +131,13 @@ ata-crm/                          # отдельный репозиторий
 - **Риски:** производительность больших таблиц → виртуализация обязательна.
 
 ### Этап 6 — User 360
-> **Обновление (Phase 1B4-B…1B5-C):** секция «Заметки» получила локальные mutation'ы поверх overlay
+> **Обновление (Phase 1B4-B…1B6):** секция «Заметки» получила локальные mutation'ы поверх overlay
 > (D-09): `addNote` (1B4-B), `assignPrimaryOwner` (1B4-C), `setNotePinned` (1B4-D), `updateNoteBody`
-> (1B4-E) и `setNoteVisibility` — смена видимости team↔private (1B5-C, D-91…D-95). Все — под существующим
-> `edit_user_notes`, только автор своей overlay-заметки; `private` по identity актора, не по роли;
-> `role_restricted` не создаётся. User 360 audit-preview отложен (D-95).
+> (1B4-E), `setNoteVisibility` — смена видимости team↔private (1B5-C, D-91…D-95) и `deleteNote` — hard
+> delete authored-заметки (1B6, D-96…D-101). Все — под существующим `edit_user_notes`, только автор своей
+> overlay-заметки; `private` по identity актора, не по роли; `role_restricted` не создаётся; удаление
+> физически убирает row из `notes[]`, append-only `note_deleted` — защитный источник истины (D-97). User 360
+> audit-preview отложен (D-95).
 
 - **Scope:** header, секции Progression/Learning/Financial/Activity/Operations, единый Timeline с фильтрами по источнику, Operations-панель (signals/recommended/tasks/notes), freshness на финансах, evidence-popover.
 - **Не входит:** реальные мутации продукта; полноценные Communications/Automations экраны.

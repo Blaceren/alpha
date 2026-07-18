@@ -192,3 +192,25 @@ export function fingerprintSetNoteVisibility(input: {
     input.visibility,
   ]);
 }
+
+/**
+ * The identity of a deleteNote command (Phase 1B6): which user, which note, which
+ * actor, which role. Any difference in any part is a different command, and reusing
+ * a key across them is a conflict — a key spent deleting user A's note is not the
+ * same command as deleting user B's, another actor's, or under another role.
+ *
+ * `expectedUpdatedAt` is deliberately NOT part of it, for the same reason it is
+ * excluded from the body/visibility fingerprints (D-83/D-93): the fingerprint answers
+ * "what was asked", and the precondition a command was sent under is not part of that.
+ * A delete has no "desired end-state value" like a body or visibility — the identity
+ * IS which note, so there is no fifth part. This is what lets a retry after the note
+ * has vanished still replay: the fingerprint depends on nothing the delete destroyed.
+ */
+export function fingerprintDeleteNote(input: {
+  userId: string;
+  actorId: string;
+  role: string;
+  noteId: string;
+}): string {
+  return stableFingerprint([input.userId, input.actorId, input.role, input.noteId]);
+}

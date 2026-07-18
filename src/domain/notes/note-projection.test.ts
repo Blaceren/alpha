@@ -4,10 +4,20 @@
  */
 import { describe, expect, it } from "vitest";
 import { CRM_ROLES } from "@/domain/identity/roles";
-import { canViewNote, projectNotes, resolveEffectivePins, sortNotes } from "./note-projection";
+import {
+  canViewNote,
+  hideDeletedNotes,
+  projectNotes,
+  resolveEffectivePins,
+  sortNotes,
+} from "./note-projection";
 import { normalizeNoteBody, NOTE_BODY_MAX_LENGTH, mockNoteId } from "./note";
 import type { CrmNote, NoteVisibility } from "./note";
-import type { AuditRecord, NotePinChangedAuditRecord } from "@/domain/audit/audit";
+import type {
+  AuditRecord,
+  NoteDeletedAuditRecord,
+  NotePinChangedAuditRecord,
+} from "@/domain/audit/audit";
 
 function note(over: Partial<CrmNote> = {}): CrmNote {
   return {
@@ -209,6 +219,88 @@ describe("resolveEffectivePins", () => {
       pinAudit({ id: "audit_mock_0002", at: "2026-07-13T10:00:00.000Z", nextPinned: false }),
     ]);
     expect(out[0]).toBe(unchanged);
+  });
+});
+
+describe("hideDeletedNotes", () => {
+  function deleteAudit(over: Partial<NoteDeletedAuditRecord> = {}): NoteDeletedAuditRecord {
+    return {
+      id: "audit_mock_0002",
+      action: "note_deleted",
+      actorEmployeeId: "emp_author",
+      actorRole: "crm_admin",
+      targetUserId: "u_001",
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T10:00:00.000Z",
+      reasonCode: "note_deleted_by_employee",
+      mock: true,
+      ...over,
+    };
+  }
+
+  it("returns notes unchanged when there are no delete records", () => {
+    const notes = [note({ id: "n1" }), note({ id: "n2" })];
+    expect(hideDeletedNotes(notes, [])).toEqual(notes);
+  });
+
+  it("ignores audit records that are not deletions", () => {
+    const pin: AuditRecord = {
+      id: "audit_mock_0009",
+      action: "note_pin_changed",
+      actorEmployeeId: "emp_author",
+      actorRole: "crm_admin",
+      targetUserId: "u_001",
+      entityType: "note",
+      entityId: "note_mock_0001",
+      at: "2026-07-13T10:00:00.000Z",
+      reasonCode: "note_pin_changed_by_employee",
+      previousPinned: false,
+      nextPinned: true,
+      mock: true,
+    };
+    expect(hideDeletedNotes([note({ id: "note_mock_0001" })], [pin])).toHaveLength(1);
+  });
+
+  it("hides a note whose delete record is at or after its updatedAt", () => {
+    const notes = [note({ id: "note_mock_0001", updatedAt: "2026-07-13T09:00:00.000Z" })];
+    expect(hideDeletedNotes(notes, [deleteAudit()])).toHaveLength(0);
+  });
+
+  it("hides the matching note only, leaving others in place", () => {
+    const notes = [
+      note({ id: "note_mock_0001", updatedAt: "2026-07-13T09:00:00.000Z" }),
+      note({ id: "note_mock_0002", updatedAt: "2026-07-13T09:00:00.000Z" }),
+    ];
+    const out = hideDeletedNotes(notes, [deleteAudit({ entityId: "note_mock_0001" })]);
+    expect(out.map((n) => n.id)).toEqual(["note_mock_0002"]);
+  });
+
+  it("does NOT hide a note written after the delete claim (stale/corrupt record)", () => {
+    const notes = [note({ id: "note_mock_0001", updatedAt: "2026-07-13T11:00:00.000Z" })];
+    // Delete at 10:00, note updatedAt 11:00 → the note is newer, so the delete is stale.
+    expect(hideDeletedNotes(notes, [deleteAudit({ at: "2026-07-13T10:00:00.000Z" })])).toHaveLength(1);
+  });
+
+  it("resolves the latest delete record by at, then id — a later delete still hides", () => {
+    const notes = [note({ id: "note_mock_0001", updatedAt: "2026-07-13T09:30:00.000Z" })];
+    const records = [
+      deleteAudit({ id: "audit_mock_0002", at: "2026-07-13T09:00:00.000Z" }), // predates the note
+      deleteAudit({ id: "audit_mock_0003", at: "2026-07-13T10:00:00.000Z" }), // later — wins, hides
+    ];
+    expect(hideDeletedNotes(notes, records)).toHaveLength(0);
+  });
+
+  it("ignores a delete record with an unparseable timestamp", () => {
+    const notes = [note({ id: "note_mock_0001" })];
+    expect(hideDeletedNotes(notes, [deleteAudit({ at: "not-a-date" })])).toHaveLength(1);
+  });
+
+  it("does not mutate its input", () => {
+    const notes = [note({ id: "note_mock_0001", updatedAt: "2026-07-13T09:00:00.000Z" })];
+    const copy = [...notes];
+    hideDeletedNotes(notes, [deleteAudit()]);
+    expect(notes).toEqual(copy);
   });
 });
 

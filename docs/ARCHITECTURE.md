@@ -367,3 +367,33 @@ features/user-360/  components/user-notes.tsx (inline visibility-editor; оди�
 - **UI**: один inline-editor на строку (body XOR visibility, контролы скрыты при открытом редакторе, draft не
   теряется молча); контрол-«щит» отличается от pencil/pin; реальный 200% reflow, zero overflow.
 - **Направление зависимостей не нарушено:** `domain` не знает про React/storage; `config/labels` зависит от домена.
+
+### Phase 1B6 — User 360 Note Delete
+
+```
+domain/audit/       audit.ts (+NoteDeletedAuditRecord: шестой член union, базовые поля)
+                    audit-view.ts (+note_deleted — базовые поля, ни тела, ни id)
+domain/notes/       note-projection.ts (+hideDeletedNotes — скрывает note с валидным поздним note_deleted)
+data/contracts/     CrmMutations.ts (+deleteNote, DeleteNoteCommand/Result) · CrmDataProvider.ts (+CrmNoteListItem.canDelete)
+data/mock/overlay/  mutation-overlay.ts (+note_deleted action guard, +note_delete receipt-kind) · fingerprint.ts (+fingerprintDeleteNote)
+data/mock/          MockCrmDataProvider.ts (+deleteNote; orderedVisibleNotes → hideDeletedNotes; getUserNotesView отдаёт canDelete; addNote replay реконструирует после удаления)
+config/             labels.ts (+NOTE_DELETE_LABEL, +auditRowText note_deleted)
+features/user-360/  components/user-notes.tsx (inline delete-confirm; один active mode на строку; post-delete focus) · components/note-composer.tsx (inputRef для focus-цели) · hooks/use-delete-note.ts · lib/note-delete-error.ts
+```
+
+- **Hard delete + append-only audit** (D-96/D-97): `deleteNote` физически убирает row из overlay `notes[]`
+  (единственная мутация, удаляющая заметку), tombstone/тело не остаётся, undo нет; `note_deleted` audit —
+  защитный источник истины. `hideDeletedNotes` выполняется ПЕРВОЙ в `orderedVisibleNotes` (до pin-resolve/
+  projectNotes/sort), поэтому удалённая заметка вне `items` и `page.total`; latest-by-`at`-then-`id`, скрывает
+  только если delete `at` ≥ note `updatedAt` (stale/corrupt не скрывает; структурно битая валит парс fail-closed).
+- **Replay ДО entity-lookup** (D-98): idempotency-replay разрешается до user/note lookup — иначе retry после
+  успешного удаления вернул бы `not_found`. Fingerprint `[userId, actorId, role, noteId]`, без `expectedUpdatedAt`.
+- **Add-replay после удаления не воскрешает** (D-98): узкая lifecycle-ветка `addNote` реконструирует `CrmNote`
+  из audit + payload (тело гарантированно то же по fingerprint), НЕ записывая row обратно; тело не в receipt/audit.
+- **Author-only** (D-96): только автор своей overlay-заметки; фикстурная → `invalid_input`, чужая видимая →
+  `unauthorized`, скрытая/неизвестная → `not_found`. Возможность — `getUserNotesView.capabilities.canDelete`.
+- **Global audit fact-only** (D-99): `AuditRecordView` для `note_deleted` — только базовые поля; `/audit` рендерит
+  «удалил заметку у …», без тела/visibility/pin/id.
+- **UI**: provider-owned `canDelete`; Trash-контрол нейтрален в idle, destructive-тон только в inline confirm;
+  один active mode на строку; post-delete focus → composer (иначе безопасный section-target); zero overflow.
+- **Направление зависимостей не нарушено:** `domain` не знает про React/storage; `config/labels` зависит от домена.

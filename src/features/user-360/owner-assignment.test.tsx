@@ -73,6 +73,9 @@ function renderScreen({
         setNoteVisibility: () => {
           throw new Error("the owner suite must not call setNoteVisibility");
         },
+        deleteNote: () => {
+          throw new Error("the owner suite must not call deleteNote");
+        },
       }
     : undefined;
   return render(
@@ -650,6 +653,9 @@ describe("owner assignment — role change", () => {
               throw new Error("unused");
             },
             setNoteVisibility: () => {
+              throw new Error("unused");
+            },
+            deleteNote: () => {
               throw new Error("unused");
             },
           }}

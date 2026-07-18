@@ -16,6 +16,7 @@ import { MockCrmDataProvider } from "../MockCrmDataProvider";
 import {
   MUTATION_OVERLAY_STORAGE_KEY,
   NOTE_BODY_RECEIPT_KIND,
+  NOTE_DELETE_RECEIPT_KIND,
   NOTE_PIN_RECEIPT_KIND,
   NOTE_VISIBILITY_RECEIPT_KIND,
   parseOverlay,
@@ -740,5 +741,145 @@ describe("overlay v1 — the visibility widening did not open a hole", () => {
     const overlay = parseOverlay(withReceipt(receipt));
     expect(overlay.notes).toEqual([]);
     expect(overlay.idempotencyReceipts).toEqual([]);
+  });
+});
+
+describe("overlay v1 — 1B4-B…1B5-C overlays survive a delete, and it coexists (Phase 1B6)", () => {
+  it("a delete on a legacy overlay removes only the target row and appends one record + receipt", async () => {
+    const storage = new MemoryKeyValueStorage();
+    // A legacy notes-only overlay with two authored notes by the same author.
+    storage.setItem(
+      MUTATION_OVERLAY_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        sequence: 2,
+        notes: [
+          {
+            id: "note_mock_0001",
+            userId: USER_ID,
+            caseId: null,
+            authorEmployeeId: "emp_actor_1",
+            body: "Первая",
+            visibility: "team",
+            pinned: false,
+            createdAt: "2026-07-11T09:00:00.001Z",
+            updatedAt: "2026-07-11T09:00:00.001Z",
+            mock: true,
+          },
+          {
+            id: "note_mock_0002",
+            userId: USER_ID,
+            caseId: null,
+            authorEmployeeId: "emp_actor_1",
+            body: "Вторая",
+            visibility: "team",
+            pinned: false,
+            createdAt: "2026-07-11T09:00:00.002Z",
+            updatedAt: "2026-07-11T09:00:00.002Z",
+            mock: true,
+          },
+        ],
+        auditRecords: [],
+        idempotencyReceipts: [
+          { key: "legacy", fingerprint: "aaaa1111aaaa1111", noteId: "note_mock_0001", auditId: "audit_legacy" },
+        ],
+      }),
+    );
+    const provider = new MockCrmDataProvider({ clock, storage });
+
+    const res = await provider.deleteNote(ctx, {
+      userId: USER_ID,
+      noteId: "note_mock_0001",
+      expectedUpdatedAt: "2026-07-11T09:00:00.001Z",
+      idempotencyKey: "del-legacy",
+    });
+    expect(res.status).toBe("ok");
+
+    const after = overlayIn(storage);
+    // Only the target row was removed; the other note and the legacy receipt survive.
+    expect(after.notes.map((n) => n.id)).toEqual(["note_mock_0002"]);
+    expect(after.idempotencyReceipts.some((r) => r.key === "legacy")).toBe(true);
+    expect(after.auditRecords.filter((a) => a.action === "note_deleted")).toHaveLength(1);
+    expect(after.idempotencyReceipts.at(-1)!.kind).toBe(NOTE_DELETE_RECEIPT_KIND);
+  });
+});
+
+describe("overlay v1 — the delete widening did not open a hole (Phase 1B6)", () => {
+  const legacy = () => JSON.parse(LEGACY_OVERLAY_JSON) as Record<string, unknown>;
+  const withAudit = (record: unknown) => {
+    const o = legacy();
+    (o.auditRecords as unknown[]).push(record);
+    return JSON.stringify(o);
+  };
+  const withReceipt = (receipt: unknown) => {
+    const o = legacy();
+    (o.idempotencyReceipts as unknown[]).push(receipt);
+    return JSON.stringify(o);
+  };
+
+  const validDeleteAudit = {
+    id: "audit_mock_0003",
+    action: "note_deleted",
+    actorEmployeeId: "emp_mock_admin",
+    actorRole: "crm_admin",
+    targetUserId: USER_ID,
+    entityType: "note",
+    entityId: "note_mock_0001",
+    at: "2026-07-15T09:00:00.003Z",
+    reasonCode: "note_deleted_by_employee",
+    mock: true,
+  };
+
+  it("accepts a well-formed delete audit record — base fields only", () => {
+    expect(parseOverlay(withAudit(validDeleteAudit)).auditRecords).toHaveLength(3);
+  });
+
+  it("accepts a well-formed delete receipt", () => {
+    const receipt = { kind: NOTE_DELETE_RECEIPT_KIND, key: "k", fingerprint: "f", auditId: "audit_mock_0003" };
+    expect(parseOverlay(withReceipt(receipt)).idempotencyReceipts).toHaveLength(3);
+  });
+
+  it.each([
+    ["a mismatched entity type", { ...validDeleteAudit, entityType: "user" }],
+    ["an invented reason code", { ...validDeleteAudit, reasonCode: "because" }],
+    ["a lost mock marker", { ...validDeleteAudit, mock: false }],
+  ])("fails closed on %s — the whole overlay, notes included", (_label, record) => {
+    const overlay = parseOverlay(withAudit(record));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.auditRecords).toEqual([]);
+    expect(overlay.sequence).toBe(0);
+  });
+
+  it("fails closed on a delete receipt without an auditId", () => {
+    const receipt = { kind: NOTE_DELETE_RECEIPT_KIND, key: "k", fingerprint: "f" };
+    const overlay = parseOverlay(withReceipt(receipt));
+    expect(overlay.notes).toEqual([]);
+    expect(overlay.idempotencyReceipts).toEqual([]);
+  });
+
+  it("lets all SIX audit actions coexist in one overlay", () => {
+    const o = legacy();
+    const base = {
+      actorEmployeeId: "emp_mock_admin",
+      actorRole: "crm_admin",
+      targetUserId: USER_ID,
+      mock: true,
+    };
+    (o.auditRecords as unknown[]).push(
+      { ...base, id: "audit_a", action: "note_added", entityType: "note", entityId: "note_mock_0001", at: "2026-07-15T09:00:00.001Z", reasonCode: "note_added_by_employee" },
+      { ...base, id: "audit_b", action: "primary_owner_changed", entityType: "user", entityId: USER_ID, at: "2026-07-15T09:00:00.002Z", reasonCode: "primary_owner_changed_by_employee", previousOwnerId: null, nextOwnerId: "emp_ret1" },
+      { ...base, id: "audit_c", action: "note_pin_changed", entityType: "note", entityId: "note_mock_0001", at: "2026-07-15T09:00:00.003Z", reasonCode: "note_pin_changed_by_employee", previousPinned: false, nextPinned: true },
+      { ...base, id: "audit_d", action: "note_body_changed", entityType: "note", entityId: "note_mock_0001", at: "2026-07-15T09:00:00.004Z", reasonCode: "note_body_changed_by_employee" },
+      { ...base, id: "audit_e", action: "note_visibility_changed", entityType: "note", entityId: "note_mock_0001", at: "2026-07-15T09:00:00.005Z", reasonCode: "note_visibility_changed_by_employee", previousVisibility: "team", nextVisibility: "private" },
+      { ...base, id: "audit_f", action: "note_deleted", entityType: "note", entityId: "note_mock_0001", at: "2026-07-15T09:00:00.006Z", reasonCode: "note_deleted_by_employee" },
+    );
+    const overlay = parseOverlay(JSON.stringify(o));
+    const actions = overlay.auditRecords.map((a) => a.action);
+    expect(actions).toContain("note_added");
+    expect(actions).toContain("primary_owner_changed");
+    expect(actions).toContain("note_pin_changed");
+    expect(actions).toContain("note_body_changed");
+    expect(actions).toContain("note_visibility_changed");
+    expect(actions).toContain("note_deleted");
   });
 });

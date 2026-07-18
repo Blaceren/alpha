@@ -224,6 +224,18 @@ export interface CrmNoteListItem {
      * an employee id.
      */
     canChangeVisibility: boolean;
+    /**
+     * `true` under the SAME conditions as `canEditBody`/`canChangeVisibility` (Phase
+     * 1B6): the actor's role has `edit_user_notes`; the note is stored in the overlay
+     * `notes[]` (never the fixture note); the note is visible to the actor; and
+     * `note.authorEmployeeId === ctx.actorId`. Additionally the note must not already
+     * be hidden by a later valid `note_deleted` record — but a note that survived the
+     * canonical projection to reach this list inherently is not, so in practice this
+     * coincides with the other two flags. Deleting is author-only, exactly like
+     * editing (D-96). A separate field so the UI never assumes it coincides; React
+     * reads the flag, never a note id and never an employee id.
+     */
+    canDelete: boolean;
   };
 }
 
