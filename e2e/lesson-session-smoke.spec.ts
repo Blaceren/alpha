@@ -170,6 +170,14 @@ test("the dev scenario still works, but no user-facing link produces one", async
   expect(hrefs.length).toBeGreaterThan(0);
   for (const href of hrefs) expect(href).not.toContain("scenario");
 
+  // The `?scenario=completed` visit above persisted a real L18 completion into
+  // this tab's sessionStorage. Since D3-D the Path folds that session progress in
+  // (effectiveProgress), so the clean active-scenario assertions below must start
+  // from a clean session — otherwise L18 correctly reads as «пройден», not the
+  // current step. Remove ONLY the ATA-owned lesson-progress key (targeted, not a
+  // blanket clear); the subsequent active visits do not write it back.
+  await page.evaluate((k) => window.sessionStorage.removeItem(k), STORAGE_KEY);
+
   // Home and Путь link into the lesson cleanly too.
   await page.goto("/?scenario=active", { waitUntil: "networkidle" });
   await expect(page.getByRole("link", { name: /Продолжить урок/ })).toHaveAttribute("href", L18);

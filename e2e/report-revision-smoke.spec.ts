@@ -20,6 +20,11 @@ const PATH = "/path?scenario=report";
 
 const KEY_V1 = "ata.report-workspace.v1";
 const KEY_V2 = "ata.report-workspace.v2";
+// Since D3-D the store writes the v3 key (DD-296). Seeds still use the legacy v2
+// key on purpose — that exercises the real v2→v3 read-time migration — but every
+// read-BACK of a value the app just wrote must target v3, the key it actually
+// writes. v1/v2 keys are migration sources only: never written, never deleted.
+const KEY_V3 = "ata.report-workspace.v3";
 const SAVE_SETTLE = 900; // debounce (600ms) + margin
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -152,7 +157,7 @@ test.describe("revision — the dev/test verdict adapter", () => {
     await expect(page.getByText("Нужна доработка")).toBeVisible();
     await expect(page.getByText("Комментарий проверки")).toBeVisible();
 
-    const stored = await page.evaluate((key) => window.localStorage.getItem(key), KEY_V2);
+    const stored = await page.evaluate((key) => window.localStorage.getItem(key), KEY_V3);
     expect(stored).toContain('"status":"revision-requested"');
     // The verdict writes the report workspace ONLY — never lesson progress.
     const lesson = await page.evaluate(() =>
@@ -358,7 +363,7 @@ test.describe("revision — after resubmit", () => {
     await expect(page.getByText("Комментарий последней проверки")).toBeVisible();
     await expect(jumpToEntry(page)).toHaveCount(0);
 
-    const stored = await page.evaluate((key) => window.localStorage.getItem(key), KEY_V2);
+    const stored = await page.evaluate((key) => window.localStorage.getItem(key), KEY_V3);
     expect(stored).toContain('"status":"pending-review"');
     expect(stored).toContain("Уточните, какое условие");
 
@@ -436,18 +441,25 @@ test.describe("revision — storage", () => {
     await expect(page.getByText("Заполнено 2 из 5 записей").first()).toBeVisible();
     await expect(noticedField(page)).toHaveValue("запись из v1 номер 1");
 
-    // Editing writes v2; v1 stays on disk untouched.
+    // Editing writes v3; the legacy v1 key stays on disk untouched, and v2 — a key
+    // this migration path never went through — is never created.
     await noticedField(page).fill("запись из v1 номер 1 — дополнено");
     await page.waitForTimeout(SAVE_SETTLE);
     const keys = await page.evaluate(
-      ([k1, k2]) => ({
+      ([k1, k2, k3]) => ({
         v1: window.localStorage.getItem(k1!),
         v2: window.localStorage.getItem(k2!),
+        v3: window.localStorage.getItem(k3!),
       }),
-      [KEY_V1, KEY_V2],
+      [KEY_V1, KEY_V2, KEY_V3],
     );
+    // The legacy v1 record survives verbatim — migration never deletes or rewrites it.
     expect(keys.v1).toContain("запись из v1 номер 1");
-    expect(keys.v2).toContain("дополнено");
+    expect(keys.v1).not.toContain("дополнено");
+    // The store writes only v3; v2 was never part of this record's history.
+    expect(keys.v2).toBeNull();
+    // The edit lands in the canonical v3 workspace.
+    expect(keys.v3).toContain("дополнено");
   });
 
   test("14. a corrupt v2 fails closed — and does not fall back to v1", async ({ page }) => {

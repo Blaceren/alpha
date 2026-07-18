@@ -18,8 +18,9 @@ const REPORT_CANONICAL = "/lessons/level.003";
 const LIB = "/lessons?scenario=report";
 const PATH = "/path?scenario=report";
 
-// Since D3-C the store writes the v2 key (DD-285); the v1 key is legacy-read-only.
-const STORAGE_KEY = "ata.report-workspace.v2";
+// Since D3-D the store writes the v3 key (DD-296); the v1/v2 keys are legacy,
+// read-only migration sources that are never written or deleted.
+const STORAGE_KEY = "ata.report-workspace.v3";
 const SAVE_SETTLE = 900; // debounce (600ms) + margin
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -539,8 +540,8 @@ test.describe("report level — invalid storage fails closed", () => {
     await context.addInitScript(() => {
       const real = window.localStorage.setItem.bind(window.localStorage);
       window.localStorage.setItem = (key: string, value: string) => {
-        // The v2 key — the one the store actually writes since D3-C (DD-285).
-        if (key === "ata.report-workspace.v2") throw new Error("QuotaExceededError");
+        // The v3 key — the one the store actually writes since D3-D (DD-296).
+        if (key === "ata.report-workspace.v3") throw new Error("QuotaExceededError");
         real(key, value);
       };
     });
