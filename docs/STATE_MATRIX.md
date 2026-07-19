@@ -116,6 +116,33 @@ localStorage —
 
 Инварианты: только manual data; никакой автоподгрузки Pocket balance/broker wallet; Risk Calculator — «сумма для расчёта», не «баланс»; Chart Markup — uploaded screenshot; Performance Dashboard — journal data; Psychology Check-in — private by default.
 
+### 5a. Tools Hub — состояния (D4-B, реализовано)
+
+| State | Значение | Статус |
+|-------|----------|--------|
+| loaded / available tools | ledger инструментов; current = highest-level available (Trading Journal для Артёма) с одним CTA | **D4-B ✅** |
+| unlocked-but-coming-soon | открыт по прогрессу, но surface не построена (Risk Calculator L15) → «Открыт по прогрессу · инструмент готовится», без CTA | **D4-B ✅** |
+| locked | уровень не пройден → «Откроется на уровне N», без CTA | **D4-B ✅** |
+| resolver unavailable | защитный fail-closed: «Список инструментов сейчас недоступен» (данные локальны, ничего не отправлено) | **D4-B ✅** |
+
+### 5b. Trading Journal — состояния (D4-B, реализовано; store `ata.tools.trading-journal.v1`, DD-310)
+
+| State | Значение | Действие | Статус |
+|-------|----------|----------|--------|
+| empty | записей нет | объяснение первой записи + CTA открывает форму; **без fake examples** | **D4-B ✅** |
+| populated / list | записи newest `occurredAt` first, tie-break by id; свёрнутая строка = инструмент/направление/дата/урок-превью/вторичный результат | раскрыть/свернуть | **D4-B ✅** |
+| create | explicit action, one-per-submit, double-submit guard; canonical reread после success | добавить запись | **D4-B ✅** |
+| editing | inline, одна запись; Cancel/Escape без сохранения; `updatedAt` только после landed write | сохранить/отмена | **D4-B ✅** |
+| expanded | триптих ПЛАН → ИСПОЛНЕНИЕ → УРОК (урок доминирует); результат — вторичная метка; edit — quiet secondary | свернуть/редактировать | **D4-B ✅** |
+| saved (save state) | idle · pending · saved — «Сохранено в этом браузере» | — | **D4-B ✅** |
+| storage-error | write не удался → «Не удалось сохранить»; draft сохранён, retry; **никакого optimistic success** | повторить | **D4-B ✅** |
+| corrupt-storage | локальные данные нечитаемы → fail-closed пустой workspace + спокойное объяснение; **без raw payload** | добавить заново (перезапишет) | **D4-B ✅** |
+| locked (surface) | уровень инструмента не достигнут → target level, **без формы и данных** | посмотреть Путь | **D4-B ✅** |
+| coming-soon (surface) | известный, но не реализованный инструмент → спокойное состояние, **без fake functionality** | к списку | **D4-B ✅** |
+| unknown route | несуществующий `[toolCode]` → not-found convention (без generic crash) | к списку | **D4-B ✅** |
+
+Инварианты (DD-303/304/310): `manualResult` — необязательное число отдельной записи, вторичное к уроку; никаких агрегатов (сумма/среднее/win-rate/%/equity); журнал не пишет в progression/report-ключи и не влияет на XP/уровни/checkpoint; browser-local, без broker sync; без cross-tab listener.
+
 ---
 
 ## 6. Community channel

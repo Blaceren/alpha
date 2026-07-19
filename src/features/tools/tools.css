@@ -1,0 +1,958 @@
+/*
+ * Tools + Trading Journal (Phase D4-B) — direction «Structured Operational Spine».
+ * Hub: Direction A operational ledger (one luminous spine threading the whole
+ * tool progression). Journal: Direction C structured field notebook (numbered
+ * spine, ПЛАН → ИСПОЛНЕНИЕ → УРОК triptych, lesson dominant, money secondary).
+ *
+ * Shell, .mono, .sr-only, focus conventions come from home.css. Dark-only,
+ * provisional tokens. No cards, no grid, no KPI, no balance.
+ *
+ * Local, non-tokenised accents used ONLY as a restrained result sign (never
+ * whole-row colour): a desaturated rose for a negative manual result.
+ */
+
+/* ================================================================= *
+ * Shared page frame
+ * ================================================================= */
+.th-page,
+.ts-page,
+.je-page {
+  --result-negative: #d7a3a8;
+  --result-positive: var(--route-completed);
+  color: var(--text-primary);
+  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 30px);
+}
+
+/* ================================================================= *
+ * TOOLS HUB — operational ledger
+ * ================================================================= */
+.th-head {
+  max-width: 860px;
+  padding-bottom: 8px;
+}
+.th-h1 {
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-size: clamp(26px, 5.4vw, 34px);
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.th-lead {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 62ch;
+  margin: 0;
+}
+.th-lead b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.th-ledger {
+  position: relative;
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  max-width: 860px;
+}
+/* The single luminous spine, bright at the unlocked head, fading to locked. */
+.th-ledger::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 26px;
+  bottom: 26px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--route-current),
+    var(--route-upcoming) 22%,
+    var(--route-locked) 82%
+  );
+  opacity: 0.55;
+}
+
+.th-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 6px 16px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.th-row:last-child {
+  border-bottom: none;
+}
+/* Current row: a soft left wash, never a bordered card. */
+.th-row.is-current {
+  background: linear-gradient(
+    90deg,
+    var(--glow-current),
+    rgba(57, 211, 166, 0) 62%
+  );
+  border-radius: 12px;
+}
+
+.th-node {
+  position: relative;
+  z-index: 1;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--background-field);
+  border: 1.5px solid var(--route-locked);
+  margin-top: 2px;
+}
+.th-node-lvl {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.th-row.is-current .th-node {
+  border-color: var(--route-current);
+  box-shadow: 0 0 0 4px var(--glow-current);
+}
+.th-row.is-current .th-node-lvl {
+  color: var(--route-current);
+}
+.th-row.is-open .th-node {
+  border-color: var(--route-completed);
+}
+.th-row.is-open .th-node-lvl {
+  color: var(--text-secondary);
+}
+.th-row.is-locked .th-node {
+  border-style: dashed;
+  border-color: var(--route-locked);
+}
+
+.th-body {
+  min-width: 0;
+}
+.th-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 3px;
+  flex-wrap: wrap;
+}
+.th-title {
+  font-size: 16.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.th-row.is-locked .th-title {
+  color: var(--text-secondary);
+  font-weight: 550;
+}
+.th-badge {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--route-current);
+  border: 1px solid rgba(92, 240, 198, 0.4);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.th-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 54ch;
+}
+.th-desc.is-muted {
+  color: var(--route-locked);
+}
+.th-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.th-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--route-locked);
+  flex: none;
+}
+.th-status.is-open .th-dot {
+  background: var(--route-current);
+}
+.th-status.is-soon .th-dot {
+  background: var(--route-upcoming);
+}
+.th-status.is-locked {
+  color: var(--text-muted);
+}
+
+.th-action {
+  align-self: center;
+}
+.th-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--background-base);
+  background: var(--route-current);
+  padding: 9px 16px;
+  border-radius: 10px;
+  transition: filter var(--motion-fast) var(--ease-standard);
+}
+.th-cta:hover {
+  filter: brightness(1.06);
+}
+.th-go {
+  display: inline-flex;
+}
+.th-ic {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.th-note {
+  max-width: 860px;
+  margin: 22px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.th-unavailable {
+  max-width: 620px;
+  margin: 24px 0 0;
+  padding: 18px 18px 20px;
+  border: 1px solid var(--divider-strong);
+  border-left: 3px solid var(--gate-boundary);
+  border-radius: 12px;
+  background: var(--surface-context);
+}
+.th-unavailable-h {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.th-unavailable-t {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* ================================================================= *
+ * TOOL SURFACE STATES — locked / coming-soon / unknown
+ * ================================================================= */
+.ts-back,
+.je-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+.ts-back:hover,
+.je-back:hover {
+  color: var(--text-secondary);
+}
+
+.ts-state {
+  max-width: 560px;
+  margin: 18px 0 0;
+  padding: 22px 22px 24px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 14px;
+  background: var(--surface-context);
+}
+.ts-state.is-locked {
+  border-left: 3px solid var(--route-locked);
+}
+.ts-state.is-soon {
+  border-left: 3px solid var(--route-upcoming);
+}
+.ts-state.is-unknown {
+  border-left: 3px solid var(--gate-boundary);
+}
+.ts-node {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--route-locked);
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.ts-state.is-soon .ts-node {
+  border-style: solid;
+  border-color: var(--route-upcoming);
+  color: var(--text-secondary);
+}
+.ts-h1 {
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-size: clamp(22px, 4.6vw, 28px);
+  margin: 0 0 8px;
+}
+.ts-lead {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ts-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 52ch;
+}
+.ts-exits {
+  margin-top: 18px;
+}
+.ts-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--route-current);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ts-link:hover {
+  text-decoration: underline;
+}
+
+/* ================================================================= *
+ * TRADING JOURNAL — structured field notebook
+ * ================================================================= */
+.je-head {
+  max-width: 820px;
+}
+.je-id {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 10px 0 6px;
+}
+.je-num {
+  font-size: 14px;
+  color: var(--route-completed);
+}
+.je-h1 {
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-size: clamp(24px, 5vw, 32px);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.je-manual {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 60ch;
+  line-height: 1.5;
+}
+.je-manual-i {
+  color: var(--route-upcoming);
+  font-family: var(--font-mono);
+}
+.je-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.je-save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--route-completed);
+  flex: none;
+}
+.je-save-dot.is-error {
+  background: var(--result-negative);
+}
+.je-save-dot.is-off {
+  background: var(--route-locked);
+}
+
+.je-corrupt {
+  max-width: 820px;
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border: 1px solid var(--divider-strong);
+  border-left: 3px solid var(--result-negative);
+  border-radius: 12px;
+  background: var(--surface-context);
+}
+.je-corrupt-h {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.je-corrupt-t {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* --- the spine --- */
+.je-spine {
+  position: relative;
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  max-width: 820px;
+}
+.je-spine::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 20px;
+  bottom: 20px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, var(--route-current), var(--route-upcoming) 45%, var(--route-locked));
+  opacity: 0.5;
+}
+
+.je-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 8px 0 18px;
+}
+.je-node-dot {
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--background-field);
+  border: 1.5px solid var(--route-upcoming);
+  margin-top: 2px;
+}
+.je-node-num {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+.je-node-dot.is-add {
+  border-color: var(--route-current);
+  border-style: solid;
+  box-shadow: 0 0 0 4px var(--glow-current);
+}
+.je-node-dot.is-add .je-node-num {
+  color: var(--route-current);
+  font-size: 18px;
+  font-family: var(--font-mono);
+}
+.je-node-dot.is-empty {
+  border-style: dashed;
+  border-color: var(--route-locked);
+}
+.je-node.is-open .je-node-dot {
+  border-color: var(--route-current);
+}
+
+.je-node-body {
+  min-width: 0;
+}
+
+/* --- add node --- */
+.je-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 1px dashed var(--divider-strong);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+.je-add-btn:hover {
+  border-color: var(--route-current);
+  color: var(--text-primary);
+}
+.je-add-plus {
+  font-size: 18px;
+  color: var(--route-current);
+  line-height: 1;
+}
+
+/* --- empty state --- */
+.je-empty-h {
+  margin: 4px 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.je-empty-t {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 56ch;
+}
+.je-empty-cta {
+  background: var(--route-current);
+  color: var(--background-base);
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  cursor: pointer;
+}
+.je-empty-cta:hover {
+  filter: brightness(1.06);
+}
+
+/* --- saved entry: collapsed head --- */
+.je-node-head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  padding: 4px 0 12px;
+  cursor: pointer;
+  color: inherit;
+}
+.je-node.is-open .je-node-head {
+  border-bottom-color: transparent;
+  padding-bottom: 8px;
+}
+.je-node-id {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.je-node-date {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.je-node-sep {
+  color: var(--route-locked);
+}
+.je-node-instr {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.je-node-dir {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.je-node-collapsed {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 6px;
+}
+.je-node-lesson {
+  display: block;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.je-node-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.je-node-result.tone-positive .je-result-dot {
+  background: var(--result-positive);
+}
+.je-node-result.tone-negative .je-result-dot {
+  background: var(--result-negative);
+}
+.je-node-toggle {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--route-upcoming);
+}
+.je-node-head:hover .je-node-toggle {
+  color: var(--route-current);
+}
+
+/* --- saved entry: expanded panel --- */
+.je-panel {
+  padding-top: 6px;
+}
+.je-triptych-view {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 12px 0 4px;
+  border-left: 2px solid rgba(92, 240, 198, 0.28);
+  padding-left: 16px;
+  margin-left: 2px;
+}
+.je-col {
+  min-width: 0;
+}
+.je-col-k {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.je-col-k.is-lesson {
+  color: var(--route-current);
+}
+.je-col-v {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.je-col-v.is-lesson {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.je-setup {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.je-setup-k {
+  color: var(--text-secondary);
+}
+.je-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.je-result-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.je-result-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--route-locked);
+  flex: none;
+}
+.je-result-fact.tone-positive {
+  color: var(--text-secondary);
+}
+.je-result-fact.tone-positive .je-result-dot {
+  background: var(--result-positive);
+}
+.je-result-fact.tone-negative {
+  color: var(--text-secondary);
+}
+.je-result-fact.tone-negative .je-result-dot {
+  background: var(--result-negative);
+}
+.je-edit {
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.je-edit:hover {
+  border-color: var(--route-upcoming);
+  color: var(--text-primary);
+}
+
+/* ================================================================= *
+ * Journal form
+ * ================================================================= */
+.je-form {
+  border: 1px solid var(--divider-strong);
+  border-left: 2px solid var(--route-current);
+  border-radius: 12px;
+  background: var(--surface-context);
+  padding: 16px 16px 18px;
+}
+.je-form-h {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.je-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.je-field label {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.je-opt {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.je-form input[type="text"],
+.je-form input[type="datetime-local"],
+.je-form textarea {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--background-field);
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  padding: 9px 11px;
+  width: 100%;
+}
+.je-form textarea {
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 44px;
+}
+.je-form input:focus-visible,
+.je-form textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+.je-form input[aria-invalid="true"],
+.je-form textarea[aria-invalid="true"] {
+  border-color: var(--result-negative);
+}
+.je-identity {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.je-dir {
+  border: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.je-dir legend {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  padding: 0;
+  margin-bottom: 6px;
+}
+.je-dir-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.je-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border: 1px solid var(--divider-strong);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.je-radio:has(input:checked) {
+  border-color: var(--route-current);
+  color: var(--text-primary);
+}
+.je-radio input {
+  accent-color: var(--route-current);
+}
+.je-triptych {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(92, 240, 198, 0.24);
+  margin-bottom: 12px;
+}
+.je-phase-k {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.je-phase-k.is-lesson {
+  color: var(--route-current);
+}
+.je-lesson-hint {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.je-result-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.je-err {
+  font-size: 12px;
+  color: var(--result-negative);
+}
+.je-storage-err {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--result-negative);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: rgba(215, 163, 168, 0.08);
+}
+.je-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.je-submit {
+  background: var(--route-current);
+  color: var(--background-base);
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  cursor: pointer;
+}
+.je-submit:hover {
+  filter: brightness(1.06);
+}
+.je-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.je-cancel {
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.je-cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--route-upcoming);
+}
+
+/* ================================================================= *
+ * Desktop / tablet
+ * ================================================================= */
+@media (min-width: 900px) {
+  .th-page,
+  .ts-page,
+  .je-page {
+    padding: 26px clamp(24px, 3.4vw, 56px) 60px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .th-ledger,
+  .je-spine,
+  .th-head,
+  .th-note,
+  .je-head,
+  .je-corrupt {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  /* Expanded entry triptych becomes three columns; lesson column dominant. */
+  .je-triptych-view {
+    grid-template-columns: 1fr 1fr 1.25fr;
+    gap: 22px;
+  }
+  .je-form .je-triptych {
+    grid-template-columns: 1fr 1fr 1.2fr;
+    gap: 16px;
+  }
+  .je-identity {
+    grid-template-columns: 220px 1fr;
+  }
+}
+
+/* ================================================================= *
+ * Small phones — 320px must not clip
+ * ================================================================= */
+@media (max-width: 360px) {
+  .th-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .th-action {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+  }
+  .th-cta {
+    width: 100%;
+    justify-content: center;
+  }
+  .th-ledger::before {
+    left: 15px;
+  }
+  .je-node {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .je-spine::before {
+    left: 14px;
+  }
+  .je-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ================================================================= *
+ * Reduced motion
+ * ================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .th-cta,
+  .je-add-btn,
+  .je-empty-cta,
+  .je-submit {
+    transition: none;
+  }
+}

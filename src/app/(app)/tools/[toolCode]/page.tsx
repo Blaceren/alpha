@@ -1,0 +1,43 @@
+import type { Metadata } from "next";
+import { AppShell } from "@/components/shell/app-shell";
+import { ToolSurface } from "@/features/tools/components/tool-surface";
+import { resolvePathScenario } from "@/features/path/model/path-state";
+import "@/features/tools/tools.css";
+
+export const metadata: Metadata = {
+  title: "Инструмент — Alfa Trade Academy",
+  description: "Личный browser-local инструмент дисциплины.",
+};
+
+/**
+ * Инструмент (/tools/[toolCode]) — one tool surface (Phase D4-B).
+ * `[toolCode]` is the canonical curriculum tool code (tool.trading_journal …),
+ * the same code-as-address convention the lesson route uses for `level.NNN`.
+ *
+ * The surface DISPATCHES on the resolved tool view, never on a raw query:
+ *   - unknown code → the existing not-found convention (no generic crash);
+ *   - locked       → a locked state with target level, no form, no data;
+ *   - unlocked but not implemented (Risk Calculator) → a calm coming-soon state;
+ *   - available (Trading Journal) → the full workspace.
+ *
+ * `?scenario=` is the development-and-test marker adapter only; unknown → the
+ * canonical marker. It never appears in a user-facing href.
+ */
+export default async function ToolSurfacePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ toolCode: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { toolCode } = await params;
+  const sp = await searchParams;
+  const rawScenario = sp.scenario;
+  const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
+
+  return (
+    <AppShell userName="Артём" activeId="tools">
+      <ToolSurface toolCode={toolCode} scenario={scenario} />
+    </AppShell>
+  );
+}

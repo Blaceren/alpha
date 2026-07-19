@@ -335,10 +335,10 @@ describe("navigation", () => {
 
   it("leaves the unbuilt destinations alone", () => {
     render(<DesktopRouteNavigation activeId="lessons" />);
-    for (const label of ["Инструменты", "Ещё"]) {
-      expect(screen.getByRole("button", { name: label })).toHaveAttribute("aria-disabled", "true");
-    }
+    // Since D4-B «Инструменты» is a real link; only «Ещё» stays disabled.
+    expect(screen.getByRole("button", { name: "Ещё" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("link", { name: "Главная" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Путь" })).toHaveAttribute("href", "/path");
+    expect(screen.getByRole("link", { name: "Инструменты" })).toHaveAttribute("href", "/tools");
   });
 });

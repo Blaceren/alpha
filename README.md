@@ -4,11 +4,21 @@
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,
 discipline и сопровождение. ATA не является торговым терминалом.
 
-> **Статус: Phase D3-D — Approved Report State.** Реализованы Главная (`/`), Путь (`/path`),
-> Урок (`/lessons/[levelCode]`), **Библиотека уроков (`/lessons`)** и **первый отчёт
-> (`/lessons/level.003`)**. Backend / CRM / Pocket / database / deploy — не подключены; все данные
-> synthetic. Прогресс урока живёт в сессии браузера, черновик отчёта — в `localStorage` этого
-> браузера. **Mentor verdict, practical и инструменты не начинались.**
+> **Статус: Phase D4-B — Tools Hub + Trading Journal.** Реализованы Главная (`/`), Путь (`/path`),
+> Урок (`/lessons/[levelCode]`), **Библиотека уроков (`/lessons`)**, **первый отчёт
+> (`/lessons/level.003`)** и **Инструменты (`/tools`, `/tools/[toolCode]`)** с первым рабочим
+> инструментом **Trading Journal**. Backend / CRM / Pocket / database / deploy — не подключены; все
+> данные synthetic. Прогресс урока живёт в сессии браузера, черновик отчёта и записи журнала — в
+> `localStorage` этого браузера. **Risk Calculator и прочие инструменты не реализованы; mentor verdict
+> и practical не начинались.**
+>
+> **Инструменты (D4-B):** hub `/tools` — operational ledger всей последовательности инструментов;
+> доступ вычисляется каноническим progression-резолвером (для Артёма L18 открыты Trading Journal L10 и
+> Risk Calculator L15; дальше — locked). Trading Journal — browser-local (`ata.tools.trading-journal.v1`,
+> `docs/TOOLS_STORAGE.md`): ручные записи по сделкам/решениям (ПЛАН → ИСПОЛНЕНИЕ → УРОК), create/edit/
+> list, без агрегатов/баланса/broker sync. Risk Calculator честно показан как «Открыт по прогрессу ·
+> инструмент готовится» без рабочего CTA. Направление — «Structured Operational Spine» (hub A + journal
+> C, DD-308). Подпись «Записи вводятся вручную и не синхронизируются с брокером.»
 >
 > **`/lessons`** — обзор учебного материала (в отличие от Пути, который показывает допуск): выбранный
 > модуль, его уровни, доминирующее «Продолжить обучение», возврат к пройденному. Направление —
@@ -81,8 +91,8 @@ npx playwright install chromium   # для e2e и screenshots
 | `npm run lint` | ESLint (flat config, eslint-config-next) |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run test` / `npm run test:run` | Vitest (watch / однократно) |
-| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт + Доработка + Одобрение), 169 тестов |
-| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (252) |
+| `npm run test:e2e` | Playwright — **все behavioral suites** (Главная + Путь + Урок + Библиотека + Отчёт + Доработка + Одобрение + **Инструменты**), 177 тестов / 10 smoke-файлов |
+| `npm run test:e2e:all` | Playwright — полный discovery, включая artifact capture (280) |
 | `npm run screenshots` | Playwright — реальные screenshots Главной (D1B) |
 
 > **Два слоя E2E (D2B.1).** `*smoke.spec.ts` — behavioral regression: ничего не пишет на диск, входит в
@@ -115,6 +125,26 @@ npx playwright install chromium   # для e2e и screenshots
 (неизвестное → active). Прогресс — mock-adapter; backend не подключён. Детали —
 `docs/D2A_PATH_ARCHITECTURE.md`, review — `design-memory/reviews/d2a-path-review.md`,
 screenshots — `design-memory/screenshots/d2a-path/final/`.
+
+## Инструменты — `/tools` + Trading Journal (D4-B)
+
+Первый production Tools vertical slice. **Hub `/tools`** — operational ledger всей последовательности
+инструментов на одной светящейся нити (не card grid / marketplace): узлы подписаны уровнем открытия,
+current-инструмент подсвечен и имеет один CTA, locked/coming-soon — спокойные строки. Доступ
+вычисляется **каноническим progression-резолвером** (`levelProgressState`) — React не сравнивает уровни
+вручную. Для Артёма (L18): Trading Journal (L10) открыт и рабочий; Risk Calculator (L15) открыт, но
+честно «инструмент готовится» без CTA; дальше — locked.
+
+**`/tools/[toolCode]`** диспетчеризует по резолву: unknown → not-found; locked → target level без формы;
+unlocked-но-не-реализован → coming-soon; available → workspace. Единственный реализованный инструмент —
+**Trading Journal**: browser-local (`ata.tools.trading-journal.v1`), ручные записи по сделкам/решениям
+на вертикальном spine, триптих **ПЛАН → ИСПОЛНЕНИЕ → УРОК** (урок доминирует, денежный результат —
+вторичная метка), create/edit/list (без delete), honest empty/saved/storage-error/corrupt-storage
+states. Никаких агрегатов (сумма/P&L/win-rate/%/equity), баланса, broker sync или влияния на XP/уровни.
+Направление — «Structured Operational Spine» (hub A + journal C, DD-308…DD-310). Хранилище —
+`docs/TOOLS_STORAGE.md`; visual review — `docs/visual-reviews/D4_B_TRADING_JOURNAL.md`; screenshots —
+`design-memory/screenshots/d4-trading-journal/final/`. `?scenario=` — dev/test адаптер маркера,
+в пользовательских ссылках не появляется.
 
 ## Документация
 

@@ -32,8 +32,8 @@
 | `/lessons/[levelCode]` | Урок / **Отчёт** | Auth · Gated | **реализован (D2B)** для `video-test`-уровней: video + проверка понимания на одной странице; dev-сценарии `?scenario=`. **Report-уровень реализован здесь же (D3-B)**: `/lessons/level.003` — отчёт является самим уровнем (DD-264). Dev/test сценарий `?scenario=report` ставит пользователя на уровень 3 (DD-272); `?verdict=revision-requested` — dev/test verdict adapter D3-C (DD-291): работает только вместе с `?scenario=report`, fail closed, в пользовательских ссылках не появляется |
 | `/lessons/[levelCode]/test` | Тест | Auth · Gated | **не реализуется**: проверка живёт под видео на маршруте урока (правило «видео перед тестом»). Остаётся **зарезервированным**; в D3-A намеренно не реализован и не удалён, судьба решается отдельным DD (DD-242, DD-269) |
 | ~~`/reports/[reportCode]`~~ | ~~Отчёт~~ | — | **НЕ ИСПОЛЬЗУЕТСЯ (DD-264).** Отчёт — это сам curriculum-level, а не приложение к нему: уровень 3 имеет `kind: "report"`. Отдельный маршрут завёл бы **второй идентификатор** (`report.003`) для одной сущности (`level.003`) и вторую URL-схему — тот же дефект, которым DD-242 отклонил `/lessons/18`. Канонический адрес отчёта — **`/lessons/level.003`** |
-| `/tools` | Инструменты | Auth | дефолт — последний редактируемый инструмент |
-| `/tools/[toolCode]` | Инструмент | Auth · Gated | `[toolCode]` = `tool.trading_journal`…`tool.pro_workspace`, `tool.secret` |
+| `/tools` | Инструменты | Auth | **реализован (D4-B)**: Tools Hub — operational ledger всей последовательности инструментов; unlock через канонический резолвер; `?scenario=` — dev/test адаптер маркера (DD-309). В `BUILT_ROUTES` и production navigation |
+| `/tools/[toolCode]` | Инструмент | Auth · Gated | **реализован (D4-B)** для `tool.trading_journal` (полноценный browser-local workspace, DD-310). `[toolCode]` = `tool.trading_journal`…`tool.pro_workspace`, `tool.secret`. Диспетчеризация по резолву: unknown → not-found convention; locked → locked state без формы; unlocked-но-не-реализован (Risk Calculator L15) → спокойный coming-soon без fake CTA |
 | `/community` | Сообщество | Auth | список каналов + locked previews |
 | `/community/[channelCode]` | Канал сообщества | Auth · Gated | `[channelCode]` = `channel.start_questions`… |
 | `/community/[channelCode]/[threadId]` | Тред | Auth · Gated | сообщение + replies |
@@ -85,8 +85,8 @@
 | Заход | Поведение |
 |-------|-----------|
 | неавторизованный пользователь | auth state от backend → редирект в public/prelanding flow (вне прототипа); собственной login-страницы нет |
-| `/tools` без истории | показать «Инструменты» (hub) |
-| `/tools` с историей | последний редактируемый инструмент |
+| `/tools` без истории | показать «Инструменты» (hub) — **реализовано (D4-B)**: hub всегда рендерит ledger инструментов |
+| `/tools` с историей | последний редактируемый инструмент — *(будущее; D4-B выбирает hub)* |
 | `/support` | активный тикет, иначе список |
 | `/path` | центрирование на текущем уровне |
 | `/lessons` | библиотека уроков; доминирующее «Продолжить обучение» ведёт на текущий уровень (D2C-B) |

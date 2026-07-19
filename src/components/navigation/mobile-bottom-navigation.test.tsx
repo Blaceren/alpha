@@ -5,7 +5,7 @@ import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-na
 /**
  * The bottom bar is the mobile primary navigation. Built destinations are real
  * links; everything not built yet must be focusable-disabled (no 404) — verified
- * structurally. Built as of D2C-B: Главная, Путь, Уроки.
+ * structurally. Built as of D4-B: Главная, Путь, Уроки, Инструменты.
  */
 describe("MobileBottomNavigation", () => {
   it("renders 5 items with the canonical RU labels", () => {
@@ -24,15 +24,22 @@ describe("MobileBottomNavigation", () => {
 
   it("keeps unbuilt destinations as focusable-disabled controls (no dead links)", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    // Three real links (Главная + Путь since D2A, Уроки since D2C-B); the two
-    // others are still disabled buttons.
+    // Four real links (Главная + Путь + Уроки + Инструменты since D4-B); only
+    // «Ещё» remains a disabled button.
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
     expect(screen.getByRole("link", { name: /Путь/ })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: /Уроки/ })).toHaveAttribute("href", "/lessons");
+    expect(screen.getByRole("link", { name: /Инструменты/ })).toHaveAttribute("href", "/tools");
     const disabled = screen.getAllByRole("button");
-    expect(disabled).toHaveLength(2);
+    expect(disabled).toHaveLength(1);
     for (const b of disabled) expect(b).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("marks Инструменты active with aria-current on the tools page", () => {
+    render(<MobileBottomNavigation activeId="tools" />);
+    expect(screen.getByRole("link", { name: /Инструменты/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /Главная/ })).not.toHaveAttribute("aria-current");
   });
 
   it("marks Уроки active with aria-current on the library page", () => {

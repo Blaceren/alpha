@@ -23,7 +23,7 @@
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | ~~Урок, тест, report, mentor feedback~~ → **Report, Practical & Mentor Review** (переопределена в D3-A, DD-270) | ◻️ D3-A ✅ (scope + art direction) · D3-B ✅ (первый report-уровень) · D3-C…D3-F не начаты |
-| D4 | Tools L10–L30 | ⛔ Не начата |
+| D4 | Tools L10–L30 | ◻️ D4-A ✅ (scope + art direction, 3 направления) · **D4-B ✅ (Tools Hub + Trading Journal, production vertical slice)** · остальные tool internals не начаты |
 | D5 | Tools L35–L60 | ⛔ Не начата |
 | D6 | Tools L65–L100 | ⛔ Не начата |
 | D7 | Community, News, Referral | ⛔ Не начата |
@@ -737,3 +737,60 @@ horizontal overflow **0px** во всех шести. Personal visual review: 0 
 
 **Документы:** `D4_TOOLS_SCOPE.md` (новый), `D4_TOOLS_ART_DIRECTION.md` (новый),
 `DESIGN_DECISIONS.md` (DD-301…DD-307), этот файл.
+
+---
+
+## D4-B — Tools Hub + Trading Journal (реализовано)
+
+**Первый production Tools vertical slice.** Выбранное направление — **«Structured Operational
+Spine»** (гибрид: hub из Direction A «Operational Ledger» + journal из Direction C «Structured Field
+Notebook», DD-308). Добавлены production-маршруты `/tools` и `/tools/[toolCode]`; «Инструменты»
+включены в `BUILT_ROUTES` (desktop + mobile nav) — теперь реальная ссылка, а не disabled-заглушка.
+
+**Домен и резолвер (DD-309):** bounded tool-модель `TOOL_DEFINITIONS` строится из канонических
+curriculum-unlock'ов (`TOOL_UNLOCKS`) — unlock-уровни не дублируются в React; проектор `projectTools`
+вычисляет доступ **только** через канонический `levelProgressState` (тот же, что у Главной/Пути/
+Уроков). Инструмент открыт, когда его checkpoint-уровень **пройден**. Для Артёма (L18): Trading
+Journal — unlocked+available (current, один CTA «Открыть журнал»), Risk Calculator — unlocked но
+`coming-soon` («Открыт по прогрессу · инструмент готовится», без CTA), Chart Markup (L20) / Indicator
+Checklist (L25) и дальше — locked («Откроется на уровне N»). Никакого ручного сравнения `currentLevel`,
+хардкода уровней или URL-query bypass в React.
+
+**Trading Journal (DD-310):** browser-local store `ata.tools.trading-journal.v1` (v1;
+`{ version, sequence, entries }`) по модели report-store. Fail-closed parser (unknown version → пусто;
+битый root → пусто + `corrupt`; malformed/duplicate/invalid-ISO/unknown-direction/non-finite-result
+запись отбрасывается целиком). Реализованы create / read-list / edit (без delete/import/tags/filter/
+search/stats/charts); create — explicit, one-per-submit, double-submit guard, canonical reread; edit —
+inline, Cancel/Escape без сохранения, `updatedAt` только после landed write; failed write не меняет
+in-memory state и показывает честный `storage-error` (draft сохраняется, retry). `manualResult` —
+необязательное число отдельной записи, вторичное к уроку, без агрегатов; журнал не пишет в progression/
+report-ключи и не влияет на XP/уровни/checkpoint. Полная модель — `docs/TOOLS_STORAGE.md`.
+
+**Композиция:** hub — широкий operational ledger (одна светящаяся нить, узлы подписаны уровнем
+открытия; current-строка подсвечена, locked/coming-soon — спокойные строки; не card grid/marketplace).
+Journal — нумерованный spine; новая запись в голове потока; триптих **ПЛАН → ИСПОЛНЕНИЕ → УРОК** с
+доминирующим уроком; сохранённая запись раскрывается/сворачивается; на mobile триптих становится
+вертикальной последовательностью (не таблицей), bottom nav ничего не перекрывает. Обязательная подпись
+«Записи вводятся вручную и не синхронизируются с брокером.»
+
+**Тесты:** Vitest **649 / 33 файла** (было 571 / 27; +78, +6 файлов: tool-catalog, tools-projection,
+journal-entry, journal-store, tools-hub, trading-journal). Mandatory `npm run test:e2e` — **177 / 10
+файлов** (было 164 / 9): добавлен `e2e/tools-smoke.spec.ts` (20 проверок в 13 тестах). Full discovery
+— **280 / 22 файла** (было 252 / 20): + tools-smoke (13) + `e2e/tools-screenshots.spec.ts` (15,
+artifact-only, не входит в mandatory gate). Обновлены два nav-теста (Инструменты теперь built link). Home/Path/Lessons/report — без
+регрессий; Артём остаётся L18.
+
+**Visual QA (двухпроходный):** 14 реальных Chromium-кадров, dimensions точно по именам, в
+`design-memory/screenshots/d4-trading-journal/{first-pass,final}/`. Personal review: 0 critical, 2 major
+(storage-error кадр показывал validation-ошибку из-за незаполненной даты; locked-кадр показывал Chart
+Markup вместо Trading Journal — оба исправлены до final), 2 minor (пустая дата в create-кадре; клиппинг
+textarea — исправлены). Отчёт — `docs/visual-reviews/D4_B_TRADING_JOURNAL.md`. Historical screenshots
+не перезаписаны.
+
+**Границы:** Risk Calculator и прочие tool internals не реализованы; delete/import/attachments/tags/
+filter/search/analytics/totals/charts/broker sync/backend/auth/XP — вне scope. Зависимости и
+`package.json`/`package-lock.json` не менялись; новых пакетов нет.
+
+**Документы:** `TOOLS_STORAGE.md` (новый), `visual-reviews/D4_B_TRADING_JOURNAL.md` (новый),
+`DESIGN_DECISIONS.md` (DD-308…DD-310), `ROUTE_MAP.md`, `STATE_MATRIX.md`, `IMPLEMENTATION_PLAN.md`,
+`D4_TOOLS_SCOPE.md`, `D4_TOOLS_ART_DIRECTION.md`, `README.md`, этот файл.

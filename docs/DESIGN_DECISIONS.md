@@ -766,6 +766,40 @@
   `localStorage`. 6 реальных Chromium-кадров 1440×900, horizontal overflow 0px. Направление выбирает
   пользователь; React (D4-B) заблокирован до выбора.
 
+- **DD-308 (Locked, D4-B).** **Выбранное направление — «Structured Operational Spine» (гибрид A+C).**
+  Из трёх D4-A направлений (DD-307) пользователь выбрал осознанный гибрид: **Tools Hub** на основе
+  Direction A «Operational Ledger» (одна широкая вертикальная лента-нить инструментов, узлы подписаны
+  уровнем открытия; Trading Journal — текущий рабочий инструмент с одним CTA; locked/coming-soon —
+  спокойные строки той же ленты; **не** card grid, **не** marketplace, **не** узкий Path-клон), а
+  **Trading Journal** на основе Direction C «Structured Field Notebook» (нумерованный spine, форма
+  новой записи в голове потока, триптих **ПЛАН → ИСПОЛНЕНИЕ → УРОК**, урок доминирует, денежный
+  результат вторичен, запись раскрывается/сворачивается на месте). Из A заимствованы спокойная
+  временная структура, состояние «Денежный результат не указан» и лёгкая форма добавления. Direction B
+  (доминирующая dashboard-карта + боковой archive rail + симметричный two-column) **не** используется.
+- **DD-309 (Locked, D4-B).** **Resolver-owned unlock + unlocked-but-unimplemented state.** Доступность
+  инструмента вычисляется исключительно каноническим progression-резолвером `levelProgressState`
+  (`path-state.ts`) — тем же, что читают Главная/Путь/Уроки. Инструмент открыт, когда его checkpoint-
+  уровень **пройден** (`completed`), а не когда пользователь стоит на нём. React ничего не
+  переопределяет: нет ручного сравнения `currentLevel`, нет хардкода L10/L15, нет URL-query как
+  production unlock-bypass. `available` = `unlocked && implementationStatus === "available"`; только
+  такой инструмент получает рабочий route/CTA. Для Артёма (L18): Trading Journal — unlocked+available
+  (current), Risk Calculator — unlocked, но `coming-soon` («Открыт по прогрессу · инструмент
+  готовится», без CTA), дальше — locked («Откроется на уровне N»). Risk Calculator в D4-B не строится.
+- **DD-310 (Locked, D4-B).** **Browser-local store `ata.tools.trading-journal.v1`, create/edit/list
+  only.** Trading Journal хранится в `localStorage` (модель report-store, DD-266): версия 1, форма
+  `{ version: 1, sequence, entries: JournalEntry[] }`. Parser fail-closed: неизвестная version →
+  пустое каноническое состояние (не corrupt); повреждённый ROOT (битый JSON / чужая структура) →
+  пусто + `corrupt: true` (спокойное объяснение, без raw payload); отдельная malformed/duplicate-id/
+  invalid-ISO/unknown-direction/non-finite-result запись отбрасывается целиком (не воскрешается
+  частично). Write формируется полностью до `setItem`; failed write не меняет in-memory canonical
+  state и честно показывает `storage-error` (draft сохраняется, retry возможен) — никакого optimistic
+  success. Реализованы только create / read-list / edit; **нет** delete/restore/duplicate/bulk/
+  attachments/import-export/tags/filter/search/pagination/statistics/charts. Никаких write в
+  `ata.lesson-progress.v1` или report-ключи; никакого cross-tab listener; никакого backend/broker
+  sync. `manualResult` — необязательное конечное число отдельной записи (DD-303), вторичное к уроку,
+  без агрегатов (DD-304); журнал **не** влияет на XP/уровни/checkpoint. Маршруты `/tools`,
+  `/tools/[toolCode]` добавлены в `BUILT_ROUTES` и production navigation. Полная модель — `docs/TOOLS_STORAGE.md`.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

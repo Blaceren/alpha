@@ -1,6 +1,17 @@
 # D4_TOOLS_ART_DIRECTION — three directions for Tools + Trading Journal
 
-**Фаза:** D4-A (art-direction gate). React запрещён до явного выбора направления
+**Фаза:** D4-A (art-direction gate) → **выбор сделан, D4-B реализован.**
+
+> **Выбранное направление (D4-B, DD-308): «Structured Operational Spine»** — осознанный гибрид.
+> **Tools Hub** = основа **Direction A «Operational Ledger»** (одна широкая вертикальная лента-нить
+> инструментов; Trading Journal — текущий рабочий инструмент; locked/coming-soon — спокойные строки).
+> **Trading Journal** = основа **Direction C «Structured Field Notebook»** (нумерованный spine, форма
+> в голове потока, триптих ПЛАН → ИСПОЛНЕНИЕ → УРОК, урок доминирует, результат вторичен). Из A
+> заимствованы спокойная временная структура, «Денежный результат не указан» и лёгкая форма добавления.
+> **Direction B не используется.** Реализация — `src/features/tools/`, visual review —
+> `docs/visual-reviews/D4_B_TRADING_JOURNAL.md`. Ниже — исходные три D4-A направления (сохранены как есть).
+
+**Исходный статус D4-A:** React запрещён до явного выбора направления
 (`ata-art-direction-gate`, CLAUDE.md workflow). **Победитель не выбран — выбирает пользователь.**
 
 Три структурно разных направления для первого Tools vertical slice (scope —

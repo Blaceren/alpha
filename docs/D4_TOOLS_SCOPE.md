@@ -1,8 +1,16 @@
 # D4_TOOLS_SCOPE — Tools & first Trading Journal vertical slice
 
-**Фаза:** D4-A (scope + art-direction gate). Production React **не пишется** в этой фазе.
-**Статус:** scope зафиксирован; направление выбирает пользователь (см. `D4_TOOLS_ART_DIRECTION.md`).
-**Базовые решения:** DD-301…DD-307 (`DESIGN_DECISIONS.md`).
+**Фаза:** D4-A (scope + art-direction gate) → **D4-B реализован**.
+**Статус:** scope зафиксирован в D4-A; направление выбрано пользователем и **реализовано в D4-B**
+(«Structured Operational Spine» — hub A + journal C, DD-308; `IMPLEMENTATION_STATUS.md` §D4-B).
+**Базовые решения:** DD-301…DD-307 (D4-A) + DD-308…DD-310 (D4-B).
+
+> **Обновление D4-B (реализовано):** production-маршруты `/tools` и `/tools/[toolCode]` **добавлены в
+> `BUILT_ROUTES`** и production navigation (это отменяет границу D4-A §3/§10/§12 «маршруты не
+> подключаются»). Storage-ключ зафиксирован как **`ata.tools.trading-journal.v1`** (§4.1 ниже; ранняя
+> формулировка `ata.trading-journal.v1` была provisional). Реализованы create/read-list/edit; delete и
+> прочее из §10 остаются вне scope. Модель хранения — `docs/TOOLS_STORAGE.md`. Приватность §5/§7/§8
+> (manual per-trade number, no-financial-aggregate) соблюдена без изменений.
 
 Этот документ фиксирует честный продуктовый scope первого Tools vertical slice. Он —
 source of truth перед D4-B. Ничего из перечисленного здесь не реализуется как production до
@@ -87,8 +95,8 @@ Trading Journal — место, где пользователь **вручную
 
 - Всё вводится **вручную**. Автоподгрузки из брокера нет.
 - Хранение — **browser-local** (та же модель, что report-workspace: `localStorage`), не серверная
-  синхронизация. В D4-B ключ будет вида `ata.trading-journal.v1` (значение фиксируется в D4-B, не
-  сейчас).
+  синхронизация. **Ключ (зафиксирован в D4-B): `ata.tools.trading-journal.v1`, версия 1**
+  (`docs/TOOLS_STORAGE.md`, DD-310).
 - Обязательная честная подпись на поверхности инструмента:
 
   > «Записи вводятся вручную и не синхронизируются с брокером.»

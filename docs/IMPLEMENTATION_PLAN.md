@@ -177,6 +177,11 @@
 - **Risks:** автоподгрузка баланса; live-chart соблазн.
 - **Stop condition:** QA-review закрыт.
 
+**Разбивка D4:**
+- **D4-A ✅** — Tools Scope & Trading Journal Art Direction: честный scope, states, privacy boundary, минимальный `JournalEntry`, три структурно разных направления (`D4_TOOLS_SCOPE.md`, `D4_TOOLS_ART_DIRECTION.md`, DD-301…DD-307). Production React не писался.
+- **D4-B ✅** — **Tools Hub + Trading Journal (production vertical slice).** Выбранное направление «Structured Operational Spine» (hub A + journal C, DD-308). Маршруты `/tools`, `/tools/[toolCode]` в `BUILT_ROUTES`; resolver-owned unlock (DD-309); browser-local store `ata.tools.trading-journal.v1` с create/edit/list (без delete), fail-closed parser, honest save/error/corrupt states (DD-310); unlocked-but-unimplemented Risk Calculator (coming-soon, без CTA). Manual per-trade number только, без агрегатов/broker sync/XP-влияния. 14 visual-QA кадров (`design-memory/screenshots/d4-trading-journal/`), `docs/visual-reviews/D4_B_TRADING_JOURNAL.md`, `docs/TOOLS_STORAGE.md`. Vitest 649/33, mandatory e2e 177/10 (+`e2e/tools-smoke.spec.ts`).
+- **Остальные D4 инструменты** (Risk Calculator internals, Chart Markup, Indicator Checklist, News Calendar) — следующие slices, не начаты.
+
 ## D5 — Tools L35–L60
 
 - **Scope:** Pause Mode (L35), Weekly Review (L40), Strategy Builder (L45), Capital Plan (L50), Market Regime Board (L55), Session Planner (L60).
