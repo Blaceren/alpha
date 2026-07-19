@@ -1,0 +1,127 @@
+/* Direction C — Structured Field Notebook (PROTOTYPE-ONLY, D4-A).
+ *
+ * Signature system: a vertical LEARNING SPINE with numbered ring-nodes (ref 04).
+ * Each note hangs off a node. Inside a note the discipline is explicit and
+ * visible as a triptych: ПЛАН → ИСПОЛНЕНИЕ → УРОК. There are no heavy cards —
+ * notes open and close in place on the spine, like pages of a personal
+ * professional field notebook. On the hub, the spine's nodes ARE the tools
+ * (numbered by unlock level); the open node is the current tool.
+ *
+ * Stable DNA: #2 luminous line as structure (the spine), #5 chaos→system
+ * (loose notes becoming a disciplined practice), #6 fine contextual metadata.
+ * Provisional idea tested (§B): vertical light ray → Learning Spine.
+ */
+
+.nb {
+  max-width: 820px;
+  margin: 0 auto;
+}
+.nb-head { padding-top: 4px; }
+.nb-title {
+  font-family: var(--font-display); font-weight: 700; letter-spacing: -0.5px;
+  margin: 2px 0 6px; color: var(--text-primary); font-size: 26px;
+}
+@media (min-width: 900px) { .nb-title { font-size: 30px; } }
+.nb-sub { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin: 0; max-width: 58ch; }
+
+/* ---- the spine ---- */
+.nb-spine {
+  position: relative;
+  margin-top: 24px;
+  padding-left: 46px;
+}
+.nb-spine::before {
+  content: "";
+  position: absolute;
+  left: 17px; top: 8px; bottom: 8px;
+  width: 2px; border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--route-current) 65%, transparent),
+    color-mix(in srgb, var(--route-upcoming) 35%, transparent) 45%,
+    var(--route-locked) 72%
+  );
+}
+
+/* a node on the spine */
+.nb-item { position: relative; padding: 14px 0 18px; }
+.nb-node {
+  position: absolute;
+  left: -46px; top: 12px;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--background-field);
+  border: 2px solid var(--route-locked);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--text-muted);
+}
+.nb-item.is-open .nb-node {
+  border-color: var(--route-current);
+  color: var(--route-current);
+  box-shadow: 0 0 0 4px var(--glow-current);
+}
+.nb-item.is-done .nb-node { border-color: var(--route-upcoming); color: var(--text-secondary); }
+.nb-item.is-locked .nb-node { border-style: dashed; }
+
+/* note header line */
+.nb-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.nb-name { font-family: var(--font-display); font-weight: 650; font-size: 17px; color: var(--text-primary); }
+.nb-item.is-locked .nb-name { color: var(--text-muted); font-weight: 550; }
+.nb-when { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); letter-spacing: 0.3px; }
+.nb-desc { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); line-height: 1.5; max-width: 56ch; }
+
+/* collapsed note: just the lesson, one glance */
+.nb-collapsed { margin-top: 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.nb-collapsed .tp-lesson { font-size: 14px; color: var(--text-secondary); flex: 1 1 60%; min-width: 0; }
+.nb-toggle {
+  margin-top: 10px; font: inherit; font-size: 12.5px; color: var(--route-upcoming);
+  background: transparent; border: 0; cursor: pointer; padding: 4px 0;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* the open note: the discipline triptych ПЛАН → ИСПОЛНЕНИЕ → УРОК */
+.nb-open {
+  margin-top: 14px;
+  border-left: 2px solid color-mix(in srgb, var(--route-current) 40%, transparent);
+  padding-left: 16px;
+}
+.nb-tri {
+  display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 4px;
+}
+@media (min-width: 760px) {
+  .nb-tri { grid-template-columns: 1fr 1fr 1.35fr; gap: 20px; align-items: start; }
+}
+.nb-cell {}
+.nb-cell-k {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.9px;
+  text-transform: uppercase; color: var(--text-muted);
+  display: flex; align-items: center; gap: 7px;
+}
+.nb-cell-k::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
+.nb-cell.is-lesson .nb-cell-k { color: var(--route-current); }
+.nb-cell.is-lesson .nb-cell-k::after { background: color-mix(in srgb, var(--route-current) 35%, transparent); }
+.nb-cell-v { margin: 8px 0 0; font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; }
+.nb-cell.is-lesson .nb-cell-v { font-size: 14.5px; color: var(--text-primary); }
+.nb-open-foot {
+  margin-top: 16px; display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+}
+
+/* add note = a node at the top of the spine with a + */
+.nb-add .nb-node { border-color: var(--route-current); border-style: solid; color: var(--route-current); }
+.nb-addbody { padding-top: 2px; }
+.nb-addgrid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+@media (min-width: 760px) { .nb-addgrid { grid-template-columns: 150px 150px 1fr; align-items: end; } }
+.nb-field { display: flex; flex-direction: column; gap: 5px; }
+.nb-field label { font-size: 11.5px; color: var(--text-muted); }
+.nb-in, .nb-ta {
+  font: inherit; font-size: 13.5px; color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-context) 60%, transparent);
+  border: 1px solid var(--divider); border-radius: 8px; padding: 9px 11px; width: 100%;
+}
+.nb-ta { resize: none; line-height: 1.5; }
+.nb-add-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+
+.nb-notice { margin-top: 18px; }
+.nb-lock { margin-top: 8px; }
+.nb-item.is-locked { padding-bottom: 12px; }

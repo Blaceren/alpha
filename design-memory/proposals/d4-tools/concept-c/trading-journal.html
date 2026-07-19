@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Trading Journal · Concept C «Structured Field Notebook»</title>
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+</head>
+<body>
+<div class="home">
+  <a href="#main" class="skip">Перейти к содержимому</a>
+
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a>
+      <a href="#">Путь</a>
+      <a href="#">Уроки</a>
+      <a href="#" aria-current="page">Инструменты</a>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <div class="mtop">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    <div class="actions" style="display:inline-flex;align-items:center;gap:8px">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём" title="Профиль"><span aria-hidden="true">А</span></button>
+    </div>
+  </div>
+
+  <main class="home-main tp-main" id="main">
+   <div class="nb">
+    <a class="tp-back" href="tools-hub.html">
+      <span aria-hidden="true">←</span> Инструменты
+      <span class="sep" aria-hidden="true">·</span> Trading Journal
+    </a>
+
+    <header class="nb-head">
+      <h1 class="nb-title">Trading Journal</h1>
+      <p class="nb-sub">Полевые заметки по сделкам. Каждая — по схеме план → исполнение → урок; последняя колонка важнее цифры.</p>
+      <p class="tp-manual" style="margin-top:14px">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4"/><path d="M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
+        <span><b>Записи вводятся вручную и не синхронизируются с брокером.</b> Открыт на уровне 10.</span>
+      </p>
+    </header>
+
+    <div class="nb-spine" aria-label="Заметки по сделкам">
+
+      <!-- add note at top of spine -->
+      <form class="nb-item nb-add" onsubmit="return false">
+        <span class="nb-node" aria-hidden="true">+</span>
+        <div class="nb-addbody">
+          <div class="nb-line">
+            <span class="nb-name" style="font-size:15px">Новая заметка</span>
+            <span class="tp-proto">поля prototype-only</span>
+          </div>
+          <div class="nb-addgrid">
+            <div class="nb-field">
+              <label for="c-when">Когда</label>
+              <input class="nb-in" id="c-when" placeholder="сегодня, время">
+            </div>
+            <div class="nb-field">
+              <label for="c-instr">Инструмент</label>
+              <input class="nb-in" id="c-instr" placeholder="напр. XAU/USD">
+            </div>
+            <div class="nb-field">
+              <label for="c-lesson">Урок</label>
+              <textarea class="nb-ta" id="c-lesson" rows="1" placeholder="Что понял по этой сделке?"></textarea>
+            </div>
+          </div>
+          <div class="nb-add-foot">
+            <span class="tp-result"><span class="lbl">результат сделки (вручную, необязательно)</span></span>
+            <button class="tp-primary" type="button">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Добавить заметку
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <!-- note 3: observation, no monetary result — OPEN triptych -->
+      <article class="nb-item is-open">
+        <span class="nb-node" aria-hidden="true">03</span>
+        <div class="nb-line">
+          <span class="tp-instr" style="font-family:var(--font-mono);font-size:15px;font-weight:600">GBP/USD</span>
+          <span class="tp-dir is-obs">Наблюдение · без входа</span>
+          <span class="nb-when">16 июля · 09:40</span>
+        </div>
+        <div class="nb-open">
+          <div class="nb-tri">
+            <div class="nb-cell">
+              <div class="nb-cell-k">План</div>
+              <p class="nb-cell-v">Не входить до выхода данных — диапазон перед новостями.</p>
+            </div>
+            <div class="nb-cell">
+              <div class="nb-cell-k">Исполнение</div>
+              <p class="nb-cell-v">Остался вне рынка, просто наблюдал за реакцией.</p>
+            </div>
+            <div class="nb-cell is-lesson">
+              <div class="nb-cell-k">Урок</div>
+              <p class="nb-cell-v">Пропуск — тоже решение. Записал, чтобы не забыть, почему не входил.</p>
+            </div>
+          </div>
+          <div class="nb-open-foot">
+            <span class="tp-noresult">Денежный результат не указан</span>
+            <button class="nb-toggle" type="button" style="color:var(--text-muted)">Свернуть</button>
+          </div>
+        </div>
+      </article>
+
+      <!-- note 2: negative — collapsed -->
+      <article class="nb-item is-done">
+        <span class="nb-node" aria-hidden="true">02</span>
+        <div class="nb-line">
+          <span class="tp-instr" style="font-size:15px">EUR/USD</span>
+          <span class="tp-dir">Покупка</span>
+          <span class="nb-when">15 июля · 16:05</span>
+        </div>
+        <div class="nb-collapsed">
+          <span class="tp-lesson">Поспешил. Нарушил своё же условие входа — вот что стоило результата, а не сам рынок.</span>
+          <span class="tp-result is-neg"><span class="fig">−7</span></span>
+        </div>
+        <button class="nb-toggle" type="button">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          Развернуть план и исполнение
+        </button>
+      </article>
+
+      <!-- note 1: positive — collapsed -->
+      <article class="nb-item is-done">
+        <span class="nb-node" aria-hidden="true">01</span>
+        <div class="nb-line">
+          <span class="tp-instr" style="font-size:15px">XAU/USD</span>
+          <span class="tp-dir">Продажа</span>
+          <span class="nb-when">14 июля · 11:20</span>
+        </div>
+        <div class="nb-collapsed">
+          <span class="tp-lesson">Терпение сработало: вход строго по условию. Хочу повторять именно это поведение.</span>
+          <span class="tp-result is-pos"><span class="fig">+18</span></span>
+        </div>
+        <button class="nb-toggle" type="button">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          Развернуть план и исполнение
+        </button>
+      </article>
+
+    </div>
+   </div>
+  </main>
+
+  <nav class="bottomnav" aria-label="Мобильная навигация">
+    <ul>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="lbl">Главная</span></a></li>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19h5a4 4 0 0 0 0-8h-3a4 4 0 0 1 0-8h5"/></svg><span class="lbl">Путь</span></a></li>
+      <li><a href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="lbl">Уроки</span></a></li>
+      <li><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/></svg><span class="lbl">Инструменты</span></a></li>
+      <li><button type="button" aria-disabled="true" title="Скоро"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span class="lbl">Ещё</span></button></li>
+    </ul>
+  </nav>
+</div>
+</body>
+</html>

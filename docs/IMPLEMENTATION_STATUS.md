@@ -696,3 +696,44 @@ Curriculum fixture, thresholds, XP-правила, Home, lesson video/test, prac
 **Документы:** `D3_APPROVED_EXPERIENCE.md` (новый); обновлены `D3_REPORT_EXPERIENCE.md`,
 `D3_REVISION_EXPERIENCE.md`, `REPORT_STATE_MACHINE.md`, `REPORT_STORAGE.md`, `STATE_MATRIX.md`,
 `ROUTE_MAP.md`, `DESIGN_DECISIONS.md` (DD-293…DD-300), `IMPLEMENTATION_PLAN.md`, README.
+
+
+## D4-A — Tools Scope & Trading Journal Art Direction (завершена)
+
+**D4 впервые открыта.** Первый Tools vertical slice определён: hub `/tools` + первый инструмент
+**Trading Journal** (unlock target L10). Зафиксированы честный scope, states, privacy boundary,
+no-financial-aggregate rule, минимальный `JournalEntry` и manual per-trade value boundary
+(`docs/D4_TOOLS_SCOPE.md`, DD-301…DD-306). Unlock — через существующий progression resolver, без
+новой логики; для канонического Артёма (L18) открыты Trading Journal (L10) и Risk Calculator (L15),
+дальше — locked previews (Chart Markup Tool L20, Indicator Checklist L25). Risk Calculator в D4-A
+не реализуется.
+
+**Manual per-trade value:** результат отдельной сделки может храниться как простое число, но никогда
+не является балансом/балансом Pocket, не агрегируется в P/L, не даёт доходность/проценты/прогресс,
+не влияет на XP/уровни/checkpoint, не синхронизируется и не импортируется; всегда визуально вторичен
+к решению и выводу; отсутствие результата — нормальное состояние записи (DD-303). Обязательная честная
+подпись «Записи вводятся вручную и не синхронизируются с брокером.» (DD-306).
+
+**Три структурно разных направления** (`docs/D4_TOOLS_ART_DIRECTION.md`, 19-пунктовый бриф + ASCII на
+каждое): **A «Operational Ledger»** (одна лента-нить времени с узлами; форма новой записи в голове
+ленты), **B «Trade Debrief Workspace»** (доминирующая рабочая плоскость + подчинённая рейка архива;
+неравные колонки), **C «Structured Field Notebook»** (вертикальный Learning Spine с нумерованными
+узлами; открытая заметка — триптих ПЛАН → ИСПОЛНЕНИЕ → УРОК). Пространственные системы, signature-
+объекты и геометрия навигации/прогресса различны (DD-307).
+
+**Проверки:** реальные Chromium-кадры в точном вьюпорте 1440×900; **ровно 6 PNG**
+(`design-memory/screenshots/d4-tools-art-direction/proposals/`, 2 поверхности × 3 направления);
+horizontal overflow **0px** во всех шести. Personal visual review: 0 critical, 1 major (default-
+подчёркивание на pill-CTA — исправлено до финальных кадров), minor зафиксированы. Fixture (hub-
+инструменты, три записи: +18 / −7 / без результата, урок важнее цифры) одинаков во всех направлениях.
+
+**Границы:** production React **не написан**; `src/`, `package.json`, `package-lock.json`, `e2e/` не
+изменялись; production-тесты не запускались (production-код не менялся); screenshot-спеки прошлых фаз
+не запускались, historical evidence не перезаписан (DD-257). Прототипы линкуют реальные токены/shell/
+шрифты, лежат вне `src/`, не пишут `localStorage`, не попадают в navigation / `BUILT_ROUTES`
+(`design-memory/proposals/d4-tools/`, DD-260, DD-307). BUILT_ROUTES и production-маршруты не менялись.
+
+**Победитель не выбран — выбор за пользователем. D4-B не начинается без явного выбора направления.**
+
+**Документы:** `D4_TOOLS_SCOPE.md` (новый), `D4_TOOLS_ART_DIRECTION.md` (новый),
+`DESIGN_DECISIONS.md` (DD-301…DD-307), этот файл.
