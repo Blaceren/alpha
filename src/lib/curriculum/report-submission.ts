@@ -18,6 +18,7 @@ import {
 import {
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
+  isCurriculumV2ReportAttachmentsEnabled,
   isCurriculumV2ReportEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -712,6 +713,244 @@ export async function resolveOwnReportContext(input: ResolveOwnReportContextInpu
   const evaluationTime = new Date();
   if (db) return resolveWithin(db, data, evaluationTime);
   return prisma.$transaction((tx) => resolveWithin(tx, data, evaluationTime));
+}
+
+// --- owner revision history (read-only) -------------------------------------
+
+type OwnReportHistoryFailure = Exclude<
+  ResolveOwnReportContextResult,
+  { kind: "available" | "draft" | "pending_review" | "rejected" | "approved" }
+>;
+
+type OwnReportHistoryContext =
+  | OwnReportHistoryFailure
+  | { kind: "no_submission" }
+  | { kind: "ok"; scope: Scope; fields: ParsedField[]; submission: SubmissionGraph; inspected: InspectedSubmission };
+
+async function loadOwnHistoryWithin(
+  tx: TransactionClient,
+  data: { actorUserId: number; locale: string; levelNumber?: number; stableCode?: string },
+  evaluationTime: Date,
+): Promise<OwnReportHistoryContext> {
+  const selector = parseSelector(data);
+  const locale = reportLocaleSchema.safeParse(data.locale);
+  if (!selector || !locale.success || locale.data !== data.locale.trim() || !Number.isSafeInteger(data.actorUserId) || data.actorUserId < 1) {
+    return { kind: "unavailable", reason: "level_not_accessible" };
+  }
+  const scopeResult = await resolveScopeWithin(tx, data.actorUserId, selector, evaluationTime);
+  if ("kind" in scopeResult) return scopeResult as OwnReportHistoryFailure;
+  const scope = scopeResult;
+  if (scope.access === "locked") return { kind: "locked", reason: "level_not_accessible" };
+  const submission = await loadSubmission(tx, scope);
+  const graphResult = await loadDefinitionGraph(tx, scope, submission);
+  if ("kind" in graphResult) return graphResult as OwnReportHistoryFailure;
+  const fields = parseDefinitionGraph(graphResult);
+  if (!fields) return { kind: "corrupt", reason: "assignment_corrupt" };
+  if (!submission) {
+    if (scope.access === "pending_review" || scope.access === "completed") return { kind: "corrupt", reason: "submission_corrupt" };
+    return { kind: "no_submission" };
+  }
+  const inspected = inspectSubmission(scope, graphResult, fields, submission, locale.data);
+  if (typeof inspected === "string") return { kind: "corrupt", reason: inspected };
+  return { kind: "ok", scope, fields, submission, inspected };
+}
+
+const ownHistoryListSchema = z.strictObject({
+  levelNumber: z.number().int().positive().max(MAX_INT).optional(),
+  stableCode: z.string().trim().regex(STABLE_CODE_PATTERN).optional(),
+  locale: reportLocaleSchema,
+  limit: z.number().int().min(1).max(50).default(20),
+  cursor: z.number().int().positive().max(MAX_INT).optional(),
+}).refine((value) => Number(value.levelNumber !== undefined) + Number(value.stableCode !== undefined) === 1, {
+  message: "exactly one level selector is required",
+});
+
+const ownRevisionDetailSchema = z.strictObject({
+  levelNumber: z.number().int().positive().max(MAX_INT).optional(),
+  stableCode: z.string().trim().regex(STABLE_CODE_PATTERN).optional(),
+  locale: reportLocaleSchema,
+  revisionNumber: z.number().int().positive().max(MAX_INT),
+}).refine((value) => Number(value.levelNumber !== undefined) + Number(value.stableCode !== undefined) === 1, {
+  message: "exactly one level selector is required",
+});
+
+export type OwnReportRevisionSummary = {
+  revisionNumber: number;
+  kind: "draft_autosave" | "initial_submission" | "resubmission";
+  createdAt: string;
+  submittedAt: string | null;
+};
+
+export type OwnReportRevisionAttachment = {
+  attachmentId: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
+  revisionNumber: number;
+  createdAt: string;
+  availableAt: string | null;
+};
+
+export type OwnReportRevisionDetail = OwnReportRevisionSummary & {
+  fieldValues: Record<string, unknown>;
+  feedback: {
+    reasonCode: string;
+    reasonTitle: string;
+    humanComment: string;
+    correctiveAction: string;
+    reviewedAt: string;
+  } | null;
+  attachments: OwnReportRevisionAttachment[];
+};
+
+export type OwnReportRevisionListResult =
+  | OwnReportHistoryFailure
+  | { kind: "no_submission" }
+  | { kind: "resolved"; status: SafeReportSubmission["status"]; workflowVersion: number; revisions: OwnReportRevisionSummary[]; nextCursor: number | null };
+
+export type OwnReportRevisionDetailResult =
+  | OwnReportHistoryFailure
+  | { kind: "no_submission" }
+  | { kind: "not_found" }
+  | { kind: "resolved"; status: SafeReportSubmission["status"]; workflowVersion: number; revision: OwnReportRevisionDetail };
+
+type HistoryOptions = { db?: TransactionClient; evaluationTime?: Date };
+
+// Bounded, deterministic owner-only revision history. Revisions are immutable,
+// ordered by their server-assigned revision number, and the cursor is simply
+// the last revision number already seen. No writes or timestamp touches.
+export async function listOwnReportRevisions(
+  actorUserId: number,
+  input: unknown,
+  options: HistoryOptions = {},
+): Promise<OwnReportRevisionListResult> {
+  if (!flagsEnabled()) return { kind: "disabled" };
+  assertSafeStructure(input, 4_096);
+  const parsed = ownHistoryListSchema.safeParse(input);
+  if (!parsed.success) fail("REPORT_INPUT_INVALID", "report revision query is invalid");
+  const run = async (tx: TransactionClient): Promise<OwnReportRevisionListResult> => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const context = await loadOwnHistoryWithin(tx, { actorUserId, ...parsed.data }, evaluationTime);
+    if (context.kind !== "ok") return context;
+    const cursor = parsed.data.cursor ?? 0;
+    const ordered = [...context.submission.revisions]
+      .sort((left, right) => left.revisionNumber - right.revisionNumber)
+      .filter((revision) => revision.revisionNumber > cursor);
+    const page = ordered.slice(0, parsed.data.limit);
+    const nextCursor = ordered.length > page.length && page.length > 0 ? page[page.length - 1].revisionNumber : null;
+    return {
+      kind: "resolved",
+      status: context.inspected.safe.status,
+      workflowVersion: context.submission.workflowVersion,
+      revisions: page.map((revision) => ({
+        revisionNumber: revision.revisionNumber,
+        kind: revision.kind,
+        createdAt: revision.createdAt.toISOString(),
+        submittedAt: safeDate(revision.submittedAt),
+      })),
+      nextCursor,
+    };
+  };
+  if (options.db) return run(options.db);
+  return prisma.$transaction(run);
+}
+
+// Exact owned immutable revision with its validated payload, the approved
+// user-facing rejection feedback when this revision is the reviewed one, and
+// safe attachment descriptors. Reviewer-private scores, claim data, receipts,
+// fingerprints and storage internals are never exposed here.
+export async function getOwnReportRevision(
+  actorUserId: number,
+  input: unknown,
+  options: HistoryOptions = {},
+): Promise<OwnReportRevisionDetailResult> {
+  if (!flagsEnabled()) return { kind: "disabled" };
+  assertSafeStructure(input, 4_096);
+  const parsed = ownRevisionDetailSchema.safeParse(input);
+  if (!parsed.success) fail("REPORT_INPUT_INVALID", "report revision query is invalid");
+  const run = async (tx: TransactionClient): Promise<OwnReportRevisionDetailResult> => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    const { revisionNumber, ...query } = parsed.data;
+    const context = await loadOwnHistoryWithin(tx, { actorUserId, ...query }, evaluationTime);
+    if (context.kind !== "ok") return context;
+    const revision = context.submission.revisions.find((item) => item.revisionNumber === revisionNumber);
+    if (!revision) return { kind: "not_found" };
+    let fieldValues: Record<string, unknown>;
+    try {
+      fieldValues = normalizeFieldValues(context.fields, revision.content, revision.kind !== "draft_autosave");
+    } catch {
+      return { kind: "corrupt", reason: "revision_pointer_corrupt" };
+    }
+    const review = context.submission.latestReview;
+    let feedback: OwnReportRevisionDetail["feedback"] = null;
+    if (review && review.decision === "rejected" && review.revisionId === revision.id) {
+      const reasonLocalization = review.reason?.localizations.find((item) => item.locale === parsed.data.locale);
+      if (review.reason && reasonLocalization && review.humanComment && review.correctiveAction) {
+        feedback = {
+          reasonCode: review.reason.stableKey,
+          reasonTitle: reasonLocalization.title,
+          humanComment: review.humanComment,
+          correctiveAction: review.correctiveAction,
+          reviewedAt: review.reviewedAt.toISOString(),
+        };
+      }
+    }
+    let attachments: OwnReportRevisionAttachment[] = [];
+    if (isCurriculumV2ReportAttachmentsEnabled()) {
+      const rows = await tx.reportAttachment.findMany({
+        where: { submissionId: context.submission.id, status: { not: "deleted" } },
+        select: {
+          id: true, originalName: true, mimeType: true, sizeBytes: true, status: true,
+          createdAt: true, availableAt: true,
+          revision: { select: { revisionNumber: true } },
+        },
+        orderBy: { id: "asc" },
+      });
+      const submittedNumbers = context.submission.revisions
+        .filter((item) => item.kind !== "draft_autosave")
+        .map((item) => item.revisionNumber)
+        .sort((left, right) => left - right);
+      const lastSubmitted = submittedNumbers.length ? submittedNumbers[submittedNumbers.length - 1] : 0;
+      const toDescriptor = (row: (typeof rows)[number]): OwnReportRevisionAttachment => ({
+        attachmentId: row.id,
+        fileName: row.originalName,
+        mimeType: row.mimeType,
+        sizeBytes: row.sizeBytes,
+        status: row.status,
+        revisionNumber: row.revision.revisionNumber,
+        createdAt: row.createdAt.toISOString(),
+        availableAt: row.availableAt?.toISOString() ?? null,
+      });
+      if (revision.kind !== "draft_autosave") {
+        const previousSubmitted = submittedNumbers.filter((number) => number < revision.revisionNumber).pop() ?? 0;
+        attachments = rows
+          .filter((row) => row.status === "available" &&
+            row.revision.revisionNumber > previousSubmitted && row.revision.revisionNumber < revision.revisionNumber)
+          .map(toDescriptor);
+      } else if (context.inspected.active.id === revision.id) {
+        attachments = rows
+          .filter((row) => row.revision.revisionNumber > lastSubmitted)
+          .map(toDescriptor);
+      }
+    }
+    return {
+      kind: "resolved",
+      status: context.inspected.safe.status,
+      workflowVersion: context.submission.workflowVersion,
+      revision: {
+        revisionNumber: revision.revisionNumber,
+        kind: revision.kind,
+        createdAt: revision.createdAt.toISOString(),
+        submittedAt: safeDate(revision.submittedAt),
+        fieldValues,
+        feedback,
+        attachments,
+      },
+    };
+  };
+  if (options.db) return run(options.db);
+  return prisma.$transaction(run);
 }
 
 export type SaveOwnReportDraftInput = z.input<typeof saveCommandSchema>;

@@ -98,6 +98,7 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportSubmitted: "REPORT_SUBMITTED",
   reportResubmitted: "REPORT_RESUBMITTED",
   reportClaimed: "REPORT_CLAIMED",
+  reportReviewStarted: "REPORT_REVIEW_STARTED",
   reportReassigned: "REPORT_REASSIGNED",
   reportRejected: "REPORT_REJECTED",
   reportApproved: "REPORT_APPROVED",

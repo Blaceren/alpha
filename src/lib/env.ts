@@ -39,6 +39,7 @@ const OPTIONAL_ENV = [
   "REPORT_ATTACHMENT_S3_SSE",
   "REPORT_ATTACHMENT_CLAMAV_HOST",
   "REPORT_ATTACHMENT_CLAMAV_PORT",
+  "REPORT_ATTACHMENT_TEST_BACKEND",
 ] as const;
 
 const envSchema = z.object({
@@ -72,6 +73,7 @@ const envSchema = z.object({
   REPORT_ATTACHMENT_S3_SSE: z.string().optional(),
   REPORT_ATTACHMENT_CLAMAV_HOST: z.string().optional(),
   REPORT_ATTACHMENT_CLAMAV_PORT: z.string().regex(/^\d+$/).optional(),
+  REPORT_ATTACHMENT_TEST_BACKEND: z.literal("unsafe-in-memory-regression-only").optional(),
   POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
   POCKET_REFERRAL_URL: z.string().url().optional(),
 });
@@ -115,6 +117,10 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
 
     if (env.POSTBACK_SECRET === DEV_POSTBACK_SECRET) {
       errors.push("POSTBACK_SECRET must not use the development fallback in production");
+    }
+
+    if (env.REPORT_ATTACHMENT_TEST_BACKEND) {
+      errors.push("REPORT_ATTACHMENT_TEST_BACKEND is a regression-only backend and must never be set in production");
     }
   }
 
@@ -189,6 +195,17 @@ export function isCurriculumV2ReportEnabled(env: NodeJS.ProcessEnv = process.env
 // Read at call time; absent env is the safe disabled default.
 export function isCurriculumV2ReportAttachmentsEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED === "true";
+}
+
+// Regression-only in-memory attachment storage/scanner backend. Activation
+// requires the exact opt-in marker AND a non-production runtime; production
+// env validation additionally hard-fails when the marker is present, so the
+// fake backend cannot be enabled in production by accident.
+export function isReportAttachmentTestBackendEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return (
+    env.NODE_ENV !== "production" &&
+    env.REPORT_ATTACHMENT_TEST_BACKEND === "unsafe-in-memory-regression-only"
+  );
 }
 
 export const envContract = {

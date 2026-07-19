@@ -27,6 +27,7 @@ const PHASE_4_CONTENT_MIGRATION = "20260715000000_content_assessment_foundation"
 const PHASE_4_LESSON_PROGRESS_MIGRATION = "20260715010000_lesson_progress_autosave_idempotency";
 const PHASE_5_REPORT_MIGRATION = "20260716000000_report_workflow_foundation";
 const PHASE_5_ATTACHMENT_MIGRATION = "20260716010000_report_attachment_purge_receipt";
+const PHASE_5_REVIEW_PIN_MIGRATION = "20260717000000_report_review_history_pin";
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -261,6 +262,13 @@ async function main() {
       phase5AttachmentIndex > phase5ReportIndex,
       true,
       "Phase 5B.5b attachment migration must follow the report migration",
+    );
+    const phase5ReviewPinIndex = all.indexOf(PHASE_5_REVIEW_PIN_MIGRATION);
+    assert.notEqual(phase5ReviewPinIndex, -1, "Phase 5B.6 review history pin migration missing");
+    assert.equal(
+      phase5ReviewPinIndex > phase5AttachmentIndex,
+      true,
+      "Phase 5B.6 review history pin migration must follow the attachment migration",
     );
     for (const name of all.slice(0, phase1Index)) {
       await applyMigration(prisma, name);
@@ -897,6 +905,43 @@ async function main() {
       assert.equal(indexes.includes("ReportAttachment_purge_pending_idx"), true);
     });
 
+    const reviewColumnsBefore = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      'PRAGMA table_info("ReportReview")',
+    )).map((column) => column.name);
+    const reportCountsBeforeReviewPinMigration = await Promise.all(reportTables.map(async (table) => Number((
+      await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+    )[0].count)));
+    await applyMigration(prisma, PHASE_5_REVIEW_PIN_MIGRATION);
+
+    await check("16c. review history pin migration removes only the rebinding cascade and preserves data", async () => {
+      const after = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        'PRAGMA table_info("ReportReview")',
+      )).map((column) => column.name);
+      assert.deepEqual(after, reviewColumnsBefore);
+      const counts = await Promise.all(reportTables.map(async (table) => Number((
+        await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS count FROM "${table}"`)
+      )[0].count)));
+      assert.deepEqual(counts, reportCountsBeforeReviewPinMigration);
+      const ddl = (await prisma.$queryRawUnsafe<Array<{ sql: string }>>(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='ReportReview'",
+      ))[0].sql;
+      assert.equal(ddl.includes("ReportReview_submittedRevision_fkey"), false, "rebinding cascade must be gone");
+      assert.equal(ddl.includes("ReportReview_revision_fkey"), true, "revision pin FK must remain");
+      assert.equal(ddl.includes("ReportReview_decision_check"), true, "decision CHECK must remain");
+      const indexes = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='ReportReview'",
+      )).map((row) => row.name);
+      for (const name of [
+        "ReportReview_revisionId_key", "ReportReview_reviewerId_requestId_key",
+        "ReportReview_id_submissionId_key", "ReportReview_id_reportRubricVersionId_key",
+        "ReportReview_submissionId_reviewedAt_idx",
+      ]) assert.equal(indexes.includes(name), true, `missing index ${name}`);
+      const stash = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        "SELECT name FROM sqlite_master WHERE name LIKE '%history_pin_stash%'",
+      );
+      assert.equal(stash.length, 0, "temporary stash table must not persist");
+    });
+
     await check("17. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(
@@ -1097,7 +1142,7 @@ async function main() {
     assert.equal((listener.stdout ?? "").trim(), "");
   });
 
-  assert.equal(passed + failed, 29, "upgrade regression scenario count drifted");
+  assert.equal(passed + failed, 30, "upgrade regression scenario count drifted");
 }
 
 main()

@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { isReportAttachmentTestBackendEnabled } from "@/lib/env";
 
 // Private S3-compatible object storage boundary for V2 report attachments.
 // Every object lives in a fully private bucket and is reachable only through
@@ -188,10 +189,18 @@ export function createInMemoryReportAttachmentStorageProvider(): InMemoryReportA
 }
 
 let cachedProvider: { signature: string; provider: ReportAttachmentStorageProvider } | null = null;
+let regressionProvider: InMemoryReportAttachmentStorage | null = null;
 
 // Production provider resolution. Configuration comes only from server-side
 // env; absent configuration fails closed as a retryable unavailable storage.
 export function getReportAttachmentStorageProvider(env: NodeJS.ProcessEnv = process.env): ReportAttachmentStorageProvider {
+  if (isReportAttachmentTestBackendEnabled(env)) {
+    // Guarded regression-only backend: never reachable in production (see
+    // isReportAttachmentTestBackendEnabled) and never contacts real object
+    // storage.
+    if (!regressionProvider) regressionProvider = createInMemoryReportAttachmentStorageProvider();
+    return regressionProvider;
+  }
   const bucket = env.REPORT_ATTACHMENT_S3_BUCKET?.trim();
   if (!bucket) {
     throw new ReportAttachmentStorageError("STORAGE_UNAVAILABLE", "report attachment storage is not configured", true);

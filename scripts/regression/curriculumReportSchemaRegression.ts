@@ -279,9 +279,23 @@ async function main() {
     await check("25. rejection reason must belong to the exact rubric", () => expectConstraint(
       () => rawInsert("ReportReview", ["submissionId", "revisionId", "curriculumVersionId", "levelDefinitionId", "reportAssignmentVersionId", "reportRubricVersionId", "reviewerId", "reviewerRoleSnapshot", "decision", "humanComment", "correctiveAction", "rejectionReasonId", "requestId", "payloadFingerprint", "reviewedAt", "createdAt"], [submissionA, submittedA, versionA.id, levelA.id, assignmentA, rubricA, reviewerUser.id, "mentor", "rejected", "Needs detail", "Add detail", reasonOther, "review-wrong-reason", fingerprintA, reviewed, later]), "foreign rejection reason",
     ));
-    await check("26. review must target the exact currently submitted revision", () => expectConstraint(
-      () => rawInsert("ReportReview", ["submissionId", "revisionId", "curriculumVersionId", "levelDefinitionId", "reportAssignmentVersionId", "reportRubricVersionId", "reviewerId", "reviewerRoleSnapshot", "decision", "requestId", "payloadFingerprint", "reviewedAt", "createdAt"], [submissionA, draftA, versionA.id, levelA.id, assignmentA, rubricA, reviewerUser.id, "mentor", "approved", "review-wrong-revision", fingerprintA, reviewed, later]), "review of non-submitted revision",
-    ));
+    await check("26. review binding is same-submission and immutable when the submitted pointer moves", async () => {
+      // Cross-submission review revisions remain impossible at the SQL level.
+      await expectConstraint(
+        () => rawInsert("ReportReview", ["submissionId", "revisionId", "curriculumVersionId", "levelDefinitionId", "reportAssignmentVersionId", "reportRubricVersionId", "reviewerId", "reviewerRoleSnapshot", "decision", "requestId", "payloadFingerprint", "reviewedAt", "createdAt"], [submissionA, draftB, versionA.id, levelA.id, assignmentA, rubricA, reviewerUser.id, "mentor", "approved", "review-wrong-revision", fingerprintA, reviewed, later]), "cross-submission review revision",
+      );
+      // The Phase 5B.6 corrective migration removed the 5B.1 cascade that
+      // silently rebound historical reviews to the newest submitted revision
+      // (which corrupted immutable history and blocked approval after a
+      // resubmission). Exact current-submitted binding at creation time is
+      // service-owned; durable history must survive later pointer advances.
+      const probe = await rawInsert("ReportReview", ["submissionId", "revisionId", "curriculumVersionId", "levelDefinitionId", "reportAssignmentVersionId", "reportRubricVersionId", "reviewerId", "reviewerRoleSnapshot", "decision", "requestId", "payloadFingerprint", "reviewedAt", "createdAt"], [submissionA, draftA, versionA.id, levelA.id, assignmentA, rubricA, reviewerUser.id, "mentor", "approved", "review-history-probe", fingerprintA, reviewed, later]);
+      await prisma!.$executeRawUnsafe('UPDATE "ReportSubmission" SET "submittedRevisionId"=?, "updatedAt"=? WHERE "id"=?', newerDraft, reviewed, submissionA);
+      const pinned = (await prisma!.$queryRawUnsafe<Array<{ revisionId: number }>>('SELECT "revisionId" FROM "ReportReview" WHERE "id"=?', probe))[0];
+      assert.equal(pinned.revisionId, draftA);
+      await prisma!.$executeRawUnsafe('UPDATE "ReportSubmission" SET "submittedRevisionId"=?, "updatedAt"=? WHERE "id"=?', submittedA, reviewed, submissionA);
+      await prisma!.$executeRawUnsafe('DELETE FROM "ReportReview" WHERE "id"=?', probe);
+    });
     await check("27. rejected review requires reason comment and corrective action", async () => {
       await expectConstraint(() => rawInsert("ReportReview", ["submissionId", "revisionId", "curriculumVersionId", "levelDefinitionId", "reportAssignmentVersionId", "reportRubricVersionId", "reviewerId", "reviewerRoleSnapshot", "decision", "rejectionReasonId", "requestId", "payloadFingerprint", "reviewedAt", "createdAt"], [submissionA, submittedA, versionA.id, levelA.id, assignmentA, rubricA, reviewerUser.id, "mentor", "rejected", reasonA, "review-missing-text", fingerprintA, reviewed, later]), "rejected review without text");
     });

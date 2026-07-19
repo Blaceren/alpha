@@ -1,4 +1,5 @@
 import net from "node:net";
+import { isReportAttachmentTestBackendEnabled } from "@/lib/env";
 
 // Antivirus boundary for V2 report attachments. Production scanning is
 // mandatory: an unavailable, timed-out or protocol-broken scanner is a
@@ -110,6 +111,7 @@ export type DeterministicReportAttachmentScanner = ReportAttachmentScanner & {
 };
 
 export const DETERMINISTIC_INFECTED_MARKER = "ATA-TEST-INFECTED-MARKER";
+export const DETERMINISTIC_UNAVAILABLE_MARKER = "ATA-TEST-SCANNER-UNAVAILABLE-MARKER";
 
 // Injected deterministic scanner for regression tests; a real ClamAV endpoint
 // is never contacted from tests.
@@ -124,6 +126,9 @@ export function createDeterministicReportAttachmentScanner(): DeterministicRepor
       scanned.push(bytes.byteLength);
       if (state.mode === "unavailable") throw new ReportAttachmentScannerError("report attachment scanner is unavailable");
       if (state.mode === "timeout") throw new ReportAttachmentScannerError("report attachment scan timed out");
+      if (state.mode === "by-marker" && Buffer.from(bytes).includes(DETERMINISTIC_UNAVAILABLE_MARKER)) {
+        throw new ReportAttachmentScannerError("report attachment scanner is unavailable");
+      }
       const infected = state.mode === "infected" ||
         (state.mode === "by-marker" && Buffer.from(bytes).includes(DETERMINISTIC_INFECTED_MARKER));
       return infected
@@ -133,9 +138,17 @@ export function createDeterministicReportAttachmentScanner(): DeterministicRepor
   };
 }
 
+let regressionScanner: DeterministicReportAttachmentScanner | null = null;
+
 // Production scanner resolution from server-side env. Absent configuration is
 // a retryable unavailable scanner: scanning is mandatory and fail closed.
 export function getReportAttachmentScanner(env: NodeJS.ProcessEnv = process.env): ReportAttachmentScanner {
+  if (isReportAttachmentTestBackendEnabled(env)) {
+    // Guarded regression-only backend: never reachable in production (see
+    // isReportAttachmentTestBackendEnabled) and never contacts a real clamd.
+    if (!regressionScanner) regressionScanner = createDeterministicReportAttachmentScanner();
+    return regressionScanner;
+  }
   const host = env.REPORT_ATTACHMENT_CLAMAV_HOST?.trim();
   const port = Number(env.REPORT_ATTACHMENT_CLAMAV_PORT ?? "3310");
   if (!host || !Number.isInteger(port) || port < 1 || port > 65_535) {

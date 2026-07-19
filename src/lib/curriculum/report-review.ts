@@ -18,6 +18,7 @@ import {
 import {
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
+  isCurriculumV2ReportAttachmentsEnabled,
   isCurriculumV2ReportEnabled,
   isCurriculumV2XpEnabled,
 } from "@/lib/env";
@@ -45,7 +46,7 @@ const REASSIGN_REASONS = [
 type TransactionClient = Prisma.TransactionClient;
 type CommandDb = Pick<PrismaClient, "$transaction">;
 type ReviewerRole = "admin" | "mentor";
-type ReviewOperation = "claim" | "renew" | "release" | "reassign" | "reject" | "approve";
+type ReviewOperation = "claim" | "renew" | "release" | "start_review" | "reassign" | "reject" | "approve";
 type CommandOptions = { db?: CommandDb; evaluationTime?: Date };
 
 const submissionRefSchema = z.string().trim().min(8).max(128);
@@ -83,7 +84,7 @@ const queueSchema = z.strictObject({
 });
 const receiptResultSchema = z.strictObject({
   version: z.literal(1),
-  operation: z.enum(["claim", "renew", "release", "reassign", "reject"]),
+  operation: z.enum(["claim", "renew", "release", "start_review", "reassign", "reject"]),
   submissionRef: submissionRefSchema,
   submittedRevision: z.number().int().positive(),
   workflowVersion: z.number().int().positive(),
@@ -782,7 +783,7 @@ async function exactApprovalRetry(input: {
 async function mutateClaim(
   actorUserId: number,
   input: unknown,
-  operation: "claim" | "renew" | "release",
+  operation: "claim" | "renew" | "release" | "start_review",
   options: CommandOptions = {},
 ): Promise<SafeReviewCommandResult> {
   if (!flagsEnabled()) fail("REPORT_DISABLED", "report workflow is disabled");
@@ -809,6 +810,12 @@ async function mutateClaim(
       if (submission.claimedById !== actorUserId) fail("REPORT_CLAIM_NOT_OWNER", "review claim belongs to another reviewer");
       if (!active) fail("REPORT_CLAIM_EXPIRED", "review claim has expired");
     }
+    if (operation === "start_review" && submission.reviewStartedAt !== null) {
+      // reviewStartedAt is set exactly once per claim; a NEW request against an
+      // already-started review is a typed no-change conflict, while the exact
+      // durable retry above returns the original result without any write.
+      fail("REPORT_NO_CHANGES", "report review was already started");
+    }
     const workflowVersion = submission.workflowVersion + 1;
     const claimVersion = submission.claimVersion + 1;
     const where: Prisma.ReportSubmissionWhereInput = {
@@ -826,18 +833,27 @@ async function mutateClaim(
           workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
           claimedById: null, claimedAt: null, claimExpiresAt: null, reviewStartedAt: null,
         }
-      : {
-          workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
-          claimedById: actorUserId,
-          ...(operation === "claim" ? { claimedAt: evaluationTime, reviewStartedAt: null } : {}),
-          claimExpiresAt: expiresAt,
-        };
+      : operation === "start_review"
+        ? {
+            // The claim itself is untouched: the lease is deliberately NOT
+            // extended and the server owns the one-time reviewStartedAt.
+            workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+            reviewStartedAt: evaluationTime,
+          }
+        : {
+            workflowVersion: { increment: 1 }, claimVersion: { increment: 1 },
+            claimedById: actorUserId,
+            ...(operation === "claim" ? { claimedAt: evaluationTime, reviewStartedAt: null } : {}),
+            claimExpiresAt: expiresAt,
+          };
     const updated = await tx.reportSubmission.updateMany({ where, data });
     if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "review claim changed concurrently");
     const safeResult = safeReceiptResult({
       operation, submission, workflowVersion, claimVersion,
       claimState: operation === "release" ? "released" : "active",
-      claimExpiresAt: operation === "release" ? null : expiresAt,
+      claimExpiresAt: operation === "release"
+        ? null
+        : operation === "start_review" ? submission.claimExpiresAt : expiresAt,
       reviewerRole: operation === "release" ? null : actor.role,
     });
     const receipt = await tx.reportCommandReceipt.create({ data: {
@@ -846,8 +862,10 @@ async function mutateClaim(
       resultRevisionId: submission.submittedRevisionId, resultingWorkflowVersion: workflowVersion,
       safeResult, appliedAt: evaluationTime,
     } });
-    if (operation === "claim") await writeAudit(tx, {
-      actor, submission, action: CURRICULUM_AUDIT_ACTIONS.reportClaimed, workflowVersion, claimVersion,
+    if (operation === "claim" || operation === "start_review") await writeAudit(tx, {
+      actor, submission,
+      action: operation === "claim" ? CURRICULUM_AUDIT_ACTIONS.reportClaimed : CURRICULUM_AUDIT_ACTIONS.reportReviewStarted,
+      workflowVersion, claimVersion,
       targetReviewerId: actorUserId,
     });
     return resultFromReceipt(receipt, false);
@@ -864,6 +882,13 @@ export function renewOwnReportClaim(actorUserId: number, input: unknown, options
 
 export function releaseOwnReportClaim(actorUserId: number, input: unknown, options: CommandOptions = {}) {
   return mutateClaim(actorUserId, input, "release", options);
+}
+
+// Marks the one-time server-owned reviewStartedAt for the caller's own active,
+// unexpired claim. The lease is never extended, release/reassignment clear the
+// marker through their existing contracts, and renew leaves it untouched.
+export function startOwnReportReview(actorUserId: number, input: unknown, options: CommandOptions = {}) {
+  return mutateClaim(actorUserId, input, "start_review", options);
 }
 
 export async function reassignReportClaim(actorUserId: number, input: unknown, options: CommandOptions = {}): Promise<SafeReviewCommandResult> {
@@ -1141,6 +1166,181 @@ export async function listReportReviewQueue(
   };
   if (options.db) return run(options.db);
   return prisma.$transaction(run);
+}
+
+const detailSchema = z.strictObject({
+  submissionRef: submissionRefSchema,
+  locale: reportLocaleSchema,
+});
+
+export type SafeReviewerDetailAttachment = {
+  attachmentId: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  revisionNumber: number;
+  availableAt: string | null;
+};
+
+export type SafeReviewerSubmissionDetail = {
+  submissionRef: string;
+  access: "summary" | "full";
+  status: "pending_review";
+  submittedRevision: number;
+  workflowVersion: number;
+  claimVersion: number;
+  submittedAt: string;
+  claim: { state: "unclaimed" | "owned_by_you" | "claimed" | "expired"; expiresAt: string | null };
+  reviewStartedAt: string | null;
+  payload: {
+    owner: { displayName: string };
+    curriculum: { code: string; versionNumber: number };
+    level: { stableCode: string; levelNumber: number; title: string };
+    assignment: SafeReviewerQueueItem["assignment"];
+    rubric: SafeReviewerQueueItem["rubric"];
+    revision: SafeReviewerQueueItem["revision"];
+    rejectionReasons: Array<{ code: string; title: string; guidance: string | null }>;
+    attachments: SafeReviewerDetailAttachment[];
+  } | null;
+};
+
+export type ReviewerDetailResult =
+  | { kind: "disabled" }
+  | { kind: "forbidden" }
+  | { kind: "resolved"; detail: SafeReviewerSubmissionDetail };
+
+// Read-only reviewer detail. The summary tier exposes only the CAS versions
+// and claim state a reviewer needs to issue a claim; the full report payload,
+// localized definitions, rejection catalog and available attachment
+// descriptors are revealed exclusively to the current active, unexpired claim
+// owner. Admins get no bypass without their own claim. Ownership, wrong-state
+// and unknown identities collapse into one not-found. No writes, audits or
+// timestamp touches happen here.
+export async function getReportReviewDetail(
+  actorUserId: number,
+  input: unknown,
+  options: { db?: TransactionClient; evaluationTime?: Date } = {},
+): Promise<ReviewerDetailResult> {
+  if (!flagsEnabled()) return { kind: "disabled" };
+  if (!Number.isSafeInteger(actorUserId) || actorUserId < 1) return { kind: "forbidden" };
+  const parsed = detailSchema.safeParse(input);
+  if (!parsed.success) fail("REPORT_REVIEW_INPUT_INVALID", "review detail query is invalid");
+  const run = async (tx: TransactionClient): Promise<ReviewerDetailResult> => {
+    const evaluationTime = options.evaluationTime ?? new Date();
+    let actor: { id: number; role: ReviewerRole };
+    try { actor = await requireReviewer(tx, actorUserId); }
+    catch (error) { if (isReportDomainError(error, "REPORT_REVIEWER_FORBIDDEN")) return { kind: "forbidden" }; throw error; }
+    const id = parseSubmissionRef(parsed.data.submissionRef);
+    if (!id) fail("REPORT_SUBMISSION_NOT_FOUND", "report submission was not found");
+    const submission = await loadSubmission(tx, id);
+    if (
+      !submission || submission.userId === actor.id || submission.status !== "pending_review"
+    ) fail("REPORT_SUBMISSION_NOT_FOUND", "report submission was not found");
+    validatePendingSubmission(submission);
+    const active = submission.claimedById !== null && !!submission.claimExpiresAt && submission.claimExpiresAt > evaluationTime;
+    const claimState = submission.claimedById === null
+      ? "unclaimed" as const
+      : active && submission.claimedById === actor.id
+        ? "owned_by_you" as const
+        : active ? "claimed" as const : "expired" as const;
+    const base = {
+      submissionRef: submissionRef(submission.id),
+      status: "pending_review" as const,
+      submittedRevision: submission.submittedRevision!.revisionNumber,
+      workflowVersion: submission.workflowVersion,
+      claimVersion: submission.claimVersion,
+      submittedAt: submission.submittedAt!.toISOString(),
+      claim: { state: claimState, expiresAt: submission.claimExpiresAt?.toISOString() ?? null },
+    };
+    if (claimState !== "owned_by_you") {
+      return { kind: "resolved", detail: { ...base, access: "summary", reviewStartedAt: null, payload: null } };
+    }
+    const graph = validateDefinitionGraph(submission, parsed.data.locale);
+    const assignmentLocale = graph.assignmentLocale!;
+    const fields = submission.assignment.fields.map((field) => {
+      const localized = field.localizations.find((item) => item.locale === parsed.data.locale);
+      if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+      return { code: field.stableKey, type: field.type, required: field.required, label: localized.label, helpText: localized.helpText };
+    });
+    const criteria = submission.rubric.criteria.map((criterion) => {
+      const localized = criterion.localizations.find((item) => item.locale === parsed.data.locale);
+      if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+      return { code: criterion.stableKey, categoryCode: criterion.categoryCode, commentRequired: criterion.commentRequired, title: localized.title, description: localized.description };
+    });
+    const scale = submission.rubric.scaleOptions.map((option) => {
+      const localized = option.localizations.find((item) => item.locale === parsed.data.locale);
+      if (!localized) fail("REPORT_LOCALIZATION_UNAVAILABLE", "report localization is unavailable");
+      return { code: option.stableKey, label: localized.label, description: localized.description };
+    });
+    const rejectionReasons = submission.rubric.rejectionReasons
+      .filter((reason) => reason.active)
+      .map((reason) => ({ reason, localized: reason.localizations.find((item) => item.locale === parsed.data.locale) }))
+      .filter((entry) => entry.localized !== undefined)
+      .sort((left, right) => left.reason.sortOrder - right.reason.sortOrder || left.reason.stableKey.localeCompare(right.reason.stableKey))
+      .map((entry) => ({ code: entry.reason.stableKey, title: entry.localized!.title, guidance: entry.localized!.guidance }));
+    let attachments: SafeReviewerDetailAttachment[] = [];
+    if (isCurriculumV2ReportAttachmentsEnabled()) {
+      const revisions = await tx.reportRevision.findMany({
+        where: { submissionId: submission.id },
+        select: { revisionNumber: true, kind: true },
+      });
+      const submittedNumber = submission.submittedRevision!.revisionNumber;
+      let previousSubmitted = 0;
+      for (const revision of revisions) {
+        if (revision.kind !== "draft_autosave" && revision.revisionNumber < submittedNumber && revision.revisionNumber > previousSubmitted) {
+          previousSubmitted = revision.revisionNumber;
+        }
+      }
+      const rows = await tx.reportAttachment.findMany({
+        where: { submissionId: submission.id, status: "available" },
+        select: {
+          id: true, originalName: true, mimeType: true, sizeBytes: true, availableAt: true,
+          revision: { select: { revisionNumber: true } },
+        },
+        orderBy: { id: "asc" },
+      });
+      attachments = rows
+        .filter((row) => row.revision.revisionNumber > previousSubmitted && row.revision.revisionNumber < submittedNumber)
+        .map((row) => ({
+          attachmentId: row.id,
+          fileName: row.originalName,
+          mimeType: row.mimeType,
+          sizeBytes: row.sizeBytes,
+          revisionNumber: row.revision.revisionNumber,
+          availableAt: row.availableAt?.toISOString() ?? null,
+        }));
+    }
+    return {
+      kind: "resolved",
+      detail: {
+        ...base,
+        access: "full",
+        reviewStartedAt: submission.reviewStartedAt?.toISOString() ?? null,
+        payload: {
+          owner: { displayName: submission.user.name },
+          curriculum: { code: submission.curriculumVersion.code, versionNumber: submission.curriculumVersion.versionNumber },
+          level: { stableCode: submission.levelDefinition.stableCode, levelNumber: submission.levelDefinition.levelNumber, title: submission.levelDefinition.title },
+          assignment: {
+            versionNumber: submission.assignment.versionNumber,
+            title: assignmentLocale.title,
+            instructions: assignmentLocale.instructions,
+            successCriteriaSummary: assignmentLocale.successCriteriaSummary,
+            fields,
+          },
+          rubric: { versionNumber: submission.rubric.versionNumber, criteria, scale },
+          revision: { revisionNumber: submittedRevisionNumberOf(submission), values: safeSubmittedValues(submission) },
+          rejectionReasons,
+          attachments,
+        },
+      },
+    };
+  };
+  if (options.db) return run(options.db);
+  return prisma.$transaction(run);
+}
+
+function submittedRevisionNumberOf(submission: ReviewSubmission) {
+  return submission.submittedRevision!.revisionNumber;
 }
 
 export async function approveReportSubmission(
