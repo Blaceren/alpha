@@ -36,7 +36,8 @@ async function fillEntry(
   page: Page,
   v: { instrument: string; direction: RegExp; result?: string; lesson: string },
 ) {
-  await page.getByLabel("Когда").fill("2026-07-14T09:00");
+  await page.getByLabel("Дата").fill("14.07.2026");
+  await page.getByLabel("Время").fill("09:00");
   await page.getByLabel("Инструмент").fill(v.instrument);
   await page.getByRole("radio", { name: v.direction }).check();
   await page.getByLabel(/^План/).fill("план входа");
@@ -288,4 +289,95 @@ test("mobile · the journal spine is not a horizontal table and the bottom nav c
   const lBox = await lesson.boundingBox();
   const nBox = await nav.boundingBox();
   expect(lBox!.y + lBox!.height).toBeLessThanOrEqual(nBox!.y + 1);
+});
+
+/* ---------------- D4-B1 acceptance corrections ---------------- */
+
+test("date/time · explicit Дата/Время fields, ДД.ММ.ГГГГ + 24h, no AM/PM, no native picker", async ({
+  page,
+}) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(JOURNAL, { waitUntil: "networkidle" });
+  await clearJournal(page);
+  await page.reload({ waitUntil: "networkidle" });
+
+  await page.getByRole("button", { name: /Добавить первую запись/ }).click();
+  await expect(page.getByLabel("Дата")).toBeVisible();
+  await expect(page.getByLabel("Время")).toBeVisible();
+  // No native datetime-local anywhere.
+  await expect(page.locator('input[type="datetime-local"]')).toHaveCount(0);
+
+  await fillEntry(page, { instrument: "GBP/USD", direction: /Наблюдение/, lesson: "24-часовой вечер" });
+  await page.getByLabel("Время").fill("21:30");
+  await page.getByRole("button", { name: /Добавить запись/ }).click();
+
+  // Rendered date is ДД.ММ.ГГГГ-derived RU and the time is 24-hour; no AM/PM.
+  await expect(page.getByText(/21:30/)).toBeVisible();
+  const body = ((await page.locator("body").innerText()) || "").toUpperCase();
+  expect(/\bAM\b|\bPM\b/.test(body)).toBe(false);
+
+  // Edit round-trips to explicit fields.
+  await page.getByRole("button", { name: /Редактировать/ }).click();
+  await expect(page.getByLabel("Время")).toHaveValue("21:30");
+  await expect(page.getByLabel("Дата")).toHaveValue("14.07.2026");
+});
+
+test("mobile hub · current tool stacks — CTA below the text, ≥44px, spine intact", async ({
+  page,
+}) => {
+  for (const size of [VIEWPORTS.mobile, { width: 320, height: 720 }, { width: 720, height: 450 }]) {
+    await page.setViewportSize(size);
+    await page.goto("/tools", { waitUntil: "networkidle" });
+    await page.evaluate(() => document.fonts.ready);
+
+    const row = page.locator(".th-row.is-current");
+    const title = row.locator(".th-title");
+    const cta = page.getByRole("link", { name: /Открыть журнал/ });
+    const titleBox = await title.boundingBox();
+    const ctaBox = await cta.boundingBox();
+
+    // CTA sits BELOW the title/description, not beside it.
+    expect(ctaBox!.y, `CTA below text @ ${size.width}`).toBeGreaterThan(titleBox!.y + titleBox!.height);
+    // Touch target ≥ 44px and inside the viewport.
+    expect(ctaBox!.height, `CTA ≥44px @ ${size.width}`).toBeGreaterThanOrEqual(44);
+    expect(ctaBox!.x + ctaBox!.width, `CTA within viewport @ ${size.width}`).toBeLessThanOrEqual(size.width + 1);
+    // Spine preserved.
+    await expect(page.locator(".th-ledger")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `no overflow @ ${size.width}`).toBeLessThanOrEqual(1);
+  }
+});
+
+test("bottom-nav clearance · last control (Edit) scrolls fully above the nav with a gap", async ({
+  page,
+}) => {
+  for (const size of [VIEWPORTS.mobile, { width: 320, height: 720 }, { width: 720, height: 450 }]) {
+    await page.setViewportSize(size);
+    await page.goto(JOURNAL, { waitUntil: "networkidle" });
+    await clearJournal(page);
+    await page.reload({ waitUntil: "networkidle" });
+
+    // A single expanded entry → its «Редактировать» is the LAST interactive control.
+    await page.getByRole("button", { name: /Добавить первую запись/ }).click();
+    await fillEntry(page, { instrument: "XAU/USD", direction: /Продажа/, result: "18", lesson: "последняя запись" });
+    await page.getByRole("button", { name: /Добавить запись/ }).click();
+
+    const nav = page.locator("nav.bottomnav");
+    await expect(nav).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(150);
+
+    const edit = page.getByRole("button", { name: /Редактировать/ });
+    const eBox = await edit.boundingBox();
+    const nBox = await nav.boundingBox();
+    // Fully above the nav top, with a visible gap (≥8px).
+    expect(eBox!.y + eBox!.height, `Edit clears nav @ ${size.width}`).toBeLessThanOrEqual(nBox!.y - 8);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `no overflow @ ${size.width}`).toBeLessThanOrEqual(1);
+  }
 });

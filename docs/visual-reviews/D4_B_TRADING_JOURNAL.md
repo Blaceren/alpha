@@ -98,3 +98,58 @@ but not dimensions.)_
 
 No screenshot outside `design-memory/screenshots/d4-trading-journal/` was created,
 modified, or deleted. Prior phase screenshot directories are untouched.
+
+---
+
+## D4-B1 — Acceptance corrections (follow-up)
+
+Three targeted visual-acceptance fixes on top of the accepted D4-B slice. No
+domain model, storage key/version, resolver, unlock rule, manual-result boundary,
+CRUD scope, route or dependency changed.
+
+1. **Mobile Tools Hub current-tool layout (DD-312).** The active Trading Journal
+   CTA no longer shares a line with the description (which had been squeezed to a
+   sliver). In the compact regime (< 900px, incl. the 720px 200% reflow) the row
+   is `[node | body]` and the CTA drops to its own line under the text —
+   content-width, ≥44px touch target, inside the viewport, spine preserved, still
+   a ledger row (not a marketing card).
+
+2. **Bottom-nav scroll clearance (DD-313).** Page-owned bottom padding
+   (`nav height + safe-area + 44px`) guarantees the last interactive control — an
+   entry's «Редактировать», a form's submit/cancel, a storage-error retry — scrolls
+   fully above the fixed bottom nav with a visible gap. New E2E asserts
+   `control.bottom ≤ nav.top − 8` at 390/320/720; horizontal overflow stays 0.
+
+3. **Locale-independent RU date/time (DD-311).** The native `datetime-local`
+   (which Chromium rendered as US `MM/DD/YYYY, hh:mm AM/PM`) is replaced by two
+   explicit fields — «Дата» `ДД.ММ.ГГГГ` and «Время» 24-hour `ЧЧ:ММ`. A pure
+   adapter maps visible date+time ↔ canonical ISO `occurredAt`; impossible dates /
+   out-of-range times fail closed; no AM/PM renders; the persisted schema and v1
+   storage are unchanged and existing entries stay readable. Wall-clock is treated
+   literally (UTC), so input and display round-trip exactly.
+
+**Screenshots updated (7).** The six named in the correction brief — plus
+`trading-journal-storage-error-desktop-1440x900.png`, because that state renders
+the create form and would otherwise still show the old US `AM/PM` datetime field
+(directly contradicting fix 3). Dimensions unchanged and correct:
+
+| File | Dimensions |
+|------|-----------:|
+| tools-hub-mobile-390x844.png | 390×844 |
+| trading-journal-create-desktop-1440x900.png | 1440×900 |
+| trading-journal-edit-desktop-1440x900.png | 1440×900 |
+| trading-journal-storage-error-desktop-1440x900.png | 1440×900 |
+| trading-journal-mobile-390x844.png | 390×844 |
+| trading-journal-mobile-320x720.png | 320×720 |
+| trading-journal-zoom-200-720x450.png | 720×450 |
+
+The other **7** D4-B final PNGs are byte-identical (verified by md5 before/after):
+tools-hub-desktop, tools-hub-locked-desktop, trading-journal-empty-desktop,
+trading-journal-populated-desktop, trading-journal-corrupt-storage-desktop,
+trading-journal-locked-desktop, trading-journal-tablet. No prior-phase screenshot
+was touched.
+
+**Personal review (real Chromium).** Verified: mobile Hub text at normal width
+with the CTA below it and the spine intact; date shown `ДД.ММ.ГГГГ`, time 24-hour,
+no AM/PM in create/edit/storage-error; Edit and all trailing controls clear the
+bottom nav after scrolling; 320px unclipped; horizontal overflow 0 everywhere.

@@ -20,7 +20,10 @@
   --result-negative: #d7a3a8;
   --result-positive: var(--route-completed);
   color: var(--text-primary);
-  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 30px);
+  /* Bottom clearance is owned HERE (D4-B1): the last interactive control — an
+     entry's «Редактировать», a form's submit/cancel, a retry — must scroll fully
+     above the fixed bottom nav with a visible gap. nav height + safe-area + 44px. */
+  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 44px);
 }
 
 /* ================================================================= *
@@ -767,8 +770,12 @@
 }
 .je-identity {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+/* Instrument gets its own full-width row under the date/time pair on mobile. */
+.je-identity .je-instr {
+  grid-column: 1 / -1;
 }
 .je-dir {
   border: none;
@@ -910,7 +917,39 @@
     gap: 16px;
   }
   .je-identity {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 150px 120px 1fr;
+  }
+  .je-identity .je-instr {
+    grid-column: auto;
+  }
+}
+
+/* ================================================================= *
+ * Compact hub — the current tool stacks (CTA below the text, D4-B1)
+ * ================================================================= *
+ * Whenever the compact (bottom-nav) layout is active — below the 900px desktop
+ * breakpoint, which includes the 720px 200% reflow — the CTA must not share a
+ * line with the description and squeeze it into a sliver. The row drops to
+ * [node | body]; the action moves to its own line under the text, content-width,
+ * with a ≥44px touch target. The spine and node↔tool link are preserved. This
+ * intentionally covers the whole compact regime, not just ≤480px.
+ */
+@media (max-width: 899px) {
+  .th-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 14px;
+  }
+  .th-action {
+    grid-column: 2 / -1;
+    align-self: start;
+    margin-top: 10px;
+  }
+  .th-cta {
+    min-height: 44px;
+  }
+  /* The current row's soft wash still reads as a row, not a marketing card. */
+  .th-row.is-current {
+    padding-right: 10px;
   }
 }
 
@@ -923,12 +962,13 @@
     gap: 12px;
   }
   .th-action {
-    grid-column: 1 / -1;
-    margin-top: 6px;
+    grid-column: 2 / -1;
+    margin-top: 8px;
   }
   .th-cta {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
   }
   .th-ledger::before {
     left: 15px;

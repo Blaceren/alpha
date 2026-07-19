@@ -11,6 +11,7 @@ import {
 
 interface FillValues {
   date?: string;
+  time?: string;
   instrument?: string;
   direction?: keyof typeof DIRECTION_LABEL;
   plan?: string;
@@ -21,7 +22,10 @@ interface FillValues {
 
 function fillForm(values: FillValues) {
   if (values.date !== undefined) {
-    fireEvent.change(screen.getByLabelText("Когда"), { target: { value: values.date } });
+    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: values.date } });
+  }
+  if (values.time !== undefined) {
+    fireEvent.change(screen.getByLabelText("Время"), { target: { value: values.time } });
   }
   if (values.instrument !== undefined) {
     fireEvent.change(screen.getByLabelText("Инструмент"), {
@@ -48,7 +52,8 @@ function fillForm(values: FillValues) {
 }
 
 const COMPLETE: FillValues = {
-  date: "2026-07-14T09:00",
+  date: "14.07.2026",
+  time: "09:00",
   instrument: "XAU/USD",
   direction: "sell",
   plan: "вход только по условию",
@@ -144,6 +149,66 @@ describe("Trading Journal — create", () => {
       expect(active?.getAttribute("aria-expanded")).toBe("true");
       expect(active?.textContent).toContain("XAU/USD");
     });
+  });
+});
+
+describe("Trading Journal — explicit locale-independent date/time (DD-311)", () => {
+  it("create form uses explicit Дата + Время text fields, no native datetime, no AM/PM", async () => {
+    const user = userEvent.setup();
+    render(<TradingJournalWorkspace />);
+    await user.click(screen.getByRole("button", { name: /Добавить первую запись/ }));
+
+    const date = screen.getByLabelText("Дата") as HTMLInputElement;
+    const time = screen.getByLabelText("Время") as HTMLInputElement;
+    expect(date.type).toBe("text");
+    expect(time.type).toBe("text");
+    expect(date).toHaveAttribute("placeholder", "ДД.ММ.ГГГГ");
+    expect(time).toHaveAttribute("placeholder", "ЧЧ:ММ");
+    // No native datetime-local control anywhere.
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    // No AM/PM in the form.
+    expect((document.body.textContent ?? "").toUpperCase()).not.toMatch(/\bAM\b|\bPM\b/);
+  });
+
+  it("edit form prefills ДД.ММ.ГГГГ date and 24-hour time from the stored ISO", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      TRADING_JOURNAL_STORAGE_KEY,
+      serializeTradingJournal({
+        version: 1,
+        sequence: 1,
+        entries: [
+          {
+            id: "journal-1",
+            occurredAt: "2026-07-16T14:15:00.000Z",
+            instrument: "GBP/USD",
+            direction: "observation",
+            setup: "",
+            plan: "план",
+            execution: "исполнение",
+            lesson: "урок",
+            manualResult: null,
+            createdAt: "2026-07-16T14:15:00.000Z",
+            updatedAt: "2026-07-16T14:15:00.000Z",
+          },
+        ],
+      }),
+    );
+    render(<TradingJournalWorkspace />);
+    await user.click(screen.getByRole("button", { name: /Редактировать/ }));
+    expect((screen.getByLabelText("Дата") as HTMLInputElement).value).toBe("16.07.2026");
+    expect((screen.getByLabelText("Время") as HTMLInputElement).value).toBe("14:15");
+    expect((document.body.textContent ?? "").toUpperCase()).not.toMatch(/\bAM\b|\bPM\b/);
+  });
+
+  it("an invalid date blocks submit with a field error, nothing persisted", async () => {
+    const user = userEvent.setup();
+    render(<TradingJournalWorkspace />);
+    await user.click(screen.getByRole("button", { name: /Добавить первую запись/ }));
+    fillForm({ ...COMPLETE, date: "31.02.2026" });
+    await user.click(screen.getByRole("button", { name: /Добавить запись/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/даты не существует/i);
+    expect(window.localStorage.getItem(TRADING_JOURNAL_STORAGE_KEY)).toBeNull();
   });
 });
 

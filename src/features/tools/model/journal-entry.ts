@@ -56,11 +56,17 @@ export const JOURNAL_LIMITS = {
 } as const;
 
 /**
- * The raw form input. `manualResult` arrives as the user's string (or null when
- * the field is untouched); validation parses it. Everything else is a string.
+ * The raw form input. Date and time are TWO explicit, locale-independent fields
+ * (D4-B1, DD-311): `date` as `ДД.ММ.ГГГГ` and `time` as 24-hour `ЧЧ:ММ` — never a
+ * native `datetime-local` whose rendering follows the browser UI locale (US
+ * `MM/DD/YYYY, hh:mm AM/PM`). `manualResult` arrives as the user's string (or
+ * null when untouched); validation parses it.
  */
 export interface JournalEntryInput {
-  occurredAt: string;
+  /** Visible date, `ДД.ММ.ГГГГ` (e.g. "14.07.2026"). */
+  date: string;
+  /** Visible time, 24-hour `ЧЧ:ММ` (e.g. "09:00"). */
+  time: string;
   instrument: string;
   direction: string;
   setup: string;
@@ -73,7 +79,8 @@ export interface JournalEntryInput {
 
 /** One field key that can carry a validation error. */
 export type JournalFieldError =
-  | "occurredAt"
+  | "date"
+  | "time"
   | "instrument"
   | "direction"
   | "plan"
@@ -110,6 +117,98 @@ export function isValidOccurredAt(value: unknown): value is string {
   return !Number.isNaN(time);
 }
 
+/* ------------------------------------------------------------------ *
+ * Locale-independent date/time ↔ ISO adapter (DD-311)
+ * ------------------------------------------------------------------ *
+ * The visible fields are `ДД.ММ.ГГГГ` + 24-hour `ЧЧ:ММ`; the canonical stored
+ * `occurredAt` stays an ISO-8601 string. The wall-clock components are treated
+ * LITERALLY (UTC `Z`), so the value the user types is exactly the value that is
+ * displayed back — deterministic, timezone- AND locale-independent, and an exact
+ * round-trip on edit. Existing entries stay readable (any valid ISO parses).
+ */
+
+const DATE_INPUT_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+const TIME_INPUT_RE = /^(\d{1,2}):(\d{2})$/;
+
+function daysInMonth(year: number, month: number): number {
+  // month is 1-based; day 0 of the next month is the last day of this month.
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+export type DateTimeParse =
+  | { ok: true; iso: string }
+  | { ok: false; dateError?: string; timeError?: string };
+
+/**
+ * Parse a visible `ДД.ММ.ГГГГ` date + `ЧЧ:ММ` (24h) time into a canonical ISO
+ * `occurredAt`. Fails closed: impossible calendar dates (31.02, month 13, day 0),
+ * out-of-range times (24:00, 09:60) and malformed shapes are rejected.
+ */
+export function parseDateTimeInput(dateRaw: string, timeRaw: string): DateTimeParse {
+  const dateStr = dateRaw.trim();
+  const timeStr = timeRaw.trim();
+
+  const dateMatch = DATE_INPUT_RE.exec(dateStr);
+  const timeMatch = TIME_INPUT_RE.exec(timeStr);
+
+  let dateError: string | undefined;
+  let timeError: string | undefined;
+
+  let year = 0;
+  let month = 0;
+  let day = 0;
+  if (!dateMatch) {
+    dateError = dateStr.length === 0 ? "Укажите дату сделки." : "Дата в формате ДД.ММ.ГГГГ.";
+  } else {
+    day = Number(dateMatch[1]);
+    month = Number(dateMatch[2]);
+    year = Number(dateMatch[3]);
+    if (month < 1 || month > 12 || day < 1 || year < 1000 || day > daysInMonth(year, month)) {
+      dateError = "Такой даты не существует.";
+    }
+  }
+
+  let hour = 0;
+  let minute = 0;
+  if (!timeMatch) {
+    timeError = timeStr.length === 0 ? "Укажите время сделки." : "Время в формате ЧЧ:ММ (24 часа).";
+  } else {
+    hour = Number(timeMatch[1]);
+    minute = Number(timeMatch[2]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      timeError = "Время в диапазоне 00:00–23:59.";
+    }
+  }
+
+  if (dateError || timeError) return { ok: false, dateError, timeError };
+
+  const iso = `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}:00.000Z`;
+  return { ok: true, iso };
+}
+
+/** ISO `occurredAt` → visible `ДД.ММ.ГГГГ` date. Reads the ISO literal (UTC). */
+export function isoToDateInput(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T/.exec(iso);
+  if (match) return `${match[3]}.${match[2]}.${match[1]}`;
+  // Fall back through Date for any non-canonical-but-valid legacy ISO.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
+}
+
+/** ISO `occurredAt` → visible 24-hour `ЧЧ:ММ` time. Reads the ISO literal (UTC). */
+export function isoToTimeInput(iso: string): string {
+  const match = /T(\d{2}):(\d{2})/.exec(iso);
+  if (match) return `${match[1]}:${match[2]}`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
 /**
  * Parse the manual-result field. Empty / null → null (absence is normal). A
  * non-finite or non-numeric value is an ERROR — it must never become data.
@@ -128,15 +227,17 @@ function parseManualResult(
 }
 
 /**
- * Validate + normalise raw input. Required, non-whitespace: occurredAt,
+ * Validate + normalise raw input. Required, non-whitespace: date, time,
  * instrument, direction, plan, execution, lesson. `setup` and `manualResult`
  * are optional. Never accepts a whitespace-only required field.
  */
 export function validateJournalInput(input: JournalEntryInput): JournalValidation {
   const errors: JournalFieldErrors = {};
 
-  if (!isValidOccurredAt(input.occurredAt)) {
-    errors.occurredAt = "Укажите дату и время сделки.";
+  const when = parseDateTimeInput(input.date, input.time);
+  if (!when.ok) {
+    if (when.dateError) errors.date = when.dateError;
+    if (when.timeError) errors.time = when.timeError;
   }
   const instrument = clamp(input.instrument.trim(), JOURNAL_LIMITS.instrument);
   if (instrument.length === 0) {
@@ -162,12 +263,12 @@ export function validateJournalInput(input: JournalEntryInput): JournalValidatio
     errors.manualResult = "Результат — простое число (например 18 или −7) или пусто.";
   }
 
-  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (Object.keys(errors).length > 0 || !when.ok) return { ok: false, errors };
 
   return {
     ok: true,
     value: {
-      occurredAt: new Date(input.occurredAt).toISOString(),
+      occurredAt: when.iso,
       instrument,
       direction: input.direction as JournalDirection,
       setup: clamp(input.setup.trim(), JOURNAL_LIMITS.setup),

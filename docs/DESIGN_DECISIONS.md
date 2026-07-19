@@ -800,6 +800,32 @@
   без агрегатов (DD-304); журнал **не** влияет на XP/уровни/checkpoint. Маршруты `/tools`,
   `/tools/[toolCode]` добавлены в `BUILT_ROUTES` и production navigation. Полная модель — `docs/TOOLS_STORAGE.md`.
 
+- **DD-311 (Locked, D4-B1).** **Явные locale-independent RU date/time контролы вместо native
+  `datetime-local`.** В русскоязычном UI Chromium рисует `datetime-local` в US-локали
+  (`MM/DD/YYYY, hh:mm AM/PM`), на что нельзя полагаться. Форма Trading Journal использует **два
+  явных текстовых поля**: «Дата» (`ДД.ММ.ГГГГ`) и «Время» (24-часовой `ЧЧ:ММ`) — без AM/PM, без
+  date-picker-зависимости. Чистый adapter (`parseDateTimeInput` / `isoToDateInput` / `isoToTimeInput`,
+  `journal-entry.ts`): visible date+time → canonical ISO `occurredAt` и обратно при edit. Fail-closed:
+  невозможные календарные даты (31.02, месяц 13, день 0, 29.02 в невисокосный год) и out-of-range время
+  (24:00, 09:60) отклоняются. **Persisted `JournalEntry` schema и storage version (v1) не меняются**;
+  существующие записи (любой валидный ISO) остаются читаемыми. Timezone-семантика зафиксирована явно:
+  wall-clock компоненты трактуются **литерально** (UTC `Z`) — что ввёл, то и отображается,
+  детерминированно и TZ-независимо; это согласуется с уже литеральным дисплеем `journal-format.ts` и
+  устраняет прежний local→UTC-дрейф. inputMode="numeric", настоящие label'ы, per-field ошибки.
+- **DD-312 (Locked, D4-B1).** **Mobile current-tool — вертикальная композиция.** В компактном режиме
+  (ниже 900px desktop-брейкпоинта, включая 200%-reflow 720px) строка текущего инструмента на Tools Hub
+  перестраивается в `[node | body]`, а CTA «Открыть журнал» уходит **на отдельную строку под текстом**
+  (content-width, touch target ≥44px), чтобы не делить строку с описанием и не сжимать его. Spine и
+  связь node↔инструмент сохранены; строка остаётся строкой ленты, **не** generic full-width marketing
+  card. Прежний узкий 3-колоночный layout (node | body | CTA) оставлен только для desktop (≥900px).
+- **DD-313 (Locked, D4-B1).** **Bottom-nav scroll clearance — ответственность страницы Tools.** Нижний
+  отступ владеется на уровне `.th-page/.ts-page/.je-page`:
+  `calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 44px)`. Любой последний
+  интерактивный контрол — «Редактировать» записи, submit/cancel формы, retry при storage-error —
+  полностью прокручивается выше fixed bottom navigation с видимым зазором (E2E проверяет геометрически
+  `control.bottom ≤ nav.top − 8` на 390/320/720). Проблема не компенсируется скрытием контрола или
+  уменьшением target.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

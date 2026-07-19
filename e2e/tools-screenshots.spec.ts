@@ -118,7 +118,8 @@ test("trading-journal-create-desktop", async ({ page }) => {
   await page.goto(JOURNAL, { waitUntil: "networkidle" });
   await ready(page);
   await page.getByRole("button", { name: /Добавить первую запись/ }).click();
-  await page.getByLabel("Когда").fill("2026-07-14T09:00");
+  await page.getByLabel("Дата").fill("14.07.2026");
+  await page.getByLabel("Время").fill("09:00");
   await page.getByLabel("Инструмент").fill("XAU/USD");
   await page.getByRole("radio", { name: /Продажа/ }).check();
   await page.getByLabel(/^План/).fill("вход только после подтверждения свечой");
@@ -153,7 +154,8 @@ test("trading-journal-storage-error-desktop", async ({ page }) => {
   await page.goto(JOURNAL, { waitUntil: "networkidle" });
   await ready(page);
   await page.getByRole("button", { name: /Добавить первую запись/ }).click();
-  await page.getByLabel("Когда").fill("2026-07-14T09:00");
+  await page.getByLabel("Дата").fill("14.07.2026");
+  await page.getByLabel("Время").fill("09:00");
   await page.getByLabel("Инструмент").fill("XAU/USD");
   await page.getByRole("radio", { name: /Продажа/ }).check();
   await page.getByLabel(/^План/).fill("план входа");

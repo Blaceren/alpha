@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   DIRECTION_LABEL,
+  isoToDateInput,
+  isoToTimeInput,
   type JournalDirection,
   type JournalEntry,
   type JournalEntryInput,
@@ -12,15 +14,10 @@ import type { JournalMutationResult } from "@/features/tools/hooks/use-trading-j
 
 const DIRECTIONS: JournalDirection[] = ["buy", "sell", "observation"];
 
-/** Convert a stored ISO to the `datetime-local` value shape (from ISO fields). */
-function toLocalInputValue(iso: string): string {
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(iso);
-  return match ? `${match[1]}T${match[2]}` : "";
-}
-
 function emptyInput(): JournalEntryInput {
   return {
-    occurredAt: "",
+    date: "",
+    time: "",
     instrument: "",
     direction: "",
     setup: "",
@@ -33,7 +30,8 @@ function emptyInput(): JournalEntryInput {
 
 function inputFromEntry(entry: JournalEntry): JournalEntryInput {
   return {
-    occurredAt: toLocalInputValue(entry.occurredAt),
+    date: isoToDateInput(entry.occurredAt),
+    time: isoToTimeInput(entry.occurredAt),
     instrument: entry.instrument,
     direction: entry.direction,
     setup: entry.setup,
@@ -128,23 +126,48 @@ export function JournalEntryForm({
     <form className="je-form" onSubmit={handleSubmit} onKeyDown={onKeyDown} aria-busy={pending} noValidate>
       <p className="je-form-h">{mode === "create" ? "Новая запись" : "Редактирование записи"}</p>
 
-      {/* Identity row: when · instrument · direction. */}
+      {/* Identity row: date · time · instrument. Date and time are explicit,
+          locale-independent fields — never a native datetime-local (DD-311). */}
       <div className="je-identity">
-        <div className="je-field je-when">
-          <label htmlFor={fieldId("occurredAt")}>Когда</label>
+        <div className="je-field je-date">
+          <label htmlFor={fieldId("date")}>Дата</label>
           <input
             ref={firstFieldRef}
-            id={fieldId("occurredAt")}
-            type="datetime-local"
-            value={values.occurredAt}
-            onChange={(e) => set("occurredAt", e.target.value)}
-            aria-invalid={invalid("occurredAt")}
-            aria-describedby={describedBy("occurredAt")}
+            id={fieldId("date")}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="ДД.ММ.ГГГГ"
+            value={values.date}
+            onChange={(e) => set("date", e.target.value)}
+            aria-invalid={invalid("date")}
+            aria-describedby={describedBy("date")}
             required
           />
-          {errors.occurredAt && (
-            <span className="je-err" id={errId("occurredAt")} role="alert">
-              {errors.occurredAt}
+          {errors.date && (
+            <span className="je-err" id={errId("date")} role="alert">
+              {errors.date}
+            </span>
+          )}
+        </div>
+
+        <div className="je-field je-time">
+          <label htmlFor={fieldId("time")}>Время</label>
+          <input
+            id={fieldId("time")}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="ЧЧ:ММ"
+            value={values.time}
+            onChange={(e) => set("time", e.target.value)}
+            aria-invalid={invalid("time")}
+            aria-describedby={describedBy("time")}
+            required
+          />
+          {errors.time && (
+            <span className="je-err" id={errId("time")} role="alert">
+              {errors.time}
             </span>
           )}
         </div>
