@@ -11,6 +11,7 @@ const USER_ROLES: UserRole[] = ["user", "admin", "support", "mentor", "moderator
 export type SessionPayload = {
   userId: number;
   role: UserRole;
+  expiresAt: Date;
 };
 
 function sign(value: string) {
@@ -50,7 +51,7 @@ export function verifySessionToken(token?: string) {
 
   const userId = Number(userIdRaw);
 
-  return Number.isInteger(userId) ? { userId, role } : null;
+  return Number.isInteger(userId) ? { userId, role, expiresAt: new Date(expiresAt) } : null;
 }
 
 export async function getSession() {

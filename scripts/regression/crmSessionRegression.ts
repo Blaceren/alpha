@@ -1,0 +1,299 @@
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import bcrypt from "bcryptjs";
+import { CRM_PERMISSIONS, resolveEffectivePermissions } from "../../src/lib/crm/roles";
+import { crmSessionResponseSchema } from "../../src/lib/crm/schemas";
+
+// Real HTTP regression for GET /api/crm/v1/session. Runs an isolated next dev
+// server against a throwaway /tmp SQLite database. No external service used.
+const dbPath = `/tmp/ata-crm-session-${process.pid}.db`;
+const dbUrl = `file:${dbPath}`;
+const port = 3910 + (process.pid % 20);
+const baseUrl = `http://127.0.0.1:${port}`;
+const password = "CrmSession123!";
+const SESSION_SECRET = "crm-session-regression-secret";
+const SESSION_COOKIE = "trading_platform_session";
+
+let passed = 0;
+let failed = 0;
+let logs = "";
+
+async function check(name: string, fn: () => Promise<void> | void) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`FAIL ${name}`);
+    console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+    if (logs) console.error(`--- server log tail ---\n${logs.slice(-1200)}\n--- end ---`);
+  }
+}
+
+function cleanup() {
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) fs.rmSync(`${dbPath}${suffix}`, { force: true });
+}
+
+function signToken(userId: number, role: string, expiresAt: number) {
+  const payload = `${userId}.${role}.${expiresAt}`;
+  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+  return `${payload}.${signature}`;
+}
+
+const baseEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  DATABASE_URL: dbUrl,
+  SESSION_SECRET,
+  POSTBACK_SECRET: "crm-session-postback-secret",
+  APP_URL: baseUrl,
+  STORAGE_DRIVER: "local",
+  POCKET_AFFILIATE_BASE_URL: "https://example.com/ref",
+  EMAIL_VERIFICATION_REQUIRED: "false",
+  CAPTCHA_DEV_BYPASS: "true",
+};
+for (const key of ["NODE_ENV"]) delete baseEnv[key];
+
+async function start() {
+  const child = spawn("npx", ["next", "dev", "--turbopack", "-p", String(port)], {
+    cwd: process.cwd(), env: baseEnv, detached: true, stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout?.on("data", (value) => { logs += String(value); });
+  child.stderr?.on("data", (value) => { logs += String(value); });
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    try { if ((await fetch(`${baseUrl}/api/health`)).ok) return child; } catch { /* boot */ }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`next dev failed to start\n${logs.slice(-3000)}`);
+}
+
+async function stop(child: ChildProcess | null) {
+  if (!child?.pid) return;
+  try { process.kill(-child.pid, "SIGTERM"); } catch { /* gone */ }
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    try { await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(500) }); } catch { return; }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ }
+}
+
+type Reply = { status: number; headers: Headers; body: Record<string, unknown>; text: string };
+class Client {
+  cookies = new Map<string, string>();
+  async request(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<Reply> {
+    const response = await fetch(`${baseUrl}${url}`, {
+      method,
+      headers: {
+        ...(this.cookies.size ? { cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } : {}),
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        ...headers,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    for (const rawCookie of response.headers.getSetCookie()) {
+      const pair = rawCookie.split(";")[0];
+      const index = pair.indexOf("=");
+      if (index > 0) this.cookies.set(pair.slice(0, index), pair.slice(index + 1));
+    }
+    const text = await response.text();
+    let value: unknown = {};
+    try { value = JSON.parse(text); } catch { /* non-json */ }
+    return { status: response.status, headers: response.headers, body: value as Record<string, unknown>, text };
+  }
+  setRawSession(token: string) { this.cookies.set(SESSION_COOKIE, token); }
+  login(email: string) { return this.request("POST", "/api/auth/login", { email, password, captchaToken: "dev-captcha-ok" }); }
+}
+
+async function main() {
+  cleanup();
+  let server: ChildProcess | null = null;
+  try {
+    const migration = spawnSync(process.execPath, [path.join("node_modules", "tsx", "dist", "cli.mjs"), path.join("prisma", "migrate.ts")], { env: baseEnv, encoding: "utf8" });
+    if (migration.status !== 0) throw new Error(`${migration.stdout}\n${migration.stderr}`);
+    process.env.DATABASE_URL = dbUrl;
+    const { prisma } = await import("../../src/lib/prisma");
+    const hash = await bcrypt.hash(password, 10);
+
+    const crmAdminUser = await prisma.user.create({ data: { email: "crm-admin@example.com", name: "Casey Admin", role: "admin", passwordHash: hash } });
+    const crmAdminProfile = await prisma.staffProfile.create({ data: { userId: crmAdminUser.id, displayName: "Casey Admin", staffRole: "crm_admin" } });
+    await prisma.user.create({ data: { email: "crm-learner@example.com", name: "Lee Learner", role: "user", passwordHash: hash } });
+    const blockedUser = await prisma.user.create({ data: { email: "crm-blocked@example.com", name: "Bo Blocked", role: "support", passwordHash: hash } });
+    await prisma.staffProfile.create({ data: { userId: blockedUser.id, displayName: "Bo Blocked", staffRole: "support" } });
+    const adminReadonlyUser = await prisma.user.create({ data: { email: "crm-axis@example.com", name: "Axl Axis", role: "admin", passwordHash: hash } });
+    await prisma.staffProfile.create({ data: { userId: adminReadonlyUser.id, displayName: "Axl Axis", staffRole: "read_only" } });
+    const supportManagerUser = await prisma.user.create({ data: { email: "crm-truth@example.com", name: "Trudy Truth", role: "support", passwordHash: hash } });
+    const supportManagerProfile = await prisma.staffProfile.create({ data: { userId: supportManagerUser.id, displayName: "Trudy Truth", staffRole: "crm_manager" } });
+
+    server = await start();
+
+    await check("1. unauthenticated request is 401", async () => {
+      const reply = await new Client().request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 401);
+      assert.equal(reply.body.code, "unauthorized");
+      assert.ok(String(reply.body.messageKey).length > 0);
+      assert.ok(String(reply.body.requestId).length > 0);
+    });
+
+    await check("2. invalid session signature is 401", async () => {
+      const client = new Client();
+      client.setRawSession("1.admin.9999999999999.deadbeef");
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 401);
+    });
+
+    await check("3. expired (but correctly signed) session is 401", async () => {
+      const client = new Client();
+      client.setRawSession(signToken(crmAdminUser.id, "admin", Date.now() - 60_000));
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 401);
+    });
+
+    await check("4. authenticated learner without a StaffProfile is 403", async () => {
+      const client = new Client();
+      assert.equal((await client.login("crm-learner@example.com")).status, 200);
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 403);
+      assert.equal(reply.body.code, "unauthorized");
+    });
+
+    let messageKey401 = "";
+    let messageKey403 = "";
+    await check("5. 401 and 403 carry the same code but distinct messageKeys", async () => {
+      const anon = await new Client().request("GET", "/api/crm/v1/session");
+      const learner = new Client();
+      await learner.login("crm-learner@example.com");
+      const forbidden = await learner.request("GET", "/api/crm/v1/session");
+      messageKey401 = String(anon.body.messageKey);
+      messageKey403 = String(forbidden.body.messageKey);
+      assert.equal(anon.body.code, forbidden.body.code);
+      assert.notEqual(messageKey401, messageKey403);
+    });
+
+    let adminReply: Reply | null = null;
+    await check("6. authenticated staff account is 200", async () => {
+      const client = new Client();
+      assert.equal((await client.login("crm-admin@example.com")).status, 200);
+      adminReply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(adminReply.status, 200);
+    });
+
+    await check("7. response body exactly matches the Zod session schema", () => {
+      const parsed = crmSessionResponseSchema.safeParse(adminReply!.body);
+      assert.ok(parsed.success, JSON.stringify(adminReply!.body));
+    });
+
+    await check("8. employeeId is StaffProfile.id, not User.id", () => {
+      assert.equal(adminReply!.body.employeeId, crmAdminProfile.id);
+      assert.notEqual(adminReply!.body.employeeId, String(crmAdminUser.id));
+    });
+
+    await check("9. role comes from StaffRole, not UserRole", () => {
+      assert.equal(adminReply!.body.role, "crm_admin");
+    });
+
+    await check("10. effectivePermissions match the matrix in canonical order", () => {
+      assert.deepEqual(adminReply!.body.effectivePermissions, [...CRM_PERMISSIONS]);
+      assert.deepEqual(adminReply!.body.effectivePermissions, resolveEffectivePermissions("crm_admin"));
+    });
+
+    await check("11. permissionVersion is a positive integer", () => {
+      assert.equal(adminReply!.body.permissionVersion, 1);
+    });
+
+    await check("12. expiresAt is a real future ISO session expiry", () => {
+      const expiresAt = new Date(String(adminReply!.body.expiresAt));
+      assert.ok(!Number.isNaN(expiresAt.getTime()));
+      const deltaDays = (expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+      assert.ok(deltaDays > 6 && deltaDays < 8, `expected ~7 days, got ${deltaDays}`);
+    });
+
+    await check("13. response leaks no learner/identity fields", () => {
+      const keys = Object.keys(adminReply!.body).sort();
+      assert.deepEqual(keys, ["displayName", "effectivePermissions", "employeeId", "expiresAt", "permissionVersion", "role"]);
+      for (const forbidden of ["email", "id", "userId", "status", "level", "xp", "passwordHash", "token", "avatar"]) {
+        assert.ok(!(forbidden in adminReply!.body), `must not expose ${forbidden}`);
+      }
+      assert.ok(!adminReply!.text.includes("crm-admin@example.com"), "email leaked in body");
+    });
+
+    await check("14. session response is Cache-Control: no-store", () => {
+      assert.ok(String(adminReply!.headers.get("cache-control") ?? "").includes("no-store"));
+    });
+
+    await check("15. blocked account is 401 even with a valid cookie", async () => {
+      const client = new Client();
+      assert.equal((await client.login("crm-blocked@example.com")).status, 200);
+      await prisma.user.update({ where: { id: blockedUser.id }, data: { status: "blocked" } });
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 401);
+    });
+
+    await check("16. axis separation: UserRole admin + StaffRole read_only -> read_only, no permissions", async () => {
+      const client = new Client();
+      await client.login("crm-axis@example.com");
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 200);
+      assert.equal(reply.body.role, "read_only");
+      assert.deepEqual(reply.body.effectivePermissions, []);
+    });
+
+    await check("17. StaffProfile is the CRM source of truth: UserRole support + StaffRole crm_manager -> crm_manager matrix", async () => {
+      const client = new Client();
+      await client.login("crm-truth@example.com");
+      const reply = await client.request("GET", "/api/crm/v1/session");
+      assert.equal(reply.status, 200);
+      assert.equal(reply.body.employeeId, supportManagerProfile.id);
+      assert.equal(reply.body.role, "crm_manager");
+      assert.deepEqual(reply.body.effectivePermissions, resolveEffectivePermissions("crm_manager"));
+    });
+
+    await check("18. existing /api/auth/me contract is unchanged (still returns UserRole)", async () => {
+      const client = new Client();
+      await client.login("crm-admin@example.com");
+      const reply = await client.request("GET", "/api/auth/me");
+      assert.equal(reply.status, 200);
+      const user = reply.body.user as Record<string, unknown>;
+      assert.equal(user.role, "admin");
+      assert.equal(user.email, "crm-admin@example.com");
+    });
+
+    await check("19. existing auth login/session-status/logout still work", async () => {
+      const client = new Client();
+      assert.equal((await client.login("crm-admin@example.com")).status, 200);
+      const status = await client.request("GET", "/api/auth/session-status");
+      assert.equal(status.status, 200);
+      assert.equal(status.body.authenticated, true);
+      const csrf = await client.request("GET", "/api/csrf");
+      const logout = await client.request("POST", "/api/auth/logout", undefined, { "x-csrf-token": String(csrf.body.csrfToken) });
+      assert.ok([200, 204].includes(logout.status));
+    });
+
+    await check("20. no CRM notes / owner / User360 routes exist yet", () => {
+      const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session"]);
+      for (const banned of ["notes", "owner", "owners", "owner-candidates", "users", "360"]) {
+        assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
+      }
+      assert.ok(!("crmNote" in prisma), "unexpected CrmNote model");
+      assert.ok(!("crmUserOwner" in prisma), "unexpected owner model");
+    });
+  } finally {
+    await stop(server);
+    cleanup();
+  }
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed === 0 ? 0 : 1);
+}
+
+main().catch((error) => {
+  console.error(error);
+  cleanup();
+  process.exit(1);
+});

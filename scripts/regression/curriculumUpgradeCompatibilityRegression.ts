@@ -942,6 +942,12 @@ async function main() {
       assert.equal(stash.length, 0, "temporary stash table must not persist");
     });
 
+    // Apply any migrations added after Phase 5B.6 (e.g. the CRM staff identity
+    // migration) so the idempotency re-run below sees the fully-applied chain.
+    for (const name of all.slice(phase5ReviewPinIndex + 1)) {
+      await applyMigration(prisma, name);
+    }
+
     await check("17. re-running the real migration runner does not duplicate schema or data", async () => {
       const before = {
         migrations: (await prisma.$queryRawUnsafe<Array<{ c: number }>>(

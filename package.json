@@ -68,7 +68,9 @@
     "test:regression:curriculum-phase4": "tsx scripts/regression/curriculumPhase4Gate.ts",
     "test:regression:curriculum-phase5": "tsx scripts/regression/curriculumPhase5Gate.ts",
     "test:regression:curriculum-phase2": "tsx scripts/regression/curriculumPhase2Gate.ts",
-    "test:regression:curriculum-phase3": "tsx scripts/regression/curriculumPhase3Gate.ts"
+    "test:regression:curriculum-phase3": "tsx scripts/regression/curriculumPhase3Gate.ts",
+    "test:regression:crm-staff-identity": "tsx scripts/regression/crmStaffIdentityRegression.ts",
+    "test:regression:crm-session": "tsx scripts/regression/crmSessionRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

@@ -2,7 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { PrismaClient, type RewardType, type UserRole } from "@prisma/client";
+import { PrismaClient, type RewardType, type StaffRole, type UserRole } from "@prisma/client";
 import { mockChatMessages } from "../src/data/mockChat";
 import { mockCheckpoints } from "../src/data/mockCheckpoints";
 import { mockCohorts } from "../src/data/mockCohorts";
@@ -107,6 +107,7 @@ async function resetDatabase() {
   await prisma.referralBonusConfig.deleteMany();
   await prisma.emailVerificationToken.deleteMany();
   await prisma.notificationSettings.deleteMany();
+  await prisma.staffProfile.deleteMany();
   await prisma.user.deleteMany();
 }
 
@@ -142,6 +143,28 @@ async function main() {
   const mentor = await createUser({ email: "mentor@test.com", passwordHash, role: "mentor", name: "Ментор" });
   const moderator = await createUser({ email: "moderator@test.com", passwordHash, role: "moderator", name: "Модератор" });
   await createUser({ email: "news@test.com", passwordHash, role: "news_editor", name: "Редактор новостей" });
+
+  const STAFF_ROLE_BY_USER_ROLE: Partial<Record<UserRole, StaffRole>> = {
+    admin: "crm_admin",
+    support: "support",
+    mentor: "mentor",
+    moderator: "moderator",
+    news_editor: "content_manager",
+  };
+  const staffAccounts = await prisma.user.findMany({
+    where: { role: { in: ["admin", "support", "mentor", "moderator", "news_editor"] } },
+    select: { id: true, name: true, role: true },
+  });
+  for (const staff of staffAccounts) {
+    const staffRole = STAFF_ROLE_BY_USER_ROLE[staff.role];
+    if (!staffRole) continue;
+    const displayName = staff.name.trim() || "Сотрудник";
+    await prisma.staffProfile.upsert({
+      where: { userId: staff.id },
+      update: {},
+      create: { userId: staff.id, displayName, staffRole },
+    });
+  }
 
   const referralUsers = await Promise.all(
     mockUser.referrals.users.map((referral) =>
