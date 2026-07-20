@@ -49,6 +49,36 @@ export const crmUsersResponseSchema = z
 
 export type CrmUsersResponse = z.infer<typeof crmUsersResponseSchema>;
 
+// Runtime contract for the CRM user detail foundation (v1). Strict so an extra
+// key — an owner id, a financial value, a raw Prisma column — fails here rather
+// than reaching the client.
+//
+// `xp` is nonnegative by a proven backend invariant: User.xp starts at 0, no
+// code path decrements it, task rewards are `Int @default(0)` validated
+// `min(0)`, promocode awards hard-fail below 1, referral bonuses are positive
+// defaults with no write path, and the admin update validates `min(0)`.
+// `level` keeps the same plain-integer shape as the accepted Users v1 contract
+// so the two endpoints stay adapter-compatible.
+export const crmUserDetailResponseSchema = z
+  .object({
+    userId: z.string().min(1),
+    displayName: z.string().min(1),
+    email: z
+      .object({
+        value: z.string().min(1),
+        visibility: z.enum(["full", "masked"]),
+      })
+      .strict(),
+    status: z.enum(["active", "blocked"]),
+    level: z.number().int(),
+    xp: z.number().int().nonnegative(),
+    emailConfirmed: z.boolean(),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+
+export type CrmUserDetailResponse = z.infer<typeof crmUserDetailResponseSchema>;
+
 // Safe CRM error envelope. Never carries raw exceptions or resource existence.
 export const crmErrorResponseSchema = z
   .object({
