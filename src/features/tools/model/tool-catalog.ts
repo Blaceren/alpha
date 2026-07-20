@@ -33,27 +33,41 @@ export interface ToolDefinition {
   /** Unlock level — READ from the curriculum unlock, never re-declared. */
   unlockLevel: number;
   implementationStatus: ToolImplementationStatus;
+  /** Per-tool hub CTA copy — never one hardcoded label for all tools (§11). */
+  ctaLabel: string;
 }
 
 /**
  * Per-tool metadata keyed by canonical code. Adds ONLY description +
- * implementation status; the unlock level is joined from `TOOL_UNLOCKS`. A tool
- * absent from this map falls back to a neutral description and `coming-soon`, so
- * the catalog can never crash on a curriculum tool we have not annotated yet.
+ * implementation status + hub CTA copy; the unlock level is joined from
+ * `TOOL_UNLOCKS`. A tool absent from this map falls back to a neutral
+ * description and `coming-soon`, so the catalog can never crash on a curriculum
+ * tool we have not annotated yet.
  */
 interface ToolMeta {
   description: string;
   implementationStatus: ToolImplementationStatus;
+  /**
+   * The CTA shown for THIS tool when it is available. Tool-specific by design;
+   * only meaningful for `available` tools (a coming-soon tool never shows one).
+   * Omitted → the neutral fallback, so we never hardcode one label everywhere.
+   */
+  ctaLabel?: string;
 }
+
+/** Neutral CTA used only if an available tool forgot to declare its own. */
+const FALLBACK_CTA = "Открыть инструмент";
 
 const TOOL_META: Record<string, ToolMeta> = {
   "tool.trading_journal": {
     description: "Ручной разбор отдельных сделок: план, исполнение и вывод.",
     implementationStatus: "available",
+    ctaLabel: "Открыть журнал",
   },
   "tool.risk_calculator": {
-    description: "Расчёт размера позиции и лимитов риска по личному плану.",
-    implementationStatus: "coming-soon",
+    description: "Ручной расчёт размера позиции и риска по цене входа и стопу.",
+    implementationStatus: "available",
+    ctaLabel: "Открыть калькулятор",
   },
   "tool.chart_markup": {
     description: "Разметка графиков: уровни, тренд и зоны решения.",
@@ -139,6 +153,7 @@ function toDefinition(unlock: ToolUnlock): ToolDefinition {
     description: meta.description,
     unlockLevel: unlock.unlockLevel,
     implementationStatus: meta.implementationStatus,
+    ctaLabel: meta.ctaLabel ?? FALLBACK_CTA,
   };
 }
 
@@ -157,3 +172,6 @@ export function getToolDefinition(code: string): ToolDefinition | null {
 
 /** The featured first tool of the whole slice. */
 export const TRADING_JOURNAL_CODE = "tool.trading_journal";
+
+/** The Risk Calculator surface code (Phase D4-C). */
+export const RISK_CALCULATOR_CODE = "tool.risk_calculator";

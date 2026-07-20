@@ -12,8 +12,9 @@
  * (DD-308). Components receive `ToolView`s and render them.
  *
  * `available` = unlocked AND the tool's surface is actually built. A tool can be
- * unlocked-but-unimplemented (Risk Calculator for Артём): honestly "открыт по
- * прогрессу · инструмент готовится", with NO active CTA into empty functionality.
+ * unlocked-but-unimplemented: honestly "открыт по прогрессу · инструмент
+ * готовится", with NO active CTA into empty functionality. As of D4-C both the
+ * Trading Journal (L10) and the Risk Calculator (L15) are available for Артём.
  */
 
 import {
@@ -41,6 +42,8 @@ export interface ToolView {
   href: string | null;
   /** Text status — state is never conveyed by colour alone. */
   statusLabel: string;
+  /** Tool-specific CTA copy, rendered only when the tool is available. */
+  ctaLabel: string;
 }
 
 /** Canonical hub href of a tool surface. Only ever built for available tools. */
@@ -90,6 +93,7 @@ export function projectTools(progress: PathProgress): ToolView[] {
       available,
       href: available ? toolHref(tool.code) : null,
       statusLabel: statusLabelFor(unlocked, available, tool.unlockLevel),
+      ctaLabel: tool.ctaLabel,
     };
   });
 

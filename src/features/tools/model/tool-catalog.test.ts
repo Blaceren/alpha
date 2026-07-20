@@ -21,18 +21,31 @@ describe("tool catalog", () => {
     }
   });
 
-  it("Trading Journal is the only available tool; unlock level 10", () => {
+  it("Trading Journal is available at level 10 with its own CTA copy", () => {
     const tj = getToolDefinition(TRADING_JOURNAL_CODE)!;
     expect(tj.implementationStatus).toBe("available");
     expect(tj.unlockLevel).toBe(10);
-    const available = TOOL_DEFINITIONS.filter((t) => t.implementationStatus === "available");
-    expect(available.map((t) => t.code)).toEqual([TRADING_JOURNAL_CODE]);
+    expect(tj.ctaLabel).toBe("Открыть журнал");
   });
 
-  it("Risk Calculator (L15) is present but coming-soon", () => {
+  it("Risk Calculator (L15) is available (D4-C) with its own CTA copy", () => {
     const risk = getToolDefinition("tool.risk_calculator")!;
     expect(risk.unlockLevel).toBe(15);
-    expect(risk.implementationStatus).toBe("coming-soon");
+    expect(risk.implementationStatus).toBe("available");
+    expect(risk.ctaLabel).toBe("Открыть калькулятор");
+  });
+
+  it("exactly the Trading Journal and Risk Calculator are available so far", () => {
+    const available = TOOL_DEFINITIONS.filter((t) => t.implementationStatus === "available");
+    expect(available.map((t) => t.code).sort()).toEqual(
+      ["tool.risk_calculator", TRADING_JOURNAL_CODE].sort(),
+    );
+  });
+
+  it("coming-soon tools fall back to the neutral CTA (no per-tool label hardcoded)", () => {
+    const soon = TOOL_DEFINITIONS.filter((t) => t.implementationStatus === "coming-soon");
+    for (const t of soon) expect(t.ctaLabel).toBe("Открыть инструмент");
+    expect(soon.length).toBeGreaterThan(0);
   });
 
   it("getToolDefinition returns null for an unknown code", () => {

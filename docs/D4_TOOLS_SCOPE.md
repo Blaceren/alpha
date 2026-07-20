@@ -123,6 +123,34 @@ Trading Journal — место, где пользователь **вручную
 
 ---
 
+## 4a. Второй инструмент — Risk Calculator (D4-C, реализовано)
+
+Полное решение — **DD-314** (`DESIGN_DECISIONS.md`); состояния — `STATE_MATRIX.md` §5c; визуальный
+отчёт — `docs/visual-reviews/D4_C_RISK_CALCULATOR.md`. Сводно:
+
+- `tool.risk_calculator`, unlock **L15** через тот же канонический resolver; маршрут
+  `/tools/tool.risk_calculator` на существующем `/tools/[toolCode]` (новой архитектуры нет);
+- утверждённое направление **A+B**: Price Rail доминирует (входы слева · измеренный entry/stop Price
+  Rail в центре · output-ledger справа), Direction B — только компактная sticky result-strip на mobile
+  в valid-состоянии; не ticket/чек/broker order; на mobile нет submit/order-кнопки;
+- четыре ручных входа: **Расчётный капитал** (временный вход расчёта, не баланс/счёт), **Риск на
+  сделку, %**, **Цена входа**, **Стоп-цена**; вывод: **Сумма риска**, **Дистанция до стопа**, **Размер
+  позиции**, **Расчётный номинал**; направление **Лонг/Шорт** (текстом, не только цветом);
+- формулы: `riskAmount = capital × risk%/100`, `stopDistance = |entry − stop|`,
+  `stopDistancePercent = stopDistance/entry × 100`, `positionUnits = riskAmount/stopDistance`,
+  `positionNotional = positionUnits × entry`;
+- чистая модель (`risk-calculation.ts` + `risk-format.ts`) без React/DOM/storage/fetch; контролируемый
+  парсинг (`inputMode="decimal"`, `.`/`,`; знак/экспонента/пробелы/разрядные/смешанные разделители/
+  non-finite отвергаются); дискриминированный incomplete/invalid/valid; fail-closed при overflow;
+  RU-формат без научной нотации/`-0`/валютного символа;
+- **без persist/fetch/XP/progression/journal/report write** — refresh сбрасывает все поля; ключа
+  `ata.tools.risk-calculator` не существует; обязательный дисклеймер всегда виден;
+- Tools Hub CTA стал per-tool (`ctaLabel`): «Открыть журнал» / «Открыть калькулятор»; featured
+  инструмент = highest available (Risk L15 > Journal L10); поведение журнала не менялось;
+- **вне scope D4-C:** история/persist калькулятора, другие tool internals, mentor, practical, backend.
+
+---
+
 ## 5. Manual per-trade value — граница (критично)
 
 Trading Journal может хранить введённый вручную результат **конкретной** сделки как простое

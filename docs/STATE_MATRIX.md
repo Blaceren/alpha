@@ -120,8 +120,8 @@ localStorage —
 
 | State | Значение | Статус |
 |-------|----------|--------|
-| loaded / available tools | ledger инструментов; current = highest-level available (Trading Journal для Артёма) с одним CTA | **D4-B ✅** |
-| unlocked-but-coming-soon | открыт по прогрессу, но surface не построена (Risk Calculator L15) → «Открыт по прогрессу · инструмент готовится», без CTA | **D4-B ✅** |
+| loaded / available tools | ledger инструментов; current = highest-level available (D4-C: Risk Calculator L15 > Trading Journal L10 для Артёма); CTA **per-tool** (`ctaLabel`: «Открыть журнал» / «Открыть калькулятор») | **D4-C ✅** |
+| unlocked-but-coming-soon | открыт по прогрессу, но surface не построена (следующие tools L20+) → «Открыт по прогрессу · инструмент готовится», без CTA | **D4-B ✅** |
 | locked | уровень не пройден → «Откроется на уровне N», без CTA | **D4-B ✅** |
 | resolver unavailable | защитный fail-closed: «Список инструментов сейчас недоступен» (данные локальны, ничего не отправлено) | **D4-B ✅** |
 
@@ -142,6 +142,22 @@ localStorage —
 | unknown route | несуществующий `[toolCode]` → not-found convention (без generic crash) | к списку | **D4-B ✅** |
 
 Инварианты (DD-303/304/310): `manualResult` — необязательное число отдельной записи, вторичное к уроку; никаких агрегатов (сумма/среднее/win-rate/%/equity); журнал не пишет в progression/report-ключи и не влияет на XP/уровни/checkpoint; browser-local, без broker sync; без cross-tab listener.
+
+### 5c. Risk Calculator — состояния (D4-C, реализовано; DD-314; **без persist**)
+
+| State | Значение | Result strip (mobile) | Статус |
+|-------|----------|-----------------------|--------|
+| empty | все четыре поля пусты; Price Rail present, но quiet; нет чисел/направления | нет | **D4-C ✅** |
+| partial | часть полей заполнена; введённые значения видны, остальное quiet; **без fake-результата и NaN/Infinity** | нет | **D4-C ✅** |
+| invalid field | заполненное поле малформатно/≤0/риск>100 → локальная per-field ошибка (`aria-invalid` + `aria-describedby`); downstream-результата нет | нет | **D4-C ✅** |
+| equal entry/stop | `entry == stop` → «Цена входа и стоп-цена должны отличаться.»; без направления/результата | нет | **D4-C ✅** |
+| valid long | `stop < entry` → Лонг; активный measured gap; полный ledger (Сумма риска · Дистанция до стопа · Размер позиции · Расчётный номинал) | **есть** (Лонг + units + notional) | **D4-C ✅** |
+| valid short | `stop > entry` → Шорт; полный ledger | **есть** (Шорт + units + notional) | **D4-C ✅** |
+| tiny distance | крошечная дистанция → дробные units сохранены; **без научной нотации**; rail остаётся читаемым | есть | **D4-C ✅** |
+| overflow | значение вне displayable-диапазона → fail-closed invalid (не рисуем infinity-scale) | нет | **D4-C ✅** |
+| locked | уровень < L15 → канонический locked state, **форма не монтируется** | нет | **D4-C ✅** |
+
+Инварианты (DD-303/314): «Расчётный капитал» — временный вход расчёта, **не** баланс/счёт; никакого storage/fetch/XP/progression/journal/report write (refresh сбрасывает всё; ключа `ata.tools.risk-calculator` нет); без валютного символа; без submit/order/execution-кнопки; обязательный дисклеймер виден всегда; направление всегда сообщается текстом (не только цветом). Формулы — см. DD-314.
 
 ---
 

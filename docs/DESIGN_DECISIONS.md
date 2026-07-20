@@ -826,6 +826,34 @@
   `control.bottom ≤ nav.top − 8` на 390/320/720). Проблема не компенсируется скрытием контрола или
   уменьшением target.
 
+- **DD-314 (Locked, D4-C).** **Risk Calculator — ручной калькулятор позиционного риска на
+  сигнатурном Price Rail.** Инструмент `tool.risk_calculator` реализован и доступен на **L15** через
+  тот же канонический resolver (`levelProgressState`), что и все остальные unlock'и: для Артёма (L18)
+  открыт и получает рабочий CTA, ниже L15 остаётся locked (форма не монтируется). Канонический
+  маршрут — `/tools/tool.risk_calculator` через существующий `/tools/[toolCode]`; новой route-
+  архитектуры нет. **Утверждённое направление A+B:** доминирует Direction A «Price Rail» (входы слева
+  · измеренный entry/stop Price Rail в центре как signature object · output-ledger справа); Direction B
+  добавляет **только** компактную sticky result-strip на mobile в valid-состоянии. Не ticket, не
+  чек, не broker order confirmation; на mobile нет submit/order-кнопки.
+  **Формулы (чистая модель `risk-calculation.ts`, без React/DOM/storage/fetch):**
+  `riskAmount = capital × risk% / 100`; `stopDistance = |entry − stop|`;
+  `stopDistancePercent = stopDistance / entry × 100`; `positionUnits = riskAmount / stopDistance`;
+  `positionNotional = positionUnits × entry`; направление `long` при `stop < entry`, `short` при
+  `stop > entry`, `stop == entry` — invalid. Ввод — контролируемые строки (`inputMode="decimal"`, не
+  `type=number`): цифры + один разделитель `.`/`,`; отвергаются знак, экспонента, внутренние пробелы,
+  разрядные и множественные/смешанные разделители, non-finite. Результат — дискриминированный
+  `incomplete | invalid | valid`; никогда `NaN`/`Infinity`; сверхбольшие значения fail-closed как
+  invalid. Формат — детерминированный RU-locale, без научной нотации, без `-0`, без валютного символа
+  (валюта не выбрана, DD-303). **«Расчётный капитал» — временный вход расчёта**, не баланс, не
+  подключённый счёт, не fetch, не persist. **Никакого storage/fetch/XP/progression/journal/report
+  write** — refresh сбрасывает все четыре поля и результат; ключа `ata.tools.risk-calculator` не
+  существует (доказано unit/component/E2E-тестами). Обязательный дисклеймер виден всегда: «Ручной
+  учебный расчёт. Данные не синхронизируются со счётом или брокером и не являются инвестиционной
+  рекомендацией.» CTA на Tools Hub теперь per-tool (`ctaLabel`): «Открыть журнал» / «Открыть
+  калькулятор» — один общий label больше не хардкодится. Featured «рабочий инструмент» = самый
+  высокий доступный (Risk Calculator L15 > Trading Journal L10); поведение самого журнала не менялось.
+  **Вне scope D4-C:** история/persist калькулятора, другие инструменты, mentor, practical, backend.
+
 ## Открытые вопросы (решаются позже)
 
 - **OQ-1.** Точная палитра и финальные шрифты — после assets прелендинга.

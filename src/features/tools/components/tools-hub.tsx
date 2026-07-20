@@ -8,10 +8,11 @@ import { projectTools, type ToolView } from "@/features/tools/model/tools-projec
  *
  * One continuous vertical ledger threads the WHOLE tool progression on a single
  * luminous spine: each tool is a node marked by its unlock level. The current
- * working tool (Trading Journal) is the live head of the ledger with one primary
- * CTA; unlocked-but-unimplemented tools (Risk Calculator) are honest, CTA-less
- * rows; locked tools are calm progression rows carrying only «Откроется на
- * уровне N». No cards, no grid, no marketplace, no KPI, no balance.
+ * working tool (the highest-level available one — Risk Calculator once L15 is
+ * passed) is the live head of the ledger; every available tool carries its OWN
+ * CTA copy (`ctaLabel`, never one hardcoded label); unlocked-but-unimplemented
+ * tools are honest, CTA-less rows; locked tools are calm progression rows
+ * carrying only «Откроется на уровне N». No cards, no grid, no KPI, no balance.
  *
  * Server-rendered and pure: unlock comes from the shared marker via the
  * canonical resolver (`projectTools`), which the server can know. A defensive
@@ -91,7 +92,7 @@ function ToolRow({ tool }: { tool: ToolView }) {
       <div className="th-action">
         {tool.available && tool.href ? (
           <Link className="th-cta" href={tool.href}>
-            Открыть журнал
+            {tool.ctaLabel}
             <span className="th-go" aria-hidden="true">
               <svg viewBox="0 0 24 24" className="th-ic">
                 <path d="M5 12h14" />

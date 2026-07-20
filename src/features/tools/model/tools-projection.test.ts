@@ -24,21 +24,42 @@ describe("tools projection — resolver-owned unlock", () => {
     expect(levels).toEqual([...levels].sort((a, b) => a - b));
   });
 
-  it("canonical Артём (L18): Trading Journal is unlocked AND available (current)", () => {
+  it("canonical Артём (L18): Trading Journal is unlocked AND available (not current)", () => {
     const tj = view("tool.trading_journal");
     expect(tj.unlocked).toBe(true);
     expect(tj.available).toBe(true);
-    expect(tj.current).toBe(true);
+    // Risk Calculator (L15) is the higher available tool, so it takes the head.
+    expect(tj.current).toBe(false);
     expect(tj.href).toBe("/tools/tool.trading_journal");
+    expect(tj.ctaLabel).toBe("Открыть журнал");
   });
 
-  it("canonical Артём: Risk Calculator is unlocked but NOT available (coming soon)", () => {
+  it("canonical Артём: Risk Calculator (L15) is available and the current head (D4-C)", () => {
     const risk = view("tool.risk_calculator");
     expect(risk.unlocked).toBe(true);
-    expect(risk.available).toBe(false);
-    expect(risk.current).toBe(false);
-    expect(risk.href).toBeNull();
-    expect(risk.statusLabel).toBe("Открыт по прогрессу · инструмент готовится");
+    expect(risk.available).toBe(true);
+    expect(risk.current).toBe(true);
+    expect(risk.href).toBe("/tools/tool.risk_calculator");
+    expect(risk.statusLabel).toBe("Открыт · рабочий инструмент");
+    expect(risk.ctaLabel).toBe("Открыть калькулятор");
+  });
+
+  it("the current head is the highest-level available tool (Risk L15 > Journal L10)", () => {
+    const current = projectTools(artem).find((v) => v.current);
+    expect(current?.code).toBe("tool.risk_calculator");
+  });
+
+  it("Risk Calculator honours the resolver boundary: L15 passed available, L14/L15-standing locked", () => {
+    // Standing on L14 → L15 not reached → locked.
+    expect(view("tool.risk_calculator", { ...artem, currentLevel: 14 }).available).toBe(false);
+    expect(view("tool.risk_calculator", { ...artem, currentLevel: 14 }).unlocked).toBe(false);
+    // Standing ON L15 (the gate) → not passed yet → still locked (no form).
+    expect(view("tool.risk_calculator", { ...artem, currentLevel: 15 }).unlocked).toBe(false);
+    // One past L15 → passed → available with its route.
+    const passed = view("tool.risk_calculator", { ...artem, currentLevel: 16 });
+    expect(passed.unlocked).toBe(true);
+    expect(passed.available).toBe(true);
+    expect(passed.href).toBe("/tools/tool.risk_calculator");
   });
 
   it("canonical Артём: Chart Markup (L20) and Indicator Checklist (L25) are locked", () => {

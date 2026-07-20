@@ -12,18 +12,22 @@ describe("Tools Hub — operational ledger", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows Trading Journal as the current working tool with the one CTA", () => {
+  it("shows Trading Journal with its own journal CTA", () => {
     render(<ToolsHub scenario="active" />);
     const cta = screen.getByRole("link", { name: /Открыть журнал/ });
     expect(cta).toHaveAttribute("href", "/tools/tool.trading_journal");
-    // Exactly one working CTA on the hub.
     expect(screen.getAllByRole("link", { name: /Открыть журнал/ })).toHaveLength(1);
   });
 
-  it("shows Risk Calculator as unlocked-but-coming-soon, with NO working CTA", () => {
+  it("shows Risk Calculator (D4-C) with its own calculator CTA — not one shared label", () => {
     render(<ToolsHub scenario="active" />);
     expect(screen.getByText("Risk Calculator")).toBeInTheDocument();
-    expect(screen.getByText(/Открыт по прогрессу · инструмент готовится/)).toBeInTheDocument();
+    const cta = screen.getByRole("link", { name: /Открыть калькулятор/ });
+    expect(cta).toHaveAttribute("href", "/tools/tool.risk_calculator");
+    // The CTA copy is per-tool: the calculator's label is not "Открыть журнал".
+    expect(screen.getAllByRole("link", { name: /Открыть калькулятор/ })).toHaveLength(1);
+    // No stale coming-soon copy remains for the now-implemented calculator.
+    expect(screen.queryByText(/Открыт по прогрессу · инструмент готовится/)).toBeNull();
   });
 
   it("shows locked tools with their exact target level and no CTA", () => {
@@ -56,10 +60,21 @@ describe("Tool surface dispatch", () => {
     expect(screen.queryByRole("button", { name: /Добавить/ })).toBeNull();
   });
 
-  it("unlocked-but-coming-soon tool → calm coming-soon, no fake working CTA", () => {
-    render(<ToolSurface toolCode="tool.risk_calculator" scenario="active" />);
-    expect(screen.getByText(/инструмент готовится/)).toBeInTheDocument();
+  it("still-locked tool for an early user → locked state, no form", () => {
+    render(<ToolSurface toolCode="tool.risk_calculator" scenario="early" />);
+    expect(screen.getByText(/Откроется на уровне 15/)).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("available Risk Calculator (D4-C) → the calculator workspace with inputs + disclaimer", () => {
+    render(<ToolSurface toolCode="tool.risk_calculator" scenario="active" />);
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(within(h1).getByText("Risk Calculator")).toBeInTheDocument();
+    expect(screen.getByLabelText("Расчётный капитал")).toBeInTheDocument();
+    expect(screen.getByLabelText("Цена входа")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Данные не синхронизируются со счётом или брокером/),
+    ).toBeInTheDocument();
   });
 
   it("unknown tool code → not-found convention, no crash", () => {

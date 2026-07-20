@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { getPathProgress, type PathScenario } from "@/features/path/model/path-state";
 import { projectTool } from "@/features/tools/model/tools-projection";
-import { TRADING_JOURNAL_CODE } from "@/features/tools/model/tool-catalog";
+import {
+  RISK_CALCULATOR_CODE,
+  TRADING_JOURNAL_CODE,
+} from "@/features/tools/model/tool-catalog";
 import { TradingJournalWorkspace } from "@/features/tools/components/trading-journal-workspace";
+import { RiskCalculatorWorkspace } from "@/features/tools/components/risk-calculator-workspace";
 
 /**
  * One tool surface (Phase D4-B). Dispatches on the RESOLVED tool view — never on
@@ -31,9 +35,12 @@ export function ToolSurface({
     return <ToolComingSoon title={tool.title} unlockLevel={tool.unlockLevel} />;
   }
 
-  // Available → the real workspace. Only Trading Journal is available in D4-B.
+  // Available → the real workspace. D4-B: Trading Journal. D4-C: Risk Calculator.
   if (tool.code === TRADING_JOURNAL_CODE) {
     return <TradingJournalWorkspace />;
+  }
+  if (tool.code === RISK_CALCULATOR_CODE) {
+    return <RiskCalculatorWorkspace />;
   }
 
   // Available in the catalog but with no built surface wired here — treat as

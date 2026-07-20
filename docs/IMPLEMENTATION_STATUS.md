@@ -23,7 +23,7 @@
 | D1 | Foundation завершение (все routes, mock provider, полная UI-библиотека) | ◻️ Частично (foundation заложен в D1A) |
 | D2 | Главная и Путь | ⛔ Не начата |
 | D3 | ~~Урок, тест, report, mentor feedback~~ → **Report, Practical & Mentor Review** (переопределена в D3-A, DD-270) | ◻️ D3-A ✅ (scope + art direction) · D3-B ✅ (первый report-уровень) · D3-C…D3-F не начаты |
-| D4 | Tools L10–L30 | ◻️ D4-A ✅ (scope + art direction, 3 направления) · **D4-B ✅ (Tools Hub + Trading Journal, production vertical slice)** · остальные tool internals не начаты |
+| D4 | Tools L10–L30 | ◻️ D4-A ✅ (scope + art direction, 3 направления) · **D4-B ✅ (Tools Hub + Trading Journal)** · **D4-C ✅ (Risk Calculator L15, Price Rail)** · остальные tool internals (Chart Markup L20+) не начаты |
 | D5 | Tools L35–L60 | ⛔ Не начата |
 | D6 | Tools L65–L100 | ⛔ Не начата |
 | D7 | Community, News, Referral | ⛔ Не начата |
@@ -794,3 +794,42 @@ filter/search/analytics/totals/charts/broker sync/backend/auth/XP — вне sco
 **Документы:** `TOOLS_STORAGE.md` (новый), `visual-reviews/D4_B_TRADING_JOURNAL.md` (новый),
 `DESIGN_DECISIONS.md` (DD-308…DD-310), `ROUTE_MAP.md`, `STATE_MATRIX.md`, `IMPLEMENTATION_PLAN.md`,
 `D4_TOOLS_SCOPE.md`, `D4_TOOLS_ART_DIRECTION.md`, `README.md`, этот файл.
+
+## D4-C — Risk Calculator (реализовано)
+
+Реализован **второй рабочий инструмент** `tool.risk_calculator` (unlock **L15** через тот же
+канонический resolver): для Артёма (L18) открыт, Tools Hub показывает рабочий CTA «Открыть
+калькулятор», маршрут `/tools/tool.risk_calculator` открывает калькулятор; ниже L15 — locked без
+формы. Утверждённое направление **A+B**: доминирует Price Rail (входы слева · измеренный entry/stop
+Price Rail в центре · output-ledger справа); Direction B добавляет только компактную sticky
+result-strip на mobile в valid-состоянии. Не ticket/чек/broker order; на mobile нет submit-кнопки.
+
+**Чистая модель (DD-314):** `risk-calculation.ts` (без React/DOM/storage/fetch) — контролируемый
+парсинг строк (`inputMode="decimal"`, `.`/`,`, отвергаются знак/экспонента/пробелы/разрядные/
+множественные/смешанные разделители/non-finite), дискриминированный `incomplete | invalid | valid`,
+per-field валидация, long/short только для valid, fail-closed при overflow; `risk-format.ts` —
+детерминированный RU-формат без научной нотации, без `-0`, без валютного символа. **Без persist/fetch/
+XP/progression/journal/report write**; refresh сбрасывает все поля; ключа `ata.tools.risk-calculator`
+нет. Обязательный дисклеймер всегда виден; направление всегда текстом. Tools Hub CTA стал per-tool
+(`ctaLabel`); featured «рабочий инструмент» = highest available (Risk L15 > Journal L10); поведение
+самого журнала не менялось.
+
+**Тесты:** Vitest **728 / 35 файлов** (было 661 / 33; +67, +2 файла: `risk-calculation.test.ts`,
+`risk-calculator.test.tsx`; существующие tool-catalog/tools-projection/tools-hub-тесты обновлены под
+доступность Risk Calculator без потери покрытия). Mandatory `npm run test:e2e` — **193 / 11 файлов**
+(было 180 / 10): добавлен `e2e/risk-calculator-smoke.spec.ts` (13 тестов). Full discovery — **311 / 24
+файла** (было 283 / 22): + risk-smoke (13) + `e2e/risk-calculator-screenshots.spec.ts` (15,
+artifact-only, вне mandatory gate). Home/Path/Lessons/report/Trading Journal — без регрессий; Артём
+остаётся L18. lint / typecheck / build — зелёные; `package.json`/`package-lock.json` не менялись.
+
+**Visual QA (двухпроходный):** 15 реальных Chromium-кадров в
+`design-memory/screenshots/d4-risk-calculator/{first-pass,final}/`, dimensions точно по именам.
+First-pass (5 кадров): 0 critical, 0 major (лишь minor polish — whitespace ledger на desktop, sticky
+strip перекрывает rail в покое на mobile, разрешается скроллом и не закрывает input/дисклеймер).
+Отчёт — `docs/visual-reviews/D4_C_RISK_CALCULATOR.md`. Historical 315 PNG не перезаписаны/не удалены.
+
+**Границы:** история/persist калькулятора, другие tool internals (Chart Markup L20+), mentor,
+practical, backend — вне scope. Зависимостей не добавлено.
+
+**Документы:** `visual-reviews/D4_C_RISK_CALCULATOR.md` (новый), `DESIGN_DECISIONS.md` (DD-314),
+`ROUTE_MAP.md`, `STATE_MATRIX.md`, `D4_TOOLS_SCOPE.md`, `IMPLEMENTATION_PLAN.md`, этот файл.

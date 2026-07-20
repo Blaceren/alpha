@@ -53,20 +53,24 @@ test("1 · /tools is a real link in production navigation", async ({ page }) => 
   await expect(link).toHaveAttribute("href", "/tools");
 });
 
-test("2-4 · canonical unlocks: Trading Journal working, Risk coming-soon, locked targets", async ({
+test("2-4 · canonical unlocks: Journal + Risk Calculator working (own CTAs), locked targets", async ({
   page,
 }) => {
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/tools", { waitUntil: "networkidle" });
 
-  // 2 · Trading Journal unlocked → the one working CTA.
+  // 2 · Trading Journal unlocked → its own journal CTA.
   const cta = page.getByRole("link", { name: /Открыть журнал/ });
   await expect(cta).toHaveCount(1);
   await expect(cta).toHaveAttribute("href", JOURNAL);
 
-  // 3 · Risk Calculator unlocked-but-coming-soon, no fake working CTA.
+  // 3 · Risk Calculator available (D4-C) → its OWN calculator CTA (per-tool copy).
   await expect(page.getByText("Risk Calculator")).toBeVisible();
-  await expect(page.getByText(/Открыт по прогрессу · инструмент готовится/)).toBeVisible();
+  const riskCta = page.getByRole("link", { name: /Открыть калькулятор/ });
+  await expect(riskCta).toHaveCount(1);
+  await expect(riskCta).toHaveAttribute("href", "/tools/tool.risk_calculator");
+  // No stale coming-soon copy for the now-implemented calculator.
+  await expect(page.getByText(/Открыт по прогрессу · инструмент готовится/)).toHaveCount(0);
 
   // 4 · locked previews carry their exact target level.
   await expect(page.getByText("Откроется на уровне 20")).toBeVisible();
@@ -332,7 +336,9 @@ test("mobile hub · current tool stacks — CTA below the text, ≥44px, spine i
 
     const row = page.locator(".th-row.is-current");
     const title = row.locator(".th-title");
-    const cta = page.getByRole("link", { name: /Открыть журнал/ });
+    // Tool-agnostic: assert the CURRENT row's OWN CTA stacks below its text
+    // (the current head is whichever available tool has the highest level).
+    const cta = row.locator("a.th-cta");
     const titleBox = await title.boundingBox();
     const ctaBox = await cta.boundingBox();
 
