@@ -38,8 +38,20 @@ function parseBackendOrigin(raw) {
 export const SESSION_PATH = "/api/crm/v1/session";
 export const USERS_PATH = "/api/crm/v1/users";
 
+/**
+ * The one dynamic entry. `:userId` matches EXACTLY ONE path segment — it is not
+ * `:userId*` and not a catch-all — so `/api/crm/v1/users/123/notes`,
+ * `/api/crm/v1/users/123/owner` and `/api/crm/v1/users/123/extra` are not
+ * proxied and fall through to the CRM app.
+ *
+ * A malformed single segment (`/api/crm/v1/users/mock_user_1`) IS forwarded,
+ * and the backend answers with its own canonical 400. Identifier validation for
+ * direct API requests is the backend's contract, not the proxy's.
+ */
+export const USER_DETAIL_PATH = "/api/crm/v1/users/:userId";
+
 /** The complete set of backend paths the CRM origin may forward. */
-export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH];
+export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH, USER_DETAIL_PATH];
 
 export function buildRewrites(envSource = process.env) {
   const mode = envSource.CRM_MODE;

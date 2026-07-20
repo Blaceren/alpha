@@ -46,10 +46,14 @@ test.describe("same-origin proxy", () => {
     expect(response.headers()["cache-control"]).toContain("no-store");
   });
 
-  test("sub-paths and near-misses are not proxied", async ({ request }) => {
+  test("nested paths and near-misses are not proxied", async ({ request }) => {
+    // Changed in Frontend CRM User Detail API Slice 2: a single segment after
+    // /users/ is now proxied on purpose (the backend owns id validation), so
+    // only NESTED paths and sibling routes may be checked for a Next-level 404.
     for (const path of [
-      "/api/crm/v1/users/extra",
-      "/api/crm/v1/users/123",
+      "/api/crm/v1/users/123/extra",
+      "/api/crm/v1/users/123/notes",
+      "/api/crm/v1/users/123/owner",
       "/api/crm/v1/user",
       "/api/crm/v1/notes",
       "/api/crm/v1/owner",
@@ -150,9 +154,11 @@ test.describe("populated list", () => {
     for (const banned of ["Сегодня", "Аудит", "Задачи", "Кейсы", "Настройки", "Демо-роль", "Роль:"]) {
       expect(visible, `must not offer ${banned}`).not.toContain(banned);
     }
-    // Only the single Users nav link exists; no row links.
+    // One nav link, plus exactly one detail link per row (Slice 2).
     await expect(page.getByRole("navigation", { name: "Разделы CRM" }).getByRole("link")).toHaveCount(1);
-    await expect(page.locator("table a")).toHaveCount(0);
+    const rowLinks = page.locator("table a");
+    await expect(rowLinks).toHaveCount(3);
+    await expect(rowLinks.first()).toHaveAttribute("href", "/users/1000");
   });
 
   test("no employeeId, permissions or backend origin reaches the page", async ({ page }) => {
@@ -334,17 +340,18 @@ test.describe("empty and error states", () => {
 });
 
 test.describe("route composition", () => {
-  test("/users/123 stays deferred and fetches no User 360", async ({ page }) => {
+  test("/users/123 mounts the production detail, never a User 360 aggregate", async ({ page }) => {
     const requested: string[] = [];
     page.on("request", (r) => requested.push(r.url()));
 
     await useStates(page, "authenticated", "populated");
     await page.goto("/users/123");
 
-    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
+    // Connected in Slice 2 — the detail foundation, not the mock User 360.
+    await expect(page.getByRole("heading", { name: "Целевой Пользователь" })).toBeVisible();
     await expect(page.locator("table")).toHaveCount(0);
-    // No User 360 endpoint was even attempted.
-    expect(requested.some((u) => /\/api\/crm\/v1\/(users\/\d|user-360)/.test(u))).toBe(false);
+    // Still no User 360 aggregate endpoint anywhere.
+    expect(requested.some((u) => u.includes("user-360"))).toBe(false);
   });
 
   test("other CRM routes stay deferred with a safe link to /users", async ({ page }) => {

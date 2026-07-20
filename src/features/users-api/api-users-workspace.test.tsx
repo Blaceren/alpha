@@ -35,6 +35,10 @@ function providerFor(outcomes: UsersOutcome[]): CrmUsersReadCapability & { calls
   let index = 0;
   return {
     calls,
+    // The list workspace must never call the detail capability.
+    getUserDetail: () => {
+      throw new Error("listUsers tests must not call getUserDetail");
+    },
     async listUsers(input) {
       calls.push(input);
       const outcome = outcomes[Math.min(index, outcomes.length - 1)];
@@ -83,7 +87,12 @@ afterEach(() => {
 
 describe("states", () => {
   it("shows a loading status first", async () => {
-    const provider: CrmUsersReadCapability = { listUsers: () => new Promise(() => {}) };
+    const provider: CrmUsersReadCapability = {
+      listUsers: () => new Promise(() => {}),
+      getUserDetail: () => {
+        throw new Error("listUsers tests must not call getUserDetail");
+      },
+    };
     renderWorkspace(provider);
     expect(await screen.findByText("Загружаем список пользователей")).toBeInTheDocument();
   });
@@ -142,18 +151,33 @@ describe("columns are limited to what the backend can prove", () => {
     }
   });
 
-  it("never renders the opaque userId", async () => {
+  it("never displays the opaque userId as content", async () => {
     renderWorkspace(providerFor([ok([user(0)])]));
     await screen.findByText("Пользователь 00");
-    expect(document.body.innerHTML).not.toContain("1000");
+    // It appears in the detail link's href (navigation), never as visible text.
+    expect(document.body.textContent ?? "").not.toContain("1000");
   });
 
-  it("shows no row link and no User 360 navigation", async () => {
+  it("gives each row exactly one accessible link to the production detail route", async () => {
     renderWorkspace(providerFor([ok([user(0), user(1)])]));
     await screen.findByText("Пользователь 00");
     const table = screen.getByRole("table");
-    expect(within(table).queryAllByRole("link")).toHaveLength(0);
-    expect(document.body.innerHTML).not.toContain("/users/1000");
+
+    // One link per row, named for the learner, pointing at the production
+    // detail route — not a click-only div, and not the mock User 360 shell.
+    const links = within(table).getAllByRole("link");
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAccessibleName("Пользователь 00");
+    expect(links[0]).toHaveAttribute("href", "/users/1000");
+    expect(links[1]).toHaveAttribute("href", "/users/1001");
+  });
+
+  it("uses the backend id verbatim as a string, never a parsed number", async () => {
+    renderWorkspace(providerFor([ok([user(0, { userId: "0071" })])]));
+    await screen.findByText("Пользователь 00");
+    const link = within(screen.getByRole("table")).getAllByRole("link")[0];
+    // "0071" must survive intact — a Number() round-trip would yield "71".
+    expect(link).toHaveAttribute("href", "/users/0071");
   });
 
   it("shows no fake total and no 'страница X из Y'", async () => {
@@ -371,6 +395,9 @@ describe("error behaviour", () => {
     const u = userEvent.setup();
     let calls = 0;
     const provider: CrmUsersReadCapability = {
+      getUserDetail: () => {
+        throw new Error("listUsers tests must not call getUserDetail");
+      },
       async listUsers() {
         calls += 1;
         if (calls === 1) return { status: "upstream_unavailable" };

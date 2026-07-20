@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CrmApiUser } from "@/data/contracts/api/users";
 import { sessionGrants } from "@/domain/identity/access";
@@ -77,7 +78,19 @@ function UsersTable({ items }: { items: CrmApiUser[] }) {
           {items.map((user) => (
             // userId is the React key only — it is never rendered.
             <tr key={user.userId} className="border-b border-border last:border-0">
-              <td className="px-3 py-2 font-medium text-text-primary">{user.displayName}</td>
+              <td className="px-3 py-2 font-medium">
+                {/*
+                  A real link, not a click-only row: it is keyboard reachable,
+                  carries an accessible name identifying the learner, and uses
+                  the backend's opaque string id verbatim — never a number.
+                */}
+                <Link
+                  href={`/users/${encodeURIComponent(user.userId)}`}
+                  className="text-text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {user.displayName}
+                </Link>
+              </td>
               <td className="px-3 py-2 font-mono text-xs text-text-secondary">
                 {user.email.value}
                 {user.email.visibility === "masked" ? (

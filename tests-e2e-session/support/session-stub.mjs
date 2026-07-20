@@ -30,6 +30,7 @@ const SESSION_PATH = "/api/crm/v1/session";
 const USERS_PATH = "/api/crm/v1/users";
 const STATE_COOKIE = "ata_test_crm_session_state";
 const USERS_STATE_COOKIE = "ata_test_crm_users_state";
+const USER_DETAIL_STATE_COOKIE = "ata_test_crm_user_detail_state";
 
 const VALID_SESSION = {
   employeeId: "emp_stub_7f3a9c",
@@ -60,6 +61,8 @@ function readCookie(header, cookieName, fallback) {
 
 const readStateCookie = (header) => readCookie(header, STATE_COOKIE, "authenticated");
 const readUsersStateCookie = (header) => readCookie(header, USERS_STATE_COOKIE, "populated");
+const readUserDetailStateCookie = (header) =>
+  readCookie(header, USER_DETAIL_STATE_COOKIE, "active");
 
 /* ------------------------------------------------------- synthetic users v1 */
 
@@ -114,6 +117,24 @@ function usersPage(state, url) {
   return {
     items: [0, 1, 2].map((i) => synthUser(i, { visibility })),
     nextCursor: "cursor-page-2",
+  };
+}
+
+/* --------------------------------------------------- synthetic user detail */
+
+// Synthetic only. Shaped exactly like the accepted User Detail v1 contract and
+// carrying no field the backend does not return.
+function synthDetail(userId, over = {}) {
+  return {
+    userId: String(userId),
+    displayName: "Целевой Пользователь",
+    email: { value: "t***@e***.test", visibility: "masked" },
+    status: "active",
+    level: 7,
+    xp: 4242,
+    emailConfirmed: true,
+    createdAt: "2026-01-01T12:00:00.000Z",
+    ...over,
   };
 }
 
@@ -185,14 +206,108 @@ function handleUsers(req, res, url) {
   }
 }
 
+function handleUserDetail(req, res, userId) {
+  const state = readUserDetailStateCookie(req.headers.cookie);
+
+  switch (state) {
+    case "invalid_input":
+      send(res, 400, {
+        code: "invalid_input",
+        messageKey: "crm.users.detail.user_id_invalid",
+        requestId: "req_stub_detail_400",
+      });
+      return;
+    case "unauthenticated":
+      send(res, 401, {
+        code: "unauthorized",
+        messageKey: "crm.session.unauthenticated",
+        requestId: "req_stub_detail_401",
+      });
+      return;
+    case "forbidden":
+      send(res, 403, {
+        code: "unauthorized",
+        messageKey: "crm.session.not_staff",
+        requestId: "req_stub_detail_403",
+      });
+      return;
+    case "not_found":
+    case "staff_hidden":
+    case "system_hidden":
+      // The backend deliberately answers identically for a nonexistent learner,
+      // a staff account and a system account.
+      send(res, 404, {
+        code: "not_found",
+        messageKey: "crm.users.detail.not_found",
+        requestId: "req_stub_detail_404",
+      });
+      return;
+    case "server_error":
+      send(res, 500, {
+        code: "internal",
+        messageKey: "crm.users.detail.internal",
+        requestId: "req_stub_detail_500",
+      });
+      return;
+    case "malformed":
+      send(res, 200, synthDetail(userId, { status: "suspended" }));
+      return;
+    case "malformed_extra_field":
+      send(res, 200, { ...synthDetail(userId), ownerId: "emp_leak" });
+      return;
+    case "not_json":
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+      res.end("<html>not json</html>");
+      return;
+    case "network_failure":
+      req.socket.destroy();
+      return;
+    case "delayed": {
+      // Held open long enough for a test to observe a genuinely in-flight
+      // request. The timer is cleared if the client disconnects first, so no
+      // handle survives into the next test.
+      const timer = setTimeout(() => send(res, 200, synthDetail(userId)), 3_000);
+      res.on("close", () => clearTimeout(timer));
+      return;
+    }
+    case "blocked":
+      send(res, 200, synthDetail(userId, { status: "blocked" }));
+      return;
+    case "full_email":
+      send(res, 200, synthDetail(userId, {
+        email: { value: "target-learner@example.test", visibility: "full" },
+      }));
+      return;
+    case "unconfirmed":
+      send(res, 200, synthDetail(userId, { emailConfirmed: false }));
+      return;
+    case "zero_xp":
+      send(res, 200, synthDetail(userId, { xp: 0, level: 1 }));
+      return;
+    case "active":
+    default:
+      send(res, 200, synthDetail(userId));
+      return;
+  }
+}
+
 const server = createServer((req, res) => {
   // Exactly two routes. Everything else is a hard 404 — the stub must not be
   // able to stand in for any backend surface the rewrite does not expose.
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
   const path = url.pathname;
 
-  if (req.method !== "GET" || (path !== SESSION_PATH && path !== USERS_PATH)) {
+  // Exactly one segment may follow /users/ — nested paths are rejected, so a
+  // notes/owner subroute cannot appear to exist even at the stub layer.
+  const detailMatch = new RegExp(`^${USERS_PATH}/([^/]+)$`).exec(path);
+
+  if (req.method !== "GET" || (path !== SESSION_PATH && path !== USERS_PATH && !detailMatch)) {
     send(res, 404, { error: "not_found" });
+    return;
+  }
+
+  if (detailMatch) {
+    handleUserDetail(req, res, decodeURIComponent(detailMatch[1]));
     return;
   }
 

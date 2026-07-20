@@ -49,15 +49,37 @@ describe("ApiCrmDataProvider — users read", () => {
   it("createApiCrmDataProvider builds the provider", () => {
     expect(createApiCrmDataProvider()).toBeInstanceOf(ApiCrmDataProvider);
   });
+
+  it("delegates getUserDetail to the detail client with the id verbatim", async () => {
+    const listClient = vi.fn(async () => ({ status: "success", page: PAGE }) as const);
+    const detailClient = vi.fn(
+      async (userId: unknown, options?: unknown) => {
+        void userId;
+        void options;
+        return { status: "not_found" } as const;
+      },
+    );
+    const provider = new ApiCrmDataProvider(listClient as never, detailClient as never);
+    const controller = new AbortController();
+
+    const result = await provider.getUserDetail("0071", { signal: controller.signal });
+
+    // The opaque id is passed through untouched — never parsed to a number.
+    expect(detailClient.mock.calls[0]?.[0]).toBe("0071");
+    expect((detailClient.mock.calls[0]?.[1] as { signal?: AbortSignal })?.signal).toBe(controller.signal);
+    expect(result.status).toBe("not_found");
+    expect(listClient).not.toHaveBeenCalled();
+  });
 });
 
 describe("unsupported capabilities fail closed", () => {
-  it("lists exactly one supported capability", () => {
-    expect([...API_SUPPORTED_CAPABILITIES]).toEqual(["listUsers"]);
+  it("lists exactly the two supported capabilities", () => {
+    expect([...API_SUPPORTED_CAPABILITIES]).toEqual(["listUsers", "getUserDetail"]);
   });
 
   it.each([
     "getUser360",
+    "getUserTimeline",
     "getUserNotes",
     "getUserNotesView",
     "addNote",
@@ -75,8 +97,9 @@ describe("unsupported capabilities fail closed", () => {
     expect(() => assertApiCapability(capability)).toThrow(UnsupportedApiCapability);
   });
 
-  it("does not throw for the supported capability", () => {
+  it("does not throw for the supported capabilities", () => {
     expect(() => assertApiCapability("listUsers")).not.toThrow();
+    expect(() => assertApiCapability("getUserDetail")).not.toThrow();
   });
 
   it("exposes no mutation method", () => {
@@ -93,12 +116,12 @@ describe("unsupported capabilities fail closed", () => {
     }
   });
 
-  it("exposes no read method beyond listUsers", () => {
+  it("exposes exactly the two accepted read methods and nothing else", () => {
     const provider = createApiCrmDataProvider();
     const own = Object.getOwnPropertyNames(Object.getPrototypeOf(provider)).filter(
       (n) => n !== "constructor",
     );
-    expect(own).toEqual(["listUsers"]);
+    expect(own.sort()).toEqual(["getUserDetail", "listUsers"]);
   });
 });
 
@@ -122,6 +145,9 @@ describe("the API provider never reaches mock code", () => {
     "src/application/api/users-client.ts",
     "src/features/users-api/api-users-workspace.tsx",
     "src/features/users-api/use-api-users-query.ts",
+    "src/application/api/user-detail-client.ts",
+    "src/features/users-api/api-user-detail-workspace.tsx",
+    "src/features/users-api/use-api-user-detail-query.ts",
   ];
 
   it.each(API_MODULES)("%s imports no mock provider, fixtures or mock users feature", (file) => {
@@ -153,6 +179,9 @@ describe("the API provider never reaches mock code", () => {
       "src/data/api/api-crm-data-provider.ts",
       "src/features/users-api/api-users-workspace.tsx",
       "src/features/users-api/use-api-users-query.ts",
+      "src/application/api/user-detail-client.ts",
+      "src/features/users-api/api-user-detail-workspace.tsx",
+      "src/features/users-api/use-api-user-detail-query.ts",
       "src/components/crm-shell/api-shell.tsx",
     ]) {
       const source = read(file);

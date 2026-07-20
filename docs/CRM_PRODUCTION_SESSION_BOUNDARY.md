@@ -158,13 +158,15 @@ JSON-дампы, `employeeId`, список разрешений, `expiresAt`, `
 
 Это **временная защитная граница**, а не замена `ApiCrmDataProvider`.
 
-> **Обновление (Frontend CRM Users API Slice 1).** Утверждение «все данные CRM
-> отложены» больше не действует целиком: подключена **ровно одна** production-
-> способность — список пользователей (`GET /api/crm/v1/users`, маршрут `/users`)
-> через `ApiCrmDataProvider`. Все остальные разделы — User 360, заметки,
-> владелец, аудит, финансы — по-прежнему отложены, `/users/[id]` остаётся
-> отложенным, и `MockCrmDataProvider` в api-режиме по-прежнему недостижим.
-> Подробности: `docs/CRM_API_USERS_READ.md`.
+> **Обновление (Frontend CRM User Detail API Slice 2).** Утверждение «все данные
+> CRM отложены» больше не действует целиком. Подключены **ровно две**
+> production-способности через `ApiCrmDataProvider`:
+> список пользователей (`GET /api/crm/v1/users`, маршрут `/users`) и основа
+> карточки учащегося (`GET /api/crm/v1/users/{userId}`, маршрут
+> `/users/{userId}`). Всё остальное — заметки, владелец, аудит, финансы,
+> активность, таймлайн, полный User 360 — по-прежнему отложено, а
+> `MockCrmDataProvider` в api-режиме по-прежнему недостижим. Подробности:
+> `docs/CRM_API_USERS_READ.md` и `docs/CRM_API_USER_DETAIL_READ.md`.
 
 Mock-режим продолжает рендерить полный mock-CRM ровно как раньше.
 

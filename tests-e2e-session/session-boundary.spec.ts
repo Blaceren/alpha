@@ -125,7 +125,10 @@ test.describe("same-origin proxy", () => {
     // Slice 1 and is covered by users-api.spec.ts. Everything else must still
     // be unreachable through both the rewrite list and the stub.
     for (const path of [
-      "/api/crm/v1/users/extra",
+      // `/users/{one-segment}` became a reviewed proxied path in Frontend CRM
+      // User Detail API Slice 2, so only NESTED paths are checked here.
+      "/api/crm/v1/users/123/extra",
+      "/api/crm/v1/users/123/notes",
       "/api/crm/v1/notes",
       "/api/crm/v1/owner",
       "/api/crm/v1/audit",

@@ -9,6 +9,7 @@
 declare module "*next.config.mjs" {
   export const SESSION_PATH: string;
   export const USERS_PATH: string;
+  export const USER_DETAIL_PATH: string;
   export const PROXIED_PATHS: string[];
 
   export interface NextRewriteRule {

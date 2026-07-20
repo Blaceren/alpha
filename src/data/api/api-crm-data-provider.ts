@@ -17,13 +17,19 @@ import {
   type FetchUsersOptions,
   type UsersOutcome,
 } from "@/application/api/users-client";
+import {
+  fetchUserDetail,
+  type FetchUserDetailOptions,
+  type UserDetailOutcome,
+} from "@/application/api/user-detail-client";
 
 /**
- * The capability the users-list application boundary needs — and nothing else.
- * A future slice adds a capability by adding a method here, deliberately.
+ * The capabilities the production application boundary needs — and nothing
+ * else. A future slice adds a capability by adding a method here, deliberately.
  */
 export interface CrmUsersReadCapability {
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome>;
+  getUserDetail(userId: string, options?: FetchUserDetailOptions): Promise<UserDetailOutcome>;
 }
 
 /**
@@ -44,7 +50,7 @@ export class UnsupportedApiCapability extends Error {
 }
 
 /** The capabilities that exist in api mode. Everything else fails closed. */
-export const API_SUPPORTED_CAPABILITIES = ["listUsers"] as const;
+export const API_SUPPORTED_CAPABILITIES = ["listUsers", "getUserDetail"] as const;
 export type ApiSupportedCapability = (typeof API_SUPPORTED_CAPABILITIES)[number];
 
 /**
@@ -60,14 +66,22 @@ export function assertApiCapability(capability: string): asserts capability is A
 
 export class ApiCrmDataProvider implements CrmUsersReadCapability {
   /**
-   * `fetchImpl` is an injection seam for tests. Production passes nothing and
-   * the real client is used, which itself calls only a relative URL.
+   * The clients are injection seams for tests. Production passes nothing and
+   * the real clients are used, each of which calls only a relative URL.
    */
-  constructor(private readonly client: typeof fetchUsers = fetchUsers) {}
+  constructor(
+    private readonly listClient: typeof fetchUsers = fetchUsers,
+    private readonly detailClient: typeof fetchUserDetail = fetchUserDetail,
+  ) {}
 
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome> {
     assertApiCapability("listUsers");
-    return this.client(input, options);
+    return this.listClient(input, options);
+  }
+
+  getUserDetail(userId: string, options?: FetchUserDetailOptions): Promise<UserDetailOutcome> {
+    assertApiCapability("getUserDetail");
+    return this.detailClient(userId, options);
   }
 }
 
@@ -80,6 +94,9 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
  * beneath a validated session boundary, which is enforced structurally because
  * the only caller is rendered inside `SessionBoundary`'s authenticated branch.
  */
-export function createApiCrmDataProvider(client?: typeof fetchUsers): ApiCrmDataProvider {
-  return new ApiCrmDataProvider(client);
+export function createApiCrmDataProvider(
+  listClient?: typeof fetchUsers,
+  detailClient?: typeof fetchUserDetail,
+): ApiCrmDataProvider {
+  return new ApiCrmDataProvider(listClient, detailClient);
 }

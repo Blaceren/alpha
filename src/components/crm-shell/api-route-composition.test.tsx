@@ -37,6 +37,19 @@ vi.mock("@/data/api/api-crm-data-provider", async (importOriginal) => {
     ...actual,
     createApiCrmDataProvider: () => ({
       listUsers: async () => ({ status: "success" as const, page: { items: [], nextCursor: null } }),
+      getUserDetail: async () => ({
+        status: "success" as const,
+        detail: {
+          userId: "1000",
+          displayName: "Detail Learner",
+          email: { value: "d***@e***.test", visibility: "masked" as const },
+          status: "active" as const,
+          level: 3,
+          xp: 120,
+          emailConfirmed: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      }),
     }),
   };
 });
@@ -106,15 +119,29 @@ describe("api mode — every other route stays deferred", () => {
     },
   );
 
-  it("/users/[id] stays deferred and never mounts User 360", async () => {
+  it("/users/[id] mounts the production detail foundation, never mock User 360", async () => {
+    // Changed in Frontend CRM User Detail API Slice 2: this route is now
+    // connected. It must still never mount the mock User360Workspace.
     renderAt("/users/1000", "api");
-    expect(await screen.findByText("Раздел ещё не подключён")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Detail Learner" })).toBeInTheDocument();
     expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
-    // No User 360 heading, no notes, no owner affordance.
     const html = document.body.innerHTML;
-    for (const banned of ["Заметки", "Владелец", "Баланс", "User 360"]) {
+    for (const banned of ["Заметки", "Владелец", "Баланс", "User 360", "Активность"]) {
       expect(html).not.toContain(banned);
     }
+  });
+
+  it("an invalid /users/[id] renders the local invalid-id state", async () => {
+    renderAt("/users/mock_user_1", "api");
+    expect(await screen.findByText("Некорректный идентификатор пользователя")).toBeInTheDocument();
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+  });
+
+  it("a nested learner route stays deferred", async () => {
+    // /users/1000/notes has no backend and must not appear to exist.
+    renderAt("/users/1000/notes", "api");
+    expect(await screen.findByText("Раздел ещё не подключён")).toBeInTheDocument();
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
   });
 
   it("the deferred state offers a safe way to the one working section", async () => {

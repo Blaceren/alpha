@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // The real production config module — not a copy. If next.config.mjs drifts,
 // these tests fail.
-import { buildRewrites, SESSION_PATH, USERS_PATH, PROXIED_PATHS } from "../../next.config.mjs";
+import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, PROXIED_PATHS } from "../../next.config.mjs";
 
 describe("rewrites — mock mode", () => {
   it("produces zero rewrites", () => {
@@ -24,8 +24,8 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly two rewrites", () => {
-    expect(buildRewrites(env)).toHaveLength(2);
+  it("produces exactly three rewrite definitions", () => {
+    expect(buildRewrites(env)).toHaveLength(3);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -42,16 +42,45 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the two reviewed paths", () => {
-    expect(PROXIED_PATHS).toEqual(["/api/crm/v1/session", "/api/crm/v1/users"]);
+  it("maps the exact user detail path to the backend", () => {
+    expect(buildRewrites(env)[2]).toEqual({
+      source: "/api/crm/v1/users/:userId",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId",
+    });
+  });
+
+  it("exposes exactly the three reviewed paths", () => {
+    expect(PROXIED_PATHS).toEqual([
+      "/api/crm/v1/session",
+      "/api/crm/v1/users",
+      "/api/crm/v1/users/:userId",
+    ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
+    expect(USER_DETAIL_PATH).toBe("/api/crm/v1/users/:userId");
+  });
+
+  it("keeps the first two entries exact static paths", () => {
+    const rules = buildRewrites(env);
+    expect(rules[0]?.source).not.toContain(":");
+    expect(rules[1]?.source).not.toContain(":");
+  });
+
+  it("gives the detail entry exactly one dynamic segment", () => {
+    const source = buildRewrites(env)[2]?.source ?? "";
+    // One parameter, and it is not a catch-all.
+    expect(source.match(/:/g)).toHaveLength(1);
+    expect(source).not.toContain("*");
+    expect(source.endsWith("/:userId")).toBe(true);
+    // Exactly one segment follows /users/.
+    expect(source.split("/users/")[1]).toBe(":userId");
   });
 
   it("normalizes a trailing slash instead of emitting a double slash", () => {
     const rules = buildRewrites({ ...env, CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110/" });
     expect(rules[0]?.destination).toBe("http://127.0.0.1:3110/api/crm/v1/session");
     expect(rules[1]?.destination).toBe("http://127.0.0.1:3110/api/crm/v1/users");
+    expect(rules[2]?.destination).toBe("http://127.0.0.1:3110/api/crm/v1/users/:userId");
   });
 });
 
@@ -61,11 +90,11 @@ describe("rewrites — no wildcard exposure", () => {
     CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110",
   });
 
-  it("uses no path parameters or wildcards in the source", () => {
+  it("uses no wildcard or catch-all in any source", () => {
     for (const rule of rules) {
       expect(rule.source).not.toContain(":path");
       expect(rule.source).not.toContain("*");
-      expect(rule.source).not.toContain(":");
+      expect(rule.source).not.toContain("...");
     }
   });
 
@@ -73,7 +102,11 @@ describe("rewrites — no wildcard exposure", () => {
     // Anything other than the two reviewed paths must be unreachable through
     // this config — including sibling auth, health and CSRF routes.
     const sources = rules.map((r) => r.source);
-    expect(sources).toEqual(["/api/crm/v1/session", "/api/crm/v1/users"]);
+    expect(sources).toEqual([
+      "/api/crm/v1/session",
+      "/api/crm/v1/users",
+      "/api/crm/v1/users/:userId",
+    ]);
     for (const forbidden of [
       "/api/:path*",
       "/api/crm/v1/:path*",
@@ -87,6 +120,22 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/user-360",
     ]) {
       expect(sources).not.toContain(forbidden);
+    }
+  });
+
+  it("exposes no nested learner subroute", () => {
+    // A single-segment parameter cannot match a deeper path, so notes/owner/
+    // audit under a learner are structurally unreachable through the proxy.
+    const sources = rules.map((r) => r.source);
+    for (const nested of [
+      "/api/crm/v1/users/:userId/notes",
+      "/api/crm/v1/users/:userId/owner",
+      "/api/crm/v1/users/:userId/audit",
+      "/api/crm/v1/users/:userId/:sub",
+      "/api/crm/v1/users/:userId*",
+      "/api/crm/v1/users/:path*",
+    ]) {
+      expect(sources).not.toContain(nested);
     }
   });
 

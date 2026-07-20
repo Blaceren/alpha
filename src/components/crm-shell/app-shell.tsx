@@ -8,6 +8,7 @@ import { MockSessionProvider, useSession } from "./session-context";
 import { SessionBoundary } from "./session-boundary";
 import { ApiShell, ApiRouteDeferred, API_USERS_PATH } from "./api-shell";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
+import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
@@ -66,12 +67,17 @@ export function AppShell({
  * provider in api mode, so mounting one could only fail or lie. Instead this
  * decides what to show from the pathname alone:
  *
- *   /users            -> the production Users v1 list, the one connected capability
- *   anything else     -> the truthful deferred state, including /users/[id],
- *                        which must not mount User360Workspace or fetch a
- *                        User 360 endpoint that does not exist.
+ *   /users            -> the production Users v1 list
+ *   /users/{id}       -> the production learner detail foundation. `{id}` is a
+ *                        single segment; the workspace itself validates it and
+ *                        renders a local invalid-id state without a request.
+ *                        This is NOT the mock User360Workspace — that aggregate
+ *                        has no backend and is never mounted in api mode.
+ *   anything else     -> the truthful deferred state, including any nested
+ *                        route under a learner (notes, owner, …), which has no
+ *                        backend and must not appear to exist.
  *
- * Matching `/users` exactly (not a prefix) is what keeps `/users/123` deferred.
+ * Matching exactly (not by prefix) is what keeps `/users/123/notes` deferred.
  */
 function ApiModeLanding() {
   const { session } = useSession();
@@ -81,6 +87,16 @@ function ApiModeLanding() {
     return (
       <ApiShell session={session}>
         <ApiUsersWorkspace />
+      </ApiShell>
+    );
+  }
+
+  // Exactly one segment after /users/ — `/users/123/notes` does not match.
+  const detail = /^\/users\/([^/]+)$/.exec(pathname ?? "");
+  if (detail) {
+    return (
+      <ApiShell session={session}>
+        <ApiUserDetailWorkspace userId={decodeURIComponent(detail[1] ?? "")} />
       </ApiShell>
     );
   }
