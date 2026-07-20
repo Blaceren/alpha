@@ -275,9 +275,12 @@ async function main() {
     });
 
     await check("20. no CRM notes / owner / User360 routes exist yet", () => {
+      // `users` joined the accepted CRM v1 surface in Backend CRM Users Slice 2
+      // (GET /api/crm/v1/users). Every other route stays banned, so this guard
+      // still proves notes, owner, audit and User 360 have not appeared.
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session"]);
-      for (const banned of ["notes", "owner", "owners", "owner-candidates", "users", "360"]) {
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session", "users"]);
+      for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
       }
       assert.ok(!("crmNote" in prisma), "unexpected CrmNote model");

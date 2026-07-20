@@ -19,6 +19,36 @@ export const crmSessionResponseSchema = z
 
 export type CrmSessionResponse = z.infer<typeof crmSessionResponseSchema>;
 
+// Runtime contract for the CRM users list (v1). Strict at every level so an
+// extra key — a stray financial field, an owner id, a raw Prisma column —
+// fails serialization here instead of reaching the client.
+export const crmUserListItemSchema = z
+  .object({
+    // User.id serialized as an opaque decimal string. Clients must not parse it.
+    userId: z.string().min(1),
+    displayName: z.string().min(1),
+    email: z
+      .object({
+        value: z.string().min(1),
+        visibility: z.enum(["full", "masked"]),
+      })
+      .strict(),
+    status: z.enum(["active", "blocked"]),
+    level: z.number().int(),
+    emailConfirmed: z.boolean(),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+
+export const crmUsersResponseSchema = z
+  .object({
+    items: z.array(crmUserListItemSchema),
+    nextCursor: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type CrmUsersResponse = z.infer<typeof crmUsersResponseSchema>;
+
 // Safe CRM error envelope. Never carries raw exceptions or resource existence.
 export const crmErrorResponseSchema = z
   .object({
