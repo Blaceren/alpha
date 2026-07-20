@@ -41,8 +41,13 @@ test.describe("authenticated", () => {
     await useState(page, "authenticated");
     await page.goto("/today");
 
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
-    await expect(page.getByText("Подключение данных CRM будет добавлено следующим этапом.")).toBeVisible();
+    // /today has no API data, so it renders the deferred state. The copy now
+    // names the one connected capability (Users) instead of claiming that all
+    // CRM data is pending — see Frontend CRM Users API Slice 1.
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
+    await expect(
+      page.getByText("Из данных CRM сейчас доступен только список", { exact: false }),
+    ).toBeVisible();
 
     // The employee is named, and the role is a safe label.
     await expect(page.getByText("Ирина Соколова")).toBeVisible();
@@ -52,7 +57,7 @@ test.describe("authenticated", () => {
   test("no mock CRM data reaches the screen", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const html = await page.content();
     // Fixture names, buckets and workspace chrome from the mock dataset.
@@ -66,7 +71,7 @@ test.describe("authenticated", () => {
   test("no sensitive session field is rendered", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const html = await page.content();
     for (const secret of [
@@ -83,7 +88,7 @@ test.describe("authenticated", () => {
   test("the dev role switch is absent for a backend session", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
     await expect(page.getByText("Демо-роль (только dev)")).toHaveCount(0);
     await expect(page.getByText("Роль:")).toHaveCount(0);
   });
@@ -96,7 +101,7 @@ test.describe("same-origin proxy", () => {
 
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const sessionCalls = requested.filter((u) => u.includes("/api/crm/v1/session"));
     expect(sessionCalls.length).toBeGreaterThan(0);
@@ -116,10 +121,14 @@ test.describe("same-origin proxy", () => {
   });
 
   test("no other backend path is exposed through the proxy", async ({ request }) => {
-    // The stub 404s anything but the session route, and the rewrite only maps
-    // that one path, so neither layer can serve these.
+    // `users` joined the reviewed proxy surface in Frontend CRM Users API
+    // Slice 1 and is covered by users-api.spec.ts. Everything else must still
+    // be unreachable through both the rewrite list and the stub.
     for (const path of [
-      "/api/crm/v1/users",
+      "/api/crm/v1/users/extra",
+      "/api/crm/v1/notes",
+      "/api/crm/v1/owner",
+      "/api/crm/v1/audit",
       "/api/crm/v1/",
       "/api/crm/v1/session/extra",
       "/api/auth/login",
@@ -139,7 +148,7 @@ test.describe("401 unauthenticated", () => {
     await expect(page).toHaveURL(/\/login\?reason=session_required$/);
     await expect(page.getByRole("heading", { name: "Alfa Trade Academy CRM" })).toBeVisible();
     const html = await page.content();
-    expect(html).not.toContain("Сессия сотрудника подтверждена");
+    expect(html).not.toContain("Раздел ещё не подключён");
   });
 });
 
@@ -150,7 +159,7 @@ test.describe("403 forbidden", () => {
 
     await expect(page.getByText("Нет доступа к CRM")).toBeVisible();
     await expect(page.getByRole("navigation")).toHaveCount(0);
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toHaveCount(0);
+    await expect(page.getByText("Раздел ещё не подключён")).toHaveCount(0);
   });
 
   test("shows the requestId but not the backend message key", async ({ page }) => {
@@ -193,7 +202,7 @@ test.describe("upstream and malformed", () => {
     await page.goto("/today");
 
     await expect(page.getByText("Некорректный ответ сервиса")).toBeVisible();
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toHaveCount(0);
+    await expect(page.getByText("Раздел ещё не подключён")).toHaveCount(0);
   });
 
   test("an unexpected sensitive field fails closed and never renders", async ({ page }) => {
@@ -220,7 +229,7 @@ test.describe("upstream and malformed", () => {
     await useState(page, "authenticated");
     await page.getByRole("button", { name: "Повторить" }).click();
 
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 });
@@ -229,13 +238,13 @@ test.describe("security regressions", () => {
   test("a stored mock crm_admin role cannot elevate an API session", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     // Plant the dev role key and reload: the backend session must be unchanged.
     await page.evaluate((key) => window.localStorage.setItem(key, "crm_admin"), MOCK_ROLE_KEY);
     await page.reload();
 
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
     // Still the backend's role, not the planted one.
     await expect(page.getByText("Support")).toBeVisible();
     await expect(page.getByText("Администратор CRM")).toHaveCount(0);
@@ -245,7 +254,7 @@ test.describe("security regressions", () => {
   test("api mode never writes the mock role key", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const stored = await page.evaluate((key) => window.localStorage.getItem(key), MOCK_ROLE_KEY);
     expect(stored).toBeNull();
@@ -255,7 +264,7 @@ test.describe("security regressions", () => {
     await useState(page, "admin_no_permissions");
     await page.goto("/today");
 
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
     // The role label is honest…
     await expect(page.getByText("Администратор CRM")).toBeVisible();
 
@@ -276,7 +285,7 @@ test.describe("security regressions", () => {
   test("the backend origin never reaches the browser", async ({ page }) => {
     await useState(page, "authenticated");
     await page.goto("/today");
-    await expect(page.getByText("Сессия сотрудника подтверждена")).toBeVisible();
+    await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const html = await page.content();
     expect(html).not.toContain("3110");

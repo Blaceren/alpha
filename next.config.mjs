@@ -29,12 +29,17 @@ function parseBackendOrigin(raw) {
 }
 
 /**
- * Exactly one path is proxied. Not `/api/crm/v1/:path*`, not `/api/:path*`:
- * a wildcard would expose every current and future backend route through the
- * CRM's origin, including ones never reviewed for it. Widening this must be a
- * deliberate decision each time, never a default.
+ * Every proxied path is listed here explicitly. Not `/api/crm/v1/:path*`, not
+ * `/api/:path*`: a wildcard would expose every current and future backend route
+ * through the CRM's origin, including ones never reviewed for it. Each addition
+ * is a deliberate decision, never a default — and each entry is an exact path,
+ * so `/api/crm/v1/users/123` and `/api/crm/v1/users/extra` are not proxied.
  */
 export const SESSION_PATH = "/api/crm/v1/session";
+export const USERS_PATH = "/api/crm/v1/users";
+
+/** The complete set of backend paths the CRM origin may forward. */
+export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH];
 
 export function buildRewrites(envSource = process.env) {
   const mode = envSource.CRM_MODE;
@@ -50,7 +55,7 @@ export function buildRewrites(envSource = process.env) {
     );
   }
 
-  return [{ source: SESSION_PATH, destination: `${origin}${SESSION_PATH}` }];
+  return PROXIED_PATHS.map((path) => ({ source: path, destination: `${origin}${path}` }));
 }
 
 /** @type {import('next').NextConfig} */

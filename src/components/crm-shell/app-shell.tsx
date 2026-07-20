@@ -3,8 +3,11 @@
 import * as React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { usePathname } from "next/navigation";
 import { MockSessionProvider, useSession } from "./session-context";
-import { SessionBoundary, ApiSessionConfirmed } from "./session-boundary";
+import { SessionBoundary } from "./session-boundary";
+import { ApiShell, ApiRouteDeferred, API_USERS_PATH } from "./api-shell";
+import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
@@ -56,13 +59,33 @@ export function AppShell({
 }
 
 /**
- * The api-mode landing. `children` — the CRM feature routes — are deliberately
- * NOT rendered: they read through `getCrmDataProvider`, which in api mode has no
- * implementation and refuses to hand back the mock one.
+ * api-mode route composition.
+ *
+ * `children` — the mock feature routes — are NEVER rendered here. Every mock
+ * page reads through `getCrmDataProvider`, which refuses to hand back the mock
+ * provider in api mode, so mounting one could only fail or lie. Instead this
+ * decides what to show from the pathname alone:
+ *
+ *   /users            -> the production Users v1 list, the one connected capability
+ *   anything else     -> the truthful deferred state, including /users/[id],
+ *                        which must not mount User360Workspace or fetch a
+ *                        User 360 endpoint that does not exist.
+ *
+ * Matching `/users` exactly (not a prefix) is what keeps `/users/123` deferred.
  */
 function ApiModeLanding() {
   const { session } = useSession();
-  return <ApiSessionConfirmed session={session} />;
+  const pathname = usePathname();
+
+  if (pathname === API_USERS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <ApiUsersWorkspace />
+      </ApiShell>
+    );
+  }
+
+  return <ApiRouteDeferred session={session} />;
 }
 
 /** Sidebar + topbar + content region. Mock mode only, unchanged from Phase 1A. */

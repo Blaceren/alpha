@@ -1,0 +1,266 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import type { CrmApiUser } from "@/data/contracts/api/users";
+import { sessionGrants } from "@/domain/identity/access";
+import { useSession } from "@/components/crm-shell/session-context";
+import { LOGIN_REDIRECT } from "@/components/crm-shell/session-boundary";
+import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { useApiUsersQuery } from "./use-api-users-query";
+
+/**
+ * Production Users v1 list.
+ *
+ * Deliberately NOT the mock `UsersWorkspace`: the backend has no owner, notes,
+ * financial, lifecycle or activity data, so this renders only what is truthful.
+ * Rows are not clickable — User 360 has no API yet, and a dead link would imply
+ * otherwise.
+ */
+
+const STATUS_LABEL: Record<CrmApiUser["status"], string> = {
+  active: "Активен",
+  blocked: "Заблокирован",
+};
+
+/** Deterministic, locale-safe date. Avoids host-locale drift between runs. */
+export function formatRegisteredAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}.${date.getUTCFullYear()}`;
+}
+
+function Panel({
+  title,
+  description,
+  children,
+  tone = "status",
+}: {
+  title: string;
+  description: string;
+  children?: React.ReactNode;
+  tone?: "status" | "alert";
+}) {
+  return (
+    <div
+      role={tone}
+      aria-live="polite"
+      className="rounded-lg border border-border bg-surface p-6 text-center"
+    >
+      <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">{description}</p>
+      {children}
+    </div>
+  );
+}
+
+function UsersTable({ items }: { items: CrmApiUser[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface text-left text-2xs uppercase tracking-wide text-text-muted">
+            <th scope="col" className="px-3 py-2 font-medium">Имя</th>
+            <th scope="col" className="px-3 py-2 font-medium">Email</th>
+            <th scope="col" className="px-3 py-2 font-medium">Статус</th>
+            <th scope="col" className="px-3 py-2 font-medium">Уровень</th>
+            <th scope="col" className="px-3 py-2 font-medium">Email подтверждён</th>
+            <th scope="col" className="px-3 py-2 font-medium">Регистрация</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((user) => (
+            // userId is the React key only — it is never rendered.
+            <tr key={user.userId} className="border-b border-border last:border-0">
+              <td className="px-3 py-2 font-medium text-text-primary">{user.displayName}</td>
+              <td className="px-3 py-2 font-mono text-xs text-text-secondary">
+                {user.email.value}
+                {user.email.visibility === "masked" ? (
+                  <span className="sr-only"> (скрытый адрес)</span>
+                ) : null}
+              </td>
+              <td className="px-3 py-2">
+                <Badge tone={user.status === "active" ? "success" : "danger"}>
+                  {STATUS_LABEL[user.status]}
+                </Badge>
+              </td>
+              <td className="px-3 py-2 tabular-nums text-text-secondary">{user.level}</td>
+              <td className="px-3 py-2 text-text-secondary">
+                {user.emailConfirmed ? "Подтверждён" : "Не подтверждён"}
+              </td>
+              <td className="px-3 py-2 tabular-nums text-text-secondary">
+                {formatRegisteredAt(user.createdAt)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapability }) {
+  const router = useRouter();
+  const { session } = useSession();
+
+  // Authority is the backend's effectivePermissions — never the role.
+  const canSearchEmail = sessionGrants(session, "view_identity_full_email");
+
+  const q = useApiUsersQuery({ canSearchEmail, provider });
+
+  // A 401 means the employee session is no longer valid. Redirect rather than
+  // render, and never show the rows that were on screen a moment ago.
+  React.useEffect(() => {
+    if (q.state.kind === "unauthenticated") router.replace(LOGIN_REDIRECT);
+  }, [q.state.kind, router]);
+
+  const searchLabel = canSearchEmail ? "Имя или email" : "Имя";
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-base font-semibold text-text-primary">Пользователи</h1>
+        <p className="mt-1 text-xs text-text-muted">
+          Данные загружаются из backend CRM. Часть разделов ещё не подключена.
+        </p>
+      </div>
+
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          q.submitSearch();
+        }}
+      >
+        <div className="min-w-[220px] flex-1">
+          <label htmlFor="api-users-search" className="block text-2xs text-text-muted">
+            {searchLabel}
+          </label>
+          <input
+            id="api-users-search"
+            type="text"
+            value={q.searchInput}
+            onChange={(event) => q.setSearchInput(event.target.value)}
+            maxLength={200}
+            className="mt-1 w-full rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-describedby={q.localSearchError ? "api-users-search-error" : undefined}
+          />
+        </div>
+        <Button type="submit">Найти</Button>
+        {q.appliedSearch || q.searchInput ? (
+          <Button type="button" variant="secondary" onClick={q.clearSearch}>
+            Сбросить
+          </Button>
+        ) : null}
+      </form>
+
+      {q.localSearchError ? (
+        <p id="api-users-search-error" role="alert" className="text-xs text-danger">
+          {q.localSearchError}
+        </p>
+      ) : null}
+
+      {q.state.kind === "loading" || q.state.kind === "retrying" ? (
+        <div role="status" aria-live="polite">
+          <span className="sr-only">Загружаем список пользователей</span>
+          <SkeletonRows rows={5} />
+        </div>
+      ) : null}
+
+      {q.state.kind === "ready" && q.state.items.length > 0 ? (
+        <>
+          <UsersTable items={q.state.items} />
+          <div className="flex items-center justify-between gap-3">
+            {/* No total exists, so there is no "страница X из Y" — only a position. */}
+            <p className="text-2xs text-text-muted">Страница {q.pageNumber}</p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={q.previousPage}
+                disabled={!q.canGoPrevious}
+              >
+                Предыдущая
+              </Button>
+              <Button type="button" onClick={q.nextPage} disabled={!q.canGoNext}>
+                Следующая
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {q.state.kind === "ready" && q.state.items.length === 0 ? (
+        <Panel
+          title="Ничего не найдено"
+          description={
+            q.appliedSearch
+              ? "По этому запросу пользователей нет. Измените запрос или сбросьте поиск."
+              : "Пользователи не найдены."
+          }
+        />
+      ) : null}
+
+      {q.state.kind === "invalid_input" ? (
+        <Panel
+          tone="alert"
+          title="Некорректный запрос"
+          description="Сервис не принял параметры поиска. Измените запрос и попробуйте снова."
+        >
+          {q.state.requestId ? (
+            <p className="mt-3 text-2xs text-text-muted">
+              Код обращения: <span className="font-mono">{q.state.requestId}</span>
+            </p>
+          ) : null}
+        </Panel>
+      ) : null}
+
+      {q.state.kind === "unauthenticated" ? (
+        <Panel title="Требуется вход" description="Перенаправляем на страницу входа…" />
+      ) : null}
+
+      {q.state.kind === "forbidden" ? (
+        <Panel
+          tone="alert"
+          title="Нет доступа к данным CRM"
+          description="У вашей учётной записи нет доступа к списку пользователей. Обратитесь к администратору CRM."
+        >
+          {q.state.requestId ? (
+            <p className="mt-3 text-2xs text-text-muted">
+              Код обращения: <span className="font-mono">{q.state.requestId}</span>
+            </p>
+          ) : null}
+        </Panel>
+      ) : null}
+
+      {q.state.kind === "upstream_unavailable" ? (
+        <Panel
+          tone="alert"
+          title="Сервис недоступен"
+          description="Не удалось загрузить список пользователей. Попробуйте ещё раз."
+        >
+          <Button className="mt-4" onClick={q.retry}>
+            Повторить
+          </Button>
+        </Panel>
+      ) : null}
+
+      {q.state.kind === "malformed" ? (
+        <Panel
+          tone="alert"
+          title="Некорректный ответ сервиса"
+          description="Ответ сервиса не прошёл проверку. Данные не показаны. Попробуйте ещё раз."
+        >
+          <Button className="mt-4" onClick={q.retry}>
+            Повторить
+          </Button>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
