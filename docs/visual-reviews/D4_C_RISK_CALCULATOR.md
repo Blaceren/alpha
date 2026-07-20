@@ -68,9 +68,9 @@ minor-пункты явно обоснованы выше.
 |----------|-----------|
 | 1440×900 desktop | три зоны (входы · Price Rail · ledger), rail доминирует; overflow 0 |
 | 1024×768 tablet | Price Rail остаётся primary, сбалансированные три зоны, без cramped-сжатия; overflow 0 |
-| 390×844 mobile | горизонтальный measured bar, входы в потоке, valid → компактная strip над nav; overflow ≤1px |
-| 320×720 small | без клиппинга, strip компактна; overflow ≤1px |
-| 720×450 (200% zoom) | компактный reflow, входы стопкой, strip над nav; overflow 0 |
+| 390×844 mobile | горизонтальный measured bar, входы в потоке, valid → компактная strip над nav; **0 CSS-pixel page overflow** |
+| 320×720 small | без клиппинга, strip компактна; **0 CSS-pixel page overflow** |
+| 720×450 (200% zoom) | компактный reflow, входы стопкой, strip над nav; **0 CSS-pixel page overflow** |
 
 ## 7. Состояния empty / partial / invalid / long / short
 
@@ -87,7 +87,7 @@ minor-пункты явно обоснованы выше.
 
 | Проверка | результат |
 |----------|-----------|
-| Horizontal overflow | 0 на 1440/1024/720; ≤1px на 390/320 (E2E) |
+| Horizontal overflow | **0 CSS-pixel page overflow** на всех viewport'ах. D4-C acceptance closure: измерено точно — `documentElement.scrollWidth === clientWidth` и `body.scrollWidth === clientWidth` (ровно равны) на 390×844, 320×720 и 720×450@200% в состояниях hub/empty/valid-strip/invalid; `devicePixelRatio = 1`. Прежний «≤1px» был субпиксельным guard'ом, а не измеренным overflow'ом; E2E-ассерты ужесточены до точного целочисленного равенства (`toBe`). Ложные срабатывания фильтра offenders — `p.sr-only` (стандартный 1px screen-reader clip, не влияет на page scroll) и внутренняя плотность `.rc-strip-k` на 320 (right ≤ viewport, не page overflow). |
 | Safe-area / bottom-nav | strip держится над nav+safe-area; последний контрол очищает nav |
 | Reduced-motion | `prefers-reduced-motion: reduce` убирает transition band-линии и анимацию появления strip |
 | Клавиатура / фокус | порядок вход → результат → дисклеймер; видимый focus-ring (токен); нет авто-фокуса, крадущего фокус |

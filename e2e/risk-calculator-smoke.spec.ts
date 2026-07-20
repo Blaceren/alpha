@@ -45,10 +45,25 @@ async function fill(
   if (v.stop !== undefined) await page.getByLabel("Стоп-цена").fill(v.stop);
 }
 
-async function overflow(page: Page): Promise<number> {
-  return page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
+/**
+ * Read the four page-level scroll/client widths. Page overflow is decided by
+ * EXACT integer equality of these — no tolerance (D4-C acceptance closure): the
+ * ≤1px figure was a subpixel guard, but the real value is exactly 0 here.
+ */
+async function pageWidths(page: Page) {
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate(() => ({
+    documentScrollWidth: document.documentElement.scrollWidth,
+    documentClientWidth: document.documentElement.clientWidth,
+    bodyScrollWidth: document.body.scrollWidth,
+    bodyClientWidth: document.body.clientWidth,
+  }));
+}
+
+async function expectNoPageOverflow(page: Page, label: string) {
+  const w = await pageWidths(page);
+  expect(w.documentScrollWidth, `documentElement @ ${label}`).toBe(w.documentClientWidth);
+  expect(w.bodyScrollWidth, `body @ ${label}`).toBe(w.bodyClientWidth);
 }
 
 test("1-2 · Артём L18 hub shows «Открыть калькулятор» that opens the calculator route", async ({
@@ -203,15 +218,39 @@ test("14-15 · mobile valid state shows the compact strip clearing the bottom na
   expect(sBox!.y + sBox!.height).toBeLessThanOrEqual(nBox!.y + 1);
 });
 
-test("16 · no horizontal overflow at 390×844 and 320×720 (empty + valid)", async ({ page }) => {
-  for (const size of [VIEWPORTS.mobile, VIEWPORTS.small]) {
-    await page.setViewportSize(size);
+test("16 · EXACT zero page overflow at 390×844, 320×720 and 720×450 (hub/empty/valid/invalid)", async ({
+  page,
+}) => {
+  const configs = [
+    { width: 390, height: 844, name: "390x844" },
+    { width: 320, height: 720, name: "320x720" },
+    { width: 720, height: 450, name: "720x450@200%" },
+  ];
+  for (const size of configs) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+
+    // Tools Hub with the Risk Calculator CTA (mobile hub state).
+    await page.goto("/tools?scenario=active", { waitUntil: "networkidle" });
+    await ready(page);
+    await expectNoPageOverflow(page, `hub ${size.name}`);
+
+    // Empty calculator.
     await page.goto(RISK, { waitUntil: "networkidle" });
     await ready(page);
-    expect(await overflow(page), `empty @ ${size.width}`).toBeLessThanOrEqual(1);
+    await expectNoPageOverflow(page, `empty ${size.name}`);
+
+    // Valid long → the compact mobile result strip is mounted.
     await fill(page, { capital: "1000000", risk: "2", entry: "100", stop: "96" });
     await ready(page);
-    expect(await overflow(page), `valid @ ${size.width}`).toBeLessThanOrEqual(1);
+    await expect(page.locator(".rc-ledger-row.is-on")).toHaveCount(4);
+    await expectNoPageOverflow(page, `valid-strip ${size.name}`);
+
+    // Invalid (equal entry/stop) → no strip.
+    await page.goto(RISK, { waitUntil: "networkidle" });
+    await fill(page, { capital: "1000", risk: "2", entry: "100", stop: "100" });
+    await ready(page);
+    await expect(page.locator(".rc-strip")).toHaveCount(0);
+    await expectNoPageOverflow(page, `invalid ${size.name}`);
   }
 });
 
