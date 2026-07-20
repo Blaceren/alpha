@@ -25,7 +25,12 @@ const KEY_V2 = "ata.report-workspace.v2";
 // read-BACK of a value the app just wrote must target v3, the key it actually
 // writes. v1/v2 keys are migration sources only: never written, never deleted.
 const KEY_V3 = "ata.report-workspace.v3";
-const SAVE_SETTLE = 900; // debounce (600ms) + margin
+// Bounded upper wait for two environment-dependent things the old fixed
+// `waitForTimeout(900)` could not guarantee on a cold Linux dev server: React
+// hydration of the report client component, and the 600ms autosave debounce.
+// The waits below are CONDITION-based (poll the app's own state) and only use
+// this value as a ceiling — never as a sleep.
+const SETTLE_TIMEOUT = 10_000;
 
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 390, height: 844 };
@@ -115,6 +120,28 @@ const jumpToEntry = (page: Page) =>
   page.getByRole("button", { name: "Запись 03 · Что заметил после сделки" });
 const jumpToSummary = (page: Page) =>
   page.getByRole("button", { name: "Итоговое наблюдение", exact: true });
+
+/**
+ * Edit the currently-open flagged field so the change actually REGISTERS in the
+ * hydrated app, then wait for the app's own reaction (resubmit enabled).
+ *
+ * Why the retry: in this Chromium/dev build a `fill()` dispatched before React
+ * attaches its controlled `onChange` is reverted to the seeded value on
+ * hydration, so the change never registers and the button stays disabled — the
+ * exact Linux failure this file is hardening. `canResubmit` is derived from
+ * in-memory draft state on the change event (no debounce), so re-applying the
+ * fill until the button enables converges the moment hydration lands. This never
+ * conceals a product defect: it can only succeed when the product itself enables
+ * resubmit in response to a real, present edit.
+ */
+async function editMarkedUntilResubmitReady(page: Page, value: string) {
+  const field = noticedField(page);
+  await expect(async () => {
+    await field.fill(value);
+    await expect(field).toHaveValue(value);
+    await expect(resubmitButton(page)).toBeEnabled({ timeout: 1_000 });
+  }).toPass({ timeout: SETTLE_TIMEOUT });
+}
 
 async function assertNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
@@ -259,13 +286,11 @@ test.describe("revision — editing and resubmit", () => {
     await expect(page.getByText("Внесите изменения после комментария проверки.")).toBeVisible();
     await expect(resubmitButton(page)).toBeDisabled();
 
-    await noticedField(page).fill("наблюдение по сделке 3 — условие записано до входа");
-    await page.waitForTimeout(SAVE_SETTLE);
+    await editMarkedUntilResubmitReady(page, "наблюдение по сделке 3 — условие записано до входа");
 
     await expect(
       page.getByText("Есть изменения после вердикта — можно отправить на проверку повторно."),
     ).toBeVisible();
-    await expect(resubmitButton(page)).toBeEnabled();
   });
 
   test("7. editing an UNMARKED field also counts — guidance, not a validator", async ({ page }) => {
@@ -273,11 +298,16 @@ test.describe("revision — editing and resubmit", () => {
     await page.setViewportSize(DESKTOP);
     await page.goto(REPORT);
 
-    await page.getByRole("button", { name: /^Запись 1: заполнена/ }).click();
-    await noticedField(page).fill("наблюдение по сделке 1 — дополнено");
-    await page.waitForTimeout(SAVE_SETTLE);
+    // Opening entry 1 is a client-only accordion transition; retry until the app
+    // actually switches (a click dispatched before hydration is a no-op).
+    await expect(async () => {
+      await page.getByRole("button", { name: /^Запись 1: заполнена/ }).click();
+      await expect(page.getByRole("heading", { level: 3, name: "Запись 1" })).toBeVisible({
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: SETTLE_TIMEOUT });
 
-    await expect(resubmitButton(page)).toBeEnabled();
+    await editMarkedUntilResubmitReady(page, "наблюдение по сделке 1 — дополнено");
   });
 
   test("8. a whitespace-only edit does NOT unlock resubmit", async ({ page }) => {
@@ -286,9 +316,13 @@ test.describe("revision — editing and resubmit", () => {
     await page.goto(REPORT);
 
     const original = await noticedField(page).inputValue();
-    await noticedField(page).fill(`${original}   `);
-    await page.waitForTimeout(SAVE_SETTLE);
+    // Prove the field is interactive with a real change (button enables), THEN
+    // show that reverting to whitespace-only does not keep it enabled. Without
+    // the first step a lost pre-hydration fill could leave the button disabled
+    // for the wrong reason and pass vacuously.
+    await editMarkedUntilResubmitReady(page, `${original} — существенное изменение`);
 
+    await noticedField(page).fill(`${original}   `);
     await expect(resubmitButton(page)).toBeDisabled();
     await expect(page.getByText("Внесите изменения после комментария проверки.")).toBeVisible();
   });
@@ -300,8 +334,7 @@ test.describe("revision — editing and resubmit", () => {
     await page.setViewportSize(DESKTOP);
     await page.goto(REPORT);
 
-    await noticedField(page).fill("наблюдение по сделке 3 — условие записано");
-    await page.waitForTimeout(SAVE_SETTLE);
+    await editMarkedUntilResubmitReady(page, "наблюдение по сделке 3 — условие записано");
     await resubmitButton(page).click();
 
     const dialog = page.getByRole("dialog");
@@ -336,8 +369,7 @@ test.describe("revision — editing and resubmit", () => {
 
 test.describe("revision — after resubmit", () => {
   async function resubmit(page: Page) {
-    await noticedField(page).fill("наблюдение по сделке 3 — условие записано до входа");
-    await page.waitForTimeout(SAVE_SETTLE);
+    await editMarkedUntilResubmitReady(page, "наблюдение по сделке 3 — условие записано до входа");
     await resubmitButton(page).click();
     await page.getByRole("dialog").getByRole("button", { name: "Отправить повторно" }).click();
   }
@@ -443,8 +475,14 @@ test.describe("revision — storage", () => {
 
     // Editing writes v3; the legacy v1 key stays on disk untouched, and v2 — a key
     // this migration path never went through — is never created.
-    await noticedField(page).fill("запись из v1 номер 1 — дополнено");
-    await page.waitForTimeout(SAVE_SETTLE);
+    // Re-apply the edit until it has actually autosaved to v3. The retry absorbs
+    // the pre-hydration fill-revert; the ≥700ms spacing lets the 600ms autosave
+    // debounce fire between attempts (a tighter loop would keep resetting it).
+    await expect(async () => {
+      await noticedField(page).fill("запись из v1 номер 1 — дополнено");
+      const v3 = await page.evaluate((k) => window.localStorage.getItem(k) ?? "", KEY_V3);
+      expect(v3).toContain("дополнено");
+    }).toPass({ timeout: SETTLE_TIMEOUT, intervals: [700, 700, 700, 700, 700] });
     const keys = await page.evaluate(
       ([k1, k2, k3]) => ({
         v1: window.localStorage.getItem(k1!),

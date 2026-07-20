@@ -329,17 +329,31 @@ describe("Trading Journal — populated, collapse/expand, edit", () => {
 describe("Trading Journal — storage failure & corruption", () => {
   it("a failed write shows an honest error, not a false success", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+    // In this jsdom build `window.localStorage` is a native Storage PROXY: its
+    // `setItem` lives on the prototype and the instance rejects an own-property
+    // shadow, so `vi.spyOn(window.localStorage, "setItem")` silently fails to
+    // intercept the real call. Spy the actual invoked implementation on the
+    // prototype instead, and always restore it so the throwing mock never leaks
+    // into the next test (which itself writes to localStorage).
+    const storageProto = Object.getPrototypeOf(window.localStorage);
+    const setItemSpy = vi.spyOn(storageProto, "setItem").mockImplementation(() => {
       throw new Error("quota");
     });
-    render(<TradingJournalWorkspace />);
-    await user.click(screen.getByRole("button", { name: /Добавить первую запись/ }));
-    fillForm(COMPLETE);
-    await user.click(screen.getByRole("button", { name: /Добавить запись/ }));
-    // No fabricated success: the entry is not shown, and the error is stated.
-    expect(screen.getAllByText(/не удалось сохранить/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Результат сделки/)).toBeNull();
-    expect(window.localStorage.getItem(TRADING_JOURNAL_STORAGE_KEY)).toBeNull();
+    try {
+      render(<TradingJournalWorkspace />);
+      await user.click(screen.getByRole("button", { name: /Добавить первую запись/ }));
+      fillForm(COMPLETE);
+      await user.click(screen.getByRole("button", { name: /Добавить запись/ }));
+      // The failing write path must actually have been exercised — otherwise the
+      // "honest error" assertions below could pass vacuously.
+      expect(setItemSpy).toHaveBeenCalled();
+      // No fabricated success: the entry is not shown, and the error is stated.
+      expect(screen.getAllByText(/не удалось сохранить/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/Результат сделки/)).toBeNull();
+      expect(window.localStorage.getItem(TRADING_JOURNAL_STORAGE_KEY)).toBeNull();
+    } finally {
+      setItemSpy.mockRestore();
+    }
   });
 
   it("corrupt storage fails closed with a calm explanation (no raw payload)", () => {
