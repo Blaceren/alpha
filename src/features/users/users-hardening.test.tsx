@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
-import { SessionProvider } from "@/components/crm-shell/session-context";
+import { MockSessionProvider } from "@/components/crm-shell/session-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UsersWorkspace } from "./users-workspace";
 import { UsersToolbar } from "./users-toolbar";
@@ -21,11 +21,11 @@ vi.mock("next/navigation", () => ({
 
 function renderWorkspace() {
   return render(
-    <SessionProvider>
+    <MockSessionProvider>
       <TooltipProvider>
         <UsersWorkspace providerOverride={new MockCrmDataProvider({ clock: new FixedMockClock(), delayMs: 0 })} />
       </TooltipProvider>
-    </SessionProvider>,
+    </MockSessionProvider>,
   );
 }
 

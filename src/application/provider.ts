@@ -7,7 +7,8 @@ import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
 import type { CrmMutations } from "@/data/contracts/CrmMutations";
 import { MockCrmDataProvider, type MockProviderOptions } from "@/data/mock/MockCrmDataProvider";
 import type { DemoDataState } from "@/config/demo-state";
-import { env, isDevelopment } from "@/config/env";
+import { isDevelopment } from "@/config/env";
+import { getClientRuntimeMode } from "@/config/client-runtime-mode";
 
 /**
  * One object implements both halves of the boundary: the read contract and the
@@ -40,20 +41,38 @@ const DEMO_OPTIONS: Record<DemoDataState, MockProviderOptions> = {
  * Providers are cached per state so a re-render never rebuilds the dataset.
  */
 function resolveProvider(state: DemoDataState): CrmProvider {
+  // Fail closed before touching the cache: api mode has no data provider yet,
+  // and the mock one must never stand in for it.
+  if (getClientRuntimeMode() === "api") throw new MockProviderUnavailableError();
+
   const key: DemoDataState = isDevelopment ? state : "default";
   const cached = cache.get(key);
   if (cached) return cached;
 
-  switch (env.CRM_MODE) {
-    case "mock":
-    default: {
-      const provider = new MockCrmDataProvider({
-        delayMs: isDevelopment ? 150 : 0,
-        ...DEMO_OPTIONS[key],
-      });
-      cache.set(key, provider);
-      return provider;
-    }
+  const provider = new MockCrmDataProvider({
+    delayMs: isDevelopment ? 150 : 0,
+    ...DEMO_OPTIONS[key],
+  });
+  cache.set(key, provider);
+  return provider;
+}
+
+/**
+ * Thrown when something reaches for CRM data in api mode. `ApiCrmDataProvider`
+ * does not exist yet, and the one thing that must never happen is api mode
+ * quietly falling back to the synthetic dataset: a confirmed production session
+ * would then be looking at mock users, balances and notes believing them real.
+ *
+ * The shell already prevents this structurally — in api mode it never mounts the
+ * feature routes — so this is the second line of defence, not the first.
+ */
+export class MockProviderUnavailableError extends Error {
+  constructor() {
+    super(
+      "MockCrmDataProvider is not available in api mode. " +
+        "CRM data APIs arrive with ApiCrmDataProvider in a later phase.",
+    );
+    this.name = "MockProviderUnavailableError";
   }
 }
 

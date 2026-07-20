@@ -17,7 +17,7 @@ import {
   NOTE_VISIBILITY_EDIT_LABEL,
   NOTE_VISIBILITY_LABEL,
 } from "@/config/labels";
-import { canEditUserNotes } from "@/domain/identity/access";
+import { sessionGrants } from "@/domain/identity/access";
 import { NOTE_BODY_MAX_LENGTH, normalizeNoteBody } from "@/domain/notes/note";
 import { useSession } from "@/components/crm-shell/session-context";
 import { formatExactTime, formatRelativeTime } from "@/lib/format";
@@ -83,7 +83,7 @@ export function UserNotes({
   // edited or have its visibility changed is a per-note capability the provider owns
   // (canEditBody / canChangeVisibility). This only decides whether the composer and
   // the pin controls are offered.
-  const canWrite = canEditUserNotes(session.role);
+  const canWrite = sessionGrants(session, "edit_user_notes");
 
   const pin = useSetNotePinned(userId, { mutationsOverride });
   const edit = useUpdateNoteBody(userId, { mutationsOverride });

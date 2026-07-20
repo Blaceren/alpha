@@ -63,8 +63,13 @@ server actions, `generateMetadata`/`generateStaticParams`, ни одного в�
 
 ## Границы среза
 
-- **Rewrite/прокси не добавлялся.** `next.config.mjs` побайтно не изменился и
-  по-прежнему не содержит `rewrites`.
+- **Rewrite/прокси не добавлялся** в этом срезе. `next.config.mjs` побайтно не
+  изменился и не содержал `rewrites`.
+
+  > Обновление: точный rewrite `/api/crm/v1/session` добавлен позже, срезом
+  > «DEV CRM Integration Slice 1», уже после того как GHSA-ggv3-7p47-pfv8 был
+  > закрыт переходом на Next 15.5.20 — то есть порядок соблюдён: сначала патч,
+  > затем rewrite. Подробности — в `docs/CRM_PRODUCTION_SESSION_BOUNDARY.md`.
 - **Production Session Boundary отложен** — отдельная будущая фаза
   «Same-Origin Auth Proxy + Production Session Boundary».
 - Интеграция `/api/crm/v1/session`, Users/Notes/Owner/Audit API и

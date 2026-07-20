@@ -3,7 +3,10 @@
 import * as React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { SessionProvider } from "./session-context";
+import { MockSessionProvider, useSession } from "./session-context";
+import { SessionBoundary, ApiSessionConfirmed } from "./session-boundary";
+import type { CrmRuntimeMode } from "@/config/runtime-mode";
+import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { Brand } from "./brand";
@@ -13,10 +16,57 @@ import { SidebarNav } from "@/components/navigation/sidebar-nav";
 const COLLAPSE_KEY = "ata-crm.sidebar-collapsed.v1";
 
 /**
- * Root CRM shell: sidebar + topbar + content region. Client component because it
- * owns local UI state (collapse + mobile drawer), persisted only in localStorage.
+ * Root CRM shell.
+ *
+ * `mode` is resolved on the server and passed down as a plain prop — the browser
+ * receives only "mock" or "api", never the backend origin.
+ *
+ *   mock → the Phase 1A behaviour, unchanged: an immediate synthetic session and
+ *          the full mock workspace.
+ *   api  → nothing renders until the session boundary has a validated backend
+ *          session, and even then the feature routes stay unmounted because no
+ *          API data provider exists yet.
  */
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  mode,
+  children,
+}: {
+  mode: CrmRuntimeMode;
+  children: React.ReactNode;
+}) {
+  // Publish the mode for client modules that sit below React and cannot take a
+  // prop — specifically the data-provider accessors, which must refuse to build
+  // the mock provider in api mode. Set synchronously so it is in place before
+  // any child renders.
+  setClientRuntimeMode(mode);
+
+  if (mode === "api") {
+    return (
+      <SessionBoundary>
+        <ApiModeLanding />
+      </SessionBoundary>
+    );
+  }
+
+  return (
+    <MockSessionProvider>
+      <MockShell>{children}</MockShell>
+    </MockSessionProvider>
+  );
+}
+
+/**
+ * The api-mode landing. `children` — the CRM feature routes — are deliberately
+ * NOT rendered: they read through `getCrmDataProvider`, which in api mode has no
+ * implementation and refuses to hand back the mock one.
+ */
+function ApiModeLanding() {
+  const { session } = useSession();
+  return <ApiSessionConfirmed session={session} />;
+}
+
+/** Sidebar + topbar + content region. Mock mode only, unchanged from Phase 1A. */
+function MockShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
@@ -41,7 +91,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <SessionProvider>
       <TooltipProvider>
         <a href="#crm-content" className="skip-link">
           Перейти к содержимому
@@ -73,7 +122,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </main>
           </div>
         </div>
-      </TooltipProvider>
-    </SessionProvider>
+    </TooltipProvider>
   );
 }

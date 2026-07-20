@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 // The session object must be STABLE: the query effect depends on its identity
-// (the real SessionProvider memoizes it), so returning a fresh object per render
+// (the real MockSessionProvider memoizes it), so returning a fresh object per render
 // would re-fire the provider read forever.
 const ADMIN_SESSION = mockSessionForRole("crm_admin");
 vi.mock("@/components/crm-shell/session-context", () => ({

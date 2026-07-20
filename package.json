@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run test:e2e:mock && npm run test:e2e:session",
+    "test:e2e:mock": "playwright test",
+    "test:e2e:session": "playwright test --config=playwright.session.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "3.9.1",

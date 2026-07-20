@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { CrmRole } from "@/domain/identity/roles";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SessionProvider, useSession } from "@/components/crm-shell/session-context";
+import { MockSessionProvider, useSession } from "@/components/crm-shell/session-context";
 import { SidebarNav } from "./sidebar-nav";
 
 // Pin the pathname so the component renders deterministically.
@@ -12,19 +12,21 @@ vi.mock("next/navigation", () => ({
 }));
 
 function RoleSetter({ role }: { role: CrmRole }) {
+  // setRole is non-null inside MockSessionProvider; it is null only for a
+  // backend session, which this mock-mode test never mounts.
   const { setRole } = useSession();
-  React.useEffect(() => setRole(role), [role, setRole]);
+  React.useEffect(() => setRole?.(role), [role, setRole]);
   return null;
 }
 
 function renderNavForRole(role: CrmRole) {
   return render(
-    <SessionProvider>
+    <MockSessionProvider>
       <TooltipProvider>
         <RoleSetter role={role} />
         <SidebarNav />
       </TooltipProvider>
-    </SessionProvider>,
+    </MockSessionProvider>,
   );
 }
 

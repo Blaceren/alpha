@@ -21,6 +21,7 @@ export default defineConfig({
     url: "http://127.0.0.1:3000/today",
     timeout: 120_000,
     reuseExistingServer: true,
-    env: { NEXT_PUBLIC_CRM_MODE: "mock" },
+    // CRM_MODE is set explicitly — the app has no default and fails closed.
+    env: { CRM_MODE: "mock" },
   },
 });

@@ -14,6 +14,34 @@ export function hasPermission(role: CrmRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 
+/* ------------------------------------------------- UI-facing authority layer */
+
+/**
+ * The UI-facing permission check. It reads an explicit permission collection —
+ * in practice `session.effectivePermissions` — and never a role.
+ *
+ * This distinction is the whole point of the production session boundary. The
+ * role-based helpers below still exist and are still correct, but only for
+ * (a) constructing mock sessions, (b) resource rules the provider owns, and
+ * (c) SECTION_VISIBILITY navigation canon. A production affordance asks the
+ * backend's answer; it does not recompute one from the role, so a backend that
+ * says `role=crm_admin, effectivePermissions=[]` grants nothing.
+ */
+export function grants(
+  permissions: readonly Permission[] | undefined,
+  permission: Permission,
+): boolean {
+  return permissions?.includes(permission) ?? false;
+}
+
+/** Convenience for the common `{ effectivePermissions }` shape. */
+export function sessionGrants(
+  session: { effectivePermissions: readonly Permission[] } | null | undefined,
+  permission: Permission,
+): boolean {
+  return grants(session?.effectivePermissions, permission);
+}
+
 export function canViewSection(role: CrmRole, section: SectionKey): boolean {
   return SECTION_VISIBILITY[section].includes(role);
 }

@@ -5,7 +5,7 @@ import type { CrmDataProvider, PrimaryOwnerCandidate } from "@/data/contracts/Cr
 import type { Result } from "@/data/contracts/result";
 import { getCrmDataProvider } from "@/application/provider";
 import { contextFromSession } from "@/application/context";
-import { canAssignOwner } from "@/domain/identity/access";
+import { sessionGrants } from "@/domain/identity/access";
 import { useSession } from "@/components/crm-shell/session-context";
 
 export interface UseOwnerCandidates {
@@ -41,7 +41,7 @@ export function useOwnerCandidates(providerOverride?: CrmDataProvider): UseOwner
   const [result, setResult] = React.useState<Result<PrimaryOwnerCandidate[]> | null>(null);
   const [loading, setLoading] = React.useState(true);
 
-  const allowed = canAssignOwner(session.role);
+  const allowed = sessionGrants(session, "assign_owner");
 
   React.useEffect(() => {
     if (!allowed) {

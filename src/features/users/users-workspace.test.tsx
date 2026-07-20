@@ -8,7 +8,7 @@ import type { CrmDataProvider } from "@/data/contracts/CrmDataProvider";
 import { fail, type Paginated } from "@/data/contracts/result";
 import type { UserSummary } from "@/domain/users/user";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
-import { SessionProvider } from "@/components/crm-shell/session-context";
+import { MockSessionProvider } from "@/components/crm-shell/session-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UsersWorkspace } from "./users-workspace";
 import { UsersTable } from "./users-table";
@@ -23,11 +23,11 @@ vi.mock("next/navigation", () => ({
 
 function renderWorkspace(provider?: CrmDataProvider) {
   return render(
-    <SessionProvider>
+    <MockSessionProvider>
       <TooltipProvider>
         <UsersWorkspace providerOverride={provider ?? new MockCrmDataProvider({ clock: new FixedMockClock(), delayMs: 0 })} />
       </TooltipProvider>
-    </SessionProvider>,
+    </MockSessionProvider>,
   );
 }
 

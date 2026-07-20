@@ -16,7 +16,7 @@ vi.mock("next/navigation", () => ({
 // The role drives the whole session → context → provider → projection path.
 // jsdom here has no localStorage, so the session is injected directly.
 // Sessions are cached per role because the query effect depends on the session's
-// identity (the real SessionProvider memoizes it) — a fresh object per render
+// identity (the real MockSessionProvider memoizes it) — a fresh object per render
 // would re-fire the provider read in a loop.
 const SESSIONS = new Map<CrmRole, ReturnType<typeof mockSessionForRole>>();
 const sessionFor = (role: CrmRole) => {

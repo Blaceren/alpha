@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
-import { SessionProvider } from "@/components/crm-shell/session-context";
+import { MockSessionProvider } from "@/components/crm-shell/session-context";
 import type { UserFilters, UserSortField } from "@/data/contracts/CrmDataProvider";
 import { useUsersQuery } from "./use-users-query";
 
@@ -36,9 +36,9 @@ async function setup() {
   let api!: ReturnType<typeof useUsersQuery>;
   const p = provider();
   render(
-    <SessionProvider>
+    <MockSessionProvider>
       <Harness providerRef={p} onReady={(a) => (api = a)} />
-    </SessionProvider>,
+    </MockSessionProvider>,
   );
   await waitFor(() => expect(screen.getAllByTestId("row").length).toBeGreaterThan(0));
   return {

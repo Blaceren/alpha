@@ -16,7 +16,7 @@ import {
   humanizeCode,
   ownerLabel,
 } from "@/config/labels";
-import { canAssignOwner } from "@/domain/identity/access";
+import { sessionGrants } from "@/domain/identity/access";
 import { useSession } from "@/components/crm-shell/session-context";
 import { formatExactTime, formatRelativeTime } from "@/lib/format";
 import type { SlaState, User360 } from "@/domain/users/user-360";
@@ -40,7 +40,7 @@ const SLA_TONE: Record<SlaState, NonNullable<BadgeProps["tone"]>> = {
  * counts are still counts, and the task/case lists are still not here.
  *
  * The picker renders for the three roles with Assign and for nobody else — decided by
- * the single `canAssignOwner` helper, never by a list of roles in React. The other six
+ * the session's effective permissions, never by a list of roles in React. The other six
  * get a calm sentence instead of a disabled control: a dead control advertises a
  * capability the role will never have and cannot explain itself to a screen reader
  * (D-59). The current owner stays visible to all nine either way.
@@ -58,7 +58,7 @@ export function UserOwnerContext({
 }) {
   const o = view.owner;
   const { session } = useSession();
-  const canAssign = canAssignOwner(session.role);
+  const canAssign = sessionGrants(session, "assign_owner");
 
   return (
     <SectionCard title={USER_360_LABEL.ownerContext}>

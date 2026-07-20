@@ -21,6 +21,10 @@ import {
 export function RoleSwitch() {
   const { session, setRole } = useSession();
 
+  // No local role to switch (api mode): render nothing rather than a control
+  // that would imply the browser can change authority.
+  if (!setRole) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-2 py-1 text-xs text-text-secondary hover:bg-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

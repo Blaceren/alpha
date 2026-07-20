@@ -12,21 +12,21 @@ import userEvent from "@testing-library/user-event";
 import { FixedMockClock } from "@/lib/clock";
 import { MockCrmDataProvider } from "@/data/mock/MockCrmDataProvider";
 import { RECOMMENDATION_CATALOG } from "@/domain/recommendations/catalog";
-import { SessionProvider } from "@/components/crm-shell/session-context";
+import { MockSessionProvider } from "@/components/crm-shell/session-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TodayWorkspace } from "./today-workspace";
 
 const clock = new FixedMockClock();
 const provider = () => new MockCrmDataProvider({ clock, delayMs: 0 });
 
-/** Mirrors the shell: SessionProvider + TooltipProvider wrap every CRM page. */
+/** Mirrors the shell: MockSessionProvider + TooltipProvider wrap every CRM page. */
 function renderToday(p = provider()) {
   return render(
-    <SessionProvider>
+    <MockSessionProvider>
       <TooltipProvider>
         <TodayWorkspace providerOverride={p} />
       </TooltipProvider>
-    </SessionProvider>,
+    </MockSessionProvider>,
   );
 }
 
