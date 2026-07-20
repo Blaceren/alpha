@@ -64,10 +64,13 @@ test.describe("same-origin proxy", () => {
     expect(response.headers()["x-request-id"]).toBeTruthy();
   });
 
-  test("nested learner subroutes are not proxied", async ({ request }) => {
+  test("nested learner subroutes other than notes are not proxied", async ({ request }) => {
+    // `/notes` is the ONE reviewed nested path (Frontend CRM User Notes Slice
+    // 1). Everything else under a learner — and any child below /notes — stays
+    // unreachable.
     for (const path of [
       "/api/crm/v1/users/101/extra",
-      "/api/crm/v1/users/101/notes",
+      "/api/crm/v1/users/101/notes/note_1",
       "/api/crm/v1/users/101/owner",
       "/api/crm/v1/users/101/audit",
       "/api/crm/v1/users/101/timeline",

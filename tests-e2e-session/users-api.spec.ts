@@ -52,7 +52,9 @@ test.describe("same-origin proxy", () => {
     // only NESTED paths and sibling routes may be checked for a Next-level 404.
     for (const path of [
       "/api/crm/v1/users/123/extra",
-      "/api/crm/v1/users/123/notes",
+      // `/users/{id}/notes` became reviewed in Frontend CRM User Notes Slice 1;
+      // a child BELOW it must still 404.
+      "/api/crm/v1/users/123/notes/note_1",
       "/api/crm/v1/users/123/owner",
       "/api/crm/v1/user",
       "/api/crm/v1/notes",

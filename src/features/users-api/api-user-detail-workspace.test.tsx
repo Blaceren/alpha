@@ -35,11 +35,23 @@ function providerFor(outcomes: UserDetailOutcome[]): CrmUsersReadCapability & { 
     listUsers: () => {
       throw new Error("detail tests must not call listUsers");
     },
+    listUserNotes: () => {
+      throw new Error("this test must not call listUserNotes");
+    },
+    createUserNote: () => {
+      throw new Error("this test must not call createUserNote");
+    },
     async getUserDetail(userId) {
       calls.push(userId);
       const outcome = outcomes[Math.min(index, outcomes.length - 1)];
       index += 1;
       if (!outcome) throw new Error("provider fixture exhausted");
+      // Faithful to the backend, which selects `where id = userId` and echoes
+      // that id back. The workspace relies on this to detect a stale frame
+      // where the route has changed but the previous detail is still in state.
+      if (outcome.status === "success") {
+        return { ...outcome, detail: { ...outcome.detail, userId } };
+      }
       return outcome;
     },
   };
@@ -85,6 +97,12 @@ describe("states", () => {
   it("shows a loading status first", async () => {
     const provider: CrmUsersReadCapability = {
       listUsers: () => { throw new Error("nope"); },
+      listUserNotes: () => {
+        throw new Error("this test must not call listUserNotes");
+      },
+      createUserNote: () => {
+        throw new Error("this test must not call createUserNote");
+      },
       getUserDetail: () => new Promise(() => {}),
     };
     renderDetail(provider);
@@ -291,6 +309,12 @@ describe("error behaviour", () => {
     let n = 0;
     const provider: CrmUsersReadCapability = {
       listUsers: () => { throw new Error("nope"); },
+      listUserNotes: () => {
+        throw new Error("this test must not call listUserNotes");
+      },
+      createUserNote: () => {
+        throw new Error("this test must not call createUserNote");
+      },
       async getUserDetail(userId) {
         calls.push(userId);
         n += 1;

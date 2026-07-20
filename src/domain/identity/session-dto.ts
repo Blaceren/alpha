@@ -14,7 +14,11 @@
 import { z } from "zod";
 import { CRM_ROLES, type CrmRole, type Permission } from "@/domain/identity/roles";
 
-/** The eight canonical permissions, as sent by the backend. */
+/**
+ * The ten canonical permissions, as sent by the backend, in the backend's exact
+ * canonical order. The first eight are the accepted session contract and keep
+ * their exact relative order; CRM User Notes v1 appended the last two.
+ */
 export const SESSION_PERMISSIONS = [
   "view_exact_financials",
   "view_identity_full_email",
@@ -24,6 +28,8 @@ export const SESSION_PERMISSIONS = [
   "view_audit",
   "manage_settings",
   "edit_user_notes",
+  "view_user_notes",
+  "create_user_notes",
 ] as const satisfies readonly Permission[];
 
 const RoleSchema = z.enum(CRM_ROLES as unknown as [CrmRole, ...CrmRole[]]);

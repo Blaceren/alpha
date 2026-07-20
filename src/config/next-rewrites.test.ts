@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // The real production config module — not a copy. If next.config.mjs drifts,
 // these tests fail.
-import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, PROXIED_PATHS } from "../../next.config.mjs";
+import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH, PROXIED_PATHS } from "../../next.config.mjs";
 
 describe("rewrites — mock mode", () => {
   it("produces zero rewrites", () => {
@@ -24,8 +24,8 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly three rewrite definitions", () => {
-    expect(buildRewrites(env)).toHaveLength(3);
+  it("produces exactly four rewrite definitions", () => {
+    expect(buildRewrites(env)).toHaveLength(4);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -49,15 +49,36 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the three reviewed paths", () => {
+  it("exposes exactly the four reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
       "/api/crm/v1/users/:userId",
+      "/api/crm/v1/users/:userId/notes",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
     expect(USER_DETAIL_PATH).toBe("/api/crm/v1/users/:userId");
+    expect(USER_NOTES_PATH).toBe("/api/crm/v1/users/:userId/notes");
+  });
+
+  it("maps the exact notes path to the backend", () => {
+    expect(buildRewrites(env)[3]).toEqual({
+      source: "/api/crm/v1/users/:userId/notes",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId/notes",
+    });
+  });
+
+  it("uses one method-agnostic notes rewrite for GET and POST", () => {
+    // Next rewrites do not vary by method; a method-specific variant would only
+    // create two definitions to keep in sync.
+    expect(buildRewrites(env).filter((r) => r.source.endsWith("/notes"))).toHaveLength(1);
+  });
+
+  it("keeps the notes path terminal — exactly one userId segment and no child", () => {
+    expect(USER_NOTES_PATH).toMatch(/^\/api\/crm\/v1\/users\/:userId\/notes$/);
+    expect(USER_NOTES_PATH).not.toContain("*");
+    expect(USER_NOTES_PATH).not.toContain(":noteId");
   });
 
   it("keeps the first two entries exact static paths", () => {
@@ -106,6 +127,7 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/session",
       "/api/crm/v1/users",
       "/api/crm/v1/users/:userId",
+      "/api/crm/v1/users/:userId/notes",
     ]);
     for (const forbidden of [
       "/api/:path*",
@@ -123,12 +145,15 @@ describe("rewrites — no wildcard exposure", () => {
     }
   });
 
-  it("exposes no nested learner subroute", () => {
-    // A single-segment parameter cannot match a deeper path, so notes/owner/
-    // audit under a learner are structurally unreachable through the proxy.
+  it("exposes no nested learner subroute other than the exact notes path", () => {
+    // `/notes` is the ONE reviewed nested path. Every other nested route —
+    // including any child BELOW /notes — stays structurally unreachable,
+    // because each parameter matches exactly one segment.
     const sources = rules.map((r) => r.source);
     for (const nested of [
-      "/api/crm/v1/users/:userId/notes",
+      "/api/crm/v1/users/:userId/notes/:noteId",
+      "/api/crm/v1/users/:userId/notes/extra",
+      "/api/crm/v1/users/:userId/notes/:path*",
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/audit",
       "/api/crm/v1/users/:userId/:sub",

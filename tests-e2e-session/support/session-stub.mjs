@@ -17,8 +17,16 @@
  *
  *   GET /api/crm/v1/users
  *
- * selected by the `ata_test_crm_users_state` cookie. All user data below is
- * synthetic. Every other path 404s.
+ * selected by the `ata_test_crm_users_state` cookie, and the accepted Notes v1
+ * routes:
+ *
+ *   GET  /api/crm/v1/users/{singleSegment}/notes
+ *   POST /api/crm/v1/users/{singleSegment}/notes
+ *
+ * selected by `ata_test_crm_notes_state`, with the Notes permission matrix
+ * selected by `ata_test_crm_notes_session`. All data below is synthetic. Every
+ * other path — including a nested `/notes/{noteId}` and any PUT/PATCH/DELETE —
+ * 404s.
  *
  * Node standard library only. Binds to loopback. Exits with the suite.
  */
@@ -31,6 +39,8 @@ const USERS_PATH = "/api/crm/v1/users";
 const STATE_COOKIE = "ata_test_crm_session_state";
 const USERS_STATE_COOKIE = "ata_test_crm_users_state";
 const USER_DETAIL_STATE_COOKIE = "ata_test_crm_user_detail_state";
+const NOTES_STATE_COOKIE = "ata_test_crm_notes_state";
+const NOTES_SESSION_COOKIE = "ata_test_crm_notes_session";
 
 const VALID_SESSION = {
   employeeId: "emp_stub_7f3a9c",
@@ -63,6 +73,21 @@ const readStateCookie = (header) => readCookie(header, STATE_COOKIE, "authentica
 const readUsersStateCookie = (header) => readCookie(header, USERS_STATE_COOKIE, "populated");
 const readUserDetailStateCookie = (header) =>
   readCookie(header, USER_DETAIL_STATE_COOKIE, "active");
+const readNotesStateCookie = (header) => readCookie(header, NOTES_STATE_COOKIE, "populated");
+const readNotesSessionCookie = (header) => readCookie(header, NOTES_SESSION_COOKIE, "both");
+
+/* --------------------------------------------------------- notes sessions */
+
+// Permission fixtures for the Notes matrix. Each is a full valid session that
+// differs ONLY in effectivePermissions, so a test proves the affordance follows
+// the permission and never the role name.
+const NOTES_SESSIONS = {
+  both: ["view_user_notes", "create_user_notes"],
+  view_only: ["view_user_notes"],
+  create_only: ["create_user_notes"],
+  neither: [],
+  edit_only: ["edit_user_notes"],
+};
 
 /* ------------------------------------------------------- synthetic users v1 */
 
@@ -118,6 +143,222 @@ function usersPage(state, url) {
     items: [0, 1, 2].map((i) => synthUser(i, { visibility })),
     nextCursor: "cursor-page-2",
   };
+}
+
+/* --------------------------------------------------------- synthetic notes */
+
+// Synthetic only. Shaped exactly like the accepted Notes v1 contract: four
+// fields, no employeeId, no authorId, no email, no visibility, no pinned.
+function synthNote(index, over = {}) {
+  return {
+    noteId: `note_stub_${index}`,
+    body: `Заметка номер ${index}`,
+    authorDisplayName: "Нина Чмиль",
+    createdAt: new Date(Date.UTC(2026, 6, 20, 18, 42 - index, 0)).toISOString(),
+    ...over,
+  };
+}
+
+function notesPage(state, url) {
+  const cursor = url.searchParams.get("cursor");
+
+  if (state === "empty") return { items: [], nextCursor: null };
+
+  if (state === "same_timestamp") {
+    // Identical createdAt across rows: proves the client preserves the server's
+    // order rather than re-sorting by timestamp.
+    const at = "2026-07-20T18:42:00.000Z";
+    return {
+      items: [1, 2, 3].map((i) => synthNote(i, { createdAt: at, body: `Одновременная ${i}` })),
+      nextCursor: null,
+    };
+  }
+
+  if (state === "long_note") {
+    return {
+      items: [
+        synthNote(1, {
+          body:
+            "Очень длинная заметка без пробелов: " +
+            "ААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААААА" +
+            " https://example.test/" + "x".repeat(300),
+        }),
+      ],
+      nextCursor: null,
+    };
+  }
+
+  if (state === "html_text") {
+    return {
+      items: [synthNote(1, { body: "<script>window.__ataNotesPwned = true;</script> **не разметка**" })],
+      nextCursor: null,
+    };
+  }
+
+  if (state === "multiline") {
+    return {
+      items: [synthNote(1, { body: "первая строка\nвторая строка\tс табом" })],
+      nextCursor: null,
+    };
+  }
+
+  if (state === "duplicate_page") {
+    // The second page repeats a noteId from the first — the client must not
+    // render it twice, and must not reorder anything to achieve that.
+    if (cursor === "notes-cursor-2") {
+      return { items: [synthNote(1), synthNote(3)], nextCursor: null };
+    }
+    return { items: [synthNote(1), synthNote(2)], nextCursor: "notes-cursor-2" };
+  }
+
+  if (state === "paged") {
+    if (cursor === "notes-cursor-2") {
+      return { items: [synthNote(3), synthNote(4)], nextCursor: null };
+    }
+    return { items: [synthNote(1), synthNote(2)], nextCursor: "notes-cursor-2" };
+  }
+
+  return { items: [synthNote(1), synthNote(2)], nextCursor: null };
+}
+
+function handleNotesList(req, res, url) {
+  const state = readNotesStateCookie(req.headers.cookie);
+
+  switch (state) {
+    case "invalid_input":
+      send(res, 400, {
+        code: "invalid_input",
+        messageKey: "crm.users.notes.limit_invalid",
+        requestId: "req_stub_notes_400",
+      });
+      return;
+    case "unauthenticated":
+      send(res, 401, {
+        code: "unauthorized",
+        messageKey: "crm.session.unauthenticated",
+        requestId: "req_stub_notes_401",
+      });
+      return;
+    case "forbidden_list":
+      send(res, 403, {
+        code: "unauthorized",
+        messageKey: "crm.users.notes.forbidden",
+        requestId: "req_stub_notes_403",
+      });
+      return;
+    case "not_found":
+      send(res, 404, {
+        code: "not_found",
+        messageKey: "crm.users.notes.not_found",
+        requestId: "req_stub_notes_404",
+      });
+      return;
+    case "server_error_list":
+      send(res, 500, {
+        code: "internal",
+        messageKey: "crm.users.notes.internal",
+        requestId: "req_stub_notes_500",
+      });
+      return;
+    case "malformed_list":
+      // Structurally valid JSON, invalid contract: a forbidden author field.
+      send(res, 200, { items: [{ ...synthNote(1), employeeId: "emp_leak" }], nextCursor: null });
+      return;
+    case "not_json":
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+      res.end("<html>not json</html>");
+      return;
+    case "network_failure":
+      req.socket.destroy();
+      return;
+    case "delayed_list": {
+      const timer = setTimeout(() => send(res, 200, notesPage("populated", url)), 3_000);
+      res.on("close", () => clearTimeout(timer));
+      return;
+    }
+    default:
+      send(res, 200, notesPage(state, url));
+      return;
+  }
+}
+
+function handleNotesCreate(req, res) {
+  const state = readNotesStateCookie(req.headers.cookie);
+
+  // The body is read and discarded except for the echo below: the stub proves
+  // the CLIENT sent a normalized body, it does not re-implement validation.
+  let raw = "";
+  req.on("data", (chunk) => {
+    raw += chunk;
+    if (raw.length > 64_000) req.socket.destroy();
+  });
+  req.on("end", () => {
+    let parsed = {};
+    try {
+      parsed = JSON.parse(raw || "{}");
+    } catch {
+      parsed = {};
+    }
+
+    switch (state) {
+      case "forbidden_create":
+        send(res, 403, {
+          code: "unauthorized",
+          messageKey: "crm.users.notes.forbidden",
+          requestId: "req_stub_notes_create_403",
+        });
+        return;
+      case "invalid_create":
+        send(res, 400, {
+          code: "invalid_input",
+          messageKey: "crm.users.notes.body_invalid",
+          requestId: "req_stub_notes_create_400",
+        });
+        return;
+      case "unauthenticated_create":
+        send(res, 401, {
+          code: "unauthorized",
+          messageKey: "crm.session.unauthenticated",
+          requestId: "req_stub_notes_create_401",
+        });
+        return;
+      case "not_found_create":
+        send(res, 404, {
+          code: "not_found",
+          messageKey: "crm.users.notes.not_found",
+          requestId: "req_stub_notes_create_404",
+        });
+        return;
+      case "server_error_create":
+        send(res, 500, {
+          code: "internal",
+          messageKey: "crm.users.notes.internal",
+          requestId: "req_stub_notes_create_500",
+        });
+        return;
+      case "malformed_create":
+        // 201 whose payload violates the contract — must not clear the draft.
+        send(res, 201, { ...synthNote(9), authorId: "emp_leak" });
+        return;
+      case "unexpected_200_create":
+        // A 200 is NOT a create. The client must treat it as malformed.
+        send(res, 200, synthNote(9));
+        return;
+      case "delayed_create": {
+        const timer = setTimeout(
+          () => send(res, 201, synthNote(9, { body: String(parsed.body ?? "") })),
+          2_000,
+        );
+        res.on("close", () => clearTimeout(timer));
+        return;
+      }
+      default:
+        // Echo the received body so a test can prove the CLIENT normalized it
+        // (trimmed, CRLF collapsed) before sending.
+        send(res, 201, synthNote(9, { body: String(parsed.body ?? "") }));
+        return;
+    }
+  });
 }
 
 /* --------------------------------------------------- synthetic user detail */
@@ -301,6 +542,24 @@ const server = createServer((req, res) => {
   // notes/owner subroute cannot appear to exist even at the stub layer.
   const detailMatch = new RegExp(`^${USERS_PATH}/([^/]+)$`).exec(path);
 
+  // Exactly one segment, then a terminal `/notes`. `/notes/extra` and
+  // `/notes/{noteId}` do not match and therefore 404 at the stub too.
+  const notesMatch = new RegExp(`^${USERS_PATH}/([^/]+)/notes$`).exec(path);
+
+  if (notesMatch) {
+    // Notes v1 is append-only: only GET and POST exist. PUT/PATCH/DELETE 404.
+    if (req.method === "GET") {
+      handleNotesList(req, res, url);
+      return;
+    }
+    if (req.method === "POST") {
+      handleNotesCreate(req, res);
+      return;
+    }
+    send(res, 404, { error: "not_found" });
+    return;
+  }
+
   if (req.method !== "GET" || (path !== SESSION_PATH && path !== USERS_PATH && !detailMatch)) {
     send(res, 404, { error: "not_found" });
     return;
@@ -362,6 +621,17 @@ const server = createServer((req, res) => {
     case "admin_no_permissions":
       send(res, 200, ADMIN_NO_PERMISSIONS);
       return;
+
+    case "notes_matrix": {
+      // Same role for every case — only effectivePermissions differ, so a test
+      // proves the Notes affordances follow the permission, not the role.
+      const which = readNotesSessionCookie(req.headers.cookie);
+      send(res, 200, {
+        ...VALID_SESSION,
+        effectivePermissions: NOTES_SESSIONS[which] ?? NOTES_SESSIONS.both,
+      });
+      return;
+    }
 
     case "authenticated":
     default:

@@ -39,6 +39,12 @@ function providerFor(outcomes: UsersOutcome[]): CrmUsersReadCapability & { calls
     getUserDetail: () => {
       throw new Error("listUsers tests must not call getUserDetail");
     },
+    listUserNotes: () => {
+      throw new Error("this test must not call listUserNotes");
+    },
+    createUserNote: () => {
+      throw new Error("this test must not call createUserNote");
+    },
     async listUsers(input) {
       calls.push(input);
       const outcome = outcomes[Math.min(index, outcomes.length - 1)];
@@ -91,6 +97,12 @@ describe("states", () => {
       listUsers: () => new Promise(() => {}),
       getUserDetail: () => {
         throw new Error("listUsers tests must not call getUserDetail");
+      },
+      listUserNotes: () => {
+        throw new Error("this test must not call listUserNotes");
+      },
+      createUserNote: () => {
+        throw new Error("this test must not call createUserNote");
       },
     };
     renderWorkspace(provider);
@@ -397,6 +409,12 @@ describe("error behaviour", () => {
     const provider: CrmUsersReadCapability = {
       getUserDetail: () => {
         throw new Error("listUsers tests must not call getUserDetail");
+      },
+      listUserNotes: () => {
+        throw new Error("this test must not call listUserNotes");
+      },
+      createUserNote: () => {
+        throw new Error("this test must not call createUserNote");
       },
       async listUsers() {
         calls += 1;

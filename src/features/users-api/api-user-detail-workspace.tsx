@@ -10,7 +10,10 @@ import { API_USERS_PATH } from "@/components/crm-shell/api-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { useSession } from "@/components/crm-shell/session-context";
+import { sessionGrants } from "@/domain/identity/access";
 import { useApiUserDetailQuery } from "./use-api-user-detail-query";
+import { ApiUserNotesSection } from "./api-user-notes";
 
 /**
  * Production learner detail FOUNDATION.
@@ -83,7 +86,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function DetailView({ detail }: { detail: CrmApiUserDetail }) {
+function DetailView({
+  detail,
+  notes,
+}: {
+  detail: CrmApiUserDetail;
+  notes?: React.ReactNode;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -127,6 +136,8 @@ function DetailView({ detail }: { detail: CrmApiUserDetail }) {
         </dl>
       </section>
 
+      {notes}
+
       <p className="text-2xs text-text-muted">
         Доступны только базовые данные учётной записи. Остальные разделы будут подключены
         следующими этапами.
@@ -144,6 +155,29 @@ export function ApiUserDetailWorkspace({
 }) {
   const router = useRouter();
   const q = useApiUserDetailQuery(userId, provider);
+  const { session } = useSession();
+
+  // Notes affordances come from the backend's effectivePermissions ONLY. The
+  // role name is never consulted: a backend that says `role=crm_admin,
+  // effectivePermissions=[]` grants nothing here. The two permissions are
+  // checked independently — neither implies the other, and `edit_user_notes`
+  // grants neither.
+  const canListNotes = sessionGrants(session, "view_user_notes");
+  const canCreateNotes = sessionGrants(session, "create_user_notes");
+
+  // A Notes 404 means the learner is gone or is not a learner at all, which is
+  // an answer about the whole detail, not about one section.
+  const [notesNotFound, setNotesNotFound] = React.useState(false);
+  const handleNotesUnauthenticated = React.useCallback(
+    () => router.replace(LOGIN_REDIRECT),
+    [router],
+  );
+  const handleNotesNotFound = React.useCallback(() => setNotesNotFound(true), []);
+  React.useEffect(() => setNotesNotFound(false), [userId]);
+
+  // Ready, and ready for THIS learner.
+  const detailMatches = q.state.kind === "ready" && q.state.detail.userId === userId;
+  const staleDetail = q.state.kind === "ready" && !detailMatches;
 
   // A 401 means the employee session is no longer valid. Redirect rather than
   // render, and never leave the previous learner's data on screen.
@@ -155,14 +189,39 @@ export function ApiUserDetailWorkspace({
     <div className="space-y-4">
       <BackLink />
 
-      {q.state.kind === "loading" || q.state.kind === "retrying" ? (
+      {q.state.kind === "loading" || q.state.kind === "retrying" || staleDetail ? (
         <div role="status" aria-live="polite">
           <span className="sr-only">Загружаем данные пользователя</span>
           <SkeletonRows rows={4} />
         </div>
       ) : null}
 
-      {q.state.kind === "ready" ? <DetailView detail={q.state.detail} /> : null}
+      {/*
+        `detailMatches` guards a real one-frame hazard: when the route userId
+        changes, React renders with the NEW id while the previous learner's
+        detail is still in state, before the refetch effect runs. Rendering
+        that frame would briefly show one learner's data under another's route
+        and would start a Notes request that is immediately superseded.
+      */}
+      {detailMatches && !notesNotFound ? (
+        <DetailView
+          detail={(q.state as { detail: CrmApiUserDetail }).detail}
+          notes={
+            // Neither permission -> the section is not mounted at all, so no
+            // Notes request is ever made.
+            canListNotes || canCreateNotes ? (
+              <ApiUserNotesSection
+                userId={userId}
+                canList={canListNotes}
+                canCreate={canCreateNotes}
+                provider={provider}
+                onUnauthenticated={handleNotesUnauthenticated}
+                onNotFound={handleNotesNotFound}
+              />
+            ) : null
+          }
+        />
+      ) : null}
 
       {q.state.kind === "invalid_id" || q.state.kind === "invalid_input" ? (
         <Panel
@@ -188,6 +247,14 @@ export function ApiUserDetailWorkspace({
             </p>
           ) : null}
         </Panel>
+      ) : null}
+
+      {notesNotFound && q.state.kind === "ready" ? (
+        <Panel
+          tone="alert"
+          title="Пользователь не найден"
+          description="Такого пользователя нет в CRM. Возможно, он был удалён или ссылка устарела."
+        />
       ) : null}
 
       {q.state.kind === "not_found" ? (

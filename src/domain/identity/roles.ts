@@ -75,4 +75,12 @@ export type Permission =
    * assignment get their own permissions when they get their own mutations;
    * `assign_owner` is a different dimension and is never reused for editing.
    */
-  | "edit_user_notes";
+  | "edit_user_notes"
+  /**
+   * CRM User Notes v1 (backend migration 31). Read and create are SEPARATE
+   * permissions and neither is implied by the other. `edit_user_notes` above
+   * stays reserved for future mutation of an EXISTING note (edit, delete,
+   * pin/unpin, visibility) and grants neither of these.
+   */
+  | "view_user_notes"
+  | "create_user_notes";

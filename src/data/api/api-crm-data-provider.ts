@@ -22,6 +22,14 @@ import {
   type FetchUserDetailOptions,
   type UserDetailOutcome,
 } from "@/application/api/user-detail-client";
+import {
+  createUserNote,
+  fetchUserNotes,
+  type FetchUserNotesInput,
+  type FetchUserNotesOptions,
+  type NoteCreateOutcome,
+  type NotesListOutcome,
+} from "@/application/api/user-notes-client";
 
 /**
  * The capabilities the production application boundary needs — and nothing
@@ -30,6 +38,21 @@ import {
 export interface CrmUsersReadCapability {
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome>;
   getUserDetail(userId: string, options?: FetchUserDetailOptions): Promise<UserDetailOutcome>;
+  listUserNotes(
+    userId: string,
+    input?: FetchUserNotesInput,
+    options?: FetchUserNotesOptions,
+  ): Promise<NotesListOutcome>;
+  /**
+   * The first production WRITE capability, added narrowly and deliberately.
+   * It appends one immutable note and nothing else — it is NOT a foothold for
+   * the broad mock mutation provider, which stays unavailable in api mode.
+   */
+  createUserNote(
+    userId: string,
+    body: string,
+    options?: FetchUserNotesOptions,
+  ): Promise<NoteCreateOutcome>;
 }
 
 /**
@@ -42,15 +65,20 @@ export class UnsupportedApiCapability extends Error {
   constructor(readonly capability: string) {
     super(
       `CRM capability "${capability}" is not available in api mode. ` +
-        "Only the Users v1 list read is connected; every other CRM data API " +
-        "arrives in a later phase.",
+        "Only the Users v1 list, user detail and immutable user notes are " +
+        "connected; every other CRM data API arrives in a later phase.",
     );
     this.name = "UnsupportedApiCapability";
   }
 }
 
 /** The capabilities that exist in api mode. Everything else fails closed. */
-export const API_SUPPORTED_CAPABILITIES = ["listUsers", "getUserDetail"] as const;
+export const API_SUPPORTED_CAPABILITIES = [
+  "listUsers",
+  "getUserDetail",
+  "listUserNotes",
+  "createUserNote",
+] as const;
 export type ApiSupportedCapability = (typeof API_SUPPORTED_CAPABILITIES)[number];
 
 /**
@@ -72,6 +100,8 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
   constructor(
     private readonly listClient: typeof fetchUsers = fetchUsers,
     private readonly detailClient: typeof fetchUserDetail = fetchUserDetail,
+    private readonly notesListClient: typeof fetchUserNotes = fetchUserNotes,
+    private readonly noteCreateClient: typeof createUserNote = createUserNote,
   ) {}
 
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome> {
@@ -82,6 +112,24 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
   getUserDetail(userId: string, options?: FetchUserDetailOptions): Promise<UserDetailOutcome> {
     assertApiCapability("getUserDetail");
     return this.detailClient(userId, options);
+  }
+
+  listUserNotes(
+    userId: string,
+    input: FetchUserNotesInput = {},
+    options?: FetchUserNotesOptions,
+  ): Promise<NotesListOutcome> {
+    assertApiCapability("listUserNotes");
+    return this.notesListClient(userId, input, options);
+  }
+
+  createUserNote(
+    userId: string,
+    body: string,
+    options?: FetchUserNotesOptions,
+  ): Promise<NoteCreateOutcome> {
+    assertApiCapability("createUserNote");
+    return this.noteCreateClient(userId, body, options);
   }
 }
 
@@ -97,6 +145,8 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
 export function createApiCrmDataProvider(
   listClient?: typeof fetchUsers,
   detailClient?: typeof fetchUserDetail,
+  notesListClient?: typeof fetchUserNotes,
+  noteCreateClient?: typeof createUserNote,
 ): ApiCrmDataProvider {
-  return new ApiCrmDataProvider(listClient, detailClient);
+  return new ApiCrmDataProvider(listClient, detailClient, notesListClient, noteCreateClient);
 }

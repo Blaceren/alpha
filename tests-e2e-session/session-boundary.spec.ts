@@ -128,7 +128,11 @@ test.describe("same-origin proxy", () => {
       // `/users/{one-segment}` became a reviewed proxied path in Frontend CRM
       // User Detail API Slice 2, so only NESTED paths are checked here.
       "/api/crm/v1/users/123/extra",
-      "/api/crm/v1/users/123/notes",
+      // `/users/{id}/notes` became a reviewed proxied path in Frontend CRM User
+      // Notes Slice 1 and is covered by user-notes-api.spec.ts. A child BELOW
+      // it, and a TOP-LEVEL /notes route, must both still be unreachable.
+      "/api/crm/v1/users/123/notes/note_1",
+      "/api/crm/v1/users/123/notes/extra",
       "/api/crm/v1/notes",
       "/api/crm/v1/owner",
       "/api/crm/v1/audit",

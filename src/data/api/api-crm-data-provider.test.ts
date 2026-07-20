@@ -73,8 +73,13 @@ describe("ApiCrmDataProvider — users read", () => {
 });
 
 describe("unsupported capabilities fail closed", () => {
-  it("lists exactly the two supported capabilities", () => {
-    expect([...API_SUPPORTED_CAPABILITIES]).toEqual(["listUsers", "getUserDetail"]);
+  it("lists exactly the four supported capabilities", () => {
+    expect([...API_SUPPORTED_CAPABILITIES]).toEqual([
+      "listUsers",
+      "getUserDetail",
+      "listUserNotes",
+      "createUserNote",
+    ]);
   });
 
   it.each([
@@ -116,12 +121,34 @@ describe("unsupported capabilities fail closed", () => {
     }
   });
 
-  it("exposes exactly the two accepted read methods and nothing else", () => {
+  it("exposes exactly the four accepted methods and nothing else", () => {
     const provider = createApiCrmDataProvider();
     const own = Object.getOwnPropertyNames(Object.getPrototypeOf(provider)).filter(
       (n) => n !== "constructor",
     );
-    expect(own.sort()).toEqual(["getUserDetail", "listUsers"]);
+    expect(own.sort()).toEqual([
+      "createUserNote",
+      "getUserDetail",
+      "listUserNotes",
+      "listUsers",
+    ]);
+  });
+
+  it("keeps the two prior read capabilities", () => {
+    const provider = createApiCrmDataProvider();
+    expect(typeof provider.listUsers).toBe("function");
+    expect(typeof provider.getUserDetail).toBe("function");
+  });
+
+  it("adds exactly the two Notes capabilities and no broader mutation surface", () => {
+    const provider = createApiCrmDataProvider();
+    expect(typeof provider.listUserNotes).toBe("function");
+    expect(typeof provider.createUserNote).toBe("function");
+    // createUserNote is the ONLY write. The broad mock mutation provider stays
+    // unavailable in api mode.
+    for (const method of ["getCrmMutations", "mutations", "addNote"]) {
+      expect((provider as unknown as Record<string, unknown>)[method]).toBeUndefined();
+    }
   });
 });
 

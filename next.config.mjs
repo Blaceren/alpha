@@ -50,8 +50,21 @@ export const USERS_PATH = "/api/crm/v1/users";
  */
 export const USER_DETAIL_PATH = "/api/crm/v1/users/:userId";
 
+/**
+ * CRM User Notes v1. Same single-segment `:userId` rule, plus an EXACT terminal
+ * `/notes`. There is no `:noteId` child and no catch-all, so
+ * `/api/crm/v1/users/123/notes/abc` and `/api/crm/v1/users/123/notes/extra` are
+ * NOT proxied and fall through to the CRM app.
+ *
+ * GET and POST share this one definition — Next rewrites are method-agnostic,
+ * and a method-specific variant would only create two things to keep in sync.
+ * Notes v1 is append-only, so PUT/PATCH/DELETE reach a backend route that does
+ * not implement them and fail safely there.
+ */
+export const USER_NOTES_PATH = "/api/crm/v1/users/:userId/notes";
+
 /** The complete set of backend paths the CRM origin may forward. */
-export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH, USER_DETAIL_PATH];
+export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH];
 
 export function buildRewrites(envSource = process.env) {
   const mode = envSource.CRM_MODE;

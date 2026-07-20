@@ -27,7 +27,7 @@ describe("SessionDtoSchema — accepts the contract", () => {
     expect(withField({ effectivePermissions: [] }).success).toBe(true);
   });
 
-  it("accepts all eight canonical permissions at once", () => {
+  it("accepts all ten canonical permissions at once", () => {
     expect(withField({ effectivePermissions: [...SESSION_PERMISSIONS] }).success).toBe(true);
   });
 
@@ -131,5 +131,61 @@ describe("SessionDtoSchema — closed to extra fields", () => {
     for (const body of [null, undefined, "string", 42, []]) {
       expect(SessionDtoSchema.safeParse(body).success).toBe(false);
     }
+  });
+});
+
+describe("Notes v1 permission schema", () => {
+  it("declares exactly ten permissions in the backend's canonical order", () => {
+    expect([...SESSION_PERMISSIONS]).toEqual([
+      "view_exact_financials",
+      "view_identity_full_email",
+      "reveal_pii",
+      "assign_owner",
+      "export",
+      "view_audit",
+      "manage_settings",
+      "edit_user_notes",
+      "view_user_notes",
+      "create_user_notes",
+    ]);
+  });
+
+  it("keeps the accepted first eight in their exact prior order", () => {
+    expect(SESSION_PERMISSIONS.slice(0, 8)).toEqual([
+      "view_exact_financials",
+      "view_identity_full_email",
+      "reveal_pii",
+      "assign_owner",
+      "export",
+      "view_audit",
+      "manage_settings",
+      "edit_user_notes",
+    ]);
+  });
+
+  it.each(["view_user_notes", "create_user_notes"])("accepts the new permission %s", (perm) => {
+    expect(withField({ effectivePermissions: [perm] }).success).toBe(true);
+  });
+
+  it("accepts either Notes permission on its own — neither implies the other", () => {
+    expect(withField({ effectivePermissions: ["view_user_notes"] }).success).toBe(true);
+    expect(withField({ effectivePermissions: ["create_user_notes"] }).success).toBe(true);
+  });
+
+  it("still rejects an unknown permission", () => {
+    expect(withField({ effectivePermissions: ["delete_user_notes"] }).success).toBe(false);
+    expect(withField({ effectivePermissions: ["manage_notes"] }).success).toBe(false);
+  });
+
+  it("still rejects duplicates, including of the new values", () => {
+    expect(
+      withField({ effectivePermissions: ["view_user_notes", "view_user_notes"] }).success,
+    ).toBe(false);
+  });
+
+  it("leaves permissionVersion semantics untouched", () => {
+    expect(withField({ permissionVersion: 1 }).success).toBe(true);
+    expect(withField({ permissionVersion: 0 }).success).toBe(false);
+    expect(withField({ permissionVersion: -1 }).success).toBe(false);
   });
 });
