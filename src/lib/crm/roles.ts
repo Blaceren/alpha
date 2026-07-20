@@ -17,8 +17,14 @@ export const CRM_STAFF_ROLES = [
 
 export type CrmStaffRole = (typeof CRM_STAFF_ROLES)[number];
 
-// Canonical CRM permissions — exactly eight. The array order is the stable,
-// canonical order in which effectivePermissions are always returned.
+// Canonical CRM permissions — exactly ten. The array order is the stable,
+// canonical order in which effectivePermissions are always returned. The first
+// eight keep their accepted relative order; Notes v1 appends the last two.
+//
+// `edit_user_notes` predates Notes v1 and is deliberately NOT reused for it. It
+// stays reserved for the future mutating operations on an existing note (edit,
+// delete, pin/unpin, visibility). Notes v1 is append-only, so it needs a read
+// permission and a create permission that are independent of it.
 export const CRM_PERMISSIONS = [
   "view_exact_financials",
   "view_identity_full_email",
@@ -28,6 +34,8 @@ export const CRM_PERMISSIONS = [
   "view_audit",
   "manage_settings",
   "edit_user_notes",
+  "view_user_notes",
+  "create_user_notes",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -51,6 +59,8 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "view_audit",
     "manage_settings",
     "edit_user_notes",
+    "view_user_notes",
+    "create_user_notes",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -60,6 +70,8 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "export",
     "view_audit",
     "edit_user_notes",
+    "view_user_notes",
+    "create_user_notes",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -68,9 +80,14 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "assign_owner",
     "export",
     "edit_user_notes",
+    "view_user_notes",
+    "create_user_notes",
   ],
+  // mentor holds nothing: an accepted product decision for Notes v1. Mentors
+  // have no CRM permission today, so granting note access here would be a new
+  // expansion rather than a port of an existing grant.
   mentor: [],
-  support: ["edit_user_notes"],
+  support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
   moderator: [],
   analyst: [],
   content_manager: [],

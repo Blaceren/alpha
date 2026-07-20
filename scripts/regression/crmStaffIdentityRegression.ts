@@ -52,17 +52,20 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "manage_settings", "edit_user_notes",
+    "view_user_notes", "create_user_notes",
   ],
   crm_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "edit_user_notes",
+    "view_user_notes", "create_user_notes",
   ],
   retention_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "edit_user_notes",
+    "view_user_notes", "create_user_notes",
   ],
   mentor: [],
-  support: ["edit_user_notes"],
+  support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
   moderator: [],
   analyst: [],
   content_manager: [],
@@ -100,10 +103,17 @@ async function main() {
     assert.equal(new Set(CRM_STAFF_ROLES).size, 9);
   });
 
-  await check("4. CrmPermission has exactly eight unique canonical values", () => {
-    assert.equal(CRM_PERMISSIONS.length, 8);
-    assert.equal(new Set(CRM_PERMISSIONS).size, 8);
+  await check("4. CrmPermission has exactly ten unique canonical values", () => {
+    // Notes v1 appended view_user_notes and create_user_notes. The accepted
+    // first eight keep their exact previous relative order.
+    assert.equal(CRM_PERMISSIONS.length, 10);
+    assert.equal(new Set(CRM_PERMISSIONS).size, 10);
     assert.deepEqual([...CRM_PERMISSIONS], [
+      "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
+      "export", "view_audit", "manage_settings", "edit_user_notes",
+      "view_user_notes", "create_user_notes",
+    ]);
+    assert.deepEqual(CRM_PERMISSIONS.slice(0, 8), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
     ]);
@@ -125,7 +135,7 @@ async function main() {
     // crm_manager keeps canonical order even though manage_settings is skipped.
     assert.deepEqual(resolveEffectivePermissions("crm_manager"), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
-      "export", "view_audit", "edit_user_notes",
+      "export", "view_audit", "edit_user_notes", "view_user_notes", "create_user_notes",
     ]);
   });
 
@@ -136,25 +146,28 @@ async function main() {
     }
   });
 
-  await check("9. crm_admin receives all eight permissions", () => {
-    assert.equal(resolveEffectivePermissions("crm_admin").length, 8);
+  await check("9. crm_admin receives all ten permissions", () => {
+    assert.equal(resolveEffectivePermissions("crm_admin").length, 10);
   });
 
   await check("10. crm_manager does not receive manage_settings", () => {
     const perms = resolveEffectivePermissions("crm_manager");
     assert.ok(!perms.includes("manage_settings"));
-    assert.equal(perms.length, 7);
+    assert.equal(perms.length, 9);
   });
 
   await check("11. retention_manager receives neither view_audit nor manage_settings", () => {
     const perms = resolveEffectivePermissions("retention_manager");
     assert.ok(!perms.includes("view_audit"));
     assert.ok(!perms.includes("manage_settings"));
-    assert.equal(perms.length, 6);
+    assert.equal(perms.length, 8);
   });
 
-  await check("12. support receives only edit_user_notes", () => {
-    assert.deepEqual(resolveEffectivePermissions("support"), ["edit_user_notes"]);
+  await check("12. support receives only the three note permissions", () => {
+    // support gained the two Notes v1 permissions; it still holds nothing else.
+    assert.deepEqual(resolveEffectivePermissions("support"), [
+      "edit_user_notes", "view_user_notes", "create_user_notes",
+    ]);
   });
 
   await check("13. mentor, moderator, analyst, content_manager, read_only receive no permissions", () => {

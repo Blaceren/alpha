@@ -648,7 +648,7 @@ async function main() {
     await check("46. migration count is still 30 and foreign keys are clean", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 30, `expected 30 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 31, `expected 31 migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -661,6 +661,9 @@ async function main() {
     await check("48. CRM v1 exposes only session and users — no notes/owner/360/audit route", () => {
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
       assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session", "users"]);
+      // Notes v1 ships a NESTED users/[userId]/notes route. A top-level
+      // /api/crm/v1/notes route must still never exist, so "notes" stays banned
+      // here — this check only ever looks at the CRM v1 top level.
       for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
       }

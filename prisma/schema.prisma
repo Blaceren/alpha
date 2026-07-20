@@ -173,6 +173,7 @@ model User {
   reportAttachments               ReportAttachment[]           @relation("ReportAttachmentOwner")
   reportCommandReceipts           ReportCommandReceipt[]       @relation("ReportCommandActor")
   staffProfile                    StaffProfile?
+  crmUserNotes                    CrmUserNote[]                @relation("CrmUserNoteTarget")
 }
 
 model XpEvent {
@@ -1700,14 +1701,40 @@ enum StaffRole {
 }
 
 model StaffProfile {
-  id                String    @id @default(cuid())
-  userId            Int       @unique
-  displayName       String
-  staffRole         StaffRole
-  permissionVersion Int       @default(1)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String        @id @default(cuid())
+  userId               Int           @unique
+  displayName          String
+  staffRole            StaffRole
+  permissionVersion    Int           @default(1)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authoredCrmUserNotes CrmUserNote[] @relation("CrmUserNoteAuthor")
 
   @@index([staffRole])
+}
+
+// CRM learner note — Notes v1. Immutable, append-only internal staff commentary
+// about a learner. There is deliberately no updatedAt, deletedAt, visibility,
+// pinned, category, caseId, owner, team, version or author name snapshot: v1
+// creates notes and reads them back, nothing else.
+//
+// Both relations are Restrict on purpose. Deleting a learner who has notes, or
+// a StaffProfile that authored notes, fails loudly rather than silently
+// orphaning or erasing operational history. The author's display name is always
+// resolved live through `author`, so a corrected staff name corrects every note.
+model CrmUserNote {
+  id        String   @id @default(cuid())
+  userId    Int
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  user   User         @relation("CrmUserNoteTarget", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author StaffProfile @relation("CrmUserNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Exactly the keyset the list query walks: (userId) filter, then the
+  // (createdAt DESC, id DESC) cursor tuple.
+  @@index([userId, createdAt, id])
+  @@index([authorId])
 }

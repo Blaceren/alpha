@@ -30,21 +30,27 @@ permissions — e.g. a `UserRole.admin` with `StaffRole.read_only` gets zero CRM
 permissions, and a `UserRole.support` with `StaffRole.crm_manager` gets the full
 crm_manager matrix. StaffProfile is the CRM source of truth.
 
-## Permissions (exactly eight, canonical order)
+## Permissions (exactly ten, canonical order)
 
-`view_exact_financials, view_identity_full_email, reveal_pii, assign_owner, export, view_audit, manage_settings, edit_user_notes`
+`view_exact_financials, view_identity_full_email, reveal_pii, assign_owner, export, view_audit, manage_settings, edit_user_notes, view_user_notes, create_user_notes`
 
 `effectivePermissions` are always returned in this canonical order.
+
+The first eight are the Slice 1 contract and keep their exact relative order.
+`view_user_notes` and `create_user_notes` were appended by CRM User Notes v1
+(see `docs/CRM_USER_NOTES_V1.md`). `edit_user_notes` is **not** used for reading
+or creating a note — it stays reserved for future mutating operations on an
+existing note (edit, delete, pin/unpin, visibility).
 
 ## Locked role → permission matrix
 
 | Role | Permissions |
 |------|-------------|
-| crm_admin | all eight |
-| crm_manager | all except `manage_settings` (seven) |
-| retention_manager | `view_exact_financials, view_identity_full_email, reveal_pii, assign_owner, export, edit_user_notes` (no `view_audit`, no `manage_settings`) |
-| mentor | none |
-| support | `edit_user_notes` only |
+| crm_admin | all ten |
+| crm_manager | all except `manage_settings` (nine) |
+| retention_manager | `view_exact_financials, view_identity_full_email, reveal_pii, assign_owner, export, edit_user_notes, view_user_notes, create_user_notes` (no `view_audit`, no `manage_settings`) |
+| mentor | none — an explicit Notes v1 decision, see `docs/CRM_USER_NOTES_V1.md` |
+| support | `edit_user_notes, view_user_notes, create_user_notes` |
 | moderator | none |
 | analyst | none |
 | content_manager | none |
@@ -63,6 +69,11 @@ Integer, default `1`, always `> 0`. The session returns the current stored DB
 value. It is not derived from time and is not `User.updatedAt`. It is intended
 to increase when a staff role or explicit grants change in a future slice. There
 is no mutation/update API in Slice 1 (no explicit-grant table, no overrides).
+
+CRM User Notes v1 deliberately did **not** increment it. That slice changed the
+role -> permission table for every employee rather than one employee's grants,
+which no client can act on per-employee, so all stored values remain `1` and no
+migration touches `StaffProfile` rows.
 
 ## CRM session contract
 
@@ -116,8 +127,11 @@ presented as ready.
   permissions do **not** replace these identity/resource checks.
 - `own/team/all` scope and any team/department model.
 - `role_restricted` note visibility.
-- CRM users v1, User 360, notes, owner assignment, owner candidates, audit
-  projector, global idempotency, CRM mutation receipts, CRM row-versioning.
+- User 360, owner assignment, owner candidates, audit projector, global
+  idempotency, CRM mutation receipts, CRM row-versioning. (CRM users v1 and
+  immutable append-only learner notes have since shipped — see
+  `docs/CRM_USERS_V1.md`, `docs/CRM_USER_DETAIL_V1.md` and
+  `docs/CRM_USER_NOTES_V1.md`.)
 - Role management API/UI, permission-override grants.
 - OpenAPI generation and generated frontend client.
 - Cross-subdomain cookie, PostgreSQL migration, deployed-database migration.

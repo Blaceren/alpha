@@ -72,7 +72,8 @@
     "test:regression:crm-staff-identity": "tsx scripts/regression/crmStaffIdentityRegression.ts",
     "test:regression:crm-session": "tsx scripts/regression/crmSessionRegression.ts",
     "test:regression:crm-users": "tsx scripts/regression/crmUsersRegression.ts",
-    "test:regression:crm-user-detail": "tsx scripts/regression/crmUserDetailRegression.ts"
+    "test:regression:crm-user-detail": "tsx scripts/regression/crmUserDetailRegression.ts",
+    "test:regression:crm-user-notes": "tsx scripts/regression/crmUserNotesRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

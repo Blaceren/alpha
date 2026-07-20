@@ -509,7 +509,7 @@ async function main() {
     await check("59-62. fresh DB, 30 migrations, clean foreign keys", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 30, `expected 30 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 31, `expected 31 migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -527,11 +527,16 @@ async function main() {
 
       const usersDir = path.join(crmV1, "users");
       assert.deepEqual(fs.readdirSync(usersDir).sort(), ["[userId]", "route.ts"]);
-      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["route.ts"]);
+      // Notes v1 added the nested notes route; nothing else joined the surface.
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["notes", "route.ts"]);
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "notes")).sort(), ["route.ts"]);
 
       for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
         assert.ok(!fs.existsSync(path.join(usersDir, banned)), `unexpected subroute users/${banned}`);
+      }
+      // Everything except notes stays banned under users/[userId].
+      for (const banned of ["owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", banned)), `unexpected subroute users/[userId]/${banned}`);
       }
       // No catch-all.

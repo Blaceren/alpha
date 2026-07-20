@@ -79,6 +79,37 @@ export const crmUserDetailResponseSchema = z
 
 export type CrmUserDetailResponse = z.infer<typeof crmUserDetailResponseSchema>;
 
+// Runtime contract for CRM user notes (v1). Strict at every level, so a field
+// that Notes v1 deliberately does not expose — employeeId, authorId, author or
+// learner email, StaffRole, effectivePermissions, updatedAt, deletedAt,
+// visibility, pinned, caseId, capabilities, audit metadata — fails
+// serialization here instead of reaching the client.
+export const crmUserNoteItemSchema = z
+  .object({
+    noteId: z.string().min(1),
+    body: z.string().min(1),
+    // The author's CURRENT StaffProfile display name. Never an id, never an
+    // email, and never a stored snapshot.
+    authorDisplayName: z.string().min(1),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+
+export type CrmUserNoteItem = z.infer<typeof crmUserNoteItemSchema>;
+
+export const crmUserNotesResponseSchema = z
+  .object({
+    items: z.array(crmUserNoteItemSchema),
+    nextCursor: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type CrmUserNotesResponse = z.infer<typeof crmUserNotesResponseSchema>;
+
+// POST returns the created note directly — the same item shape as GET, so the
+// client validates one shape, not two.
+export const crmUserNoteCreatedSchema = crmUserNoteItemSchema;
+
 // Safe CRM error envelope. Never carries raw exceptions or resource existence.
 export const crmErrorResponseSchema = z
   .object({

@@ -280,6 +280,8 @@ async function main() {
       // still proves notes, owner, audit and User 360 have not appeared.
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
       assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session", "users"]);
+      // A top-level /api/crm/v1/notes route still must not exist; Notes v1 is
+      // nested under users/[userId]/notes and is asserted there instead.
       for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
       }
