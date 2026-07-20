@@ -27,14 +27,14 @@ const suites = [
   ["4B.4 pinned content and progress", "test:regression:curriculum-content-read-progress", 18],
   ["4B.5 assessment runtime", "test:regression:curriculum-assessment-runtime", 35],
   ["4B.6 real HTTP", "test:regression:curriculum-phase4-http", 32],
-  ["populated V1 upgrade/runtime", "test:regression:curriculum-upgrade", 28],
+  ["populated V1 upgrade/runtime", "test:regression:curriculum-upgrade", 30],
 ] as const;
 
 // Flat cumulative orchestration: every leaf suite appears exactly once. The
 // historical Phase 1/2/3 gate scripts remain independently runnable, but are
 // deliberately not nested here because each nests its predecessor and repeats
 // upgrade/HTTP work.
-const UNIQUE_LEAF_ASSERTIONS = 1079;
+const UNIQUE_LEAF_ASSERTIONS = 1081;
 
 const gateDb = `/tmp/ata-phase4-gate-noop-${process.pid}.db`;
 const env = { ...process.env, DATABASE_URL: process.env.DATABASE_URL ?? `file:${gateDb}` };
