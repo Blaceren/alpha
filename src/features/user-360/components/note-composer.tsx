@@ -36,7 +36,7 @@ export function NoteComposer({
    * post-delete focus target (Phase 1B6): after a note row vanishes, focus lands on
    * the composer, the natural next place to act.
    */
-  inputRef?: React.RefObject<HTMLTextAreaElement>;
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const [body, setBody] = React.useState("");
   const [expanded, setExpanded] = React.useState(false);

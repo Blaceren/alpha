@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { stripFlightRowRefs } from "./rsc-flight";
 
 /**
  * Phase 1C.1 — provider privacy consistency, proved in a real browser.
@@ -67,7 +68,7 @@ test("Users: a user with no balance reads «Нет данных», not «Нед�
 
   // The admin MAY see exact financials, so a permission message would be false.
   await expect(page.getByText("Нет данных").first()).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("Недоступно для роли");
 
   await page.screenshot({ path: `${OUT}/users-no-financial-data-1440x900.png` });
@@ -86,7 +87,7 @@ test("Users: read_only sees «Недоступно для роли» for a user 
 
   // The value exists but the role may not see it — the opposite of the case above.
   await expect(page.getByText("Недоступно для роли").first()).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain(EXACT_BALANCE);
   expect(html).not.toContain("Нет данных");
 
@@ -104,7 +105,7 @@ test("Users: support gets a bucket and no exact amount in the served document", 
   await searchForSingleUser(page, "Nina", "Nina Chmiel");
   await expect(page.getByText("$50–99").first()).toBeVisible();
 
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain(EXACT_BALANCE);
   expect(html).not.toContain("@example.test");
 
@@ -121,7 +122,7 @@ test("Users mobile: no financial value, so it cannot disagree with the table", a
 
   // Mobile cards deliberately carry no financial column; whatever the role, the
   // exact amount must not appear, and no hidden-state text can contradict desktop.
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain(EXACT_BALANCE);
   expect(html).not.toContain("диапазон");
 

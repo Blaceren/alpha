@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { stripFlightRowRefs } from "./rsc-flight";
 
 /**
  * User 360 notes (Phase 1B4-B) E2E + screenshot suite — the first mutating
@@ -232,7 +233,7 @@ test("support may add a note and still gets no exact financials or full email", 
   await expect(page.getByText("Support: обновил статус обращения.")).toBeVisible();
 
   // Writing a note does not widen what support may read.
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("$90");
   expect(html).not.toContain(FULL_EMAIL);
   expect(html).toContain("$50–99");
@@ -317,7 +318,7 @@ test("a storage failure says so in Russian and leaks no diagnostics", async ({ p
 
   await expect(formAlert(page)).toHaveText("Локальное сохранение недоступно. Попробуйте ещё раз");
 
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   // The provider's own English diagnostic never reaches the document.
   expect(html).not.toContain("Mock overlay could not be persisted");
   expect(html).not.toContain("QuotaExceededError");
@@ -331,7 +332,7 @@ test("no raw provider diagnostic appears anywhere in a healthy document", async 
   await openNotes(page);
   await addNote(page, "Обычная рабочая заметка.");
 
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   for (const diagnostic of [
     "Mock overlay could not be persisted",
     "Note body is empty",

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { stripFlightRowRefs } from "./rsc-flight";
 
 /**
  * User 360 (Phase 1C) E2E + screenshot suite. Real-browser render of the
@@ -99,7 +100,7 @@ test("support desktop 1440x900 — permission-safe, no exact amount anywhere", a
   // Bucket representation is shown…
   await expect(page.getByText("$50–99").first()).toBeVisible();
 
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   // …and the exact amount is absent from the whole serialized document —
   // including props, title/aria attributes and Next's serialized payload.
   expect(html).not.toContain("$90");
@@ -158,7 +159,7 @@ test("onboarding user — Pocket registration axis is honest", async ({ page }) 
   // No balance exists → says so honestly; not a fake zero, and NOT a false
   // "no permission" message (this role may see exact financials).
   await expect(page.getByText("Нет данных").first()).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("Недоступно для роли");
 
   expect(errors, errors.join("\n")).toHaveLength(0);
@@ -257,7 +258,7 @@ test("unknown user id — real not-found, no fabricated profile", async ({ page 
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   // A way back, and no invented data.
   await expect(page.getByRole("link", { name: "Пользователи" }).last()).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("Баланс");
 
   await page.screenshot({ path: `${OUT}/user-360-not-found-1440x900.png` });
@@ -306,7 +307,7 @@ test("analyst — pseudonymous identity, no name and no exact amount", async ({ 
 
   // Analyst gets an opaque id instead of the display name.
   await expect(page.getByRole("heading", { level: 1, name: /anon_/ })).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("Nina Chmiel");
   expect(html).not.toContain(FULL_EMAIL);
   expect(html).not.toContain("$90");
@@ -322,7 +323,7 @@ test("read_only — financials hidden, profile still readable", async ({ page })
   await waitFor360(page, /Nina Chmiel/);
 
   await expect(page.getByText("Недоступно для роли").first()).toBeVisible();
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
   expect(html).not.toContain("$90");
   expect(html).not.toContain("$50–99");
 

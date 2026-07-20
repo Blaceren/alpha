@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { stripFlightRowRefs } from "./rsc-flight";
 
 /**
  * Today workspace screenshot suite (Phase 1B3). Real-browser render — every
@@ -84,7 +85,7 @@ test("support desktop 1440x900 (permission-safe)", async ({ page }) => {
   await waitForQueue(page);
 
   const body = (await page.locator("body").innerText()).replace(/\s+/g, " ");
-  const html = await page.content();
+  const html = stripFlightRowRefs(await page.content());
 
   // Named exact amounts rather than /\$\d/: a bucket label IS "$50–99", so a
   // pattern would flag the very projection support is supposed to get. These are
