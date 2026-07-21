@@ -110,6 +110,48 @@ export type CrmUserNotesResponse = z.infer<typeof crmUserNotesResponseSchema>;
 // client validates one shape, not two.
 export const crmUserNoteCreatedSchema = crmUserNoteItemSchema;
 
+// Runtime contract for CRM learner owner (v1). Strict at every level, so a
+// field Owner v1 deliberately does NOT expose — the owner's email, User.id,
+// userId, internal ownerId, StaffRole, UserRole, permissions,
+// effectivePermissions, permissionVersion, status, createdAt/updatedAt,
+// history, audit metadata or reason — fails serialization here instead of
+// reaching the client. The owner identity is exactly two fields; ownerVersion
+// is the opaque optimistic-concurrency token.
+export const crmOwnerIdentitySchema = z
+  .object({
+    employeeId: z.string().min(1),
+    displayName: z.string().min(1),
+  })
+  .strict();
+
+export type CrmOwnerIdentity = z.infer<typeof crmOwnerIdentitySchema>;
+
+export const crmOwnerResponseSchema = z
+  .object({
+    owner: crmOwnerIdentitySchema.nullable(),
+    // 0 for pristine, never-mutated state; monotonic and never reset thereafter.
+    ownerVersion: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type CrmOwnerResponse = z.infer<typeof crmOwnerResponseSchema>;
+
+// A candidate is exactly the same two fields as an owner identity — an id to
+// send and a caption to show. StaffRole is deliberately absent: exposing it
+// would imply a book the backend does not model and leak the role axis.
+export const crmOwnerCandidateSchema = crmOwnerIdentitySchema;
+
+export type CrmOwnerCandidate = z.infer<typeof crmOwnerCandidateSchema>;
+
+export const crmOwnerCandidatesResponseSchema = z
+  .object({
+    items: z.array(crmOwnerCandidateSchema),
+    nextCursor: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type CrmOwnerCandidatesResponse = z.infer<typeof crmOwnerCandidatesResponseSchema>;
+
 // Safe CRM error envelope. Never carries raw exceptions or resource existence.
 export const crmErrorResponseSchema = z
   .object({

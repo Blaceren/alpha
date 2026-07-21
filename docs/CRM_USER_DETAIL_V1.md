@@ -205,7 +205,7 @@ preserve the mock User 360 layout:
 | `selectedAchievementId`, achievements | Cosmetic learner-facing display choice; no CRM need. |
 | `leaderboardExcluded` | Internal moderation/leaderboard control — not exposed merely because it exists. |
 | `ExchangeAccount` (balance, deposits, withdrawals, P/L, traderId) | Broker-sourced financial data, out of scope. |
-| owner / primary owner | **No CRM owner model exists.** |
+| owner / primary owner | Owner is a **separate** endpoint, not part of the detail DTO. See `docs/CRM_USER_OWNER_V1.md` (`GET/PUT /api/crm/v1/users/[userId]/owner`). |
 | notes, note counts | **No CRM notes model exists.** |
 | lifecycle / funding / engagement, priority, recommendations, timeline, tasks, cases, signals | Mock-side derivations and aggregates with no backend source. |
 | `employeeId`, `UserRole`, `StaffRole`, permissions | Staff axis; never mixed into learner data. |

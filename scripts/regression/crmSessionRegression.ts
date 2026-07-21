@@ -274,19 +274,19 @@ async function main() {
       assert.ok([200, 204].includes(logout.status));
     });
 
-    await check("20. no CRM notes / owner / User360 routes exist yet", () => {
-      // `users` joined the accepted CRM v1 surface in Backend CRM Users Slice 2
-      // (GET /api/crm/v1/users). Every other route stays banned, so this guard
-      // still proves notes, owner, audit and User 360 have not appeared.
+    await check("20. CRM v1 surface is exactly session, users and owner-candidates", () => {
+      // `users` joined in Users Slice 2; `owner-candidates` joins in Owner v1
+      // (GET /api/crm/v1/owner-candidates). Every other top-level route stays
+      // banned, so this guard still proves audit and User 360 have not appeared
+      // and that owner mutation lives nested under users/[userId], not here.
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session", "users"]);
-      // A top-level /api/crm/v1/notes route still must not exist; Notes v1 is
-      // nested under users/[userId]/notes and is asserted there instead.
-      for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["owner-candidates", "session", "users"]);
+      // A top-level /api/crm/v1/notes or /owner route still must not exist:
+      // notes and owner are nested under users/[userId] and asserted there.
+      for (const banned of ["notes", "owner", "owners", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
       }
       assert.ok(!("crmNote" in prisma), "unexpected CrmNote model");
-      assert.ok(!("crmUserOwner" in prisma), "unexpected owner model");
     });
   } finally {
     await stop(server);

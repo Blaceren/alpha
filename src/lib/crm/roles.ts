@@ -109,3 +109,32 @@ export function resolveEffectivePermissions(role: string): CrmPermission[] {
 export function isCrmStaffRole(value: string): value is CrmStaffRole {
   return (CRM_STAFF_ROLES as readonly string[]).includes(value);
 }
+
+// ---------------------------------------------------------------- Owner v1
+
+// Eligible owner StaffRoles — a fixed product decision for CRM Learner Owner v1.
+// This is a DOMAIN rule for who may be a candidate/owner, NOT an operation
+// permission: candidacy deliberately does not depend on `assign_owner`. Note the
+// asymmetry — crm_admin holds `assign_owner` (may assign) but is NOT eligible as
+// an owner, while mentor and support are eligible owners yet hold no
+// `assign_owner` (cannot assign). Do not widen this set by intuition.
+export const CRM_ELIGIBLE_OWNER_ROLES: readonly CrmStaffRole[] = [
+  "crm_manager",
+  "retention_manager",
+  "mentor",
+  "support",
+] as const;
+
+export function isEligibleOwnerRole(role: string): role is CrmStaffRole {
+  return (CRM_ELIGIBLE_OWNER_ROLES as readonly string[]).includes(role);
+}
+
+// Narrow authorization gate for the two Owner mutation-side operations:
+// listing candidates and PUT owner. Both require exactly `assign_owner`, which
+// is held only by crm_admin, crm_manager and retention_manager. Reading the
+// current owner deliberately does NOT go through here — any valid StaffProfile
+// may read it. No other permission implies `assign_owner`, and no StaffRole name
+// is checked here: authorization is purely permission-based.
+export function canAssignOwner(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("assign_owner");
+}

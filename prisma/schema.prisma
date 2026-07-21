@@ -174,6 +174,7 @@ model User {
   reportCommandReceipts           ReportCommandReceipt[]       @relation("ReportCommandActor")
   staffProfile                    StaffProfile?
   crmUserNotes                    CrmUserNote[]                @relation("CrmUserNoteTarget")
+  crmOwnerState                   CrmUserOwner?                @relation("CrmUserOwnerLearner")
 }
 
 model XpEvent {
@@ -1701,15 +1702,16 @@ enum StaffRole {
 }
 
 model StaffProfile {
-  id                   String        @id @default(cuid())
-  userId               Int           @unique
+  id                   String         @id @default(cuid())
+  userId               Int            @unique
   displayName          String
   staffRole            StaffRole
-  permissionVersion    Int           @default(1)
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  authoredCrmUserNotes CrmUserNote[] @relation("CrmUserNoteAuthor")
+  permissionVersion    Int            @default(1)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authoredCrmUserNotes CrmUserNote[]  @relation("CrmUserNoteAuthor")
+  ownedLearnerStates   CrmUserOwner[] @relation("CrmUserOwnerStaff")
 
   @@index([staffRole])
 }
@@ -1737,4 +1739,40 @@ model CrmUserNote {
   // (createdAt DESC, id DESC) cursor tuple.
   @@index([userId, createdAt, id])
   @@index([authorId])
+}
+
+// CRM learner owner — Owner v1. The single current owner of one learner, stored
+// as a mutable singleton keyed by the learner (userId is the primary key, so a
+// learner can have at most one owner-state row). Ownership is informational
+// only: it grants no authorization and changes no Notes, email, financial or
+// learner-visibility rule.
+//
+// Concurrency and lifecycle are deliberate and MUST NOT be simplified:
+//   - NO row            = pristine, never-mutated state → owner null, version 0.
+//   - version starts at 1 on the first real assignment (row is created then).
+//   - `ownerId` is nullable: a row with ownerId = null and version > 0 is
+//     "previously mutated but currently unassigned" — a real, distinct state.
+//   - version is monotonic and never resets; unassignment sets ownerId = null
+//     and increments version. The row is NEVER deleted by Owner v1.
+//
+// Both foreign keys are Restrict: deleting a learner that has an owner-state
+// row, or a StaffProfile that currently owns a learner, fails loudly rather
+// than silently orphaning operational state. The owner FK is nullable so an
+// unassigned row keeps no dangling reference. The owner's display name is
+// always resolved live through `owner`, never snapshotted.
+//
+// There is deliberately no history, actorId, assignedBy, reason, comment,
+// deletedAt, AuditLog relation, workload or team field: Owner v1 stores current
+// state only. Typed assignment history is a deferred future slice.
+model CrmUserOwner {
+  userId    Int      @id
+  ownerId   String?
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User          @relation("CrmUserOwnerLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  owner StaffProfile? @relation("CrmUserOwnerStaff", fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([ownerId])
 }

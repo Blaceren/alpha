@@ -127,11 +127,13 @@ presented as ready.
   permissions do **not** replace these identity/resource checks.
 - `own/team/all` scope and any team/department model.
 - `role_restricted` note visibility.
-- User 360, owner assignment, owner candidates, audit projector, global
-  idempotency, CRM mutation receipts, CRM row-versioning. (CRM users v1 and
-  immutable append-only learner notes have since shipped — see
-  `docs/CRM_USERS_V1.md`, `docs/CRM_USER_DETAIL_V1.md` and
-  `docs/CRM_USER_NOTES_V1.md`.)
+- User 360, audit projector, global idempotency, CRM mutation receipts. (CRM
+  users v1, immutable append-only learner notes, and the CRM learner owner
+  foundation — current owner, eligible candidates, safe assignment with
+  per-row `ownerVersion` concurrency — have since shipped. See
+  `docs/CRM_USERS_V1.md`, `docs/CRM_USER_DETAIL_V1.md`,
+  `docs/CRM_USER_NOTES_V1.md` and `docs/CRM_USER_OWNER_V1.md`. `assign_owner` is
+  now enforced by the owner endpoints.)
 - Role management API/UI, permission-override grants.
 - OpenAPI generation and generated frontend client.
 - Cross-subdomain cookie, PostgreSQL migration, deployed-database migration.

@@ -506,10 +506,10 @@ async function main() {
       void plainLearner;
     });
 
-    await check("59-62. fresh DB, 30 migrations, clean foreign keys", () => {
+    await check("59-62. fresh DB, 32 migrations, clean foreign keys", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 31, `expected 31 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 32, `expected 32 migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -521,28 +521,35 @@ async function main() {
 
     /* ----------------------------------------------------------- route scope */
 
-    await check("65-70. CRM v1 exposes only session, users and users/[userId]", () => {
+    await check("65-70. CRM v1 exposes session, users, owner-candidates and nested owner", () => {
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["session", "users"]);
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["owner-candidates", "session", "users"]);
+      // owner-candidates is a flat read-only route: exactly one route file.
+      assert.deepEqual(fs.readdirSync(path.join(crmV1, "owner-candidates")).sort(), ["route.ts"]);
 
       const usersDir = path.join(crmV1, "users");
       assert.deepEqual(fs.readdirSync(usersDir).sort(), ["[userId]", "route.ts"]);
-      // Notes v1 added the nested notes route; nothing else joined the surface.
-      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["notes", "route.ts"]);
+      // Notes v1 added nested notes; Owner v1 adds nested owner. Nothing else.
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["notes", "owner", "route.ts"]);
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "notes")).sort(), ["route.ts"]);
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner")).sort(), ["route.ts"]);
 
-      for (const banned of ["notes", "owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
+      // Top-level: notes and owner are nested, so they must not appear here;
+      // owners/audit/360 never existed.
+      for (const banned of ["notes", "owner", "owners", "audit", "360", "user-360"]) {
         assert.ok(!fs.existsSync(path.join(crmV1, banned)), `unexpected route ${banned}`);
         assert.ok(!fs.existsSync(path.join(usersDir, banned)), `unexpected subroute users/${banned}`);
       }
-      // Everything except notes stays banned under users/[userId].
-      for (const banned of ["owner", "owners", "owner-candidates", "audit", "360", "user-360"]) {
+      // Under users/[userId] only notes and owner exist; everything else banned.
+      for (const banned of ["owners", "owner-candidates", "audit", "360", "user-360", "history"]) {
         assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", banned)), `unexpected subroute users/[userId]/${banned}`);
       }
+      // No owner history or per-employee owner subroute.
+      assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", "owner", "history")), "unexpected owner/history");
+      assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", "owner", "[employeeId]")), "unexpected owner/[employeeId]");
       // No catch-all.
       assert.ok(!fs.existsSync(path.join(usersDir, "[...slug]")));
       assert.ok(!("crmNote" in prisma), "unexpected CrmNote model");
-      assert.ok(!("crmUserOwner" in prisma), "unexpected owner model");
     });
 
     await check("69. the detail route exposes only GET", async () => {
