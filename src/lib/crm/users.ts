@@ -337,17 +337,26 @@ export async function listCrmUsers(
       }
     : {};
 
+  // Compose the final filter as an AND of independently built conditions. The
+  // owner (`unassigned`), search and cursor fragments each carry their OWN
+  // top-level `OR`, so they MUST occupy separate AND entries: spreading them into
+  // one object would let a later `OR` key silently overwrite an earlier one and
+  // drop that predicate (owner=unassigned + search returning an assigned learner
+  // was exactly this). Empty fragments are omitted so the AND holds only real
+  // clauses and every active predicate always applies.
+  const conditions: Prisma.UserWhereInput[] = [
+    // Learner axis. Mirrors the existing accepted CRM users surface
+    // (/api/crm/users), which lists role: "user" accounts. This is the UserRole
+    // axis used purely as a listing filter — it is never read as a StaffRole and
+    // never grants anything.
+    { role: "user" },
+  ];
+  if (query.owner !== "all") conditions.push(ownerWhere);
+  if (query.search) conditions.push(searchWhere);
+  if (query.cursor) conditions.push(cursorWhere);
+
   const rows = await prisma.user.findMany({
-    where: {
-      // Learner axis. Mirrors the existing accepted CRM users surface
-      // (/api/crm/users), which lists role: "user" accounts. This is the
-      // UserRole axis used purely as a listing filter — it is never read as a
-      // StaffRole and never grants anything.
-      role: "user",
-      ...(query.owner !== "all" ? ownerWhere : {}),
-      ...(query.search ? searchWhere : {}),
-      ...(query.cursor ? cursorWhere : {}),
-    },
+    where: { AND: conditions },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: query.limit + 1,
     select: USER_SELECT,

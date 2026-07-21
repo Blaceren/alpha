@@ -247,9 +247,35 @@ async function main() {
     const ineligOwnerLearner = await prisma.user.create({ data: { email: "has-inelig-owner@example.test", name: "Has Ineligible Owner", role: "user", passwordHash: hash, createdAt: new Date("2026-04-06T00:00:00.000Z") } });
     await prisma.crmUserOwner.create({ data: { userId: ineligOwnerLearner.id, ownerId: ineligOwnerProfile.id, version: 1 } });
 
-    // Assigned learners = the five with a non-null ownerId above.
+    /* ---------------------------------------- where-composition fixtures ---
+     * Purpose-built so a single search token spans BOTH an assigned learner and
+     * unassigned learners, and so owner=mine can be exercised with an actor-owned
+     * learner that does NOT match the search. These are exactly the shapes a
+     * top-level `OR` key-overwrite (owner OR vs search OR) silently mishandles.
+     *
+     *   Kappa Shared        -> assigned (support)      | search "Kappa Shared" hit
+     *   Kappa Shared Free   -> unassigned, rowless     | search "Kappa Shared" hit
+     *   Kappa Shared Null   -> unassigned, persisted-null | search "Kappa Shared" hit
+     *   Sigma Book          -> assigned (support, "mine"), NOT a "Owned" hit
+     *
+     * Sigma Book is owned by support (never crm_manager) so it cannot disturb the
+     * crm_manager mine-book that checks 77/81 pin exactly to ownedA/ownedB.
+     */
+    const compAssigned = await prisma.user.create({ data: { email: "kappa-shared@example.test", name: "Kappa Shared", role: "user", passwordHash: hash, createdAt: new Date("2026-06-01T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: compAssigned.id, ownerId: supportProfile.id, version: 1 } });
+    const compRowless = await prisma.user.create({ data: { email: "kappa-shared-free@example.test", name: "Kappa Shared Free", role: "user", passwordHash: hash, createdAt: new Date("2026-06-02T00:00:00.000Z") } });
+    const compPersistedNull = await prisma.user.create({ data: { email: "kappa-shared-null@example.test", name: "Kappa Shared Null", role: "user", passwordHash: hash, createdAt: new Date("2026-06-03T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: compPersistedNull.id, ownerId: null, version: 2 } });
+    // Owned by support and dated BEFORE ownedByOther (support's matching learner,
+    // 04-03): under a support mine+search+cursor walk, a pre-fix build that drops
+    // the search predicate on page 2 would leak this non-matching learner, so it
+    // must sort where the cursor descends into, not above support's matching row.
+    const mineNoMatch = await prisma.user.create({ data: { email: "sigma-book@example.test", name: "Sigma Book", role: "user", passwordHash: hash, createdAt: new Date("2026-04-02T12:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: mineNoMatch.id, ownerId: supportProfile.id, version: 1 } });
+
+    // Assigned learners = every learner above with a non-null ownerId.
     const assignedLearnerIds = new Set(
-      [ownedA.id, ownedB.id, ownedByOther.id, blockedOwnerLearner.id, ineligOwnerLearner.id].map(String),
+      [ownedA.id, ownedB.id, ownedByOther.id, blockedOwnerLearner.id, ineligOwnerLearner.id, compAssigned.id, mineNoMatch.id].map(String),
     );
 
     const totalLearners = await prisma.user.count({ where: { role: "user" } });
@@ -750,12 +776,12 @@ async function main() {
 
     // Walk every page of a given query and return the userIds seen, asserting
     // no duplicate and safe termination.
-    async function walkAll(client: Client, suffix: string): Promise<string[]> {
+    async function walkAll(client: Client, suffix: string, limit = 3): Promise<string[]> {
       const seen: string[] = [];
       let cursor: string | null = null;
       let guard = 0;
       do {
-        const url = `/api/crm/v1/users?limit=3&${suffix}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+        const url = `/api/crm/v1/users?limit=${limit}&${suffix}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
         const reply: Reply = await client.request("GET", url);
         assert.equal(reply.status, 200, `${suffix} page ${guard} -> ${reply.status}`);
         for (const item of itemsOf(reply)) seen.push(item.userId);
@@ -1076,6 +1102,134 @@ async function main() {
       assert.equal(matches.length, 1, `expected 1 findMany, found ${matches.length}`);
       // The owner relation is projected inline, not fetched per row.
       assert.ok(!/crmUserOwner\.findMany|crmUserOwner\.findUnique/.test(source), "owner is fetched separately (N+1)");
+    });
+
+    /* ================= OWNER x SEARCH x CURSOR: where composition ========= */
+    // Regression for the real defect: the final Prisma `where` was assembled by
+    // spreading fragments, so owner=unassigned (a top-level OR) and search (a
+    // top-level OR) collided — the later key silently overwrote the earlier one,
+    // dropping the owner predicate. The clauses must compose as an AND, never
+    // overwrite. Each check below fails on the pre-fix key-overwrite build.
+
+    await check("91. owner=unassigned + search matching ONLY an assigned learner returns empty", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      // "Owned Other" is owned by support (assigned). Under unassigned it must vanish.
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=unassigned&search=Owned%20Other");
+      assert.equal(reply.status, 200);
+      assert.deepEqual(itemsOf(reply), [], "assigned learner leaked into owner=unassigned+search");
+      assert.equal(reply.body.nextCursor, null);
+    });
+
+    await check("92. owner=unassigned + search matching a rowless pristine learner returns that learner", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=unassigned&search=Learner%2000");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, 1);
+      assert.equal(itemsOf(reply)[0].userId, String(learnerIds[0]));
+      assert.equal(itemsOf(reply)[0].owner, null);
+    });
+
+    await check("93. owner=unassigned + search matching a persisted-null learner returns that learner", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=unassigned&search=Persisted%20Null");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, 1);
+      assert.equal(itemsOf(reply)[0].userId, String(persistedNull.id));
+      assert.equal(itemsOf(reply)[0].owner, null);
+    });
+
+    await check("94. owner=unassigned + search matching BOTH assigned and unassigned returns only the unassigned", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      // "Kappa Shared" spans compAssigned (assigned), compRowless + compPersistedNull (unassigned).
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=unassigned&search=Kappa%20Shared");
+      assert.equal(reply.status, 200);
+      const ids = new Set(itemsOf(reply).map((i) => i.userId));
+      assert.deepEqual([...ids].sort(), [String(compRowless.id), String(compPersistedNull.id)].sort());
+      assert.ok(!ids.has(String(compAssigned.id)), "assigned learner leaked into unassigned+search");
+      for (const item of itemsOf(reply)) assert.equal(item.owner, null);
+    });
+
+    await check("95. owner=mine + search returns only the actor's matching learners", async () => {
+      // crm_manager owns exactly ownedA/ownedB. "Owned" also matches ownedByOther
+      // (support's), which owner=mine must exclude — proving the owner predicate
+      // ANDs with search rather than being overwritten by it.
+      const client = await loginAs(staffByRole.get("crm_manager")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=mine&search=Owned");
+      assert.equal(reply.status, 200);
+      const ids = new Set(itemsOf(reply).map((i) => i.userId));
+      assert.deepEqual([...ids].sort(), [String(ownedA.id), String(ownedB.id)].sort());
+      assert.ok(!ids.has(String(ownedByOther.id)), "someone else's learner leaked into mine");
+    });
+
+    await check("96. owner=all + search preserves normal search behaviour", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const expected = await prisma.user.count({ where: { role: "user", name: { contains: "Owned" } } });
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=all&search=Owned");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, expected);
+      const ids = new Set(itemsOf(reply).map((i) => i.userId));
+      assert.deepEqual(
+        [...ids].sort(),
+        [String(ownedA.id), String(ownedB.id), String(ownedByOther.id)].sort(),
+      );
+    });
+
+    await check("97. owner omitted + search matches owner=all + search exactly", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const omitted = await client.request("GET", "/api/crm/v1/users?limit=100&search=Owned");
+      const all = await client.request("GET", "/api/crm/v1/users?limit=100&owner=all&search=Owned");
+      assert.equal(omitted.status, 200);
+      assert.deepEqual(
+        itemsOf(omitted).map((i) => i.userId),
+        itemsOf(all).map((i) => i.userId),
+      );
+    });
+
+    await check("98. owner=unassigned + search + cursor: all predicates compose across pages, no assigned, no dup/gap", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      // "Learner" matches learnerIds[0..11] + "Plain Learner" — all unassigned.
+      const matching = await prisma.user.findMany({
+        where: { role: "user", name: { contains: "Learner" } },
+        select: { id: true },
+      });
+      const expected = new Set(
+        matching.map((m) => String(m.id)).filter((id) => !assignedLearnerIds.has(id)),
+      );
+      const seen = await walkAll(client, "owner=unassigned&search=Learner");
+      assert.equal(seen.length, expected.size, `expected ${expected.size} unassigned matches, saw ${seen.length}`);
+      assert.deepEqual(new Set(seen), expected);
+      for (const id of assignedLearnerIds) {
+        assert.ok(!seen.includes(id), `assigned learner ${id} leaked into unassigned+search+cursor`);
+      }
+    });
+
+    await check("99. owner=mine + search + cursor: all predicates compose across pages", async () => {
+      // support owns ownedByOther ("Owned Other", matches) and Sigma Book (mine but
+      // NOT a search match, dated just below ownedByOther). limit=1 forces cursor
+      // paging: a pre-fix build drops the search predicate on page 2 and leaks
+      // Sigma Book. Only ownedByOther may survive owner=mine AND search.
+      const client = await loginAs(staffByRole.get("support")!.email);
+      const seen = await walkAll(client, "owner=mine&search=Owned", 1);
+      assert.deepEqual(new Set(seen), new Set([String(ownedByOther.id)]));
+      assert.ok(!seen.includes(String(mineNoMatch.id)), "non-matching mine learner leaked across paged mine+search");
+      assert.ok(!seen.includes(String(ownedA.id)), "other actor's learner leaked across paged mine+search");
+    });
+
+    await check("100. both independent OR groups survive: owner=unassigned OR-branches + search OR both apply (with cursor)", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      // "Kappa Shared" search OR must AND with the owner OR whose TWO branches are
+      // rowless (compRowless) and persisted-null (compPersistedNull). Both branches
+      // must appear; the assigned Kappa (compAssigned) must not. Walked with a
+      // cursor so the cursor OR is simultaneously in play (limit=1 forces paging).
+      const seen = await walkAll(client, "owner=unassigned&search=Kappa%20Shared", 1);
+      assert.deepEqual(new Set(seen), new Set([String(compRowless.id), String(compPersistedNull.id)]));
+      assert.ok(seen.includes(String(compRowless.id)), "rowless owner-OR branch dropped");
+      assert.ok(seen.includes(String(compPersistedNull.id)), "persisted-null owner-OR branch dropped");
+      assert.ok(!seen.includes(String(compAssigned.id)), "assigned learner leaked past AND composition");
+      // Structural guard: the service composes with an enclosing AND, not a
+      // top-level spread that lets one OR overwrite another.
+      const source = fs.readFileSync(path.join(process.cwd(), "src", "lib", "crm", "users.ts"), "utf8");
+      assert.ok(/where:\s*\{\s*AND:/.test(source), "final where is not composed as an enclosing AND");
     });
   } finally {
     await stop(server);
