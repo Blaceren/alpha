@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UsersOutcome } from "@/application/api/users-client";
 import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
+import { throwingOwnerMethods } from "./owner-provider-test-stub";
 import type { Permission } from "@/domain/identity/roles";
 import { sessionFromDto } from "@/domain/identity/session";
 import { AuthenticatedSessionProvider } from "@/components/crm-shell/session-context";
@@ -35,6 +36,7 @@ function providerFor(outcomes: UsersOutcome[]): CrmUsersReadCapability & { calls
   let index = 0;
   return {
     calls,
+    ...throwingOwnerMethods(),
     // The list workspace must never call the detail capability.
     getUserDetail: () => {
       throw new Error("listUsers tests must not call getUserDetail");
@@ -94,6 +96,7 @@ afterEach(() => {
 describe("states", () => {
   it("shows a loading status first", async () => {
     const provider: CrmUsersReadCapability = {
+      ...throwingOwnerMethods(),
       listUsers: () => new Promise(() => {}),
       getUserDetail: () => {
         throw new Error("listUsers tests must not call getUserDetail");
@@ -407,6 +410,7 @@ describe("error behaviour", () => {
     const u = userEvent.setup();
     let calls = 0;
     const provider: CrmUsersReadCapability = {
+      ...throwingOwnerMethods(),
       getUserDetail: () => {
         throw new Error("listUsers tests must not call getUserDetail");
       },

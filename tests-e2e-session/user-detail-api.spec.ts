@@ -64,14 +64,15 @@ test.describe("same-origin proxy", () => {
     expect(response.headers()["x-request-id"]).toBeTruthy();
   });
 
-  test("nested learner subroutes other than notes are not proxied", async ({ request }) => {
-    // `/notes` is the ONE reviewed nested path (Frontend CRM User Notes Slice
-    // 1). Everything else under a learner — and any child below /notes — stays
-    // unreachable.
+  test("nested learner subroutes other than notes and owner are not proxied", async ({ request }) => {
+    // `/notes` and `/owner` are the TWO reviewed nested paths (Notes Slice 1,
+    // Owner Slice 1). Everything else under a learner — and any child below them
+    // — stays unreachable.
     for (const path of [
       "/api/crm/v1/users/101/extra",
       "/api/crm/v1/users/101/notes/note_1",
-      "/api/crm/v1/users/101/owner",
+      "/api/crm/v1/users/101/owner/history",
+      "/api/crm/v1/users/101/owner/emp_1",
       "/api/crm/v1/users/101/audit",
       "/api/crm/v1/users/101/timeline",
     ]) {
@@ -164,13 +165,18 @@ test.describe("populated detail", () => {
 });
 
 test.describe("only truthful sections appear", () => {
-  test("shows no owner, notes, financial, activity, timeline or recommendation section", async ({ page }) => {
+  test("shows the owner section but no mock-only sections", async ({ page }) => {
     await useStates(page, "authenticated", "active");
     await page.goto("/users/101");
     await expect(learner(page)).toBeVisible();
 
+    // Owner v1 is a truthful connected section — it must appear, under its
+    // production label «Ответственный», never the mock's «Владелец».
+    await expect(page.getByRole("heading", { name: "Ответственный" })).toBeVisible();
+
     const visible = await page.locator("body").innerText();
     for (const banned of [
+      // «Владелец» is the MOCK owner label; production uses «Ответственный».
       "Владелец", "Заметки", "Баланс", "Депозит", "Активность",
       "Рекомендаци", "Приоритет", "Сегмент", "Задачи", "Кейсы", "Достижени", "360",
     ]) {

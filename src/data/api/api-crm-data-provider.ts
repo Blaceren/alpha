@@ -30,6 +30,16 @@ import {
   type NoteCreateOutcome,
   type NotesListOutcome,
 } from "@/application/api/user-notes-client";
+import {
+  fetchOwnerCandidates,
+  fetchUserOwner,
+  setUserOwner,
+  type FetchOwnerCandidatesInput,
+  type OwnerCandidatesOutcome,
+  type OwnerMutationOutcome,
+  type OwnerReadOutcome,
+  type OwnerRequestOptions,
+} from "@/application/api/user-owner-client";
 
 /**
  * The capabilities the production application boundary needs — and nothing
@@ -53,6 +63,31 @@ export interface CrmUsersReadCapability {
     body: string,
     options?: FetchUserNotesOptions,
   ): Promise<NoteCreateOutcome>;
+  /**
+   * The current owner of one learner. Visible to every authenticated
+   * StaffProfile — this read carries no permission gate of its own; the caller
+   * decides only whether to render the assignment controls.
+   */
+  getUserOwner(userId: string, options?: OwnerRequestOptions): Promise<OwnerReadOutcome>;
+  /**
+   * The eligible owner-candidate directory. Only called when the session holds
+   * `assign_owner`; the backend enforces the same and 403s otherwise.
+   */
+  listOwnerCandidates(
+    input?: FetchOwnerCandidatesInput,
+    options?: OwnerRequestOptions,
+  ): Promise<OwnerCandidatesOutcome>;
+  /**
+   * Assign, replace or unassign the owner under optimistic concurrency. NOT a
+   * foothold for the broad mock mutation provider — it writes exactly the owner
+   * singleton and nothing else.
+   */
+  setUserOwner(
+    userId: string,
+    ownerEmployeeId: string | null,
+    expectedVersion: number,
+    options?: OwnerRequestOptions,
+  ): Promise<OwnerMutationOutcome>;
 }
 
 /**
@@ -65,8 +100,9 @@ export class UnsupportedApiCapability extends Error {
   constructor(readonly capability: string) {
     super(
       `CRM capability "${capability}" is not available in api mode. ` +
-        "Only the Users v1 list, user detail and immutable user notes are " +
-        "connected; every other CRM data API arrives in a later phase.",
+        "Only the Users v1 list, user detail, immutable user notes and the " +
+        "learner owner (current owner, candidates, assignment) are connected; " +
+        "every other CRM data API arrives in a later phase.",
     );
     this.name = "UnsupportedApiCapability";
   }
@@ -78,6 +114,9 @@ export const API_SUPPORTED_CAPABILITIES = [
   "getUserDetail",
   "listUserNotes",
   "createUserNote",
+  "getUserOwner",
+  "listOwnerCandidates",
+  "setUserOwner",
 ] as const;
 export type ApiSupportedCapability = (typeof API_SUPPORTED_CAPABILITIES)[number];
 
@@ -102,6 +141,9 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
     private readonly detailClient: typeof fetchUserDetail = fetchUserDetail,
     private readonly notesListClient: typeof fetchUserNotes = fetchUserNotes,
     private readonly noteCreateClient: typeof createUserNote = createUserNote,
+    private readonly ownerReadClient: typeof fetchUserOwner = fetchUserOwner,
+    private readonly ownerCandidatesClient: typeof fetchOwnerCandidates = fetchOwnerCandidates,
+    private readonly ownerWriteClient: typeof setUserOwner = setUserOwner,
   ) {}
 
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome> {
@@ -131,6 +173,29 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
     assertApiCapability("createUserNote");
     return this.noteCreateClient(userId, body, options);
   }
+
+  getUserOwner(userId: string, options?: OwnerRequestOptions): Promise<OwnerReadOutcome> {
+    assertApiCapability("getUserOwner");
+    return this.ownerReadClient(userId, options);
+  }
+
+  listOwnerCandidates(
+    input: FetchOwnerCandidatesInput = {},
+    options?: OwnerRequestOptions,
+  ): Promise<OwnerCandidatesOutcome> {
+    assertApiCapability("listOwnerCandidates");
+    return this.ownerCandidatesClient(input, options);
+  }
+
+  setUserOwner(
+    userId: string,
+    ownerEmployeeId: string | null,
+    expectedVersion: number,
+    options?: OwnerRequestOptions,
+  ): Promise<OwnerMutationOutcome> {
+    assertApiCapability("setUserOwner");
+    return this.ownerWriteClient(userId, ownerEmployeeId, expectedVersion, options);
+  }
 }
 
 /**
@@ -147,6 +212,17 @@ export function createApiCrmDataProvider(
   detailClient?: typeof fetchUserDetail,
   notesListClient?: typeof fetchUserNotes,
   noteCreateClient?: typeof createUserNote,
+  ownerReadClient?: typeof fetchUserOwner,
+  ownerCandidatesClient?: typeof fetchOwnerCandidates,
+  ownerWriteClient?: typeof setUserOwner,
 ): ApiCrmDataProvider {
-  return new ApiCrmDataProvider(listClient, detailClient, notesListClient, noteCreateClient);
+  return new ApiCrmDataProvider(
+    listClient,
+    detailClient,
+    notesListClient,
+    noteCreateClient,
+    ownerReadClient,
+    ownerCandidatesClient,
+    ownerWriteClient,
+  );
 }

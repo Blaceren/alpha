@@ -4,6 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UserDetailOutcome } from "@/application/api/user-detail-client";
 import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
+import { pristineOwnerMethods } from "./owner-provider-test-stub";
 import { sessionFromDto } from "@/domain/identity/session";
 import { AuthenticatedSessionProvider } from "@/components/crm-shell/session-context";
 import { resetClientRuntimeMode, setClientRuntimeMode } from "@/config/client-runtime-mode";
@@ -41,6 +42,7 @@ function providerFor(outcomes: UserDetailOutcome[]): CrmUsersReadCapability & { 
     createUserNote: () => {
       throw new Error("this test must not call createUserNote");
     },
+    ...pristineOwnerMethods(),
     async getUserDetail(userId) {
       calls.push(userId);
       const outcome = outcomes[Math.min(index, outcomes.length - 1)];
@@ -103,6 +105,7 @@ describe("states", () => {
       createUserNote: () => {
         throw new Error("this test must not call createUserNote");
       },
+      ...pristineOwnerMethods(),
       getUserDetail: () => new Promise(() => {}),
     };
     renderDetail(provider);
@@ -315,6 +318,7 @@ describe("error behaviour", () => {
       createUserNote: () => {
         throw new Error("this test must not call createUserNote");
       },
+      ...pristineOwnerMethods(),
       async getUserDetail(userId) {
         calls.push(userId);
         n += 1;

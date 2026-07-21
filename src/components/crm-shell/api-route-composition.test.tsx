@@ -50,6 +50,15 @@ vi.mock("@/data/api/api-crm-data-provider", async (importOriginal) => {
           createdAt: "2026-01-01T00:00:00.000Z",
         },
       }),
+      // The Owner section mounts for every StaffProfile; answer with the
+      // pristine, never-mutated state so this composition test stays focused on
+      // routing, not on owner behaviour.
+      getUserOwner: async () => ({
+        status: "success" as const,
+        owner: { owner: null, ownerVersion: 0 },
+      }),
+      listOwnerCandidates: async () => ({ status: "forbidden" as const }),
+      setUserOwner: async () => ({ status: "forbidden" as const }),
     }),
   };
 });

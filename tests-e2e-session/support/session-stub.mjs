@@ -41,6 +41,11 @@ const USERS_STATE_COOKIE = "ata_test_crm_users_state";
 const USER_DETAIL_STATE_COOKIE = "ata_test_crm_user_detail_state";
 const NOTES_STATE_COOKIE = "ata_test_crm_notes_state";
 const NOTES_SESSION_COOKIE = "ata_test_crm_notes_session";
+const OWNER_STATE_COOKIE = "ata_test_crm_owner_state";
+const OWNER_MUTATION_COOKIE = "ata_test_crm_owner_mutation";
+const CANDIDATES_STATE_COOKIE = "ata_test_crm_candidates_state";
+const OWNER_SESSION_COOKIE = "ata_test_crm_owner_session";
+const OWNER_CANDIDATES_PATH = "/api/crm/v1/owner-candidates";
 
 const VALID_SESSION = {
   employeeId: "emp_stub_7f3a9c",
@@ -75,6 +80,185 @@ const readUserDetailStateCookie = (header) =>
   readCookie(header, USER_DETAIL_STATE_COOKIE, "active");
 const readNotesStateCookie = (header) => readCookie(header, NOTES_STATE_COOKIE, "populated");
 const readNotesSessionCookie = (header) => readCookie(header, NOTES_SESSION_COOKIE, "both");
+const readOwnerStateCookie = (header) => readCookie(header, OWNER_STATE_COOKIE, "assigned");
+const readOwnerMutationCookie = (header) => readCookie(header, OWNER_MUTATION_COOKIE, "success");
+const readCandidatesStateCookie = (header) => readCookie(header, CANDIDATES_STATE_COOKIE, "one_page");
+const readOwnerSessionCookie = (header) => readCookie(header, OWNER_SESSION_COOKIE, "assigner");
+
+/* --------------------------------------------------------- owner sessions */
+
+// Permission fixtures for the Owner matrix. Each is a full valid session that
+// differs ONLY in effectivePermissions, so a test proves the affordance follows
+// the permission and never the role name.
+const OWNER_SESSIONS = {
+  assigner: ["assign_owner"],
+  no_assign: ["view_user_notes"],
+  unrelated: ["reveal_pii", "view_identity_full_email"],
+  none: [],
+};
+
+/* --------------------------------------------------------- synthetic owner */
+
+// Synthetic owner directory. Deliberately two fields only — no StaffRole, email,
+// status or version metadata, exactly like the accepted contract.
+const OWNER_ALPHA = { employeeId: "emp_alpha", displayName: "Оператор Альфа" };
+const OWNER_BETA = { employeeId: "emp_beta", displayName: "Оператор Бета" };
+const OWNER_GAMMA = { employeeId: "emp_gamma", displayName: "Оператор Гамма" };
+
+function ownerNameFor(employeeId) {
+  if (employeeId === "emp_alpha") return "Оператор Альфа";
+  if (employeeId === "emp_beta") return "Оператор Бета";
+  if (employeeId === "emp_gamma") return "Оператор Гамма";
+  return "Сотрудник";
+}
+
+function candidatesPage(state, url) {
+  const cursor = url.searchParams.get("cursor");
+  if (state === "empty") return { items: [], nextCursor: null };
+  if (state === "paged") {
+    if (cursor === "cand-2") return { items: [OWNER_BETA], nextCursor: null };
+    return { items: [OWNER_ALPHA], nextCursor: "cand-2" };
+  }
+  if (state === "duplicate") {
+    // The second page repeats emp_alpha — the client must dedupe without
+    // reordering.
+    if (cursor === "cand-2") return { items: [OWNER_ALPHA, OWNER_GAMMA], nextCursor: null };
+    return { items: [OWNER_ALPHA, OWNER_BETA], nextCursor: "cand-2" };
+  }
+  // one_page (default): deterministic backend order.
+  return { items: [OWNER_ALPHA, OWNER_BETA, OWNER_GAMMA], nextCursor: null };
+}
+
+function handleCandidates(req, res, url) {
+  const state = readCandidatesStateCookie(req.headers.cookie);
+  switch (state) {
+    case "forbidden":
+      send(res, 403, { code: "unauthorized", messageKey: "crm.users.owner.forbidden", requestId: "req_stub_cand_403" });
+      return;
+    case "server_error":
+      send(res, 500, { code: "internal", messageKey: "crm.owner_candidates.internal", requestId: "req_stub_cand_500" });
+      return;
+    case "malformed":
+      // Structurally valid JSON, invalid contract: a forbidden StaffRole field.
+      send(res, 200, { items: [{ ...OWNER_ALPHA, staffRole: "support" }], nextCursor: null });
+      return;
+    case "not_json":
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+      res.end("<html>not json</html>");
+      return;
+    case "network_failure":
+      req.socket.destroy();
+      return;
+    case "delayed": {
+      const timer = setTimeout(() => send(res, 200, candidatesPage("one_page", url)), 3_000);
+      res.on("close", () => clearTimeout(timer));
+      return;
+    }
+    default:
+      send(res, 200, candidatesPage(state, url));
+      return;
+  }
+}
+
+function handleOwnerRead(req, res) {
+  const state = readOwnerStateCookie(req.headers.cookie);
+  switch (state) {
+    case "pristine":
+      send(res, 200, { owner: null, ownerVersion: 0 });
+      return;
+    case "unassigned_persisted":
+      send(res, 200, { owner: null, ownerVersion: 3 });
+      return;
+    case "forbidden":
+      send(res, 403, { code: "unauthorized", messageKey: "crm.session.not_staff", requestId: "req_stub_owner_403" });
+      return;
+    case "unauthenticated":
+      send(res, 401, { code: "unauthorized", messageKey: "crm.session.unauthenticated", requestId: "req_stub_owner_401" });
+      return;
+    case "not_found":
+      send(res, 404, { code: "not_found", messageKey: "crm.users.owner.not_found", requestId: "req_stub_owner_404" });
+      return;
+    case "server_error":
+      send(res, 500, { code: "internal", messageKey: "crm.users.owner.internal", requestId: "req_stub_owner_500" });
+      return;
+    case "malformed":
+      // 200 whose payload violates the contract: a forbidden ownerId field.
+      send(res, 200, { owner: { ...OWNER_ALPHA, ownerId: "emp_leak" }, ownerVersion: 1 });
+      return;
+    case "not_json":
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+      res.end("<html>not json</html>");
+      return;
+    case "network_failure":
+      req.socket.destroy();
+      return;
+    case "delayed": {
+      const timer = setTimeout(() => send(res, 200, { owner: OWNER_ALPHA, ownerVersion: 1 }), 3_000);
+      res.on("close", () => clearTimeout(timer));
+      return;
+    }
+    case "assigned":
+    default:
+      send(res, 200, { owner: OWNER_ALPHA, ownerVersion: 1 });
+      return;
+  }
+}
+
+function handleOwnerWrite(req, res) {
+  const state = readOwnerMutationCookie(req.headers.cookie);
+  let raw = "";
+  req.on("data", (chunk) => {
+    raw += chunk;
+    if (raw.length > 64_000) req.socket.destroy();
+  });
+  req.on("end", () => {
+    let parsed = {};
+    try {
+      parsed = JSON.parse(raw || "{}");
+    } catch {
+      parsed = {};
+    }
+    switch (state) {
+      case "conflict":
+        send(res, 409, { code: "conflict", messageKey: "crm.users.owner.conflict", requestId: "req_stub_owner_put_409" });
+        return;
+      case "forbidden":
+        send(res, 403, { code: "unauthorized", messageKey: "crm.users.owner.forbidden", requestId: "req_stub_owner_put_403" });
+        return;
+      case "candidate_404":
+        send(res, 404, { code: "not_found", messageKey: "crm.users.owner.candidate_not_found", requestId: "req_stub_owner_put_c404" });
+        return;
+      case "learner_404":
+        send(res, 404, { code: "not_found", messageKey: "crm.users.owner.not_found", requestId: "req_stub_owner_put_l404" });
+        return;
+      case "unauthenticated":
+        send(res, 401, { code: "unauthorized", messageKey: "crm.session.unauthenticated", requestId: "req_stub_owner_put_401" });
+        return;
+      case "invalid":
+        send(res, 400, { code: "invalid_input", messageKey: "crm.users.owner.body_invalid", requestId: "req_stub_owner_put_400" });
+        return;
+      case "server_error":
+        send(res, 500, { code: "internal", messageKey: "crm.users.owner.internal", requestId: "req_stub_owner_put_500" });
+        return;
+      case "malformed":
+        // 200 whose payload violates the contract — must not read as success.
+        send(res, 200, { owner: { ...OWNER_ALPHA, ownerId: "emp_leak" }, ownerVersion: 2 });
+        return;
+      case "success":
+      default: {
+        // Echo the requested change back as the new state: version advances by
+        // one from the expectedVersion the client sent.
+        const employeeId = typeof parsed.ownerEmployeeId === "string" ? parsed.ownerEmployeeId : null;
+        const version = (Number.isInteger(parsed.expectedVersion) ? parsed.expectedVersion : 0) + 1;
+        send(res, 200, {
+          owner: employeeId === null ? null : { employeeId, displayName: ownerNameFor(employeeId) },
+          ownerVersion: version,
+        });
+        return;
+      }
+    }
+  });
+}
 
 /* --------------------------------------------------------- notes sessions */
 
@@ -546,6 +730,35 @@ const server = createServer((req, res) => {
   // `/notes/{noteId}` do not match and therefore 404 at the stub too.
   const notesMatch = new RegExp(`^${USERS_PATH}/([^/]+)/notes$`).exec(path);
 
+  // Exactly one segment, then a terminal `/owner`. `/owner/extra`,
+  // `/owner/history` and `/owner/{employeeId}` do not match and 404 at the stub.
+  const ownerMatch = new RegExp(`^${USERS_PATH}/([^/]+)/owner$`).exec(path);
+
+  // The flat owner-candidates directory has no child: `/owner-candidates/extra`
+  // does not match and 404s at the stub too.
+  if (path === OWNER_CANDIDATES_PATH) {
+    if (req.method === "GET") {
+      handleCandidates(req, res, url);
+      return;
+    }
+    send(res, 404, { error: "not_found" });
+    return;
+  }
+
+  if (ownerMatch) {
+    // Owner v1 exposes exactly GET and PUT. POST/PATCH/DELETE 404.
+    if (req.method === "GET") {
+      handleOwnerRead(req, res);
+      return;
+    }
+    if (req.method === "PUT") {
+      handleOwnerWrite(req, res);
+      return;
+    }
+    send(res, 404, { error: "not_found" });
+    return;
+  }
+
   if (notesMatch) {
     // Notes v1 is append-only: only GET and POST exist. PUT/PATCH/DELETE 404.
     if (req.method === "GET") {
@@ -629,6 +842,17 @@ const server = createServer((req, res) => {
       send(res, 200, {
         ...VALID_SESSION,
         effectivePermissions: NOTES_SESSIONS[which] ?? NOTES_SESSIONS.both,
+      });
+      return;
+    }
+
+    case "owner_matrix": {
+      // Same role for every case — only effectivePermissions differ, so a test
+      // proves the Owner affordances follow the permission, not the role.
+      const which = readOwnerSessionCookie(req.headers.cookie);
+      send(res, 200, {
+        ...VALID_SESSION,
+        effectivePermissions: OWNER_SESSIONS[which] ?? OWNER_SESSIONS.assigner,
       });
       return;
     }

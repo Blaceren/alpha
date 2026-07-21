@@ -52,13 +52,16 @@ test.describe("same-origin proxy", () => {
     // only NESTED paths and sibling routes may be checked for a Next-level 404.
     for (const path of [
       "/api/crm/v1/users/123/extra",
-      // `/users/{id}/notes` became reviewed in Frontend CRM User Notes Slice 1;
-      // a child BELOW it must still 404.
+      // `/users/{id}/notes` and `/users/{id}/owner` are reviewed nested paths;
+      // a child BELOW either must still 404.
       "/api/crm/v1/users/123/notes/note_1",
-      "/api/crm/v1/users/123/owner",
+      "/api/crm/v1/users/123/owner/history",
       "/api/crm/v1/user",
       "/api/crm/v1/notes",
+      // A TOP-LEVEL /owner path stays unreachable: owner is nested under a
+      // learner, and the flat directory is /owner-candidates.
       "/api/crm/v1/owner",
+      "/api/crm/v1/owner-candidates/extra",
       "/api/crm/v1/audit",
       "/api/auth/login",
       "/api/health",

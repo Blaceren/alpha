@@ -73,12 +73,15 @@ describe("ApiCrmDataProvider — users read", () => {
 });
 
 describe("unsupported capabilities fail closed", () => {
-  it("lists exactly the four supported capabilities", () => {
+  it("lists exactly the seven supported capabilities", () => {
     expect([...API_SUPPORTED_CAPABILITIES]).toEqual([
       "listUsers",
       "getUserDetail",
       "listUserNotes",
       "createUserNote",
+      "getUserOwner",
+      "listOwnerCandidates",
+      "setUserOwner",
     ]);
   });
 
@@ -121,7 +124,7 @@ describe("unsupported capabilities fail closed", () => {
     }
   });
 
-  it("exposes exactly the four accepted methods and nothing else", () => {
+  it("exposes exactly the seven accepted methods and nothing else", () => {
     const provider = createApiCrmDataProvider();
     const own = Object.getOwnPropertyNames(Object.getPrototypeOf(provider)).filter(
       (n) => n !== "constructor",
@@ -129,8 +132,11 @@ describe("unsupported capabilities fail closed", () => {
     expect(own.sort()).toEqual([
       "createUserNote",
       "getUserDetail",
+      "getUserOwner",
+      "listOwnerCandidates",
       "listUserNotes",
       "listUsers",
+      "setUserOwner",
     ]);
   });
 
@@ -147,6 +153,18 @@ describe("unsupported capabilities fail closed", () => {
     // createUserNote is the ONLY write. The broad mock mutation provider stays
     // unavailable in api mode.
     for (const method of ["getCrmMutations", "mutations", "addNote"]) {
+      expect((provider as unknown as Record<string, unknown>)[method]).toBeUndefined();
+    }
+  });
+
+  it("adds exactly the three Owner capabilities under production names", () => {
+    const provider = createApiCrmDataProvider();
+    expect(typeof provider.getUserOwner).toBe("function");
+    expect(typeof provider.listOwnerCandidates).toBe("function");
+    expect(typeof provider.setUserOwner).toBe("function");
+    // The MOCK owner command/query names are never adapted onto the production
+    // provider — the mock mutation surface stays unreachable in api mode.
+    for (const method of ["assignPrimaryOwner", "getPrimaryOwnerCandidates", "unassignOwner"]) {
       expect((provider as unknown as Record<string, unknown>)[method]).toBeUndefined();
     }
   });

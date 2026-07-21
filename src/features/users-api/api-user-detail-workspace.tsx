@@ -14,6 +14,7 @@ import { useSession } from "@/components/crm-shell/session-context";
 import { sessionGrants } from "@/domain/identity/access";
 import { useApiUserDetailQuery } from "./use-api-user-detail-query";
 import { ApiUserNotesSection } from "./api-user-notes";
+import { ApiUserOwnerSection } from "./api-user-owner";
 
 /**
  * Production learner detail FOUNDATION.
@@ -88,9 +89,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function DetailView({
   detail,
+  owner,
   notes,
 }: {
   detail: CrmApiUserDetail;
+  owner?: React.ReactNode;
   notes?: React.ReactNode;
 }) {
   return (
@@ -136,6 +139,8 @@ function DetailView({
         </dl>
       </section>
 
+      {owner}
+
       {notes}
 
       <p className="text-2xs text-text-muted">
@@ -165,15 +170,34 @@ export function ApiUserDetailWorkspace({
   const canListNotes = sessionGrants(session, "view_user_notes");
   const canCreateNotes = sessionGrants(session, "create_user_notes");
 
-  // A Notes 404 means the learner is gone or is not a learner at all, which is
-  // an answer about the whole detail, not about one section.
+  // Owner affordances also come from effectivePermissions ONLY. The current
+  // owner is read for every StaffProfile; only `assign_owner` mounts the editing
+  // controls. The role name is never consulted.
+  const canAssignOwner = sessionGrants(session, "assign_owner");
+
+  // A Notes or Owner 404 means the learner is gone or is not a learner at all,
+  // which is an answer about the whole detail, not about one section. An Owner
+  // 403 (no StaffProfile) is likewise a whole-detail denial.
   const [notesNotFound, setNotesNotFound] = React.useState(false);
+  const [ownerNotFound, setOwnerNotFound] = React.useState(false);
+  const [ownerForbidden, setOwnerForbidden] = React.useState(false);
+  const learnerNotFound = notesNotFound || ownerNotFound;
   const handleNotesUnauthenticated = React.useCallback(
     () => router.replace(LOGIN_REDIRECT),
     [router],
   );
   const handleNotesNotFound = React.useCallback(() => setNotesNotFound(true), []);
-  React.useEffect(() => setNotesNotFound(false), [userId]);
+  const handleOwnerNotFound = React.useCallback(() => setOwnerNotFound(true), []);
+  const handleOwnerForbidden = React.useCallback(() => setOwnerForbidden(true), []);
+  React.useEffect(() => {
+    setNotesNotFound(false);
+    setOwnerNotFound(false);
+    setOwnerForbidden(false);
+  }, [userId]);
+
+  // A stable key that changes when the employee session changes, so the Owner
+  // section refetches cleanly under the new identity.
+  const sessionKey = session ? `${session.employeeId}:${session.permissionVersion}` : undefined;
 
   // Ready, and ready for THIS learner.
   const detailMatches = q.state.kind === "ready" && q.state.detail.userId === userId;
@@ -203,9 +227,23 @@ export function ApiUserDetailWorkspace({
         that frame would briefly show one learner's data under another's route
         and would start a Notes request that is immediately superseded.
       */}
-      {detailMatches && !notesNotFound ? (
+      {detailMatches && !learnerNotFound && !ownerForbidden ? (
         <DetailView
           detail={(q.state as { detail: CrmApiUserDetail }).detail}
+          owner={
+            // The Owner section is mounted for every StaffProfile — the current
+            // owner is universally visible. Editing controls inside decide
+            // themselves whether to mount, from `assign_owner`.
+            <ApiUserOwnerSection
+              userId={userId}
+              canAssign={canAssignOwner}
+              provider={provider}
+              onUnauthenticated={handleNotesUnauthenticated}
+              onLearnerNotFound={handleOwnerNotFound}
+              onForbidden={handleOwnerForbidden}
+              sessionKey={sessionKey}
+            />
+          }
           notes={
             // Neither permission -> the section is not mounted at all, so no
             // Notes request is ever made.
@@ -249,11 +287,21 @@ export function ApiUserDetailWorkspace({
         </Panel>
       ) : null}
 
-      {notesNotFound && q.state.kind === "ready" ? (
+      {learnerNotFound && q.state.kind === "ready" ? (
         <Panel
           tone="alert"
           title="Пользователь не найден"
           description="Такого пользователя нет в CRM. Возможно, он был удалён или ссылка устарела."
+        />
+      ) : null}
+
+      {ownerForbidden && !learnerNotFound && q.state.kind === "ready" ? (
+        // An Owner 403 means the session is not a usable CRM employee — the same
+        // no-StaffProfile denial the detail read would surface.
+        <Panel
+          tone="alert"
+          title="Нет доступа к данным CRM"
+          description="У вашей учётной записи нет доступа к данным этого пользователя. Обратитесь к администратору CRM."
         />
       ) : null}
 

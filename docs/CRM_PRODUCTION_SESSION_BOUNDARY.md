@@ -44,20 +44,27 @@ API данных.
 
 ## 2. Точный rewrite
 
-При `CRM_MODE=api` добавляется **ровно один** внешний rewrite:
+При `CRM_MODE=api` добавляется **ровно шесть** явных внешних rewrite (по одному
+осознанному решению на каждый проверенный путь):
 
 ```
-/api/crm/v1/session  →  ${CRM_BACKEND_ORIGIN}/api/crm/v1/session
+/api/crm/v1/session               →  ${CRM_BACKEND_ORIGIN}/api/crm/v1/session
+/api/crm/v1/users                 →  …/api/crm/v1/users
+/api/crm/v1/users/:userId         →  …/api/crm/v1/users/:userId
+/api/crm/v1/users/:userId/notes   →  …/api/crm/v1/users/:userId/notes
+/api/crm/v1/owner-candidates      →  …/api/crm/v1/owner-candidates
+/api/crm/v1/users/:userId/owner   →  …/api/crm/v1/users/:userId/owner
 ```
 
-При `CRM_MODE=mock` список rewrite пустой.
+При `CRM_MODE=mock` список rewrite пустой. `:userId` — ровно один сегмент;
+`/notes` и `/owner` — терминальные, поэтому их дочерние пути не проксируются.
 
 **Почему нет wildcard.** Ни `/api/crm/v1/:path*`, ни `/api/:path*`: шаблон открыл
 бы через origin CRM каждый существующий и каждый будущий маршрут backend,
 включая те, которые для этого никто не проверял. Расширение проксирования должно
 быть отдельным осознанным решением, а не побочным эффектом. Тест
 `next-rewrites.test.ts` проверяет, что в `source` нет ни `:path`, ни `*`, и что
-список источников равен ровно `["/api/crm/v1/session"]`.
+список источников равен ровно этим шести путям.
 
 Из этого следует остальное:
 

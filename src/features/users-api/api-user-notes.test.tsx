@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
 import type { NoteCreateOutcome, NotesListOutcome } from "@/application/api/user-notes-client";
+import { pristineOwnerMethods } from "./owner-provider-test-stub";
 import type { Permission } from "@/domain/identity/roles";
 import { AuthenticatedSessionProvider } from "@/components/crm-shell/session-context";
 import { sessionFromDto } from "@/domain/identity/session";
@@ -54,6 +55,7 @@ function harness(
     listCalls,
     createCalls,
     provider: {
+      ...pristineOwnerMethods(),
       listUsers: () => {
         throw new Error("notes tests must not call listUsers");
       },

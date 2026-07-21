@@ -63,8 +63,37 @@ export const USER_DETAIL_PATH = "/api/crm/v1/users/:userId";
  */
 export const USER_NOTES_PATH = "/api/crm/v1/users/:userId/notes";
 
+/**
+ * CRM Learner Owner v1 — owner-candidate directory. A flat, static path (no
+ * parameter): candidacy is global, not scoped to one learner. There is no
+ * `/owner-candidates/:something` child and no catch-all, so
+ * `/api/crm/v1/owner-candidates/extra` is NOT proxied and falls through to the
+ * CRM app.
+ */
+export const OWNER_CANDIDATES_PATH = "/api/crm/v1/owner-candidates";
+
+/**
+ * CRM Learner Owner v1 — the current-owner singleton. Same single-segment
+ * `:userId` rule as detail/notes, plus an EXACT terminal `/owner`. There is no
+ * `:employeeId` child, no `/owner/history` and no catch-all, so
+ * `/api/crm/v1/users/123/owner/anything` is NOT proxied and falls through to
+ * the CRM app.
+ *
+ * GET and PUT share this one definition — Next rewrites are method-agnostic. The
+ * backend owner route implements exactly GET and PUT; POST/PATCH/DELETE reach it
+ * and fail safely there.
+ */
+export const USER_OWNER_PATH = "/api/crm/v1/users/:userId/owner";
+
 /** The complete set of backend paths the CRM origin may forward. */
-export const PROXIED_PATHS = [SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH];
+export const PROXIED_PATHS = [
+  SESSION_PATH,
+  USERS_PATH,
+  USER_DETAIL_PATH,
+  USER_NOTES_PATH,
+  OWNER_CANDIDATES_PATH,
+  USER_OWNER_PATH,
+];
 
 export function buildRewrites(envSource = process.env) {
   const mode = envSource.CRM_MODE;
