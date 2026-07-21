@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UsersOutcome } from "@/application/api/users-client";
 import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
@@ -12,8 +12,9 @@ import { resetClientRuntimeMode, setClientRuntimeMode } from "@/config/client-ru
 import { ApiUsersWorkspace, formatRegisteredAt } from "./api-users-workspace";
 
 const replace = vi.fn();
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ replace, push, refresh: vi.fn() }),
   usePathname: () => "/users",
 }));
 
@@ -27,6 +28,9 @@ function user(index: number, over: Partial<Record<string, unknown>> = {}) {
     level: index + 1,
     emailConfirmed: index % 2 === 0,
     createdAt: `2026-01-0${(index % 9) + 1}T09:15:00.000Z`,
+    // Owner is a required part of the strict DTO; default to unassigned so
+    // existing rows render «Не назначен» unless a test overrides it.
+    owner: null as { displayName: string } | null,
     ...over,
   };
 }
@@ -85,12 +89,16 @@ function renderWorkspace(
 
 beforeEach(() => {
   replace.mockClear();
+  push.mockClear();
   setClientRuntimeMode("api");
   window.localStorage.clear();
+  // Each test starts from the canonical /users URL (no owner parameter).
+  window.history.replaceState(null, "", "/users");
 });
 afterEach(() => {
   resetClientRuntimeMode();
   window.localStorage.clear();
+  window.history.replaceState(null, "", "/users");
 });
 
 describe("states", () => {
@@ -150,17 +158,26 @@ describe("states", () => {
 });
 
 describe("columns are limited to what the backend can prove", () => {
-  it("shows exactly the six contract columns", async () => {
+  it("shows exactly the seven contract columns, with Ответственный before Регистрация", async () => {
     renderWorkspace(providerFor([ok([user(0)])]));
     await screen.findByText("Пользователь 00");
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["Имя", "Email", "Статус", "Уровень", "Email подтверждён", "Регистрация"]);
+    expect(headers).toEqual([
+      "Имя",
+      "Email",
+      "Статус",
+      "Уровень",
+      "Email подтверждён",
+      "Ответственный",
+      "Регистрация",
+    ]);
   });
 
-  it("shows no owner, notes, financial, activity or recommendation column", async () => {
+  it("shows no mock owner label, notes, financial, activity or recommendation column", async () => {
     renderWorkspace(providerFor([ok([user(0)])]));
     await screen.findByText("Пользователь 00");
     const html = document.body.innerHTML;
+    // «Владелец» is the mock owner label; the production column is «Ответственный».
     for (const banned of ["Владелец", "Заметки", "Баланс", "Депозит", "Активность", "Рекомендация", "Приоритет", "Сегмент", "$"]) {
       expect(html, `must not render ${banned}`).not.toContain(banned);
     }
@@ -434,5 +451,283 @@ describe("error behaviour", () => {
     await u.click(button).catch(() => {});
 
     expect(calls).toBe(2);
+  });
+});
+
+const ownerSelect = () => screen.getByLabelText("Ответственный") as HTMLSelectElement;
+
+describe("owner column", () => {
+  it("renders the owner displayName for an assigned learner", async () => {
+    renderWorkspace(providerFor([ok([user(0, { owner: { displayName: "Мария Куратор" } })])]));
+    expect(await screen.findByText("Мария Куратор")).toBeInTheDocument();
+  });
+
+  it("renders «Не назначен» for a null owner", async () => {
+    renderWorkspace(providerFor([ok([user(0, { owner: null })])]));
+    await screen.findByText("Пользователь 00");
+    expect(screen.getByText("Не назначен")).toBeInTheDocument();
+  });
+
+  it("keeps a long owner name fully available through title", async () => {
+    const long = "Александра-Валентина Оператор-Куратор Длинноимённая-Двойная";
+    renderWorkspace(providerFor([ok([user(0, { owner: { displayName: long } })])]));
+    const cell = await screen.findByText(long);
+    expect(cell).toHaveAttribute("title", long);
+  });
+
+  it("shows no owner employeeId, ownerVersion, StaffRole, email or timestamp in the cell", async () => {
+    renderWorkspace(
+      providerFor([
+        ok([
+          // A hostile row: extra keys the component must never read or render.
+          user(0, {
+            owner: {
+              displayName: "Мария Куратор",
+              employeeId: "emp_leak",
+              ownerVersion: 4,
+              staffRole: "support",
+              email: "leak@example.test",
+            } as never,
+          }),
+        ]),
+      ]),
+    );
+    await screen.findByText("Мария Куратор");
+    const html = document.body.innerHTML;
+    for (const secret of ["emp_leak", "ownerVersion", "staffRole", "leak@example.test", "support"]) {
+      expect(html, `leaked ${secret}`).not.toContain(secret);
+    }
+  });
+});
+
+describe("owner filter control", () => {
+  it("offers exactly the three labels and no assigned option", async () => {
+    renderWorkspace(providerFor([ok([user(0)])]));
+    await screen.findByText("Пользователь 00");
+    const options = within(ownerSelect()).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["Все", "Мои", "Без ответственного"]);
+    expect(document.body.innerHTML).not.toContain("Назначен"); // no «Назначенные»/assigned
+  });
+
+  it("is shown to a session with no permissions (no assign_owner gate)", async () => {
+    renderWorkspace(providerFor([ok([user(0)])]), []);
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect()).toBeInTheDocument();
+  });
+
+  it("is shown regardless of unrelated permissions and never branches on role", async () => {
+    renderWorkspace(providerFor([ok([user(0)])]), ["reveal_pii", "view_identity_full_email"], "crm_admin");
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect()).toBeInTheDocument();
+  });
+
+  it("defaults to all and requests without an owner filter", async () => {
+    const provider = providerFor([ok([user(0)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect().value).toBe("all");
+    expect((provider.calls[0] as { owner?: string }).owner).toBe("all");
+  });
+
+  it("selecting mine threads owner=mine, resets the cursor, and pushes the URL", async () => {
+    const u = userEvent.setup();
+    const provider = providerFor([ok([user(0)], "c2"), ok([user(1)], "c2"), ok([user(2)], null)]);
+    renderWorkspace(provider);
+
+    await screen.findByText("Пользователь 00");
+    // Move to page 2 first, so we can prove the filter change resets pagination.
+    await u.click(screen.getByRole("button", { name: "Следующая" }));
+    await screen.findByText("Пользователь 01");
+    await screen.findByText("Страница 2");
+
+    await u.selectOptions(ownerSelect(), "mine");
+
+    await waitFor(() => expect(provider.calls.length).toBe(3));
+    const last = provider.calls[2] as { owner?: string; cursor?: string | null };
+    expect(last.owner).toBe("mine");
+    expect(last.cursor).toBeFalsy();
+    expect(await screen.findByText("Страница 1")).toBeInTheDocument();
+    expect(push).toHaveBeenCalledWith("/users?owner=mine");
+  });
+
+  it("selecting unassigned threads owner=unassigned", async () => {
+    const u = userEvent.setup();
+    const provider = providerFor([ok([user(0)]), ok([user(1)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+
+    await u.selectOptions(ownerSelect(), "unassigned");
+    await waitFor(() => expect(provider.calls.length).toBe(2));
+    expect((provider.calls[1] as { owner?: string }).owner).toBe("unassigned");
+    expect(push).toHaveBeenCalledWith("/users?owner=unassigned");
+  });
+
+  it("preserves the owner filter when the search changes", async () => {
+    const u = userEvent.setup();
+    const provider = providerFor([ok([user(0)]), ok([user(1)]), ok([user(2)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+
+    await u.selectOptions(ownerSelect(), "mine");
+    await waitFor(() => expect(provider.calls.length).toBe(2));
+
+    await u.type(screen.getByLabelText("Имя"), "Лена");
+    await u.click(screen.getByRole("button", { name: "Найти" }));
+    await waitFor(() => expect(provider.calls.length).toBe(3));
+
+    const last = provider.calls[2] as { owner?: string; search?: string; cursor?: string | null };
+    expect(last.owner).toBe("mine");
+    expect(last.search).toBe("Лена");
+    expect(last.cursor).toBeFalsy();
+  });
+
+  it("never sends an employee id and never renders the session employeeId", async () => {
+    const provider = providerFor([ok([user(0, { owner: { displayName: "Мария Куратор" } })])]);
+    renderWorkspace(provider);
+    await screen.findByText("Мария Куратор");
+    // The request carries only limit/cursor/search/owner — never an employee id.
+    expect(JSON.stringify(provider.calls)).not.toContain("emp_stub_1");
+    expect(document.body.innerHTML).not.toContain("emp_stub_1");
+  });
+
+  it("never calls the owner-candidates capability from the list", async () => {
+    const u = userEvent.setup();
+    // providerFor uses throwingOwnerMethods(): any owner-candidate call throws.
+    const provider = providerFor([ok([user(0)]), ok([user(1)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+    await u.selectOptions(ownerSelect(), "mine");
+    // No throw ⇒ the list never reached for candidates.
+    expect(await screen.findByText("Пользователь 01")).toBeInTheDocument();
+  });
+});
+
+describe("owner filter — URL state", () => {
+  it("restores mine from a refreshed/shared ?owner=mine URL", async () => {
+    window.history.replaceState(null, "", "/users?owner=mine");
+    const provider = providerFor([ok([user(0)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect().value).toBe("mine");
+    expect((provider.calls[0] as { owner?: string }).owner).toBe("mine");
+    // A clean single value is already canonical — no rewrite.
+    expect(replace).not.toHaveBeenCalledWith(expect.stringContaining("/users"));
+  });
+
+  it("canonicalizes an explicit owner=all away with replace (no owner sent to backend as all)", async () => {
+    window.history.replaceState(null, "", "/users?owner=all");
+    const provider = providerFor([ok([user(0)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect().value).toBe("all");
+    expect(replace).toHaveBeenCalledWith("/users");
+  });
+
+  it("canonicalizes an invalid owner value away and falls back to all", async () => {
+    window.history.replaceState(null, "", "/users?owner=assigned");
+    const provider = providerFor([ok([user(0)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect().value).toBe("all");
+    expect(replace).toHaveBeenCalledWith("/users");
+  });
+
+  it("canonicalizes a repeated owner key away", async () => {
+    window.history.replaceState(null, "", "/users?owner=mine&owner=all");
+    renderWorkspace(providerFor([ok([user(0)])]));
+    await screen.findByText("Пользователь 00");
+    expect(ownerSelect().value).toBe("all");
+    expect(replace).toHaveBeenCalledWith("/users");
+  });
+
+  it("restores the filter on browser back/forward via popstate", async () => {
+    const provider = providerFor([ok([user(0)]), ok([user(1)]), ok([user(2)])]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+
+    // Simulate a back/forward that lands on ?owner=unassigned.
+    await act(async () => {
+      window.history.pushState(null, "", "/users?owner=unassigned");
+      window.dispatchEvent(new Event("popstate"));
+    });
+    await waitFor(() => expect(ownerSelect().value).toBe("unassigned"));
+    await waitFor(() =>
+      expect((provider.calls[provider.calls.length - 1] as { owner?: string }).owner).toBe("unassigned"),
+    );
+
+    // And forward back to the canonical (all) URL.
+    await act(async () => {
+      window.history.pushState(null, "", "/users");
+      window.dispatchEvent(new Event("popstate"));
+    });
+    await waitFor(() => expect(ownerSelect().value).toBe("all"));
+  });
+
+  it("uses no localStorage or sessionStorage for the filter", async () => {
+    const u = userEvent.setup();
+    renderWorkspace(providerFor([ok([user(0)]), ok([user(1)])]));
+    await screen.findByText("Пользователь 00");
+    await u.selectOptions(ownerSelect(), "mine");
+    await screen.findByText("Пользователь 01");
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
+});
+
+describe("owner-aware empty states", () => {
+  it("mine + zero rows shows the mine empty copy", async () => {
+    window.history.replaceState(null, "", "/users?owner=mine");
+    renderWorkspace(providerFor([ok([])]));
+    expect(await screen.findByText("За вами пока не закреплены пользователи.")).toBeInTheDocument();
+  });
+
+  it("unassigned + zero rows shows the unassigned empty copy", async () => {
+    window.history.replaceState(null, "", "/users?owner=unassigned");
+    renderWorkspace(providerFor([ok([])]));
+    expect(
+      await screen.findByText("Все пользователи закреплены за ответственными."),
+    ).toBeInTheDocument();
+  });
+
+  it("a non-empty search takes precedence over the owner empty copy", async () => {
+    const u = userEvent.setup();
+    window.history.replaceState(null, "", "/users?owner=mine");
+    renderWorkspace(providerFor([ok([user(0)]), ok([])]));
+    await screen.findByText("Пользователь 00");
+
+    await u.type(screen.getByLabelText("Имя"), "Лена");
+    await u.click(screen.getByRole("button", { name: "Найти" }));
+
+    expect(
+      await screen.findByText("По этому запросу пользователей нет. Измените запрос или сбросьте поиск."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("За вами пока не закреплены пользователи.")).not.toBeInTheDocument();
+  });
+
+  it("all + zero rows keeps the existing neutral empty copy", async () => {
+    renderWorkspace(providerFor([ok([])]));
+    expect(await screen.findByText("Пользователи не найдены.")).toBeInTheDocument();
+  });
+});
+
+describe("owner filter — visible across states", () => {
+  it("keeps the filter visible and selectable in the 500 error state", async () => {
+    window.history.replaceState(null, "", "/users?owner=mine");
+    renderWorkspace(providerFor([{ status: "upstream_unavailable" }]));
+    expect(await screen.findByText("Сервис недоступен")).toBeInTheDocument();
+    expect(ownerSelect()).toBeInTheDocument();
+    expect(ownerSelect().value).toBe("mine");
+  });
+
+  it("clears stale rows while a new filter loads (no rows from the previous filter)", async () => {
+    const u = userEvent.setup();
+    const provider = providerFor([ok([user(0)]), new Promise<UsersOutcome>(() => {}) as never]);
+    renderWorkspace(provider);
+    await screen.findByText("Пользователь 00");
+
+    await u.selectOptions(ownerSelect(), "mine");
+    // The second request never resolves; the previous row must be gone.
+    await waitFor(() => expect(screen.queryByText("Пользователь 00")).not.toBeInTheDocument());
+    expect(screen.getByText("Загружаем список пользователей")).toBeInTheDocument();
   });
 });

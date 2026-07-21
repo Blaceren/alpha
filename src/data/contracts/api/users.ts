@@ -15,6 +15,31 @@ import { z } from "zod";
  * never parsed as a JavaScript number, never used for arithmetic and never
  * assumed to remain numeric. It is only a React key and a stable row identity.
  */
+/**
+ * The list-row owner projection. Strict and displayName-only, mirroring the
+ * backend contract exactly (docs/CRM_USERS_V1.md → Owner projection): the list
+ * carries the live `StaffProfile.displayName` and NOTHING else. An owner
+ * `employeeId`, internal `ownerId`, `ownerVersion`, `StaffRole`/`role`, email,
+ * `status`, permission or timestamp riding along is contract drift and must fail
+ * closed here rather than reach a CRM row.
+ *
+ * This is deliberately NOT the richer User-detail Owner contract
+ * (`crmOwnerIdentitySchema`, which carries `employeeId`): a list row only names
+ * the owner, it never lets you act on them, so it never learns their id.
+ */
+export const crmApiUserOwnerSchema = z
+  .object({
+    // Non-blank after trim, matching the row `displayName` policy and the
+    // backend's `min(1)` live-name guarantee (a blank name fails closed on the
+    // backend before it can reach the wire).
+    displayName: z.string().refine((v) => v.trim().length > 0, {
+      message: "owner displayName must be non-empty after trim",
+    }),
+  })
+  .strict();
+
+export type CrmApiUserOwner = z.infer<typeof crmApiUserOwnerSchema>;
+
 export const crmApiUserSchema = z
   .object({
     userId: z.string().min(1),
@@ -31,6 +56,11 @@ export const crmApiUserSchema = z
     level: z.number().int(),
     emailConfirmed: z.boolean(),
     createdAt: z.string().datetime({ offset: true }),
+    // Current learner owner — displayName only, or null. `null` covers BOTH the
+    // pristine (no owner row) and persisted-unassigned states; the list does not
+    // distinguish them. Required key: the backend always sends it, so its
+    // absence is drift and fails closed.
+    owner: crmApiUserOwnerSchema.nullable(),
   })
   .strict();
 

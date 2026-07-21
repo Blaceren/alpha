@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { crmApiErrorSchema, crmApiUserSchema, crmApiUsersResponseSchema } from "./users";
+import {
+  crmApiErrorSchema,
+  crmApiUserOwnerSchema,
+  crmApiUserSchema,
+  crmApiUsersResponseSchema,
+} from "./users";
 
 const VALID_USER = {
   userId: "1042",
@@ -9,6 +14,7 @@ const VALID_USER = {
   level: 7,
   emailConfirmed: true,
   createdAt: "2026-01-04T09:15:00.000Z",
+  owner: { displayName: "Мария Куратор" },
 } as const;
 
 const withUser = (patch: Record<string, unknown>) =>
@@ -95,7 +101,7 @@ describe("crmApiUserSchema — closed to fields the backend does not send", () =
   it.each([
     ["employeeId", { employeeId: "emp_stub_admin" }],
     ["ownerId", { ownerId: "emp_1" }],
-    ["owner", { owner: { id: "emp_1" } }],
+    ["owner with an unknown key", { owner: { id: "emp_1" } }],
     ["noteCount", { noteCount: 3 }],
     ["unreadCount", { unreadCount: 1 }],
     ["balance", { balance: 90 }],
@@ -111,6 +117,50 @@ describe("crmApiUserSchema — closed to fields the backend does not send", () =
     ["raw xp", { xp: 42 }],
   ])("rejects an extra %s field", (_label, patch) => {
     expect(withUser(patch as Record<string, unknown>).success).toBe(false);
+  });
+});
+
+describe("owner projection — displayName only, or null", () => {
+  it("accepts an assigned owner", () => {
+    expect(withUser({ owner: { displayName: "Мария Куратор" } }).success).toBe(true);
+  });
+
+  it("accepts a null owner (pristine or persisted-unassigned)", () => {
+    expect(withUser({ owner: null }).success).toBe(true);
+  });
+
+  it("requires the owner key (backend always sends it)", () => {
+    const partial: Record<string, unknown> = { ...VALID_USER };
+    delete partial.owner;
+    expect(crmApiUserSchema.safeParse(partial).success).toBe(false);
+  });
+
+  it("rejects a blank owner displayName", () => {
+    expect(withUser({ owner: { displayName: "   " } }).success).toBe(false);
+    expect(withUser({ owner: { displayName: "" } }).success).toBe(false);
+  });
+
+  it.each([
+    ["employeeId", { displayName: "Мария", employeeId: "emp_1" }],
+    ["ownerId", { displayName: "Мария", ownerId: "emp_1" }],
+    ["ownerVersion", { displayName: "Мария", ownerVersion: 3 }],
+    ["StaffRole", { displayName: "Мария", staffRole: "support" }],
+    ["role", { displayName: "Мария", role: "support" }],
+    ["email", { displayName: "Мария", email: "m@e.test" }],
+    ["status", { displayName: "Мария", status: "active" }],
+    ["permissionVersion", { displayName: "Мария", permissionVersion: 1 }],
+    ["createdAt", { displayName: "Мария", createdAt: "2026-01-01T00:00:00.000Z" }],
+    ["updatedAt", { displayName: "Мария", updatedAt: "2026-01-01T00:00:00.000Z" }],
+  ])("rejects an owner carrying a forbidden %s field", (_label, owner) => {
+    expect(withUser({ owner }).success).toBe(false);
+    // The standalone owner schema fails closed on the same field.
+    expect(crmApiUserOwnerSchema.safeParse(owner).success).toBe(false);
+  });
+
+  it("rejects a non-object owner", () => {
+    for (const owner of ["Мария", 1, true, []]) {
+      expect(withUser({ owner }).success).toBe(false);
+    }
   });
 });
 

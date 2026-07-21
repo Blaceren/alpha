@@ -22,8 +22,20 @@ type UsersState =
   | "server_error"
   | "malformed"
   | "malformed_extra_field"
+  | "owner_malformed"
+  | "owner_extra_field"
   | "not_json"
   | "network_failure";
+
+const OWNER_COLUMNS = [
+  "Имя",
+  "Email",
+  "Статус",
+  "Уровень",
+  "Email подтверждён",
+  "Ответственный",
+  "Регистрация",
+];
 
 async function useStates(page: Page, session: SessionState, users: UsersState) {
   await page.context().clearCookies();
@@ -107,13 +119,13 @@ test.describe("populated list", () => {
     await expect(page.getByText("learner00@example.test")).toBeVisible();
   });
 
-  test("shows only the six contract columns", async ({ page }) => {
+  test("shows the seven contract columns, with Ответственный before Регистрация", async ({ page }) => {
     await useStates(page, "authenticated", "populated");
     await page.goto("/users");
     await expect(heading(page)).toBeVisible();
 
     const headers = await page.locator("th").allTextContents();
-    expect(headers).toEqual(["Имя", "Email", "Статус", "Уровень", "Email подтверждён", "Регистрация"]);
+    expect(headers).toEqual(OWNER_COLUMNS);
   });
 
   test("shows the Russian status and confirmation labels", async ({ page }) => {
@@ -370,5 +382,303 @@ test.describe("route composition", () => {
       "href",
       "/users",
     );
+  });
+});
+
+const ownerSelect = (page: Page) => page.getByLabel("Ответственный");
+
+/** Collect every `/api/crm/v1/users` request URL seen after this call. */
+function trackUsersRequests(page: Page): string[] {
+  const urls: string[] = [];
+  page.on("request", (r) => {
+    const url = r.url();
+    if (url.includes("/api/crm/v1/users")) urls.push(url);
+  });
+  return urls;
+}
+
+test.describe("owner column", () => {
+  test("renders an assigned owner displayName and «Не назначен» for a null owner", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    // Default synthetic list: an assigned owner and an unassigned row.
+    await expect(page.getByText("Оператор Альфа").first()).toBeVisible();
+    await expect(page.getByText("Не назначен").first()).toBeVisible();
+  });
+
+  test("a long owner name keeps its full text via title", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    const long = "Александра-Валентина Оператор-Куратор Длинноимённая-Двойная";
+    await expect(page.getByText(long).first()).toHaveAttribute("title", long);
+  });
+
+  test("exposes no owner employeeId, ownerVersion, StaffRole or email", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    const html = await page.content();
+    for (const secret of ["employeeId", "ownerId", "ownerVersion", "staffRole", "emp_stub", "emp_alpha"]) {
+      expect(html, `leaked ${secret}`).not.toContain(secret);
+    }
+  });
+
+  test("a malformed owner payload fails closed", async ({ page }) => {
+    await useStates(page, "authenticated", "owner_malformed");
+    await page.goto("/users");
+    await expect(page.getByText("Некорректный ответ сервиса")).toBeVisible();
+    await expect(page.locator("table")).toHaveCount(0);
+  });
+
+  test("a forbidden extra owner field fails closed and never renders", async ({ page }) => {
+    await useStates(page, "authenticated", "owner_extra_field");
+    await page.goto("/users");
+    await expect(page.getByText("Некорректный ответ сервиса")).toBeVisible();
+    expect(await page.content()).not.toContain("emp_leak");
+  });
+});
+
+test.describe("owner filter", () => {
+  test("the default list requests no owner parameter", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) expect(url).not.toContain("owner=");
+    await expect(ownerSelect(page)).toHaveValue("all");
+  });
+
+  test("an incoming owner=all canonicalizes away and sends no owner", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=all");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await expect(page).toHaveURL(/\/users$/);
+    await expect(ownerSelect(page)).toHaveValue("all");
+    for (const url of urls) expect(url).not.toContain("owner=");
+  });
+
+  test("owner=mine is sent exactly and carries no employee id", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=mine");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    const mine = urls.filter((u) => u.includes("owner=mine"));
+    expect(mine.length).toBeGreaterThan(0);
+    for (const url of mine) {
+      expect(url).not.toContain("emp_");
+      expect(url).not.toContain("employeeId");
+    }
+    await expect(ownerSelect(page)).toHaveValue("mine");
+  });
+
+  test("owner=unassigned is sent exactly and shows only unassigned rows", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=unassigned");
+    await expect(page.getByText("Не назначен").first()).toBeVisible();
+    expect(urls.some((u) => u.includes("owner=unassigned"))).toBe(true);
+    await expect(ownerSelect(page)).toHaveValue("unassigned");
+  });
+
+  test("the filter offers exactly Все / Мои / Без ответственного and no assigned option", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(ownerSelect(page)).toBeVisible();
+    const options = await ownerSelect(page).locator("option").allTextContents();
+    expect(options).toEqual(["Все", "Мои", "Без ответственного"]);
+  });
+
+  test("the filter is shown without assign_owner (support session)", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(ownerSelect(page)).toBeVisible();
+  });
+
+  test("unrelated permissions do not change the filter (admin with none)", async ({ page }) => {
+    await useStates(page, "admin_no_permissions", "populated");
+    await page.goto("/users");
+    await expect(ownerSelect(page)).toBeVisible();
+    const options = await ownerSelect(page).locator("option").allTextContents();
+    expect(options).toEqual(["Все", "Мои", "Без ответственного"]);
+  });
+
+  test("selecting mine updates the URL and the request", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+
+    await ownerSelect(page).selectOption("mine");
+    await expect(page).toHaveURL(/\/users\?owner=mine$/);
+    await expect(page.getByText("Ирина Соколова").first()).toBeVisible();
+    expect(urls.some((u) => u.includes("owner=mine"))).toBe(true);
+  });
+
+  test("selecting unassigned updates the URL and the request", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await ownerSelect(page).selectOption("unassigned");
+    await expect(page).toHaveURL(/\/users\?owner=unassigned$/);
+    await expect(page.getByText("Не назначен").first()).toBeVisible();
+  });
+
+  test("changing the filter resets pagination to the first page", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await page.getByRole("button", { name: "Следующая" }).click();
+    await expect(page.getByText("Страница 2")).toBeVisible();
+
+    await ownerSelect(page).selectOption("mine");
+    await expect(page.getByText("Страница 1")).toBeVisible();
+  });
+
+  test("a search change preserves the owner filter", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=mine");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+
+    await page.getByLabel("Имя").fill("Пользователь 03");
+    await page.getByRole("button", { name: "Найти" }).click();
+    await expect(page.getByText("Пользователь 03")).toBeVisible();
+
+    const searched = urls.filter((u) => u.includes("search="));
+    expect(searched.length).toBeGreaterThan(0);
+    for (const url of searched) expect(url).toContain("owner=mine");
+    await expect(ownerSelect(page)).toHaveValue("mine");
+  });
+
+  test("search composes with unassigned", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=unassigned");
+    await page.getByLabel("Имя").fill("Пользователь 02");
+    await page.getByRole("button", { name: "Найти" }).click();
+    await expect(page.getByText("Пользователь 02")).toBeVisible();
+  });
+
+  test("browser back restores the previous owner filter", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+
+    await ownerSelect(page).selectOption("mine");
+    await expect(page).toHaveURL(/\/users\?owner=mine$/);
+    await expect(ownerSelect(page)).toHaveValue("mine");
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/users$/);
+    await expect(ownerSelect(page)).toHaveValue("all");
+  });
+
+  test("browser forward re-applies the owner filter", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await ownerSelect(page).selectOption("mine");
+    await expect(page).toHaveURL(/\/users\?owner=mine$/);
+    await page.goBack();
+    await expect(ownerSelect(page)).toHaveValue("all");
+    await page.goForward();
+    await expect(page).toHaveURL(/\/users\?owner=mine$/);
+    await expect(ownerSelect(page)).toHaveValue("mine");
+  });
+
+  test("a refresh preserves mine", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=mine");
+    await expect(ownerSelect(page)).toHaveValue("mine");
+    await page.reload();
+    await expect(ownerSelect(page)).toHaveValue("mine");
+  });
+
+  test("an invalid owner URL canonicalizes safely to all", async ({ page }) => {
+    const urls = trackUsersRequests(page);
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=assigned");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await expect(page).toHaveURL(/\/users$/);
+    await expect(ownerSelect(page)).toHaveValue("all");
+    // The invalid value never reaches the backend.
+    for (const url of urls) expect(url).not.toContain("owner=assigned");
+  });
+
+  test("a repeated owner URL canonicalizes safely to all", async ({ page }) => {
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=mine&owner=all");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await expect(page).toHaveURL(/\/users$/);
+    await expect(ownerSelect(page)).toHaveValue("all");
+  });
+
+  test("no owner-candidates request is made from the list", async ({ page }) => {
+    const all: string[] = [];
+    page.on("request", (r) => all.push(r.url()));
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    await ownerSelect(page).selectOption("mine");
+    await expect(page.getByText("Ирина Соколова").first()).toBeVisible();
+    expect(all.some((u) => u.includes("owner-candidates"))).toBe(false);
+  });
+});
+
+test.describe("owner filter — empty states and copy", () => {
+  test("mine with no rows shows the mine empty copy", async ({ page }) => {
+    await useStates(page, "authenticated", "empty");
+    await page.goto("/users?owner=mine");
+    await expect(page.getByText("За вами пока не закреплены пользователи.")).toBeVisible();
+    await expect(page.locator("table")).toHaveCount(0);
+  });
+
+  test("unassigned with no rows shows the unassigned empty copy", async ({ page }) => {
+    await useStates(page, "authenticated", "empty");
+    await page.goto("/users?owner=unassigned");
+    await expect(page.getByText("Все пользователи закреплены за ответственными.")).toBeVisible();
+  });
+
+  test("a non-empty search takes precedence over the owner empty copy", async ({ page }) => {
+    // owner=unassigned + a search that matches an owned row → zero rows, but the
+    // search-empty copy wins.
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users?owner=unassigned");
+    await page.getByLabel("Имя").fill("Пользователь 00");
+    await page.getByRole("button", { name: "Найти" }).click();
+    await expect(
+      page.getByText("По этому запросу пользователей нет. Измените запрос или сбросьте поиск."),
+    ).toBeVisible();
+    await expect(page.getByText("Все пользователи закреплены за ответственными.")).toHaveCount(0);
+  });
+});
+
+test.describe("owner filter — mobile", () => {
+  test("the owner field is usable at a 320px viewport with no horizontal overflow", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    // The owner value and the filter are reachable.
+    await expect(page.getByText("Оператор Альфа").first()).toBeVisible();
+    await expect(ownerSelect(page)).toBeVisible();
+    // The document itself never scrolls horizontally (wide content scrolls only
+    // inside its own container).
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(true);
+  });
+
+  test("a long owner name does not force horizontal document overflow at 320px", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    await useStates(page, "authenticated", "populated");
+    await page.goto("/users");
+    await expect(page.getByText("Пользователь 00")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(true);
   });
 });

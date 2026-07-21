@@ -275,9 +275,25 @@ const NOTES_SESSIONS = {
 
 /* ------------------------------------------------------- synthetic users v1 */
 
+// A deliberately long owner display name — proves the column/cell wraps and
+// keeps its full text without forcing horizontal document overflow.
+const LONG_OWNER_NAME =
+  "Александра-Валентина Оператор-Куратор Длинноимённая-Двойная";
+
+// Default owner projection for the unfiltered list: an assigned owner, a long
+// name, and a `null` (unassigned) row, so the owner column shows every shape.
+function defaultOwner(index) {
+  if (index === 2 || index === 5) return null;
+  if (index === 1 || index === 4) return { displayName: LONG_OWNER_NAME };
+  return { displayName: "Оператор Альфа" };
+}
+
 // Synthetic only. Deliberately shaped like the accepted Users v1 contract and
-// containing no field the backend does not return.
-function synthUser(index, { visibility }) {
+// containing no field the backend does not return. `owner` is the current
+// owner's displayName only, or null — never an employeeId, ownerVersion,
+// StaffRole, email, status or timestamp. When `owner` is omitted the deterministic
+// default is used; pass it explicitly to force an assigned/unassigned row.
+function synthUser(index, { visibility, owner } = {}) {
   const n = String(index).padStart(2, "0");
   const local = `learner${n}`;
   return {
@@ -291,22 +307,60 @@ function synthUser(index, { visibility }) {
     level: (index % 9) + 1,
     emailConfirmed: index % 2 === 0,
     createdAt: new Date(Date.UTC(2026, 0, 1 + index, 12, 0, 0)).toISOString(),
+    owner: owner === undefined ? defaultOwner(index) : owner,
   };
 }
 
 function usersPage(state, url) {
   const visibility = state === "full_email" ? "full" : "masked";
   const search = (url.searchParams.get("search") ?? "").trim();
+  const owner = url.searchParams.get("owner"); // null | "mine" | "unassigned"
   const cursor = url.searchParams.get("cursor");
 
   if (state === "empty") return { items: [], nextCursor: null };
 
-  // Display-name search: only "Пользователь 03" matches.
+  // Owner-filter result sets (no active search). `mine` returns a small book all
+  // owned by the session actor; `unassigned` returns only `null`-owner rows.
+  if (!search) {
+    if (owner === "mine") {
+      return {
+        items: [
+          synthUser(0, { visibility, owner: { displayName: "Ирина Соколова" } }),
+          synthUser(3, { visibility, owner: { displayName: "Ирина Соколова" } }),
+        ],
+        nextCursor: null,
+      };
+    }
+    if (owner === "unassigned") {
+      return {
+        items: [
+          synthUser(2, { visibility, owner: null }),
+          synthUser(5, { visibility, owner: null }),
+        ],
+        nextCursor: null,
+      };
+    }
+  }
+
+  // Display-name search: only "Пользователь NN" matches. Composes with an owner
+  // filter by AND — `unassigned` + a search matching an owned row yields nothing.
   if (search && !search.includes("@")) {
     const match = /(\d{2})\s*$/.exec(search);
     const index = match ? Number(match[1]) : NaN;
     if (Number.isNaN(index)) return { items: [], nextCursor: null };
-    return { items: [synthUser(index, { visibility })], nextCursor: null };
+    if (owner === "unassigned" && !(index === 2 || index === 5)) {
+      return { items: [], nextCursor: null };
+    }
+    if (owner === "mine" && !(index === 0 || index === 3)) {
+      return { items: [], nextCursor: null };
+    }
+    const ownerOverride =
+      owner === "unassigned"
+        ? null
+        : owner === "mine"
+          ? { displayName: "Ирина Соколова" }
+          : undefined;
+    return { items: [synthUser(index, { visibility, owner: ownerOverride })], nextCursor: null };
   }
 
   // Full-email search: matches the one synthetic address.
@@ -618,6 +672,25 @@ function handleUsers(req, res, url) {
         nextCursor: null,
       });
       return;
+    case "owner_malformed":
+      // 200 whose OWNER payload violates the contract: a blank displayName.
+      send(res, 200, {
+        items: [synthUser(0, { visibility: "masked", owner: { displayName: "   " } })],
+        nextCursor: null,
+      });
+      return;
+    case "owner_extra_field":
+      // 200 whose owner object carries a forbidden employeeId — strict rejects.
+      send(res, 200, {
+        items: [
+          {
+            ...synthUser(0, { visibility: "masked" }),
+            owner: { displayName: "Оператор Альфа", employeeId: "emp_leak" },
+          },
+        ],
+        nextCursor: null,
+      });
+      return;
     case "not_json":
       res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
       res.end("<html>not json</html>");
@@ -625,9 +698,30 @@ function handleUsers(req, res, url) {
     case "network_failure":
       req.socket.destroy();
       return;
-    default:
+    case "delayed": {
+      // Held open long enough to observe a genuinely in-flight owner-filter
+      // request; cleared if the client disconnects first.
+      const timer = setTimeout(() => send(res, 200, usersPage("populated", url)), 3_000);
+      res.on("close", () => clearTimeout(timer));
+      return;
+    }
+    default: {
+      // The canonical frontend only ever sends owner=mine or owner=unassigned.
+      // owner=all, an employee id, `assigned` or any other value is a contract
+      // violation the frontend must never emit — answer 400 so a test proves the
+      // omission (an `all` request that carried a param would fail here).
+      const owner = url.searchParams.get("owner");
+      if (owner !== null && owner !== "mine" && owner !== "unassigned") {
+        send(res, 400, {
+          code: "invalid_input",
+          messageKey: "crm.users.owner_filter_invalid",
+          requestId: "req_stub_users_owner_400",
+        });
+        return;
+      }
       send(res, 200, usersPage(state, url));
       return;
+    }
   }
 }
 

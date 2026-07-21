@@ -13,6 +13,7 @@ import {
   crmApiUsersResponseSchema,
   type CrmApiUsersResponse,
 } from "@/data/contracts/api/users";
+import { OWNER_FILTER_PARAM, type CrmUsersOwnerFilter } from "./users-owner-filter";
 
 export const USERS_ENDPOINT = "/api/crm/v1/users";
 export const USERS_TIMEOUT_MS = 8_000;
@@ -37,6 +38,13 @@ export interface FetchUsersInput {
   cursor?: string | null;
   /** Trimmed; omitted entirely when empty. */
   search?: string;
+  /**
+   * Owner filter. `all` (or omitted) sends NO `owner` parameter — matching the
+   * backend default, which is why the frontend never writes `owner=all`. `mine`
+   * and `unassigned` are the only values ever put on the wire; `mine` carries no
+   * employee id (the backend resolves the actor from the session).
+   */
+  owner?: CrmUsersOwnerFilter;
 }
 
 export interface FetchUsersOptions {
@@ -47,9 +55,14 @@ export interface FetchUsersOptions {
 }
 
 /**
- * Serialize only the three keys the backend accepts. Anything else — offset,
- * page, sort, owner, segment, status, employeeId, role, permissions — is
- * structurally impossible to send, because nothing else is ever written here.
+ * Serialize only the keys the backend accepts, in a deterministic order:
+ * `limit`, `cursor`, `search`, then `owner`. Anything else — offset, page,
+ * sort, segment, status, employeeId, role, permissions — is structurally
+ * impossible to send, because nothing else is ever written here.
+ *
+ * The `owner` parameter is written ONLY for `mine`/`unassigned`. `all` (or an
+ * omitted/unexpected value) writes nothing, so the canonical request carries no
+ * `owner` key and the frontend can never emit an invalid owner value.
  */
 export function buildUsersQuery(input: FetchUsersInput): string {
   const params = new URLSearchParams();
@@ -64,6 +77,11 @@ export function buildUsersQuery(input: FetchUsersInput): string {
 
   const search = input.search?.trim() ?? "";
   if (search.length > 0) params.set("search", search.slice(0, USERS_MAX_SEARCH_LENGTH));
+
+  // Only the two non-default values reach the wire; `all`/undefined is omitted.
+  if (input.owner === "mine" || input.owner === "unassigned") {
+    params.set(OWNER_FILTER_PARAM, input.owner);
+  }
 
   return params.toString();
 }

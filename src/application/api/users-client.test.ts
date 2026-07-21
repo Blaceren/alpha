@@ -9,6 +9,7 @@ const USER = {
   level: 7,
   emailConfirmed: true,
   createdAt: "2026-01-04T09:15:00.000Z",
+  owner: { displayName: "Мария Куратор" },
 };
 
 const PAGE = { items: [USER], nextCursor: null };
@@ -65,6 +66,49 @@ describe("buildUsersQuery — only the three accepted keys", () => {
     });
     const keys = [...new URLSearchParams(query).keys()].sort();
     expect(keys).toEqual(["cursor", "limit", "search"]);
+  });
+});
+
+describe("buildUsersQuery — owner filter", () => {
+  it("omits owner for all (or an omitted value) — the canonical default", () => {
+    expect(buildUsersQuery({})).not.toContain("owner");
+    expect(buildUsersQuery({ owner: "all" })).not.toContain("owner");
+  });
+
+  it("sends owner=mine exactly", () => {
+    const query = new URLSearchParams(buildUsersQuery({ owner: "mine" }));
+    expect(query.get("owner")).toBe("mine");
+  });
+
+  it("sends owner=unassigned exactly", () => {
+    const query = new URLSearchParams(buildUsersQuery({ owner: "unassigned" }));
+    expect(query.get("owner")).toBe("unassigned");
+  });
+
+  it("never puts an employee id on the wire for mine", () => {
+    // The wire carries the literal `mine`, never a session employeeId.
+    expect(buildUsersQuery({ owner: "mine" })).toBe("limit=25&owner=mine");
+  });
+
+  it("composes owner with search and cursor in a deterministic order", () => {
+    expect(buildUsersQuery({ cursor: "cur", search: "Лена", owner: "unassigned" })).toBe(
+      "limit=25&cursor=cur&search=%D0%9B%D0%B5%D0%BD%D0%B0&owner=unassigned",
+    );
+  });
+
+  it("refuses to serialize an invalid owner value (never reaches the wire)", () => {
+    for (const bad of ["assigned", "ALL", "mine,all", "emp_123", "", "true"]) {
+      expect(buildUsersQuery({ owner: bad as never })).not.toContain("owner");
+    }
+  });
+
+  it("changing only the owner filter does not alter search normalization", () => {
+    const withMine = new URLSearchParams(buildUsersQuery({ search: "  Лена  ", owner: "mine" }));
+    const withUnassigned = new URLSearchParams(
+      buildUsersQuery({ search: "  Лена  ", owner: "unassigned" }),
+    );
+    expect(withMine.get("search")).toBe("Лена");
+    expect(withUnassigned.get("search")).toBe("Лена");
   });
 });
 

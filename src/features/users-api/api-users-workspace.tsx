@@ -8,6 +8,11 @@ import { sessionGrants } from "@/domain/identity/access";
 import { useSession } from "@/components/crm-shell/session-context";
 import { LOGIN_REDIRECT } from "@/components/crm-shell/session-boundary";
 import type { CrmUsersReadCapability } from "@/data/api/api-crm-data-provider";
+import {
+  CRM_USERS_OWNER_FILTERS,
+  isOwnerFilter,
+  type CrmUsersOwnerFilter,
+} from "@/application/api/users-owner-filter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkeletonRows } from "@/components/ui/skeleton";
@@ -16,15 +21,27 @@ import { useApiUsersQuery } from "./use-api-users-query";
 /**
  * Production Users v1 list.
  *
- * Deliberately NOT the mock `UsersWorkspace`: the backend has no owner, notes,
+ * Deliberately NOT the mock `UsersWorkspace`: the backend has no notes,
  * financial, lifecycle or activity data, so this renders only what is truthful.
- * Rows are not clickable — User 360 has no API yet, and a dead link would imply
- * otherwise.
+ * The one relational field it can prove — the current owner's display name — is
+ * shown as its own column and drives the owner filter. Rows link to the
+ * production detail route only.
  */
 
 const STATUS_LABEL: Record<CrmApiUser["status"], string> = {
   active: "Активен",
   blocked: "Заблокирован",
+};
+
+/** «Не назначен» — the frontend label for a `null` owner (pristine OR persisted
+ *  unassigned; the list does not distinguish them). It is NOT a backend value. */
+export const OWNER_UNASSIGNED_LABEL = "Не назначен";
+
+/** Exact filter labels. `all` omits the URL parameter; `mine`/`unassigned` set it. */
+export const OWNER_FILTER_LABEL: Record<CrmUsersOwnerFilter, string> = {
+  all: "Все",
+  mine: "Мои",
+  unassigned: "Без ответственного",
 };
 
 /** Deterministic, locale-safe date. Avoids host-locale drift between runs. */
@@ -60,10 +77,28 @@ function Panel({
   );
 }
 
+/**
+ * The owner cell — the ONLY owner information the list carries. It renders the
+ * live `displayName`, or «Не назначен» for a `null` owner. No employeeId,
+ * ownerVersion, StaffRole, email, status, timestamp, edit control or candidate
+ * selector: a list row names the owner, it never lets you act on them. A long
+ * name wraps and keeps its full text available through `title`.
+ */
+function OwnerCell({ owner }: { owner: CrmApiUser["owner"] }) {
+  if (owner === null) {
+    return <span className="text-text-muted">{OWNER_UNASSIGNED_LABEL}</span>;
+  }
+  return (
+    <span className="block max-w-[220px] break-words text-text-secondary" title={owner.displayName}>
+      {owner.displayName}
+    </span>
+  );
+}
+
 function UsersTable({ items }: { items: CrmApiUser[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className="w-full min-w-[760px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-surface text-left text-2xs uppercase tracking-wide text-text-muted">
             <th scope="col" className="px-3 py-2 font-medium">Имя</th>
@@ -71,6 +106,7 @@ function UsersTable({ items }: { items: CrmApiUser[] }) {
             <th scope="col" className="px-3 py-2 font-medium">Статус</th>
             <th scope="col" className="px-3 py-2 font-medium">Уровень</th>
             <th scope="col" className="px-3 py-2 font-medium">Email подтверждён</th>
+            <th scope="col" className="px-3 py-2 font-medium">Ответственный</th>
             <th scope="col" className="px-3 py-2 font-medium">Регистрация</th>
           </tr>
         </thead>
@@ -106,6 +142,9 @@ function UsersTable({ items }: { items: CrmApiUser[] }) {
               <td className="px-3 py-2 text-text-secondary">
                 {user.emailConfirmed ? "Подтверждён" : "Не подтверждён"}
               </td>
+              <td className="px-3 py-2">
+                <OwnerCell owner={user.owner} />
+              </td>
               <td className="px-3 py-2 tabular-nums text-text-secondary">
                 {formatRegisteredAt(user.createdAt)}
               </td>
@@ -117,6 +156,52 @@ function UsersTable({ items }: { items: CrmApiUser[] }) {
   );
 }
 
+/**
+ * The owner filter — a labelled native select. One accessible control for every
+ * viewport (44px min target), always exactly one selected value. It is shown to
+ * EVERY authenticated employee: there is no `assign_owner` gate, no StaffRole
+ * branch and no owner-candidates request behind it. There is no `assigned` and
+ * no specific-owner option — the list only distinguishes all / mine / no owner.
+ */
+function OwnerFilterControl({
+  value,
+  onChange,
+}: {
+  value: CrmUsersOwnerFilter;
+  onChange: (next: CrmUsersOwnerFilter) => void;
+}) {
+  return (
+    <div className="min-w-[180px]">
+      <label htmlFor="api-users-owner" className="block text-2xs text-text-muted">
+        Ответственный
+      </label>
+      <select
+        id="api-users-owner"
+        value={value}
+        aria-describedby="api-users-owner-mine-hint"
+        onChange={(event) => {
+          const next = event.target.value;
+          if (isOwnerFilter(next)) onChange(next);
+        }}
+        className="mt-1 min-h-[44px] w-full rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {CRM_USERS_OWNER_FILTERS.map((filter) => (
+          <option
+            key={filter}
+            value={filter}
+            title={filter === "mine" ? "Закреплённые за мной" : undefined}
+          >
+            {OWNER_FILTER_LABEL[filter]}
+          </option>
+        ))}
+      </select>
+      <span id="api-users-owner-mine-hint" className="sr-only">
+        «Мои» — закреплённые за мной.
+      </span>
+    </div>
+  );
+}
+
 export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapability }) {
   const router = useRouter();
   const { session } = useSession();
@@ -124,7 +209,7 @@ export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapabil
   // Authority is the backend's effectivePermissions — never the role.
   const canSearchEmail = sessionGrants(session, "view_identity_full_email");
 
-  const q = useApiUsersQuery({ canSearchEmail, provider });
+  const q = useApiUsersQuery({ canSearchEmail, provider, sessionEmployeeId: session.employeeId });
 
   // A 401 means the employee session is no longer valid. Redirect rather than
   // render, and never show the rows that were on screen a moment ago.
@@ -133,6 +218,17 @@ export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapabil
   }, [q.state.kind, router]);
 
   const searchLabel = canSearchEmail ? "Имя или email" : "Имя";
+
+  // Empty-state copy. A non-empty search takes precedence over the owner-filter
+  // copy; otherwise mine/unassigned get their own guidance and `all` keeps the
+  // existing neutral message. Raw query values and employee ids never appear.
+  const emptyDescription = q.appliedSearch
+    ? "По этому запросу пользователей нет. Измените запрос или сбросьте поиск."
+    : q.ownerFilter === "mine"
+      ? "За вами пока не закреплены пользователи."
+      : q.ownerFilter === "unassigned"
+        ? "Все пользователи закреплены за ответственными."
+        : "Пользователи не найдены.";
 
   return (
     <div className="space-y-4">
@@ -164,6 +260,9 @@ export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapabil
             aria-describedby={q.localSearchError ? "api-users-search-error" : undefined}
           />
         </div>
+        {/* The owner filter is always visible — it stays put across loading and
+            every error state, and always reflects the selected value. */}
+        <OwnerFilterControl value={q.ownerFilter} onChange={q.setOwnerFilter} />
         <Button type="submit">Найти</Button>
         {q.appliedSearch || q.searchInput ? (
           <Button type="button" variant="secondary" onClick={q.clearSearch}>
@@ -209,14 +308,7 @@ export function ApiUsersWorkspace({ provider }: { provider?: CrmUsersReadCapabil
       ) : null}
 
       {q.state.kind === "ready" && q.state.items.length === 0 ? (
-        <Panel
-          title="Ничего не найдено"
-          description={
-            q.appliedSearch
-              ? "По этому запросу пользователей нет. Измените запрос или сбросьте поиск."
-              : "Пользователи не найдены."
-          }
-        />
+        <Panel title="Ничего не найдено" description={emptyDescription} />
       ) : null}
 
       {q.state.kind === "invalid_input" ? (
