@@ -95,18 +95,29 @@ export function decodeUsersCursor(raw: string): { createdAt: Date; id: number } 
 
 /* ------------------------------------------------------------------- query */
 
-const KNOWN_QUERY_KEYS = new Set(["limit", "cursor", "search"]);
+const KNOWN_QUERY_KEYS = new Set(["limit", "cursor", "search", "owner"]);
+
+// The exact accepted Owner-filter values. `all` is the canonical default and is
+// also accepted explicitly; omission means `all`. No trim, no case-folding: an
+// empty value, mixed case, an alias (`me`, `assigned`), a boolean, a
+// comma-separated list, JSON or a raw employee id are all invalid.
+export const CRM_USERS_OWNER_FILTERS = ["all", "mine", "unassigned"] as const;
+export type CrmUsersOwnerFilter = (typeof CRM_USERS_OWNER_FILTERS)[number];
 
 export interface CrmUsersQuery {
   limit: number;
   cursor?: { createdAt: Date; id: number };
   search?: string;
+  owner: CrmUsersOwnerFilter;
 }
 
 /**
  * Strict query parsing. Unknown keys are rejected rather than ignored, so a
  * client that sends a filter this version does not implement gets told, instead
- * of silently receiving unfiltered data it believes is filtered.
+ * of silently receiving unfiltered data it believes is filtered. A repeated
+ * known key is rejected too: `URLSearchParams.get()` would otherwise silently
+ * take only the first value, so a client could believe a second `owner=` or
+ * `search=` applied when it was dropped.
  */
 export function parseCrmUsersQuery(
   searchParams: URLSearchParams,
@@ -114,6 +125,15 @@ export function parseCrmUsersQuery(
 ): CrmUsersQuery {
   for (const key of searchParams.keys()) {
     if (!KNOWN_QUERY_KEYS.has(key)) throw new CrmUsersInputError("crm.users.unknown_query_key");
+  }
+
+  // Reject any known key that appears more than once — before any duplicate
+  // value is read. Not first-wins, not last-wins, not joined: a repeated known
+  // key is a malformed request. Identical and empty duplicates are rejected too.
+  for (const key of KNOWN_QUERY_KEYS) {
+    if (searchParams.getAll(key).length > 1) {
+      throw new CrmUsersInputError("crm.users.repeated_query_key");
+    }
   }
 
   // limit — integer, bounded. Rejects 0, negatives, fractions and non-numerics.
@@ -156,7 +176,21 @@ export function parseCrmUsersQuery(
     }
   }
 
-  return { limit, cursor, search };
+  // owner — bounded enum. Absent means `all`; explicit `all` is equivalent. The
+  // value is matched exactly (no trim, no case-folding), so `All`, ``, `me`,
+  // `assigned`, `true`, `mine,all` or an employee id are 400 invalid_input. The
+  // client can never supply an employee id here: `mine` is resolved server-side
+  // from the authenticated StaffProfile, not from any request value.
+  let owner: CrmUsersOwnerFilter = "all";
+  const rawOwner = searchParams.get("owner");
+  if (rawOwner !== null) {
+    if (!(CRM_USERS_OWNER_FILTERS as readonly string[]).includes(rawOwner)) {
+      throw new CrmUsersInputError("crm.users.owner_filter_invalid");
+    }
+    owner = rawOwner as CrmUsersOwnerFilter;
+  }
+
+  return { limit, cursor, search, owner };
 }
 
 /* -------------------------------------------------------------- projection */
@@ -169,14 +203,28 @@ export interface CrmUserListItem {
   level: number;
   emailConfirmed: boolean;
   createdAt: string;
+  owner: { displayName: string } | null;
 }
 
 /** Honest fallback when a learner has no usable name. Never the email. */
 export const CRM_USERS_DISPLAY_NAME_FALLBACK = "Пользователь";
 
-// Exactly the columns needed for projection, search and the pagination tuple.
-// Nothing else is read, so passwordHash, tokens and relations cannot leak even
-// by accident.
+// Thrown when a stored current owner has a blank/unusable display name. Fails
+// closed to the route's generic safe 500 rather than fabricating a label or
+// projecting null — it is a data fault, not an "unassigned" learner. It is
+// deliberately NOT a CrmUsersInputError, so it never becomes a 400.
+export class CrmUsersOwnerProjectionError extends Error {
+  constructor() {
+    super("crm.users.owner_display_name_blank");
+    this.name = "CrmUsersOwnerProjectionError";
+  }
+}
+
+// Exactly the columns needed for projection, search and the pagination tuple,
+// plus the current-owner relation projected inline (ownerId to tell the three
+// owner states apart, and the live owner displayName). `ownerId` stays inside
+// the service and never enters the DTO. Nothing else is read, so passwordHash,
+// tokens and other relations cannot leak even by accident.
 const USER_SELECT = {
   id: true,
   name: true,
@@ -185,9 +233,33 @@ const USER_SELECT = {
   level: true,
   emailVerifiedAt: true,
   createdAt: true,
+  crmOwnerState: {
+    select: {
+      ownerId: true,
+      owner: { select: { displayName: true } },
+    },
+  },
 } satisfies Prisma.UserSelect;
 
 type SelectedUser = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
+
+/**
+ * Project the current owner into the public shape: displayName only, or null.
+ *
+ *   no CrmUserOwner row            -> null
+ *   row with ownerId = null        -> null   (pristine and persisted-null both null)
+ *   row with a valid owner         -> { displayName: live StaffProfile name }
+ *
+ * The owner is NOT filtered by status or eligible role, so a current owner who
+ * later became blocked or role-ineligible still shows. A blank live display
+ * name fails closed rather than fabricating a placeholder or leaking the id.
+ */
+function projectOwner(state: SelectedUser["crmOwnerState"]): { displayName: string } | null {
+  if (!state || state.ownerId === null) return null;
+  const displayName = state.owner?.displayName.trim() ?? "";
+  if (displayName.length === 0) throw new CrmUsersOwnerProjectionError();
+  return { displayName };
+}
 
 function toListItem(user: SelectedUser, canSeeFullEmail: boolean): CrmUserListItem {
   const name = user.name.trim();
@@ -201,6 +273,7 @@ function toListItem(user: SelectedUser, canSeeFullEmail: boolean): CrmUserListIt
     level: user.level,
     emailConfirmed: user.emailVerifiedAt !== null,
     createdAt: user.createdAt.toISOString(),
+    owner: projectOwner(user.crmOwnerState),
   };
 }
 
@@ -215,10 +288,15 @@ export interface CrmUsersPage {
  * Keyset pagination over (createdAt DESC, id DESC). Both columns are stable for
  * a given row, so a page boundary cannot drift the way an OFFSET would, and id
  * breaks ties when two accounts share a createdAt.
+ *
+ * `actorEmployeeId` is the authenticated StaffProfile.id resolved by the
+ * session — the ONLY source of identity for `owner=mine`. It is never taken
+ * from a request value, so a client cannot list another employee's book.
  */
 export async function listCrmUsers(
   query: CrmUsersQuery,
   permissions: readonly CrmPermission[],
+  actorEmployeeId: string,
 ): Promise<CrmUsersPage> {
   const canSeeFullEmail = permissions.includes("view_identity_full_email");
 
@@ -232,6 +310,23 @@ export async function listCrmUsers(
         ],
       }
     : {};
+
+  // Owner filter, applied in the WHERE before keyset pagination so pages stay
+  // stable. `all` adds nothing. `mine` matches the current-owner relation to
+  // the authenticated StaffProfile. `unassigned` is BOTH the absent relation
+  // (pristine) and a present relation whose ownerId is null (persisted-null) —
+  // matching only one of the two would silently drop learners.
+  const ownerWhere: Prisma.UserWhereInput =
+    query.owner === "mine"
+      ? { crmOwnerState: { is: { ownerId: actorEmployeeId } } }
+      : query.owner === "unassigned"
+        ? {
+            OR: [
+              { crmOwnerState: { is: null } },
+              { crmOwnerState: { is: { ownerId: null } } },
+            ],
+          }
+        : {};
 
   const cursorWhere: Prisma.UserWhereInput = query.cursor
     ? {
@@ -249,6 +344,7 @@ export async function listCrmUsers(
       // UserRole axis used purely as a listing filter — it is never read as a
       // StaffRole and never grants anything.
       role: "user",
+      ...(query.owner !== "all" ? ownerWhere : {}),
       ...(query.search ? searchWhere : {}),
       ...(query.cursor ? cursorWhere : {}),
     },

@@ -37,6 +37,18 @@ export const crmUserListItemSchema = z
     level: z.number().int(),
     emailConfirmed: z.boolean(),
     createdAt: z.string().datetime(),
+    // Current learner owner — displayName only, or null. Strict, so an owner
+    // employeeId, internal ownerId, ownerVersion, StaffRole, email, status or
+    // timestamp can never ride along. `null` covers BOTH the pristine no-row
+    // state and a persisted row whose ownerId is null; the list does not
+    // distinguish them. The name is the live StaffProfile.displayName, resolved
+    // through the relation and never snapshotted.
+    owner: z
+      .object({
+        displayName: z.string().min(1),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 

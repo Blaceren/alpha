@@ -23,7 +23,9 @@ export async function GET(request: Request) {
     const session = await resolveCrmSession();
 
     const query = parseCrmUsersQuery(new URL(request.url).searchParams, session.effectivePermissions);
-    const page = await listCrmUsers(query, session.effectivePermissions);
+    // `session.employeeId` is the authenticated StaffProfile.id — the only
+    // identity used for owner=mine. It is never read from the request.
+    const page = await listCrmUsers(query, session.effectivePermissions, session.employeeId);
 
     // Validate the exact shape before it leaves the process.
     return NextResponse.json(crmUsersResponseSchema.parse(page), { headers });

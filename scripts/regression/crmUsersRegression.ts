@@ -125,6 +125,7 @@ type Item = {
   level: number;
   emailConfirmed: boolean;
   createdAt: string;
+  owner: { displayName: string } | null;
 };
 const itemsOf = (reply: Reply) => reply.body.items as Item[];
 
@@ -200,7 +201,59 @@ async function main() {
     // A learner with a blank name -> honest fallback, never the email.
     await prisma.user.create({ data: { email: "nameless@example.test", name: "   ", role: "user", passwordHash: hash, createdAt: new Date("2026-03-03T00:00:00.000Z") } });
 
+    /* ------------------------------------------------------ owner fixtures */
+
+    // The "mine" actor is crm_manager (an existing, eligible StaffProfile). We
+    // create owner-state rows DIRECTLY via prisma to control every state exactly
+    // — the assignment SERVICE is exercised by crmUserOwnerRegression, not here.
+    const managerProfile = await prisma.staffProfile.findFirstOrThrow({
+      where: { userId: staffByRole.get("crm_manager")!.userId },
+      select: { id: true, displayName: true },
+    });
+    const supportProfile = await prisma.staffProfile.findFirstOrThrow({
+      where: { userId: staffByRole.get("support")!.userId },
+      select: { id: true },
+    });
+
+    // Two learners owned by the mine-actor (crm_manager).
+    const ownedA = await prisma.user.create({ data: { email: "owned-a@example.test", name: "Owned Alpha", role: "user", passwordHash: hash, createdAt: new Date("2026-04-01T00:00:00.000Z") } });
+    const ownedB = await prisma.user.create({ data: { email: "owned-b@example.test", name: "Owned Beta", role: "user", passwordHash: hash, createdAt: new Date("2026-04-02T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: ownedA.id, ownerId: managerProfile.id, version: 1 } });
+    await prisma.crmUserOwner.create({ data: { userId: ownedB.id, ownerId: managerProfile.id, version: 2 } });
+
+    // A learner owned by someone ELSE (support) — must never appear in the
+    // manager's `mine`, and must be excluded from `unassigned`.
+    const ownedByOther = await prisma.user.create({ data: { email: "owned-other@example.test", name: "Owned Other", role: "user", passwordHash: hash, createdAt: new Date("2026-04-03T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: ownedByOther.id, ownerId: supportProfile.id, version: 1 } });
+
+    // Persisted-null: a row exists but ownerId is null (version > 0). This is
+    // the previously-assigned-then-unassigned state and MUST count as
+    // unassigned — the case a naive "no row" predicate would drop.
+    const persistedNull = await prisma.user.create({ data: { email: "persisted-null@example.test", name: "Persisted Null", role: "user", passwordHash: hash, createdAt: new Date("2026-04-04T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: persistedNull.id, ownerId: null, version: 3 } });
+
+    // Blocked current owner: a dedicated staff, assigned, then its User blocked.
+    // The owner must stay visible (the owner read is not status-filtered).
+    const blockedOwnerUser = await prisma.user.create({ data: { email: "owner-blocked@example.com", name: "Owner Blocked User", role: "support", passwordHash: hash } });
+    const blockedOwnerProfile = await prisma.staffProfile.create({ data: { userId: blockedOwnerUser.id, displayName: "Blocked Owner Name", staffRole: "support" } });
+    const blockedOwnerLearner = await prisma.user.create({ data: { email: "has-blocked-owner@example.test", name: "Has Blocked Owner", role: "user", passwordHash: hash, createdAt: new Date("2026-04-05T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: blockedOwnerLearner.id, ownerId: blockedOwnerProfile.id, version: 1 } });
+    await prisma.user.update({ where: { id: blockedOwnerUser.id }, data: { status: "blocked" } });
+
+    // Role-ineligible current owner: a dedicated staff with a NON-eligible
+    // StaffRole (moderator). Assigned directly, it must also stay visible.
+    const ineligOwnerUser = await prisma.user.create({ data: { email: "owner-inelig@example.com", name: "Owner Inelig User", role: "support", passwordHash: hash } });
+    const ineligOwnerProfile = await prisma.staffProfile.create({ data: { userId: ineligOwnerUser.id, displayName: "Ineligible Owner Name", staffRole: "moderator" } });
+    const ineligOwnerLearner = await prisma.user.create({ data: { email: "has-inelig-owner@example.test", name: "Has Ineligible Owner", role: "user", passwordHash: hash, createdAt: new Date("2026-04-06T00:00:00.000Z") } });
+    await prisma.crmUserOwner.create({ data: { userId: ineligOwnerLearner.id, ownerId: ineligOwnerProfile.id, version: 1 } });
+
+    // Assigned learners = the five with a non-null ownerId above.
+    const assignedLearnerIds = new Set(
+      [ownedA.id, ownedB.id, ownedByOther.id, blockedOwnerLearner.id, ineligOwnerLearner.id].map(String),
+    );
+
     const totalLearners = await prisma.user.count({ where: { role: "user" } });
+    const unassignedExpected = totalLearners - assignedLearnerIds.size;
 
     server = await start();
 
@@ -271,11 +324,11 @@ async function main() {
       assert.deepEqual(Object.keys(adminReply.body).sort(), ["items", "nextCursor"]);
     });
 
-    await check("10. each item has exactly the seven contract keys", () => {
+    await check("10. each item has exactly the eight contract keys (incl. owner)", () => {
       for (const item of itemsOf(adminReply)) {
         assert.deepEqual(
           Object.keys(item).sort(),
-          ["createdAt", "displayName", "email", "emailConfirmed", "level", "status", "userId"],
+          ["createdAt", "displayName", "email", "emailConfirmed", "level", "owner", "status", "userId"],
         );
       }
     });
@@ -307,8 +360,11 @@ async function main() {
       }
     });
 
-    await check("14. no owner/notes/team/financial field is fabricated", () => {
-      for (const banned of ["ownerId", "owner", "noteCount", "notes", "unread", "balance", "netDeposits", "bucket", "segment", "priority", "recommendation", "taskCount", "caseCount", "signals", "traderId", "clickId", "totalDeposits", "xp"]) {
+    await check("14. no notes/team/financial field is fabricated, and no owner internals leak", () => {
+      // `owner` is now a real field (displayName only). Everything else the mock
+      // carries stays absent, and no owner INTERNAL (ownerId, ownerVersion,
+      // employeeId, staffRole, owner email) is ever serialized.
+      for (const banned of ["ownerId", "ownerVersion", "ownerEmployeeId", "employeeId", "staffRole", "noteCount", "notes", "unread", "balance", "netDeposits", "bucket", "segment", "priority", "recommendation", "taskCount", "caseCount", "signals", "traderId", "clickId", "totalDeposits", "xp"]) {
         assert.ok(!adminReply.text.includes(banned), `must not expose ${banned}`);
       }
     });
@@ -638,8 +694,11 @@ async function main() {
     /* ------------------------------------------------- database / non-scope */
 
     await check("45. no learner StaffProfile was created by listing", async () => {
+      // Nine role staff + one blocked-staff (check 5) + two dedicated owner
+      // staff (blocked-owner, ineligible-owner) = 12. Listing itself creates
+      // none, and no learner ever gains a StaffProfile.
       const profiles = await prisma.staffProfile.count();
-      assert.equal(profiles, CRM_STAFF_ROLES.length + 1, "unexpected StaffProfile rows");
+      assert.equal(profiles, CRM_STAFF_ROLES.length + 3, "unexpected StaffProfile rows");
       for (const id of learnerIds) {
         assert.equal(await prisma.staffProfile.count({ where: { userId: id } }), 0);
       }
@@ -685,6 +744,338 @@ async function main() {
       for (const marker of ["SELECT", "prisma", "/tmp/", ".db", "at Object", "Error:", "node_modules"]) {
         assert.ok(!reply.text.includes(marker), `leaked ${marker}`);
       }
+    });
+
+    /* ============================================ OWNER: query parsing ==== */
+
+    // Walk every page of a given query and return the userIds seen, asserting
+    // no duplicate and safe termination.
+    async function walkAll(client: Client, suffix: string): Promise<string[]> {
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      let guard = 0;
+      do {
+        const url = `/api/crm/v1/users?limit=3&${suffix}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+        const reply: Reply = await client.request("GET", url);
+        assert.equal(reply.status, 200, `${suffix} page ${guard} -> ${reply.status}`);
+        for (const item of itemsOf(reply)) seen.push(item.userId);
+        cursor = reply.body.nextCursor as string | null;
+        guard += 1;
+        assert.ok(guard < 50, `${suffix} pagination did not terminate`);
+      } while (cursor);
+      assert.equal(new Set(seen).size, seen.length, `duplicate userId for ${suffix}`);
+      return seen;
+    }
+
+    await check("51. owner omitted defaults to all learners", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      assert.equal(itemsOf(reply).length, totalLearners);
+    });
+
+    await check("52. explicit owner=all equals omission", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const all = await client.request("GET", "/api/crm/v1/users?limit=100&owner=all");
+      const omitted = await client.request("GET", "/api/crm/v1/users?limit=100");
+      assert.equal(all.status, 200);
+      assert.deepEqual(
+        itemsOf(all).map((i) => i.userId),
+        itemsOf(omitted).map((i) => i.userId),
+      );
+    });
+
+    for (const [name, value] of [
+      ["53. empty owner value is 400", ""],
+      ["54. unsupported owner value is 400", "team"],
+      ["55. uppercase owner=All is 400", "All"],
+      ["56. uppercase owner=MINE is 400", "MINE"],
+      ["57. owner=assigned is 400 (not supported)", "assigned"],
+      ["58. owner=me is 400", "me"],
+      ["59. owner=mine,all (comma) is 400", "mine,all"],
+      ["60. owner=true (boolean) is 400", "true"],
+    ] as const) {
+      await check(name, async () => {
+        const client = await loginAs(staffByRole.get("crm_admin")!.email);
+        const reply = await client.request("GET", `/api/crm/v1/users?owner=${encodeURIComponent(value)}`);
+        assert.equal(reply.status, 400, `owner=${value} should be 400`);
+        assert.equal(reply.body.code, "invalid_input");
+        assert.equal(reply.body.messageKey, "crm.users.owner_filter_invalid");
+      });
+    }
+
+    await check("61. an arbitrary employee id as owner value is 400, not honoured", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", `/api/crm/v1/users?owner=${encodeURIComponent(managerProfile.id)}`);
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.messageKey, "crm.users.owner_filter_invalid");
+      // The refusal must not confirm the employee id exists.
+      assert.ok(!reply.text.includes(managerProfile.id));
+    });
+
+    await check("62. ownerEmployeeId is an unknown query key (400 unknown_query_key)", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?ownerEmployeeId=x");
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.messageKey, "crm.users.unknown_query_key");
+    });
+
+    /* ==================================== OWNER: repeated-key hardening ==== */
+
+    for (const [name, qs] of [
+      ["63. repeated owner (identical values) is 400 repeated_query_key", "owner=mine&owner=mine"],
+      ["64. repeated owner (different values) is 400 repeated_query_key", "owner=mine&owner=all"],
+      ["65. repeated limit is 400 repeated_query_key", "limit=5&limit=5"],
+      ["66. repeated cursor is 400 repeated_query_key", "cursor=a&cursor=b"],
+      ["67. repeated search is 400 repeated_query_key", "search=x&search=y"],
+      ["68. repeated empty search is 400 repeated_query_key", "search=&search="],
+    ] as const) {
+      await check(name, async () => {
+        const client = await loginAs(staffByRole.get("crm_admin")!.email);
+        const reply = await client.request("GET", `/api/crm/v1/users?${qs}`);
+        assert.equal(reply.status, 400, `${qs} should be 400`);
+        assert.equal(reply.body.code, "invalid_input");
+        assert.equal(reply.body.messageKey, "crm.users.repeated_query_key");
+      });
+    }
+
+    /* ========================================= OWNER: projection shape ==== */
+
+    await check("69. assigned learner projects exactly { owner: { displayName } }", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const item = itemsOf(reply).find((i) => i.userId === String(ownedA.id));
+      assert.ok(item, "owned learner missing");
+      assert.ok(item.owner, "owner should not be null for an assigned learner");
+      assert.deepEqual(Object.keys(item.owner).sort(), ["displayName"]);
+      assert.equal(item.owner.displayName, managerProfile.displayName);
+    });
+
+    await check("70. pristine (no row) learner has owner null", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      // learnerIds[0] was never given an owner row.
+      const item = itemsOf(reply).find((i) => i.userId === String(learnerIds[0]));
+      assert.ok(item, "pristine learner missing");
+      assert.equal(item.owner, null);
+    });
+
+    await check("71. persisted ownerId=null learner has owner null", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const item = itemsOf(reply).find((i) => i.userId === String(persistedNull.id));
+      assert.ok(item, "persisted-null learner missing");
+      assert.equal(item.owner, null);
+    });
+
+    await check("72. a blocked current owner remains visible with its live name", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const item = itemsOf(reply).find((i) => i.userId === String(blockedOwnerLearner.id));
+      assert.ok(item?.owner, "blocked owner should still project");
+      assert.equal(item.owner.displayName, "Blocked Owner Name");
+    });
+
+    await check("73. a role-ineligible current owner remains visible", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const item = itemsOf(reply).find((i) => i.userId === String(ineligOwnerLearner.id));
+      assert.ok(item?.owner, "ineligible owner should still project");
+      assert.equal(item.owner.displayName, "Ineligible Owner Name");
+    });
+
+    await check("74. a live owner displayName change is reflected (never snapshotted)", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const before = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const b = itemsOf(before).find((i) => i.userId === String(ineligOwnerLearner.id));
+      assert.equal(b?.owner?.displayName, "Ineligible Owner Name");
+      await prisma.staffProfile.update({ where: { id: ineligOwnerProfile.id }, data: { displayName: "Renamed Owner Live" } });
+      const after = await client.request("GET", "/api/crm/v1/users?limit=100");
+      const a = itemsOf(after).find((i) => i.userId === String(ineligOwnerLearner.id));
+      assert.equal(a?.owner?.displayName, "Renamed Owner Live");
+      // restore
+      await prisma.staffProfile.update({ where: { id: ineligOwnerProfile.id }, data: { displayName: "Ineligible Owner Name" } });
+    });
+
+    await check("75. no owner internal leaks in an owner-bearing response", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+      // The internal ownerId (a cuid) must never appear in the wire body.
+      for (const id of [managerProfile.id, supportProfile.id, blockedOwnerProfile.id, ineligOwnerProfile.id]) {
+        assert.ok(!reply.text.includes(id), `internal ownerId leaked: ${id}`);
+      }
+      for (const banned of ["employeeId", "ownerId", "ownerVersion", "staffRole", "\"version\""]) {
+        assert.ok(!reply.text.includes(banned), `owner internal leaked: ${banned}`);
+      }
+      // No owner email either: the owner staff addresses must not appear.
+      for (const owEmail of ["owner-blocked@example.com", "owner-inelig@example.com", "staff-support@example.com"]) {
+        assert.ok(!reply.text.includes(owEmail), `owner email leaked: ${owEmail}`);
+      }
+    });
+
+    await check("76. a blank current-owner display name fails closed (safe 500), never a placeholder", async () => {
+      // Build an isolated blank-name owner, prove the 500, then remove it so the
+      // rest of the dataset stays clean.
+      const blankUser = await prisma.user.create({ data: { email: "owner-blank@example.com", name: "Owner Blank User", role: "support", passwordHash: hash } });
+      const blankProfile = await prisma.staffProfile.create({ data: { userId: blankUser.id, displayName: "   ", staffRole: "support" } });
+      const blankLearner = await prisma.user.create({ data: { email: "has-blank-owner@example.test", name: "Zzz Blank Owner Learner", role: "user", passwordHash: hash, createdAt: new Date("2026-05-01T00:00:00.000Z") } });
+      await prisma.crmUserOwner.create({ data: { userId: blankLearner.id, ownerId: blankProfile.id, version: 1 } });
+      try {
+        const client = await loginAs(staffByRole.get("crm_admin")!.email);
+        // Target just this learner via a unique name search so only its page 500s.
+        const reply = await client.request("GET", "/api/crm/v1/users?search=Zzz%20Blank%20Owner%20Learner");
+        assert.equal(reply.status, 500, `expected 500, got ${reply.status}`);
+        assert.equal(reply.body.code, "internal");
+        assert.ok(!reply.text.includes("Неизвестный"), "must not fabricate a placeholder");
+        for (const marker of ["prisma", "SELECT", "/tmp/", ".db", blankProfile.id]) {
+          assert.ok(!reply.text.includes(marker), `leaked ${marker}`);
+        }
+      } finally {
+        await prisma.crmUserOwner.delete({ where: { userId: blankLearner.id } });
+        await prisma.user.delete({ where: { id: blankLearner.id } });
+        await prisma.staffProfile.delete({ where: { id: blankProfile.id } });
+        await prisma.user.delete({ where: { id: blankUser.id } });
+      }
+    });
+
+    /* ============================================ OWNER: mine filter ===== */
+
+    await check("77. owner=mine returns exactly the actor's learners", async () => {
+      const client = await loginAs(staffByRole.get("crm_manager")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=mine");
+      assert.equal(reply.status, 200);
+      const ids = new Set(itemsOf(reply).map((i) => i.userId));
+      assert.deepEqual([...ids].sort(), [String(ownedA.id), String(ownedB.id)].sort());
+      // Someone else's learner is never in my book.
+      assert.ok(!ids.has(String(ownedByOther.id)));
+    });
+
+    await check("78. owner=mine is actor-scoped, not global (a non-owning actor gets [])", async () => {
+      const client = await loginAs(staffByRole.get("analyst")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=mine");
+      assert.equal(reply.status, 200);
+      assert.deepEqual(itemsOf(reply), []);
+      assert.equal(reply.body.nextCursor, null);
+    });
+
+    await check("79. owner=mine is empty for another valid StaffProfile owning nothing", async () => {
+      const client = await loginAs(staffByRole.get("read_only")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=mine");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, 0);
+    });
+
+    /* ======================================= OWNER: unassigned filter ==== */
+
+    await check("80. owner=unassigned includes rowless + persisted-null, excludes assigned", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?limit=100&owner=unassigned");
+      assert.equal(reply.status, 200);
+      const ids = new Set(itemsOf(reply).map((i) => i.userId));
+      assert.ok(ids.has(String(learnerIds[0])), "rowless pristine learner missing from unassigned");
+      assert.ok(ids.has(String(persistedNull.id)), "persisted-null learner missing from unassigned");
+      for (const id of assignedLearnerIds) {
+        assert.ok(!ids.has(id), `assigned learner ${id} leaked into unassigned`);
+      }
+      assert.equal(itemsOf(reply).length, unassignedExpected);
+      // Every returned row genuinely has owner null.
+      for (const item of itemsOf(reply)) assert.equal(item.owner, null);
+    });
+
+    await check("81. owner=mine + owner=unassigned partition the assigned/unassigned sets", async () => {
+      const client = await loginAs(staffByRole.get("crm_manager")!.email);
+      const mine = await walkAll(client, "owner=mine");
+      const unassigned = await walkAll(client, "owner=unassigned");
+      // No learner is both mine and unassigned.
+      const overlap = mine.filter((id) => unassigned.includes(id));
+      assert.deepEqual(overlap, []);
+      assert.equal(unassigned.length, unassignedExpected);
+    });
+
+    /* ========================================= OWNER: authorization ====== */
+
+    await check("82. all nine StaffRoles may use every owner filter value (200)", async () => {
+      for (const role of CRM_STAFF_ROLES) {
+        const client = await loginAs(staffByRole.get(role)!.email);
+        for (const value of ["all", "mine", "unassigned"]) {
+          const reply = await client.request("GET", `/api/crm/v1/users?owner=${value}`);
+          assert.equal(reply.status, 200, `${role} owner=${value} -> ${reply.status}`);
+          assert.ok(Array.isArray(reply.body.items));
+        }
+      }
+    });
+
+    await check("83. all nine StaffRoles see the owner projection on an assigned learner", async () => {
+      for (const role of CRM_STAFF_ROLES) {
+        const client = await loginAs(staffByRole.get(role)!.email);
+        const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
+        const item = itemsOf(reply).find((i) => i.userId === String(ownedA.id));
+        assert.ok(item?.owner, `${role} did not see owner`);
+        assert.equal(item.owner.displayName, managerProfile.displayName);
+      }
+    });
+
+    await check("84. assign_owner grants no extra filter capability (manager vs analyst identical availability)", async () => {
+      const manager = await loginAs(staffByRole.get("crm_manager")!.email); // has assign_owner
+      const analyst = await loginAs(staffByRole.get("analyst")!.email); // no assign_owner
+      for (const value of ["all", "mine", "unassigned"]) {
+        assert.equal((await manager.request("GET", `/api/crm/v1/users?owner=${value}`)).status, 200);
+        assert.equal((await analyst.request("GET", `/api/crm/v1/users?owner=${value}`)).status, 200);
+      }
+    });
+
+    /* ============================== OWNER: composition & preservation ==== */
+
+    await check("85. search composes with owner=mine (AND)", async () => {
+      const client = await loginAs(staffByRole.get("crm_manager")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=mine&search=Owned%20Alpha");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, 1);
+      assert.equal(itemsOf(reply)[0].userId, String(ownedA.id));
+      // A search that matches only someone else's learner returns nothing.
+      const none = await client.request("GET", "/api/crm/v1/users?owner=mine&search=Owned%20Other");
+      assert.deepEqual(itemsOf(none), []);
+    });
+
+    await check("86. search composes with owner=unassigned (AND)", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=unassigned&search=Persisted%20Null");
+      assert.equal(reply.status, 200);
+      assert.equal(itemsOf(reply).length, 1);
+      assert.equal(itemsOf(reply)[0].userId, String(persistedNull.id));
+    });
+
+    await check("87. email masking is unchanged under an owner filter", async () => {
+      const client = await loginAs(staffByRole.get("support")!.email); // no full-email
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=all&limit=100");
+      assert.equal(reply.status, 200);
+      for (const item of itemsOf(reply)) assert.equal(item.email.visibility, "masked");
+      // full-email role still gets full addresses with a filter present.
+      const admin = await loginAs(staffByRole.get("crm_admin")!.email);
+      const full = await admin.request("GET", "/api/crm/v1/users?owner=unassigned&limit=100");
+      assert.ok(itemsOf(full).some((i) => i.email.visibility === "full"));
+    });
+
+    await check("88. unauthorized email-shaped search is still refused with an owner filter present", async () => {
+      const client = await loginAs(staffByRole.get("support")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=mine&search=learner05%40example.test");
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.code, "invalid_input");
+      assert.ok(!reply.text.includes("learner05@example.test"));
+    });
+
+    await check("89. owner-filtered responses keep Cache-Control: no-store and a requestId", async () => {
+      const client = await loginAs(staffByRole.get("crm_admin")!.email);
+      const reply = await client.request("GET", "/api/crm/v1/users?owner=unassigned");
+      assert.ok(String(reply.headers.get("cache-control") ?? "").includes("no-store"));
+      assert.ok(String(reply.headers.get("x-request-id") ?? "").length > 0);
+    });
+
+    await check("90. exactly one prisma.user.findMany application call (no N+1)", () => {
+      const source = fs.readFileSync(path.join(process.cwd(), "src", "lib", "crm", "users.ts"), "utf8");
+      const matches = source.match(/prisma\.user\.findMany\(/g) ?? [];
+      assert.equal(matches.length, 1, `expected 1 findMany, found ${matches.length}`);
+      // The owner relation is projected inline, not fetched per row.
+      assert.ok(!/crmUserOwner\.findMany|crmUserOwner\.findUnique/.test(source), "owner is fetched separately (N+1)");
     });
   } finally {
     await stop(server);
