@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_E2E, BACKEND_ORIGIN_HOSTPORT, BACKEND_PORT_TOKEN } from "./support/e2e-config";
 
 /**
  * Production Users v1 list, proved in a real browser against the deterministic
@@ -96,8 +97,8 @@ test.describe("same-origin proxy", () => {
     expect(apiCalls.some((u) => u.includes("/session"))).toBe(true);
     expect(apiCalls.some((u) => u.includes("/users"))).toBe(true);
     for (const url of apiCalls) {
-      expect(url.startsWith("http://127.0.0.1:3010/")).toBe(true);
-      expect(url).not.toContain("3110");
+      expect(url.startsWith(`${SESSION_E2E.baseURL}/`)).toBe(true);
+      expect(url).not.toContain(BACKEND_PORT_TOKEN);
     }
   });
 });
@@ -184,7 +185,7 @@ test.describe("populated list", () => {
     await expect(heading(page)).toBeVisible();
 
     const html = await page.content();
-    for (const secret of ["emp_stub", "effectivePermissions", "permissionVersion", "3110", "CRM_BACKEND_ORIGIN"]) {
+    for (const secret of ["emp_stub", "effectivePermissions", "permissionVersion", BACKEND_PORT_TOKEN, "CRM_BACKEND_ORIGIN"]) {
       expect(html, `leaked ${secret}`).not.toContain(secret);
     }
   });
@@ -324,7 +325,7 @@ test.describe("empty and error states", () => {
     await expect(page.getByRole("button", { name: "Повторить" })).toBeVisible();
 
     const html = await page.content();
-    for (const leak of ["ECONNREFUSED", "ECONNRESET", "127.0.0.1:3110", "crm.users.internal"]) {
+    for (const leak of ["ECONNREFUSED", "ECONNRESET", BACKEND_ORIGIN_HOSTPORT, "crm.users.internal"]) {
       expect(html).not.toContain(leak);
     }
   });

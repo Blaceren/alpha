@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { SESSION_E2E } from "./tests-e2e-session/support/e2e-config";
 
 /**
  * API-mode session E2E config.
@@ -10,9 +11,13 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * One worker: server RAM is constrained, and these tests drive a shared stub
  * whose response is selected by a cookie.
+ *
+ * Ports come from `tests-e2e-session/support/e2e-config.ts`, which defaults to
+ * 3031/3211 and REFUSES the live runtime ports (3100/3010/3110/3020). They were
+ * hard-coded to 3010/3110 until TB-2, which made the suite unrunnable while the
+ * DEV runtime was up. Override with CRM_E2E_PORT / CRM_E2E_STUB_PORT.
  */
-const CRM_PORT = 3010;
-const STUB_PORT = 3110;
+const { host: HOST, crmPort: CRM_PORT, stubPort: STUB_PORT, baseURL } = SESSION_E2E;
 
 export default defineConfig({
   testDir: "./tests-e2e-session",
@@ -23,7 +28,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   use: {
-    baseURL: `http://127.0.0.1:${CRM_PORT}`,
+    baseURL,
     trace: "off",
     screenshot: "off",
   },
@@ -34,18 +39,20 @@ export default defineConfig({
       command: `node tests-e2e-session/support/session-stub.mjs`,
       port: STUB_PORT,
       timeout: 30_000,
+      // Never attach to a process this run did not start: a stray listener on
+      // this port would silently replace the deterministic stub.
       reuseExistingServer: false,
-      env: { SESSION_STUB_PORT: String(STUB_PORT) },
+      env: { SESSION_STUB_PORT: String(STUB_PORT), SESSION_STUB_HOST: HOST },
     },
     {
       // The CRM in api mode. CRM_MODE is set explicitly — never defaulted.
-      command: `npx next dev --port ${CRM_PORT}`,
-      url: `http://127.0.0.1:${CRM_PORT}/today`,
+      command: `npx next dev --port ${CRM_PORT} --hostname ${HOST}`,
+      url: `${baseURL}/today`,
       timeout: 120_000,
       reuseExistingServer: false,
       env: {
         CRM_MODE: "api",
-        CRM_BACKEND_ORIGIN: `http://127.0.0.1:${STUB_PORT}`,
+        CRM_BACKEND_ORIGIN: SESSION_E2E.backendOrigin,
       },
     },
   ],

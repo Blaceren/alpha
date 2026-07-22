@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_E2E, BACKEND_ORIGIN_HOSTPORT, BACKEND_PORT_TOKEN } from "./support/e2e-config";
 
 /**
  * API-mode session boundary, proved in a real browser against the deterministic
@@ -107,8 +108,8 @@ test.describe("same-origin proxy", () => {
     expect(sessionCalls.length).toBeGreaterThan(0);
     for (const url of sessionCalls) {
       // Same origin as the CRM — the rewrite happens server-side.
-      expect(url.startsWith("http://127.0.0.1:3010/")).toBe(true);
-      expect(url).not.toContain("3110");
+      expect(url.startsWith(`${SESSION_E2E.baseURL}/`)).toBe(true);
+      expect(url).not.toContain(BACKEND_PORT_TOKEN);
     }
   });
 
@@ -192,7 +193,7 @@ test.describe("upstream and malformed", () => {
     // `app-pages-internals.js` chunk name.
     const body = await page.locator("body").innerText();
     const html = await page.content();
-    for (const leak of ['{"error":"internal"}', "ECONNREFUSED", "ECONNRESET", "127.0.0.1:3110", "socket hang up"]) {
+    for (const leak of ['{"error":"internal"}', "ECONNREFUSED", "ECONNRESET", BACKEND_ORIGIN_HOSTPORT, "socket hang up"]) {
       expect(html, `diagnostic leaked: ${leak}`).not.toContain(leak);
     }
     expect(body).not.toContain("500");
@@ -295,7 +296,7 @@ test.describe("security regressions", () => {
     await expect(page.getByText("Раздел ещё не подключён")).toBeVisible();
 
     const html = await page.content();
-    expect(html).not.toContain("3110");
+    expect(html).not.toContain(BACKEND_PORT_TOKEN);
     expect(html).not.toContain("CRM_BACKEND_ORIGIN");
     // And no client-visible mode key.
     expect(html).not.toContain("NEXT_PUBLIC_CRM_MODE");

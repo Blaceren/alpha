@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_E2E, BACKEND_ORIGIN_HOSTPORT, BACKEND_PORT_TOKEN } from "./support/e2e-config";
 
 /**
  * Production User Detail foundation at `/users/[userId]`, proved in a real
@@ -203,7 +204,7 @@ test.describe("only truthful sections appear", () => {
     await expect(learner(page)).toBeVisible();
 
     const html = await page.content();
-    for (const leak of ["Nina Chmiel", "$50–99", "usr_mock", "emp_stub", "effectivePermissions", "3110", "CRM_BACKEND_ORIGIN"]) {
+    for (const leak of ["Nina Chmiel", "$50–99", "usr_mock", "emp_stub", "effectivePermissions", BACKEND_PORT_TOKEN, "CRM_BACKEND_ORIGIN"]) {
       expect(html, `leaked ${leak}`).not.toContain(leak);
     }
   });
@@ -272,7 +273,7 @@ test.describe("error states", () => {
     await expect(page.getByRole("button", { name: "Повторить" })).toBeVisible();
 
     const html = await page.content();
-    for (const leak of ["ECONNREFUSED", "ECONNRESET", "127.0.0.1:3110", "crm.users.detail.internal"]) {
+    for (const leak of ["ECONNREFUSED", "ECONNRESET", BACKEND_ORIGIN_HOSTPORT, "crm.users.detail.internal"]) {
       expect(html).not.toContain(leak);
     }
   });

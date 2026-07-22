@@ -32,8 +32,8 @@
  */
 import { createServer } from "node:http";
 
-const PORT = Number(process.env.SESSION_STUB_PORT ?? 3110);
-const HOST = "127.0.0.1";
+const PORT = Number(process.env.SESSION_STUB_PORT ?? 3211);
+const HOST = process.env.SESSION_STUB_HOST ?? "127.0.0.1";
 const SESSION_PATH = "/api/crm/v1/session";
 const USERS_PATH = "/api/crm/v1/users";
 const STATE_COOKIE = "ata_test_crm_session_state";

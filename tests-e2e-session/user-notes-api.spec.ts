@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_E2E, BACKEND_ORIGIN_HOSTPORT, BACKEND_PORT_TOKEN } from "./support/e2e-config";
 
 /**
  * Production CRM User Notes v1 at `/users/[userId]`, proved in a real browser
@@ -452,8 +453,8 @@ test.describe("privacy and stale data", () => {
     });
     await page.goto("/users/101");
     await expect(page.getByText("Заметка номер 1")).toBeVisible();
-    expect(external.filter((u) => u.includes("3110"))).toHaveLength(0);
-    expect(await page.content()).not.toContain("3110");
+    expect(external.filter((u) => u.includes(BACKEND_PORT_TOKEN))).toHaveLength(0);
+    expect(await page.content()).not.toContain(BACKEND_PORT_TOKEN);
   });
 
   test("no note draft is persisted to local storage", async ({ page }) => {
