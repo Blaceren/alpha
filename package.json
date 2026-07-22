@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "security:sql": "tsx scripts/security/sqlInjectionAudit.ts",
+    "test:regression:sql-audit": "tsx scripts/regression/sqlAuditRegression.ts",
     "setup:local": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed",
     "verify:local": "npm run lint && npm run build",
     "verify:rc": "npm run setup:local && npm run verify:local && npm run smoke:ci",

@@ -42,7 +42,7 @@ const SUITES: Array<{
   {
     name: "populated upgrade/runtime",
     command: "test:regression:curriculum-upgrade",
-    expectedAssertions: 26,
+    expectedAssertions: 30,
   },
   {
     name: "Phase 2 cumulative gate",
@@ -53,8 +53,8 @@ const SUITES: Array<{
 // Phase 2 runs its own upgrade suite, and its nested Phase 1 gate runs upgrade
 // once more. These totals make that repetition explicit rather than inflating
 // the unique coverage claim.
-const PHASE_3_EXECUTED_ASSERTIONS = 854;
-const PHASE_3_UNIQUE_ASSERTIONS = 802;
+const PHASE_3_EXECUTED_ASSERTIONS = 866;
+const PHASE_3_UNIQUE_ASSERTIONS = 806;
 
 const gateDbPath = `/tmp/ata-phase3-gate-noop-${process.pid}.db`;
 const childEnv: NodeJS.ProcessEnv = {
