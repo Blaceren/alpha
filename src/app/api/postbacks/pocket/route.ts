@@ -1,11 +1,17 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { forbiddenResponse } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
-import { getPostbackSecret, isPocketPostbackSecretRequired } from "@/lib/env";
+import {
+  PocketRejectionReason,
+  authenticatePocketRequest,
+  fingerprintEventId,
+  hasQueryAuthMaterial,
+  resolvePocketPostbackConfig,
+} from "@/lib/exchange/pocketPostbackAuth";
 import { processExchangePostbackPayload } from "@/lib/exchange/postbackProcessor";
 import type { PocketPostbackType } from "@/lib/exchange/pocket";
 import { prisma } from "@/lib/prisma";
+import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import { receivePostbackSchema } from "@/lib/validation";
 
 const goalToPocketType: Record<string, PocketPostbackType> = {
@@ -25,10 +31,79 @@ const goalToPocketType: Record<string, PocketPostbackType> = {
   canceled_withdrawal: "Canceled Withdrawal",
 };
 
+const ROUTE = "/api/postbacks/pocket";
+
+/**
+ * Query aliases the legacy contract accepted as authentication material. They
+ * are declared here, in the route itself, because the secret auditor
+ * (scripts/security/sqlAuditCore.ts) proves this file covers every alias. A
+ * request carrying any of them is rejected outright, and the names stay on the
+ * redaction list so a legacy caller's secret is never persisted.
+ */
+const SECRET_QUERY_KEYS = ["ow", "secret", "token"] as const;
+
 const MAX_QUERY_PARAMS = 40;
 const MAX_QUERY_KEY_LENGTH = 80;
 const MAX_QUERY_VALUE_LENGTH = 1000;
-const SECRET_QUERY_KEYS = new Set(["ow", "secret", "token"]);
+
+// Bounded per-IP budget, applied before any database work. Authentication
+// failures consume the same budget as accepted events, so an attacker cannot
+// probe the secret at unbounded rates.
+const RATE_LIMIT = { limit: 60, windowMs: 60_000 } as const;
+
+/** Every response is uncacheable and carries a correlation id. */
+function respond(status: number, body: Record<string, unknown>) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Request-Id": crypto.randomUUID(),
+    },
+  });
+}
+
+function fail(status: number, error: string) {
+  return respond(status, { success: false, error });
+}
+
+/**
+ * The single rendering of every authentication failure. Missing, empty,
+ * malformed, ambiguous, query-supplied and simply wrong secrets are all
+ * indistinguishable to the caller; the precise reason is recorded only in the
+ * AuditLog. Integration-disabled and server-secret-missing deliberately share
+ * one 503 so the response cannot reveal whether a secret is configured.
+ */
+function authFailureResponse() {
+  return fail(403, "FORBIDDEN");
+}
+
+function unavailableResponse() {
+  return fail(503, "POCKET_POSTBACK_UNAVAILABLE");
+}
+
+type SecurityAudit = {
+  action: "POCKET_POSTBACK_FORBIDDEN" | "POCKET_POSTBACK_REJECTED";
+  reason: string;
+  request: Request;
+  eventFingerprint?: string;
+};
+
+/**
+ * Allow-listed security metadata. Only the route, a bounded reason enum and an
+ * optional non-reversible fingerprint are ever stored — never the secret, the
+ * auth header, the raw payload, an email, an external account identifier or a
+ * database error. AuditLog already records IP/User-Agent separately; this slice
+ * does not widen that surface.
+ */
+async function auditSecurityEvent({ action, reason, request, eventFingerprint }: SecurityAudit) {
+  await createAuditLog({
+    action,
+    entityType: "API_ROUTE",
+    entityId: ROUTE,
+    metadata: eventFingerprint ? { route: ROUTE, reason, eventFingerprint } : { route: ROUTE, reason },
+    request,
+  });
+}
 
 function firstParam(params: URLSearchParams, names: string[]) {
   for (const name of names) {
@@ -70,10 +145,6 @@ async function jsonFrom(response: Response) {
   }
 }
 
-function fail(status: number, error: string) {
-  return NextResponse.json({ success: false, error }, { status });
-}
-
 function validateQueryShape(params: URLSearchParams) {
   const entries = Array.from(params.entries());
   if (entries.length > MAX_QUERY_PARAMS) return "TOO_MANY_PARAMS";
@@ -87,11 +158,18 @@ function validateQueryShape(params: URLSearchParams) {
   return undefined;
 }
 
+/**
+ * Query params captured for provenance. Authentication material can no longer
+ * reach this point (the request is rejected first), but the aliases stay
+ * redacted so a legacy caller's secret can never be persisted even in transit.
+ */
 function sanitizedRawPayload(params: URLSearchParams) {
+  const secretKeys = new Set<string>(SECRET_QUERY_KEYS);
+
   return Object.fromEntries(
     Array.from(params.entries()).map(([key, value]) => [
       key,
-      SECRET_QUERY_KEYS.has(key.toLowerCase()) ? "[redacted]" : value,
+      secretKeys.has(key.toLowerCase()) ? "[redacted]" : value,
     ]),
   );
 }
@@ -99,11 +177,56 @@ function sanitizedRawPayload(params: URLSearchParams) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const params = url.searchParams;
+
+  // 1. Integration gate. Disabled and misconfigured are one indistinguishable
+  //    response, and neither reaches the database.
+  const config = resolvePocketPostbackConfig();
+
+  if (!config.enabled) {
+    return unavailableResponse();
+  }
+
+  // 2. Rate limit, before any database work including the audit write.
+  const ip = getRequestIp(request);
+  const limit = rateLimit(`postback:pocket:${ip}`, RATE_LIMIT);
+
+  if (!limit.allowed) {
+    return fail(429, "RATE_LIMITED");
+  }
+
+  // 3. Bounded query shape.
   const queryShapeError = validateQueryShape(params);
 
   if (queryShapeError) {
     return fail(400, queryShapeError);
   }
+
+  // 4. Authentication material must never arrive in the URL.
+  if (hasQueryAuthMaterial(params, SECRET_QUERY_KEYS)) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_FORBIDDEN",
+      reason: PocketRejectionReason.QueryAuthMaterial,
+      request,
+    });
+
+    return authFailureResponse();
+  }
+
+  // 5-6. Structural header validation, then timing-safe comparison.
+  const auth = authenticatePocketRequest(request.headers, config.secret);
+
+  if (!auth.ok) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_FORBIDDEN",
+      reason: auth.reason,
+      request,
+    });
+
+    return authFailureResponse();
+  }
+
+  // ---- authenticated boundary ----
+  // No business lookup and no domain mutation occurs above this line.
 
   const clickId = firstParam(params, ["clickid", "click_id"]);
   const goal = firstParam(params, ["goal", "event", "type"])?.toLowerCase();
@@ -120,11 +243,9 @@ export async function GET(request: Request) {
   const type = goal ? goalToPocketType[goal] : undefined;
 
   if (!type) {
-    await createAuditLog({
+    await auditSecurityEvent({
       action: "POCKET_POSTBACK_REJECTED",
-      entityType: "API_ROUTE",
-      entityId: "/api/postbacks/pocket",
-      metadata: { reason: "unknown_goal", goal, clickId, traderId },
+      reason: PocketRejectionReason.UnknownGoal,
       request,
     });
 
@@ -133,23 +254,6 @@ export async function GET(request: Request) {
 
   if (amount === null) {
     return fail(400, "INVALID_AMOUNT");
-  }
-
-  const secretRequired = isPocketPostbackSecretRequired();
-  const providedSecret =
-    request.headers.get("x-postback-secret") ??
-    firstParam(params, ["ow", "secret", "token"]);
-
-  if (secretRequired && providedSecret !== getPostbackSecret()) {
-    await createAuditLog({
-      action: "POCKET_POSTBACK_FORBIDDEN",
-      entityType: "API_ROUTE",
-      entityId: "/api/postbacks/pocket",
-      metadata: { securityMode: "secret", clickId, traderId },
-      request,
-    });
-
-    return forbiddenResponse();
   }
 
   if (!clickId) {
@@ -162,23 +266,16 @@ export async function GET(request: Request) {
   });
 
   if (!knownClick) {
-    await createAuditLog({
+    await auditSecurityEvent({
       action: "POCKET_POSTBACK_REJECTED",
-      entityType: "API_ROUTE",
-      entityId: "/api/postbacks/pocket",
-      metadata: {
-        securityMode: secretRequired ? "secret" : "no_secret",
-        reason: "unknown_clickid",
-        clickId,
-        traderId,
-      },
+      reason: PocketRejectionReason.UnknownClickId,
       request,
+      eventFingerprint: fingerprintEventId(clickId),
     });
 
     return fail(404, "UNKNOWN_CLICK_ID");
   }
 
-  const rawPayload = sanitizedRawPayload(params);
   const payload = {
     type,
     userId: knownClick.userId,
@@ -213,19 +310,17 @@ export async function GET(request: Request) {
     visitor_id: firstParam(params, ["visitor_id"]),
     country_ip: firstParam(params, ["country_ip"]),
     rawPayload: {
-      ...rawPayload,
-      securityMode: secretRequired ? "secret" : "no_secret",
+      ...sanitizedRawPayload(params),
+      securityMode: "header_secret",
     },
   };
 
   const parsed = receivePostbackSchema.safeParse(payload);
 
   if (!parsed.success) {
-    await createAuditLog({
-      action: "VALIDATION_ERROR",
-      entityType: "API_ROUTE",
-      entityId: "/api/postbacks/pocket",
-      metadata: { details: parsed.error.issues.map((issue) => issue.message) },
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: PocketRejectionReason.ValidationError,
       request,
     });
 
@@ -236,21 +331,15 @@ export async function GET(request: Request) {
   const body = await jsonFrom(response);
 
   if (!response.ok) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          typeof body.message === "string"
-            ? body.message
-            : typeof body.error === "string"
-              ? body.error
-              : "POSTBACK_REJECTED",
-      },
-      { status: response.status },
+    // Upstream sees a bounded code only. The processor's own message may name a
+    // business entity, so it is deliberately not forwarded.
+    return fail(
+      response.status,
+      response.status === 409 ? "POSTBACK_CONFLICT" : "POSTBACK_REJECTED",
     );
   }
 
-  return NextResponse.json({
+  return respond(200, {
     success: true,
     duplicate: Boolean(body.duplicate),
   });

@@ -22,7 +22,7 @@ const OPTIONAL_ENV = [
   "ALLOW_PRODUCTION_SEED",
   "ALLOW_PRODUCTION_BETA_RESET",
   "BETA_RESET_CONFIRM",
-  "POCKET_POSTBACK_REQUIRE_SECRET",
+  "POCKET_POSTBACK_ENABLED",
   "POCKET_REFERRAL_URL",
   "CURRICULUM_V2_ADMIN_ENABLED",
   "CURRICULUM_V2_READ_ENABLED",
@@ -57,7 +57,7 @@ const envSchema = z.object({
   ALLOW_PRODUCTION_SEED: z.enum(["true", "false"]).optional(),
   ALLOW_PRODUCTION_BETA_RESET: z.enum(["true", "false"]).optional(),
   BETA_RESET_CONFIRM: z.string().optional(),
-  POCKET_POSTBACK_REQUIRE_SECRET: z.enum(["true", "false"]).optional(),
+  POCKET_POSTBACK_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ADMIN_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_READ_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ENROLLMENT_ENABLED: z.enum(["true", "false"]).optional(),
@@ -151,10 +151,13 @@ export function getPostbackSecret() {
   return process.env.POSTBACK_SECRET ?? DEV_POSTBACK_SECRET;
 }
 
-export function isPocketPostbackSecretRequired() {
-  assertRuntimeEnv();
-  return process.env.POCKET_POSTBACK_REQUIRE_SECRET === "true";
-}
+// POCKET_POSTBACK_ENABLED gates the Pocket postback intake and fails closed:
+// absent means disabled. It is resolved together with the secret by the single
+// authoritative resolver in src/lib/exchange/pocketPostbackAuth.ts, so there is
+// exactly one place that decides whether Pocket postbacks are accepted.
+//
+// The removed POCKET_POSTBACK_REQUIRE_SECRET flag had the opposite, unsafe
+// direction — absent meant "no secret required" — and must not return.
 
 // Feature flag for the V2 curriculum admin API. Absent env means disabled.
 export function isCurriculumV2AdminEnabled() {

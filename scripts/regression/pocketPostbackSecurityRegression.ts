@@ -1,0 +1,659 @@
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  PocketRejectionReason,
+  authenticatePocketRequest,
+  fingerprintEventId,
+  hasQueryAuthMaterial,
+  isAcceptableSecret,
+  resolvePocketPostbackConfig,
+  timingSafeSecretEqual,
+} from "../../src/lib/exchange/pocketPostbackAuth";
+
+// Real HTTP regression for the fail-closed Pocket postback contract:
+//   GET /api/postbacks/pocket
+//
+// Isolated `next dev` servers against throwaway /tmp SQLite databases. No
+// deployed database, no external service, no contact with Pocket. Every secret
+// used here is synthetic.
+//
+// Three server configurations are exercised in sequence:
+//   A. integration disabled (POCKET_POSTBACK_ENABLED absent)
+//   B. enabled but the secret is too weak to be usable
+//   C. enabled with a valid synthetic secret
+const dbPath = `/tmp/ata-pocket-security-${process.pid}.db`;
+const dbUrl = `file:${dbPath}`;
+const port = 3860 + (process.pid % 30);
+const baseUrl = `http://127.0.0.1:${port}`;
+
+const SECRET = "pocket-ps1-synthetic-secret-value";
+const WRONG_SECRET = "pocket-ps1-synthetic-secret-wrong";
+const WEAK_SECRET = "short";
+const SESSION_SECRET = "pocket-ps1-session-secret";
+const CLICK_ID = "tq-ps1-known-click";
+
+let passed = 0;
+let failed = 0;
+let logs = "";
+
+async function check(name: string, fn: () => Promise<void> | void) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`FAIL ${name}`);
+    console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+    if (logs) console.error(`--- server log tail ---\n${logs.slice(-1200)}\n--- end ---`);
+  }
+}
+
+function cleanup() {
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    fs.rmSync(`${dbPath}${suffix}`, { force: true });
+  }
+}
+
+const baseEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  DATABASE_URL: dbUrl,
+  SESSION_SECRET,
+  POSTBACK_SECRET: SECRET,
+  APP_URL: baseUrl,
+  STORAGE_DRIVER: "local",
+  POCKET_AFFILIATE_BASE_URL: "https://example.com/ref",
+  EMAIL_VERIFICATION_REQUIRED: "false",
+  CAPTCHA_DEV_BYPASS: "true",
+};
+for (const key of [
+  "NODE_ENV",
+  "POCKET_POSTBACK_ENABLED",
+  "POCKET_POSTBACK_REQUIRE_SECRET",
+  "CURRICULUM_V2_ADMIN_ENABLED",
+  "CURRICULUM_V2_READ_ENABLED",
+  "CURRICULUM_V2_ENROLLMENT_ENABLED",
+  "CURRICULUM_V2_XP_ENABLED",
+  "CURRICULUM_V2_CONTENT_ENABLED",
+  "CURRICULUM_V2_ASSESSMENT_ENABLED",
+]) {
+  delete baseEnv[key];
+}
+
+async function start(overrides: Record<string, string | undefined>) {
+  const env = { ...baseEnv, ...overrides };
+  const child = spawn("npx", ["next", "dev", "--turbopack", "-p", String(port)], {
+    cwd: process.cwd(),
+    env,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout?.on("data", (value) => {
+    logs += String(value);
+  });
+  child.stderr?.on("data", (value) => {
+    logs += String(value);
+  });
+
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await fetch(`${baseUrl}/api/health`)).ok) return child;
+    } catch {
+      // server not up yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`next dev failed to start\n${logs.slice(-4000)}`);
+}
+
+async function stop(child: ChildProcess | null) {
+  if (!child?.pid) return;
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch {
+    // already gone
+  }
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    try {
+      await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(500) });
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+}
+
+type Reply = { status: number; headers: Headers; body: Record<string, unknown>; text: string };
+
+async function postback(
+  query: Record<string, string>,
+  headers: Record<string, string> = {},
+): Promise<Reply> {
+  const url = new URL(`${baseUrl}/api/postbacks/pocket`);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  const response = await fetch(url, { headers, redirect: "manual" });
+  const text = await response.text();
+  let value: unknown = {};
+  try {
+    value = JSON.parse(text);
+  } catch {
+    // non-JSON body is asserted on via `text`
+  }
+  return { status: response.status, headers: response.headers, body: value as Record<string, unknown>, text };
+}
+
+function authed(extra: Record<string, string> = {}) {
+  return { "x-postback-secret": SECRET, ...extra };
+}
+
+function regQuery(eventId: string, extra: Record<string, string> = {}) {
+  return { goal: "reg", clickid: CLICK_ID, playerid: "ps1-player", event_id: eventId, ...extra };
+}
+
+async function main() {
+  cleanup();
+  let server: ChildProcess | null = null;
+
+  try {
+    const migration = spawnSync(
+      process.execPath,
+      [path.join("node_modules", "tsx", "dist", "cli.mjs"), path.join("prisma", "migrate.ts")],
+      { env: baseEnv, encoding: "utf8" },
+    );
+    if (migration.status !== 0) {
+      throw new Error(`${migration.stdout}\n${migration.stderr}`);
+    }
+
+    process.env.DATABASE_URL = dbUrl;
+    const { prisma } = await import("../../src/lib/prisma");
+
+    const user = await prisma.user.create({
+      data: { email: "pocket-ps1@example.com", name: "Pocket PS1", role: "user", passwordHash: "x" },
+    });
+    await prisma.exchangeAccount.create({
+      data: {
+        userId: user.id,
+        provider: "manual",
+        status: "pending",
+        clickId: CLICK_ID,
+        referralLink: `https://example.com/ref?click_id=${CLICK_ID}`,
+        exchangeAccountId: "ps1-exchange-account",
+      },
+    });
+
+    // ---------------------------------------------------------------- unit --
+    // Pure contract tests: no server, no database.
+
+    await check("unit: absent enable flag disables the integration", () => {
+      assert.deepEqual(resolvePocketPostbackConfig({ POSTBACK_SECRET: SECRET }), { enabled: false });
+    });
+
+    await check("unit: the removed fail-open flag cannot enable the route", () => {
+      const config = resolvePocketPostbackConfig({
+        POSTBACK_SECRET: SECRET,
+        POCKET_POSTBACK_REQUIRE_SECRET: "false",
+      });
+      assert.deepEqual(config, { enabled: false });
+    });
+
+    await check("unit: enabled without a secret stays disabled", () => {
+      assert.deepEqual(resolvePocketPostbackConfig({ POCKET_POSTBACK_ENABLED: "true" }), {
+        enabled: false,
+      });
+    });
+
+    await check("unit: whitespace-only and weak secrets are rejected", () => {
+      for (const secret of ["   ", "\t\n", WEAK_SECRET, `  ${SECRET}  `, "a".repeat(201)]) {
+        assert.equal(isAcceptableSecret(secret), false, `expected ${JSON.stringify(secret)} invalid`);
+        assert.deepEqual(
+          resolvePocketPostbackConfig({ POCKET_POSTBACK_ENABLED: "true", POSTBACK_SECRET: secret }),
+          { enabled: false },
+        );
+      }
+      assert.equal(isAcceptableSecret(SECRET), true);
+    });
+
+    await check("unit: enabled with a valid secret resolves", () => {
+      assert.deepEqual(
+        resolvePocketPostbackConfig({ POCKET_POSTBACK_ENABLED: "true", POSTBACK_SECRET: SECRET }),
+        { enabled: true, secret: SECRET },
+      );
+    });
+
+    await check("unit: timing-safe comparison is correct for equal and unequal lengths", () => {
+      assert.equal(timingSafeSecretEqual(SECRET, SECRET), true);
+      assert.equal(timingSafeSecretEqual(WRONG_SECRET, SECRET), false);
+      assert.equal(timingSafeSecretEqual("", SECRET), false);
+      assert.equal(timingSafeSecretEqual(`${SECRET}x`, SECRET), false, "longer must not match");
+      assert.equal(timingSafeSecretEqual(SECRET.slice(0, -1), SECRET), false, "shorter must not match");
+    });
+
+    await check("unit: header structural validation covers every rejection", () => {
+      const cases: Array<[Record<string, string>, string]> = [
+        [{}, PocketRejectionReason.MissingHeader],
+        [{ "x-postback-secret": "" }, PocketRejectionReason.MissingHeader],
+        // HTTP strips optional whitespace, so a space-only header arrives empty.
+        [{ "x-postback-secret": " " }, PocketRejectionReason.MissingHeader],
+        [{ "x-postback-secret": WEAK_SECRET }, PocketRejectionReason.MalformedHeader],
+        [{ "x-postback-secret": "has an internal space value" }, PocketRejectionReason.MalformedHeader],
+        [{ "x-postback-secret": `${SECRET},${SECRET}` }, PocketRejectionReason.AmbiguousHeader],
+        [{ "x-postback-secret": WRONG_SECRET }, PocketRejectionReason.SecretMismatch],
+      ];
+      for (const [headers, reason] of cases) {
+        const outcome = authenticatePocketRequest(new Headers(headers), SECRET);
+        assert.equal(outcome.ok, false, `expected rejection for ${JSON.stringify(headers)}`);
+        assert.equal(outcome.ok === false && outcome.reason, reason);
+      }
+      assert.deepEqual(authenticatePocketRequest(new Headers(authed()), SECRET), { ok: true });
+    });
+
+    await check("unit: query auth material is detected case-insensitively", () => {
+      const keys = ["ow", "secret", "token"];
+      for (const key of ["ow", "OW", "Secret", "TOKEN"]) {
+        assert.equal(hasQueryAuthMaterial(new URLSearchParams({ [key]: "x" }), keys), true, key);
+      }
+      assert.equal(hasQueryAuthMaterial(new URLSearchParams({ goal: "reg" }), keys), false);
+    });
+
+    await check("unit: event fingerprint is short and non-reversible", () => {
+      const fingerprint = fingerprintEventId(CLICK_ID);
+      assert.equal(fingerprint.length, 12);
+      assert.match(fingerprint, /^[0-9a-f]{12}$/);
+      assert.ok(!fingerprint.includes(CLICK_ID));
+      assert.equal(fingerprint, fingerprintEventId(CLICK_ID), "must be deterministic");
+    });
+
+    // ------------------------------------------- A. integration disabled ----
+    server = await start({});
+
+    await check("disabled: an unauthenticated postback is refused", async () => {
+      const reply = await postback(regQuery("disabled-1"));
+      assert.equal(reply.status, 503);
+      assert.equal(reply.body.error, "POCKET_POSTBACK_UNAVAILABLE");
+    });
+
+    await check("disabled: a correctly authenticated postback is still refused", async () => {
+      const reply = await postback(regQuery("disabled-2"), authed());
+      assert.equal(reply.status, 503);
+    });
+
+    await check("disabled: zero domain rows changed", async () => {
+      assert.equal(await prisma.postbackEvent.count(), 0);
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.registrationStatus, false);
+    });
+
+    await stop(server);
+    server = null;
+
+    // ------------------------------------- B. enabled, secret unusable ------
+    server = await start({ POCKET_POSTBACK_ENABLED: "true", POSTBACK_SECRET: WEAK_SECRET });
+
+    await check("weak secret: the route is unavailable, not open", async () => {
+      const reply = await postback(regQuery("weak-1"));
+      assert.equal(reply.status, 503);
+      assert.equal(reply.body.error, "POCKET_POSTBACK_UNAVAILABLE");
+    });
+
+    await check("weak secret: the configured weak value does not authenticate", async () => {
+      const reply = await postback(regQuery("weak-2"), { "x-postback-secret": WEAK_SECRET });
+      assert.equal(reply.status, 503);
+    });
+
+    await check("weak secret: disabled and misconfigured are indistinguishable", async () => {
+      const reply = await postback(regQuery("weak-3"), authed());
+      assert.equal(reply.status, 503);
+      assert.equal(reply.body.error, "POCKET_POSTBACK_UNAVAILABLE");
+    });
+
+    await check("weak secret: zero domain rows changed", async () => {
+      assert.equal(await prisma.postbackEvent.count(), 0);
+    });
+
+    await stop(server);
+    server = null;
+
+    // --------------------------------------- C. enabled and configured ------
+    server = await start({ POCKET_POSTBACK_ENABLED: "true" });
+
+    await check("auth: a missing header is refused", async () => {
+      const reply = await postback(regQuery("auth-1"));
+      assert.equal(reply.status, 403);
+      assert.equal(reply.body.error, "FORBIDDEN");
+    });
+
+    await check("auth: an empty header is refused", async () => {
+      const reply = await postback(regQuery("auth-2"), { "x-postback-secret": "" });
+      assert.equal(reply.status, 403);
+    });
+
+    await check("auth: a malformed header is refused", async () => {
+      const reply = await postback(regQuery("auth-3"), { "x-postback-secret": WEAK_SECRET });
+      assert.equal(reply.status, 403);
+    });
+
+    await check("auth: a wrong secret is refused", async () => {
+      const reply = await postback(regQuery("auth-4"), { "x-postback-secret": WRONG_SECRET });
+      assert.equal(reply.status, 403);
+    });
+
+    await check("auth: missing and wrong secrets are byte-identical responses", async () => {
+      const missing = await postback(regQuery("auth-5"));
+      const wrong = await postback(regQuery("auth-5"), { "x-postback-secret": WRONG_SECRET });
+      assert.equal(missing.status, wrong.status);
+      assert.equal(missing.text, wrong.text);
+    });
+
+    await check("auth: a query-string secret is refused, not accepted", async () => {
+      for (const key of ["ow", "secret", "token"]) {
+        const reply = await postback(regQuery(`auth-q-${key}`, { [key]: SECRET }));
+        assert.equal(reply.status, 403, `${key} must not authenticate`);
+      }
+    });
+
+    await check("auth: a valid header does not rescue a query-supplied secret", async () => {
+      const reply = await postback(regQuery("auth-q-both", { ow: SECRET }), authed());
+      assert.equal(reply.status, 403, "query auth material must be rejected outright");
+    });
+
+    await check("auth: a duplicated header is refused as ambiguous", async () => {
+      const reply = await postback(regQuery("auth-6"), {
+        "x-postback-secret": `${SECRET},${WRONG_SECRET}`,
+      });
+      assert.equal(reply.status, 403);
+    });
+
+    await check("auth: rejected requests performed zero business work", async () => {
+      assert.equal(await prisma.postbackEvent.count(), 0);
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.registrationStatus, false);
+      assert.equal(account?.status, "pending");
+    });
+
+    await check("privacy: no rejection response contains the secret", async () => {
+      const replies = [
+        await postback(regQuery("privacy-1")),
+        await postback(regQuery("privacy-2"), { "x-postback-secret": WRONG_SECRET }),
+        await postback(regQuery("privacy-3", { ow: SECRET })),
+      ];
+      for (const reply of replies) {
+        assert.ok(!reply.text.includes(SECRET), "response leaked the expected secret");
+        assert.ok(!reply.text.includes(WRONG_SECRET), "response leaked the received secret");
+        assert.ok(!reply.text.toLowerCase().includes("prisma"), "response leaked a Prisma error");
+        assert.ok(!reply.text.includes("at "), "response leaked a stack frame");
+      }
+    });
+
+    await check("privacy: AuditLog security metadata is allow-listed only", async () => {
+      const rows = await prisma.auditLog.findMany({
+        where: { action: { in: ["POCKET_POSTBACK_FORBIDDEN", "POCKET_POSTBACK_REJECTED"] } },
+      });
+      assert.ok(rows.length > 0, "expected security audit rows");
+      const allowed = new Set(["route", "reason", "eventFingerprint"]);
+      const reasons = new Set<string>(Object.values(PocketRejectionReason));
+      for (const row of rows) {
+        const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+        for (const key of Object.keys(metadata)) {
+          assert.ok(allowed.has(key), `unexpected audit metadata key ${key}`);
+        }
+        assert.equal(metadata.route, "/api/postbacks/pocket");
+        assert.ok(reasons.has(String(metadata.reason)), `unbounded reason ${metadata.reason}`);
+        const serialized = JSON.stringify(metadata);
+        assert.ok(!serialized.includes(SECRET), "audit leaked the secret");
+        assert.ok(!serialized.includes(WRONG_SECRET), "audit leaked the received secret");
+        assert.ok(!serialized.includes("pocket-ps1@example.com"), "audit leaked an email");
+      }
+    });
+
+    await check("headers: every response is no-store and correlated", async () => {
+      const rejected = await postback(regQuery("hdr-1"));
+      assert.equal(rejected.headers.get("cache-control"), "no-store");
+      assert.match(String(rejected.headers.get("x-request-id")), /^[0-9a-f-]{36}$/);
+    });
+
+    await check("validation: an unknown goal is refused after authentication", async () => {
+      const reply = await postback({ goal: "not-a-goal", clickid: CLICK_ID }, authed());
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "UNKNOWN_GOAL");
+    });
+
+    await check("validation: a non-numeric amount is refused", async () => {
+      const reply = await postback(regQuery("val-1", { sum: "abc" }), authed());
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "INVALID_AMOUNT");
+    });
+
+    await check("validation: a negative amount is refused", async () => {
+      const reply = await postback(regQuery("val-2", { sum: "-5" }), authed());
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "INVALID_AMOUNT");
+    });
+
+    await check("validation: a missing click id is refused", async () => {
+      const reply = await postback({ goal: "reg", playerid: "x" }, authed());
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "CLICK_ID_REQUIRED");
+    });
+
+    await check("validation: an overlong parameter is refused", async () => {
+      const reply = await postback(regQuery("val-3", { promo: "a".repeat(1001) }), authed());
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "PARAM_TOO_LONG");
+    });
+
+    await check("validation: an unknown click id is refused without creating an account", async () => {
+      const before = await prisma.exchangeAccount.count();
+      const reply = await postback(
+        { goal: "reg", clickid: "no-such-click", playerid: "x", event_id: "val-4" },
+        authed(),
+      );
+      assert.equal(reply.status, 404);
+      assert.equal(reply.body.error, "UNKNOWN_CLICK_ID");
+      assert.equal(await prisma.exchangeAccount.count(), before);
+    });
+
+    await check("validation: still zero postback events for the known account", async () => {
+      assert.equal(await prisma.postbackEvent.count({ where: { exchangeAccountId: { not: null } } }), 0);
+    });
+
+    // ------------------------------------------------ idempotency/replay ----
+    await check("replay: the first authenticated event is applied once", async () => {
+      const reply = await postback(regQuery("evt-registration"), authed());
+      assert.equal(reply.status, 200);
+      assert.equal(reply.body.success, true);
+      assert.equal(reply.body.duplicate, false);
+
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.registrationStatus, true);
+      assert.equal(account?.status, "connected");
+    });
+
+    await check("replay: an exact duplicate does not mutate twice", async () => {
+      const events = await prisma.postbackEvent.count({ where: { externalEventId: "evt-registration" } });
+      const reply = await postback(regQuery("evt-registration"), authed());
+      assert.equal(reply.status, 200);
+      assert.equal(reply.body.duplicate, true);
+      assert.equal(await prisma.postbackEvent.count({ where: { externalEventId: "evt-registration" } }), events);
+    });
+
+    await check("replay: the duplicate response is deterministic", async () => {
+      const first = await postback(regQuery("evt-registration"), authed());
+      const second = await postback(regQuery("evt-registration"), authed());
+      assert.deepEqual(first.body, second.body);
+    });
+
+    await check("replay: a deposit applies its amount exactly once", async () => {
+      const query = { goal: "dep", clickid: CLICK_ID, playerid: "ps1-player", event_id: "evt-dep", sum: "100" };
+      const first = await postback(query, authed());
+      assert.equal(first.status, 200);
+      assert.equal(first.body.duplicate, false);
+
+      for (let i = 0; i < 3; i += 1) {
+        const repeat = await postback(query, authed());
+        assert.equal(repeat.body.duplicate, true);
+      }
+
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.totalDeposits, 100, "deposit must be credited exactly once");
+      assert.equal(account?.balance, 100);
+      assert.equal(account?.firstDepositConfirmed, true);
+    });
+
+    await check("replay: concurrent duplicates apply the mutation exactly once", async () => {
+      const query = {
+        goal: "redep",
+        clickid: CLICK_ID,
+        playerid: "ps1-player",
+        event_id: "evt-concurrent",
+        sum: "50",
+      };
+
+      // Fired in one batch with no sleep: the durable unique constraint, not
+      // timing, is what makes this deterministic.
+      const replies = await Promise.all(
+        Array.from({ length: 6 }, () => postback(query, authed())),
+      );
+
+      for (const reply of replies) {
+        assert.equal(reply.status, 200, `unexpected status ${reply.status}: ${reply.text}`);
+      }
+      const applied = replies.filter((reply) => reply.body.duplicate === false);
+      assert.equal(applied.length, 1, `exactly one request may apply the mutation, got ${applied.length}`);
+
+      assert.equal(
+        await prisma.postbackEvent.count({ where: { externalEventId: "evt-concurrent" } }),
+        1,
+        "the unique constraint must keep a single receipt",
+      );
+
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.totalDeposits, 150, "re-deposit must be credited exactly once");
+      assert.equal(account?.balance, 150);
+    });
+
+    await check("replay: a conflicting duplicate fails safely without overwriting", async () => {
+      const conflicting = {
+        goal: "redep",
+        clickid: CLICK_ID,
+        playerid: "ps1-player",
+        event_id: "evt-concurrent",
+        sum: "9999",
+      };
+      const reply = await postback(conflicting, authed());
+      assert.equal(reply.status, 409);
+      assert.equal(reply.body.error, "POSTBACK_CONFLICT");
+
+      const stored = await prisma.postbackEvent.findUnique({ where: { externalEventId: "evt-concurrent" } });
+      assert.equal(stored?.amount, 50, "the original receipt must not be overwritten");
+
+      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      assert.equal(account?.totalDeposits, 150, "a conflict must not move money");
+      assert.equal(account?.balance, 150);
+    });
+
+    await check("replay: idempotency is durable, not process memory", async () => {
+      // The receipt is a database row with a UNIQUE column; prove the constraint
+      // itself rejects a second insert independently of any route or cache.
+      await assert.rejects(
+        prisma.postbackEvent.create({
+          data: {
+            externalEventId: "evt-concurrent",
+            type: "Re-deposit",
+            eventType: "deposit",
+            status: "processed",
+            rawPayload: "{}",
+          },
+        }),
+        (error: unknown) =>
+          typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002",
+      );
+    });
+
+    await check("replay: progression completed at most once", async () => {
+      const completions = await prisma.auditLog.count({
+        where: { userId: user.id, action: "POSTBACK_RECEIVED" },
+      });
+      const receipts = await prisma.postbackEvent.count({ where: { exchangeAccountId: { not: null } } });
+      assert.equal(completions, receipts, "one accepted receipt must produce one POSTBACK_RECEIVED");
+    });
+
+    await check("privacy: accepted responses expose no internal detail", async () => {
+      const reply = await postback(regQuery("evt-registration"), authed());
+      assert.deepEqual(Object.keys(reply.body).sort(), ["duplicate", "success"]);
+      assert.ok(!reply.text.includes(SECRET));
+      assert.ok(!reply.text.includes("pocket-ps1@example.com"));
+      assert.equal(reply.headers.get("cache-control"), "no-store");
+    });
+
+    await check("privacy: no stored payload retains a secret alias value", async () => {
+      const events = await prisma.postbackEvent.findMany();
+      for (const event of events) {
+        assert.ok(!event.rawPayload.includes(SECRET), "rawPayload leaked the secret");
+        assert.ok(!JSON.stringify(event.payload ?? {}).includes(SECRET), "payload leaked the secret");
+      }
+    });
+
+    // ------------------------------------------------------ rate limiting --
+    await check("rate limit: a burst is bounded and returns a safe 429", async () => {
+      const replies: Reply[] = [];
+      for (let i = 0; i < 80; i += 1) {
+        replies.push(await postback(regQuery(`rl-${i}`), { "x-forwarded-for": "203.0.113.77" }));
+      }
+      const limited = replies.filter((reply) => reply.status === 429);
+      assert.ok(limited.length > 0, "expected the per-IP budget to engage");
+      for (const reply of limited) {
+        assert.equal(reply.body.error, "RATE_LIMITED");
+        assert.equal(reply.headers.get("cache-control"), "no-store");
+        assert.ok(!reply.text.includes(SECRET), "429 leaked the secret");
+        assert.ok(!reply.text.includes("203.0.113.77"), "429 echoed the bucket key");
+      }
+    });
+
+    await check("rate limit: unauthenticated attempts consume the budget", async () => {
+      // The exhausted bucket above was filled entirely by requests with no
+      // valid secret, proving authentication failures are rate-limited.
+      const reply = await postback(regQuery("rl-authed"), {
+        ...authed(),
+        "x-forwarded-for": "203.0.113.77",
+      });
+      assert.equal(reply.status, 429, "a valid secret must not bypass the limit");
+    });
+
+    await check("rate limit: buckets are isolated per IP", async () => {
+      const reply = await postback(regQuery("iso-other"), {
+        ...authed(),
+        "x-forwarded-for": "203.0.113.9",
+      });
+      assert.notEqual(reply.status, 429, "a different IP must have its own budget");
+    });
+
+    await check("rate limit: the exhausted bucket wrote no domain rows", async () => {
+      // Every "rl-" request came from the throttled IP and carried no valid
+      // secret, so none of them may have reached the database.
+      const stray = await prisma.postbackEvent.count({ where: { externalEventId: { startsWith: "rl-" } } });
+      assert.equal(stray, 0, "rate-limited and rejected requests must not create receipts");
+    });
+  } finally {
+    await stop(server);
+    cleanup();
+  }
+
+  console.log(`\npocket postback security: ${passed} passed, ${failed} failed`);
+  if (failed > 0) process.exit(1);
+}
+
+main().catch((error) => {
+  console.error(error);
+  cleanup();
+  process.exit(1);
+});

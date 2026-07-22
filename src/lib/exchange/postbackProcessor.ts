@@ -150,6 +150,46 @@ export function buildSimulatedPostbackAccountUpdate(
   return {};
 }
 
+type StoredEventFacts = {
+  normalizedEventType: string | null;
+  amount: number | null;
+  currency: string | null;
+};
+
+/** Prisma's unique-constraint violation, narrowed without importing the runtime class. */
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+/**
+ * A replayed identifier must describe the same event. If an upstream reuses an
+ * event id for different business facts, that is a conflict rather than a
+ * duplicate: returning the original silently would hide a real mismatch, and
+ * overwriting it would let a later request rewrite settled money state.
+ */
+function conflictsWithStoredEvent(
+  stored: StoredEventFacts,
+  incoming: StoredEventFacts,
+): boolean {
+  return (
+    stored.normalizedEventType !== incoming.normalizedEventType ||
+    stored.amount !== incoming.amount ||
+    stored.currency !== incoming.currency
+  );
+}
+
+function conflictResponse() {
+  return NextResponse.json(
+    { ok: false, error: "POSTBACK_CONFLICT" },
+    { status: 409, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 export async function processExchangePostbackPayload(
   data: ReceivePostbackPayload,
   request: Request,
@@ -172,12 +212,26 @@ export async function processExchangePostbackPayload(
     clickId ? { clickId } : null,
   ].filter(Boolean) as Prisma.ExchangeAccountWhereInput[];
 
+  const incomingFacts: StoredEventFacts = {
+    normalizedEventType,
+    amount,
+    currency: data.currency ?? null,
+  };
+
+  // Durable replay control. PostbackEvent.externalEventId is UNIQUE, so the
+  // database — not process memory — is the source of truth. This read is the
+  // fast path; the unique constraint below is what actually holds under
+  // concurrency.
   if (data.externalEventId) {
     const existingEvent = await prisma.postbackEvent.findUnique({
       where: { externalEventId: data.externalEventId },
     });
 
     if (existingEvent) {
+      if (conflictsWithStoredEvent(existingEvent, incomingFacts)) {
+        return conflictResponse();
+      }
+
       return NextResponse.json({
         ok: true,
         duplicate: true,
@@ -197,26 +251,37 @@ export async function processExchangePostbackPayload(
       : null;
 
   if (!exchangeAccount) {
-    const rejectedEvent = await prisma.postbackEvent.create({
-      data: {
-        exchangeAccountId: null,
-        externalEventId: eventId,
-        type: type ?? normalizedEventType,
-        eventType,
-        normalizedEventType,
-        externalAccountId: externalAccountLookup,
-        traderId,
-        clickId,
-        amount,
-        currency: data.currency,
-        status: "rejected",
-        rawPayload: JSON.stringify(payload),
-        payload,
-        attribution,
-        rejectionReason: "Exchange account not found",
-        processedAt: new Date(),
-      },
-    });
+    // A concurrent duplicate may already have written this receipt; the unique
+    // constraint is authoritative and the outcome is the same rejection.
+    const rejectedEvent = await prisma.postbackEvent
+      .create({
+        data: {
+          exchangeAccountId: null,
+          externalEventId: eventId,
+          type: type ?? normalizedEventType,
+          eventType,
+          normalizedEventType,
+          externalAccountId: externalAccountLookup,
+          traderId,
+          clickId,
+          amount,
+          currency: data.currency,
+          status: "rejected",
+          rawPayload: JSON.stringify(payload),
+          payload,
+          attribution,
+          rejectionReason: "Exchange account not found",
+          processedAt: new Date(),
+        },
+      })
+      .catch((error: unknown) => {
+        if (isUniqueConstraintViolation(error)) return null;
+        throw error;
+      });
+
+    if (!rejectedEvent) {
+      return notFoundResponse("Биржевой аккаунт не найден");
+    }
 
     await createAuditLog({
       action: "EXCHANGE_POSTBACK_REJECTED",
@@ -250,48 +315,77 @@ export async function processExchangePostbackPayload(
     payload,
   });
 
-  const event = await prisma.$transaction(async (tx) => {
-    const postback = await tx.postbackEvent.create({
-      data: {
-        exchangeAccountId: exchangeAccount.id,
-        externalEventId: eventId,
-        type: type ?? normalizedEventType,
-        eventType,
-        normalizedEventType,
-        externalAccountId: externalAccountLookup,
-        traderId,
-        clickId,
-        amount,
-        currency: data.currency,
-        status: data.status ?? "processed",
-        rawPayload: JSON.stringify(payload),
-        payload,
-        attribution: {
-          ...((exchangeAccount.attribution as Record<string, string> | null) ?? {}),
-          ...(attribution as Record<string, string>),
-        },
-        rejectionReason: data.rejectionReason,
-        processedAt: new Date(),
-      },
-    });
-
-    await tx.exchangeAccount.update({
-      where: { id: exchangeAccount.id },
-      data: {
-        ...buildPostbackAccountUpdate(
-          normalizedEventType,
+  // The receipt and the account mutation share one transaction, so a failed
+  // mutation can never leave behind a receipt that marks the event processed,
+  // and a committed receipt always means the mutation applied exactly once.
+  // A concurrent duplicate loses the unique-constraint race here and its whole
+  // transaction — including the account update — rolls back.
+  const event = await prisma
+    .$transaction(async (tx) => {
+      const postback = await tx.postbackEvent.create({
+        data: {
+          exchangeAccountId: exchangeAccount.id,
+          externalEventId: eventId,
+          type: type ?? normalizedEventType,
           eventType,
+          normalizedEventType,
+          externalAccountId: externalAccountLookup,
+          traderId,
+          clickId,
           amount,
-          providerResult.message,
-        ),
-        traderId: traderId ?? exchangeAccount.traderId,
-        clickId: clickId ?? exchangeAccount.clickId,
-        attribution,
-      },
+          currency: data.currency,
+          status: data.status ?? "processed",
+          rawPayload: JSON.stringify(payload),
+          payload,
+          attribution: {
+            ...((exchangeAccount.attribution as Record<string, string> | null) ?? {}),
+            ...(attribution as Record<string, string>),
+          },
+          rejectionReason: data.rejectionReason,
+          processedAt: new Date(),
+        },
+      });
+
+      await tx.exchangeAccount.update({
+        where: { id: exchangeAccount.id },
+        data: {
+          ...buildPostbackAccountUpdate(
+            normalizedEventType,
+            eventType,
+            amount,
+            providerResult.message,
+          ),
+          traderId: traderId ?? exchangeAccount.traderId,
+          clickId: clickId ?? exchangeAccount.clickId,
+          attribution,
+        },
+      });
+
+      return postback;
+    })
+    .catch((error: unknown) => {
+      if (isUniqueConstraintViolation(error)) return null;
+      throw error;
     });
 
-    return postback;
-  });
+  // Lost the race: the winning request already applied the mutation and will
+  // run the progression side effects. Return the same deterministic duplicate
+  // body the fast path returns, without mutating or progressing anything.
+  if (!event) {
+    const winner = await prisma.postbackEvent.findUnique({
+      where: { externalEventId: eventId },
+    });
+
+    if (winner && conflictsWithStoredEvent(winner, incomingFacts)) {
+      return conflictResponse();
+    }
+
+    return NextResponse.json({
+      ok: true,
+      duplicate: true,
+      postback: winner,
+    });
+  }
 
   if (normalizedEventType === "registration") {
     await completeProgressionTaskByCode(exchangeAccount.userId, "lvl_01_pocket_registration");

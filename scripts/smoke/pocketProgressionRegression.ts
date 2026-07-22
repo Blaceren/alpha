@@ -107,9 +107,14 @@ async function main() {
   postback.searchParams.set("clickid", confirmedClickId);
   postback.searchParams.set("goal", "reg");
   postback.searchParams.set("playerid", traderId);
+  // Authentication is header-only: the Pocket route rejects any request that
+  // carries a secret alias in the query string.
   const postbackSecret = readEnvValue("POSTBACK_SECRET");
-  if (postbackSecret) postback.searchParams.set("ow", postbackSecret);
-  const postbackResponse = await fetch(postback, { redirect: "manual" });
+  assert(postbackSecret, "POSTBACK_SECRET is required to authenticate the Pocket postback");
+  const postbackResponse = await fetch(postback, {
+    redirect: "manual",
+    headers: { "x-postback-secret": postbackSecret },
+  });
   const postbackBody = await postbackResponse.json().catch(() => ({}));
   assert(postbackResponse.ok, `postback failed ${postbackResponse.status}: ${JSON.stringify(postbackBody)}`);
 

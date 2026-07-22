@@ -23,7 +23,7 @@ The build is allowed to run without production secrets. Strict validation happen
 - `ALLOW_PRODUCTION_SEED`
 - `ALLOW_PRODUCTION_BETA_RESET`
 - `BETA_RESET_CONFIRM`
-- `POCKET_POSTBACK_REQUIRE_SECRET`
+- `POCKET_POSTBACK_ENABLED`
 
 ## Local defaults
 
@@ -32,7 +32,7 @@ Local development may use:
 ```env
 DATABASE_URL="file:./dev.db"
 POSTBACK_SECRET=dev-postback-secret
-POCKET_POSTBACK_REQUIRE_SECRET=false
+POCKET_POSTBACK_ENABLED=false
 STORAGE_DRIVER=local
 LOCAL_UPLOADS_DIR=storage/uploads
 ```
@@ -44,7 +44,11 @@ Those fallback values are rejected when `NODE_ENV=production`.
 
 Closed beta without real providers uses `EMAIL_VERIFICATION_REQUIRED=false` and `CAPTCHA_DEV_BYPASS=true`. If captcha bypass is disabled, the dev token is rejected; no real captcha provider is claimed. Production beta reset is refused unless both `ALLOW_PRODUCTION_BETA_RESET=true` and `BETA_RESET_CONFIRM=RESET_BETA_DATA` are explicitly set.
 
-`POCKET_POSTBACK_REQUIRE_SECRET=false` keeps the Pocket GET adapter in no-secret known-clickid-only mode. `POCKET_POSTBACK_REQUIRE_SECRET=true` requires `POSTBACK_SECRET` through `ow`, `secret`, `token`, or the `x-postback-secret` header. See [Pocket postbacks](pocket-postbacks.md).
+`POCKET_POSTBACK_ENABLED` gates the Pocket GET adapter and **fails closed**: absent or `false` means every Pocket postback is refused with `503`. `POCKET_POSTBACK_ENABLED=true` makes authentication mandatory — each request must present `POSTBACK_SECRET` in the `x-postback-secret` **header**. The secret is never accepted from the query string, and a request carrying `ow`, `secret` or `token` in the URL is rejected outright.
+
+When the integration is enabled, `POSTBACK_SECRET` must be 16-200 printable non-whitespace characters containing no comma. A secret that fails those bounds is treated exactly like an absent one: the route reports `503`, never open. See [Pocket postbacks](pocket-postbacks.md).
+
+> The removed `POCKET_POSTBACK_REQUIRE_SECRET` flag failed **open** — absent meant "no secret required". It must not be reintroduced.
 
 Never use `dev-postback-secret` for a production listener. `VISUAL_QA_BASE_URL` normally points to `http://127.0.0.1:3009` during local QA.
 
