@@ -3,6 +3,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { LessonsLibraryWorkspace } from "@/features/lessons-library/components/lessons-library-workspace";
 import { MODULE_QUERY_PARAM } from "@/features/lessons-library/model/lessons-library-model";
 import { resolvePathScenario } from "@/features/path/model/path-state";
+import { getAcademyConfig } from "@/config/academy-config";
+import { ApiLessons } from "@/features/curriculum-api/api-screens";
 import "@/features/lessons-library/lessons-library.css";
 
 export const metadata: Metadata = {
@@ -42,6 +44,9 @@ export default async function LessonsLibraryPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (getAcademyConfig().mode === "api") {
+    return <ApiLessons />;
+  }
   const params = await searchParams;
   const raw = params[MODULE_QUERY_PARAM];
   // A repeated query key arrives as an array; take the first and let the model's

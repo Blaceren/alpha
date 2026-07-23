@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { PathWorkspace } from "@/features/path/components/path-workspace";
 import { resolvePathScenario } from "@/features/path/model/path-state";
+import { getAcademyConfig } from "@/config/academy-config";
+import { ApiPath } from "@/features/curriculum-api/api-screens";
 import "@/features/path/path.css";
 
 export const metadata: Metadata = {
@@ -19,6 +21,9 @@ export default async function PathPage({
 }: {
   searchParams: Promise<{ scenario?: string }>;
 }) {
+  if (getAcademyConfig().mode === "api") {
+    return <ApiPath />;
+  }
   const { scenario } = await searchParams;
   return (
     <AppShell userName="Артём" activeId="path">

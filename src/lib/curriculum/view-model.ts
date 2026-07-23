@@ -1,0 +1,226 @@
+/**
+ * Pure mappers: Backend curriculum read -> Academy view models.
+ *
+ * No I/O, no storage, no fetch. Fully unit-testable. Renders the Backend's
+ * authoritative decisions; never recomputes prerequisites or unlocks. Unknown
+ * types/states degrade safely (see level-type.ts / progress-state.ts).
+ */
+import type {
+  BackendCurriculumRead,
+  BackendCurriculumMeta,
+  BackendLevel,
+  BackendModule,
+  BackendXp,
+  BackendLevelContent,
+} from "@/lib/curriculum/backend-dto";
+import { mapLevelType, type AcademyLevelType } from "@/lib/curriculum/level-type";
+import { mapLevelState } from "@/lib/curriculum/progress-state";
+import type {
+  AcademyCurriculumSummary,
+  AcademyCurriculumView,
+  AcademyLevelContent,
+  AcademyLevelDetail,
+  AcademyLevelSummary,
+  AcademyModuleSummary,
+  AcademyProgressSummary,
+} from "@/lib/curriculum/academy-view";
+
+export function levelHref(levelCode: string): string {
+  return `/lessons/${encodeURIComponent(levelCode)}`;
+}
+
+const COMPLETION_SOURCE: Record<AcademyLevelType, string> = {
+  external: "external_event",
+  checkpoint: "financial_checkpoint",
+  report: "mentor_review",
+  "mentor-review": "mentor_review",
+  lesson: "self",
+  scenario: "self",
+  practice: "self",
+  "final-exam": "final_exam",
+  unsupported: "unknown",
+};
+
+function mapCurriculum(meta: BackendCurriculumMeta): AcademyCurriculumSummary {
+  return {
+    curriculumCode: meta.code,
+    curriculumVersion: meta.versionNumber,
+    title: meta.name,
+    status: meta.status,
+    publishedAt: meta.publishedAt,
+  };
+}
+
+function progressVersionOf(level: BackendLevel): string | null {
+  const p = level.progress;
+  if (!p) return null;
+  return p.lastProgressAt ?? p.completedAt ?? p.startedAt ?? null;
+}
+
+function mapLevel(level: BackendLevel): AcademyLevelSummary {
+  const typeInfo = mapLevelType(level.type);
+  const stateInfo = mapLevelState({
+    presentationState: level.presentationState,
+    blockers: level.blockers,
+    durableStatus: level.durableStatus,
+    isExternal: typeInfo.isExternal,
+  });
+  return {
+    levelCode: level.stableCode,
+    order: level.levelNumber,
+    title: level.title,
+    shortDescription: level.shortDescription,
+    learningObjective: level.learningObjective,
+    typeInfo: {
+      type: typeInfo.type,
+      label: typeInfo.label,
+      isCheckpoint: typeInfo.isCheckpoint,
+      isExternal: typeInfo.isExternal,
+      supported: typeInfo.supported,
+    },
+    state: stateInfo.state,
+    lockReason: stateInfo.lockReason,
+    stateLabel: stateInfo.label,
+    completionSource: COMPLETION_SOURCE[typeInfo.type],
+    requirements: {
+      previousLevel: level.requirements.previousLevel,
+      requiredXp: level.requirements.requiredXp,
+      checkpointLevel: level.requirements.checkpointLevel,
+    },
+    routeAccessible: stateInfo.routeAccessible,
+    actions: stateInfo.routeAccessible ? ["view"] : [],
+    href: levelHref(level.stableCode),
+    xpReward: level.xpReward,
+    progressVersion: progressVersionOf(level),
+  };
+}
+
+function mapModule(moduleDefinition: BackendModule): AcademyModuleSummary {
+  const levels = [...moduleDefinition.levels]
+    .sort((a, b) => a.levelNumber - b.levelNumber)
+    .map(mapLevel);
+  return {
+    moduleCode: moduleDefinition.code,
+    order: moduleDefinition.moduleNumber,
+    title: moduleDefinition.title,
+    description: moduleDefinition.description,
+    learningObjective: moduleDefinition.learningObjective,
+    status: moduleDefinition.status,
+    levels,
+    progress: { total: levels.length, completed: levels.filter((l) => l.state === "completed").length },
+  };
+}
+
+function mapXp(xp: BackendXp | undefined): AcademyProgressSummary["xp"] {
+  if (!xp || xp.kind === "disabled") return { available: false };
+  return {
+    available: true,
+    currentXp: xp.currentXp,
+    nextLevelRequiredXp: xp.nextLevelRequiredXp,
+    xpRemaining: xp.xpRemaining,
+  };
+}
+
+function buildProgress(
+  modules: AcademyModuleSummary[],
+  currentLevelNumber: number | null,
+  updatedAt: string | null,
+  xp: BackendXp | undefined,
+): AcademyProgressSummary {
+  const allLevels = modules.flatMap((m) => m.levels.map((l) => ({ level: l, moduleCode: m.moduleCode })));
+  const total = allLevels.length;
+  const completed = allLevels.filter((x) => x.level.state === "completed").length;
+  const current = currentLevelNumber === null ? null : allLevels.find((x) => x.level.order === currentLevelNumber) ?? null;
+  const nextAvailable = allLevels.find((x) => x.level.state === "available") ?? null;
+  return {
+    currentLevelCode: current?.level.levelCode ?? null,
+    currentModuleCode: current?.moduleCode ?? null,
+    nextAvailableLevelCode: nextAvailable?.level.levelCode ?? null,
+    completedLevels: completed,
+    totalLevels: total,
+    xp: mapXp(xp),
+    updatedAt,
+  };
+}
+
+export function toAcademyCurriculumView(read: BackendCurriculumRead): AcademyCurriculumView {
+  if (read.kind === "unavailable") {
+    return { state: "unavailable", reason: read.reason };
+  }
+  if (read.kind === "candidate") {
+    return { state: "candidate", curriculum: mapCurriculum(read.curriculum), modules: [], progress: null };
+  }
+  // enrolled | completed
+  const modules = [...read.modules].sort((a, b) => a.moduleNumber - b.moduleNumber).map(mapModule);
+  const currentLevelNumber = read.kind === "enrolled" ? read.enrollment.currentLevel : null;
+  const updatedAt = read.enrollment.lastMeaningfulActionAt ?? read.enrollment.completedAt ?? read.enrollment.enrolledAt;
+  const xp = read.xp;
+  return {
+    state: read.kind,
+    curriculum: mapCurriculum(read.curriculum),
+    modules,
+    progress: buildProgress(modules, currentLevelNumber, updatedAt, xp),
+  };
+}
+
+/** Find a mapped level summary by stable code across a curriculum view. */
+export function findLevel(view: AcademyCurriculumView, levelCode: string): { level: AcademyLevelSummary; moduleCode: string } | null {
+  if (view.state === "unavailable" || view.state === "candidate") return null;
+  for (const moduleSummary of view.modules) {
+    const level = moduleSummary.levels.find((l) => l.levelCode === levelCode);
+    if (level) return { level, moduleCode: moduleSummary.moduleCode };
+  }
+  return null;
+}
+
+export function mapLevelContent(
+  content: BackendLevelContent | null,
+  unavailableReason: AcademyLevelContent["unavailableReason"],
+): AcademyLevelContent {
+  if (!content) {
+    return { available: false, metadata: null, unavailableReason: unavailableReason ?? "unavailable" };
+  }
+  const loc = content.content.localization;
+  return {
+    available: true,
+    metadata: {
+      versionNumber: content.content.versionNumber,
+      videoDurationSeconds: content.content.videoDurationSeconds,
+      publishedAt: content.content.publishedAt,
+      locale: loc.locale,
+      title: loc.title,
+      subtitle: loc.subtitle,
+      summary: loc.summary,
+      learningObjectiveExtension: loc.learningObjectiveExtension,
+      hasTranscript: typeof loc.transcript === "string" && loc.transcript.length > 0,
+    },
+    unavailableReason: null,
+  };
+}
+
+export function buildLevelDetail(
+  view: AcademyCurriculumView,
+  levelCode: string,
+  content: AcademyLevelContent,
+): AcademyLevelDetail | null {
+  const found = findLevel(view, levelCode);
+  if (!found) return null;
+  if (view.state === "unavailable" || view.state === "candidate") return null;
+
+  const ordered = view.modules.flatMap((m) => m.levels);
+  const index = ordered.findIndex((l) => l.levelCode === levelCode);
+  const previous = index > 0 ? ordered[index - 1] : null;
+  const next = index >= 0 && index < ordered.length - 1 ? ordered[index + 1] : null;
+
+  return {
+    summary: found.level,
+    moduleCode: found.moduleCode,
+    prerequisites: found.level.requirements,
+    content,
+    navigation: {
+      previousLevelCode: previous?.levelCode ?? null,
+      // Only expose forward navigation to an accessible next level.
+      nextLevelCode: next && next.routeAccessible ? next.levelCode : null,
+    },
+  };
+}
