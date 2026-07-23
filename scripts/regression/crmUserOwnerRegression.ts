@@ -705,10 +705,11 @@ async function main() {
 
     /* ==================================================== database integrity */
 
-    await check("41. fresh DB has 32 migrations, clean foreign_key_check and integrity_check", () => {
+    await check("41. fresh DB has 33 migrations, clean foreign_key_check and integrity_check", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations")).filter((e) => e !== "migration_lock.toml");
-      assert.equal(migrations.length, 32, `expected 32 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
       assert.ok(migrations.includes("20260721000000_crm_user_owner_foundation"));
+      assert.ok(migrations.includes("20260723000000_crm_user_owner_history"));
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
       const integ = spawnSync("sqlite3", [dbPath, "PRAGMA integrity_check;"], { encoding: "utf8" });
@@ -739,8 +740,16 @@ async function main() {
     await check("45. upgrading a 31-migration DB to 32 preserves rows and adds an empty owner table", () => {
       const upgradeUrl = `file:${upgradeDbPath}`;
       const migrationsDir = path.join(process.cwd(), "prisma", "migrations");
+      // Prove the owner-FOUNDATION (migration 32) upgrade specifically, so exclude
+      // both the owner foundation and the later owner-history migration (33) to
+      // reconstruct the exact 31-migration pre-owner baseline.
       const prior = fs.readdirSync(migrationsDir)
-        .filter((e) => e !== "migration_lock.toml" && e !== "20260721000000_crm_user_owner_foundation")
+        .filter(
+          (e) =>
+            e !== "migration_lock.toml" &&
+            e !== "20260721000000_crm_user_owner_foundation" &&
+            e !== "20260723000000_crm_user_owner_history",
+        )
         .sort();
       assert.equal(prior.length, 31, `expected 31 prior migrations, found ${prior.length}`);
 

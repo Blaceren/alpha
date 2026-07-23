@@ -390,6 +390,41 @@ async function resolveAssignableCandidate(
   return displayName;
 }
 
+/* -------------------------------------------------------- owner history write */
+
+interface OwnerHistoryInsert {
+  userId: number;
+  actorStaffId: string;
+  previousOwnerId: string | null;
+  nextOwnerId: string | null;
+  ownerVersion: number;
+}
+
+/**
+ * Insert exactly one immutable owner-history row within the caller's owner
+ * transaction. Every field is server-derived — the actor comes from the session,
+ * the previous/next owners and the resulting version are computed by the mutation
+ * — so nothing here is ever taken from the request body. The DB CHECK rejects a
+ * null→null or A→A transition and the unique (userId, ownerVersion) index rejects
+ * a duplicate resulting version; either surfaces as the transaction's failure and
+ * rolls back the owner change with it.
+ */
+async function recordOwnerHistory(
+  tx: Prisma.TransactionClient,
+  insert: OwnerHistoryInsert,
+): Promise<void> {
+  await tx.crmUserOwnerHistory.create({
+    data: {
+      userId: insert.userId,
+      actorStaffId: insert.actorStaffId,
+      previousOwnerId: insert.previousOwnerId,
+      nextOwnerId: insert.nextOwnerId,
+      ownerVersion: insert.ownerVersion,
+    },
+    select: { id: true },
+  });
+}
+
 /* ----------------------------------------------------------- mutation */
 
 /**
@@ -408,9 +443,20 @@ async function resolveAssignableCandidate(
  * updatedAt — and, for a same-owner no-op, does NOT revalidate candidacy, so a
  * current owner who later became blocked stays put without an idempotent call
  * turning into a fresh assignment.
+ *
+ * OH-1 — Owner History: every REAL transition (assign-from-unowned, replace,
+ * unassign) writes exactly one immutable CrmUserOwnerHistory row inside THIS
+ * same transaction. `actorStaffId` is the authenticated StaffProfile and is
+ * supplied by the caller from the session, never from the request body. A no-op,
+ * a pristine unassign and a stale/losing concurrent write produce no row. If the
+ * history insert fails (unique userId+ownerVersion clash, CHECK violation) the
+ * whole transaction rolls back, so the current owner and its history can never
+ * disagree. The row is derived entirely from server state: previous owner, next
+ * owner and resulting version are computed here, never accepted from the client.
  */
 export async function assignCrmUserOwner(
   userId: number,
+  actorStaffId: string,
   mutation: CrmOwnerMutation,
 ): Promise<CrmOwnerState> {
   await resolveLearnerTarget(userId);
@@ -430,7 +476,7 @@ export async function assignCrmUserOwner(
         if (expectedVersion !== 0) throw new CrmOwnerConflictError();
 
         // Desired unassigned == pristine: a true no-op. Write nothing, create no
-        // row, so the learner stays pristine at version 0.
+        // row and no history, so the learner stays pristine at version 0.
         if (desired === null) return { owner: null, ownerVersion: 0 };
 
         // First real assignment: validate the candidate, then create at v1. A
@@ -440,6 +486,14 @@ export async function assignCrmUserOwner(
           data: { userId, ownerId: desired, version: 1 },
           select: { version: true },
         });
+        // One history row for the assign-from-unowned transition, same tx.
+        await recordOwnerHistory(tx, {
+          userId,
+          actorStaffId,
+          previousOwnerId: null,
+          nextOwnerId: desired,
+          ownerVersion: created.version,
+        });
         return { owner: { employeeId: desired, displayName }, ownerVersion: created.version };
       }
 
@@ -447,8 +501,8 @@ export async function assignCrmUserOwner(
       if (expectedVersion !== current.version) throw new CrmOwnerConflictError();
 
       // Same desired state as current: no-op. No increment, no updatedAt touch,
-      // no candidacy revalidation. Resolve the CURRENT owner's live name (even
-      // if now blocked/ineligible) for the response.
+      // no candidacy revalidation and no history row. Resolve the CURRENT owner's
+      // live name (even if now blocked/ineligible) for the response.
       if (desired === current.ownerId) {
         if (desired === null) return { owner: null, ownerVersion: current.version };
         const same = await tx.staffProfile.findUnique({
@@ -477,6 +531,16 @@ export async function assignCrmUserOwner(
       if (updated.count === 0) throw new CrmOwnerConflictError();
 
       const nextVersion = current.version + 1;
+      // One history row for the replace or unassign transition, same tx. The
+      // unique (userId, ownerVersion) index is the backstop for a race that
+      // somehow reached the same resulting version twice — it maps to 409 below.
+      await recordOwnerHistory(tx, {
+        userId,
+        actorStaffId,
+        previousOwnerId: current.ownerId,
+        nextOwnerId: desired,
+        ownerVersion: nextVersion,
+      });
       return desired === null
         ? { owner: null, ownerVersion: nextVersion }
         : { owner: { employeeId: desired, displayName: displayName! }, ownerVersion: nextVersion };

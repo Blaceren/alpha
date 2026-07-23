@@ -22,10 +22,11 @@ type RouteContext = {
   params: Promise<{ userId: string }>;
 };
 
-// This route exports exactly GET and PUT. Owner v1 has no POST, PATCH or DELETE,
-// no /owner/history and no /owner/[employeeId]: the current owner is a mutable
-// singleton whose complete desired state is expressed by one PUT body. An
-// unsupported method therefore gets Next's own 405 without reaching this module.
+// This route exports exactly GET and PUT. The current owner is a mutable
+// singleton whose complete desired state is expressed by one PUT body, so there
+// is no POST, PATCH, DELETE or /owner/[employeeId] here. The immutable owner
+// HISTORY is a separate read-only sibling route (./history), never a method on
+// this one. An unsupported method gets Next's own 405 without reaching here.
 
 /**
  * Shared error mapping. Every failure collapses to the safe
@@ -133,7 +134,9 @@ export async function PUT(request: Request, context: RouteContext) {
 
     const mutation = parseCrmOwnerMutationBody(raw);
     const { userId } = await context.params;
-    const state = await assignCrmUserOwner(parseCrmUserId(userId), mutation);
+    // The actor is the authenticated StaffProfile from the session — never the
+    // request body — and it becomes the mandatory actorStaffId on the history row.
+    const state = await assignCrmUserOwner(parseCrmUserId(userId), session.employeeId, mutation);
 
     return NextResponse.json(crmOwnerResponseSchema.parse(state), { headers });
   } catch (error) {

@@ -923,10 +923,10 @@ async function main() {
 
     /* ----------------------------------------------- 76-82 database proofs */
 
-    await check("76. fresh database has exactly 32 migrations", () => {
+    await check("76. fresh database has exactly 33 migrations", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 32, `expected 32 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
       assert.ok(migrations.includes("20260720000000_crm_user_note_foundation"));
     });
 
@@ -990,8 +990,9 @@ async function main() {
 
     await check("83. upgrading a 30-migration database preserves existing rows", () => {
       // Build a throwaway DB at the accepted 30-migration state by applying every
-      // migration except Notes (31) and the later Owner (32) foundation, seed
-      // representative rows, then let the runner apply the pending migration(s).
+      // migration except Notes (31), the later Owner (32) foundation and the
+      // Owner History (33) migration, seed representative rows, then let the
+      // runner apply the pending migration(s).
       const upgradeUrl = `file:${upgradeDbPath}`;
       const migrationsDir = path.join(process.cwd(), "prisma", "migrations");
       const applied = fs.readdirSync(migrationsDir)
@@ -999,7 +1000,8 @@ async function main() {
           (e) =>
             e !== "migration_lock.toml" &&
             e !== "20260720000000_crm_user_note_foundation" &&
-            e !== "20260721000000_crm_user_owner_foundation",
+            e !== "20260721000000_crm_user_owner_foundation" &&
+            e !== "20260723000000_crm_user_owner_history",
         )
         .sort();
       assert.equal(applied.length, 30, `expected 30 prior migrations, found ${applied.length}`);

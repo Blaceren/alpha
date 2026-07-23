@@ -138,3 +138,13 @@ export function isEligibleOwnerRole(role: string): role is CrmStaffRole {
 export function canAssignOwner(permissions: readonly CrmPermission[]): boolean {
   return permissions.includes("assign_owner");
 }
+
+// ---------------------------------------------------------- Owner History OH-1
+
+// Read gate for CRM Learner Owner HISTORY. It requires exactly `view_audit`,
+// held only by crm_admin and crm_manager — there is deliberately NO fallback to
+// `assign_owner`, so retention_manager (which may mutate the owner) still cannot
+// read the history. This reuses the existing permission and broadens no role.
+export function canViewOwnerHistory(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("view_audit");
+}

@@ -76,7 +76,8 @@
     "test:regression:crm-users": "tsx scripts/regression/crmUsersRegression.ts",
     "test:regression:crm-user-detail": "tsx scripts/regression/crmUserDetailRegression.ts",
     "test:regression:crm-user-notes": "tsx scripts/regression/crmUserNotesRegression.ts",
-    "test:regression:crm-user-owner": "tsx scripts/regression/crmUserOwnerRegression.ts"
+    "test:regression:crm-user-owner": "tsx scripts/regression/crmUserOwnerRegression.ts",
+    "test:regression:crm-user-owner-history": "tsx scripts/regression/crmUserOwnerHistoryRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

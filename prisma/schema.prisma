@@ -175,6 +175,7 @@ model User {
   staffProfile                    StaffProfile?
   crmUserNotes                    CrmUserNote[]                @relation("CrmUserNoteTarget")
   crmOwnerState                   CrmUserOwner?                @relation("CrmUserOwnerLearner")
+  crmOwnerHistory                 CrmUserOwnerHistory[]        @relation("CrmUserOwnerHistoryLearner")
 }
 
 model XpEvent {
@@ -1713,6 +1714,13 @@ model StaffProfile {
   authoredCrmUserNotes CrmUserNote[]  @relation("CrmUserNoteAuthor")
   ownedLearnerStates   CrmUserOwner[] @relation("CrmUserOwnerStaff")
 
+  // Owner-history attribution axes. All three are Restrict-referenced (see
+  // CrmUserOwnerHistory), so a StaffProfile named as an actor, previous or next
+  // owner cannot be deleted out from under the immutable record.
+  actedOwnerHistory    CrmUserOwnerHistory[] @relation("CrmUserOwnerHistoryActor")
+  previousOwnerHistory CrmUserOwnerHistory[] @relation("CrmUserOwnerHistoryPrevious")
+  nextOwnerHistory     CrmUserOwnerHistory[] @relation("CrmUserOwnerHistoryNext")
+
   @@index([staffRole])
 }
 
@@ -1775,4 +1783,57 @@ model CrmUserOwner {
   owner StaffProfile? @relation("CrmUserOwnerStaff", fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([ownerId])
+}
+
+// CRM learner owner HISTORY — Owner History OH-1. One immutable row per real
+// owner transition of one learner. It is the dedicated domain record of owner
+// change; it is NOT the generic AuditLog and NOT the mock `/audit` workspace.
+//
+// A row is written inside the SAME transaction as the CrmUserOwner mutation it
+// records, so the current owner and its history can never disagree: if the row
+// cannot be written the owner change rolls back, and if the owner change fails
+// no row is written. Exactly one row is written per successful assign, replace
+// or unassign; a no-op or a stale/losing concurrent write produces none.
+//
+// Transition type is DERIVED, never stored as a string:
+//   previousOwnerId NULL, nextOwnerId set   -> assigned   (from unowned)
+//   both set, previous <> next              -> reassigned
+//   previousOwnerId set, nextOwnerId NULL   -> unassigned
+// The DB CHECK constraint (see the migration) rejects null->null and A->A, so
+// an invalid transition cannot be stored even if application validation is
+// bypassed. `ownerVersion` is the RESULTING current owner version after the
+// transition, and (userId, ownerVersion) is unique — a version is claimed by at
+// most one history row, which is the concurrency backstop.
+//
+// All three staff references are Restrict: the actor and the previous/next
+// owner cannot be deleted while any history names them, so attribution is never
+// silently erased. There is deliberately no updatedAt, deletedAt, reason,
+// comment, IP, user-agent or AuditLog relation: history rows are immutable and
+// carry only what the CRM read needs. History begins after this migration; no
+// backfill is attempted and no synthetic transition is fabricated.
+model CrmUserOwnerHistory {
+  id              String   @id @default(cuid())
+  userId          Int
+  actorStaffId    String
+  previousOwnerId String?
+  nextOwnerId     String?
+  ownerVersion    Int
+  createdAt       DateTime @default(now())
+
+  user          User          @relation("CrmUserOwnerHistoryLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor         StaffProfile  @relation("CrmUserOwnerHistoryActor", fields: [actorStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  previousOwner StaffProfile? @relation("CrmUserOwnerHistoryPrevious", fields: [previousOwnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  nextOwner     StaffProfile? @relation("CrmUserOwnerHistoryNext", fields: [nextOwnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // A resulting version is claimed by at most one history row per learner. This
+  // unique index also carries the keyset the list query walks: (userId) filter,
+  // then ownerVersion DESC — newest transition first, no tie-breaker needed
+  // because ownerVersion is unique and monotonic per learner.
+  @@unique([userId, ownerVersion])
+  // Support the Restrict deletion lookups ("does any history name this staff?")
+  // across all three attribution axes, matching the CrmUserOwner/CrmUserNote
+  // convention of indexing each Restrict-referenced staff FK.
+  @@index([actorStaffId])
+  @@index([previousOwnerId])
+  @@index([nextOwnerId])
 }

@@ -164,6 +164,44 @@ export const crmOwnerCandidatesResponseSchema = z
 
 export type CrmOwnerCandidatesResponse = z.infer<typeof crmOwnerCandidatesResponseSchema>;
 
+// Runtime contract for CRM learner owner HISTORY (OH-1). Strict at every level,
+// so a field the history read deliberately does NOT expose — a raw actor/owner
+// id under a different key, an email, StaffRole, IP, User-Agent, AuditLog
+// metadata, reason, or any internal Prisma field — fails serialization here
+// instead of reaching the client. Each staff reference is exactly an opaque id
+// plus a display-safe label; the transition is a closed enum derived server-side.
+export const crmOwnerHistoryActorSchema = z
+  .object({
+    employeeId: z.string().min(1),
+    displayName: z.string().min(1),
+  })
+  .strict();
+
+export type CrmOwnerHistoryActorDto = z.infer<typeof crmOwnerHistoryActorSchema>;
+
+export const crmOwnerHistoryItemSchema = z
+  .object({
+    historyId: z.string().min(1),
+    transition: z.enum(["assigned", "reassigned", "unassigned"]),
+    ownerVersion: z.number().int().positive(),
+    createdAt: z.string().datetime(),
+    actor: crmOwnerHistoryActorSchema,
+    previousOwner: crmOwnerHistoryActorSchema.nullable(),
+    nextOwner: crmOwnerHistoryActorSchema.nullable(),
+  })
+  .strict();
+
+export type CrmOwnerHistoryItemDto = z.infer<typeof crmOwnerHistoryItemSchema>;
+
+export const crmOwnerHistoryResponseSchema = z
+  .object({
+    items: z.array(crmOwnerHistoryItemSchema),
+    nextCursor: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type CrmOwnerHistoryResponse = z.infer<typeof crmOwnerHistoryResponseSchema>;
+
 // Safe CRM error envelope. Never carries raw exceptions or resource existence.
 export const crmErrorResponseSchema = z
   .object({

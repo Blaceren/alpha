@@ -730,10 +730,10 @@ async function main() {
       }
     });
 
-    await check("46. migration count is 32 and foreign keys are clean", () => {
+    await check("46. migration count is 33 and foreign keys are clean", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 32, `expected 32 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });

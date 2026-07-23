@@ -506,10 +506,10 @@ async function main() {
       void plainLearner;
     });
 
-    await check("59-62. fresh DB, 32 migrations, clean foreign keys", () => {
+    await check("59-62. fresh DB, 33 migrations, clean foreign keys", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 32, `expected 32 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -529,10 +529,12 @@ async function main() {
 
       const usersDir = path.join(crmV1, "users");
       assert.deepEqual(fs.readdirSync(usersDir).sort(), ["[userId]", "route.ts"]);
-      // Notes v1 added nested notes; Owner v1 adds nested owner. Nothing else.
+      // Notes v1 added nested notes; Owner v1 adds nested owner; Owner History
+      // OH-1 adds a nested owner/history read. Nothing else.
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["notes", "owner", "route.ts"]);
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "notes")).sort(), ["route.ts"]);
-      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner")).sort(), ["route.ts"]);
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner")).sort(), ["history", "route.ts"]);
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner", "history")).sort(), ["route.ts"]);
 
       // Top-level: notes and owner are nested, so they must not appear here;
       // owners/audit/360 never existed.
@@ -541,11 +543,13 @@ async function main() {
         assert.ok(!fs.existsSync(path.join(usersDir, banned)), `unexpected subroute users/${banned}`);
       }
       // Under users/[userId] only notes and owner exist; everything else banned.
+      // `history` is nested UNDER owner (owner/history), never a direct child.
       for (const banned of ["owners", "owner-candidates", "audit", "360", "user-360", "history"]) {
         assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", banned)), `unexpected subroute users/[userId]/${banned}`);
       }
-      // No owner history or per-employee owner subroute.
-      assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", "owner", "history")), "unexpected owner/history");
+      // Owner history is the ONE reviewed owner subroute; a per-employee owner
+      // subroute never existed.
+      assert.ok(fs.existsSync(path.join(usersDir, "[userId]", "owner", "history", "route.ts")), "missing owner/history route");
       assert.ok(!fs.existsSync(path.join(usersDir, "[userId]", "owner", "[employeeId]")), "unexpected owner/[employeeId]");
       // No catch-all.
       assert.ok(!fs.existsSync(path.join(usersDir, "[...slug]")));
