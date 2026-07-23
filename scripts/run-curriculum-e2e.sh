@@ -49,14 +49,39 @@ const PAST = new Date("2026-06-01T00:00:00.000Z");
   const user = await prisma.user.upsert({ where: { email: "learner@ci1.test" }, update: { passwordHash, status: "active" }, create: { email: "learner@ci1.test", name: "CI1 Learner", passwordHash, role: "user", status: "active" } });
   const version = await prisma.curriculumVersion.create({ data: { code: "ata-v2", name: "ATA V2 (CI-2 synthetic)", versionNumber: 1, status: "published", publishedAt: PAST, effectiveFrom: PAST } });
   const m = await prisma.moduleDefinition.create({ data: { curriculumVersionId: version.id, moduleNumber: 1, code: "module.01", title: "Первое знакомство", firstLevel: 1, lastLevel: 4, checkpointLevel: 4, learningObjective: "Основы ATA" } });
+  // Titles are seeded explicitly: the Academy level detail renders the LEVEL
+  // DEFINITION title, so a stableCode-as-title seed would make the read
+  // assertions vacuous.
   const spec = [
-    { n: 1, c: "level.001", t: "external_event", cm: "external", xp: 10, prev: null, cp: null },
-    { n: 2, c: "level.002", t: "lesson", cm: "video_test", xp: 20, prev: 1, cp: null },
-    { n: 3, c: "level.003", t: "report", cm: "report", xp: 30, prev: 2, cp: null },
-    { n: 4, c: "level.004", t: "financial_checkpoint", cm: "checkpoint", xp: 0, prev: 3, cp: 4 },
+    { n: 1, c: "v2.l001.otkrytie-scheta", t: "external_event", cm: "external", xp: 10, prev: null, cp: null, ti: "Открытие счёта", lo: "Пройти внешний шаг" },
+    { n: 2, c: "v2.l002.kak-ustroen-put", t: "lesson", cm: "video_test", xp: 20, prev: 1, cp: null, ti: "Как устроен Alfa Trade Academy", lo: "Понять структуру пути" },
+    { n: 3, c: "v2.l003.pervyy-otchet", t: "report", cm: "report", xp: 30, prev: 2, cp: null, ti: "Первый отчёт", lo: "Оформить отчёт" },
+    { n: 4, c: "v2.l004.kontrolnaya-tochka", t: "financial_checkpoint", cm: "checkpoint", xp: 0, prev: 3, cp: 4, ti: "Контрольная точка модуля", lo: "Подтвердить готовность" },
   ];
   const levels = {};
-  for (const l of spec) levels[l.n] = await prisma.levelDefinition.create({ data: { curriculumVersionId: version.id, moduleId: m.id, levelNumber: l.n, stableCode: l.c, type: l.t, title: l.c, learningObjective: l.c, completionMethod: l.cm, xpReward: l.xp, requiredXp: 0, requiredPreviousLevel: l.prev, requiredCheckpointLevel: l.cp } });
+  for (const l of spec) levels[l.n] = await prisma.levelDefinition.create({ data: { curriculumVersionId: version.id, moduleId: m.id, levelNumber: l.n, stableCode: l.c, type: l.t, title: l.ti, learningObjective: l.lo, completionMethod: l.cm, xpReward: l.xp, requiredXp: 0, requiredPreviousLevel: l.prev, requiredCheckpointLevel: l.cp } });
+
+  // Published content bound to L2 only, so the E2E exercises the real
+  // content-metadata read path (available) AND the not-configured path (L3/L4).
+  const contentVersion = await prisma.contentVersion.create({ data: { levelDefinitionId: levels[2].id, curriculumVersionId: version.id, versionNumber: 1, status: "published", publishedAt: PAST, videoDurationSeconds: 600 } });
+  await prisma.contentLocalization.create({ data: {
+    contentVersionId: contentVersion.id,
+    locale: "ru",
+    title: "Урок 2 — знакомство с путём",
+    subtitle: "Обзор модулей и контрольных точек",
+    learningObjectiveExtension: "Разобрать, как уровни открываются последовательно",
+    summary: "Короткий обзор того, как устроен путь обучения и что даёт каждый уровень.",
+    transcript: "Расшифровка урока для синтетического теста.",
+    body: {
+      sections: [{ code: "intro", title: "Введение", body: "Путь состоит из модулей и уровней." }],
+      examples: [],
+      commonMistakes: [],
+      glossary: [],
+      nextAction: { label: "Перейти к следующему уровню", body: "Завершите урок, чтобы открыть отчёт." },
+      riskDisclaimer: "Обучение не является инвестиционной рекомендацией.",
+    },
+  } });
+  await prisma.levelResourceBinding.create({ data: { levelDefinitionId: levels[2].id, curriculumVersionId: version.id, contentVersionId: contentVersion.id } });
   const enr = await prisma.userCurriculumEnrollment.create({ data: { userId: user.id, curriculumVersionId: version.id, curriculumCode: "ata-v2", status: "active", enrolledAt: PAST, currentLevel: 2, highestCompletedLevel: 1, lastMeaningfulActionAt: PAST } });
   await prisma.userLevelProgress.create({ data: { enrollmentId: enr.id, curriculumVersionId: version.id, levelDefinitionId: levels[1].id, status: "completed", startedAt: PAST, lastProgressAt: PAST, completedAt: PAST, completionMethod: "external", attemptCount: 1 } });
   await prisma.$disconnect();

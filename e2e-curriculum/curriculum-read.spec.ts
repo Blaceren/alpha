@@ -83,6 +83,11 @@ test("level detail is read-only: available lesson, locked report, checkpoint", a
   await expect(page.locator(".cur-detail")).toHaveAttribute("data-state", "available");
   await expect(page.locator(".cur-detail__readonly")).toBeVisible();
   await expect(page.getByRole("button", { name: /Завершить|Отправить|Пройти/ })).toHaveCount(0);
+  // Backend content metadata for the available level actually renders (not the
+  // "not configured" fallback), and carries no answers.
+  await expect(page.locator(".cur-content__title")).toHaveText("Урок 2 — знакомство с путём");
+  await expect(page.locator(".cur-content__facts")).toContainText("Локаль: ru");
+  await expect(page.locator(".cur-content__none")).toHaveCount(0);
 
   // L3 locked report detail — read-only, report type shown.
   await page.goto(`${ACADEMY_BASE_URL}/lessons/${LEVELS.l3}`);
@@ -100,14 +105,15 @@ test("browser storage cannot unlock, complete, or grant XP; server wins", async 
   await login(page);
   await page.goto(`${ACADEMY_BASE_URL}/path`);
 
-  // Forge every kind of local progress/unlock/XP/verdict.
-  await page.evaluate(() => {
-    localStorage.setItem("ata.lesson-progress.v1", JSON.stringify({ "level.003": "completed", "level.004": "completed" }));
-    localStorage.setItem("ata.curriculum.unlocks", JSON.stringify(["level.003", "level.004"]));
+  // Forge every kind of local progress/unlock/XP/verdict, targeting the REAL
+  // server-locked level codes so the forgery is actually addressed at them.
+  await page.evaluate(({ l3, l4 }: { l3: string; l4: string }) => {
+    localStorage.setItem("ata.lesson-progress.v1", JSON.stringify({ [l3]: "completed", [l4]: "completed" }));
+    localStorage.setItem("ata.curriculum.unlocks", JSON.stringify([l3, l4]));
     localStorage.setItem("ata.curriculum.xp", "999999");
     localStorage.setItem("ata.report-workspace.v3", JSON.stringify({ verdict: "approved", status: "completed" }));
-    sessionStorage.setItem("ata.lesson-progress.v1", JSON.stringify({ "level.004": "completed" }));
-  });
+    sessionStorage.setItem("ata.lesson-progress.v1", JSON.stringify({ [l4]: "completed" }));
+  }, { l3: LEVELS.l3 as string, l4: LEVELS.l4 as string });
 
   await page.reload();
   // States are unchanged — the server is authority.

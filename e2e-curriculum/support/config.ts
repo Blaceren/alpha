@@ -16,11 +16,17 @@ export const FORBIDDEN_PORTS = [3100, 3010, 3110, 3020, 3200, 3300, 3400] as con
 export const LEARNER_EMAIL = process.env.ACADEMY_CUR_E2E_EMAIL ?? "learner@ci1.test";
 export const LEARNER_PASSWORD = process.env.ACADEMY_CUR_E2E_PASSWORD ?? "Test-Passw0rd";
 
+/**
+ * Stable codes MUST satisfy the Backend's canonical STABLE_CODE_PATTERN
+ * (`^v2\.l(\d{3})\.[a-z0-9]+(?:-[a-z0-9]+)*$`). The content read route parses
+ * the code with that pattern, so a non-conformant code (e.g. `level.002`) is
+ * rejected as `level_not_accessible` before any content lookup happens.
+ */
 export const LEVELS = {
-  l1: "level.001",
-  l2: "level.002",
-  l3: "level.003",
-  l4: "level.004",
+  l1: "v2.l001.otkrytie-scheta",
+  l2: "v2.l002.kak-ustroen-put",
+  l3: "v2.l003.pervyy-otchet",
+  l4: "v2.l004.kontrolnaya-tochka",
 } as const;
 
 export function assertSafePorts(): void {
