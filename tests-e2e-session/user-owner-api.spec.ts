@@ -129,8 +129,12 @@ test.describe("same-origin proxy", () => {
     expect((await request.get("/api/crm/v1/users/101/owner/extra")).status()).toBe(404);
   });
 
-  test("/owner/history is NOT proxied", async ({ request }) => {
-    expect((await request.get("/api/crm/v1/users/101/owner/history")).status()).toBe(404);
+  test("/owner/history IS proxied (OH-1), but a child beneath it is not", async ({ request }) => {
+    // Owner History (OH-1) is a reviewed terminal path and reaches the backend.
+    expect((await request.get("/api/crm/v1/users/101/owner/history")).status()).toBe(200);
+    // A child segment below it is not a reviewed path and must fall through.
+    expect((await request.get("/api/crm/v1/users/101/owner/history/hist_1")).status()).toBe(404);
+    expect((await request.get("/api/crm/v1/users/101/owner/history/extra")).status()).toBe(404);
   });
 
   test("/owner-candidates/extra is NOT proxied", async ({ request }) => {

@@ -73,7 +73,7 @@ describe("ApiCrmDataProvider — users read", () => {
 });
 
 describe("unsupported capabilities fail closed", () => {
-  it("lists exactly the seven supported capabilities", () => {
+  it("lists exactly the eight supported capabilities", () => {
     expect([...API_SUPPORTED_CAPABILITIES]).toEqual([
       "listUsers",
       "getUserDetail",
@@ -82,6 +82,7 @@ describe("unsupported capabilities fail closed", () => {
       "getUserOwner",
       "listOwnerCandidates",
       "setUserOwner",
+      "listUserOwnerHistory",
     ]);
   });
 
@@ -124,7 +125,7 @@ describe("unsupported capabilities fail closed", () => {
     }
   });
 
-  it("exposes exactly the seven accepted methods and nothing else", () => {
+  it("exposes exactly the eight accepted methods and nothing else", () => {
     const provider = createApiCrmDataProvider();
     const own = Object.getOwnPropertyNames(Object.getPrototypeOf(provider)).filter(
       (n) => n !== "constructor",
@@ -135,6 +136,7 @@ describe("unsupported capabilities fail closed", () => {
       "getUserOwner",
       "listOwnerCandidates",
       "listUserNotes",
+      "listUserOwnerHistory",
       "listUsers",
       "setUserOwner",
     ]);
@@ -168,6 +170,42 @@ describe("unsupported capabilities fail closed", () => {
       expect((provider as unknown as Record<string, unknown>)[method]).toBeUndefined();
     }
   });
+
+  it("adds the Owner History read capability and delegates verbatim", async () => {
+    const historyClient = vi.fn(
+      async (userId: unknown, input?: unknown, options?: unknown) => {
+        void userId;
+        void input;
+        void options;
+        return { status: "success", page: PAGE } as const;
+      },
+    );
+    // Positional constructor: the history client is the 8th argument.
+    const provider = new ApiCrmDataProvider(
+      undefined as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      historyClient as never,
+    );
+    const controller = new AbortController();
+
+    const result = await provider.listUserOwnerHistory("0071", { limit: 20 }, { signal: controller.signal });
+
+    expect(historyClient).toHaveBeenCalledTimes(1);
+    // The opaque id is passed through untouched — never parsed to a number.
+    expect(historyClient.mock.calls[0]?.[0]).toBe("0071");
+    expect(historyClient.mock.calls[0]?.[1]).toEqual({ limit: 20 });
+    expect((historyClient.mock.calls[0]?.[2] as { signal?: AbortSignal })?.signal).toBe(controller.signal);
+    expect(result.status).toBe("success");
+  });
+
+  it("owner history read is gated by assertApiCapability (supported)", () => {
+    expect(() => assertApiCapability("listUserOwnerHistory")).not.toThrow();
+  });
 });
 
 describe("the API provider never reaches mock code", () => {
@@ -193,6 +231,9 @@ describe("the API provider never reaches mock code", () => {
     "src/application/api/user-detail-client.ts",
     "src/features/users-api/api-user-detail-workspace.tsx",
     "src/features/users-api/use-api-user-detail-query.ts",
+    "src/application/api/user-owner-history-client.ts",
+    "src/features/users-api/api-user-owner-history.tsx",
+    "src/features/users-api/use-api-user-owner-history.ts",
   ];
 
   it.each(API_MODULES)("%s imports no mock provider, fixtures or mock users feature", (file) => {

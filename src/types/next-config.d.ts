@@ -13,6 +13,7 @@ declare module "*next.config.mjs" {
   export const USER_NOTES_PATH: string;
   export const OWNER_CANDIDATES_PATH: string;
   export const USER_OWNER_PATH: string;
+  export const USER_OWNER_HISTORY_PATH: string;
   export const PROXIED_PATHS: string[];
 
   export interface NextRewriteRule {

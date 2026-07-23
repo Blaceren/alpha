@@ -15,6 +15,7 @@ import { sessionGrants } from "@/domain/identity/access";
 import { useApiUserDetailQuery } from "./use-api-user-detail-query";
 import { ApiUserNotesSection } from "./api-user-notes";
 import { ApiUserOwnerSection } from "./api-user-owner";
+import { ApiUserOwnerHistorySection } from "./api-user-owner-history";
 
 /**
  * Production learner detail FOUNDATION.
@@ -90,10 +91,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function DetailView({
   detail,
   owner,
+  ownerHistory,
   notes,
 }: {
   detail: CrmApiUserDetail;
   owner?: React.ReactNode;
+  ownerHistory?: React.ReactNode;
   notes?: React.ReactNode;
 }) {
   return (
@@ -141,6 +144,8 @@ function DetailView({
 
       {owner}
 
+      {ownerHistory}
+
       {notes}
 
       <p className="text-2xs text-text-muted">
@@ -174,6 +179,11 @@ export function ApiUserDetailWorkspace({
   // owner is read for every StaffProfile; only `assign_owner` mounts the editing
   // controls. The role name is never consulted.
   const canAssignOwner = sessionGrants(session, "assign_owner");
+
+  // Owner HISTORY is read-gated by `view_audit` ONLY — never `assign_owner`, so
+  // a role that may reassign the owner (retention_manager) still does not see the
+  // log. Without it the section is not mounted at all, so no request is made.
+  const canViewOwnerHistory = sessionGrants(session, "view_audit");
 
   // A Notes or Owner 404 means the learner is gone or is not a learner at all,
   // which is an answer about the whole detail, not about one section. An Owner
@@ -243,6 +253,22 @@ export function ApiUserDetailWorkspace({
               onForbidden={handleOwnerForbidden}
               sessionKey={sessionKey}
             />
+          }
+          ownerHistory={
+            // Mounted only for `view_audit`; the section self-hides otherwise and
+            // makes no request. A history 404 is a whole-detail answer (the
+            // learner is gone), and a 401 redirects — the same handlers the other
+            // sections use.
+            canViewOwnerHistory ? (
+              <ApiUserOwnerHistorySection
+                userId={userId}
+                canView={canViewOwnerHistory}
+                provider={provider}
+                onUnauthenticated={handleNotesUnauthenticated}
+                onNotFound={handleOwnerNotFound}
+                sessionKey={sessionKey}
+              />
+            ) : null
           }
           notes={
             // Neither permission -> the section is not mounted at all, so no

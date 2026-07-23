@@ -65,15 +65,15 @@ test.describe("same-origin proxy", () => {
     expect(response.headers()["x-request-id"]).toBeTruthy();
   });
 
-  test("nested learner subroutes other than notes and owner are not proxied", async ({ request }) => {
-    // `/notes` and `/owner` are the TWO reviewed nested paths (Notes Slice 1,
-    // Owner Slice 1). Everything else under a learner — and any child below them
-    // — stays unreachable.
+  test("nested learner subroutes other than notes, owner and owner-history are not proxied", async ({ request }) => {
+    // `/notes`, `/owner` and `/owner/history` are the THREE reviewed nested paths
+    // (Notes Slice 1, Owner Slice 1, Owner History OH-1). Everything else under a
+    // learner — and any child below them — stays unreachable.
     for (const path of [
       "/api/crm/v1/users/101/extra",
       "/api/crm/v1/users/101/notes/note_1",
-      "/api/crm/v1/users/101/owner/history",
       "/api/crm/v1/users/101/owner/emp_1",
+      "/api/crm/v1/users/101/owner/history/hist_1",
       "/api/crm/v1/users/101/audit",
       "/api/crm/v1/users/101/timeline",
     ]) {

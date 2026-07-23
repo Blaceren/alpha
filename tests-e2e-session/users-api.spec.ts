@@ -65,10 +65,11 @@ test.describe("same-origin proxy", () => {
     // only NESTED paths and sibling routes may be checked for a Next-level 404.
     for (const path of [
       "/api/crm/v1/users/123/extra",
-      // `/users/{id}/notes` and `/users/{id}/owner` are reviewed nested paths;
-      // a child BELOW either must still 404.
+      // `/users/{id}/notes`, `/users/{id}/owner` and `/users/{id}/owner/history`
+      // are reviewed nested paths; a child BELOW any of them must still 404.
       "/api/crm/v1/users/123/notes/note_1",
-      "/api/crm/v1/users/123/owner/history",
+      "/api/crm/v1/users/123/owner/emp_1",
+      "/api/crm/v1/users/123/owner/history/hist_1",
       "/api/crm/v1/user",
       "/api/crm/v1/notes",
       // A TOP-LEVEL /owner path stays unreachable: owner is nested under a

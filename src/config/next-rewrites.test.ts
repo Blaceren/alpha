@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // The real production config module — not a copy. If next.config.mjs drifts,
 // these tests fail.
-import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH, OWNER_CANDIDATES_PATH, USER_OWNER_PATH, PROXIED_PATHS } from "../../next.config.mjs";
+import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH, OWNER_CANDIDATES_PATH, USER_OWNER_PATH, USER_OWNER_HISTORY_PATH, PROXIED_PATHS } from "../../next.config.mjs";
 
 describe("rewrites — mock mode", () => {
   it("produces zero rewrites", () => {
@@ -24,8 +24,8 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly six rewrite definitions", () => {
-    expect(buildRewrites(env)).toHaveLength(6);
+  it("produces exactly seven rewrite definitions", () => {
+    expect(buildRewrites(env)).toHaveLength(7);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -49,7 +49,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the six reviewed paths", () => {
+  it("exposes exactly the seven reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -57,6 +57,7 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/users/:userId/notes",
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
+      "/api/crm/v1/users/:userId/owner/history",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -64,6 +65,7 @@ describe("rewrites — api mode", () => {
     expect(USER_NOTES_PATH).toBe("/api/crm/v1/users/:userId/notes");
     expect(OWNER_CANDIDATES_PATH).toBe("/api/crm/v1/owner-candidates");
     expect(USER_OWNER_PATH).toBe("/api/crm/v1/users/:userId/owner");
+    expect(USER_OWNER_HISTORY_PATH).toBe("/api/crm/v1/users/:userId/owner/history");
   });
 
   it("maps the exact notes path to the backend", () => {
@@ -87,8 +89,27 @@ describe("rewrites — api mode", () => {
     });
   });
 
+  it("maps the exact owner-history path to the backend", () => {
+    expect(buildRewrites(env)[6]).toEqual({
+      source: "/api/crm/v1/users/:userId/owner/history",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId/owner/history",
+    });
+  });
+
   it("uses one method-agnostic owner rewrite for GET and PUT", () => {
+    // Only the exact `/owner` singleton — the `/owner/history` sibling is a
+    // separate reviewed path and must not be counted here.
     expect(buildRewrites(env).filter((r) => r.source.endsWith("/owner"))).toHaveLength(1);
+  });
+
+  it("uses one method-agnostic owner-history rewrite", () => {
+    expect(buildRewrites(env).filter((r) => r.source.endsWith("/owner/history"))).toHaveLength(1);
+  });
+
+  it("keeps the owner-history path terminal — one userId segment, no child", () => {
+    expect(USER_OWNER_HISTORY_PATH).toMatch(/^\/api\/crm\/v1\/users\/:userId\/owner\/history$/);
+    expect(USER_OWNER_HISTORY_PATH).not.toContain("*");
+    expect(USER_OWNER_HISTORY_PATH).not.toContain(":historyId");
   });
 
   it("keeps the owner path terminal — one userId segment, no child", () => {
@@ -164,6 +185,7 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/users/:userId/notes",
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
+      "/api/crm/v1/users/:userId/owner/history",
     ]);
     for (const forbidden of [
       "/api/:path*",
@@ -183,19 +205,23 @@ describe("rewrites — no wildcard exposure", () => {
     }
   });
 
-  it("exposes no nested learner subroute other than the exact notes and owner paths", () => {
-    // `/notes` and `/owner` are the TWO reviewed nested paths. Every other nested
-    // route — including any child BELOW them — stays structurally unreachable,
-    // because each parameter matches exactly one segment.
+  it("exposes no nested learner subroute other than the exact notes, owner and owner-history paths", () => {
+    // `/notes`, `/owner` and `/owner/history` are the THREE reviewed nested
+    // paths. Every other nested route — including any child BELOW them — stays
+    // structurally unreachable, because each parameter matches exactly one
+    // segment. Note that `/owner/history` IS reviewed, but any child beneath it
+    // (`/owner/history/:id`, `/owner/history/extra`) is not.
     const sources = rules.map((r) => r.source);
     for (const nested of [
       "/api/crm/v1/users/:userId/notes/:noteId",
       "/api/crm/v1/users/:userId/notes/extra",
       "/api/crm/v1/users/:userId/notes/:path*",
       "/api/crm/v1/users/:userId/owner/:employeeId",
-      "/api/crm/v1/users/:userId/owner/history",
       "/api/crm/v1/users/:userId/owner/extra",
       "/api/crm/v1/users/:userId/owner/:path*",
+      "/api/crm/v1/users/:userId/owner/history/:historyId",
+      "/api/crm/v1/users/:userId/owner/history/extra",
+      "/api/crm/v1/users/:userId/owner/history/:path*",
       "/api/crm/v1/owner-candidates/:cursor",
       "/api/crm/v1/owner-candidates/extra",
       "/api/crm/v1/users/:userId/audit",
@@ -205,9 +231,10 @@ describe("rewrites — no wildcard exposure", () => {
     ]) {
       expect(sources).not.toContain(nested);
     }
-    // The two reviewed nested paths ARE present.
+    // The three reviewed nested paths ARE present.
     expect(sources).toContain("/api/crm/v1/users/:userId/notes");
     expect(sources).toContain("/api/crm/v1/users/:userId/owner");
+    expect(sources).toContain("/api/crm/v1/users/:userId/owner/history");
   });
 
   it("proxies the users path exactly — no sub-paths and no near-misses", () => {

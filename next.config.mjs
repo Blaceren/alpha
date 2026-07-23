@@ -81,9 +81,19 @@ export const OWNER_CANDIDATES_PATH = "/api/crm/v1/owner-candidates";
  *
  * GET and PUT share this one definition — Next rewrites are method-agnostic. The
  * backend owner route implements exactly GET and PUT; POST/PATCH/DELETE reach it
- * and fail safely there.
+ * and fail safely there. The immutable owner HISTORY is a separate terminal path
+ * (below), never a child segment matched by this one.
  */
 export const USER_OWNER_PATH = "/api/crm/v1/users/:userId/owner";
+
+/**
+ * CRM Learner Owner History (OH-1). Same single-segment `:userId` rule as
+ * detail/notes/owner, plus an EXACT terminal `/owner/history`. There is no
+ * `:historyId` child and no catch-all, so `/api/crm/v1/users/123/owner/history/x`
+ * is NOT proxied and falls through to the CRM app. The backend history route
+ * implements exactly GET; other methods reach it and fail safely there.
+ */
+export const USER_OWNER_HISTORY_PATH = "/api/crm/v1/users/:userId/owner/history";
 
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
@@ -93,6 +103,7 @@ export const PROXIED_PATHS = [
   USER_NOTES_PATH,
   OWNER_CANDIDATES_PATH,
   USER_OWNER_PATH,
+  USER_OWNER_HISTORY_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

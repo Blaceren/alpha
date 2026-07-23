@@ -45,6 +45,7 @@ const OWNER_STATE_COOKIE = "ata_test_crm_owner_state";
 const OWNER_MUTATION_COOKIE = "ata_test_crm_owner_mutation";
 const CANDIDATES_STATE_COOKIE = "ata_test_crm_candidates_state";
 const OWNER_SESSION_COOKIE = "ata_test_crm_owner_session";
+const OWNER_HISTORY_STATE_COOKIE = "ata_test_crm_owner_history_state";
 const OWNER_CANDIDATES_PATH = "/api/crm/v1/owner-candidates";
 
 const VALID_SESSION = {
@@ -84,6 +85,8 @@ const readOwnerStateCookie = (header) => readCookie(header, OWNER_STATE_COOKIE, 
 const readOwnerMutationCookie = (header) => readCookie(header, OWNER_MUTATION_COOKIE, "success");
 const readCandidatesStateCookie = (header) => readCookie(header, CANDIDATES_STATE_COOKIE, "one_page");
 const readOwnerSessionCookie = (header) => readCookie(header, OWNER_SESSION_COOKIE, "assigner");
+const readOwnerHistoryStateCookie = (header) =>
+  readCookie(header, OWNER_HISTORY_STATE_COOKIE, "three");
 
 /* --------------------------------------------------------- owner sessions */
 
@@ -95,6 +98,11 @@ const OWNER_SESSIONS = {
   no_assign: ["view_user_notes"],
   unrelated: ["reveal_pii", "view_identity_full_email"],
   none: [],
+  // OH-1: `view_audit` alone reads Owner History but cannot assign. `assigner`
+  // above deliberately holds `assign_owner` WITHOUT `view_audit`, proving a role
+  // that may reassign the owner still cannot see the history log.
+  viewer: ["view_audit"],
+  viewer_and_assigner: ["view_audit", "assign_owner"],
 };
 
 /* --------------------------------------------------------- synthetic owner */
@@ -258,6 +266,107 @@ function handleOwnerWrite(req, res) {
       }
     }
   });
+}
+
+/* --------------------------------------------------- owner history (OH-1) */
+
+// Synthetic owner-history actor and the three transition rows, newest first.
+// Deterministic ids and timestamps — no randomness during tests — and no real
+// names or emails. `ownerVersion` is the resulting version after the transition.
+const OWNER_DELTA = { employeeId: "emp_delta", displayName: "Оператор Дельта" };
+const HIST_ASSIGNED = {
+  historyId: "hist_1",
+  transition: "assigned",
+  ownerVersion: 1,
+  createdAt: "2026-07-01T09:00:00.000Z",
+  actor: OWNER_DELTA,
+  previousOwner: null,
+  nextOwner: OWNER_ALPHA,
+};
+const HIST_REASSIGNED = {
+  historyId: "hist_2",
+  transition: "reassigned",
+  ownerVersion: 2,
+  createdAt: "2026-07-02T10:30:00.000Z",
+  actor: OWNER_DELTA,
+  previousOwner: OWNER_ALPHA,
+  nextOwner: OWNER_BETA,
+};
+const HIST_UNASSIGNED = {
+  historyId: "hist_3",
+  transition: "unassigned",
+  ownerVersion: 3,
+  createdAt: "2026-07-03T11:45:00.000Z",
+  actor: OWNER_DELTA,
+  previousOwner: OWNER_BETA,
+  nextOwner: null,
+};
+
+// GET /api/crm/v1/users/{segment}/owner/history — read-only, view_audit-gated.
+// Response selected by `ata_test_crm_owner_history_state`, cursor honoured for
+// the paged case. Every branch is no-store with a request id, mirroring the
+// backend envelope.
+function handleOwnerHistory(req, res, url) {
+  const state = readOwnerHistoryStateCookie(req.headers.cookie);
+  const cursor = url.searchParams.get("cursor");
+
+  switch (state) {
+    case "empty":
+      send(res, 200, { items: [], nextCursor: null });
+      return;
+    case "forbidden":
+      send(res, 403, {
+        code: "unauthorized",
+        messageKey: "crm.users.owner_history.forbidden",
+        requestId: "req_stub_hist_403",
+      });
+      return;
+    case "unauthenticated":
+      send(res, 401, {
+        code: "unauthorized",
+        messageKey: "crm.session.unauthenticated",
+        requestId: "req_stub_hist_401",
+      });
+      return;
+    case "not_found":
+      send(res, 404, {
+        code: "not_found",
+        messageKey: "crm.users.owner_history.not_found",
+        requestId: "req_stub_hist_404",
+      });
+      return;
+    case "server_error":
+      send(res, 500, {
+        code: "internal",
+        messageKey: "crm.users.owner_history.internal",
+        requestId: "req_stub_hist_500",
+      });
+      return;
+    case "malformed":
+      // A 200 whose item carries a forbidden internal field: the CRM must reject
+      // it as malformed rather than render a leaked id.
+      send(res, 200, {
+        items: [{ ...HIST_ASSIGNED, actorStaffId: "emp_leak" }],
+        nextCursor: null,
+      });
+      return;
+    case "paged":
+      // Newest-first, split across two pages by ownerVersion keyset. The second
+      // page is fetched only when the first cursor is presented.
+      if (cursor === "hist-2") {
+        send(res, 200, { items: [HIST_ASSIGNED], nextCursor: null });
+        return;
+      }
+      send(res, 200, { items: [HIST_UNASSIGNED, HIST_REASSIGNED], nextCursor: "hist-2" });
+      return;
+    case "three":
+    default:
+      send(res, 200, {
+        items: [HIST_UNASSIGNED, HIST_REASSIGNED, HIST_ASSIGNED],
+        nextCursor: null,
+      });
+      return;
+  }
 }
 
 /* --------------------------------------------------------- notes sessions */
@@ -824,15 +933,30 @@ const server = createServer((req, res) => {
   // `/notes/{noteId}` do not match and therefore 404 at the stub too.
   const notesMatch = new RegExp(`^${USERS_PATH}/([^/]+)/notes$`).exec(path);
 
-  // Exactly one segment, then a terminal `/owner`. `/owner/extra`,
-  // `/owner/history` and `/owner/{employeeId}` do not match and 404 at the stub.
+  // Exactly one segment, then a terminal `/owner`. `/owner/extra` and
+  // `/owner/{employeeId}` do not match and 404 at the stub. `/owner/history` is
+  // its own reviewed terminal path, matched separately below.
   const ownerMatch = new RegExp(`^${USERS_PATH}/([^/]+)/owner$`).exec(path);
+
+  // Exactly one segment, then a terminal `/owner/history`. A child beneath it
+  // (`/owner/history/{id}`) does not match and 404s at the stub too.
+  const ownerHistoryMatch = new RegExp(`^${USERS_PATH}/([^/]+)/owner/history$`).exec(path);
 
   // The flat owner-candidates directory has no child: `/owner-candidates/extra`
   // does not match and 404s at the stub too.
   if (path === OWNER_CANDIDATES_PATH) {
     if (req.method === "GET") {
       handleCandidates(req, res, url);
+      return;
+    }
+    send(res, 404, { error: "not_found" });
+    return;
+  }
+
+  if (ownerHistoryMatch) {
+    // Owner History (OH-1) is read-only: only GET exists. Everything else 404s.
+    if (req.method === "GET") {
+      handleOwnerHistory(req, res, url);
       return;
     }
     send(res, 404, { error: "not_found" });

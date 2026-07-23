@@ -40,6 +40,12 @@ import {
   type OwnerReadOutcome,
   type OwnerRequestOptions,
 } from "@/application/api/user-owner-client";
+import {
+  fetchUserOwnerHistory,
+  type FetchOwnerHistoryInput,
+  type FetchOwnerHistoryOptions,
+  type OwnerHistoryListOutcome,
+} from "@/application/api/user-owner-history-client";
 
 /**
  * The capabilities the production application boundary needs — and nothing
@@ -88,6 +94,18 @@ export interface CrmUsersReadCapability {
     expectedVersion: number,
     options?: OwnerRequestOptions,
   ): Promise<OwnerMutationOutcome>;
+  /**
+   * The immutable owner-transition history for one learner (OH-1). A READ, so
+   * it lives here beside the other owner reads. Only called when the session
+   * holds `view_audit`; the backend enforces the same and 403s otherwise. Never
+   * a foothold for the broad mock provider — history stays unavailable in api
+   * mode unless it is this real, server-backed read.
+   */
+  listUserOwnerHistory(
+    userId: string,
+    input?: FetchOwnerHistoryInput,
+    options?: FetchOwnerHistoryOptions,
+  ): Promise<OwnerHistoryListOutcome>;
 }
 
 /**
@@ -101,8 +119,8 @@ export class UnsupportedApiCapability extends Error {
     super(
       `CRM capability "${capability}" is not available in api mode. ` +
         "Only the Users v1 list, user detail, immutable user notes and the " +
-        "learner owner (current owner, candidates, assignment) are connected; " +
-        "every other CRM data API arrives in a later phase.",
+        "learner owner (current owner, candidates, assignment, history) are " +
+        "connected; every other CRM data API arrives in a later phase.",
     );
     this.name = "UnsupportedApiCapability";
   }
@@ -117,6 +135,7 @@ export const API_SUPPORTED_CAPABILITIES = [
   "getUserOwner",
   "listOwnerCandidates",
   "setUserOwner",
+  "listUserOwnerHistory",
 ] as const;
 export type ApiSupportedCapability = (typeof API_SUPPORTED_CAPABILITIES)[number];
 
@@ -144,6 +163,7 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
     private readonly ownerReadClient: typeof fetchUserOwner = fetchUserOwner,
     private readonly ownerCandidatesClient: typeof fetchOwnerCandidates = fetchOwnerCandidates,
     private readonly ownerWriteClient: typeof setUserOwner = setUserOwner,
+    private readonly ownerHistoryClient: typeof fetchUserOwnerHistory = fetchUserOwnerHistory,
   ) {}
 
   listUsers(input: FetchUsersInput, options?: FetchUsersOptions): Promise<UsersOutcome> {
@@ -196,6 +216,15 @@ export class ApiCrmDataProvider implements CrmUsersReadCapability {
     assertApiCapability("setUserOwner");
     return this.ownerWriteClient(userId, ownerEmployeeId, expectedVersion, options);
   }
+
+  listUserOwnerHistory(
+    userId: string,
+    input: FetchOwnerHistoryInput = {},
+    options?: FetchOwnerHistoryOptions,
+  ): Promise<OwnerHistoryListOutcome> {
+    assertApiCapability("listUserOwnerHistory");
+    return this.ownerHistoryClient(userId, input, options);
+  }
 }
 
 /**
@@ -215,6 +244,7 @@ export function createApiCrmDataProvider(
   ownerReadClient?: typeof fetchUserOwner,
   ownerCandidatesClient?: typeof fetchOwnerCandidates,
   ownerWriteClient?: typeof setUserOwner,
+  ownerHistoryClient?: typeof fetchUserOwnerHistory,
 ): ApiCrmDataProvider {
   return new ApiCrmDataProvider(
     listClient,
@@ -224,5 +254,6 @@ export function createApiCrmDataProvider(
     ownerReadClient,
     ownerCandidatesClient,
     ownerWriteClient,
+    ownerHistoryClient,
   );
 }
