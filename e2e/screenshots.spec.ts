@@ -1,13 +1,10 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import fs from "node:fs";
 import path from "node:path";
 
 /** Output dir chosen via SHOT_OUT (first-pass | final). Phase D1B.1. */
-const OUT = path.join(
-  process.cwd(),
-  "design-memory/screenshots/d1b-1-responsive-fix",
-  process.env.SHOT_OUT ?? "final",
-);
+const OUT = screenshotDir("d1b-1-responsive-fix", process.env.SHOT_OUT ?? "final");
 fs.mkdirSync(OUT, { recursive: true });
 
 const DESKTOP = { width: 1440, height: 900 };

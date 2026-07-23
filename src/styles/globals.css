@@ -40,3 +40,26 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Authenticated-shell logout control (api mode only; hidden for fixture viewer). */
+.logout-button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.logout-button:hover {
+  color: var(--text-primary);
+}
+
+.logout-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}

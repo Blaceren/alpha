@@ -1,4 +1,5 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 
 /**
  * D3-B.1 — mobile safe-area acceptance evidence.
@@ -8,7 +9,7 @@ import { test, type Page } from "@playwright/test";
  *
  *   npx playwright test e2e/report-acceptance-fix-screenshots.spec.ts
  *
- * It writes ONLY under design-memory/screenshots/d3-report/mobile-acceptance-fix/
+ * It writes ONLY under the gitignored test-results/screenshots/d3-report/mobile-acceptance-fix/
  * and never touches the 13 historical D3-B frames in .../final/ or the D3-A
  * concept frames.
  *
@@ -17,7 +18,7 @@ import { test, type Page } from "@playwright/test";
  * one shot — the claim and its evidence in the same image.
  */
 
-const OUT = "design-memory/screenshots/d3-report/mobile-acceptance-fix";
+const OUT = screenshotDir("d3-report/mobile-acceptance-fix");
 const REPORT = "/lessons/level.003?scenario=report";
 const SAVE_SETTLE = 900;
 

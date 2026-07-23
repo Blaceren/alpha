@@ -1,17 +1,18 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 
 /**
  * D3-C — report revision cycle artifact capture.
  *
  * Named *-screenshots.spec.ts, NOT *-smoke.spec.ts: per DD-257 this file writes
- * PNGs to design-memory/ and is therefore deliberately excluded from the standard
+ * PNGs to the gitignored test-results artifact directory and is therefore deliberately excluded from the standard
  * `npm run test:e2e` gate. Re-running a screenshot spec overwrites evidence, so
  * it is run by hand, staged:
  *
  *   npx playwright test e2e/report-revision-screenshots.spec.ts
  *   REVISION_SHOTS_STAGE=final npx playwright test e2e/report-revision-screenshots.spec.ts
  *
- * It writes ONLY under design-memory/screenshots/d3-revision/<stage>/ and never
+ * It writes ONLY under the gitignored test-results/screenshots/d3-revision/<stage>/ and never
  * touches d3-report/** or d3-revision/concepts/** (the historical evidence).
  *
  * `?scenario=report` is the development/test marker adapter (DD-272); the
@@ -20,7 +21,7 @@ import { test, type Page } from "@playwright/test";
  */
 
 const STAGE = process.env.REVISION_SHOTS_STAGE === "final" ? "final" : "first-pass";
-const OUT = `design-memory/screenshots/d3-revision/${STAGE}`;
+const OUT = screenshotDir("d3-revision", STAGE);
 
 const REPORT = "/lessons/level.003?scenario=report";
 const LIB = "/lessons?scenario=report";

@@ -1,4 +1,5 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import path from "node:path";
 
 /**
@@ -10,11 +11,11 @@ import path from "node:path";
  * first-pass captures exactly the five review images; final captures the full
  * fifteen. Every capture is viewport-clipped so PNG dimensions match the
  * filename exactly (Desktop Chrome deviceScaleFactor = 1). Output lives ONLY
- * under design-memory/screenshots/d4-risk-calculator/<pass>/.
+ * under the gitignored test-results/screenshots/d4-risk-calculator/<pass>/.
  */
 
 const PASS = process.env.RISK_SHOT_PASS === "first-pass" ? "first-pass" : "final";
-const OUT = path.resolve("design-memory/screenshots/d4-risk-calculator", PASS);
+const OUT = screenshotDir("d4-risk-calculator", PASS);
 const RISK = "/tools/tool.risk_calculator";
 
 async function ready(page: Page) {

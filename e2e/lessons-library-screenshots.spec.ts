@@ -1,4 +1,5 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -10,11 +11,7 @@ import path from "node:path";
  * re-running a past phase's screenshot spec would overwrite historical evidence —
  * which is exactly why the two layers are split.
  */
-const OUT = path.join(
-  process.cwd(),
-  "design-memory/screenshots/d2c-lessons-library",
-  process.env.SHOT_OUT ?? "final",
-);
+const OUT = screenshotDir("d2c-lessons-library", process.env.SHOT_OUT ?? "final");
 fs.mkdirSync(OUT, { recursive: true });
 
 const LIB = "/lessons";

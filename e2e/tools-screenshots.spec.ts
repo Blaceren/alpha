@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import path from "node:path";
 
 /**
@@ -11,7 +12,7 @@ import path from "node:path";
  */
 
 const PASS = process.env.TOOLS_SHOT_PASS === "first-pass" ? "first-pass" : "final";
-const OUT = path.resolve("design-memory/screenshots/d4-trading-journal", PASS);
+const OUT = screenshotDir("d4-trading-journal", PASS);
 const STORAGE_KEY = "ata.tools.trading-journal.v1";
 const JOURNAL = "/tools/tool.trading_journal";
 

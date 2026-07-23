@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BrandMark } from "@/components/shell/brand-mark";
 import { NotificationButton } from "@/components/shell/notification-button";
 import { UserAvatar } from "@/components/shell/user-avatar";
+import { SessionControls } from "@/components/shell/session-controls";
 import { DesktopRouteNavigation } from "@/components/navigation/desktop-route-navigation";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 
@@ -33,6 +34,7 @@ export function AppShell({
         <div className="actions">
           <NotificationButton />
           <UserAvatar name={userName} />
+          <SessionControls />
         </div>
       </header>
 
@@ -42,6 +44,7 @@ export function AppShell({
         <div className="actions" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <NotificationButton />
           <UserAvatar name={userName} />
+          <SessionControls />
         </div>
       </div>
 

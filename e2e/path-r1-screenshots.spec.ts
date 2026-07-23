@@ -1,13 +1,10 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import fs from "node:fs";
 import path from "node:path";
 
 /** Phase D2A-R1 — path correction evidence. SHOT_OUT = first-pass | final. */
-const OUT = path.join(
-  process.cwd(),
-  "design-memory/screenshots/d2a-r1-path-correction",
-  process.env.SHOT_OUT ?? "final",
-);
+const OUT = screenshotDir("d2a-r1-path-correction", process.env.SHOT_OUT ?? "final");
 fs.mkdirSync(OUT, { recursive: true });
 
 const DESKTOP = { width: 1440, height: 900 };

@@ -1,16 +1,17 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 
 /**
  * D3-D — approved report state artifact capture.
  *
  * Named *-screenshots.spec.ts, NOT *-smoke.spec.ts: per DD-257 this file writes
- * PNGs to design-memory/ and is deliberately excluded from `npm run test:e2e`.
+ * PNGs to the gitignored test-results artifact directory and is deliberately excluded from `npm run test:e2e`.
  * Run by hand, staged:
  *
  *   npx playwright test e2e/report-approved-screenshots.spec.ts
  *   APPROVED_SHOTS_STAGE=final npx playwright test e2e/report-approved-screenshots.spec.ts
  *
- * Writes ONLY under design-memory/screenshots/d3-approved/<stage>/ and never
+ * Writes ONLY under the gitignored test-results/screenshots/d3-approved/<stage>/ and never
  * touches other historical evidence.
  *
  * The approved state is seeded directly as the v3 record the verdict adapter
@@ -19,7 +20,7 @@ import { test, type Page } from "@playwright/test";
  */
 
 const STAGE = process.env.APPROVED_SHOTS_STAGE === "final" ? "final" : "first-pass";
-const OUT = `design-memory/screenshots/d3-approved/${STAGE}`;
+const OUT = screenshotDir("d3-approved", STAGE);
 
 const REPORT = "/lessons/level.003?scenario=report";
 const REPORT_CANONICAL = "/lessons/level.003";

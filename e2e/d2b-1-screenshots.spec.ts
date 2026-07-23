@@ -1,4 +1,5 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -10,7 +11,7 @@ import path from "node:path";
  * NOT named *-smoke.spec.ts on purpose: the standard `npm run test:e2e` gate
  * must not write PNGs into the working tree.
  */
-const OUT = path.join(process.cwd(), "design-memory/screenshots/d2b-1-acceptance-fix");
+const OUT = screenshotDir("d2b-1-acceptance-fix");
 fs.mkdirSync(OUT, { recursive: true });
 
 const DESKTOP = { width: 1440, height: 900 };

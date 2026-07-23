@@ -1,9 +1,10 @@
 import { test, type Page } from "@playwright/test";
+import { screenshotDir } from "./support/artifact-paths";
 import fs from "node:fs";
 import path from "node:path";
 
 /** Phase D1B.2 — short-viewport / bottom-nav evidence screenshots. */
-const OUT = path.join(process.cwd(), "design-memory/screenshots/d1b-2-short-viewport-fix", "final");
+const OUT = screenshotDir("d1b-2-short-viewport-fix", "final");
 fs.mkdirSync(OUT, { recursive: true });
 
 const ZOOM_200 = { width: 720, height: 450 }; // == 200% browser zoom of 1440x900
