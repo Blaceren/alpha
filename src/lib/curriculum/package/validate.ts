@@ -1,0 +1,514 @@
+/**
+ * Deterministic package validation.
+ *
+ * Runs entirely in memory, before any transaction begins. Every issue carries a
+ * package field PATH (never a database id, never learner data), so a rejected
+ * package can be fixed by editing the JSON.
+ *
+ * Layer order matters: schema -> stable codes -> graph -> content/assessment/
+ * report semantics -> provenance/readiness -> fingerprint. Stable codes are
+ * checked before anything touches the database, which is the invariant that
+ * makes `/current` and `/content` agree (CV-1 §2.24).
+ */
+import {
+  curriculumPackageSchema,
+  PRODUCTION_PROVENANCE,
+  type CurriculumPackage,
+  type PackageLevel,
+  type ProvenanceRecord,
+} from "@/lib/curriculum/package/schema";
+import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
+import {
+  describeStableCodeIssue,
+  isCanonicalCurriculumCode,
+  isCanonicalModuleCode,
+  parseLevelCode,
+} from "@/lib/curriculum/stable-code";
+
+export type PackageIssue = { code: string; path: string; message: string };
+
+export type PackageValidationResult =
+  | { ok: true; package: CurriculumPackage; fingerprint: string; warnings: PackageIssue[] }
+  | { ok: false; issues: PackageIssue[] };
+
+const PLACEHOLDER_MARKERS = [
+  "TODO",
+  "TBD",
+  "FIXME",
+  "PLACEHOLDER",
+  "LOREM IPSUM",
+  "УТОЧНЯЕТСЯ",
+  "ЗАГЛУШКА",
+];
+
+/** Level types that must carry renderable content to be publishable. */
+const CONTENT_BEARING_TYPES = new Set(["lesson", "scenario", "practice", "final_exam"]);
+/** Level types that are gated outside the learner UI and never self-completable. */
+const GATED_TYPES = new Set(["external_event", "financial_checkpoint"]);
+
+/**
+ * Completion methods that `completion.ts` OWNER_RULES maps to a learner-driven
+ * completion owner. A gated level must never carry one of these, or the gate
+ * could be satisfied from inside the product.
+ */
+const SELF_COMPLETABLE_METHODS = new Set([
+  "lesson",
+  "manual",
+  "assessment_pass",
+  "report_approval",
+  "mentor_review",
+]);
+
+function issue(list: PackageIssue[], code: string, path: string, message: string): void {
+  list.push({ code, path, message });
+}
+
+function containsPlaceholder(value: string): string | null {
+  const upper = value.toUpperCase();
+  return PLACEHOLDER_MARKERS.find((marker) => upper.includes(marker)) ?? null;
+}
+
+function looksLikeSecret(key: string): boolean {
+  return /(password|secret|token|apikey|api_key|credential|privatekey)/i.test(key);
+}
+
+/** Walk every string in the package looking for placeholders and secret-ish keys. */
+function scanStrings(
+  value: unknown,
+  path: string,
+  onString: (text: string, path: string) => void,
+  onKey: (key: string, path: string) => void,
+): void {
+  if (typeof value === "string") {
+    onString(value, path);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => scanStrings(item, `${path}[${index}]`, onString, onKey));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      onKey(key, `${path}.${key}`);
+      scanStrings(child, `${path}.${key}`, onString, onKey);
+    }
+  }
+}
+
+function requiresApproval(record: ProvenanceRecord): boolean {
+  return record.approvalRequired || !PRODUCTION_PROVENANCE.has(record.classification);
+}
+
+export function validateCurriculumPackage(input: unknown): PackageValidationResult {
+  const issues: PackageIssue[] = [];
+  const warnings: PackageIssue[] = [];
+
+  /* ---------------------------- 1. schema ---------------------------- */
+  const parsed = curriculumPackageSchema.safeParse(input);
+  if (!parsed.success) {
+    for (const problem of parsed.error.issues) {
+      issue(issues, "SCHEMA_INVALID", problem.path.join(".") || "<root>", problem.message);
+    }
+    return { ok: false, issues };
+  }
+  const pkg = parsed.data;
+
+  /* ------------------------- 2. stable codes ------------------------- */
+  if (!isCanonicalCurriculumCode(pkg.curriculumCode)) {
+    issue(issues, "CURRICULUM_CODE_INVALID", "curriculumCode", "curriculum code must be lowercase kebab");
+  }
+
+  const levelsByCode = new Map<string, { level: PackageLevel; path: string }>();
+  const seenModuleCodes = new Set<string>();
+  const seenModuleNumbers = new Set<number>();
+  const seenLevelNumbers = new Set<number>();
+  const seenContentCodes = new Set<string>();
+  const seenAssessmentCodes = new Set<string>();
+  const seenReportCodes = new Set<string>();
+
+  pkg.modules.forEach((moduleDefinition, moduleIndex) => {
+    const modulePath = `modules[${moduleIndex}]`;
+    if (!isCanonicalModuleCode(moduleDefinition.moduleCode)) {
+      issue(issues, "MODULE_CODE_INVALID", `${modulePath}.moduleCode`, "module code must be lowercase kebab/dot");
+    }
+    if (seenModuleCodes.has(moduleDefinition.moduleCode)) {
+      issue(issues, "MODULE_CODE_DUPLICATE", `${modulePath}.moduleCode`, "duplicate module code");
+    }
+    seenModuleCodes.add(moduleDefinition.moduleCode);
+    if (seenModuleNumbers.has(moduleDefinition.moduleNumber)) {
+      issue(issues, "MODULE_NUMBER_DUPLICATE", `${modulePath}.moduleNumber`, "duplicate module number");
+    }
+    seenModuleNumbers.add(moduleDefinition.moduleNumber);
+
+    moduleDefinition.levels.forEach((level, levelIndex) => {
+      const levelPath = `${modulePath}.levels[${levelIndex}]`;
+
+      const parsedCode = parseLevelCode(level.levelCode, level.levelNumber);
+      if (!parsedCode.ok) {
+        issue(
+          issues,
+          parsedCode.issue === "LEVEL_NUMBER_MISMATCH" ? "LEVEL_CODE_NUMBER_MISMATCH" : "LEVEL_CODE_INVALID",
+          `${levelPath}.levelCode`,
+          describeStableCodeIssue(parsedCode.issue),
+        );
+      }
+      if (levelsByCode.has(level.levelCode)) {
+        issue(issues, "LEVEL_CODE_DUPLICATE", `${levelPath}.levelCode`, "duplicate level code");
+      }
+      levelsByCode.set(level.levelCode, { level, path: levelPath });
+
+      if (seenLevelNumbers.has(level.levelNumber)) {
+        issue(issues, "LEVEL_NUMBER_DUPLICATE", `${levelPath}.levelNumber`, "duplicate level number");
+      }
+      seenLevelNumbers.add(level.levelNumber);
+
+      if (level.title === level.levelCode) {
+        issue(issues, "LEVEL_TITLE_IS_CODE", `${levelPath}.title`, "title must not be the stable code");
+      }
+
+      /* ------------------- 3. per-level semantics ------------------- */
+      const isContentBearing = CONTENT_BEARING_TYPES.has(level.type);
+      const isGated = GATED_TYPES.has(level.type);
+
+      if (isGated) {
+        if (!level.gate) {
+          issue(issues, "GATE_MISSING", `${levelPath}.gate`, `${level.type} level requires a gate configuration`);
+        } else {
+          const expected = level.type === "external_event" ? "external_event" : "financial_checkpoint";
+          if (level.gate.completionSource !== expected) {
+            issue(issues, "GATE_SOURCE_MISMATCH", `${levelPath}.gate.completionSource`, `must be ${expected}`);
+          }
+          // selfCompletable is z.literal(false); this is the belt-and-braces check.
+          if (level.gate.selfCompletable !== false) {
+            issue(issues, "GATE_SELF_COMPLETABLE", `${levelPath}.gate.selfCompletable`, "gated level must not be self-completable");
+          }
+          if (!level.gate.blockedExplanation.some((b) => b.locale === pkg.locale)) {
+            issue(issues, "GATE_EXPLANATION_MISSING", `${levelPath}.gate.blockedExplanation`, `missing package locale ${pkg.locale}`);
+          }
+        }
+        if (SELF_COMPLETABLE_METHODS.has(level.completionMethod)) {
+          issue(
+            issues,
+            "GATE_COMPLETION_METHOD_SELF_COMPLETABLE",
+            `${levelPath}.completionMethod`,
+            `${level.completionMethod} is a learner-driven completion owner and must not gate a ${level.type} level`,
+          );
+        }
+        if (level.content) {
+          issue(issues, "GATE_HAS_CONTENT", `${levelPath}.content`, "gated level must not carry lesson content");
+        }
+        if (level.assessment) {
+          issue(issues, "GATE_HAS_ASSESSMENT", `${levelPath}.assessment`, "gated level must not carry an assessment");
+        }
+      } else if (level.gate) {
+        issue(issues, "GATE_NOT_ALLOWED", `${levelPath}.gate`, `${level.type} level must not carry a gate`);
+      }
+
+      // A report level without a report definition is legal in a `draft`
+      // package — that is how "structure known, prompt not yet approved" is
+      // recorded honestly. `approved` packages are checked below.
+      if (level.type !== "report" && level.report) {
+        issue(issues, "REPORT_NOT_ALLOWED", `${levelPath}.report`, `${level.type} level must not carry a report`);
+      }
+
+      if (!isContentBearing && level.content) {
+        issue(issues, "CONTENT_TYPE_INCOMPATIBLE", `${levelPath}.content`, `${level.type} level must not carry lesson content`);
+      }
+      if (!isContentBearing && level.assessment) {
+        issue(issues, "ASSESSMENT_TYPE_INCOMPATIBLE", `${levelPath}.assessment`, `${level.type} level must not carry an assessment`);
+      }
+
+      /* -------------------------- content --------------------------- */
+      if (level.content) {
+        const contentPath = `${levelPath}.content`;
+        if (seenContentCodes.has(`${level.content.contentCode}@${level.content.versionNumber}`)) {
+          issue(issues, "CONTENT_CODE_DUPLICATE", `${contentPath}.contentCode`, "duplicate content code/version");
+        }
+        seenContentCodes.add(`${level.content.contentCode}@${level.content.versionNumber}`);
+        if (!level.content.localizations.some((l) => l.locale === pkg.locale)) {
+          issue(issues, "CONTENT_LOCALIZATION_MISSING", `${contentPath}.localizations`, `missing package locale ${pkg.locale}`);
+        }
+        const localeCodes = new Set<string>();
+        level.content.localizations.forEach((l, i) => {
+          if (localeCodes.has(l.locale)) {
+            issue(issues, "CONTENT_LOCALE_DUPLICATE", `${contentPath}.localizations[${i}].locale`, "duplicate locale");
+          }
+          localeCodes.add(l.locale);
+          const sectionCodes = new Set<string>();
+          l.body.sections.forEach((s, si) => {
+            if (sectionCodes.has(s.code)) {
+              issue(issues, "CONTENT_SECTION_DUPLICATE", `${contentPath}.localizations[${i}].body.sections[${si}].code`, "duplicate section code");
+            }
+            sectionCodes.add(s.code);
+          });
+        });
+      }
+
+      /* ------------------------- assessment ------------------------- */
+      if (level.assessment) {
+        const assessmentPath = `${levelPath}.assessment`;
+        if (seenAssessmentCodes.has(level.assessment.assessmentCode)) {
+          issue(issues, "ASSESSMENT_CODE_DUPLICATE", `${assessmentPath}.assessmentCode`, "duplicate assessment code");
+        }
+        seenAssessmentCodes.add(level.assessment.assessmentCode);
+        if (level.assessment.maxAttempts !== null && level.assessment.maxAttempts < 1) {
+          issue(issues, "ASSESSMENT_RETRY_IMPOSSIBLE", `${assessmentPath}.maxAttempts`, "maxAttempts must be >= 1 or null");
+        }
+
+        const questionCodes = new Set<string>();
+        const questionNumbers = new Set<number>();
+        level.assessment.questions.forEach((question, qi) => {
+          const questionPath = `${assessmentPath}.questions[${qi}]`;
+          if (questionCodes.has(question.questionCode)) {
+            issue(issues, "QUESTION_CODE_DUPLICATE", `${questionPath}.questionCode`, "duplicate question code");
+          }
+          questionCodes.add(question.questionCode);
+          if (questionNumbers.has(question.questionNumber)) {
+            issue(issues, "QUESTION_NUMBER_DUPLICATE", `${questionPath}.questionNumber`, "duplicate question number");
+          }
+          questionNumbers.add(question.questionNumber);
+
+          const optionCodes = new Set<string>();
+          question.optionCodes.forEach((optionCode, oi) => {
+            if (optionCodes.has(optionCode)) {
+              issue(issues, "OPTION_CODE_DUPLICATE", `${questionPath}.optionCodes[${oi}]`, "duplicate option code within question");
+            }
+            optionCodes.add(optionCode);
+          });
+
+          const isNumeric = question.type === "numeric";
+          if (isNumeric) {
+            if (question.correctNumericValue === null) {
+              issue(issues, "QUESTION_CORRECT_ANSWER_MISSING", `${questionPath}.correctNumericValue`, "numeric question requires a correct value");
+            }
+          } else {
+            if (question.optionCodes.length < 2) {
+              issue(issues, "QUESTION_OPTIONS_INSUFFICIENT", `${questionPath}.optionCodes`, "choice question requires at least two options");
+            }
+            if (question.correctOptionCodes.length === 0) {
+              issue(issues, "QUESTION_CORRECT_ANSWER_MISSING", `${questionPath}.correctOptionCodes`, "question requires a correct answer");
+            }
+            for (const correct of question.correctOptionCodes) {
+              if (!optionCodes.has(correct)) {
+                issue(issues, "QUESTION_CORRECT_OPTION_ABSENT", `${questionPath}.correctOptionCodes`, "correct option is not among the options");
+              }
+            }
+            if (question.type === "single_choice" && question.correctOptionCodes.length !== 1) {
+              issue(issues, "QUESTION_CORRECT_ANSWER_CARDINALITY", `${questionPath}.correctOptionCodes`, "single_choice requires exactly one correct option");
+            }
+          }
+
+          for (const [li, localization] of question.localizations.entries()) {
+            if (!isNumeric && localization.optionLabels.length !== question.optionCodes.length) {
+              issue(
+                issues,
+                "QUESTION_OPTION_LABEL_MISMATCH",
+                `${questionPath}.localizations[${li}].optionLabels`,
+                "option label count does not match option code count",
+              );
+            }
+          }
+          if (!question.localizations.some((l) => l.locale === pkg.locale)) {
+            issue(issues, "QUESTION_LOCALIZATION_MISSING", `${questionPath}.localizations`, `missing package locale ${pkg.locale}`);
+          }
+        });
+      }
+
+      /* --------------------------- report --------------------------- */
+      if (level.report) {
+        const reportPath = `${levelPath}.report`;
+        if (seenReportCodes.has(level.report.reportCode)) {
+          issue(issues, "REPORT_CODE_DUPLICATE", `${reportPath}.reportCode`, "duplicate report code");
+        }
+        seenReportCodes.add(level.report.reportCode);
+        const localized = level.report.localizations.find((l) => l.locale === pkg.locale);
+        if (!localized) {
+          issue(issues, "REPORT_LOCALIZATION_MISSING", `${reportPath}.localizations`, `missing package locale ${pkg.locale}`);
+        } else if (localized.instructions.trim().length === 0) {
+          issue(issues, "REPORT_PROMPT_MISSING", `${reportPath}.localizations`, "report requires a prompt");
+        }
+        const fieldKeys = new Set<string>();
+        const fieldOrders = new Set<number>();
+        level.report.fields.forEach((field, fi) => {
+          const fieldPath = `${reportPath}.fields[${fi}]`;
+          if (fieldKeys.has(field.stableKey)) {
+            issue(issues, "REPORT_FIELD_DUPLICATE", `${fieldPath}.stableKey`, "duplicate report field key");
+          }
+          fieldKeys.add(field.stableKey);
+          if (fieldOrders.has(field.sortOrder)) {
+            issue(issues, "REPORT_FIELD_ORDER_DUPLICATE", `${fieldPath}.sortOrder`, "duplicate report field sortOrder");
+          }
+          fieldOrders.add(field.sortOrder);
+          if (field.minLength !== null && field.maxLength !== null && field.minLength > field.maxLength) {
+            issue(issues, "REPORT_FIELD_LENGTH_INVALID", `${fieldPath}.minLength`, "minLength exceeds maxLength");
+          }
+          const needsChoices = field.type === "single_choice" || field.type === "multi_choice";
+          if (needsChoices && field.choiceCodes.length < 2) {
+            issue(issues, "REPORT_FIELD_CHOICES_MISSING", `${fieldPath}.choiceCodes`, "choice field requires at least two choices");
+          }
+        });
+        if (!level.report.attachmentsAllowed && level.report.maxAttachments !== 0) {
+          issue(issues, "REPORT_ATTACHMENT_POLICY_INVALID", `${reportPath}.maxAttachments`, "maxAttachments must be 0 when attachments are not allowed");
+        }
+      }
+    });
+  });
+
+  /* ------------------------- 4. graph checks ------------------------- */
+  for (const [code, { level, path }] of levelsByCode) {
+    for (const [pi, prerequisite] of level.prerequisiteLevelCodes.entries()) {
+      const prerequisitePath = `${path}.prerequisiteLevelCodes[${pi}]`;
+      if (!parseLevelCode(prerequisite).ok) {
+        issue(issues, "PREREQUISITE_CODE_INVALID", prerequisitePath, "prerequisite must be a canonical level code");
+        continue;
+      }
+      if (prerequisite === code) {
+        issue(issues, "PREREQUISITE_SELF", prerequisitePath, "level must not depend on itself");
+        continue;
+      }
+      const target = levelsByCode.get(prerequisite);
+      if (!target) {
+        issue(issues, "PREREQUISITE_MISSING", prerequisitePath, "prerequisite level is not in this package");
+        continue;
+      }
+      if (target.level.levelNumber >= level.levelNumber) {
+        issue(issues, "PREREQUISITE_NOT_EARLIER", prerequisitePath, "prerequisite must precede the level");
+      }
+    }
+    if (level.checkpointLevelCode !== null) {
+      const checkpointPath = `${path}.checkpointLevelCode`;
+      if (!parseLevelCode(level.checkpointLevelCode).ok) {
+        issue(issues, "CHECKPOINT_CODE_INVALID", checkpointPath, "checkpoint must be a canonical level code");
+      } else if (!levelsByCode.has(level.checkpointLevelCode)) {
+        issue(issues, "CHECKPOINT_MISSING", checkpointPath, "checkpoint level is not in this package");
+      }
+    }
+  }
+
+  // A module's checkpoint reference is a stable code too, and is easy to miss:
+  // it is the one code the level loop above never sees.
+  pkg.modules.forEach((moduleDefinition, moduleIndex) => {
+    if (moduleDefinition.checkpointLevelCode === null) return;
+    const checkpointPath = `modules[${moduleIndex}].checkpointLevelCode`;
+    if (!parseLevelCode(moduleDefinition.checkpointLevelCode).ok) {
+      issue(issues, "MODULE_CHECKPOINT_CODE_INVALID", checkpointPath, "module checkpoint must be a canonical level code");
+    } else if (!levelsByCode.has(moduleDefinition.checkpointLevelCode)) {
+      issue(issues, "MODULE_CHECKPOINT_MISSING", checkpointPath, "module checkpoint level is not in this package");
+    }
+  });
+
+  // Cycle detection over the prerequisite graph (independent of numbering).
+  const colour = new Map<string, 0 | 1 | 2>();
+  const walk = (code: string): boolean => {
+    const state = colour.get(code) ?? 0;
+    if (state === 1) return true;
+    if (state === 2) return false;
+    colour.set(code, 1);
+    const entry = levelsByCode.get(code);
+    for (const prerequisite of entry?.level.prerequisiteLevelCodes ?? []) {
+      if (levelsByCode.has(prerequisite) && walk(prerequisite)) return true;
+    }
+    colour.set(code, 2);
+    return false;
+  };
+  for (const code of levelsByCode.keys()) {
+    if (walk(code)) {
+      issue(issues, "PREREQUISITE_CYCLE", `levels.${code}`, "prerequisite cycle detected");
+      break;
+    }
+  }
+
+  /* --------------------- 5. hygiene / secrets scan -------------------- */
+  scanStrings(
+    pkg,
+    "package",
+    () => {},
+    (key, path) => {
+      if (looksLikeSecret(key)) {
+        issue(issues, "SECRET_LIKE_FIELD", path, "package must not contain secret-like fields");
+      }
+    },
+  );
+
+  /* -------------------- 6. approved-package gates -------------------- */
+  const approvalDebt: PackageIssue[] = [];
+  const collectProvenance = (record: ProvenanceRecord, path: string, label: string): void => {
+    if (record.classification === "MISSING" || record.classification === "CONFLICTING") {
+      approvalDebt.push({ code: `PROVENANCE_${record.classification}`, path, message: `${label} has ${record.classification} provenance` });
+    } else if (requiresApproval(record)) {
+      approvalDebt.push({ code: "PROVENANCE_APPROVAL_REQUIRED", path, message: `${label} requires operator approval` });
+    }
+  };
+
+  pkg.modules.forEach((moduleDefinition, mi) => {
+    moduleDefinition.levels.forEach((level, li) => {
+      const levelPath = `modules[${mi}].levels[${li}]`;
+      collectProvenance(level.provenance, `${levelPath}.provenance`, "level");
+      if (level.content) collectProvenance(level.content.provenance, `${levelPath}.content.provenance`, "content");
+      if (level.gate) collectProvenance(level.gate.provenance, `${levelPath}.gate.provenance`, "gate");
+      if (level.report) collectProvenance(level.report.provenance, `${levelPath}.report.provenance`, "report");
+      if (level.assessment) {
+        collectProvenance(level.assessment.provenance, `${levelPath}.assessment.provenance`, "assessment");
+        level.assessment.questions.forEach((question, qi) => {
+          collectProvenance(question.provenance, `${levelPath}.assessment.questions[${qi}].provenance`, "question");
+        });
+      }
+    });
+  });
+
+  // Pending approvals must reference real levels, and never survive approval.
+  pkg.pendingApprovals.forEach((pending, index) => {
+    const pendingPath = `pendingApprovals[${index}]`;
+    if (!levelsByCode.has(pending.levelCode)) {
+      issue(issues, "PENDING_APPROVAL_UNKNOWN_LEVEL", `${pendingPath}.levelCode`, "pending approval references a level not in this package");
+    }
+    approvalDebt.push({
+      code: `PENDING_${pending.classification}`,
+      path: `${pendingPath}.${pending.element}`,
+      message: pending.detail,
+    });
+  });
+
+  if (pkg.status === "approved") {
+    // An approved package must be production-clean: provenance, placeholders,
+    // and real content for every content-bearing level.
+    issues.push(...approvalDebt);
+
+    scanStrings(
+      pkg,
+      "package",
+      (value, path) => {
+        const marker = containsPlaceholder(value);
+        if (marker) {
+          issue(issues, "PLACEHOLDER_IN_APPROVED_PACKAGE", path, `approved package contains placeholder marker ${marker}`);
+        }
+      },
+      () => {},
+    );
+
+    for (const [, { level, path }] of levelsByCode) {
+      if (level.type === "report" && !level.report) {
+        issue(issues, "REPORT_REQUIRED_FOR_APPROVED", `${path}.report`, "report level in an approved package requires a report definition");
+      }
+      if (!CONTENT_BEARING_TYPES.has(level.type)) continue;
+      if (!level.content) {
+        issue(issues, "CONTENT_REQUIRED_FOR_APPROVED", `${path}.content`, "content-bearing level in an approved package requires content");
+        continue;
+      }
+      if (level.content.status !== "published") {
+        issue(issues, "CONTENT_NOT_PUBLISHED", `${path}.content.status`, "approved package requires published content");
+      }
+    }
+  } else {
+    warnings.push(...approvalDebt);
+  }
+
+  /* ------------------------- 7. fingerprint -------------------------- */
+  const fingerprint = calculateFingerprint(pkg);
+  if (fingerprint !== pkg.contentFingerprint) {
+    issue(issues, "FINGERPRINT_MISMATCH", "contentFingerprint", "declared fingerprint does not match calculated content");
+  }
+
+  if (issues.length > 0) return { ok: false, issues };
+  return { ok: true, package: pkg, fingerprint, warnings };
+}
