@@ -24,6 +24,13 @@ import {
 import { prisma } from "@/lib/prisma";
 import { resolveUserCurriculumLevelStates } from "@/lib/curriculum/level-state";
 import { resolveUserCurriculumContext } from "@/lib/curriculum/resolver";
+import {
+  isRequiredWhenActive,
+  parseRequiredWhen,
+  validateRequiredWhen,
+  type RequiredWhen,
+  type RequiredWhenFieldRef,
+} from "@/lib/curriculum/report-required-when";
 
 const MAX_INT = 2_147_483_647;
 const MAX_COMMAND_BYTES = 256 * 1024;
@@ -101,6 +108,12 @@ export type SafeReportPresentation = {
       required: boolean;
       sortOrder: number;
       validation: Prisma.JsonValue | null;
+      /**
+       * Bounded conditional requiredness (RC-1). Safe declarative rule only: a
+       * controller field code, the `equals` operator and a typed value. Never an
+       * executable expression, a database id, or the correct-answer of anything.
+       */
+      requiredWhen: { fieldCode: string; operator: "equals"; value: boolean | string | number | null } | null;
       choices: Array<{ code: string; label: string }>;
       label: string;
       helpText: string;
@@ -362,6 +375,7 @@ async function loadDefinitionGraph(tx: TransactionClient, scope: Scope, submissi
 
 type ParsedField = z.infer<typeof reportFieldDefinitionPayloadSchema> & {
   id: number;
+  requiredWhen: RequiredWhen | null;
   localizations: DefinitionGraph["assignment"]["fields"][number]["localizations"];
 };
 
@@ -374,7 +388,10 @@ function parseDefinitionGraph(graph: DefinitionGraph): ParsedField[] | null {
       stableKey: field.stableKey, type: field.type, required: field.required, sortOrder: field.sortOrder,
       validationRules: field.validationRules, choiceCodes: field.choiceCodes,
     });
-    if (!parsed.success || keys.has(field.stableKey) || orders.has(field.sortOrder)) return null;
+    // A persisted requiredWhen that does not parse is corrupt: fail closed rather
+    // than silently drop the requirement.
+    const requiredWhen = parseRequiredWhen(field.requiredWhen);
+    if (!parsed.success || !requiredWhen.ok || keys.has(field.stableKey) || orders.has(field.sortOrder)) return null;
     keys.add(field.stableKey); orders.add(field.sortOrder);
     const locales = new Set<string>();
     for (const localization of field.localizations) {
@@ -385,9 +402,26 @@ function parseDefinitionGraph(graph: DefinitionGraph): ParsedField[] | null {
       if (!checked.success || locales.has(localization.locale)) return null;
       locales.add(localization.locale);
     }
-    fields.push({ id: field.id, ...parsed.data, localizations: field.localizations });
+    fields.push({ id: field.id, ...parsed.data, requiredWhen: requiredWhen.rule, localizations: field.localizations });
   }
   if (fields.length === 0) return null;
+  // A stored condition that is inconsistent with the field set (missing / self /
+  // late / type-incompatible controller, or paired with static required) is
+  // corrupt: fail closed so no submission is ever validated against it.
+  const fieldRefs = new Map<string, RequiredWhenFieldRef>(
+    fields.map((field) => [field.stableKey, {
+      stableKey: field.stableKey,
+      type: field.type,
+      sortOrder: field.sortOrder,
+      required: field.required,
+      choiceCodes: Array.isArray(field.choiceCodes) ? (field.choiceCodes as string[]) : null,
+    }]),
+  );
+  for (const field of fields) {
+    if (field.requiredWhen && validateRequiredWhen(field.requiredWhen, fieldRefs.get(field.stableKey)!, fieldRefs)) {
+      return null;
+    }
+  }
   const assignmentLocales = new Set<string>();
   for (const localization of graph.assignment.localizations) {
     const checked = reportAssignmentLocalizationPayloadSchema.safeParse({
@@ -454,6 +488,19 @@ function normalizeFieldValues(fields: ParsedField[], value: unknown, complete: b
   for (const field of [...fields].sort((left, right) => left.sortOrder - right.sortOrder || left.stableKey.localeCompare(right.stableKey))) {
     if (!(field.stableKey in input)) {
       if (complete && field.required) fail("REPORT_DRAFT_INPUT_INVALID", "required report field is missing");
+      // Conditional requiredness is evaluated server-side against the submitted
+      // controller value already normalized earlier in this pass (the validator
+      // guarantees the controller precedes the dependent field). A frontend
+      // `isRequired` flag is never consulted. Missing controller -> inactive.
+      if (complete && !field.required && field.requiredWhen && isRequiredWhenActive(field.requiredWhen, normalized)) {
+        throw new ReportDomainError("REPORT_DRAFT_INPUT_INVALID", "required report field is missing", [
+          {
+            code: "REQUIRED_WHEN",
+            path: field.stableKey,
+            message: `field is required when ${field.requiredWhen.fieldCode} equals ${JSON.stringify(field.requiredWhen.value)}`,
+          },
+        ]);
+      }
       continue;
     }
     const raw = input[field.stableKey];
@@ -517,12 +564,14 @@ function mapPresentation(scope: Scope, graph: DefinitionGraph, locale: string): 
     if (!localization) return null;
     const labels = localization.choiceLabels && typeof localization.choiceLabels === "object" && !Array.isArray(localization.choiceLabels)
       ? localization.choiceLabels as Record<string, unknown> : {};
+    const parsedRequiredWhen = parseRequiredWhen(field.requiredWhen);
     return {
       stableKey: field.stableKey,
       type: field.type,
       required: field.required,
       sortOrder: field.sortOrder,
       validation: field.validationRules,
+      requiredWhen: parsedRequiredWhen.ok ? parsedRequiredWhen.rule : null,
       choices: (Array.isArray(field.choiceCodes) ? field.choiceCodes : []).map((code) => ({ code: String(code), label: String(labels[String(code)] ?? "") })),
       label: localization.label,
       helpText: localization.helpText,

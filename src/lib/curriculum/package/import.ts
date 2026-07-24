@@ -333,6 +333,15 @@ async function writePackage(
                   : undefined,
               choiceCodes:
                 field.choiceCodes.length > 0 ? (field.choiceCodes as unknown as Prisma.InputJsonValue) : undefined,
+              // Conditional requiredness rule (RC-1), already validated against the
+              // report's own fields before the transaction opened. Absent -> NULL.
+              requiredWhen: field.requiredWhen
+                ? ({
+                    fieldCode: field.requiredWhen.fieldCode,
+                    operator: field.requiredWhen.operator,
+                    value: field.requiredWhen.value,
+                  } as unknown as Prisma.InputJsonValue)
+                : undefined,
             },
           });
           counts.reportFields += 1;
@@ -396,6 +405,18 @@ export async function importCurriculumPackage(input: unknown, options: ImportOpt
     notes.push(
       "report assignment imported without LevelReportBinding: binding requires an approved reportRubricVersion",
     );
+  }
+  const conditionalFieldCount = pkg.modules.reduce(
+    (total, m) =>
+      total +
+      m.levels.reduce(
+        (sub, l) => sub + (l.report?.fields.filter((f) => (f.requiredWhen ?? null) !== null).length ?? 0),
+        0,
+      ),
+    0,
+  );
+  if (conditionalFieldCount > 0) {
+    notes.push(`conditional report fields (requiredWhen): ${conditionalFieldCount}`);
   }
 
   const existing = await options.db.curriculumVersion.findUnique({

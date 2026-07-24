@@ -12,6 +12,7 @@
  * learner DTO — the learner content route builds its own payload.
  */
 import { z } from "zod";
+import { requiredWhenSchema } from "@/lib/curriculum/report-required-when";
 
 export const PACKAGE_SCHEMA_VERSION = "ata.curriculum.package/1" as const;
 export const MIN_IMPORTER_VERSION = 1 as const;
@@ -182,6 +183,14 @@ const reportFieldSchema = z.strictObject({
   minLength: z.number().int().min(0).max(100_000).nullable(),
   maxLength: z.number().int().min(1).max(100_000).nullable(),
   choiceCodes: z.array(z.string().trim().min(1).max(64)).max(50),
+  /**
+   * Bounded conditional requiredness (RC-1). When present, the field is required
+   * during final submission only when the referenced controller field equals the
+   * given typed value. `required: true` combined with a condition is rejected by
+   * the validator. Cross-field checks (controller exists, precedes, type-compat)
+   * run in the package validator, which has the whole report in scope.
+   */
+  requiredWhen: requiredWhenSchema.nullable().optional(),
   localizations: z
     .array(
       z.strictObject({

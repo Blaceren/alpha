@@ -1,0 +1,18 @@
+-- RC-1 -- Conditional report-field requiredness (requiredWhen).
+--
+-- Purely additive. One new nullable JSON column on ReportFieldDefinition. No
+-- existing table is rebuilt, no existing row is modified, no enum is mutated and
+-- no data is backfilled, so this migration cannot alter accepted behaviour.
+-- Every existing report field receives requiredWhen equal to NULL (no condition),
+-- which preserves its current static required semantics exactly.
+--
+-- The column uses the same JSONB type name as the sibling validationRules and
+-- choiceCodes columns. Those siblings carry a json_valid CHECK only because they
+-- were declared inside their original CREATE TABLE. SQLite rejects a CHECK on
+-- ALTER TABLE ADD COLUMN and no existing ADD COLUMN migration in this repository
+-- uses one, so the additive column is added without a CHECK. The database layer
+-- therefore guarantees only that requiredWhen is nullable JSON text. The rule
+-- structure of fieldCode plus operator plus value is validated at the application
+-- layer (report-required-when.ts, the package validator before import, and the
+-- submission validator), and the importer only ever writes a pre-validated rule.
+ALTER TABLE "ReportFieldDefinition" ADD COLUMN "requiredWhen" JSONB;

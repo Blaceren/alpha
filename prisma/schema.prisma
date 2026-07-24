@@ -1318,6 +1318,7 @@ model ReportFieldDefinition {
   sortOrder                 Int
   validationRules           Json?
   choiceCodes               Json?
+  requiredWhen              Json?
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
   assignment                ReportAssignmentVersion   @relation(fields: [reportAssignmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)

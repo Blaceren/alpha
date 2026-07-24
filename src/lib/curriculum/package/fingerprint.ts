@@ -119,6 +119,11 @@ function projectReport(report: PackageReport | null): Json {
       minLength: f.minLength,
       maxLength: f.maxLength,
       choiceCodes: [...f.choiceCodes],
+      // Conditional requiredness is part of a field's semantic identity: changing
+      // the controller, operator or comparison value must move the fingerprint.
+      requiredWhen: f.requiredWhen
+        ? { fieldCode: f.requiredWhen.fieldCode, operator: f.requiredWhen.operator, value: f.requiredWhen.value }
+        : null,
       localizations: byKey(f.localizations, (l) => l.locale).map((l) => ({
         locale: l.locale,
         label: l.label,

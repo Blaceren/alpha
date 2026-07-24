@@ -24,6 +24,10 @@ import {
   isCanonicalModuleCode,
   parseLevelCode,
 } from "@/lib/curriculum/stable-code";
+import {
+  validateRequiredWhen,
+  type RequiredWhenFieldRef,
+} from "@/lib/curriculum/report-required-when";
 
 export type PackageIssue = { code: string; path: string; message: string };
 
@@ -329,6 +333,17 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         }
         const fieldKeys = new Set<string>();
         const fieldOrders = new Set<number>();
+        // Built for requiredWhen controller resolution (same report definition only).
+        const reportFieldsByCode = new Map<string, RequiredWhenFieldRef>();
+        level.report.fields.forEach((field) => {
+          reportFieldsByCode.set(field.stableKey, {
+            stableKey: field.stableKey,
+            type: field.type,
+            sortOrder: field.sortOrder,
+            required: field.required,
+            choiceCodes: field.choiceCodes.length > 0 ? field.choiceCodes : null,
+          });
+        });
         level.report.fields.forEach((field, fi) => {
           const fieldPath = `${reportPath}.fields[${fi}]`;
           if (fieldKeys.has(field.stableKey)) {
@@ -345,6 +360,26 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
           const needsChoices = field.type === "single_choice" || field.type === "multi_choice";
           if (needsChoices && field.choiceCodes.length < 2) {
             issue(issues, "REPORT_FIELD_CHOICES_MISSING", `${fieldPath}.choiceCodes`, "choice field requires at least two choices");
+          }
+          // Conditional requiredness (RC-1): controller must be an earlier field of
+          // the same report, the comparison must be type-compatible, and a field
+          // must not be both statically required and conditionally required.
+          const requiredWhen = field.requiredWhen ?? null;
+          if (requiredWhen) {
+            const problem = validateRequiredWhen(
+              requiredWhen,
+              {
+                stableKey: field.stableKey,
+                type: field.type,
+                sortOrder: field.sortOrder,
+                required: field.required,
+                choiceCodes: field.choiceCodes.length > 0 ? field.choiceCodes : null,
+              },
+              reportFieldsByCode,
+            );
+            if (problem) {
+              issue(issues, `REPORT_FIELD_${problem.code}`, `${fieldPath}.requiredWhen`, problem.message);
+            }
           }
         });
         if (!level.report.attachmentsAllowed && level.report.maxAttachments !== 0) {
