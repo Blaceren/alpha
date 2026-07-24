@@ -329,7 +329,12 @@ async function writePackage(
               sortOrder: field.sortOrder,
               validationRules:
                 field.minLength !== null || field.maxLength !== null
-                  ? ({ minLength: field.minLength, maxLength: field.maxLength } as unknown as Prisma.InputJsonValue)
+                  ? // The `version: 1` marker is required by the report read schema
+                    // (report-schemas.ts textRules); without it an imported text
+                    // field is rejected by parseDefinitionGraph and the report
+                    // reads corrupt. Package min/max drive the fingerprint, so this
+                    // storage detail does not change package identity.
+                    ({ version: 1, minLength: field.minLength, maxLength: field.maxLength } as unknown as Prisma.InputJsonValue)
                   : undefined,
               choiceCodes:
                 field.choiceCodes.length > 0 ? (field.choiceCodes as unknown as Prisma.InputJsonValue) : undefined,

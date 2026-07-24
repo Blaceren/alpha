@@ -62,6 +62,7 @@
     "test:regression:curriculum-report-submission": "tsx scripts/regression/curriculumReportSubmissionRegression.ts",
     "test:regression:curriculum-report-review": "tsx scripts/regression/curriculumReportReviewRegression.ts",
     "test:regression:curriculum-report-required-when": "tsx scripts/regression/curriculumReportRequiredWhenRegression.ts",
+    "test:regression:curriculum-first-slice-r2": "tsx scripts/regression/curriculumFirstSliceR2Regression.ts",
     "test:regression:curriculum-report-approval": "tsx scripts/regression/curriculumReportApprovalRegression.ts",
     "test:regression:curriculum-report-attachments": "tsx scripts/regression/curriculumReportAttachmentRegression.ts",
     "test:regression:curriculum-content-read-progress": "tsx scripts/regression/curriculumContentReadProgressRegression.ts",
