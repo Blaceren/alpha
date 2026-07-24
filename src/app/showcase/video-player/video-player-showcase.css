@@ -151,6 +151,164 @@
   border-color: #346fdc;
 }
 
+.vps__local-video {
+  grid-column: 1 / -1;
+  width: min(1080px, 100%);
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: minmax(250px, 1fr) minmax(360px, 1.35fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin: 0 auto 14px;
+  padding: 12px 14px 12px 18px;
+  background: rgba(11, 22, 38, 0.72);
+  border: 1px solid rgba(150, 175, 210, 0.14);
+  border-radius: 10px;
+}
+
+.vps__local-video-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.vps__local-video-copy > span {
+  color: #6f9ad8;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vps__local-video-copy strong {
+  overflow: hidden;
+  color: #dce6f4;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vps__local-video-copy p,
+.vps__file-error {
+  margin: 0;
+  color: #8090aa;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.vps__dropzone {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  color: #91a1b8;
+  background: rgba(6, 14, 26, 0.68);
+  border: 1px dashed rgba(131, 160, 202, 0.28);
+  border-radius: 8px;
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.vps__dropzone[data-drag-active="true"] {
+  color: #e9f2ff;
+  background: rgba(29, 79, 174, 0.2);
+  border-color: #4f83e0;
+}
+
+.vps__dropzone > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #6f9ad8;
+  stroke-width: 1.6;
+}
+
+.vps__dropzone > span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vps__dropzone button,
+.vps__reset-source {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  color: #eef5ff;
+  font: 650 0.72rem/1 var(--font-ui);
+  background: #1d4fae;
+  border: 1px solid #346fdc;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.vps__dropzone button:hover {
+  background: #245ec8;
+  border-color: #4f83e0;
+}
+
+.vps__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.vps__local-video-actions {
+  min-width: 90px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.vps__file-error {
+  max-width: 180px;
+  color: #ff9298;
+  text-align: right;
+}
+
+.vps__reset-source {
+  color: #acb9cb;
+  background: transparent;
+  border-color: rgba(150, 175, 210, 0.22);
+}
+
+.vps__reset-source:hover {
+  color: #eef5ff;
+  border-color: rgba(150, 175, 210, 0.4);
+}
+
+.vps__reset-source svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.7;
+}
+
+.vps__dropzone button:focus-visible,
+.vps__reset-source:focus-visible,
+.vps__file-input:focus-visible + svg {
+  outline: 2px solid #76a4f8;
+  outline-offset: 2px;
+}
+
 .vps__preview {
   grid-column: 1 / -1;
   width: min(1080px, 100%);
@@ -196,8 +354,13 @@
   }
 
   .vps__preview,
+  .vps__local-video,
   .vps__footer {
     width: min(900px, 100%);
+  }
+
+  .vps__local-video {
+    grid-template-columns: minmax(220px, 0.9fr) minmax(340px, 1.3fr) auto;
   }
 }
 
@@ -213,6 +376,15 @@
 
   .vps__footer > div:nth-child(3) {
     display: none;
+  }
+
+  .vps__local-video {
+    grid-template-columns: 1fr auto;
+    gap: 10px 14px;
+  }
+
+  .vps__dropzone {
+    grid-column: 1 / -1;
   }
 }
 
@@ -249,6 +421,35 @@
   .vps__toolbar {
     margin-right: -16px;
     padding-right: 16px;
+  }
+
+  .vps__local-video {
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  .vps__local-video-copy p {
+    max-width: 250px;
+  }
+
+  .vps__dropzone {
+    min-height: 74px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 10px;
+  }
+
+  .vps__dropzone > span {
+    flex: 1 1 160px;
+  }
+
+  .vps__dropzone button {
+    width: 100%;
+  }
+
+  .vps__file-error {
+    max-width: 120px;
   }
 
   .vps__footer {
