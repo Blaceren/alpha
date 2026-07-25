@@ -139,8 +139,11 @@ async function main() {
     // 16 option codes across 4 questions
     const questions = await prisma.questionDefinition.findMany({ orderBy: { questionNumber: "asc" } });
     assert.equal(questions.reduce((n, q) => n + (Array.isArray(q.options) ? (q.options as unknown[]).length : 0), 0), 16);
-    // Correct answers live only on QuestionDefinition.correctAnswer
-    assert.deepEqual(questions.map((q) => (q.correctAnswer as AnyRecord).optionCodes), [["c"], ["b"], ["d"], ["c"]]);
+    // Correct answers live only on QuestionDefinition.correctAnswer, in the
+    // canonical single_choice shape `{ code }` the runtime grader reads (AC-1).
+    assert.deepEqual(questions.map((q) => (q.correctAnswer as AnyRecord).code), ["c", "b", "d", "c"]);
+    // canonical options: ordered objects carrying only a stable code
+    assert.deepEqual(questions[0].options, [{ code: "a" }, { code: "b" }, { code: "c" }, { code: "d" }]);
     // Five requiredWhen rules, each referencing its own trade's plan-followed, value:false
     const conditional = await prisma.reportFieldDefinition.findMany({ where: { stableKey: { endsWith: "deviation-note" } }, orderBy: { sortOrder: "asc" } });
     assert.equal(conditional.length, 5);
@@ -252,7 +255,10 @@ async function main() {
   });
   await check("C8 answers accessible only through QuestionDefinition (server side)", async () => {
     const q = await prisma.questionDefinition.findFirstOrThrow({ where: { stableKey: "ata-v2.l002.q1" } });
-    assert.deepEqual((q.correctAnswer as AnyRecord).optionCodes, ["c"]);
+    assert.deepEqual(q.correctAnswer, { code: "c" });
+    // localized labels are keyed by option code, so no positional answer inference
+    const localization = await prisma.questionLocalization.findFirstOrThrow({ where: { questionId: q.id } });
+    assert.deepEqual(Object.keys(localization.optionLabels as AnyRecord).sort(), ["a", "b", "c", "d"]);
   });
 
   /* ============================ D. requiredWhen END-TO-END ============================ */

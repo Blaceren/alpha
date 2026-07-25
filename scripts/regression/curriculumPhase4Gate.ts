@@ -22,7 +22,7 @@ const suites = [
   ["3B.6 XP read HTTP", "test:regression:curriculum-xp-api", 62],
   ["4B.1 content and assessment schema", "test:regression:curriculum-content-schema", 71],
   ["4B.2 content lifecycle", "test:regression:curriculum-content-lifecycle", 48],
-  ["4B.3 assessment lifecycle", "test:regression:curriculum-assessment-lifecycle", 48],
+  ["4B.3 assessment lifecycle", "test:regression:curriculum-assessment-lifecycle", 49],
   ["4B.4.1 lesson progress schema", "test:regression:curriculum-lesson-progress-schema", 23],
   ["4B.4 pinned content and progress", "test:regression:curriculum-content-read-progress", 18],
   ["4B.5 assessment runtime", "test:regression:curriculum-assessment-runtime", 35],

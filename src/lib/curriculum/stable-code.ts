@@ -40,6 +40,44 @@ export const MODULE_CODE_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 /** Curriculum codes, e.g. the `DEFAULT_CURRICULUM_CODE` "ata-v2". */
 export const CURRICULUM_CODE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Assessment question keys (`QuestionDefinition.stableKey`).
+ *
+ * AC-1: this is a *distinct* identifier class from the level stable code and is
+ * deliberately NOT `STABLE_CODE_PATTERN` — a question key carries no level
+ * number and is never a URL path segment (it appears only inside JSON bodies as
+ * `questionKey`). Before AC-1 the assessment publication validator reused a
+ * level-flavoured `/^[a-z0-9][a-z0-9-]{0,63}$/`, which rejected every editorial
+ * question code the package grammar produces (`ata-v2.l002.q1` — dots), so the
+ * approved assessment could never publish. The grammar below is the package
+ * `questionCode` grammar, which is what the importer actually persists.
+ *
+ * Properties (all required by the AC-1 identifier contract):
+ *  - lowercase-only, explicit `.`/`_`/`-` separators, alphanumeric segments;
+ *  - no leading/trailing separator and no repeated separator, so `..` — and
+ *    therefore any path-traversal or URL semantics — is unrepresentable;
+ *  - no whitespace, no case folding and no trimming, so two distinct stored keys
+ *    can never collide under normalisation;
+ *  - bounded at 64 characters to match the `QuestionDefinition.stableKey`
+ *    CHECK constraint (`length(trim(stableKey)) BETWEEN 1 AND 64`). The package
+ *    schema allows 120, so this is the binding limit and is enforced at import.
+ */
+export const ASSESSMENT_QUESTION_KEY_PATTERN = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
+
+/** Matches the DB CHECK on `QuestionDefinition.stableKey`. */
+export const MAX_ASSESSMENT_QUESTION_KEY_LENGTH = 64;
+
+/**
+ * Exact canonical check for an assessment question key. No trimming, no case
+ * folding — a key that only survives normalisation is rejected.
+ */
+export function isCanonicalAssessmentQuestionKey(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (value.length === 0 || value.length > MAX_ASSESSMENT_QUESTION_KEY_LENGTH) return false;
+  if (value !== value.trim()) return false;
+  return ASSESSMENT_QUESTION_KEY_PATTERN.test(value);
+}
+
 export type StableCodeIssue =
   | "NOT_A_STRING"
   | "EMPTY"

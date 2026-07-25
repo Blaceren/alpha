@@ -252,10 +252,33 @@ async function main() {
 
     const badPass = await fillChoiceDraft(levels[1].id);
     await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: badPass.id, patch: { passPercent: 70 } });
-    await check("26. publication collects safe pass-percent issues and audits rejection", async () => {
-      const error = await expectError(() => assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: badPass.id }), "ASSESSMENT_PUBLICATION_INVALID");
-      assert(error.issues.some((item) => item.code === "ASSESSMENT_PASS_PERCENT_INVALID"));
-      assert(await prisma.auditLog.findFirst({ where: { action: "ASSESSMENT_PUBLICATION_REJECTED", entityId: String(badPass.id) } }));
+    /*
+     * AC-1: passPercent is now a bounded integer contract (1..100) instead of the
+     * single value 80, so 70 is legitimately publishable and can no longer stand
+     * in for "invalid". Out-of-range values are unreachable through both the
+     * authoring command schema (int 1..100) and the DB CHECK, so the publication
+     * validator's pass-percent branch is pure defence in depth and is covered
+     * directly by curriculumAssessmentContractRegression (cases 3–5). The
+     * publication-rejection + audit path is exercised here with a question count
+     * outside the approved lesson bounds instead.
+     */
+    await check("26. publication collects safe question-count issues and audits rejection", async () => {
+      const tooFew = await createDraft(levels[1].id);
+      await addQuestion(tooFew.id, 1);
+      await addQuestion(tooFew.id, 2);
+      await addQuestion(tooFew.id, 3);
+      const error = await expectError(() => assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: tooFew.id }), "ASSESSMENT_PUBLICATION_INVALID");
+      assert(error.issues.some((item) => item.code === "ASSESSMENT_LESSON_QUESTION_COUNT"));
+      assert(await prisma.auditLog.findFirst({ where: { action: "ASSESSMENT_PUBLICATION_REJECTED", entityId: String(tooFew.id) } }));
+      assert.equal((await prisma.assessmentVersion.findUniqueOrThrow({ where: { id: tooFew.id } })).status, "draft");
+    });
+    await check("26b. bounded non-standard pass percent (70) is publishable", async () => {
+      const bounded = await fillChoiceDraft(levels[1].id);
+      await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: bounded.id, patch: { passPercent: 70 } });
+      const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: bounded.id });
+      assert.equal(result.published.status, "published");
+      assert.equal(result.published.passPercent, 70);
+      await prisma.assessmentVersion.update({ where: { id: bounded.id }, data: { status: "archived", archivedAt: new Date() } });
     });
 
     const noCommon = await createDraft(levels[2].id);
@@ -433,7 +456,7 @@ async function main() {
     cleanupDb();
   }
 
-  assert.equal(passed + failed, 48, "assessment lifecycle scenario count drifted");
+  assert.equal(passed + failed, 49, "assessment lifecycle scenario count drifted");
   if (failed > 0) throw new Error(`${failed} assessment lifecycle scenario(s) failed`);
   console.log(`\ncurriculum assessment lifecycle regression: ${passed} passed, ${failed} failed`);
   console.log("logical groups: gate/admin 7; version lifecycle 4; answer contracts 8; question/localization CRUD 6; publication validation 7; publish/binding/replacement 10; isolation 1; audit atomicity 5");

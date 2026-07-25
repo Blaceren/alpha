@@ -8,10 +8,37 @@ import type {
 import type { z } from "zod";
 import { AssessmentDomainError } from "@/lib/curriculum/assessment-errors";
 import type { AssessmentValidationIssue } from "@/lib/curriculum/assessment-errors";
+import { isCanonicalAssessmentQuestionKey } from "@/lib/curriculum/stable-code";
+
+/**
+ * AC-1 — the ONE bounded assessment publication policy.
+ *
+ * `passPercent` is a general bounded integer, not a fixed product template. The
+ * bounds are not invented here: `AssessmentVersion.passPercent` has carried
+ * `CHECK ("passPercent" BETWEEN 1 AND 100)` since the content/assessment
+ * foundation migration, and both the authoring command schema
+ * (`assessment-schemas.ts`) and the package schema already accept
+ * `int().min(1).max(100)`. Only this validator narrowed publication to the
+ * single value 80 — the Phase 4B.3 *product standard* (V2_PRODUCT_DECISIONS §20,
+ * "продуктовый стандарт 80") hardcoded as an equality. The operator-approved
+ * D1–D8 first-slice decision requires 100, so the standard is expressed here as
+ * the model's real contract instead of one permitted value.
+ */
+export const MIN_PASS_PERCENT = 1;
+export const MAX_PASS_PERCENT = 100;
+
+/**
+ * Lesson assessments: bounded question count. Phase 4B.3 approved 5–7; the later
+ * operator-approved D1–D8 decision approves exactly 4 for the first slice. The
+ * union 4..7 is the narrowest bound satisfying both — it admits the approved 4
+ * and keeps every previously valid 5/6/7 assessment valid, while still rejecting
+ * zero and any unbounded count. `final_exam` (exactly 30) is unchanged.
+ */
+export const MIN_LESSON_QUESTIONS = 4;
+export const MAX_LESSON_QUESTIONS = 7;
 
 const OPTION_CODE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const DECIMAL = /^-?\d{1,12}(\.\d{1,6})?$/;
-const STABLE_KEY = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 const MAX_JSON_BYTES = 16 * 1024;
 const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
@@ -237,8 +264,12 @@ export function validateAssessmentPublication(snapshot: AssessmentPublicationSna
   const issues: AssessmentValidationIssue[] = [];
   const questions = snapshot.questions;
   const activeQuestions = questions.filter((question) => question.status === "active");
-  if (snapshot.passPercent !== 80) {
-    issues.push(issue("ASSESSMENT_PASS_PERCENT_INVALID", "assessment", `assessment:${snapshot.id}`, "published assessments require passPercent 80"));
+  if (
+    !Number.isInteger(snapshot.passPercent) ||
+    snapshot.passPercent < MIN_PASS_PERCENT ||
+    snapshot.passPercent > MAX_PASS_PERCENT
+  ) {
+    issues.push(issue("ASSESSMENT_PASS_PERCENT_INVALID", "assessment", `assessment:${snapshot.id}`, `passPercent must be an integer between ${MIN_PASS_PERCENT} and ${MAX_PASS_PERCENT}`));
   }
   if (snapshot.maxAttempts !== null && snapshot.maxAttempts <= 0) {
     issues.push(issue("ASSESSMENT_MAX_ATTEMPTS_INVALID", "assessment", `assessment:${snapshot.id}`, "maxAttempts must be positive or null"));
@@ -246,8 +277,11 @@ export function validateAssessmentPublication(snapshot: AssessmentPublicationSna
   if (activeQuestions.length === 0) {
     issues.push(issue("ASSESSMENT_QUESTION_REQUIRED", "assessment", `assessment:${snapshot.id}`, "at least one question is required"));
   }
-  if (snapshot.levelDefinition.type === "lesson" && (activeQuestions.length < 5 || activeQuestions.length > 7)) {
-    issues.push(issue("ASSESSMENT_LESSON_QUESTION_COUNT", "assessment", `assessment:${snapshot.id}`, "lesson assessments require 5 to 7 questions"));
+  if (
+    snapshot.levelDefinition.type === "lesson" &&
+    (activeQuestions.length < MIN_LESSON_QUESTIONS || activeQuestions.length > MAX_LESSON_QUESTIONS)
+  ) {
+    issues.push(issue("ASSESSMENT_LESSON_QUESTION_COUNT", "assessment", `assessment:${snapshot.id}`, `lesson assessments require ${MIN_LESSON_QUESTIONS} to ${MAX_LESSON_QUESTIONS} questions`));
   } else if (snapshot.levelDefinition.type === "final_exam") {
     if (activeQuestions.length !== 30) {
       issues.push(issue("ASSESSMENT_FINAL_EXAM_QUESTION_COUNT", "assessment", `assessment:${snapshot.id}`, "final exam requires exactly 30 questions"));
@@ -270,7 +304,7 @@ export function validateAssessmentPublication(snapshot: AssessmentPublicationSna
     if (!Number.isInteger(question.questionNumber) || question.questionNumber <= 0) {
       issues.push(issue("ASSESSMENT_QUESTION_ORDER_INVALID", "question", reference, "questionNumber must be a positive integer"));
     }
-    if (!STABLE_KEY.test(question.stableKey)) {
+    if (!isCanonicalAssessmentQuestionKey(question.stableKey)) {
       issues.push(issue("ASSESSMENT_QUESTION_KEY_INVALID", "question", reference, "stableKey is invalid"));
     }
     if (numbers.has(question.questionNumber)) issues.push(issue("ASSESSMENT_QUESTION_ORDER_DUPLICATE", "question", reference, "questionNumber must be unique"));

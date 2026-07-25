@@ -23,6 +23,11 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { validateCurriculumPackage, type PackageIssue } from "@/lib/curriculum/package/validate";
 import type { CurriculumPackage, PackageQuestion } from "@/lib/curriculum/package/schema";
+import { canonicalizeQuestion, localizationIsComplete } from "@/lib/curriculum/assessment-validation";
+import {
+  isCanonicalAssessmentQuestionKey,
+  MAX_ASSESSMENT_QUESTION_KEY_LENGTH,
+} from "@/lib/curriculum/stable-code";
 
 export const IMPORTER_VERSION = 1 as const;
 
@@ -66,7 +71,8 @@ export type ImportErrorCode =
   | "IMPORTER_TOO_OLD"
   | "VERSION_IMMUTABLE"
   | "PACKAGE_DRIFT"
-  | "VERSION_NOT_PACKAGE_MANAGED";
+  | "VERSION_NOT_PACKAGE_MANAGED"
+  | "ASSESSMENT_NOT_CANONICAL";
 
 function marker(pkg: CurriculumPackage, fingerprint: string): string {
   return `${MARKER}:${pkg.packageCode}@${pkg.packageRevision}:${fingerprint}`;
@@ -97,15 +103,121 @@ function emptyCounts(): ImportSummary["counts"] {
   };
 }
 
+/* ------------------- canonical assessment representation ------------------- */
 /**
- * Correct answers are stored as `QuestionDefinition.correctAnswer` (Json), in the
- * shape the assessment runtime already expects: option codes for choice
- * questions, a numeric value for numeric ones.
+ * AC-1 — the importer persists exactly the ONE canonical assessment shape that
+ * `canonicalizeQuestion` / `localizationIsComplete` / the learner runtime read:
+ *
+ *   QuestionDefinition.options            = [{ code }, …]   (explicit order)
+ *   QuestionDefinition.correctAnswer      = { code } | { codes } | { value }
+ *   QuestionLocalization.optionLabels     = { [optionCode]: label }
+ *
+ * Before AC-1 it wrote `options: string[]`, `optionLabels: string[]` (positional)
+ * and `correctAnswer: { kind, optionCodes }`. None of those three shapes is
+ * readable by the runtime, so every published package assessment failed closed
+ * with `ASSESSMENT_STATE_CORRUPT`. The old `{ kind: … }` envelope was written
+ * only here and read by nothing, so there is no legacy consumer to keep.
+ *
+ * The package's positional `optionLabels` are *not* ambiguous: the package
+ * validator already rejects any localization whose `optionLabels.length` differs
+ * from `optionCodes.length` (`QUESTION_OPTION_LABELS_MISMATCH`), and
+ * `optionCodes` is an explicitly ordered list of unique stable codes. The
+ * label↔code mapping is therefore total, injective and deterministic:
+ * `optionLabels[i] ↦ optionCodes[i]`. Nothing is guessed or repaired.
+ */
+function canonicalOptionsJson(question: PackageQuestion): Prisma.InputJsonValue | undefined {
+  if (question.optionCodes.length === 0) return undefined;
+  return question.optionCodes.map((code) => ({ code }));
+}
+
+function canonicalOptionLabelsJson(
+  question: PackageQuestion,
+  optionLabels: readonly string[],
+): Prisma.InputJsonValue | undefined {
+  if (question.optionCodes.length === 0) return undefined;
+  const record: Record<string, string> = {};
+  question.optionCodes.forEach((code, index) => {
+    record[code] = optionLabels[index];
+  });
+  return record;
+}
+
+/**
+ * Correct answers are stored as `QuestionDefinition.correctAnswer` (Json) in the
+ * exact per-type shape `canonicalizeQuestion` accepts. Multiple choice is a
+ * sorted canonical set; ordered steps keep the approved permutation order.
  */
 function correctAnswerJson(question: PackageQuestion): Prisma.InputJsonValue {
-  return question.type === "numeric"
-    ? { kind: "numeric", value: question.correctNumericValue }
-    : { kind: "options", optionCodes: [...question.correctOptionCodes].sort() };
+  switch (question.type) {
+    case "numeric":
+      return { value: canonicalNumericString(question.correctNumericValue) };
+    case "multiple_choice":
+      return { codes: [...question.correctOptionCodes].sort() };
+    case "ordered_steps":
+      return { codes: [...question.correctOptionCodes] };
+    default:
+      return { code: question.correctOptionCodes[0] };
+  }
+}
+
+/** `canonicalizeQuestion` requires a decimal *string*; never a float literal. */
+function canonicalNumericString(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "";
+  return Number.isInteger(value) ? value.toFixed(0) : String(value);
+}
+
+/**
+ * Strict pre-transaction proof that every assessment question the importer is
+ * about to write is canonical and runtime-readable. Runs before any row is
+ * created, so a malformed package fails the import instead of persisting data
+ * the learner runtime would later reject as corrupt. Never echoes prompts,
+ * labels or answer values into an issue.
+ */
+function assessmentCanonicalIssues(pkg: CurriculumPackage): PackageIssue[] {
+  const issues: PackageIssue[] = [];
+  pkg.modules.forEach((module, mi) => {
+    module.levels.forEach((level, li) => {
+      const assessment = level.assessment;
+      if (!assessment) return;
+      const base = `modules[${mi}].levels[${li}].assessment`;
+      assessment.questions.forEach((question, qi) => {
+        const path = `${base}.questions[${qi}]`;
+        if (!isCanonicalAssessmentQuestionKey(question.questionCode)) {
+          issues.push({
+            code: "QUESTION_CODE_NOT_CANONICAL",
+            path: `${path}.questionCode`,
+            message: `questionCode is not a canonical assessment question key (max ${MAX_ASSESSMENT_QUESTION_KEY_LENGTH} chars, lowercase alphanumeric segments separated by . _ -)`,
+          });
+        }
+        const options = canonicalOptionsJson(question);
+        try {
+          canonicalizeQuestion(question.type, options ?? null, correctAnswerJson(question), path);
+        } catch {
+          issues.push({
+            code: "QUESTION_NOT_CANONICAL",
+            path,
+            message: "question options/correctAnswer do not satisfy the canonical runtime contract for this question type",
+          });
+        }
+        question.localizations.forEach((localization, li2) => {
+          const labels = canonicalOptionLabelsJson(question, localization.optionLabels) ?? null;
+          if (
+            !localizationIsComplete(
+              { type: question.type, options: (options ?? null) as Prisma.JsonValue },
+              { prompt: localization.prompt, optionLabels: labels as Prisma.JsonValue },
+            )
+          ) {
+            issues.push({
+              code: "QUESTION_LOCALIZATION_NOT_CANONICAL",
+              path: `${path}.localizations[${li2}].optionLabels`,
+              message: "localization does not map exactly onto the canonical option codes",
+            });
+          }
+        });
+      });
+    });
+  });
+  return issues;
 }
 
 async function writePackage(
@@ -267,7 +379,7 @@ async function writePackage(
               stableKey: question.questionCode,
               type: question.type,
               skillTag: question.skillTag,
-              options: question.optionCodes.length > 0 ? (question.optionCodes as unknown as Prisma.InputJsonValue) : undefined,
+              options: canonicalOptionsJson(question),
               correctAnswer: correctAnswerJson(question),
               status: "active",
             },
@@ -280,10 +392,7 @@ async function writePackage(
                 questionId: questionRow.id,
                 locale: localization.locale,
                 prompt: localization.prompt,
-                optionLabels:
-                  localization.optionLabels.length > 0
-                    ? (localization.optionLabels as unknown as Prisma.InputJsonValue)
-                    : undefined,
+                optionLabels: canonicalOptionLabelsJson(question, localization.optionLabels),
                 explanation: localization.explanation,
               },
             });
@@ -405,6 +514,14 @@ export async function importCurriculumPackage(input: unknown, options: ImportOpt
     };
   }
 
+  // AC-1: prove every assessment question is canonical and runtime-readable
+  // BEFORE the transaction opens. Never persist data the learner runtime would
+  // later reject as ASSESSMENT_STATE_CORRUPT.
+  const canonicalIssues = assessmentCanonicalIssues(pkg);
+  if (canonicalIssues.length > 0) {
+    return { ok: false, code: "ASSESSMENT_NOT_CANONICAL", issues: canonicalIssues };
+  }
+
   const notes: string[] = [];
   if (pkg.modules.some((m) => m.levels.some((l) => l.report !== null))) {
     notes.push(
@@ -422,6 +539,15 @@ export async function importCurriculumPackage(input: unknown, options: ImportOpt
   );
   if (conditionalFieldCount > 0) {
     notes.push(`conditional report fields (requiredWhen): ${conditionalFieldCount}`);
+  }
+  // Bounded record of the canonical assessment projection (counts only — never a
+  // prompt, a label or an answer value).
+  const canonicalQuestionCount = pkg.modules.reduce(
+    (total, m) => total + m.levels.reduce((sub, l) => sub + (l.assessment?.questions.length ?? 0), 0),
+    0,
+  );
+  if (canonicalQuestionCount > 0) {
+    notes.push(`assessment questions persisted in the canonical runtime representation: ${canonicalQuestionCount}`);
   }
 
   const existing = await options.db.curriculumVersion.findUnique({
