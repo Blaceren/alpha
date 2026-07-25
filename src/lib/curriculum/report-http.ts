@@ -21,7 +21,6 @@ import {
   isCurriculumV2ReadEnabled,
   isCurriculumV2ReportAttachmentsEnabled,
   isCurriculumV2ReportEnabled,
-  isCurriculumV2XpEnabled,
 } from "@/lib/env";
 import { rateLimit } from "@/lib/rateLimit";
 
@@ -299,14 +298,16 @@ export async function gateReportSelf(
   return gate;
 }
 
-// Reviewer gate. Approval additionally requires the XP flag before anything
-// else; the flag set behaves exactly like a missing route when incomplete.
+// Reviewer gate. READ + ENROLLMENT + REPORT are required; the XP flag is NOT a
+// reviewer-gate precondition, because approval of a zero-reward level awards no XP.
+// Positive-reward XP enforcement is reward-conditional and lives in the completion
+// primitive (a positive reward with XP disabled fails closed and rolls the approval
+// back atomically). An incomplete flag set behaves exactly like a missing route.
 export async function gateReportReviewer(
   request: Request,
   write: boolean,
-  options: { xp?: boolean } = {},
 ): Promise<ReportGateResult> {
-  if (!selfFlagsEnabled() || (options.xp && !isCurriculumV2XpEnabled())) {
+  if (!selfFlagsEnabled()) {
     return { ok: false, response: reportDisabled() };
   }
   const gate = await activePrincipal(request, requireTaskReportReviewer);

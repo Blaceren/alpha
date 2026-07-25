@@ -409,8 +409,10 @@ async function main() {
         "completion-failure");
     });
     await claim(corruptFixture, mentor.id, "corrupt");
-    await check("14. invalid immutable XP reward fails closed and rolls back approval evidence", async () => {
-      await prisma.levelDefinition.update({ where: { id: corruptFixture.graph.level.id }, data: { xpReward: 0 } });
+    await check("14. invalid immutable NEGATIVE XP reward fails closed and rolls back approval evidence", async () => {
+      // xpReward 0 is a valid zero-reward level (RR-1); a NEGATIVE reward is the
+      // genuinely invalid case that must fail closed and roll back all evidence.
+      await prisma.levelDefinition.update({ where: { id: corruptFixture.graph.level.id }, data: { xpReward: -5 } });
       await expectError(() => approve(corruptFixture, mentor.id, "corrupt"), "REPORT_STATE_CORRUPT");
       await unchanged(corruptFixture);
       await prisma.levelDefinition.update({ where: { id: corruptFixture.graph.level.id }, data: { xpReward: corruptFixture.graph.xpReward } });

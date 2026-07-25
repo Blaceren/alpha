@@ -538,9 +538,22 @@ async function main() {
       assert.equal(row?.claimedById, mentor1.id);
       assert.equal(row?.reviewStartedAt, null);
     });
-    await check("39. approve while XP is off behaves like a missing route", async () => {
-      const reply = await m1.request("POST", `${detailUrl}/approve`, { ...versions, scores: [] }, { ...m1h, "Idempotency-Key": "m1-approve-early" });
+    await check("39. approve of a positive-reward level while XP is off fails closed like a missing route", async () => {
+      // The XP flag is no longer a blanket reviewer-gate precondition (RR-1):
+      // a zero-reward level approves without it. This level carries a positive
+      // reward (xpReward 25), so the completion primitive still requires the XP
+      // flag and the approval fails closed. With valid pinned evidence the domain
+      // reaches completion, maps COMPLETION_DISABLED to REPORT_DISABLED (404) and
+      // rolls the whole transaction back, leaving nothing durable.
+      const validScores = [
+        { criterionCode: "process-quality", scaleCode: "meets" },
+        { criterionCode: "risk-discipline", scaleCode: "below" },
+      ];
+      const reply = await m1.request("POST", `${detailUrl}/approve`, { ...versions, scores: validScores }, { ...m1h, "Idempotency-Key": "m1-approve-early" });
       assert.equal(reply.status, 404); noStore(reply);
+      const row = await prisma.reportSubmission.findFirst({ where: { userId: owner.id }, select: { status: true } });
+      assert.equal(row?.status, "pending_review");
+      assert.equal(await prisma.reportReview.count(), 0);
     });
     await check("40. rejection demands complete pinned evidence and reason", async () => {
       const scores = [

@@ -1157,10 +1157,10 @@ function reviewerCommandRoute<T extends z.ZodType>(
   service: ReviewerService,
   bodySchema: T,
   label: string,
-  options: { xp?: boolean; adminOnly?: boolean } = {},
+  options: { adminOnly?: boolean } = {},
 ) {
   return async (request: Request, context: Context) => {
-    const gate = await gateReportReviewer(request, true, { xp: options.xp }); if (!gate.ok) return gate.response;
+    const gate = await gateReportReviewer(request, true); if (!gate.ok) return gate.response;
     try {
       if (options.adminOnly && gate.role !== "admin") {
         return reportError("REPORT_REVIEWER_FORBIDDEN", 403);
@@ -1200,5 +1200,8 @@ export function reviewerRejectRoute() {
 }
 
 export function reviewerApproveRoute() {
-  return reviewerCommandRoute(approveReportSubmission, evidenceBody, "review approve POST", { xp: true });
+  // No { xp: true }: the XP flag is enforced reward-conditionally by the completion
+  // primitive (positive reward only), not as a blanket reviewer-gate precondition,
+  // so a zero-reward level's approval succeeds with the XP flag disabled.
+  return reviewerCommandRoute(approveReportSubmission, evidenceBody, "review approve POST");
 }

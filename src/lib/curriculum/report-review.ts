@@ -20,7 +20,6 @@ import {
   isCurriculumV2ReadEnabled,
   isCurriculumV2ReportAttachmentsEnabled,
   isCurriculumV2ReportEnabled,
-  isCurriculumV2XpEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import {
@@ -94,21 +93,38 @@ const receiptResultSchema = z.strictObject({
   reviewerRole: z.enum(["admin", "mentor"]).nullable(),
   reasonCode: z.string().nullable(),
 });
-const approvalReceiptResultSchema = z.strictObject({
-  version: z.literal(1),
-  operation: z.literal("approve"),
-  submissionRef: submissionRefSchema,
-  submittedRevision: z.number().int().positive(),
-  workflowVersion: z.number().int().positive(),
-  claimVersion: z.number().int().positive(),
-  reviewId: z.number().int().positive(),
-  xpTransactionId: z.number().int().positive(),
-  xpAwarded: z.number().int().positive(),
-  levelNumber: z.number().int().positive(),
-  nextLevelNumber: z.number().int().positive().nullable(),
-  terminal: z.boolean(),
-  completedAt: z.string().datetime(),
-});
+// The durable approval receipt no longer assumes every completion awards XP.
+// A completion is one of exactly two shapes, enforced by the refinement below:
+//   - zero reward:     xpAwarded === 0 && xpTransactionId === null (no ledger row);
+//   - positive reward: xpAwarded > 0  && xpTransactionId is the exact ledger id.
+// Any other pairing (0 with an id, positive without an id, negative award) is a
+// corrupt receipt and is rejected before it can be trusted or replayed.
+const approvalReceiptResultSchema = z
+  .strictObject({
+    version: z.literal(1),
+    operation: z.literal("approve"),
+    submissionRef: submissionRefSchema,
+    submittedRevision: z.number().int().positive(),
+    workflowVersion: z.number().int().positive(),
+    claimVersion: z.number().int().positive(),
+    reviewId: z.number().int().positive(),
+    xpTransactionId: z.number().int().positive().nullable(),
+    xpAwarded: z.number().int().nonnegative(),
+    levelNumber: z.number().int().positive(),
+    nextLevelNumber: z.number().int().positive().nullable(),
+    terminal: z.boolean(),
+    completedAt: z.string().datetime(),
+  })
+  .superRefine((value, ctx) => {
+    const zeroReward = value.xpAwarded === 0 && value.xpTransactionId === null;
+    const positiveReward = value.xpAwarded > 0 && value.xpTransactionId !== null;
+    if (!zeroReward && !positiveReward) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "report approval reward and XP transaction pairing is inconsistent",
+      });
+    }
+  });
 
 const submissionInclude = Prisma.validator<Prisma.ReportSubmissionInclude>()({
   user: { select: { id: true, name: true, status: true } },
@@ -209,7 +225,8 @@ export type SafeReportApprovalResult = {
   claimVersion: number;
   reviewId: number;
   completion: {
-    xpTransactionId: number;
+    // null for a zero-reward level completion; the exact ledger id otherwise.
+    xpTransactionId: number | null;
     xpAwarded: number;
     levelNumber: number;
     nextLevelNumber: number | null;
@@ -221,10 +238,6 @@ export type SafeReportApprovalResult = {
 
 function flagsEnabled() {
   return isCurriculumV2ReadEnabled() && isCurriculumV2EnrollmentEnabled() && isCurriculumV2ReportEnabled();
-}
-
-function approvalFlagsEnabled() {
-  return flagsEnabled() && isCurriculumV2XpEnabled();
 }
 
 function fail(code: ReportDomainErrorCode, message: string): never {
@@ -566,10 +579,10 @@ async function writeAudit(tx: TransactionClient, input: {
   targetReviewerId?: number;
   reasonCode?: string;
   reviewId?: number;
-  // AC-1: the completion primitive now returns a null xpTransactionId for a
-  // zero-reward level. Report approval still requires a positive XP receipt (its
-  // receipt schema is not yet generalized — a scoped follow-up for when REPORT is
-  // enabled), so a null id simply omits the field from audit metadata here.
+  // A zero-reward approval completes with a null xpTransactionId and xpAwarded 0.
+  // The durable receipt (ReportCommandReceipt.safeResult) records both explicitly;
+  // this audit metadata simply omits the XP fields when there is no award, keeping
+  // a zero-reward approval's audit free of a fabricated ledger reference.
   xpTransactionId?: number | null;
   xpAwarded?: number;
   terminal?: boolean;
@@ -1352,7 +1365,13 @@ export async function approveReportSubmission(
   input: unknown,
   options: CommandOptions = {},
 ): Promise<SafeReportApprovalResult> {
-  if (!approvalFlagsEnabled()) fail("REPORT_DISABLED", "report approval is disabled");
+  // REPORT (with READ + ENROLLMENT) gates approval at entry. The XP flag is NOT
+  // required here: per the operator platform rule it is required only for a
+  // positive reward, which the completion primitive enforces once the level (and
+  // therefore its reward) is loaded — a positive reward with XP disabled surfaces
+  // as COMPLETION_DISABLED and is mapped to REPORT_DISABLED inside runReportCompletion,
+  // rolling the whole approval back atomically. A zero-reward level needs no XP flag.
+  if (!flagsEnabled()) fail("REPORT_DISABLED", "report approval is disabled");
   parseActorId(actorUserId);
   const command = parseCommand(reviewEvidenceSchema, input);
   return executeCommand(options.db ?? prisma, async (tx) => {

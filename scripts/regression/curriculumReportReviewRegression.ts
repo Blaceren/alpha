@@ -375,10 +375,22 @@ async function main() {
         }, { evaluationTime: at("2026-03-03T10:20:00.000Z") }), "REPORT_STATE_CORRUPT");
       } finally { await prisma.reportSubmission.update({ where: { id: third.aggregate.id }, data: { claimedById: mentorTwo.id } }); }
     });
-    await check("23. approval remains fail-closed without the independently required XP flag", async () => {
+    await check("23. XP flag is no longer a blanket approval precondition, but REPORT still is", async () => {
+      // RR-1: the XP flag is not an independent reviewer-gate precondition. A
+      // missing XP flag alone no longer makes approval fail closed (a zero-reward
+      // level needs no XP flag; a positive reward is enforced inside completion).
+      // The REPORT flag remains an independent precondition. Neither path here
+      // creates a durable approval, review or XP row.
       const before = { approved: await prisma.reportSubmission.count({ where: { status: "approved" } }), reviews: await prisma.reportReview.count({ where: { decision: "approved" } }), xp: await prisma.xPTransaction.count() };
       delete process.env.CURRICULUM_V2_XP_ENABLED;
-      await expectError(() => review.approveReportSubmission(mentorOne.id, {}, { evaluationTime: at("2026-03-03T10:30:00.000Z") }), "REPORT_DISABLED");
+      // XP off, REPORT on: not REPORT_DISABLED anymore — the request reaches input
+      // validation instead of being short-circuited by a blanket XP gate.
+      await expectError(() => review.approveReportSubmission(mentorOne.id, {}, { evaluationTime: at("2026-03-03T10:30:00.000Z") }), "REPORT_REVIEW_INPUT_INVALID");
+      // REPORT off: still fail closed regardless of XP.
+      delete process.env.CURRICULUM_V2_REPORT_ENABLED;
+      try {
+        await expectError(() => review.approveReportSubmission(mentorOne.id, {}, { evaluationTime: at("2026-03-03T10:31:00.000Z") }), "REPORT_DISABLED");
+      } finally { process.env.CURRICULUM_V2_REPORT_ENABLED = "true"; }
       assert.deepEqual({ approved: await prisma.reportSubmission.count({ where: { status: "approved" } }), reviews: await prisma.reportReview.count({ where: { decision: "approved" } }), xp: await prisma.xPTransaction.count() }, before);
     });
     await check("24. reject does not touch XP, completion, enrollment summary, V1, notifications or submitted revision history", async () => {
