@@ -3,7 +3,10 @@ import { getServerViewer } from "@/server/auth/server-session";
 import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent } from "@/lib/curriculum/academy-view";
 import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
+import { LevelAssessment } from "@/features/assessment/level-assessment";
 import "@/features/curriculum-api/curriculum-api.css";
+
+const ASSESSMENT_LOCALE = "ru";
 
 const CONTENT_NOTE: Record<NonNullable<AcademyLevelContent["unavailableReason"]>, string> = {
   not_configured: "Учебный материал для этого уровня ещё не привязан.",
@@ -73,13 +76,33 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
                   <li>Материал: {content.metadata.hasTranscript ? "есть расшифровка" : "без расшифровки"}</li>
                   <li>Локаль: {content.metadata.locale}</li>
                 </ul>
+                {content.metadata.videoDurationSeconds === null ? (
+                  /* Honest media-pending surface. Compatible with a later branded
+                     player; CI-3 does not introduce the player component. */
+                  <p className="cur-content__media-pending" data-media="pending">
+                    Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас.
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className="cur-content__none">{CONTENT_NOTE[content.unavailableReason ?? "unavailable"]}</p>
             )}
-            {/* CI-2 is read-only: no completion or submission action exists here. */}
-            <p className="cur-detail__readonly">Только просмотр — прогресс сохраняется на сервере.</p>
+            {/* The lesson MATERIAL remains view-only; the graded check below is the
+                only submission surface, and it is server-authoritative. */}
+            <p className="cur-detail__readonly">Материал — только просмотр. Прогресс сохраняется на сервере.</p>
           </section>
+
+          {/* Server-graded assessment (CI-3). Rendered for accessible lesson levels;
+              a lesson without a configured assessment degrades to a bounded notice
+              from the Backend. Pass/completion are derived from Backend responses. */}
+          {summary.typeInfo.type === "lesson" && summary.routeAccessible ? (
+            <LevelAssessment
+              stableCode={summary.levelCode}
+              locale={ASSESSMENT_LOCALE}
+              alreadyCompleted={summary.state === "completed"}
+              nextLevelCode={navigation.nextLevelCode}
+            />
+          ) : null}
 
           <nav className="cur-detail__nav" aria-label="Навигация по уровням">
             {navigation.previousLevelCode ? (

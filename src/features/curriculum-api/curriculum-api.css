@@ -130,3 +130,13 @@ a.lvl-row__title:hover { text-decoration: underline; }
 @media (max-width: 480px) {
   .cur-detail__meta dl { grid-template-columns: 1fr; }
 }
+
+/* CI-3: honest media-pending surface (text available, video pending). */
+.cur-content__media-pending {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--divider-strong);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--background-field);
+}
