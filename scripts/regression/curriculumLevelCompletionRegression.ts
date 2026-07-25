@@ -472,8 +472,18 @@ async function main() {
     });
     expectResult(await run(fixture), "rejected", "COMPLETION_OWNER_UNAVAILABLE");
   });
-  await check("zero reward is corrupt", async () => {
+  await check("zero reward completes without an XPTransaction (platform rule)", async () => {
+    // Operator platform decision (2026-07-25): a level with xpReward === 0 completes
+    // server-side without creating an XPTransaction. Negative rewards remain invalid.
     const fixture = await setup({ levels: [{ xpReward: 0 }, {}] });
+    const result = await run(fixture);
+    assert.equal(result.kind, "completed");
+    assert.equal((result as { xpAwarded: number }).xpAwarded, 0);
+    assert.equal((result as { xpTransactionId: number | null }).xpTransactionId, null);
+    assert.equal(await prisma.xPTransaction.count({ where: { enrollmentId: fixture.enrollment.id } }), 0);
+  });
+  await check("negative reward is corrupt", async () => {
+    const fixture = await setup({ levels: [{ xpReward: -1 }, {}] });
     expectResult(await run(fixture), "corrupt", "COMPLETION_REWARD_INVALID");
   });
 
@@ -868,7 +878,7 @@ async function main() {
   });
 
   await prisma.$disconnect();
-  assert.equal(passed + failed, 76, "regression scenario count changed");
+  assert.equal(passed + failed, 77, "regression scenario count changed");
 }
 
 main()

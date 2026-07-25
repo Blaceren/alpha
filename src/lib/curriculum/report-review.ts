@@ -566,7 +566,11 @@ async function writeAudit(tx: TransactionClient, input: {
   targetReviewerId?: number;
   reasonCode?: string;
   reviewId?: number;
-  xpTransactionId?: number;
+  // AC-1: the completion primitive now returns a null xpTransactionId for a
+  // zero-reward level. Report approval still requires a positive XP receipt (its
+  // receipt schema is not yet generalized — a scoped follow-up for when REPORT is
+  // enabled), so a null id simply omits the field from audit metadata here.
+  xpTransactionId?: number | null;
   xpAwarded?: number;
   terminal?: boolean;
   status?: "approved";

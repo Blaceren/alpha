@@ -78,6 +78,7 @@
     "test:regression:curriculum-package": "tsx scripts/regression/curriculumPackageRegression.ts",
     "test:regression:curriculum-package-roundtrip": "tsx scripts/regression/curriculumPackageRoundtripRegression.ts",
     "test:regression:curriculum-assessment-contract": "tsx scripts/regression/curriculumAssessmentContractRegression.ts",
+    "test:regression:curriculum-zero-reward-completion": "tsx scripts/regression/curriculumZeroRewardCompletionRegression.ts",
     "test:regression:crm-staff-identity": "tsx scripts/regression/crmStaffIdentityRegression.ts",
     "test:regression:crm-session": "tsx scripts/regression/crmSessionRegression.ts",
     "test:regression:crm-users": "tsx scripts/regression/crmUsersRegression.ts",

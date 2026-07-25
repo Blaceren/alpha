@@ -27,7 +27,7 @@ const SUITES: Array<{
   {
     name: "3B.4 completion transition",
     command: "test:regression:curriculum-level-completion",
-    expectedAssertions: 76,
+    expectedAssertions: 77,
   },
   {
     name: "3B.5 promocode compatibility",
@@ -53,8 +53,8 @@ const SUITES: Array<{
 // Phase 2 runs its own upgrade suite, and its nested Phase 1 gate runs upgrade
 // once more. These totals make that repetition explicit rather than inflating
 // the unique coverage claim.
-const PHASE_3_EXECUTED_ASSERTIONS = 866;
-const PHASE_3_UNIQUE_ASSERTIONS = 806;
+const PHASE_3_EXECUTED_ASSERTIONS = 867;
+const PHASE_3_UNIQUE_ASSERTIONS = 807;
 
 const gateDbPath = `/tmp/ata-phase3-gate-noop-${process.pid}.db`;
 const childEnv: NodeJS.ProcessEnv = {

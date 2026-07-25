@@ -879,6 +879,7 @@ async function terminalRetry(
   fingerprint: string,
   graded: ReturnType<typeof grade>,
   assessment: AssessmentGraph,
+  levelXpReward: number,
 ) {
   assertTerminalMatches(attempt, input, normalized, fingerprint, graded, assessment.passPercent);
   if (attempt.status === "failed") {
@@ -893,7 +894,9 @@ async function terminalRetry(
     if (xp) fail("ASSESSMENT_STATE_CORRUPT", "failed assessment attempt owns XP");
     return submitResult(false, attempt, null);
   }
-  assertXpFlag();
+  // Reward-conditional XP flag, mirroring runSubmit: a zero-reward level's passing
+  // retry re-asserts completion without requiring the XP flag.
+  if (levelXpReward > 0) assertXpFlag();
   const completion = await completeCurriculumLevelInTransaction(tx, {
     enrollmentId: attempt.enrollmentId,
     levelDefinitionId: attempt.levelDefinitionId,
@@ -934,7 +937,7 @@ async function runSubmit(
   const graded = grade(questions, normalized, assessment.passPercent);
 
   if (attempt.status !== "in_progress") {
-    return terminalRetry(tx, attempt, actorUserId, input, normalized, fingerprint, graded, assessment);
+    return terminalRetry(tx, attempt, actorUserId, input, normalized, fingerprint, graded, assessment, level.xpReward);
   }
   assertInProgressShape(attempt);
   const progress = context.progress.find((candidate) => candidate.levelDefinitionId === level.id);
@@ -946,7 +949,9 @@ async function runSubmit(
   ) {
     fail("ASSESSMENT_ATTEMPT_IMMUTABLE", "active assessment attempt cannot be submitted in the current level state");
   }
-  if (graded.passed) assertXpFlag();
+  // XP flag is required only when the level awards a positive reward (operator
+  // platform rule). A zero-reward level completes without XP and without the flag.
+  if (graded.passed && level.xpReward > 0) assertXpFlag();
   const durationSeconds = Math.floor((now.getTime() - attempt.startedAt.getTime()) / 1_000);
   if (durationSeconds < 0) fail("ASSESSMENT_STATE_CORRUPT", "assessment attempt starts in the future");
   const status = graded.passed ? "passed" : "failed";

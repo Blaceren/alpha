@@ -130,8 +130,10 @@ export type CurriculumLevelCompletedResult = {
   enrollmentId: number;
   levelNumber: number;
   stableCode: string;
+  /** 0 for a zero-reward level; positive otherwise. */
   xpAwarded: number;
-  xpTransactionId: number;
+  /** null when the level awarded no XP (zero reward); the XPTransaction id otherwise. */
+  xpTransactionId: number | null;
   nextLevelNumber: number | null;
   terminal: boolean;
   completedAt: Date;
@@ -181,12 +183,21 @@ function failure(
   throw new CurriculumLevelCompletionError(code, message, retryableCas);
 }
 
-function assertFlags() {
-  if (
-    !isCurriculumV2ReadEnabled() ||
-    !isCurriculumV2EnrollmentEnabled() ||
-    !isCurriculumV2XpEnabled()
-  ) {
+/**
+ * Base completion flags. READ and ENROLLMENT are always required. The XP flag is
+ * NOT required here: per the operator platform decision, `CURRICULUM_V2_XP_ENABLED`
+ * is required only for a positive XP award, which is enforced by
+ * `assertXpFlagForReward` once the level (and therefore its reward) is loaded.
+ */
+function assertBaseFlags() {
+  if (!isCurriculumV2ReadEnabled() || !isCurriculumV2EnrollmentEnabled()) {
+    failure("COMPLETION_DISABLED", "curriculum level completion is disabled");
+  }
+}
+
+/** The XP flag gates positive awards only; a zero-reward completion needs no XP flag. */
+function assertXpFlagForReward(context: CompletionContext) {
+  if (awardsXp(context) && !isCurriculumV2XpEnabled()) {
     failure("COMPLETION_DISABLED", "curriculum level completion is disabled");
   }
 }
@@ -572,10 +583,23 @@ async function assertReportApprovalProof(
   }
 }
 
+/**
+ * Reward contract (operator platform decision, 2026-07-25):
+ *  - `xpReward` must be a non-negative integer;
+ *  - `xpReward === 0` is a valid, completable level that awards no XP and creates
+ *    NO XPTransaction;
+ *  - `xpReward < 0` is invalid.
+ * This is a general platform rule with no per-level special case.
+ */
 function assertReward(context: CompletionContext) {
-  if (!Number.isInteger(context.level.xpReward) || context.level.xpReward <= 0) {
+  if (!Number.isInteger(context.level.xpReward) || context.level.xpReward < 0) {
     failure("COMPLETION_REWARD_INVALID", "curriculum level reward is invalid");
   }
+}
+
+/** A completion awards XP (and creates an XPTransaction) only for a positive reward. */
+function awardsXp(context: CompletionContext) {
+  return context.level.xpReward > 0;
 }
 
 function xpInput(
@@ -631,7 +655,7 @@ async function levelXpRows(tx: Prisma.TransactionClient, context: CompletionCont
 
 function completedResult(
   context: CompletionContext,
-  transaction: CurriculumXpTransactionSummary,
+  transaction: CurriculumXpTransactionSummary | null,
   completedAt: Date,
   created: boolean,
 ): CurriculumLevelCompletedResult {
@@ -643,7 +667,7 @@ function completedResult(
     levelNumber: context.level.levelNumber,
     stableCode: context.level.stableCode,
     xpAwarded: context.level.xpReward,
-    xpTransactionId: transaction.id,
+    xpTransactionId: transaction?.id ?? null,
     nextLevelNumber: terminal ? null : context.level.levelNumber + 1,
     terminal,
     completedAt: new Date(completedAt.getTime()),
@@ -658,6 +682,15 @@ async function verifyCompletedRetry(
   if (!context.progress.completedAt) {
     failure("COMPLETION_STATE_CORRUPT", "completed progress has no completion time");
   }
+  const rows = await levelXpRows(tx, context);
+  if (!awardsXp(context)) {
+    // Zero-reward level: the completed progress row is the durable proof of
+    // completion. No XPTransaction was ever created, and none may exist.
+    if (rows.length !== 0) {
+      failure("COMPLETION_STATE_CORRUPT", "zero-reward completion must own no XP");
+    }
+    return completedResult(context, null, context.progress.completedAt, false);
+  }
   const ledger = await resolveEnrollmentXp({
     enrollmentId: context.enrollment.id,
     db: tx,
@@ -665,7 +698,6 @@ async function verifyCompletedRetry(
   if (ledger.kind !== "available") {
     failure("COMPLETION_STATE_CORRUPT", "completion XP ledger is corrupt");
   }
-  const rows = await levelXpRows(tx, context);
   if (rows.length === 0) {
     failure("COMPLETION_STATE_CORRUPT", "completed progress has no durable XP award");
   }
@@ -701,6 +733,7 @@ async function runCompletionTransaction(
   await assertLessonAssessmentProof(tx, context, input);
   await assertReportApprovalProof(tx, context, input);
   assertReward(context);
+  assertXpFlagForReward(context);
 
   if (context.progress.status === "completed") {
     return verifyCompletedRetry(tx, context, input);
@@ -734,14 +767,20 @@ async function runCompletionTransaction(
     failure("COMPLETION_CONFLICT", "completion progress claim lost", true);
   }
 
-  let xpAward;
-  try {
-    xpAward = await recordCurriculumXpInTransaction(tx, xpInput(context, input));
-  } catch (error) {
-    mapXpError(error);
-  }
-  if (!xpAward.created) {
-    failure("COMPLETION_STATE_CORRUPT", "XP existed before progress completion");
+  // Positive reward -> create the XPTransaction atomically with completion.
+  // Zero reward -> complete without any XPTransaction (operator platform rule).
+  let xpTransaction: CurriculumXpTransactionSummary | null = null;
+  if (awardsXp(context)) {
+    let xpAward;
+    try {
+      xpAward = await recordCurriculumXpInTransaction(tx, xpInput(context, input));
+    } catch (error) {
+      mapXpError(error);
+    }
+    if (!xpAward.created) {
+      failure("COMPLETION_STATE_CORRUPT", "XP existed before progress completion");
+    }
+    xpTransaction = xpAward.transaction;
   }
 
   const terminal = context.level.levelNumber === context.maxLevel;
@@ -785,7 +824,7 @@ async function runCompletionTransaction(
         sourceType: input.sourceType,
         sourceIdHash,
         actorId: input.actorId,
-        xpTransactionId: xpAward.transaction.id,
+        xpTransactionId: xpTransaction?.id ?? null,
         xpAwarded: context.level.xpReward,
         previousCurrentLevel: context.enrollment.currentLevel,
         nextCurrentLevel: terminal ? null : nextCurrentLevel,
@@ -796,7 +835,7 @@ async function runCompletionTransaction(
 
   return completedResult(
     context,
-    xpAward.transaction,
+    xpTransaction,
     input.evaluationTime,
     true,
   );
@@ -806,7 +845,7 @@ export async function completeCurriculumLevelInTransaction(
   tx: Prisma.TransactionClient,
   rawInput: CompleteCurriculumLevelInTransactionInput,
 ): Promise<CurriculumLevelCompletedResult> {
-  assertFlags();
+  assertBaseFlags();
   const input = validatedInput(rawInput);
   return runCompletionTransaction(tx, input);
 }
@@ -839,7 +878,7 @@ export async function completeCurriculumLevel({
   ...rawInput
 }: CompleteCurriculumLevelInput): Promise<CompleteCurriculumLevelResult> {
   try {
-    assertFlags();
+    assertBaseFlags();
     const input = validatedInput(rawInput);
     try {
       return await db.$transaction((tx) => runCompletionTransaction(tx, input));
