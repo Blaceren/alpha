@@ -23,20 +23,47 @@ const STATE_LABELS: Array<{ id: ShowcaseState; label: string }> = [
 ];
 
 const DEMO_SOURCE = "/showcase/video-player/academy-lesson-demo.webm";
-const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+
+// Containers a browser can plausibly open. The <video> element's error handler
+// is the final arbiter for codecs the browser cannot actually decode.
+const SUPPORTED_VIDEO_EXTENSIONS = new Set(["mp4", "webm", "m4v", "mov", "mkv"]);
 
 interface LocalVideo {
   name: string;
+  size: number;
+  type: string;
+  extension: string;
   url: string;
 }
 
+function getExtension(name: string) {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+// A user-picked file rarely arrives as a clean "video/mp4": Windows commonly
+// reports "application/octet-stream", phones hand over "video/quicktime" (.mov),
+// and .m4v/.mkv carry non-standard MIME types. Accept anything the browser
+// labels as video/*, or a known video container by extension; only reject files
+// that are clearly not video. Decoding failures are surfaced separately by the
+// player's error handler.
 function isSupportedVideo(file: File) {
-  const extension = file.name.toLowerCase().split(".").pop();
-  const hasSupportedExtension = extension === "mp4" || extension === "webm";
+  const type = file.type.toLowerCase();
   return (
-    SUPPORTED_VIDEO_TYPES.has(file.type) ||
-    (file.type === "" && hasSupportedExtension)
+    type.startsWith("video/") ||
+    SUPPORTED_VIDEO_EXTENSIONS.has(getExtension(file.name))
   );
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 Б";
+  const units = ["Б", "КБ", "МБ", "ГБ"];
+  const exponent = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+  );
+  const value = bytes / 1024 ** exponent;
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
 function setFixtureMediaValues(video: HTMLVideoElement, state: ShowcaseState) {
@@ -63,6 +90,7 @@ export function VideoPlayerShowcase({
   const [state, setState] = useState(initialState);
   const [localVideo, setLocalVideo] = useState<LocalVideo | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +113,9 @@ export function VideoPlayerShowcase({
       if (!file) return;
 
       if (!isSupportedVideo(file)) {
-        setFileError("Выберите видео в формате MP4 или WebM.");
+        setFileError(
+          "Не похоже на видео. Поддерживаются MP4, WebM, MOV, M4V и MKV.",
+        );
         return;
       }
 
@@ -93,8 +123,15 @@ export function VideoPlayerShowcase({
       const nextUrl = URL.createObjectURL(file);
       const previousUrl = objectUrlRef.current;
       objectUrlRef.current = nextUrl;
-      setLocalVideo({ name: file.name, url: nextUrl });
+      setLocalVideo({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        extension: getExtension(file.name),
+        url: nextUrl,
+      });
       setFileError(null);
+      setMediaError(null);
       setState("initial");
 
       if (previousUrl) URL.revokeObjectURL(previousUrl);
@@ -108,10 +145,23 @@ export function VideoPlayerShowcase({
     objectUrlRef.current = null;
     setLocalVideo(null);
     setFileError(null);
+    setMediaError(null);
     setState("initial");
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (previousUrl) URL.revokeObjectURL(previousUrl);
   }, [stopCurrentVideo]);
+
+  // A local file passes container validation but may still use a codec the
+  // browser cannot decode (e.g. HEVC in a .mov). The player accepts the source,
+  // fails to decode, and reports it here so we can explain the real reason
+  // instead of the demo's generic "check your connection" copy.
+  const handlePlayerError = useCallback(
+    (error: MediaError | null) => {
+      if (!localVideo) return;
+      setMediaError(error?.code ?? 0);
+    },
+    [localVideo],
+  );
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     selectLocalVideo(event.target.files?.[0]);
@@ -211,7 +261,9 @@ export function VideoPlayerShowcase({
             <strong id="local-video-title">
               {localVideo?.name ?? "Демонстрационный урок Academy"}
             </strong>
-            <p>MP4 или WebM, файл остаётся на вашем устройстве</p>
+            <p>
+              MP4, WebM, MOV, M4V или MKV — файл остаётся на вашем устройстве
+            </p>
           </div>
 
           <div
@@ -226,7 +278,7 @@ export function VideoPlayerShowcase({
               ref={fileInputRef}
               className="vps__file-input"
               type="file"
-              accept="video/mp4,video/webm,.mp4,.webm"
+              accept="video/*,.mp4,.webm,.m4v,.mov,.mkv"
               aria-label="Выбрать локальное видео"
               onChange={handleFileChange}
             />
@@ -250,6 +302,12 @@ export function VideoPlayerShowcase({
                 {fileError}
               </p>
             )}
+            {mediaError != null && (
+              <p className="vps__file-error" role="alert">
+                Файл выбран, но браузер не поддерживает его видеокодек.
+                Попробуйте MP4 (H.264) или WebM.
+              </p>
+            )}
             {localVideo && (
               <button
                 type="button"
@@ -261,12 +319,42 @@ export function VideoPlayerShowcase({
               </button>
             )}
           </div>
+
+          {localVideo && (
+            <dl className="vps__diagnostics" aria-label="Диагностика файла">
+              <div>
+                <dt>Имя</dt>
+                <dd>{localVideo.name}</dd>
+              </div>
+              <div>
+                <dt>Размер</dt>
+                <dd>{formatBytes(localVideo.size)}</dd>
+              </div>
+              <div>
+                <dt>MIME</dt>
+                <dd>{localVideo.type || "— (не указан)"}</dd>
+              </div>
+              <div>
+                <dt>Расширение</dt>
+                <dd>{localVideo.extension ? `.${localVideo.extension}` : "—"}</dd>
+              </div>
+              <div>
+                <dt>Статус</dt>
+                <dd>
+                  {mediaError != null
+                    ? `ошибка декодирования (код ${mediaError})`
+                    : "источник назначен"}
+                </dd>
+              </div>
+            </dl>
+          )}
         </section>
 
         <div ref={previewRef} className="vps__preview">
           <AcademyVideoPlayer
             key={`${state}-${playerSource}`}
             src={playerSource}
+            onError={handlePlayerError}
             title={localVideo?.name ?? "Поддержка и сопротивление"}
             description={
               localVideo
