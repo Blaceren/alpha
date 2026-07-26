@@ -9,6 +9,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  RotateCw,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -16,6 +17,8 @@ import type {
   CSSProperties,
   FocusEvent,
   KeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
   SyntheticEvent,
 } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -37,7 +40,10 @@ export interface AcademyVideoPlayerProps {
   captions?: AcademyVideoCaption[];
   autoPlay?: boolean;
   className?: string;
-  aspectRatio?: string;
+  /** "source" (default) adapts the frame to the file's real ratio; a string like "16 / 9" pins it. */
+  aspectRatio?: "source" | string;
+  /** How the frame is filled. "contain" (default) never distorts; "cover" crops to fill. */
+  fit?: "contain" | "cover";
   initialVolume?: number;
   onPlay?: () => void;
   onPause?: () => void;
@@ -47,9 +53,16 @@ export interface AcademyVideoPlayerProps {
 }
 
 const CONTROLS_HIDE_DELAY = 2400;
+const SKIP_SECONDS = 10;
+const SEEK_FEEDBACK_MS = 700;
+const CLICK_DELAY_MS = 220;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function isFiniteDuration(value: number) {
+  return Number.isFinite(value) && value > 0;
 }
 
 function formatTime(seconds: number) {
@@ -67,7 +80,8 @@ function isEditableTarget(target: EventTarget | null) {
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
-    target instanceof HTMLButtonElement
+    target instanceof HTMLButtonElement ||
+    target.getAttribute("role") === "slider"
   );
 }
 
@@ -79,7 +93,8 @@ export function AcademyVideoPlayer({
   captions = [],
   autoPlay = false,
   className,
-  aspectRatio = "16 / 9",
+  aspectRatio = "source",
+  fit = "contain",
   initialVolume = 0.8,
   onPlay,
   onPause,
@@ -89,25 +104,66 @@ export function AcademyVideoPlayer({
 }: AcademyVideoPlayerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startedRef = useRef(false);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
   const keyboardFocusRef = useRef(false);
+  const startedRef = useRef(false);
+  const scrubbingRef = useRef(false);
+  const errorRef = useRef<MediaError | null>(null);
+  const onErrorRef = useRef(onError);
 
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [errorCode, setErrorCode] = useState<number | null>(null);
   const [ended, setEnded] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [videoRatio, setVideoRatio] = useState<number | null>(null);
   const [volume, setVolume] = useState(() => clamp(initialVolume, 0, 1));
   const [muted, setMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [seekFeedback, setSeekFeedback] = useState<{
+    dir: 1 | -1;
+    id: number;
+  } | null>(null);
   const [captionsOn, setCaptionsOn] = useState(
     () => captions.findIndex((caption) => caption.default) >= 0,
   );
 
+  const seekable = isFiniteDuration(duration);
+
+  // --- error lifecycle (stale-error safe) ---------------------------------
+  const clearError = useCallback(() => {
+    setFailed(false);
+    setBuffering(false);
+    if (errorRef.current !== null) {
+      errorRef.current = null;
+      setErrorCode(null);
+      onErrorRef.current?.(null);
+    }
+  }, []);
+
+  const reportError = useCallback((error: MediaError | null) => {
+    errorRef.current = error;
+    setFailed(true);
+    setBuffering(false);
+    setErrorCode(error ? error.code : null);
+    onErrorRef.current?.(error);
+  }, []);
+
+  // Keep the latest onError callback without re-subscribing effects to it.
+  useEffect(() => {
+    onErrorRef.current = onError;
+  });
+
+  // --- controls autohide --------------------------------------------------
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
@@ -117,7 +173,7 @@ export function AcademyVideoPlayer({
 
   const scheduleControlsHide = useCallback(() => {
     clearHideTimer();
-    if (!playing) return;
+    if (!playing || scrubbingRef.current) return;
     hideTimerRef.current = setTimeout(() => {
       const focusInside = rootRef.current?.contains(document.activeElement);
       if (!(keyboardFocusRef.current && focusInside)) setControlsVisible(false);
@@ -136,6 +192,7 @@ export function AcademyVideoPlayer({
     else clearHideTimer();
   }, [clearHideTimer, playing, scheduleControlsHide]);
 
+  // --- fullscreen sync ----------------------------------------------------
   useEffect(() => {
     const handleFullscreenChange = () => {
       setFullscreen(document.fullscreenElement === rootRef.current);
@@ -145,12 +202,41 @@ export function AcademyVideoPlayer({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
+  // --- volume/mute reflection --------------------------------------------
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.volume = volume;
     video.muted = muted;
   }, [muted, volume]);
+
+  // --- smooth progress while playing (single rAF loop, no leaks) ----------
+  useEffect(() => {
+    if (!playing) return;
+    const step = () => {
+      const video = videoRef.current;
+      if (video && !scrubbingRef.current) setCurrentTime(video.currentTime);
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [playing]);
+
+  // --- unmount cleanup ----------------------------------------------------
+  useEffect(
+    () => () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    },
+    [],
+  );
 
   const updateCaptionTracks = useCallback((enabled: boolean) => {
     const tracks = videoRef.current?.textTracks;
@@ -160,6 +246,7 @@ export function AcademyVideoPlayer({
     }
   }, []);
 
+  // --- playback control ---------------------------------------------------
   const togglePlay = useCallback(async () => {
     const video = videoRef.current;
     if (!video || failed) return;
@@ -182,23 +269,45 @@ export function AcademyVideoPlayer({
   const retry = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    setFailed(false);
+    clearError();
     setEnded(false);
     setCurrentTime(0);
     video.load();
-  }, []);
+  }, [clearError]);
 
   const seekTo = useCallback(
     (nextTime: number) => {
       const video = videoRef.current;
-      if (!video || !duration) return;
+      if (!video || !seekable) return;
       const safeTime = clamp(nextTime, 0, duration);
       video.currentTime = safeTime;
       setCurrentTime(safeTime);
       setEnded(false);
+    },
+    [duration, seekable],
+  );
+
+  const showSeekFeedback = useCallback((dir: 1 | -1) => {
+    setSeekFeedback({ dir, id: Date.now() });
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(
+      () => setSeekFeedback(null),
+      SEEK_FEEDBACK_MS,
+    );
+  }, []);
+
+  const skipBy = useCallback(
+    (delta: number) => {
+      const video = videoRef.current;
+      if (!video || !seekable) return;
+      const safeTime = clamp(video.currentTime + delta, 0, duration);
+      video.currentTime = safeTime;
+      setCurrentTime(safeTime);
+      setEnded(false);
+      showSeekFeedback(delta < 0 ? -1 : 1);
       revealControls();
     },
-    [duration, revealControls],
+    [duration, revealControls, seekable, showSeekFeedback],
   );
 
   const toggleMute = useCallback(() => {
@@ -238,25 +347,118 @@ export function AcademyVideoPlayer({
     }
   }, []);
 
+  // --- timeline seek (pointer + touch) ------------------------------------
+  const seekFromClientX = useCallback(
+    (clientX: number) => {
+      const el = timelineRef.current;
+      const video = videoRef.current;
+      if (!el || !video || !seekable) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const target = ratio * duration;
+      video.currentTime = target;
+      setCurrentTime(target);
+      setEnded(false);
+    },
+    [duration, seekable],
+  );
+
+  const handleTimelinePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!seekable) return;
+    event.preventDefault();
+    scrubbingRef.current = true;
+    setScrubbing(true);
+    timelineRef.current?.setPointerCapture?.(event.pointerId);
+    seekFromClientX(event.clientX);
+    revealControls();
+  };
+
+  const handleTimelinePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return;
+    seekFromClientX(event.clientX);
+  };
+
+  const endScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return;
+    scrubbingRef.current = false;
+    setScrubbing(false);
+    timelineRef.current?.releasePointerCapture?.(event.pointerId);
+    scheduleControlsHide();
+  };
+
+  const handleTimelineKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!seekable) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      seekTo(currentTime - 5);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      seekTo(currentTime + 5);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      seekTo(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      seekTo(duration);
+    }
+  };
+
+  // --- surface click (play/pause) vs double-click (fullscreen) ------------
+  const cancelPendingClick = () => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  };
+
+  const handleSurfaceClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (scrubbingRef.current) return;
+    // The second click of a double-click arrives before the dblclick event, so
+    // use it (not just onDoubleClick) to cancel the pending single-click action.
+    if (event.detail > 1) {
+      cancelPendingClick();
+      return;
+    }
+    if (clickTimerRef.current) return;
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      void togglePlay();
+    }, CLICK_DELAY_MS);
+  };
+
+  const handleSurfaceDoubleClick = () => {
+    cancelPendingClick();
+    void toggleFullscreen();
+  };
+
+  const stopSurface = (
+    event: SyntheticEvent<HTMLElement> | ReactPointerEvent<HTMLElement>,
+  ) => {
+    event.stopPropagation();
+  };
+
+  // --- keyboard shortcuts (only when the region itself is focused) --------
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     keyboardFocusRef.current = true;
     if (event.target !== event.currentTarget || isEditableTarget(event.target)) {
       return;
     }
 
-    if (event.key === " " || event.key.toLowerCase() === "k") {
+    const key = event.key.toLowerCase();
+    if (event.key === " " || key === "k") {
       event.preventDefault();
       void togglePlay();
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
-      seekTo(currentTime - 5);
+      skipBy(-SKIP_SECONDS);
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      seekTo(currentTime + 5);
-    } else if (event.key.toLowerCase() === "m") {
+      skipBy(SKIP_SECONDS);
+    } else if (key === "m") {
       event.preventDefault();
       toggleMute();
-    } else if (event.key.toLowerCase() === "f") {
+    } else if (key === "f") {
       event.preventDefault();
       void toggleFullscreen();
     }
@@ -270,9 +472,10 @@ export function AcademyVideoPlayer({
   };
 
   const handleFocusCapture = (event: FocusEvent<HTMLDivElement>) => {
-    keyboardFocusRef.current = event.target instanceof HTMLElement
-      ? event.target.matches(":focus-visible")
-      : false;
+    keyboardFocusRef.current =
+      event.target instanceof HTMLElement
+        ? event.target.matches(":focus-visible")
+        : false;
     revealControls();
   };
 
@@ -281,12 +484,14 @@ export function AcademyVideoPlayer({
     revealControls();
   };
 
+  // --- native media events ------------------------------------------------
   const handlePlay = () => {
     startedRef.current = true;
     setStarted(true);
     setPlaying(true);
     setEnded(false);
     setBuffering(false);
+    clearError();
     setControlsVisible(true);
     scheduleControlsHide();
     onPlay?.();
@@ -311,34 +516,79 @@ export function AcademyVideoPlayer({
 
   const handleTimeUpdate = (event: SyntheticEvent<HTMLVideoElement>) => {
     const video = event.currentTarget;
-    setCurrentTime(video.currentTime);
+    if (!scrubbingRef.current && !playing) setCurrentTime(video.currentTime);
     onTimeUpdate?.(video.currentTime, video.duration || duration);
   };
 
-  const handleLoadedMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
+  const syncMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
     const video = event.currentTarget;
-    const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
-    setDuration(nextDuration);
-    setCurrentTime(video.currentTime);
-    setBuffering(false);
-    setFailed(false);
+    setDuration(isFiniteDuration(video.duration) ? video.duration : 0);
+    if (!scrubbingRef.current) setCurrentTime(video.currentTime);
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setVideoRatio(video.videoWidth / video.videoHeight);
+    }
+    clearError();
     updateCaptionTracks(captionsOn);
+  };
+
+  // Changing src makes the browser fire emptied + loadstart; both fully reset
+  // the media state so a previous file's duration/time/error never lingers.
+  const handleEmptied = () => {
+    setPlaying(false);
+    setStarted(false);
+    startedRef.current = false;
+    setEnded(false);
+    setBuffering(false);
+    setDuration(0);
+    setCurrentTime(0);
+    setVideoRatio(null);
+    clearError();
+  };
+
+  const handleLoadStart = () => {
+    setEnded(false);
+    setDuration(0);
+    setCurrentTime(0);
+    setVideoRatio(null);
+    clearError();
   };
 
   const handleError = (event: SyntheticEvent<HTMLVideoElement>) => {
     setPlaying(false);
-    setBuffering(false);
-    setFailed(true);
     setControlsVisible(true);
     clearHideTimer();
-    onError?.(event.currentTarget.error);
+    reportError(event.currentTarget.error);
   };
 
-  const progress = duration ? (currentTime / duration) * 100 : 0;
+  const progress = seekable ? clamp((currentTime / duration) * 100, 0, 100) : 0;
+  const isPortrait =
+    aspectRatio === "source" && videoRatio !== null && videoRatio <= 1.05;
+  const frameAspect =
+    aspectRatio === "source"
+      ? videoRatio && videoRatio > 0
+        ? `${videoRatio}`
+        : "16 / 9"
+      : aspectRatio;
+
   const style = {
-    "--avp-aspect-ratio": aspectRatio,
+    "--avp-aspect-ratio": frameAspect,
     "--avp-progress": `${progress}%`,
+    "--avp-fit": fit,
   } as CSSProperties;
+
+  const errorDetail =
+    errorCode === 2
+      ? "Проблема с сетью. Проверьте соединение и попробуйте ещё раз."
+      : errorCode === 3 || errorCode === 4
+        ? "Формат или кодек видео не поддерживается этим браузером."
+        : "Не удалось загрузить видео. Попробуйте ещё раз.";
+
+  const showCenter = !failed && !buffering && !ended && (!playing || controlsVisible);
+  const centerMainLabel = playing
+    ? "Поставить на паузу"
+    : started
+      ? "Продолжить видео"
+      : "Воспроизвести видео";
 
   return (
     <div
@@ -347,6 +597,8 @@ export function AcademyVideoPlayer({
         "avp",
         playing && "avp--playing",
         controlsVisible && "avp--controls-visible",
+        scrubbing && "avp--scrubbing",
+        isPortrait && "avp--tall",
         failed && "avp--failed",
         className,
       )}
@@ -355,6 +607,8 @@ export function AcademyVideoPlayer({
       aria-label={`Видеоплеер: ${title}`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onClick={handleSurfaceClick}
+      onDoubleClick={handleSurfaceDoubleClick}
       onPointerMove={handlePointerActivity}
       onPointerDown={handlePointerActivity}
       onMouseEnter={revealControls}
@@ -373,10 +627,19 @@ export function AcademyVideoPlayer({
         onPlay={handlePlay}
         onPause={handlePause}
         onWaiting={() => startedRef.current && setBuffering(true)}
-        onPlaying={() => setBuffering(false)}
-        onCanPlay={() => setBuffering(false)}
-        onLoadedMetadata={handleLoadedMetadata}
-        onDurationChange={handleLoadedMetadata}
+        onPlaying={() => {
+          setBuffering(false);
+          clearError();
+        }}
+        onCanPlay={() => {
+          setBuffering(false);
+          clearError();
+        }}
+        onEmptied={handleEmptied}
+        onLoadStart={handleLoadStart}
+        onLoadedMetadata={syncMetadata}
+        onLoadedData={syncMetadata}
+        onDurationChange={syncMetadata}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onError={handleError}
@@ -413,15 +676,58 @@ export function AcademyVideoPlayer({
 
       <div className="avp__shade" aria-hidden="true" />
 
-      {!failed && !buffering && !ended && !playing && (
-        <button
-          type="button"
-          className="avp__hero-play"
-          onClick={() => void togglePlay()}
-          aria-label={started ? "Продолжить видео" : "Воспроизвести видео"}
+      {seekFeedback && (
+        <div
+          key={seekFeedback.id}
+          className={cn(
+            "avp__seek-feedback",
+            seekFeedback.dir < 0
+              ? "avp__seek-feedback--back"
+              : "avp__seek-feedback--forward",
+          )}
+          aria-hidden="true"
         >
-          <Play aria-hidden="true" fill="currentColor" />
-        </button>
+          <span>{seekFeedback.dir < 0 ? "−10 секунд" : "+10 секунд"}</span>
+        </div>
+      )}
+
+      {showCenter && (
+        <div className="avp__center" onClick={stopSurface} onDoubleClick={stopSurface}>
+          <button
+            type="button"
+            className="avp__center-btn avp__center-btn--skip"
+            onClick={() => skipBy(-SKIP_SECONDS)}
+            disabled={!seekable}
+            aria-label="Назад на 10 секунд"
+            title="Назад 10 секунд"
+          >
+            <RotateCcw aria-hidden="true" />
+            <span className="avp__center-num">10</span>
+          </button>
+          <button
+            type="button"
+            className="avp__center-btn avp__center-btn--main"
+            onClick={() => void togglePlay()}
+            aria-label={centerMainLabel}
+          >
+            {playing ? (
+              <Pause aria-hidden="true" fill="currentColor" />
+            ) : (
+              <Play aria-hidden="true" fill="currentColor" />
+            )}
+          </button>
+          <button
+            type="button"
+            className="avp__center-btn avp__center-btn--skip"
+            onClick={() => skipBy(SKIP_SECONDS)}
+            disabled={!seekable}
+            aria-label="Вперёд на 10 секунд"
+            title="Вперёд 10 секунд"
+          >
+            <RotateCw aria-hidden="true" />
+            <span className="avp__center-num">10</span>
+          </button>
+        </div>
       )}
 
       {buffering && !failed && (
@@ -432,13 +738,18 @@ export function AcademyVideoPlayer({
       )}
 
       {failed && (
-        <div className="avp__state avp__state--error" role="alert">
+        <div
+          className="avp__state avp__state--error"
+          role="alert"
+          onClick={stopSurface}
+          onDoubleClick={stopSurface}
+        >
           <span className="avp__state-icon">
             <AlertTriangle aria-hidden="true" />
           </span>
           <div>
             <strong>Видео не загрузилось</strong>
-            <span>Проверьте соединение и попробуйте ещё раз.</span>
+            <span>{errorDetail}</span>
           </div>
           <button type="button" onClick={retry}>
             Повторить
@@ -447,7 +758,12 @@ export function AcademyVideoPlayer({
       )}
 
       {ended && !failed && (
-        <div className="avp__state avp__state--ended" role="status">
+        <div
+          className="avp__state avp__state--ended"
+          role="status"
+          onClick={stopSurface}
+          onDoubleClick={stopSurface}
+        >
           <span className="avp__eyebrow">Урок просмотрен</span>
           <strong>{title}</strong>
           <button type="button" onClick={() => void togglePlay()}>
@@ -458,22 +774,47 @@ export function AcademyVideoPlayer({
       )}
 
       {!failed && (
-        <div className="avp__controls">
-          <label className="avp__timeline">
-            <span className="avp__sr-only">Позиция видео</span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={Math.min(currentTime, duration || 0)}
-              onChange={(event) => seekTo(Number(event.target.value))}
-              aria-valuetext={`${formatTime(currentTime)} из ${formatTime(duration)}`}
-            />
-          </label>
+        <div
+          className="avp__controls"
+          onClick={stopSurface}
+          onDoubleClick={stopSurface}
+        >
+          <div
+            ref={timelineRef}
+            className="avp__timeline"
+            role="slider"
+            tabIndex={0}
+            aria-label="Позиция видео"
+            aria-valuemin={0}
+            aria-valuemax={seekable ? Math.round(duration) : 0}
+            aria-valuenow={seekable ? Math.round(currentTime) : 0}
+            aria-valuetext={`${formatTime(currentTime)} из ${formatTime(duration)}`}
+            aria-disabled={!seekable}
+            onPointerDown={handleTimelinePointerDown}
+            onPointerMove={handleTimelinePointerMove}
+            onPointerUp={endScrub}
+            onPointerCancel={endScrub}
+            onKeyDown={handleTimelineKeyDown}
+          >
+            <div className="avp__timeline-track">
+              <div className="avp__timeline-fill" />
+              <div className="avp__timeline-thumb" />
+            </div>
+          </div>
 
           <div className="avp__control-row">
             <div className="avp__control-group">
+              <button
+                type="button"
+                className="avp__icon-button"
+                onClick={() => skipBy(-SKIP_SECONDS)}
+                disabled={!seekable}
+                aria-label="Назад на 10 секунд"
+                title="Назад 10 секунд"
+              >
+                <RotateCcw aria-hidden="true" />
+                <span className="avp__skip-num">10</span>
+              </button>
               <button
                 type="button"
                 className="avp__icon-button avp__icon-button--primary"
@@ -486,7 +827,21 @@ export function AcademyVideoPlayer({
                   <Play aria-hidden="true" fill="currentColor" />
                 )}
               </button>
-              <p className="avp__time" aria-label={`${formatTime(currentTime)} из ${formatTime(duration)}`}>
+              <button
+                type="button"
+                className="avp__icon-button"
+                onClick={() => skipBy(SKIP_SECONDS)}
+                disabled={!seekable}
+                aria-label="Вперёд на 10 секунд"
+                title="Вперёд 10 секунд"
+              >
+                <RotateCw aria-hidden="true" />
+                <span className="avp__skip-num">10</span>
+              </button>
+              <p
+                className="avp__time"
+                aria-label={`${formatTime(currentTime)} из ${formatTime(duration)}`}
+              >
                 <span>{formatTime(currentTime)}</span>
                 <span aria-hidden="true">/</span>
                 <span>{formatTime(duration)}</span>

@@ -121,10 +121,19 @@ describe("VideoPlayerShowcase local video loader", () => {
     render(<VideoPlayerShowcase initialState="initial" />);
     selectFile("lesson.mp4", "video/mp4");
 
+    // The browser rejects the codec (SRC_NOT_SUPPORTED) after the container was
+    // accepted; the player reports the real MediaError to the showcase.
+    Object.defineProperty(videoEl(), "error", {
+      configurable: true,
+      value: { code: 4 },
+    });
     fireEvent.error(videoEl());
 
     expect(
       screen.getByText(/браузер не поддерживает его видеокодек/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/MEDIA_ERR_SRC_NOT_SUPPORTED \(код 4\)/),
     ).toBeInTheDocument();
     expect(revokeObjectURL).not.toHaveBeenCalled();
     expect(videoEl()).toHaveAttribute("src", "blob:academy-video-1");

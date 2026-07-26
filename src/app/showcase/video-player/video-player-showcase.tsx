@@ -66,6 +66,27 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
+// Standard HTMLMediaElement.error.code values.
+const MEDIA_ERROR_LABELS: Record<number, string> = {
+  1: "MEDIA_ERR_ABORTED",
+  2: "MEDIA_ERR_NETWORK",
+  3: "MEDIA_ERR_DECODE",
+  4: "MEDIA_ERR_SRC_NOT_SUPPORTED",
+};
+
+function mediaErrorMessage(code: number) {
+  if (code === 3 || code === 4) {
+    return "Файл выбран, но браузер не поддерживает его видеокодек. Попробуйте MP4 (H.264) или WebM.";
+  }
+  if (code === 2) {
+    return "Проблема с сетью при загрузке файла. Попробуйте ещё раз.";
+  }
+  if (code === 1) {
+    return "Загрузка видео была прервана.";
+  }
+  return "Не удалось воспроизвести выбранный файл.";
+}
+
 function setFixtureMediaValues(video: HTMLVideoElement, state: ShowcaseState) {
   try {
     Object.defineProperty(video, "duration", {
@@ -158,10 +179,18 @@ export function VideoPlayerShowcase({
   const handlePlayerError = useCallback(
     (error: MediaError | null) => {
       if (!localVideo) return;
-      setMediaError(error?.code ?? 0);
+      // A null error is the player signalling recovery (loadstart / canplay /
+      // playing) — clear any stale message so it never lingers over good video.
+      setMediaError(error ? error.code : null);
     },
     [localVideo],
   );
+
+  // A playing video has decoded successfully; drop any error left over from a
+  // previous file/instance so it never lingers over good playback.
+  const handlePlayerPlay = useCallback(() => {
+    setMediaError(null);
+  }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     selectLocalVideo(event.target.files?.[0]);
@@ -304,8 +333,7 @@ export function VideoPlayerShowcase({
             )}
             {mediaError != null && (
               <p className="vps__file-error" role="alert">
-                Файл выбран, но браузер не поддерживает его видеокодек.
-                Попробуйте MP4 (H.264) или WebM.
+                {mediaErrorMessage(mediaError)}
               </p>
             )}
             {localVideo && (
@@ -342,7 +370,7 @@ export function VideoPlayerShowcase({
                 <dt>Статус</dt>
                 <dd>
                   {mediaError != null
-                    ? `ошибка декодирования (код ${mediaError})`
+                    ? `${MEDIA_ERROR_LABELS[mediaError] ?? "MEDIA_ERR"} (код ${mediaError})`
                     : "источник назначен"}
                 </dd>
               </div>
@@ -355,6 +383,7 @@ export function VideoPlayerShowcase({
             key={`${state}-${playerSource}`}
             src={playerSource}
             onError={handlePlayerError}
+            onPlay={handlePlayerPlay}
             title={localVideo?.name ?? "Поддержка и сопротивление"}
             description={
               localVideo
