@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { CRM_ROLE_LABEL } from "@/domain/identity/roles";
 import { sessionFromDto, type EmployeeSession } from "@/domain/identity/session";
 import { fetchSession, type SessionOutcome } from "@/application/session-client";
+import { rememberReturnPath } from "@/domain/identity/return-path";
 import { AuthenticatedSessionProvider } from "./session-context";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 
 /** Where an unauthenticated employee is sent. A fixed literal, never built from input. */
@@ -107,8 +109,14 @@ export function SessionBoundary({ children, fetchSessionImpl = fetchSession }: S
 
   // Redirect rather than render for an unauthenticated employee. The target is
   // a fixed literal, so there is no redirect parameter an attacker could steer.
+  //
+  // Where the employee was heading is remembered in sessionStorage instead of in
+  // the URL — same reason: a return path in a link is a return path an attacker
+  // can choose. See domain/identity/return-path.ts.
   React.useEffect(() => {
-    if (state.kind === "unauthenticated") router.replace(LOGIN_REDIRECT);
+    if (state.kind !== "unauthenticated") return;
+    rememberReturnPath(window.location.pathname + window.location.search);
+    router.replace(LOGIN_REDIRECT);
   }, [state.kind, router]);
 
   const retry = React.useCallback(() => void load("retry"), [load]);
@@ -149,6 +157,13 @@ export function SessionBoundary({ children, fetchSessionImpl = fetchSession }: S
               Код обращения: <span className="font-mono">{state.requestId}</span>
             </p>
           ) : null}
+          {/*
+            A session that is valid but not a CRM employee is a dead end, so the
+            one available action is to leave. CRM login itself never produces this
+            state — the login route drops the cookie for a non-staff account — but
+            a session obtained elsewhere on the same host can still land here.
+          */}
+          <SignOutButton className="mt-4 w-full" />
         </BoundaryPanel>
       );
 

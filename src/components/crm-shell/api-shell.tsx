@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { CRM_ROLE_LABEL } from "@/domain/identity/roles";
 import type { EmployeeSession } from "@/domain/identity/session";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 
 /**
  * Bounded api-mode shell.
@@ -48,9 +49,12 @@ export function ApiShell({
           </ul>
         </nav>
 
-        <div className="ml-auto text-right">
-          <p className="text-sm font-medium text-text-primary">{session.displayName}</p>
-          <p className="text-2xs text-text-muted">{CRM_ROLE_LABEL[session.role]}</p>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-sm font-medium text-text-primary">{session.displayName}</p>
+            <p className="text-2xs text-text-muted">{CRM_ROLE_LABEL[session.role]}</p>
+          </div>
+          <SignOutButton />
         </div>
       </header>
 
