@@ -29,13 +29,33 @@ export function ApiShell({
 }) {
   return (
     <div className="flex min-h-dvh w-full flex-col bg-background">
+      {/*
+        Every child here is a flex item with the default `min-width: auto`, so the
+        header's width floor is the SUM of its children's min-content widths. Once
+        that floor exceeds the viewport the header — a block in the full-height
+        column — widens the document itself, which is a document-level horizontal
+        scroll at 320px and at 200% zoom.
+
+        The floor is therefore made explicit instead of accidental: the badge, the
+        section navigation and the sign-out action never shrink (they are the
+        things an employee must still be able to reach), the wordmark is dropped
+        on narrow viewports because the badge beside it already carries the brand,
+        and the identity text is the one element allowed to give — it truncates.
+      */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded bg-accent text-2xs font-bold text-accent-foreground">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent text-2xs font-bold text-accent-foreground">
           ATA
         </span>
-        <span className="text-sm font-semibold text-text-primary">ATA CRM</span>
+        {/*
+          `md` rather than `sm`: at 200% zoom the viewport is still ~640px wide
+          (a breakpoint is a CSS pixel query and does not move when the root font
+          size doubles), while every box inside it is twice as large. Hiding the
+          wordmark only below `sm` therefore still left the identity text with a
+          few pixels at 200% zoom and rendered it as a bare ellipsis.
+        */}
+        <span className="hidden text-sm font-semibold text-text-primary md:inline">ATA CRM</span>
 
-        <nav aria-label="Разделы CRM" className="ml-4">
+        <nav aria-label="Разделы CRM" className="ml-4 shrink-0">
           <ul>
             <li>
               <Link
@@ -49,12 +69,19 @@ export function ApiShell({
           </ul>
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-medium text-text-primary">{session.displayName}</p>
-            <p className="text-2xs text-text-muted">{CRM_ROLE_LABEL[session.role]}</p>
+        <div className="ml-auto flex min-w-0 items-center gap-3">
+          {/*
+            `min-w-0` + `truncate`: without both, the name's min-content width is a
+            hard floor no amount of available space can reduce. `title` keeps the
+            full name reachable when it is visually clipped.
+          */}
+          <div className="min-w-0 text-right">
+            <p className="truncate text-sm font-medium text-text-primary" title={session.displayName}>
+              {session.displayName}
+            </p>
+            <p className="truncate text-2xs text-text-muted">{CRM_ROLE_LABEL[session.role]}</p>
           </div>
-          <SignOutButton />
+          <SignOutButton className="shrink-0" />
         </div>
       </header>
 
