@@ -1,11 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { FIXTURE, REVIEW_E2E, manifest, nextMentor } from "./support/review-e2e-config";
+import { manifest, ownerName } from "./support/review-e2e-config";
 import {
-  REPORT_REVIEW_PATH,
   enrollmentLevels,
   learnerResubmit,
   levelStatus,
   loginAndOpenReview,
+  nextMentor,
+  ownerRow,
   reviewRows,
   submissionStatus,
   submittedRevisionNumber,
@@ -17,14 +18,17 @@ import {
  * Journeys F–L: resubmission, zero-reward approval, idempotency, the two-reviewer
  * race, and the flag boundaries.
  *
- * ORDERING IS LOAD-BEARING. These depend on `01-queue-and-inspection.spec.ts`
- * having sent Learner A back for revision, so the files carry numeric prefixes and
+ * Journeys H and I own a report each (`learnerB`, `learnerC`) that nothing else
+ * decides, so they hold wherever they land in the run. Journeys F and G continue
+ * the `learnerA` chain begun in `01-queue-and-inspection.spec.ts`: proving that a
+ * CORRECTED revision returns to the queue and is then approved requires the
+ * revision request to have happened first, so the files carry numeric prefixes and
  * the suite runs on one worker. Playwright orders files alphabetically, and the
  * original names (`decision-…` before `review-…`) silently inverted the chain —
  * every dependent test failed until the prefixes made the order explicit.
  *
- * The dependency itself is intrinsic: proving that a *corrected* revision returns
- * to the queue and is then approved requires the revision request to happen first.
+ * Each link of the chain asserts the state it requires before acting, so a broken
+ * chain reports where it broke instead of failing as a UI timeout.
  */
 
 test.beforeAll(async ({ browser }) => {
@@ -42,8 +46,8 @@ test.beforeAll(async ({ browser }) => {
  * claimed. Whichever settles first tells us which branch we are in: the claim
  * prompt (unclaimed) or the report content (already ours).
  */
-async function openAndPrepare(page: Page, learnerName: string) {
-  await page.getByRole("row", { name: new RegExp(learnerName) }).getByRole("button", { name: /открыть/i }).click();
+async function openAndPrepare(page: Page, ownerKey: string) {
+  await ownerRow(page, ownerKey).getByRole("button", { name: /открыть/i }).click();
 
   const claim = page.getByRole("button", { name: /взять в работу/i });
   const content = page.getByRole("heading", { name: /содержание отчёта/i });
@@ -67,9 +71,9 @@ test.describe("Journey F — corrected revision returns to the queue", () => {
     expect(submissionStatus(learnerA.submissionId)).toBe("rejected");
     const before = submittedRevisionNumber(learnerA.submissionId);
 
-    // Driven through the backend's own learner runtime, entirely outside the CRM:
+    // Driven through the backend's own learner API, entirely outside the CRM:
     // the reviewer UI must have no way to touch a learner draft.
-    learnerResubmit(learnerA.userId, "journeyF");
+    await learnerResubmit("learnerA", "journeyF");
 
     expect(submissionStatus(learnerA.submissionId)).toBe("pending_review");
     expect(submittedRevisionNumber(learnerA.submissionId)).toBeGreaterThan(before);
@@ -77,10 +81,11 @@ test.describe("Journey F — corrected revision returns to the queue", () => {
     await loginAndOpenReview(page, nextMentor());
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
-    await expect(table.getByText("MR1R Learner A")).toBeVisible();
+    await expect(table.getByText(ownerName("learnerA"))).toBeVisible();
     // The queue shows the NEW revision number.
-    const row = page.getByRole("row", { name: /MR1R Learner A/ });
-    await expect(row).toContainText(`№${submittedRevisionNumber(learnerA.submissionId)}`);
+    await expect(ownerRow(page, "learnerA")).toContainText(
+      `№${submittedRevisionNumber(learnerA.submissionId)}`,
+    );
   });
 });
 
@@ -89,11 +94,15 @@ test.describe("Journey F — corrected revision returns to the queue", () => {
 test.describe("Journey G — approve the corrected revision", () => {
   test("L3 completes, L4 becomes available, zero XPTransaction", async ({ page }) => {
     const learnerA = manifest().learnerA;
+    // The corrected revision must be back in review, or this proves nothing about
+    // approving a CORRECTED report.
+    expect(submissionStatus(learnerA.submissionId)).toBe("pending_review");
+    expect(submittedRevisionNumber(learnerA.submissionId)).toBeGreaterThan(2);
     expect(xpTransactionCount()).toBe(0);
     const reviewsBefore = reviewRows().length;
 
     await loginAndOpenReview(page, nextMentor());
-    await openAndPrepare(page, "MR1R Learner A");
+    await openAndPrepare(page, "learnerA");
 
     await page.getByRole("button", { name: /принять отчёт/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -118,9 +127,13 @@ test.describe("Journey G — approve the corrected revision", () => {
   });
 
   test("the approved report leaves the pending queue", async ({ page }) => {
+    expect(submissionStatus(manifest().learnerA.submissionId)).toBe("approved");
+
     await loginAndOpenReview(page, nextMentor());
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByRole("table").getByText("MR1R Learner A")).toHaveCount(0);
+    await expect(page.getByRole("table").getByText(ownerName("learnerA"))).toHaveCount(0);
+    // Approving one report did not empty the queue for anyone else.
+    await expect(page.getByRole("table").getByText(ownerName("queueAlpha"))).toBeVisible();
   });
 });
 
@@ -132,8 +145,12 @@ test.describe("Journey H — idempotency", () => {
     // controls, because that is the only way to send the SAME key twice — which is
     // exactly what a retry after an ambiguous timeout does. The UI mints its key
     // internally, so it cannot demonstrate a replay.
-    await loginAndOpenReview(page, nextMentor());
     const learnerB = manifest().learnerB;
+    // Journey H owns this report outright: no other journey claims, approves or
+    // rejects it, so a replay is measured against a report only this test has touched.
+    expect(submissionStatus(learnerB.submissionId)).toBe("pending_review");
+
+    await loginAndOpenReview(page, nextMentor());
     const ref = submissionRef(learnerB.submissionId);
     const key = "crm-approve-journeyh-replay01";
 

@@ -5,8 +5,7 @@ import {
   FIXTURE,
   REVIEW_E2E,
   manifest,
-  nextAdmin,
-  nextMentor,
+  ownerName,
 } from "./support/review-e2e-config";
 import {
   REPORT_REVIEW_PATH,
@@ -15,21 +14,27 @@ import {
   login,
   loginAndOpenReview,
   loginError,
-  reviewRows,
+  nextAdmin,
+  nextMentor,
+  ownerRow,
   submissionStatus,
   warmRoutes,
   xpTransactionCount,
 } from "./support/helpers";
 
 /**
- * MR-1R journeys A–L against the real RR-1 Backend on a seeded synthetic
- * migration-34 database carrying the operator-approved revision 3.
+ * MR-1R journeys A–L against the real RR-1 Backend on a synthetic migration-34
+ * database carrying the operator-approved revision 3, seeded from scratch by
+ * global setup before this file runs.
  *
- * Tests run in declaration order on one worker, and the later journeys
- * deliberately depend on earlier ones (a revision request must precede a
- * resubmission, which must precede the approval of the corrected revision).
- * Each test that logs in spends a fresh pooled identity so the backend's
- * per-address login rate limit never becomes the reason a test fails.
+ * Every scenario that DECIDES a report owns a report nobody else touches, and the
+ * queue-rendering journeys read two owners (`queueAlpha`, `queueBeta`) that no
+ * journey ever decides. So an approval here cannot empty a queue there, and these
+ * assertions hold wherever the test lands in the run.
+ *
+ * Journeys D→E (and F→G in the next file) are a deliberate chain on `learnerA`:
+ * proving that a CORRECTED revision is approved requires a revision request first.
+ * Each link states the state it needs, so a broken chain fails where it broke.
  */
 
 test.beforeAll(async ({ browser }) => {
@@ -41,14 +46,16 @@ test.beforeAll(async ({ browser }) => {
 /* ------------------------------------------------- A: mentor login + queue */
 
 test.describe("Journey A — mentor login and queue", () => {
-  test("a mentor reaches the queue and sees both pending reports", async ({ page }) => {
+  test("a mentor reaches the queue and sees the pending reports", async ({ page }) => {
     await loginAndOpenReview(page, nextMentor());
 
     await expect(page.getByRole("heading", { name: /отчёты на проверке/i })).toBeVisible();
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
-    await expect(table.getByText("MR1R Learner A")).toBeVisible();
-    await expect(table.getByText("MR1R Learner B")).toBeVisible();
+    // Two reports that no journey ever decides: whatever else has run, these are
+    // pending, so this assertion measures the queue rather than the run order.
+    await expect(table.getByText(ownerName("queueAlpha"))).toBeVisible();
+    await expect(table.getByText(ownerName("queueBeta"))).toBeVisible();
     // Real backend rows, with the real level title from revision 3.
     await expect(table.getByText(/demo-сделок/i).first()).toBeVisible();
   });
@@ -70,9 +77,9 @@ test.describe("Journey A — mentor login and queue", () => {
     await loginAndOpenReview(page, nextMentor());
     await expect(page.getByRole("table")).toBeVisible();
 
-    await page.getByLabel(/фильтр/i).fill("Learner A");
-    await expect(page.getByRole("table").getByText("MR1R Learner A")).toBeVisible();
-    await expect(page.getByRole("table").getByText("MR1R Learner B")).toHaveCount(0);
+    await page.getByLabel(/фильтр/i).fill("Queue Alpha");
+    await expect(page.getByRole("table").getByText(ownerName("queueAlpha"))).toBeVisible();
+    await expect(page.getByRole("table").getByText(ownerName("queueBeta"))).toHaveCount(0);
 
     await page.getByLabel(/фильтр/i).fill("zzzz-no-match");
     await expect(page.getByText(/ничего не найдено/i)).toBeVisible();
@@ -87,7 +94,7 @@ test.describe("Journey B — admin reviews without CURRICULUM_V2_ADMIN_ENABLED",
     // that report review does not depend on that flag.
     await loginAndOpenReview(page, nextAdmin());
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByRole("table").getByText("MR1R Learner A")).toBeVisible();
+    await expect(page.getByRole("table").getByText(ownerName("queueAlpha"))).toBeVisible();
   });
 });
 
@@ -139,10 +146,14 @@ test.describe("Journey C — staff admission is not reviewer authority", () => {
 
 test.describe("Journey D — inspect the report", () => {
   test("claim reveals the payload, five trades, summary and R1–R7", async ({ page }) => {
+    // The first link of the chain: the report this journey inspects must still be
+    // awaiting review, and the seeder is what guarantees that.
+    expect(submissionStatus(manifest().learnerA.submissionId)).toBe("pending_review");
+
     // The chain reviewer, not a pooled one: this test CLAIMS Learner A and Journey E
     // decides on that same claim. A claim belongs to one reviewer.
     await loginAndOpenReview(page, CHAIN_MENTOR);
-    await page.getByRole("row", { name: /MR1R Learner A/ }).getByRole("button", { name: /открыть/i }).click();
+    await ownerRow(page, "learnerA").getByRole("button", { name: /открыть/i }).click();
 
     // Before claiming the backend releases no payload at all.
     await expect(page.getByText(/возьмите отчёт в работу/i)).toBeVisible();
@@ -176,10 +187,11 @@ test.describe("Journey E — request a revision", () => {
   test("L3 stays incomplete, L4 stays locked, no XP", async ({ page }) => {
     const before = xpTransactionCount();
     const learnerA = manifest().learnerA;
+    expect(submissionStatus(learnerA.submissionId)).toBe("pending_review");
 
     // Same reviewer as Journey D, so the claim taken there is still ours.
     await loginAndOpenReview(page, CHAIN_MENTOR);
-    await page.getByRole("row", { name: /MR1R Learner A/ }).getByRole("button", { name: /открыть/i }).click();
+    await ownerRow(page, "learnerA").getByRole("button", { name: /открыть/i }).click();
     // Wait for the detail to settle before probing: an immediate isVisible() races
     // the loading state and would skip the claim entirely.
     const claim = page.getByRole("button", { name: /взять в работу/i });
@@ -211,9 +223,12 @@ test.describe("Journey E — request a revision", () => {
   });
 
   test("the revision-requested report leaves the pending queue", async ({ page }) => {
+    expect(submissionStatus(manifest().learnerA.submissionId)).toBe("rejected");
+
     await loginAndOpenReview(page, nextMentor());
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByRole("table").getByText("MR1R Learner A")).toHaveCount(0);
-    await expect(page.getByRole("table").getByText("MR1R Learner B")).toBeVisible();
+    await expect(page.getByRole("table").getByText(ownerName("learnerA"))).toHaveCount(0);
+    // The queue itself is intact — only the one report left it.
+    await expect(page.getByRole("table").getByText(ownerName("queueAlpha"))).toBeVisible();
   });
 });
