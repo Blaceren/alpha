@@ -154,9 +154,39 @@ test.describe("401 unauthenticated", () => {
     await page.goto("/today");
 
     await expect(page).toHaveURL(/\/login\?reason=session_required$/);
-    await expect(page.getByRole("heading", { name: "Alfa Trade Academy CRM" })).toBeVisible();
+
+    // CRM-AUTH-1 replaced the Phase 1A placeholder — which had no form and simply
+    // linked to /today — with the real staff credential form. This asserted the
+    // placeholder's "Alfa Trade Academy CRM" heading, which now exists only in
+    // mock mode, so it failed for the right reason: the page it described is gone.
+    //
+    // The replacement asserts the semantics that must hold whatever the panel is
+    // called — an employee bounced off a protected route lands on a usable login
+    // form — instead of one heading string.
+    await expect(page.getByRole("heading", { name: "Вход для сотрудников" })).toBeVisible();
+    await expect(page.getByLabel("Рабочий email")).toBeVisible();
+    await expect(page.getByLabel("Пароль")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Войти" })).toBeVisible();
+
+    // Still no CRM chrome: no shell navigation, and not the deferred-section panel.
+    await expect(page.getByRole("navigation")).toHaveCount(0);
     const html = await page.content();
     expect(html).not.toContain("Раздел ещё не подключён");
+  });
+
+  test("stays on the login page instead of looping back into the protected route", async ({
+    page,
+  }) => {
+    // The redirect is bounded: one hop to a fixed literal. A loop would leave the
+    // URL changing and the form never settling, so the URL is re-checked after the
+    // page has had time to perform any further navigation.
+    await useState(page, "unauthenticated");
+    await page.goto("/today");
+    await expect(page).toHaveURL(/\/login\?reason=session_required$/);
+
+    await page.waitForTimeout(1_000);
+    await expect(page).toHaveURL(/\/login\?reason=session_required$/);
+    await expect(page.getByRole("button", { name: "Войти" })).toBeVisible();
   });
 });
 
