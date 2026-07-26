@@ -24,8 +24,11 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly seven rewrite definitions", () => {
-    expect(buildRewrites(env)).toHaveLength(7);
+  it("produces exactly twelve rewrite definitions", () => {
+    // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R).
+    // Pinning the count is the point: a new proxied path must be a deliberate
+    // change to this number, never a side effect.
+    expect(buildRewrites(env)).toHaveLength(12);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -49,7 +52,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the seven reviewed paths", () => {
+  it("exposes exactly the twelve reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -58,6 +61,11 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/owner/history",
+      "/api/curriculum/v2/report-reviews/queue",
+      "/api/curriculum/v2/report-submissions/:submissionRef",
+      "/api/curriculum/v2/report-submissions/:submissionRef/claim",
+      "/api/curriculum/v2/report-submissions/:submissionRef/reject",
+      "/api/curriculum/v2/report-submissions/:submissionRef/approve",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -186,6 +194,11 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/owner/history",
+      "/api/curriculum/v2/report-reviews/queue",
+      "/api/curriculum/v2/report-submissions/:submissionRef",
+      "/api/curriculum/v2/report-submissions/:submissionRef/claim",
+      "/api/curriculum/v2/report-submissions/:submissionRef/reject",
+      "/api/curriculum/v2/report-submissions/:submissionRef/approve",
     ]);
     for (const forbidden of [
       "/api/:path*",
@@ -200,6 +213,15 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/owner",
       "/api/crm/v1/audit",
       "/api/crm/v1/user-360",
+      // MR-1R added five exact reviewer paths. These stay forbidden: a wildcard
+      // would expose the whole curriculum surface, and attachments must remain
+      // unreachable while the attachment flag is off.
+      "/api/curriculum/:path*",
+      "/api/curriculum/v2/:path*",
+      "/api/curriculum/v2/report-submissions/:path*",
+      "/api/curriculum/v2/report-submissions/:submissionRef/attachments",
+      "/api/curriculum/v2/report-attachments/:attachmentId",
+      "/api/curriculum/v2/report-submissions/:submissionRef/reassign",
     ]) {
       expect(sources).not.toContain(forbidden);
     }

@@ -211,7 +211,10 @@ describe("proxy surface stays explicit", () => {
     // Auth is served by route handlers, not rewrites, so the seven reviewed
     // rewrite paths must be exactly as they were. This is what keeps the
     // existing `/users` API mode compatible.
-    expect(PROXIED_PATHS).toEqual([
+    // MR-1R appended five exact reviewer paths. The seven CRM v1 data paths that
+    // CRM-AUTH-1 shipped must remain first and unchanged: auth is still served by
+    // route handlers, not rewrites, and existing api-mode Users is untouched.
+    expect(PROXIED_PATHS.slice(0, 7)).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
       "/api/crm/v1/users/:userId",
@@ -220,6 +223,14 @@ describe("proxy surface stays explicit", () => {
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/owner/history",
     ]);
+    // No auth or CSRF route was ever added to the rewrite list.
+    for (const forbidden of ["/api/auth/login", "/api/auth/logout", "/api/csrf"]) {
+      expect(PROXIED_PATHS).not.toContain(forbidden);
+    }
+    // Still no wildcard anywhere.
+    for (const path of PROXIED_PATHS) {
+      expect(path).not.toContain("*");
+    }
   });
 
   it("the server-side backend path list is a closed allowlist", () => {

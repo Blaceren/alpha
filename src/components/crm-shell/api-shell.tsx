@@ -59,7 +59,13 @@ export function ApiShell({
       </header>
 
       <main id="crm-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 focus:outline-none">
-        <div className="mx-auto max-w-6xl">{children}</div>
+        {/*
+          `min-w-0` lets this container shrink below its content width. Without it,
+          `main`'s default `min-width: auto` as a column flex item allows wide
+          content (a data table) to widen the document instead of scrolling inside
+          its own container.
+        */}
+        <div className="mx-auto min-w-0 max-w-6xl">{children}</div>
       </main>
     </div>
   );

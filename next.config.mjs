@@ -95,6 +95,26 @@ export const USER_OWNER_PATH = "/api/crm/v1/users/:userId/owner";
  */
 export const USER_OWNER_HISTORY_PATH = "/api/crm/v1/users/:userId/owner/history";
 
+/* --------------------------------------------- Mentor report review (MR-1R)
+ *
+ * Five exact reviewer paths, each a deliberate addition. `:submissionRef` matches
+ * EXACTLY ONE segment and each command path ends in an exact terminal verb, so
+ * `/report-submissions/x/y/z` and any unlisted verb are NOT proxied and fall
+ * through to the CRM app.
+ *
+ * Note these are `/api/curriculum/v2/*`, not `/api/crm/v1/*`: report review is a
+ * curriculum-domain capability the CRM consumes. Same backend origin, same
+ * explicit-allowlist rule, no wildcard.
+ *
+ * The attachment routes are deliberately ABSENT. Attachments stay disabled, and a
+ * path that is not listed cannot be called by accident.
+ */
+export const REVIEW_QUEUE_PATH = "/api/curriculum/v2/report-reviews/queue";
+export const REVIEW_DETAIL_PATH = "/api/curriculum/v2/report-submissions/:submissionRef";
+export const REVIEW_CLAIM_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/claim";
+export const REVIEW_REJECT_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/reject";
+export const REVIEW_APPROVE_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/approve";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -104,6 +124,11 @@ export const PROXIED_PATHS = [
   OWNER_CANDIDATES_PATH,
   USER_OWNER_PATH,
   USER_OWNER_HISTORY_PATH,
+  REVIEW_QUEUE_PATH,
+  REVIEW_DETAIL_PATH,
+  REVIEW_CLAIM_PATH,
+  REVIEW_REJECT_PATH,
+  REVIEW_APPROVE_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

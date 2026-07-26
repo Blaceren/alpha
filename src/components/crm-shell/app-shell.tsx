@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { MockSessionProvider, useSession } from "./session-context";
 import { SessionBoundary } from "./session-boundary";
 import { ApiShell, ApiRouteDeferred, API_USERS_PATH } from "./api-shell";
+import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
@@ -67,6 +68,7 @@ export function AppShell({
  * provider in api mode, so mounting one could only fail or lie. Instead this
  * decides what to show from the pathname alone:
  *
+ *   /report-review    -> the mentor report review workspace (queue + detail)
  *   /users            -> the production Users v1 list
  *   /users/{id}       -> the production learner detail foundation. `{id}` is a
  *                        single segment; the workspace itself validates it and
@@ -82,6 +84,18 @@ export function AppShell({
 function ApiModeLanding() {
   const { session } = useSession();
   const pathname = usePathname();
+
+  // Mentor report review. A staff route: it renders for any authenticated CRM
+  // employee, and the REVIEWER boundary is decided by the Backend queue response
+  // inside the workspace — a valid staff member who is not a reviewer gets a
+  // bounded forbidden panel here, never an authentication loop.
+  if (pathname === REPORT_REVIEW_PATH) {
+    return (
+      <ApiShell session={session}>
+        <ReportReviewWorkspace />
+      </ApiShell>
+    );
+  }
 
   if (pathname === API_USERS_PATH) {
     return (
