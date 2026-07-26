@@ -7,11 +7,15 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 /**
  * Curriculum write contract.
  *
- * CI-2 made the curriculum integration READ-ONLY. CI-3 adds EXACTLY ONE bounded
- * learner write surface: the server-graded L2 assessment (start attempt + submit
- * attempt). This test therefore allows the assessment attempt routes/proxy/client
- * and NOTHING else — no report submission, no lesson-progress, no admin
- * publish/archive, no other mutation — anywhere in the curriculum/assessment code.
+ * CI-2 made the curriculum integration READ-ONLY. CI-3 added EXACTLY ONE bounded
+ * learner write surface: the server-graded L2 assessment (start + submit attempt).
+ * CI-4 adds EXACTLY ONE more bounded learner write surface: the L3 report
+ * workflow (draft save + submit + resubmit).
+ *
+ * This test therefore allows the assessment attempt surface and the report
+ * learner surface and NOTHING else — no reviewer/mentor review, no admin
+ * publish/archive/authoring, no lesson-progress, no attachment, no other
+ * mutation — anywhere in the curriculum/assessment/report code.
  */
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -28,14 +32,23 @@ const SCAN_DIRS = [
   "src/server/curriculum",
   "src/server/proxy/curriculum-proxy.ts",
   "src/server/proxy/assessment-proxy.ts",
+  "src/server/proxy/report-proxy.ts",
   "src/app/api/backend/curriculum",
   "src/features/curriculum-api",
   "src/lib/assessment",
   "src/features/assessment",
+  "src/lib/report",
+  "src/features/report",
 ].map((p) => path.join(REPO_ROOT, p));
 
 /** The sanctioned CI-3 assessment write surface (start + submit attempt). */
 const ASSESSMENT_WRITE = /assessment-proxy|assessment-client|level-assessment|assessment-machine|[\\/]assessment[\\/]/;
+/** The sanctioned CI-4 learner report write surface (draft + submit + resubmit). */
+const REPORT_WRITE = /report-proxy|report-client|level-report|report-machine|[\\/]report[\\/]/;
+
+function sanctionedWrite(file: string): boolean {
+  return ASSESSMENT_WRITE.test(file) || REPORT_WRITE.test(file);
+}
 
 function files(): string[] {
   const result: string[] = [];
@@ -48,33 +61,44 @@ function files(): string[] {
   return result;
 }
 
-describe("curriculum write contract (CI-3: read-only + bounded assessment write)", () => {
+describe("curriculum write contract (CI-4: read-only + bounded assessment & report writes)", () => {
   const sources = files().map((f) => ({ f, src: fs.readFileSync(f, "utf8") }));
 
   it("has source to scan", () => {
     expect(sources.length).toBeGreaterThan(5);
   });
 
-  it("declares write HTTP handlers ONLY in the assessment attempt routes", () => {
+  it("declares write HTTP handlers ONLY in the assessment or report learner routes", () => {
     for (const { f, src } of sources) {
       if (!f.includes(`${path.sep}api${path.sep}`)) continue;
       if (/export\s+(async\s+)?function\s+(POST|PUT|PATCH|DELETE)/.test(src)) {
-        expect(ASSESSMENT_WRITE.test(f), `${f} may only be a write route if it is the assessment attempt surface`).toBe(true);
+        expect(sanctionedWrite(f), `${f} may only be a write route if it is the assessment or report learner surface`).toBe(true);
       }
     }
   });
 
-  it("issues write fetch methods ONLY from the assessment proxy", () => {
+  it("issues write fetch methods ONLY from the assessment or report surface", () => {
     for (const { f, src } of sources) {
       if (/method:\s*["'](POST|PUT|PATCH|DELETE)["']/.test(src)) {
-        expect(ASSESSMENT_WRITE.test(f), `${f} may only use a write method in the assessment surface`).toBe(true);
+        expect(sanctionedWrite(f), `${f} may only use a write method in the assessment or report surface`).toBe(true);
       }
     }
   });
 
-  it("sends no report/lesson-progress/admin mutation path anywhere", () => {
+  it("never references a reviewer/admin/attachment/lesson-progress mutation path", () => {
+    // These remain forbidden EVERYWHERE (no mentor UI, no admin, no attachments).
     for (const { f, src } of sources) {
-      expect(src, `${f} references a forbidden mutation path`).not.toMatch(/report\/(submit|draft|resubmit)|lesson-progress|\/publish|\/archive|report-submissions|report-reviews/);
+      expect(src, `${f} references a forbidden mutation path`).not.toMatch(
+        /lesson-progress|\/publish\b|\/archive\b|report-submissions|report-reviews|report\/attachments|report-attachments/,
+      );
+    }
+  });
+
+  it("uses report write paths (draft/submit/resubmit) ONLY in the report surface", () => {
+    for (const { f, src } of sources) {
+      if (/report\/(submit|draft|resubmit)\b/.test(src)) {
+        expect(REPORT_WRITE.test(f), `${f} may only use a report write path in the report surface`).toBe(true);
+      }
     }
   });
 

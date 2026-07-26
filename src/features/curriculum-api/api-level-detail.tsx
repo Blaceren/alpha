@@ -4,9 +4,11 @@ import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent } from "@/lib/curriculum/academy-view";
 import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
 import { LevelAssessment } from "@/features/assessment/level-assessment";
+import { LevelReport } from "@/features/report/level-report";
 import "@/features/curriculum-api/curriculum-api.css";
 
 const ASSESSMENT_LOCALE = "ru";
+const REPORT_LOCALE = "ru";
 
 const CONTENT_NOTE: Record<NonNullable<AcademyLevelContent["unavailableReason"]>, string> = {
   not_configured: "Учебный материал для этого уровня ещё не привязан.",
@@ -100,6 +102,17 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
               stableCode={summary.levelCode}
               locale={ASSESSMENT_LOCALE}
               alreadyCompleted={summary.state === "completed"}
+              nextLevelCode={navigation.nextLevelCode}
+            />
+          ) : null}
+
+          {/* Server-authoritative L3 learner report (CI-4). Rendered for accessible
+              report levels; the definition, draft, submit, revision and approval
+              all come from the Backend. Completion/XP are never computed here. */}
+          {summary.typeInfo.type === "report" && summary.routeAccessible ? (
+            <LevelReport
+              stableCode={summary.levelCode}
+              locale={REPORT_LOCALE}
               nextLevelCode={navigation.nextLevelCode}
             />
           ) : null}
