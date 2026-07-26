@@ -147,7 +147,9 @@ function renderControl(
                 disabled={common.disabled}
                 onChange={() => onChange(field.stableKey, choice.code)}
               />
-              <label htmlFor={`${common.id}-${choice.code}`}>{choice.label}</label>
+              {/* Fall back to the stable code when the definition ships no label,
+                  so a choice is never an unlabelled control. */}
+              <label htmlFor={`${common.id}-${choice.code}`}>{choice.label || choice.code}</label>
             </div>
           ))}
         </fieldset>
@@ -175,7 +177,7 @@ function renderControl(
                   onChange(field.stableKey, [...next]);
                 }}
               />
-              <label htmlFor={`${common.id}-${choice.code}`}>{choice.label}</label>
+              <label htmlFor={`${common.id}-${choice.code}`}>{choice.label || choice.code}</label>
             </div>
           ))}
         </fieldset>

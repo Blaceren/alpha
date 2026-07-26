@@ -347,9 +347,16 @@ function ReadOnlyReport({
 function formatValue(type: string, value: unknown, choices: { code: string; label: string }[]): string {
   if (value === undefined || value === null || value === "") return "—";
   if (type === "boolean") return value === true ? "Да" : value === false ? "Нет" : "—";
-  if (type === "single_choice") return choices.find((c) => c.code === value)?.label ?? String(value);
+  // Fall back to the stable code when the definition ships no choice label.
+  if (type === "single_choice") {
+    const label = choices.find((c) => c.code === value)?.label;
+    return label && label.trim() ? label : String(value);
+  }
   if (type === "multi_choice" && Array.isArray(value)) {
-    return value.map((code) => choices.find((c) => c.code === code)?.label ?? String(code)).join(", ") || "—";
+    return value.map((code) => {
+      const label = choices.find((c) => c.code === code)?.label;
+      return label && label.trim() ? label : String(code);
+    }).join(", ") || "—";
   }
   return String(value);
 }
