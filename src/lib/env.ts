@@ -32,6 +32,7 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_ASSESSMENT_ENABLED",
   "CURRICULUM_V2_REPORT_ENABLED",
   "CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED",
+  "CURRICULUM_V2_CHECKPOINT_ENABLED",
   "REPORT_ATTACHMENT_S3_BUCKET",
   "REPORT_ATTACHMENT_S3_REGION",
   "REPORT_ATTACHMENT_S3_ENDPOINT",
@@ -66,6 +67,7 @@ const envSchema = z.object({
   CURRICULUM_V2_ASSESSMENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_REPORT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_CHECKPOINT_ENABLED: z.enum(["true", "false"]).optional(),
   REPORT_ATTACHMENT_S3_BUCKET: z.string().optional(),
   REPORT_ATTACHMENT_S3_REGION: z.string().optional(),
   REPORT_ATTACHMENT_S3_ENDPOINT: z.string().url().optional(),
@@ -198,6 +200,22 @@ export function isCurriculumV2ReportEnabled(env: NodeJS.ProcessEnv = process.env
 // Read at call time; absent env is the safe disabled default.
 export function isCurriculumV2ReportAttachmentsEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED === "true";
+}
+
+// Independent dynamic gate for the V2 financial-checkpoint runtime. Read at call
+// time; absent env is the safe disabled default.
+//
+// This flag governs ONLY whether checkpoint verification may be attempted at
+// all. It is deliberately independent of REPORT, XP, ADMIN, attachments and
+// Pocket: a checkpoint is neither a report nor a reward, and enabling any of
+// those must never enable balance verification as a side effect.
+//
+// Enabling it is NOT sufficient to verify a checkpoint. There is no
+// authoritative balance provider, so `resolveCheckpointVerification` still
+// answers `verification_unavailable` with the flag on — see
+// src/lib/curriculum/checkpoint.ts.
+export function isCurriculumV2CheckpointEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CURRICULUM_V2_CHECKPOINT_ENABLED === "true";
 }
 
 // Regression-only in-memory attachment storage/scanner backend. Activation

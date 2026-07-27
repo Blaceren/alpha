@@ -310,7 +310,15 @@ async function resolveScopeWithin(
     if (states.kind !== "resolved") return { kind: "not_enrolled" };
     const state = states.levels.find((item) => item.levelDefinition.id === level.id);
     if (!state) return { kind: "corrupt", reason: "submission_corrupt" };
-    access = state.state === "locked" || state.state === "xp_eligible" ? "locked" : state.state;
+    // `checkpoint_unverified` is unreachable here (the level type is already
+    // constrained to `report` above) but is folded into `locked` so a future
+    // state can never widen report access by falling through.
+    access =
+      state.state === "locked" ||
+      state.state === "xp_eligible" ||
+      state.state === "checkpoint_unverified"
+        ? "locked"
+        : state.state;
   }
   return {
     actorUserId,

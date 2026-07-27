@@ -24,6 +24,22 @@ The build is allowed to run without production secrets. Strict validation happen
 - `ALLOW_PRODUCTION_BETA_RESET`
 - `BETA_RESET_CONFIRM`
 - `POCKET_POSTBACK_ENABLED`
+- `CURRICULUM_V2_CHECKPOINT_ENABLED`
+
+### `CURRICULUM_V2_CHECKPOINT_ENABLED`
+
+Gates the V2 financial-checkpoint runtime. Absent or `false` means disabled, and
+disabled is the shipped default.
+
+It is independent of `CURRICULUM_V2_REPORT_ENABLED`, `CURRICULUM_V2_XP_ENABLED`,
+`CURRICULUM_V2_ADMIN_ENABLED`, `CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED` and
+`POCKET_POSTBACK_ENABLED`: a checkpoint is neither a report nor a reward, and
+enabling any of those must never enable balance verification as a side effect.
+
+**Setting it to `true` does not make a checkpoint passable.** There is no
+authoritative balance provider, so `resolveCheckpointVerification` still answers
+`verification_unavailable` — with the reason `provider_unconfigured` instead of
+`checkpoint_disabled`. See `docs/L4_CHECKPOINT_HANDOFF.md`.
 
 ## Local defaults
 

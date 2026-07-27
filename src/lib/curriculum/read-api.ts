@@ -4,6 +4,8 @@ import type {
   ModuleDefinition,
   UserCurriculumEnrollment,
 } from "@prisma/client";
+import type { CheckpointReadModel } from "./checkpoint";
+import { resolveCheckpointVerification, isFinancialCheckpointType } from "./checkpoint";
 import type { UserCurriculumLevelStatesResult } from "./level-state";
 import type { ResolveEnrollmentXpResult } from "./xp";
 import type {
@@ -69,6 +71,27 @@ function mapModule(moduleDefinition: ModuleDefinition) {
   };
 }
 
+/**
+ * The bounded checkpoint block. Emitted only for `financial_checkpoint` levels
+ * and only from definition + feature-flag state.
+ *
+ * It carries no observed balance, no remaining amount, no account data and no
+ * open metadata object — the read model has no field a financial value could
+ * occupy, so the privacy rule holds structurally rather than by review.
+ */
+function mapCheckpoint(checkpoint: CheckpointReadModel | null) {
+  if (!checkpoint) return null;
+  return {
+    kind: checkpoint.kind,
+    integrationCode: checkpoint.integrationCode,
+    verificationState: checkpoint.verificationState,
+    verificationReason: checkpoint.verificationReason,
+    canVerify: checkpoint.canVerify,
+    canStart: checkpoint.canStart,
+    canComplete: checkpoint.canComplete,
+  };
+}
+
 function mapLevelDefinition(levelDefinition: LevelDefinition) {
   return {
     levelNumber: levelDefinition.levelNumber,
@@ -111,6 +134,7 @@ function mapEnrolledModules(context: ResolvedLevelStates) {
         presentationState: item.state,
         blockers: [...item.blockers],
         progress: mapProgress(item.progress),
+        checkpoint: mapCheckpoint(item.checkpoint),
       })),
   }));
 }
@@ -129,6 +153,15 @@ function mapCompletedModules(context: CompletedContext) {
           ...mapLevelDefinition(levelDefinition),
           durableStatus: progress?.status ?? null,
           progress: mapProgress(progress),
+          // A completed enrollment has no level-state resolution, so the
+          // checkpoint block is derived directly from the definition here.
+          checkpoint: isFinancialCheckpointType(levelDefinition.type)
+            ? mapCheckpoint(
+                resolveCheckpointVerification({
+                  integrationCode: levelDefinition.featureUnlockCode,
+                }),
+              )
+            : null,
         };
       }),
   }));

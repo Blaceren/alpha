@@ -12,6 +12,11 @@ import {
   isCurriculumV2ReadEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import {
+  isFinancialCheckpointType,
+  resolveCheckpointVerification,
+  type CheckpointReadModel,
+} from "./checkpoint";
 import { CURRICULUM_AUDIT_ACTIONS } from "./constants";
 import {
   resolveUserCurriculumContext,
@@ -27,6 +32,12 @@ export type EffectiveLevelState =
   | "in_progress"
   | "available"
   | "xp_eligible"
+  // A financial checkpoint the learner has reached but that the platform cannot
+  // verify. Derived read-model state only: no UserLevelProgress status is added
+  // for it, and no durable row changes when a level presents this way. It is
+  // NOT `available` (nothing can be started) and NOT `locked` (the learner has
+  // legitimately arrived, and the sequence in front of it is complete).
+  | "checkpoint_unverified"
   | "locked";
 
 export type LevelStateBlockerCode =
@@ -35,7 +46,12 @@ export type LevelStateBlockerCode =
   | "definition_inactive"
   | "xp_engine_unavailable"
   | "xp_insufficient"
+  // A level that DEPENDS on a checkpoint cannot be evaluated.
   | "checkpoint_engine_unavailable"
+  // The checkpoint level ITSELF cannot be verified: no authoritative balance
+  // authority exists. Distinct from the blocker above, which is about a
+  // dependency rather than about the gate.
+  | "checkpoint_verification_unavailable"
   | "visibility_rule_unsupported";
 
 export type EffectiveLevelStateItem = {
@@ -44,6 +60,8 @@ export type EffectiveLevelStateItem = {
   progress: ResolvedProgress | null;
   state: EffectiveLevelState;
   blockers: LevelStateBlockerCode[];
+  /** Present only on `financial_checkpoint` levels; never carries a balance. */
+  checkpoint: CheckpointReadModel | null;
 };
 
 // Safe internal XP summary (never duplicated per level; each level exposes only
@@ -231,13 +249,39 @@ function deriveEnrolledLevelStates(
   const levels: EffectiveLevelStateItem[] = definitions.map((levelDefinition) => {
     const moduleDefinition = moduleById.get(levelDefinition.moduleId)!;
     const progress = progressByLevelId.get(levelDefinition.id) ?? null;
+    // A financial checkpoint is governed by an external authority, so it is
+    // resolved before the ordinary progress/blocker path. The checkpoint read
+    // model is definition- and flag-derived only; it never touches progress and
+    // never carries a financial value.
+    const isCheckpoint = isFinancialCheckpointType(levelDefinition.type);
+    const checkpoint = isCheckpoint
+      ? resolveCheckpointVerification({
+          integrationCode: levelDefinition.featureUnlockCode,
+        })
+      : null;
+
     if (progress) {
+      // A checkpoint completed by a future verification engine stays completed;
+      // any other durable status presents as unverified rather than as an
+      // ordinary in-progress learning level. The durable row is not modified —
+      // only how it reads.
+      if (isCheckpoint && progress.status !== "completed") {
+        return {
+          levelDefinition,
+          moduleDefinition,
+          progress,
+          state: "checkpoint_unverified",
+          blockers: ["checkpoint_verification_unavailable"],
+          checkpoint,
+        };
+      }
       return {
         levelDefinition,
         moduleDefinition,
         progress,
         state: progress.status,
         blockers: [],
+        checkpoint,
       };
     }
 
@@ -276,9 +320,22 @@ function deriveEnrolledLevelStates(
     if (levelDefinition.visibilityRule !== null) {
       blockers.push("visibility_rule_unsupported");
     }
+    // The checkpoint gate itself. Recorded before the state is chosen so a
+    // checkpoint can never fall through to `available`, and so the blocker is
+    // visible even when the level is locked for an unrelated reason.
+    const structurallyReachable = blockers.length === 0;
+    if (isCheckpoint) {
+      blockers.push("checkpoint_verification_unavailable");
+    }
 
     let state: EffectiveLevelState;
-    if (blockers.length === 0) {
+    if (isCheckpoint) {
+      // Reached and sequence-complete -> the learner is legitimately standing at
+      // the gate (`checkpoint_unverified`). Otherwise the ordinary lock applies.
+      // XP never opens a checkpoint (DD-030), so `xp_eligible` is not reachable
+      // here.
+      state = structurallyReachable ? "checkpoint_unverified" : "locked";
+    } else if (blockers.length === 0) {
       state = "available";
     } else if (
       xpEnabled &&
@@ -300,6 +357,7 @@ function deriveEnrolledLevelStates(
       progress,
       state,
       blockers,
+      checkpoint,
     };
   });
 
@@ -422,7 +480,12 @@ export type LevelStartDomainErrorCode =
   | "LEVEL_START_NO_ACTIVE_ENROLLMENT"
   | "LEVEL_START_ENROLLMENT_COMPLETED"
   | "LEVEL_STATE_CORRUPT"
-  | "LEVEL_START_NOT_AVAILABLE";
+  | "LEVEL_START_NOT_AVAILABLE"
+  // A financial checkpoint is never started like a learning level: it is
+  // resolved by an external authority. Typed separately from
+  // LEVEL_START_NOT_AVAILABLE so "this gate cannot be verified" is never
+  // mistaken for "you have not got here yet".
+  | "LEVEL_START_CHECKPOINT_UNVERIFIED";
 
 export class LevelStartDomainError extends Error {
   readonly code: LevelStartDomainErrorCode;
@@ -548,6 +611,18 @@ async function runStartTransaction(
     evaluationTime,
   );
 
+  // A financial checkpoint is refused before anything else, with or without an
+  // existing progress row: it is not a learning level, it cannot be started,
+  // and no progress may be created that would imply the learner is working on
+  // it. Refusing here also means no row is written that a later verification
+  // engine would have to reconcile.
+  if (isFinancialCheckpointType(state.levelDefinition.type)) {
+    throw new LevelStartDomainError(
+      "LEVEL_START_CHECKPOINT_UNVERIFIED",
+      "financial checkpoint verification is unavailable",
+      state.blockers,
+    );
+  }
   if (
     state.progress &&
     (state.state === "in_progress" || state.state === "pending_review")
