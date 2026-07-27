@@ -16,6 +16,7 @@ import type {
 import { mapLevelType, type AcademyLevelType } from "@/lib/curriculum/level-type";
 import { mapLevelState } from "@/lib/curriculum/progress-state";
 import type {
+  AcademyCheckpointState,
   AcademyCurriculumSummary,
   AcademyCurriculumView,
   AcademyLevelContent,
@@ -48,6 +49,40 @@ function mapCurriculum(meta: BackendCurriculumMeta): AcademyCurriculumSummary {
     title: meta.name,
     status: meta.status,
     publishedAt: meta.publishedAt,
+  };
+}
+
+const CHECKPOINT_REASONS = new Set(["checkpoint_disabled", "provider_unconfigured", "integration_unknown"]);
+
+/**
+ * Map the Backend checkpoint block. Fail-closed in both directions: a missing
+ * block (older Backend) and an unrecognised verification state both resolve to
+ * "cannot verify, cannot start, cannot complete", so the Academy can never
+ * present a checkpoint as passable because it failed to understand the payload.
+ */
+function mapCheckpoint(level: BackendLevel, isCheckpointType: boolean): AcademyCheckpointState | null {
+  if (!isCheckpointType) return null;
+  const raw = level.checkpoint;
+  if (!raw) {
+    return {
+      verificationState: "unsupported",
+      reason: "unsupported",
+      canVerify: false,
+      canStart: false,
+      canComplete: false,
+    };
+  }
+  const known = raw.verificationState === "verification_unavailable";
+  return {
+    verificationState: known ? "verification_unavailable" : "unsupported",
+    reason: known && CHECKPOINT_REASONS.has(raw.verificationReason)
+      ? (raw.verificationReason as AcademyCheckpointState["reason"])
+      : "unsupported",
+    // The Academy never widens a Backend permission: `true` is honoured only
+    // when the Backend says so, and anything unrecognised stays false.
+    canVerify: raw.canVerify === true && known,
+    canStart: raw.canStart === true && known,
+    canComplete: raw.canComplete === true && known,
   };
 }
 
@@ -92,6 +127,7 @@ function mapLevel(level: BackendLevel): AcademyLevelSummary {
     href: levelHref(level.stableCode),
     xpReward: level.xpReward,
     progressVersion: progressVersionOf(level),
+    checkpoint: mapCheckpoint(level, typeInfo.isCheckpoint),
   };
 }
 

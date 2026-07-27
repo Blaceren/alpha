@@ -4,6 +4,7 @@ import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent } from "@/lib/curriculum/academy-view";
 import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
 import { LevelAssessment } from "@/features/assessment/level-assessment";
+import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
 import "@/features/curriculum-api/curriculum-api.css";
 
@@ -38,6 +39,11 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
   }
 
   const { summary, content, prerequisites, navigation } = result.detail;
+  // A financial checkpoint is a module boundary, not a lesson. It has no
+  // material by definition, so the "Материал" section is suppressed rather than
+  // shown with a note about a type that "is not displayed yet" — which stopped
+  // being true the moment this branch existed.
+  const isCheckpoint = summary.typeInfo.type === "checkpoint";
 
   return (
     <AppShell userName={name} activeId="lessons">
@@ -64,6 +70,7 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
             </dl>
           </section>
 
+          {isCheckpoint ? null : (
           <section className="cur-detail__content" aria-label="Материал уровня">
             <h2>Материал</h2>
             {content.available && content.metadata ? (
@@ -93,6 +100,15 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
                 only submission surface, and it is server-authoritative. */}
             <p className="cur-detail__readonly">Материал — только просмотр. Прогресс сохраняется на сервере.</p>
           </section>
+          )}
+
+          {/* Financial checkpoint (L4HG-1). The Backend decides whether the
+              condition can be verified at all; the Academy only renders that
+              decision. There is no verify action while verification is
+              unavailable, and no learner input of any kind. */}
+          {isCheckpoint && summary.checkpoint ? (
+            <LevelCheckpoint levelNumber={summary.order} checkpoint={summary.checkpoint} />
+          ) : null}
 
           {/* Server-graded assessment (CI-3). Rendered for accessible lesson levels;
               a lesson without a configured assessment degrades to a bounded notice

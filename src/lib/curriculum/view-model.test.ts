@@ -70,7 +70,7 @@ describe("toAcademyCurriculumView (enrolled)", () => {
   it("does not expose email/xp-internal/prisma fields (only whitelisted keys)", () => {
     const level0 = view.modules[0]!.levels[0]!;
     expect(Object.keys(level0).sort()).toEqual(
-      ["actions", "completionSource", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
+      ["actions", "checkpoint", "completionSource", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
     );
   });
 });

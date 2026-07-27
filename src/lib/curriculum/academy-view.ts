@@ -17,6 +17,24 @@ export type AcademyCurriculumSummary = {
   publishedAt: string | null;
 };
 
+/**
+ * Display-safe financial-checkpoint state for a level.
+ *
+ * Carries the Backend's verdict about *the platform's own ability to verify*
+ * and nothing about the learner's money. The canonical target amount is NOT
+ * here — it lives in the published curriculum (level title / fixture
+ * threshold), so this object can never become a place a balance is stored.
+ */
+export type AcademyCheckpointState = {
+  /** Always `verification_unavailable` today; a union so a future state adds to it. */
+  verificationState: "verification_unavailable" | "unsupported";
+  /** Why, in operational terms. Never financial. */
+  reason: "checkpoint_disabled" | "provider_unconfigured" | "integration_unknown" | "unsupported";
+  canVerify: boolean;
+  canStart: boolean;
+  canComplete: boolean;
+};
+
 export type AcademyLevelSummary = {
   levelCode: string;
   order: number;
@@ -36,6 +54,8 @@ export type AcademyLevelSummary = {
   xpReward: number;
   /** Opaque staleness marker (latest progress timestamp), else null. */
   progressVersion: string | null;
+  /** Present only on checkpoint levels; null everywhere else. */
+  checkpoint: AcademyCheckpointState | null;
 };
 
 export type AcademyModuleSummary = {

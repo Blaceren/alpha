@@ -277,7 +277,12 @@ const MODULE_STATE_LABEL: Record<ModuleAggregateState, string> = {
   locked: "впереди",
 };
 
-function buildCheckpointInfo(levelNumber: number): LibraryCheckpointInfo | null {
+/**
+ * Exported so the Backend-driven checkpoint screen reads the SAME canonical
+ * target and rewards the library shows, instead of a second copy of the
+ * curriculum. Target only — never a balance, never a remainder (DD-259).
+ */
+export function buildCheckpointInfo(levelNumber: number): LibraryCheckpointInfo | null {
   const mod = getModuleForLevel(levelNumber);
   const cp = mod.checkpoint;
   if (cp.level !== levelNumber) return null;

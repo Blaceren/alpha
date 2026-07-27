@@ -45,6 +45,24 @@ export type BackendProgress = {
   attemptCount: number;
 };
 
+/**
+ * Bounded financial-checkpoint block. Present only on `financial_checkpoint`
+ * levels; `null` on every other level.
+ *
+ * The Backend never sends a balance, a remaining amount or any account value,
+ * and this type has no field one could occupy — so a future Backend change that
+ * started sending one would fail the guard rather than reach the UI.
+ */
+export type BackendCheckpoint = {
+  kind: string;
+  integrationCode: string | null;
+  verificationState: string;
+  verificationReason: string;
+  canVerify: boolean;
+  canStart: boolean;
+  canComplete: boolean;
+};
+
 export type BackendLevel = {
   levelNumber: number;
   stableCode: string;
@@ -66,6 +84,8 @@ export type BackendLevel = {
   blockers?: string[];
   durableStatus: string | null;
   progress: BackendProgress | null;
+  /** Absent on a Backend that predates the honest gate; null on non-checkpoints. */
+  checkpoint?: BackendCheckpoint | null;
 };
 
 export type BackendModule = {
@@ -184,6 +204,19 @@ function isProgress(v: unknown): v is BackendProgress {
   );
 }
 
+function isCheckpoint(v: unknown): v is BackendCheckpoint {
+  return (
+    isObject(v) &&
+    isStr(v.kind) &&
+    isStrOrNull(v.integrationCode) &&
+    isStr(v.verificationState) &&
+    isStr(v.verificationReason) &&
+    typeof v.canVerify === "boolean" &&
+    typeof v.canStart === "boolean" &&
+    typeof v.canComplete === "boolean"
+  );
+}
+
 function isLevel(v: unknown): v is BackendLevel {
   if (!isObject(v)) return false;
   const req = v.requirements;
@@ -204,7 +237,8 @@ function isLevel(v: unknown): v is BackendLevel {
     (v.presentationState === undefined || isStr(v.presentationState)) &&
     (v.blockers === undefined || (Array.isArray(v.blockers) && v.blockers.every(isStr))) &&
     isStrOrNull(v.durableStatus) &&
-    (v.progress === null || isProgress(v.progress))
+    (v.progress === null || isProgress(v.progress)) &&
+    (v.checkpoint === undefined || v.checkpoint === null || isCheckpoint(v.checkpoint))
   );
 }
 

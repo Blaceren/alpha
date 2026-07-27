@@ -13,6 +13,7 @@ export type BackendPresentationState =
   | "in_progress"
   | "available"
   | "xp_eligible"
+  | "checkpoint_unverified"
   | "locked";
 
 export type BackendBlocker =
@@ -22,6 +23,7 @@ export type BackendBlocker =
   | "xp_engine_unavailable"
   | "xp_insufficient"
   | "checkpoint_engine_unavailable"
+  | "checkpoint_verification_unavailable"
   | "visibility_rule_unsupported";
 
 export type AcademyLevelState =
@@ -29,6 +31,10 @@ export type AcademyLevelState =
   | "pending_review"
   | "in_progress"
   | "available"
+  // The learner has reached a financial checkpoint the platform cannot verify.
+  // Deliberately its own state: it is not `available` (nothing can be done) and
+  // not `locked` (the learner has arrived and lost nothing).
+  | "checkpoint_unverified"
   | "locked";
 
 export type AcademyLockReason =
@@ -59,6 +65,9 @@ const STATE_LABEL: Record<AcademyLevelState, string> = {
   pending_review: "На проверке",
   in_progress: "В процессе",
   available: "Доступен",
+  // Truthful, and deliberately not «Заблокирован»: nothing is blocking the
+  // learner, the platform simply cannot confirm the condition yet.
+  checkpoint_unverified: "Проверка недоступна",
   locked: "Заблокирован",
 };
 
@@ -75,6 +84,7 @@ const LOCK_LABEL: Record<AcademyLockReason, string> = {
 
 // Priority order: the most actionable/meaningful reason wins.
 const BLOCKER_PRIORITY: BackendBlocker[] = [
+  "checkpoint_verification_unavailable",
   "checkpoint_engine_unavailable",
   "xp_insufficient",
   "xp_engine_unavailable",
@@ -85,6 +95,7 @@ const BLOCKER_PRIORITY: BackendBlocker[] = [
 ];
 
 const BLOCKER_REASON: Record<BackendBlocker, AcademyLockReason> = {
+  checkpoint_verification_unavailable: "checkpoint",
   checkpoint_engine_unavailable: "checkpoint",
   xp_insufficient: "xp",
   xp_engine_unavailable: "xp",
@@ -149,6 +160,19 @@ export function mapLevelState(input: MapStateInput): AcademyStateInfo {
       return { state: "in_progress", lockReason: null, label: STATE_LABEL.in_progress, routeAccessible: true, contentViewable: true, terminal: false };
     case "available":
       return { state: "available", lockReason: null, label: STATE_LABEL.available, routeAccessible: true, contentViewable: true, terminal: false };
+    case "checkpoint_unverified":
+      // The route opens so the learner can read the gate — its condition, what
+      // it opens, and why the check is unavailable. `contentViewable` stays
+      // false: a checkpoint has no lesson content, and the Backend refuses it
+      // regardless. `terminal` is false because the learner is not finished.
+      return {
+        state: "checkpoint_unverified",
+        lockReason: null,
+        label: STATE_LABEL.checkpoint_unverified,
+        routeAccessible: true,
+        contentViewable: false,
+        terminal: false,
+      };
     case "xp_eligible":
       // XP satisfied but sequence/current-level not reached: still not startable.
       return locked(deriveLockReason(blockers, input.isExternal));
