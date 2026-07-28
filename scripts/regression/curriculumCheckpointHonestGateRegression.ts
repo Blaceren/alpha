@@ -154,14 +154,30 @@ async function main() {
 
   await check("A3 flag true still unavailable — no authoritative provider", () => {
     process.env.CURRICULUM_V2_CHECKPOINT_ENABLED = "true";
+    delete process.env.POCKET_BALANCE_PROVIDER_ENABLED;
     assert.equal(env.isCurriculumV2CheckpointEnabled(), true);
     assert.equal(checkpoint.hasAuthoritativeCheckpointProvider(), false);
     const model = checkpoint.resolveCheckpointVerification({ integrationCode: "checkpoint.module-01" });
-    // The decisive rule: enabling the flag must NEVER produce a verdict about
-    // the learner's money. Unavailable is not "not met".
+    // The decisive rule, unchanged: enabling a flag must NEVER produce a verdict
+    // about the learner's money. Unavailable is not "not met".
     assert.equal(model.verificationState, "verification_unavailable");
-    assert.equal(model.verificationReason, "provider_unconfigured");
     assert.equal(model.canVerify, false);
+    // L4VC-1 refined the REASON. The checkpoint flag alone does not grant the
+    // provider capability, so the honest answer is `provider_disabled` — the
+    // platform is not permitted to ask — rather than `provider_unconfigured`,
+    // which claims it tried to find an adapter and could not.
+    assert.equal(model.verificationReason, "provider_disabled");
+
+    // With the provider capability ALSO granted but no adapter wired (the
+    // shipped build), the reason becomes `provider_unconfigured` and the state
+    // is still unavailable.
+    process.env.POCKET_BALANCE_PROVIDER_ENABLED = "true";
+    const granted = checkpoint.resolveCheckpointVerification({ integrationCode: "checkpoint.module-01" });
+    assert.equal(granted.verificationState, "verification_unavailable");
+    assert.equal(granted.verificationReason, "provider_unconfigured");
+    assert.equal(granted.canVerify, false);
+    assert.equal(checkpoint.hasAuthoritativeCheckpointProvider(), false);
+    delete process.env.POCKET_BALANCE_PROVIDER_ENABLED;
   });
 
   await check("A4 unknown / malformed integration code fails closed", () => {
@@ -178,10 +194,13 @@ async function main() {
 
   await check("A5 resolver exposes no financial field", () => {
     const model = checkpoint.resolveCheckpointVerification({ integrationCode: "checkpoint.module-01" });
+    // L4VC-1 adds `retryAfterSeconds` — a WAIT in seconds, never an amount. The
+    // field set is still a closed list with no slot a balance could occupy.
     assert.deepEqual(Object.keys(model).sort(), [
       "canComplete", "canStart", "canVerify", "integrationCode", "kind",
-      "verificationReason", "verificationState",
+      "retryAfterSeconds", "verificationReason", "verificationState",
     ]);
+    assert.equal(model.retryAfterSeconds, null);
     const text = JSON.stringify(model);
     for (const token of FORBIDDEN_TOKENS) {
       assert.ok(!text.includes(token), `resolver leaked "${token}"`);
@@ -341,6 +360,10 @@ async function main() {
 
   await check("C2 no completion owner can complete the checkpoint", async () => {
     const legacy = (globalThis as AnyRecord).__hg1legacy as { userId: number; enrollmentId: number };
+    // L4VC-1 gave `financial_checkpoint:balance_check` exactly ONE owner
+    // (`checkpoint_verification`), so the four XP-bearing owners are now
+    // refused as the wrong owner rather than as an unowned level type. Either
+    // way the level is not completed and nothing durable changes.
     for (const sourceType of ["level_completion", "assessment_pass", "report_approval", "mentor_completion"] as const) {
       const result = await completion.completeCurriculumLevel({
         enrollmentId: legacy.enrollmentId,
@@ -348,8 +371,23 @@ async function main() {
         sourceType, sourceId: `hg1-${sourceType}`, actorId: legacy.userId, db: prisma,
       });
       assert.equal(result.kind, "rejected", sourceType);
-      assert.equal((result as AnyRecord).code, "COMPLETION_OWNER_UNAVAILABLE", sourceType);
+      assert.equal((result as AnyRecord).code, "COMPLETION_OWNER_MISMATCH", sourceType);
     }
+    // And the one real owner still cannot complete it without a durable,
+    // settled `met` verification attempt to prove it.
+    const forged = await completion.completeCurriculumLevel({
+      enrollmentId: legacy.enrollmentId,
+      levelDefinitionId: definitions.get(L4)!.id,
+      sourceType: "checkpoint_verification",
+      sourceId: "checkpoint-verification:1",
+      actorId: legacy.userId, db: prisma,
+    });
+    assert.notEqual(forged.kind, "completed");
+    assert.equal((forged as AnyRecord).code, "COMPLETION_STATE_CORRUPT");
+    const durable = await prisma.userLevelProgress.findFirstOrThrow({
+      where: { enrollmentId: legacy.enrollmentId, levelDefinitionId: definitions.get(L4)!.id },
+    });
+    assert.equal(durable.status, "in_progress", "a refused completion changes nothing");
   });
 
   await check("C3 completion is refused even without a progress row", async () => {
@@ -398,10 +436,12 @@ async function main() {
     assert.equal(l4.presentationState, "checkpoint_unverified");
     assert.deepEqual(l4.blockers, ["checkpoint_verification_unavailable"]);
     const block = l4.checkpoint as AnyRecord;
+    // L4VC-1 adds `retryAfterSeconds` (a wait, never an amount) and nothing else.
     assert.deepEqual(Object.keys(block).sort(), [
       "canComplete", "canStart", "canVerify", "integrationCode", "kind",
-      "verificationReason", "verificationState",
+      "retryAfterSeconds", "verificationReason", "verificationState",
     ]);
+    assert.equal(block.retryAfterSeconds, null);
     assert.equal(block.verificationState, "verification_unavailable");
     // Non-checkpoint levels carry an explicit null rather than an absent key.
     assert.equal(levels[0].checkpoint, null);
@@ -457,12 +497,17 @@ async function main() {
     // any Pocket surface. Prose references in comments are fine and expected —
     // the check is on the import graph, not on the word.
     const source = fs.readFileSync("src/lib/curriculum/checkpoint.ts", "utf8");
-    const imports = source.match(/^\s*import[^;]+;/gm) ?? [];
-    assert.equal(imports.length, 1, "the resolver should need exactly one import");
-    for (const statement of imports) {
-      assert.ok(!/exchange|balanceProvider|pocket/i.test(statement), `forbidden import: ${statement.trim()}`);
+    const specifiers = (source.match(/from\s+["']([^"']+)["']/g) ?? []).map((m) =>
+      m.replace(/^from\s+["']|["']$/g, ""),
+    );
+    // L4VC-1 adds the provider SEAM as the resolver's second dependency. Both
+    // are ours: environment flags and our own typed interface. Neither is an
+    // exchange, a Pocket surface or an HTTP client.
+    assert.deepEqual(specifiers.sort(), ["./checkpoint-provider", "@/lib/env"]);
+    for (const specifier of specifiers) {
+      assert.ok(!/exchange|pocket/i.test(specifier), `forbidden import: ${specifier}`);
     }
-    assert.ok(imports[0].includes("@/lib/env"));
+    assert.ok(!/\bfetch\s*\(/.test(source), "the resolver must make no network call");
   });
 
   await check("D6 database integrity intact", async () => {

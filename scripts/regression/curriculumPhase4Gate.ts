@@ -17,7 +17,7 @@ const suites = [
   ["3B.1 XP schema", "test:regression:curriculum-xp-schema", 47],
   ["3B.2 XP ledger and resolver", "test:regression:curriculum-xp-ledger", 66],
   ["3B.3 XP LevelState", "test:regression:curriculum-xp-level-state", 81],
-  ["3B.4 completion transition", "test:regression:curriculum-level-completion", 77],
+  ["3B.4 completion transition", "test:regression:curriculum-level-completion", 79],
   ["3B.5 promocode compatibility HTTP", "test:regression:curriculum-promocode-xp", 67],
   ["3B.6 XP read HTTP", "test:regression:curriculum-xp-api", 62],
   ["4B.1 content and assessment schema", "test:regression:curriculum-content-schema", 71],

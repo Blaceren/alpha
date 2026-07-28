@@ -27,7 +27,7 @@ const SUITES: Array<{
   {
     name: "3B.4 completion transition",
     command: "test:regression:curriculum-level-completion",
-    expectedAssertions: 77,
+    expectedAssertions: 79,
   },
   {
     name: "3B.5 promocode compatibility",

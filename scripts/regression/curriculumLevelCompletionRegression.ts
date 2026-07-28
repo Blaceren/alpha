@@ -465,12 +465,41 @@ async function main() {
       );
     });
   }
-  await check("checkpoint owner is unavailable", async () => {
+  await check("a financial checkpoint has exactly one owner (L4VC-1)", async () => {
+    // Before L4VC-1 `financial_checkpoint:balance_check` had NO owner at all,
+    // so every source was refused as OWNER_UNAVAILABLE. It now has exactly one
+    // (`checkpoint_verification`), so the default source is refused as the
+    // WRONG owner instead. The level is still not completed either way.
     const fixture = await setup({
       graphStatus: "archived",
       levels: [{ type: "financial_checkpoint", completionMethod: "balance_check" }, {}],
     });
+    expectResult(await run(fixture), "rejected", "COMPLETION_OWNER_MISMATCH");
+  });
+  await check("an unmapped level type still has no owner at all", async () => {
+    // `scenario:manual` remains unowned, so OWNER_UNAVAILABLE is still reachable
+    // and still means what it always meant.
+    const fixture = await setup({
+      graphStatus: "archived",
+      levels: [{ type: "scenario", completionMethod: "manual" }, {}],
+    });
     expectResult(await run(fixture), "rejected", "COMPLETION_OWNER_UNAVAILABLE");
+  });
+  await check("the checkpoint owner cannot complete without a verification proof", async () => {
+    const fixture = await setup({
+      graphStatus: "archived",
+      levels: [{ type: "financial_checkpoint", completionMethod: "balance_check" }, {}],
+    });
+    // No CheckpointVerificationAttempt exists, so the proof is missing.
+    expectResult(
+      await run(fixture, {
+        sourceType: "checkpoint_verification",
+        sourceId: "checkpoint-verification:1",
+      }),
+      "corrupt",
+      "COMPLETION_STATE_CORRUPT",
+    );
+    assert.equal(await prisma.xPTransaction.count({ where: { enrollmentId: fixture.enrollment.id } }), 0);
   });
   await check("zero reward completes without an XPTransaction (platform rule)", async () => {
     // Operator platform decision (2026-07-25): a level with xpReward === 0 completes
@@ -878,7 +907,9 @@ async function main() {
   });
 
   await prisma.$disconnect();
-  assert.equal(passed + failed, 77, "regression scenario count changed");
+  // 77 before L4VC-1; +2 for the checkpoint owner split (unmapped type still
+  // unowned, and the checkpoint owner refused without a verification proof).
+  assert.equal(passed + failed, 79, "regression scenario count changed");
 }
 
 main()
