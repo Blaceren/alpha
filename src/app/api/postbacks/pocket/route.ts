@@ -2,10 +2,16 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import {
+  POCKET_FORBIDDEN_QUERY_SECRET_KEYS,
+  POCKET_POSTBACK_QUERY_SECRET_KEY,
   PocketRejectionReason,
+  authenticatePocketQuerySecret,
   authenticatePocketRequest,
   fingerprintEventId,
+  goalAcceptsQuerySecret,
   hasQueryAuthMaterial,
+  parsePocketRegistrationFields,
+  readPostbackGoalForAuthMode,
   resolvePocketPostbackConfig,
 } from "@/lib/exchange/pocketPostbackAuth";
 import { bindPocketTraderIdentity } from "@/lib/exchange/pocketTraderIdentity";
@@ -35,11 +41,17 @@ const goalToPocketType: Record<string, PocketPostbackType> = {
 const ROUTE = "/api/postbacks/pocket";
 
 /**
- * Query aliases the legacy contract accepted as authentication material. They
- * are declared here, in the route itself, because the secret auditor
- * (scripts/security/sqlAuditCore.ts) proves this file covers every alias. A
- * request carrying any of them is rejected outright, and the names stay on the
- * redaction list so a legacy caller's secret is never persisted.
+ * Every query key that may carry a secret, for REDACTION purposes.
+ *
+ * Declared here, in the route itself, because the secret auditor
+ * (scripts/security/sqlAuditCore.ts) proves this file covers every alias. All
+ * three are stripped from anything that could be persisted or echoed — the
+ * official `ow` included, precisely because PDP-1 now accepts it.
+ *
+ * REDACTION is not the same list as REJECTION. `secret` and `token` were legacy
+ * ATA aliases with no provider mandate and remain rejected outright
+ * (`POCKET_FORBIDDEN_QUERY_SECRET_KEYS`); `ow` is Pocket's official field and is
+ * accepted only for the goals in `POCKET_QUERY_SECRET_GOALS`.
  */
 const SECRET_QUERY_KEYS = ["ow", "secret", "token"] as const;
 
@@ -175,6 +187,75 @@ function sanitizedRawPayload(params: URLSearchParams) {
   );
 }
 
+/**
+ * PDP-1 — the official direct Pocket registration postback, past authentication.
+ *
+ * Pocket → ATA → PocketTraderIdentity, with no intermediary. The response is
+ * deliberately the smallest thing that can mean "received": a bounded
+ * `{ ok: true }` that is byte-identical whether the binding was created, was
+ * already present, or conflicted. An upstream postback sender has no business
+ * learning whether a clickid exists, whether a trader is already bound, or to
+ * whom — and an attacker who has stolen the secret must not be handed an
+ * enumeration oracle on top of it.
+ *
+ * Conflicts and validation failures are recorded for operators through the
+ * existing bounded AuditLog reasons, never through the response body.
+ */
+async function handleDirectRegistration(params: URLSearchParams, request: Request) {
+  const fields = parsePocketRegistrationFields(params);
+
+  if (!fields.ok) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: fields.reason,
+      request,
+    });
+
+    return fail(400, "INVALID_REGISTRATION");
+  }
+
+  const learner = await prisma.exchangeAccount.findFirst({
+    where: { clickId: fields.clickId },
+    select: { userId: true },
+  });
+
+  if (!learner) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: PocketRejectionReason.UnknownClickId,
+      request,
+      // Non-reversible: an operator can correlate a support report without the
+      // raw attribution identifier ever entering the audit trail.
+      eventFingerprint: fingerprintEventId(fields.clickId),
+    });
+
+    // The same bounded 400 an invalid field shape produces, so a caller cannot
+    // distinguish "this clickid is unknown" from "this clickid is malformed".
+    return fail(400, "INVALID_REGISTRATION");
+  }
+
+  const result = await bindPocketTraderIdentity({
+    userId: learner.userId,
+    pocketUserId: fields.playerId,
+    clickId: fields.clickId,
+    db: prisma,
+  });
+
+  // `bound` and `already_bound` are the two expected outcomes and are silent;
+  // everything else is a conflict an operator should be able to see.
+  if (result.outcome !== "bound" && result.outcome !== "already_bound") {
+    await createAuditLog({
+      action: "POCKET_IDENTITY_BINDING_REJECTED",
+      entityType: "PocketTraderIdentity",
+      entityId: String(learner.userId),
+      metadata: { route: ROUTE, reason: result.outcome },
+      request,
+    });
+  }
+
+  return respond(200, { ok: true });
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const params = url.searchParams;
@@ -202,8 +283,25 @@ export async function GET(request: Request) {
     return fail(400, queryShapeError);
   }
 
-  // 4. Authentication material must never arrive in the URL.
-  if (hasQueryAuthMaterial(params, SECRET_QUERY_KEYS)) {
+  // 4. Choose the authentication mode from the goal alone.
+  //
+  //    PDP-1: Pocket's official DIRECT postback carries its shared secret as the
+  //    `ow` query parameter, so a registration event authenticates that way.
+  //    Everything else — every event that moves money — still requires the
+  //    stronger `x-postback-secret` header, and still rejects URL-borne secrets
+  //    outright. Reading `goal` here is a pure string read: no lookup, no write
+  //    and no audit happens before authentication succeeds.
+  const authGoal = readPostbackGoalForAuthMode(params);
+  const directRegistration = goalAcceptsQuerySecret(authGoal);
+
+  // The legacy aliases have no provider mandate and are never acceptable. For
+  // non-registration goals `ow` joins them, preserving the header-only contract
+  // for financial events exactly as PS-1/PS-2 established it.
+  const forbiddenQueryKeys = directRegistration
+    ? POCKET_FORBIDDEN_QUERY_SECRET_KEYS
+    : SECRET_QUERY_KEYS;
+
+  if (hasQueryAuthMaterial(params, forbiddenQueryKeys)) {
     await auditSecurityEvent({
       action: "POCKET_POSTBACK_FORBIDDEN",
       reason: PocketRejectionReason.QueryAuthMaterial,
@@ -213,8 +311,15 @@ export async function GET(request: Request) {
     return authFailureResponse();
   }
 
-  // 5-6. Structural header validation, then timing-safe comparison.
-  const auth = authenticatePocketRequest(request.headers, config.secret);
+  // 5-6. Structural validation, then timing-safe comparison. A registration may
+  //      present EITHER the official `ow` query secret OR the header, so an
+  //      existing header-based integration keeps working unchanged.
+  const usedQuerySecret =
+    directRegistration && params.has(POCKET_POSTBACK_QUERY_SECRET_KEY);
+
+  const auth = usedQuerySecret
+    ? authenticatePocketQuerySecret(params, config.secret)
+    : authenticatePocketRequest(request.headers, config.secret);
 
   if (!auth.ok) {
     await auditSecurityEvent({
@@ -228,6 +333,18 @@ export async function GET(request: Request) {
 
   // ---- authenticated boundary ----
   // No business lookup and no domain mutation occurs above this line.
+
+  // 7. PDP-1 direct registration: strict, single-spelling field validation and
+  //    an identity binding that is the whole point of the event.
+  //
+  //    Scoped to requests that actually authenticated with the official `ow`
+  //    secret — i.e. the direct Pocket contract. A header-authenticated
+  //    `goal=reg` is an existing ATA/affiliate integration and continues down
+  //    the legacy path below with its established response shape, so nothing
+  //    that works today changes.
+  if (usedQuerySecret) {
+    return handleDirectRegistration(params, request);
+  }
 
   const clickId = firstParam(params, ["clickid", "click_id"]);
   const goal = firstParam(params, ["goal", "event", "type"])?.toLowerCase();

@@ -37,6 +37,14 @@ export const PocketRejectionReason = {
   MissingClickId: "missing_click_id",
   UnknownClickId: "unknown_click_id",
   ValidationError: "validation_error",
+  // PDP-1 — the official direct Pocket registration contract carries its shared
+  // secret as the `ow` QUERY parameter. These reasons describe that path only.
+  MissingQuerySecret: "missing_query_secret",
+  AmbiguousQuerySecret: "ambiguous_query_secret",
+  MalformedQuerySecret: "malformed_query_secret",
+  InvalidClickId: "invalid_click_id",
+  InvalidPlayerId: "invalid_player_id",
+  AmbiguousRegistrationParam: "ambiguous_registration_param",
 } as const;
 
 export type PocketRejectionReason =
@@ -159,4 +167,156 @@ export function hasQueryAuthMaterial(
  */
 export function fingerprintEventId(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+/* ------------------------------------------------------------------------ */
+/* PDP-1 — the official DIRECT Pocket registration postback                  */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The official Pocket postback authentication field.
+ *
+ * Pocket sends its shared secret as a QUERY parameter named `ow`. That is the
+ * provider's protocol, not ATA's preference: a URL-borne secret is written into
+ * every access log, proxy log, browser history and error report that touches
+ * the request. ATA cannot change Pocket's contract, so it supports it under
+ * strictly bounded conditions (see `POCKET_QUERY_SECRET_GOALS`) and compensates
+ * with redaction everywhere the value could otherwise be recorded.
+ *
+ * The stronger `x-postback-secret` header contract is NOT removed. It remains
+ * the only accepted authentication for every financial event.
+ */
+export const POCKET_POSTBACK_QUERY_SECRET_KEY = "ow";
+
+/**
+ * The ONLY goals for which a query-borne secret is accepted.
+ *
+ * Registration is the single event Pocket must deliver directly for the L4
+ * identity chain to exist, and it mutates no money. Deposits, re-deposits,
+ * commissions and withdrawals continue to require the header, so a leaked `ow`
+ * cannot fabricate a financial event — it could at worst attempt an identity
+ * binding, which the uniqueness constraints already make non-destructive.
+ */
+export const POCKET_QUERY_SECRET_GOALS: readonly string[] = ["reg"];
+
+/**
+ * Query aliases that are NEVER acceptable as authentication material.
+ *
+ * `ow` is deliberately absent: it is the official field and is handled by
+ * `authenticatePocketQuerySecret` under the goal restriction above. `secret`
+ * and `token` were legacy ATA aliases with no provider mandate, so they stay
+ * rejected outright.
+ */
+export const POCKET_FORBIDDEN_QUERY_SECRET_KEYS: readonly string[] = ["secret", "token"];
+
+/**
+ * Authenticate a direct Pocket postback from its `ow` query parameter.
+ *
+ * The raw value is used exactly as `URLSearchParams` decoded it: it is NOT
+ * trimmed, NOT lower-cased and NOT decoded a second time. A secret that only
+ * matches after normalisation is not the secret, and double-decoding would let
+ * `%2520` smuggle a different value past this check than the one an operator
+ * configured.
+ *
+ * `getAll` rather than `get`: a duplicated `?ow=a&ow=b` must be an explicit
+ * ambiguity rejection, never a silent "first one wins".
+ */
+export function authenticatePocketQuerySecret(
+  params: URLSearchParams,
+  expectedSecret: string,
+): PocketAuthOutcome {
+  const supplied = params.getAll(POCKET_POSTBACK_QUERY_SECRET_KEY);
+
+  if (supplied.length === 0) {
+    return { ok: false, reason: PocketRejectionReason.MissingQuerySecret };
+  }
+  if (supplied.length > 1) {
+    return { ok: false, reason: PocketRejectionReason.AmbiguousQuerySecret };
+  }
+
+  const raw = supplied[0];
+
+  if (raw.length === 0 || !isAcceptableSecret(raw)) {
+    return { ok: false, reason: PocketRejectionReason.MalformedQuerySecret };
+  }
+  if (!timingSafeSecretEqual(raw, expectedSecret)) {
+    return { ok: false, reason: PocketRejectionReason.SecretMismatch };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * The goal value, read for the sole purpose of choosing an authentication mode.
+ *
+ * This runs BEFORE authentication, so it must do nothing but read a string: no
+ * lookup, no write, no audit. A duplicated or absent `goal` yields `null`,
+ * which selects the strict header-only mode — the safe default.
+ */
+export function readPostbackGoalForAuthMode(params: URLSearchParams): string | null {
+  const goals = params.getAll("goal");
+  if (goals.length !== 1) return null;
+  return goals[0];
+}
+
+/** True when this goal may authenticate with the official `ow` query secret. */
+export function goalAcceptsQuerySecret(goal: string | null): boolean {
+  return goal !== null && POCKET_QUERY_SECRET_GOALS.includes(goal);
+}
+
+/**
+ * The exact shape of an ATA-generated clickid: `tq-<uuid v4>`.
+ *
+ * Generated by `POST /api/exchange/referral-link` as `tq-${crypto.randomUUID()}`.
+ * Matching it exactly means a path-like, SQL-like or oversized value is refused
+ * before it ever reaches a database lookup.
+ */
+const ATA_CLICK_ID = /^tq-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Pocket trader identifiers are strictly positive base-10 integers.
+ *
+ * No sign, no decimal point, no exponent, no leading zero, and bounded to 16
+ * digits so the value stays inside `Number.MAX_SAFE_INTEGER` — the Partner API
+ * returns `user_id` as a JSON number, and an identifier that cannot survive
+ * that round-trip must be refused rather than silently mis-compared.
+ */
+const POCKET_PLAYER_ID = /^[1-9][0-9]{0,15}$/;
+
+export type PocketRegistrationFields =
+  | { ok: true; clickId: string; playerId: string }
+  | { ok: false; reason: PocketRejectionReason };
+
+/**
+ * Strictly parse the two identity-bearing fields of a registration postback.
+ *
+ * Every field is read with `getAll` and required to appear EXACTLY once. The
+ * legacy route accepts a family of aliases (`click_id`, `trader_id`, `user_id`,
+ * …) because affiliate networks historically differed; the direct Pocket
+ * contract has one spelling for each, so accepting more here would only widen
+ * the surface for no provider benefit.
+ */
+export function parsePocketRegistrationFields(
+  params: URLSearchParams,
+): PocketRegistrationFields {
+  const clickIds = params.getAll("clickid");
+  const playerIds = params.getAll("playerid");
+
+  if (clickIds.length > 1 || playerIds.length > 1) {
+    return { ok: false, reason: PocketRejectionReason.AmbiguousRegistrationParam };
+  }
+  if (clickIds.length === 0) {
+    return { ok: false, reason: PocketRejectionReason.MissingClickId };
+  }
+  if (!ATA_CLICK_ID.test(clickIds[0])) {
+    return { ok: false, reason: PocketRejectionReason.InvalidClickId };
+  }
+  if (playerIds.length === 0 || !POCKET_PLAYER_ID.test(playerIds[0])) {
+    return { ok: false, reason: PocketRejectionReason.InvalidPlayerId };
+  }
+  if (!Number.isSafeInteger(Number(playerIds[0]))) {
+    return { ok: false, reason: PocketRejectionReason.InvalidPlayerId };
+  }
+
+  return { ok: true, clickId: clickIds[0], playerId: playerIds[0] };
 }
