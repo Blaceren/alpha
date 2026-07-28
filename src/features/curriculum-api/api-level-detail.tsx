@@ -102,12 +102,18 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
           </section>
           )}
 
-          {/* Financial checkpoint (L4HG-1). The Backend decides whether the
-              condition can be verified at all; the Academy only renders that
-              decision. There is no verify action while verification is
-              unavailable, and no learner input of any kind. */}
+          {/* Financial checkpoint (L4HG-1, L4VC-1). The Backend decides whether
+              the condition can be verified at all and what the answer is; the
+              Academy only renders that decision and offers at most one control
+              to ask. There is no verify action while verification is
+              unavailable, and no learner input of any kind — the request body
+              carries a request identity and nothing else. */}
           {isCheckpoint && summary.checkpoint ? (
-            <LevelCheckpoint levelNumber={summary.order} checkpoint={summary.checkpoint} />
+            <LevelCheckpoint
+              levelNumber={summary.order}
+              stableCode={summary.levelCode}
+              checkpoint={summary.checkpoint}
+            />
           ) : null}
 
           {/* Server-graded assessment (CI-3). Rendered for accessible lesson levels;

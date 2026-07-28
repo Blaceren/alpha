@@ -25,14 +25,55 @@ export type AcademyCurriculumSummary = {
  * here — it lives in the published curriculum (level title / fixture
  * threshold), so this object can never become a place a balance is stored.
  */
+/**
+ * The learner-visible checkpoint state (L4HG-1, extended by L4VC-1).
+ *
+ * `unsupported` is the Academy's own fail-closed member: a Backend payload this
+ * build does not understand presents as unavailable rather than as a passable
+ * gate. Every other member mirrors a Backend state exactly — the Academy never
+ * invents or widens one.
+ */
+export type AcademyCheckpointVerificationState =
+  | "verification_unavailable"
+  | "ready"
+  | "checking"
+  | "cooldown"
+  | "not_met"
+  | "completed"
+  | "unsupported";
+
+/**
+ * Why, in operational or threshold terms. NEVER financial: no member of this
+ * union can describe how much money the learner has.
+ */
+export type AcademyCheckpointReason =
+  | "none"
+  | "checkpoint_disabled"
+  | "provider_disabled"
+  | "provider_unconfigured"
+  | "requirement_unconfigured"
+  | "integration_unknown"
+  | "identity_unlinked"
+  | "identity_mismatch"
+  | "unsupported_currency"
+  | "provider_timeout"
+  | "provider_maintenance"
+  | "provider_rate_limited"
+  | "stale"
+  | "invalid_provider_response"
+  | "cooldown_active"
+  | "rate_limited"
+  | "not_met"
+  | "unsupported";
+
 export type AcademyCheckpointState = {
-  /** Always `verification_unavailable` today; a union so a future state adds to it. */
-  verificationState: "verification_unavailable" | "unsupported";
-  /** Why, in operational terms. Never financial. */
-  reason: "checkpoint_disabled" | "provider_unconfigured" | "integration_unknown" | "unsupported";
+  verificationState: AcademyCheckpointVerificationState;
+  reason: AcademyCheckpointReason;
   canVerify: boolean;
   canStart: boolean;
   canComplete: boolean;
+  /** Seconds to wait. A duration, never an amount. */
+  retryAfterSeconds: number | null;
 };
 
 export type AcademyLevelSummary = {

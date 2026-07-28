@@ -61,6 +61,11 @@ export type BackendCheckpoint = {
   canVerify: boolean;
   canStart: boolean;
   canComplete: boolean;
+  /**
+   * Seconds to wait before retrying. A DURATION, never an amount of money.
+   * Absent on a Backend that predates L4VC-1.
+   */
+  retryAfterSeconds?: number | null;
 };
 
 export type BackendLevel = {
@@ -213,7 +218,10 @@ function isCheckpoint(v: unknown): v is BackendCheckpoint {
     isStr(v.verificationReason) &&
     typeof v.canVerify === "boolean" &&
     typeof v.canStart === "boolean" &&
-    typeof v.canComplete === "boolean"
+    typeof v.canComplete === "boolean" &&
+    (v.retryAfterSeconds === undefined ||
+      v.retryAfterSeconds === null ||
+      isNum(v.retryAfterSeconds))
   );
 }
 

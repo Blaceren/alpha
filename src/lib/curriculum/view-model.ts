@@ -52,7 +52,37 @@ function mapCurriculum(meta: BackendCurriculumMeta): AcademyCurriculumSummary {
   };
 }
 
-const CHECKPOINT_REASONS = new Set(["checkpoint_disabled", "provider_unconfigured", "integration_unknown"]);
+const CHECKPOINT_STATES = new Set([
+  "verification_unavailable",
+  "ready",
+  "checking",
+  "cooldown",
+  "not_met",
+  "completed",
+]);
+
+const CHECKPOINT_REASONS = new Set([
+  "none",
+  "checkpoint_disabled",
+  "provider_disabled",
+  "provider_unconfigured",
+  "requirement_unconfigured",
+  "integration_unknown",
+  "identity_unlinked",
+  "identity_mismatch",
+  "unsupported_currency",
+  "provider_timeout",
+  "provider_maintenance",
+  "provider_rate_limited",
+  "stale",
+  "invalid_provider_response",
+  "cooldown_active",
+  "rate_limited",
+  "not_met",
+]);
+
+/** An advertised wait longer than this is treated as absent rather than shown. */
+const MAX_RETRY_AFTER_SECONDS = 3_600;
 
 /**
  * Map the Backend checkpoint block. Fail-closed in both directions: a missing
@@ -70,11 +100,15 @@ function mapCheckpoint(level: BackendLevel, isCheckpointType: boolean): AcademyC
       canVerify: false,
       canStart: false,
       canComplete: false,
+      retryAfterSeconds: null,
     };
   }
-  const known = raw.verificationState === "verification_unavailable";
+  const known = CHECKPOINT_STATES.has(raw.verificationState);
+  const retry = raw.retryAfterSeconds;
   return {
-    verificationState: known ? "verification_unavailable" : "unsupported",
+    verificationState: known
+      ? (raw.verificationState as AcademyCheckpointState["verificationState"])
+      : "unsupported",
     reason: known && CHECKPOINT_REASONS.has(raw.verificationReason)
       ? (raw.verificationReason as AcademyCheckpointState["reason"])
       : "unsupported",
@@ -83,6 +117,15 @@ function mapCheckpoint(level: BackendLevel, isCheckpointType: boolean): AcademyC
     canVerify: raw.canVerify === true && known,
     canStart: raw.canStart === true && known,
     canComplete: raw.canComplete === true && known,
+    // A wait is only shown when it is a sane, positive, bounded duration.
+    retryAfterSeconds:
+      known &&
+      typeof retry === "number" &&
+      Number.isFinite(retry) &&
+      retry > 0 &&
+      retry <= MAX_RETRY_AFTER_SECONDS
+        ? Math.ceil(retry)
+        : null,
   };
 }
 
