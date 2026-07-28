@@ -8,6 +8,7 @@ import {
   hasQueryAuthMaterial,
   resolvePocketPostbackConfig,
 } from "@/lib/exchange/pocketPostbackAuth";
+import { bindPocketTraderIdentity } from "@/lib/exchange/pocketTraderIdentity";
 import { processExchangePostbackPayload } from "@/lib/exchange/postbackProcessor";
 import type { PocketPostbackType } from "@/lib/exchange/pocket";
 import { prisma } from "@/lib/prisma";
@@ -339,8 +340,78 @@ export async function GET(request: Request) {
     );
   }
 
+  // L4PA-1 — authoritative Pocket identity binding.
+  //
+  // Only here: past the enabled gate, the rate limit, the query-shape bound, the
+  // URL-auth-material rejection and the timing-safe header secret, and only
+  // after the clickid resolved to a real learner and the event itself was
+  // accepted. A registration postback is the single trusted source of the Pocket
+  // trader id the Partner API is later asked about.
+  //
+  // The binding NEVER affects this response. A conflict is a security fact for
+  // an operator, not something an upstream caller may probe by watching status
+  // codes, so every outcome still returns the same 200 the postback earned.
+  if (type === "Registration" && traderId) {
+    await bindRegistrationIdentity({
+      userId: knownClick.userId,
+      pocketUserId: traderId,
+      clickId,
+      request,
+    });
+  }
+
   return respond(200, {
     success: true,
     duplicate: Boolean(body.duplicate),
   });
+}
+
+/**
+ * Record the learner-to-Pocket binding, auditing anything that is not routine.
+ *
+ * `bound` is the expected first-registration outcome and `already_bound` is an
+ * ordinary replay; neither is audited, because auditing every duplicate
+ * postback would bury the events that matter. A conflict, a malformed
+ * identifier or an unexpected failure IS audited — with a bounded reason only,
+ * never the claimed Pocket id, the clickid or a database error.
+ *
+ * A failure here never fails the postback: the financial event was already
+ * accepted and committed, and reversing it because an identity could not be
+ * recorded would lose a real event to protect a derived one.
+ */
+async function bindRegistrationIdentity(input: {
+  userId: number;
+  pocketUserId: string;
+  clickId: string;
+  request: Request;
+}) {
+  try {
+    const result = await bindPocketTraderIdentity({
+      userId: input.userId,
+      pocketUserId: input.pocketUserId,
+      clickId: input.clickId,
+      db: prisma,
+    });
+
+    if (result.outcome === "bound" || result.outcome === "already_bound") return;
+
+    await createAuditLog({
+      action: "POCKET_IDENTITY_BINDING_REJECTED",
+      entityType: "PocketTraderIdentity",
+      entityId: String(input.userId),
+      metadata: { route: ROUTE, reason: result.outcome },
+      request: input.request,
+    });
+  } catch {
+    // The thrown value is deliberately not inspected: a Prisma error can quote
+    // the conflicting row, and this path must not be the way an identifier
+    // reaches a log.
+    await createAuditLog({
+      action: "POCKET_IDENTITY_BINDING_REJECTED",
+      entityType: "PocketTraderIdentity",
+      entityId: String(input.userId),
+      metadata: { route: ROUTE, reason: "binding_error" },
+      request: input.request,
+    }).catch(() => undefined);
+  }
 }

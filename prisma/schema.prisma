@@ -176,6 +176,7 @@ model User {
   crmUserNotes                    CrmUserNote[]                @relation("CrmUserNoteTarget")
   crmOwnerState                   CrmUserOwner?                @relation("CrmUserOwnerLearner")
   crmOwnerHistory                 CrmUserOwnerHistory[]        @relation("CrmUserOwnerHistoryLearner")
+  pocketTraderIdentity            PocketTraderIdentity?        @relation("PocketTraderIdentityLearner")
 }
 
 model XpEvent {
@@ -1072,6 +1073,50 @@ model CheckpointVerificationAttempt {
   @@index([enrollmentId, requestId])
   @@index([enrollmentId, levelDefinitionId, createdAt])
   @@index([levelDefinitionId])
+}
+
+/**
+ * L4PA-1 — the authoritative binding between an ATA learner and a Pocket trader.
+ *
+ * WHY THIS EXISTS RATHER THAN `ExchangeAccount.traderId`
+ * `traderId` looks like the same fact and is not. It is nullable, it is NOT
+ * unique, it is written by EVERY authenticated postback goal (deposit,
+ * withdrawal, commission — not just registration), and the processor overwrites
+ * it with `traderId ?? existing`, so a later postback silently rebinds a learner
+ * to a different Pocket account. It is also one of the OR-branches the account
+ * lookup itself searches, so it is an attribution hint, not an identity claim.
+ * Using it to authorise a $50 financial gate would mean the gate could be moved
+ * onto someone else's funded account without anyone noticing.
+ *
+ * This table states the fact once, immutably in practice, with the uniqueness
+ * the gate actually requires:
+ *   - `userId` UNIQUE  — one learner has at most one authoritative Pocket ID;
+ *   - `pocketUserId` UNIQUE — one Pocket trader backs at most one learner.
+ * Both constraints are enforced by the DATABASE, so two concurrent registration
+ * postbacks cannot both win and a conflict cannot be resolved by overwriting.
+ *
+ * `pocketUserId` is TEXT holding a canonical decimal integer, not INTEGER: it
+ * is a foreign system's identifier that must round-trip exactly, and comparing
+ * canonical strings avoids ever depending on float behaviour for an identity.
+ *
+ * PRIVACY BY ABSENCE. There is no balance column, no demo balance, no deposit
+ * total, no FTD, no raw postback, no raw provider response, no free-form JSON,
+ * no API token and no generated hash. Storing a learner's money here would
+ * require a new migration and a review, which is the point.
+ */
+model PocketTraderIdentity {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
+  pocketUserId String   @unique
+  clickId      String
+  /** Provenance of the binding. Only `registration_postback` is written today. */
+  source       String   @default("registration_postback")
+  boundAt      DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([clickId])
 }
 
 model UserCurriculumEnrollment {
