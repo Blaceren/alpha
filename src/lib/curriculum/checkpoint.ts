@@ -30,6 +30,7 @@ import {
   unconfiguredCheckpointProvider,
   type CheckpointBalanceProvider,
 } from "./checkpoint-provider";
+import { resolvePocketPartnerProvider } from "./checkpoint-provider-pocket";
 
 /**
  * Learner-visible verification state.
@@ -194,8 +195,21 @@ export function resolveCheckpointProvider(
   if (testProviderFactory && isCheckpointProviderTestBackendEnabled(env)) {
     return { provider: testProviderFactory(), usable: true, reason: "none" };
   }
-  // The shipped reality: the capability is granted but no adapter exists.
-  // Granting permission must never manufacture an answer about someone's money.
+  // L4PA-1: the official Pocket Partner adapter, selected only when its own
+  // configuration fully validates (HTTPS, the exact approved host, a positive
+  // Partner ID and a non-synthetic token — see pocketPartnerConfig.ts).
+  //
+  // There is deliberately NO fallback in either direction. An invalid Pocket
+  // configuration falls through to `unconfigured`, never to the mock: silently
+  // answering a financial question with a test double would be far worse than
+  // refusing to answer. And the mock branch above requires its own marker, so
+  // a production process cannot reach it however this branch resolves.
+  const pocketProvider = resolvePocketPartnerProvider(env);
+  if (pocketProvider) {
+    return { provider: pocketProvider, usable: true, reason: "none" };
+  }
+  // The capability is granted but no adapter is configured. Granting permission
+  // must never manufacture an answer about someone's money.
   return {
     provider: unconfiguredCheckpointProvider,
     usable: false,

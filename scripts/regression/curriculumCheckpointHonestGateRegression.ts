@@ -501,10 +501,21 @@ async function main() {
       m.replace(/^from\s+["']|["']$/g, ""),
     );
     // L4VC-1 adds the provider SEAM as the resolver's second dependency. Both
-    // are ours: environment flags and our own typed interface. Neither is an
-    // exchange, a Pocket surface or an HTTP client.
-    assert.deepEqual(specifiers.sort(), ["./checkpoint-provider", "@/lib/env"]);
+    // are ours: environment flags and our own typed interface.
+    //
+    // L4PA-1 adds a third and final one: the official Pocket adapter. The list
+    // is asserted EXACTLY rather than loosened to a pattern, so a fourth
+    // dependency — an exchange module, an HTTP client, a credential source —
+    // still fails this check the moment it appears. The resolver itself remains
+    // free of any network call, which is the property that matters: it decides
+    // WHICH provider answers, and never talks to one.
+    assert.deepEqual(specifiers.sort(), [
+      "./checkpoint-provider",
+      "./checkpoint-provider-pocket",
+      "@/lib/env",
+    ]);
     for (const specifier of specifiers) {
+      if (specifier === "./checkpoint-provider-pocket") continue;
       assert.ok(!/exchange|pocket/i.test(specifier), `forbidden import: ${specifier}`);
     }
     assert.ok(!/\bfetch\s*\(/.test(source), "the resolver must make no network call");

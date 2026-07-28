@@ -1286,10 +1286,21 @@ async function main() {
       // The check is on the import GRAPH — the module specifier — not on type
       // names. `CheckpointBalanceProvider` is our own seam; importing
       // `@/lib/exchange/balanceProvider` would be the violation.
-      for (const specifier of source.match(/from\s+["']([^"']+)["']/g) ?? []) {
+      //
+      // L4PA-1: `checkpoint.ts` now resolves the official Pocket adapter, which
+      // is the ONE wiring change the L4VC-1 handoff said this phase would make.
+      // That single specifier is allowed by exact name — a wildcard would let
+      // any future `@/lib/exchange/*` import in unnoticed, which is precisely
+      // what this assertion exists to prevent. Every other prohibition above
+      // (no fetch, no HTTP client, no URL, no credential) still applies to
+      // these files unchanged.
+      const ALLOWED_POCKET_SPECIFIER = "./checkpoint-provider-pocket";
+      for (const match of source.match(/from\s+["']([^"']+)["']/g) ?? []) {
+        const specifier = match.replace(/^from\s+["']|["']$/g, "");
+        if (specifier === ALLOWED_POCKET_SPECIFIER) continue;
         assert.ok(
           !/exchange|pocket/i.test(specifier),
-          `${file} forbidden import: ${specifier.trim()}`,
+          `${file} forbidden import: ${specifier}`,
         );
       }
     }

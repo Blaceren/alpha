@@ -35,6 +35,11 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_CHECKPOINT_ENABLED",
   "POCKET_BALANCE_PROVIDER_ENABLED",
   "CHECKPOINT_PROVIDER_TEST_BACKEND",
+  "POCKET_PARTNER_API_BASE_URL",
+  "POCKET_PARTNER_ID",
+  "POCKET_PARTNER_API_TOKEN",
+  "POCKET_PARTNER_API_TIMEOUT_MS",
+  "POCKET_PARTNER_API_TEST_MODE",
   "REPORT_ATTACHMENT_S3_BUCKET",
   "REPORT_ATTACHMENT_S3_REGION",
   "REPORT_ATTACHMENT_S3_ENDPOINT",
@@ -73,6 +78,17 @@ const envSchema = z.object({
   POCKET_BALANCE_PROVIDER_ENABLED: z.enum(["true", "false"]).optional(),
   CHECKPOINT_PROVIDER_TEST_BACKEND: z
     .literal("unsafe-deterministic-mock-regression-only")
+    .optional(),
+  // L4PA-1 — official Pocket Partner user-info API. Server-only, all optional:
+  // absent configuration means the adapter is unconfigured and the checkpoint
+  // reports `provider_unconfigured`. The token is never read outside
+  // src/lib/exchange/pocketPartner*.ts and never reaches browser code.
+  POCKET_PARTNER_API_BASE_URL: z.string().url().optional(),
+  POCKET_PARTNER_ID: z.string().regex(/^[1-9][0-9]*$/).optional(),
+  POCKET_PARTNER_API_TOKEN: z.string().optional(),
+  POCKET_PARTNER_API_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
+  POCKET_PARTNER_API_TEST_MODE: z
+    .literal("unsafe-loopback-mock-regression-only")
     .optional(),
   REPORT_ATTACHMENT_S3_BUCKET: z.string().optional(),
   REPORT_ATTACHMENT_S3_REGION: z.string().optional(),
@@ -133,6 +149,15 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
 
     if (env.CHECKPOINT_PROVIDER_TEST_BACKEND) {
       errors.push("CHECKPOINT_PROVIDER_TEST_BACKEND is a regression-only balance provider and must never be set in production");
+    }
+
+    // L4PA-1. The marker exists only so regression suites may point the adapter
+    // at a loopback mock over plaintext HTTP. In production it would permit
+    // sending a token-derived credential to an unapproved host, so its mere
+    // presence is a hard failure rather than something the resolver silently
+    // ignores.
+    if (env.POCKET_PARTNER_API_TEST_MODE) {
+      errors.push("POCKET_PARTNER_API_TEST_MODE is a regression-only marker and must never be set in production");
     }
   }
 
