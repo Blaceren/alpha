@@ -1,51 +1,104 @@
 /**
- * V2 financial-checkpoint verification state (L4HG-1 — honest gate).
+ * V2 financial-checkpoint read model (L4HG-1 honest gate, extended by L4VC-1).
  *
  * A `financial_checkpoint` level is completed by an authoritative statement
- * about the learner's REAL trading balance. No such authority exists in this
- * platform yet: there is no configured balance provider, and
- * `docs/V2_PRODUCT_DECISIONS.md` §6 forbids simulating a production balance
- * check. Until that is resolved (see docs/L4_CHECKPOINT_HANDOFF.md), the only
- * truthful answer this module may give is `verification_unavailable`.
+ * about whether the learner's REAL balance reached a published threshold.
+ * L4VC-1 builds the engine that can carry such a statement, but it deliberately
+ * ships with NO real provider: the seam is complete, the adapter is not
+ * (docs/POCKET_ADAPTER_HANDOFF.md).
  *
- * The distinction this module exists to protect: **unavailable is not
- * not-met**. Reporting "you have not reached $50" when the platform simply
- * cannot look would be a false statement about a real person's money, and
- * `docs/V2_PRODUCT_DECISIONS.md` requires `verification_unavailable` to be its
- * own explicit state rather than a below-threshold measurement.
+ * The distinction this module exists to protect is unchanged: **unavailable is
+ * not not-met**. Saying "you have not reached $50" when the platform could not
+ * look would be a false statement about a real person's money, so the two are
+ * separate states and always will be.
  *
- * Nothing here reads, derives, receives or returns a balance. There is no
- * provider call, no Pocket request and no learner input. The resolver is a pure
- * function of the feature flag and the level's own definition, so it cannot
- * leak a financial value even by accident.
+ * NOTHING HERE CARRIES AN AMOUNT. The resolver receives a configured threshold
+ * and a typed outcome; it never receives, derives or returns an observed
+ * balance. The read model has no field one could occupy — see
+ * `CheckpointReadModel`.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION. Every branch that is not an explicit, fully
+ * satisfied "the learner may ask" resolves to `verification_unavailable`.
  */
-import { isCurriculumV2CheckpointEnabled } from "@/lib/env";
+import {
+  isCurriculumV2CheckpointEnabled,
+  isPocketBalanceProviderEnabled,
+  isCheckpointProviderTestBackendEnabled,
+} from "@/lib/env";
+import {
+  disabledCheckpointProvider,
+  unconfiguredCheckpointProvider,
+  type CheckpointBalanceProvider,
+} from "./checkpoint-provider";
 
 /**
- * Learner-visible verification state. A single member today, deliberately
- * modelled as a union so the future engine ADDS `verified` / `not_met` rather
- * than reinterpreting an existing value.
+ * Learner-visible verification state.
+ *
+ * `verification_unavailable` remains the single umbrella for "the platform
+ * cannot answer", with the operational detail in `verificationReason`. Keeping
+ * it that way is what preserves the shipped honest gate byte-for-byte while the
+ * flags are off.
  */
-export type CheckpointVerificationState = "verification_unavailable";
+export type CheckpointVerificationState =
+  | "verification_unavailable"
+  | "ready"
+  | "checking"
+  | "cooldown"
+  | "not_met"
+  | "completed";
 
 /**
- * Why verification is unavailable. Operational, never financial: no member of
- * this union can describe the learner's money.
+ * Why. Operational or threshold-shaped, never financial: no member of this
+ * union can describe how much money the learner has.
  */
 export type CheckpointVerificationReason =
+  /**
+   * Nothing for the checkpoint to explain: either the state speaks for itself
+   * (ready / checking / completed), or the LEVEL state already carries the
+   * explanation (the learner has not reached the gate yet).
+   */
+  | "none"
   /** `CURRICULUM_V2_CHECKPOINT_ENABLED` is absent or false. */
   | "checkpoint_disabled"
-  /** Flag on, but no authoritative balance provider is configured. */
+  /** Checkpoint on, but `POCKET_BALANCE_PROVIDER_ENABLED` is absent or false. */
+  | "provider_disabled"
+  /** Both flags on, but no balance adapter is wired into this build. */
   | "provider_unconfigured"
+  /** No `LevelCheckpointRequirement` row exists for this level. */
+  | "requirement_unconfigured"
   /** The level's integration code is missing or not a recognised checkpoint. */
-  | "integration_unknown";
+  | "integration_unknown"
+  /** No provider account is linked to this learner. */
+  | "identity_unlinked"
+  /** A linked account belongs to a different identity. */
+  | "identity_mismatch"
+  /** The account currency cannot be compared to the configured threshold. */
+  | "unsupported_currency"
+  | "provider_timeout"
+  | "provider_maintenance"
+  | "provider_rate_limited"
+  /** The provider answered from data too old to be authoritative. */
+  | "stale"
+  /** The provider answered outside its contract. */
+  | "invalid_provider_response"
+  /** A recent attempt means the learner must wait before asking again. */
+  | "cooldown_active"
+  /** The learner has spent the hourly attempt allowance. */
+  | "rate_limited"
+  /** The configured threshold was not reached. */
+  | "not_met";
 
 /**
  * The bounded checkpoint object exposed to the learner read model.
  *
- * Forbidden by contract and by construction: observed balance, remaining
+ * Forbidden by contract AND by construction: observed balance, remaining
  * amount, deposits, demo balance, account identifiers, provider payloads, or an
- * open `Json` bag that a later change could quietly fill with any of those.
+ * open `Json` bag a later change could quietly fill with any of those.
+ *
+ * `canStart` and `canComplete` are literal `false` on purpose. A checkpoint is
+ * never an ordinary startable level, and the learner never completes it
+ * directly — verification is the only completion owner, so a client that
+ * offered a "complete" button would be offering something no route accepts.
  */
 export type CheckpointReadModel = {
   kind: "financial_checkpoint";
@@ -53,12 +106,12 @@ export type CheckpointReadModel = {
   integrationCode: string | null;
   verificationState: CheckpointVerificationState;
   verificationReason: CheckpointVerificationReason;
-  /** No verification can be requested while no authority exists. */
-  canVerify: false;
-  /** A checkpoint is never an ordinary startable learning level. */
+  /** True only when a verification request would actually be accepted. */
+  canVerify: boolean;
   canStart: false;
-  /** No completion owner exists for `financial_checkpoint:balance_check`. */
   canComplete: false;
+  /** Seconds to wait before retrying, when the state implies waiting. */
+  retryAfterSeconds: number | null;
 };
 
 /**
@@ -77,59 +130,300 @@ export function isKnownCheckpointIntegrationCode(code: string | null | undefined
   return KNOWN_INTEGRATION_CODES.has(code);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Provider selection                                                        */
+/* ------------------------------------------------------------------------ */
+
+export type CheckpointProviderResolution = {
+  provider: CheckpointBalanceProvider;
+  /** True only when a provider capable of answering has been selected. */
+  usable: boolean;
+  /** The reason to report when `usable` is false. */
+  reason: Extract<
+    CheckpointVerificationReason,
+    "none" | "checkpoint_disabled" | "provider_disabled" | "provider_unconfigured"
+  >;
+};
+
+/**
+ * A test-only provider factory, installed by regression suites.
+ *
+ * It is a module-level slot rather than an import so that no production code
+ * path can reach the mock: selecting it additionally requires a non-production
+ * runtime AND the exact opt-in marker, which production env validation rejects
+ * outright.
+ */
+let testProviderFactory: (() => CheckpointBalanceProvider) | null = null;
+
+/** Regression-only. Returns a disposer that restores the previous state. */
+export function __setCheckpointTestProvider(
+  factory: (() => CheckpointBalanceProvider) | null,
+): () => void {
+  const previous = testProviderFactory;
+  testProviderFactory = factory;
+  return () => {
+    testProviderFactory = previous;
+  };
+}
+
+/**
+ * Decide which provider answers, from flags alone.
+ *
+ * The two flags ask different questions and are checked in order: may the
+ * platform run a checkpoint at all, and may it ask a balance provider. Neither
+ * substitutes for the other, and the shipped state (both absent) selects the
+ * disabled provider.
+ */
+export function resolveCheckpointProvider(
+  env: NodeJS.ProcessEnv = process.env,
+): CheckpointProviderResolution {
+  if (!isCurriculumV2CheckpointEnabled(env)) {
+    return {
+      provider: disabledCheckpointProvider,
+      usable: false,
+      reason: "checkpoint_disabled",
+    };
+  }
+  if (!isPocketBalanceProviderEnabled(env)) {
+    return {
+      provider: disabledCheckpointProvider,
+      usable: false,
+      reason: "provider_disabled",
+    };
+  }
+  if (testProviderFactory && isCheckpointProviderTestBackendEnabled(env)) {
+    return { provider: testProviderFactory(), usable: true, reason: "none" };
+  }
+  // The shipped reality: the capability is granted but no adapter exists.
+  // Granting permission must never manufacture an answer about someone's money.
+  return {
+    provider: unconfiguredCheckpointProvider,
+    usable: false,
+    reason: "provider_unconfigured",
+  };
+}
+
 /**
  * Whether an authoritative balance provider is configured.
  *
- * Always false. This is the single seam the future verification engine will
- * replace; it is a named function rather than an inline `false` so that the
- * absence of a provider is an explicit, testable platform fact rather than an
- * omission someone has to notice.
- *
- * `src/lib/exchange/balanceProvider.ts` is NOT such an authority: `sandbox`
- * reads a deposit accumulator (rejected by product decisions §6) and
- * `real_placeholder` is an unimplemented stub. Neither is consulted here, and
- * no call is made to either.
+ * Retained as the named platform fact it has always been; it now delegates to
+ * the provider resolution so "is there an authority?" has exactly one answer.
  */
-export function hasAuthoritativeCheckpointProvider(): boolean {
-  return false;
+export function hasAuthoritativeCheckpointProvider(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return resolveCheckpointProvider(env).usable;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Read-model resolution                                                     */
+/* ------------------------------------------------------------------------ */
+
+/** The configured threshold, as the read model is allowed to see it. */
+export type CheckpointRequirementSnapshot = {
+  integrationCode: string;
+  thresholdCurrency: string;
+  thresholdMinorUnits: number;
+};
+
+/**
+ * The last attempt, reduced to what the read model needs.
+ *
+ * Note what is NOT here: no provider payload, no observed amount, no account.
+ * Just an outcome name and two timestamps.
+ */
+export type CheckpointAttemptSnapshot = {
+  outcome: string;
+  cooldownUntil: Date | null;
+  completedAt: Date | null;
+};
 
 export type ResolveCheckpointInput = {
   /** `LevelDefinition.featureUnlockCode` for the checkpoint level. */
   integrationCode: string | null;
+  /** The configured requirement, when one exists. */
+  requirement?: CheckpointRequirementSnapshot | null;
+  /** The learner's most recent attempt on this level, when one exists. */
+  latestAttempt?: CheckpointAttemptSnapshot | null;
+  /** True once the level's durable progress is `completed`. */
+  completed?: boolean;
+  /**
+   * True when the learner is structurally standing at this gate (sequence
+   * complete, level current). A learner who has not arrived is never told the
+   * gate is `ready`.
+   */
+  reachable?: boolean;
   env?: NodeJS.ProcessEnv;
+  now?: Date;
 };
 
-/**
- * Resolve the checkpoint read model. Fail-closed in every branch: the result is
- * `verification_unavailable` whether the flag is off, the flag is on without a
- * provider, or the integration code is unrecognised.
- */
-export function resolveCheckpointVerification({
-  integrationCode,
-  env = process.env,
-}: ResolveCheckpointInput): CheckpointReadModel {
-  const known = isKnownCheckpointIntegrationCode(integrationCode);
-  const reason: CheckpointVerificationReason = !isCurriculumV2CheckpointEnabled(env)
-    ? "checkpoint_disabled"
-    : !known
-      ? "integration_unknown"
-      : !hasAuthoritativeCheckpointProvider()
-        ? "provider_unconfigured"
-        : // Unreachable while `hasAuthoritativeCheckpointProvider` is false. Kept
-          // so adding a provider is a deliberate edit here rather than a silent
-          // fallthrough into a state this phase never designed.
-          "provider_unconfigured";
+/** Provider outcomes that map straight onto a learner-visible reason. */
+const OUTCOME_REASON: Record<string, CheckpointVerificationReason> = {
+  identity_unlinked: "identity_unlinked",
+  identity_mismatch: "identity_mismatch",
+  unsupported_currency: "unsupported_currency",
+  provider_timeout: "provider_timeout",
+  provider_maintenance: "provider_maintenance",
+  provider_rate_limited: "provider_rate_limited",
+  provider_disabled: "provider_disabled",
+  provider_unconfigured: "provider_unconfigured",
+  stale: "stale",
+  invalid_provider_response: "invalid_provider_response",
+};
 
+function model(
+  fields: Partial<CheckpointReadModel> & {
+    verificationState: CheckpointVerificationState;
+    verificationReason: CheckpointVerificationReason;
+  },
+): CheckpointReadModel {
   return {
     kind: "financial_checkpoint",
-    integrationCode: known ? integrationCode : null,
-    verificationState: "verification_unavailable",
-    verificationReason: reason,
+    integrationCode: null,
     canVerify: false,
     canStart: false,
     canComplete: false,
+    retryAfterSeconds: null,
+    ...fields,
   };
+}
+
+function secondsUntil(target: Date, now: Date): number {
+  return Math.max(1, Math.ceil((target.getTime() - now.getTime()) / 1_000));
+}
+
+/**
+ * Resolve the checkpoint read model.
+ *
+ * Ordering matters and is deliberate:
+ *   completed -> flags -> integration code -> requirement -> in-flight ->
+ *   cooldown -> last outcome -> ready.
+ *
+ * A completed checkpoint reads as completed regardless of flags, because
+ * turning a flag off must not retract a fact about the learner's history.
+ * Everything else fails closed.
+ */
+export function resolveCheckpointVerification({
+  integrationCode,
+  requirement = null,
+  latestAttempt = null,
+  completed = false,
+  reachable = false,
+  env = process.env,
+  now = new Date(),
+}: ResolveCheckpointInput): CheckpointReadModel {
+  const known = isKnownCheckpointIntegrationCode(integrationCode);
+  const code = known ? integrationCode : null;
+
+  // A passed gate stays passed. Flags govern whether a NEW question may be
+  // asked, never whether an answered one is retracted.
+  if (completed) {
+    return model({
+      integrationCode: code,
+      verificationState: "completed",
+      verificationReason: "none",
+    });
+  }
+
+  // Ordering is load-bearing and matches the shipped honest gate exactly:
+  //   checkpoint flag -> integration code -> provider -> requirement.
+  //
+  // While the checkpoint is switched off the platform has not looked at the
+  // level at all, so it cannot honestly blame the integration code. Once it is
+  // on, the code is a property of the DEFINITION and is knowable without any
+  // provider — so an unrecognised gate is reported as such rather than being
+  // masked by whichever provider happens to be wired.
+  if (!isCurriculumV2CheckpointEnabled(env)) {
+    return model({
+      integrationCode: code,
+      verificationState: "verification_unavailable",
+      verificationReason: "checkpoint_disabled",
+    });
+  }
+
+  if (!known) {
+    return model({
+      integrationCode: null,
+      verificationState: "verification_unavailable",
+      verificationReason: "integration_unknown",
+    });
+  }
+
+  const resolution = resolveCheckpointProvider(env);
+  if (!resolution.usable) {
+    return model({
+      integrationCode: code,
+      verificationState: "verification_unavailable",
+      verificationReason: resolution.reason,
+    });
+  }
+
+  // A gate with no published threshold is not a gate. The platform will not
+  // invent one, and will not ask a provider to compare against nothing.
+  if (
+    !requirement ||
+    requirement.integrationCode !== integrationCode ||
+    requirement.thresholdCurrency !== "USD" ||
+    !Number.isSafeInteger(requirement.thresholdMinorUnits) ||
+    requirement.thresholdMinorUnits <= 0
+  ) {
+    return model({
+      integrationCode: code,
+      verificationState: "verification_unavailable",
+      verificationReason: "requirement_unconfigured",
+    });
+  }
+
+  if (latestAttempt) {
+    // Claimed but unanswered: a request is in flight. Reported as `checking` so
+    // the learner sees progress rather than a second verify button.
+    if (latestAttempt.completedAt === null && latestAttempt.outcome === "in_progress") {
+      return model({
+        integrationCode: code,
+        verificationState: "checking",
+        verificationReason: "none",
+      });
+    }
+    if (latestAttempt.cooldownUntil && latestAttempt.cooldownUntil > now) {
+      return model({
+        integrationCode: code,
+        verificationState: "cooldown",
+        verificationReason: "cooldown_active",
+        retryAfterSeconds: secondsUntil(latestAttempt.cooldownUntil, now),
+      });
+    }
+    // Cooldown has expired: report WHY the last attempt did not pass, and allow
+    // another. `not_met` is a distinct state from every unavailable reason.
+    if (latestAttempt.outcome === "not_met") {
+      return model({
+        integrationCode: code,
+        verificationState: "not_met",
+        verificationReason: "not_met",
+        canVerify: reachable,
+      });
+    }
+    const reason = OUTCOME_REASON[latestAttempt.outcome];
+    if (reason) {
+      return model({
+        integrationCode: code,
+        verificationState: "verification_unavailable",
+        verificationReason: reason,
+        canVerify: reachable,
+      });
+    }
+  }
+
+  // Configured and answerable. A learner who has not yet arrived at the gate is
+  // not offered verification, and the reason is `none` on purpose: the gate is
+  // fine, and "you have not got here yet" is already carried honestly by the
+  // LEVEL state (locked + sequence_incomplete). Restating it here as a fault of
+  // the checkpoint would be wrong.
+  return model({
+    integrationCode: code,
+    verificationState: reachable ? "ready" : "verification_unavailable",
+    verificationReason: "none",
+    canVerify: reachable,
+  });
 }
 
 /** True for the one level type this module governs. */

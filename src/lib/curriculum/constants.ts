@@ -21,6 +21,10 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   userEnrolled: "CURRICULUM_USER_ENROLLED",
   levelStarted: "CURRICULUM_LEVEL_STARTED",
   levelCompleted: "CURRICULUM_LEVEL_COMPLETED",
+  // L4VC-1. Recorded ONLY when a financial checkpoint is passed; a refusal or
+  // an unavailable provider writes nothing, so the presence of this action is
+  // itself the proof that a threshold was met.
+  checkpointVerified: "CURRICULUM_CHECKPOINT_VERIFIED",
   xpAwarded: "CURRICULUM_XP_AWARDED",
   contentVersionCreated: "CONTENT_VERSION_CREATED",
   contentVersionUpdated: "CONTENT_VERSION_UPDATED",

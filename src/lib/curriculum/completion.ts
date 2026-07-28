@@ -11,6 +11,7 @@ import {
   isCurriculumV2XpEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { isFinancialCheckpointType } from "./checkpoint";
 import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
 import {
   validatePinnedEnrollmentSnapshot,
@@ -28,7 +29,11 @@ const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 const MAX_SOURCE_ID_LENGTH = 200;
 const UNSAFE_REVIEW_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
 
-export type CurriculumLevelCompletionSource = Extract<
+/**
+ * Completion owners that can carry an XP reward. Every member is also a member
+ * of `CurriculumXpSourceType`, so an award is representable in the ledger.
+ */
+export type CurriculumXpBearingCompletionSource = Extract<
   CurriculumXpSourceType,
   | "level_completion"
   | "assessment_pass"
@@ -36,12 +41,43 @@ export type CurriculumLevelCompletionSource = Extract<
   | "mentor_completion"
 >;
 
+/**
+ * The financial-checkpoint owner (L4VC-1).
+ *
+ * Deliberately NOT a member of `CurriculumXpSourceType`. A checkpoint is a gate,
+ * not an achievement: it awards nothing. Keeping it outside the XP vocabulary
+ * means an XPTransaction for a checkpoint is not merely forbidden by a rule —
+ * it does not typecheck, and the database CHECK constraint on
+ * `XPTransaction.sourceType` would reject it even if it did.
+ */
+export type CurriculumCheckpointCompletionSource = "checkpoint_verification";
+
+export type CurriculumLevelCompletionSource =
+  | CurriculumXpBearingCompletionSource
+  | CurriculumCheckpointCompletionSource;
+
 const COMPLETION_SOURCES = new Set<string>([
   "level_completion",
   "assessment_pass",
   "report_approval",
   "mentor_completion",
+  "checkpoint_verification",
 ]);
+
+/** The subset that may appear in the XP ledger. */
+const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
+  "level_completion",
+  "assessment_pass",
+  "report_approval",
+  "mentor_completion",
+];
+
+/** A source that can never award XP, whatever the level definition says. */
+function isZeroRewardOnlySource(
+  sourceType: CurriculumLevelCompletionSource,
+): sourceType is CurriculumCheckpointCompletionSource {
+  return sourceType === "checkpoint_verification";
+}
 
 type OwnerRule = {
   initialStatus: UserLevelProgressStatus;
@@ -67,6 +103,13 @@ const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
   mentor_completion: {
     initialStatus: "pending_review",
     pairs: new Set(["mentor_review:mentor_review"]),
+  },
+  // L4VC-1. The verification engine is the ONLY owner of a financial
+  // checkpoint: it is not startable by the learner, not completable by an
+  // assessment, a report or a mentor, and there is no staff override.
+  checkpoint_verification: {
+    initialStatus: "in_progress",
+    pairs: new Set(["financial_checkpoint:balance_check"]),
   },
 };
 
@@ -196,8 +239,11 @@ function assertBaseFlags() {
 }
 
 /** The XP flag gates positive awards only; a zero-reward completion needs no XP flag. */
-function assertXpFlagForReward(context: CompletionContext) {
-  if (awardsXp(context) && !isCurriculumV2XpEnabled()) {
+function assertXpFlagForReward(
+  context: CompletionContext,
+  sourceType: CurriculumLevelCompletionSource,
+) {
+  if (awardsXp(context, sourceType) && !isCurriculumV2XpEnabled()) {
     failure("COMPLETION_DISABLED", "curriculum level completion is disabled");
   }
 }
@@ -425,6 +471,7 @@ function assertOwnerRule(
 
 const ASSESSMENT_ATTEMPT_SOURCE = /^assessment-attempt:([1-9]\d*)$/;
 const REPORT_REVIEW_SOURCE = /^report-review:([1-9]\d*)$/;
+const CHECKPOINT_ATTEMPT_SOURCE = /^checkpoint-verification:([1-9]\d*)$/;
 
 async function assertLessonAssessmentProof(
   tx: Prisma.TransactionClient,
@@ -584,6 +631,47 @@ async function assertReportApprovalProof(
 }
 
 /**
+ * A financial checkpoint may only be completed against a durable, settled
+ * verification attempt that actually says `met`, for THIS enrollment and THIS
+ * level. Same discipline as the assessment and report proofs: the completion
+ * primitive verifies the evidence itself rather than trusting the caller that
+ * claims to own it.
+ *
+ * Note what is NOT checked, because it is not stored: any balance. The proof of
+ * a passed gate is the typed outcome, not a number.
+ */
+async function assertCheckpointVerificationProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+) {
+  if (input.sourceType !== "checkpoint_verification") return;
+  const match = CHECKPOINT_ATTEMPT_SOURCE.exec(input.sourceId);
+  const attemptId = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(attemptId) || attemptId <= 0) {
+    failure("COMPLETION_OWNER_MISMATCH", "checkpoint proof identity is invalid");
+  }
+  const attempt = await tx.checkpointVerificationAttempt.findUnique({
+    where: { id: attemptId },
+  });
+  if (
+    !attempt ||
+    attempt.enrollmentId !== context.enrollment.id ||
+    attempt.levelDefinitionId !== context.level.id ||
+    attempt.outcome !== "met" ||
+    attempt.completedAt === null ||
+    // A passed gate has nothing to wait for.
+    attempt.cooldownUntil !== null ||
+    attempt.requestId.trim().length < 8
+  ) {
+    failure("COMPLETION_STATE_CORRUPT", "checkpoint verification proof is missing or corrupt");
+  }
+  if (!isFinancialCheckpointType(context.level.type)) {
+    failure("COMPLETION_OWNER_MISMATCH", "checkpoint proof targets a non-checkpoint level");
+  }
+}
+
+/**
  * Reward contract (operator platform decision, 2026-07-25):
  *  - `xpReward` must be a non-negative integer;
  *  - `xpReward === 0` is a valid, completable level that awards no XP and creates
@@ -591,21 +679,42 @@ async function assertReportApprovalProof(
  *  - `xpReward < 0` is invalid.
  * This is a general platform rule with no per-level special case.
  */
-function assertReward(context: CompletionContext) {
+function assertReward(
+  context: CompletionContext,
+  sourceType: CurriculumLevelCompletionSource,
+) {
   if (!Number.isInteger(context.level.xpReward) || context.level.xpReward < 0) {
     failure("COMPLETION_REWARD_INVALID", "curriculum level reward is invalid");
   }
+  // A zero-reward-only owner cannot complete a level that promises XP. Failing
+  // closed here means a mis-authored checkpoint is refused rather than silently
+  // completed without the reward its definition advertises.
+  if (isZeroRewardOnlySource(sourceType) && context.level.xpReward !== 0) {
+    failure("COMPLETION_REWARD_INVALID", "financial checkpoint must award no XP");
+  }
 }
 
-/** A completion awards XP (and creates an XPTransaction) only for a positive reward. */
-function awardsXp(context: CompletionContext) {
-  return context.level.xpReward > 0;
+/**
+ * A completion awards XP (and creates an XPTransaction) only for a positive
+ * reward from an XP-bearing owner. The checkpoint owner never does, whatever
+ * the definition says — `assertReward` has already refused that case.
+ */
+function awardsXp(
+  context: CompletionContext,
+  sourceType: CurriculumLevelCompletionSource,
+) {
+  return !isZeroRewardOnlySource(sourceType) && context.level.xpReward > 0;
 }
 
 function xpInput(
   context: CompletionContext,
   input: ReturnType<typeof validatedInput>,
 ) {
+  if (isZeroRewardOnlySource(input.sourceType)) {
+    // Unreachable: every caller is guarded by `awardsXp`. Kept as a hard stop so
+    // a future edit cannot route a checkpoint into the XP ledger.
+    failure("COMPLETION_REWARD_INVALID", "financial checkpoint must award no XP");
+  }
   return {
     enrollmentId: context.enrollment.id,
     levelDefinitionId: context.level.id,
@@ -647,7 +756,9 @@ async function levelXpRows(tx: Prisma.TransactionClient, context: CompletionCont
     where: {
       enrollmentId: context.enrollment.id,
       levelDefinitionId: context.level.id,
-      sourceType: { in: [...COMPLETION_SOURCES] as CurriculumXpSourceType[] },
+      // Only XP-bearing owners can appear in the ledger; `checkpoint_verification`
+      // is not a member of the XP vocabulary at all.
+      sourceType: { in: XP_BEARING_SOURCES },
     },
     orderBy: { id: "asc" },
   });
@@ -683,7 +794,7 @@ async function verifyCompletedRetry(
     failure("COMPLETION_STATE_CORRUPT", "completed progress has no completion time");
   }
   const rows = await levelXpRows(tx, context);
-  if (!awardsXp(context)) {
+  if (!awardsXp(context, input.sourceType)) {
     // Zero-reward level: the completed progress row is the durable proof of
     // completion. No XPTransaction was ever created, and none may exist.
     if (rows.length !== 0) {
@@ -732,8 +843,9 @@ async function runCompletionTransaction(
   assertOwnerRule(context, input.sourceType);
   await assertLessonAssessmentProof(tx, context, input);
   await assertReportApprovalProof(tx, context, input);
-  assertReward(context);
-  assertXpFlagForReward(context);
+  await assertCheckpointVerificationProof(tx, context, input);
+  assertReward(context, input.sourceType);
+  assertXpFlagForReward(context, input.sourceType);
 
   if (context.progress.status === "completed") {
     return verifyCompletedRetry(tx, context, input);
@@ -770,7 +882,7 @@ async function runCompletionTransaction(
   // Positive reward -> create the XPTransaction atomically with completion.
   // Zero reward -> complete without any XPTransaction (operator platform rule).
   let xpTransaction: CurriculumXpTransactionSummary | null = null;
-  if (awardsXp(context)) {
+  if (awardsXp(context, input.sourceType)) {
     let xpAward;
     try {
       xpAward = await recordCurriculumXpInTransaction(tx, xpInput(context, input));

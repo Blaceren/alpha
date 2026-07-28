@@ -89,6 +89,7 @@ function mapCheckpoint(checkpoint: CheckpointReadModel | null) {
     canVerify: checkpoint.canVerify,
     canStart: checkpoint.canStart,
     canComplete: checkpoint.canComplete,
+    retryAfterSeconds: checkpoint.retryAfterSeconds,
   };
 }
 
@@ -154,11 +155,15 @@ function mapCompletedModules(context: CompletedContext) {
           durableStatus: progress?.status ?? null,
           progress: mapProgress(progress),
           // A completed enrollment has no level-state resolution, so the
-          // checkpoint block is derived directly from the definition here.
+          // checkpoint block is derived directly from the definition and the
+          // durable progress row. A checkpoint the learner already passed reads
+          // as `completed`; anything else reads as unavailable, because a
+          // finished enrollment offers no new verification.
           checkpoint: isFinancialCheckpointType(levelDefinition.type)
             ? mapCheckpoint(
                 resolveCheckpointVerification({
                   integrationCode: levelDefinition.featureUnlockCode,
+                  completed: progress?.status === "completed",
                 }),
               )
             : null,

@@ -15,7 +15,9 @@ import { prisma } from "@/lib/prisma";
 import {
   isFinancialCheckpointType,
   resolveCheckpointVerification,
+  type CheckpointAttemptSnapshot,
   type CheckpointReadModel,
+  type CheckpointRequirementSnapshot,
 } from "./checkpoint";
 import { CURRICULUM_AUDIT_ACTIONS } from "./constants";
 import {
@@ -52,6 +54,11 @@ export type LevelStateBlockerCode =
   // authority exists. Distinct from the blocker above, which is about a
   // dependency rather than about the gate.
   | "checkpoint_verification_unavailable"
+  // The gate CAN be verified and the learner is standing at it, but the
+  // threshold has not been met yet. Distinct from the blocker above: one says
+  // the platform cannot look, this one says it looked (or can) and the answer
+  // is not yet yes.
+  | "checkpoint_verification_required"
   | "visibility_rule_unsupported";
 
 export type EffectiveLevelStateItem = {
@@ -137,9 +144,28 @@ function corruptLevelState(
   return { kind: "corrupt", reason, diagnostics };
 }
 
+/**
+ * Durable checkpoint facts, read once per resolution and keyed by level id.
+ *
+ * Carries only a configured threshold and a typed attempt outcome — the two
+ * snapshot types have no field an observed balance could occupy, so widening
+ * the read model with them cannot widen what a learner can see about money.
+ */
+export type CheckpointStateSnapshots = {
+  requirements: Map<number, CheckpointRequirementSnapshot>;
+  latestAttempts: Map<number, CheckpointAttemptSnapshot>;
+};
+
+const EMPTY_CHECKPOINT_SNAPSHOTS: CheckpointStateSnapshots = {
+  requirements: new Map(),
+  latestAttempts: new Map(),
+};
+
 function deriveEnrolledLevelStates(
   context: Extract<UserCurriculumContextResult, { kind: "enrolled" }>,
   xp: LevelStateXpSummary,
+  checkpoints: CheckpointStateSnapshots = EMPTY_CHECKPOINT_SNAPSHOTS,
+  evaluationTime: Date = new Date(),
 ): UserCurriculumLevelStatesResult {
   const xpEnabled = xp.kind === "available";
   const currentXp = xp.kind === "available" ? xp.totalXp : 0;
@@ -254,13 +280,31 @@ function deriveEnrolledLevelStates(
     // model is definition- and flag-derived only; it never touches progress and
     // never carries a financial value.
     const isCheckpoint = isFinancialCheckpointType(levelDefinition.type);
-    const checkpoint = isCheckpoint
-      ? resolveCheckpointVerification({
-          integrationCode: levelDefinition.featureUnlockCode,
-        })
-      : null;
+    /**
+     * Structurally standing AT the gate: this is the current level, everything
+     * before it is complete, and the definition is live. A learner who has not
+     * arrived is never offered verification, so `canVerify` cannot be true for
+     * a level they cannot reach.
+     */
+    const atGate =
+      levelDefinition.levelNumber === context.enrollment.currentLevel &&
+      levelDefinition.status === "active" &&
+      moduleDefinition.status === "active" &&
+      context.enrollment.highestCompletedLevel === levelDefinition.levelNumber - 1;
+    const checkpointFor = (completed: boolean) =>
+      isCheckpoint
+        ? resolveCheckpointVerification({
+            integrationCode: levelDefinition.featureUnlockCode,
+            requirement: checkpoints.requirements.get(levelDefinition.id) ?? null,
+            latestAttempt: checkpoints.latestAttempts.get(levelDefinition.id) ?? null,
+            completed,
+            reachable: atGate,
+            now: evaluationTime,
+          })
+        : null;
 
     if (progress) {
+      const checkpoint = checkpointFor(progress.status === "completed");
       // A checkpoint completed by a future verification engine stays completed;
       // any other durable status presents as unverified rather than as an
       // ordinary in-progress learning level. The durable row is not modified —
@@ -271,7 +315,11 @@ function deriveEnrolledLevelStates(
           moduleDefinition,
           progress,
           state: "checkpoint_unverified",
-          blockers: ["checkpoint_verification_unavailable"],
+          blockers: [
+            checkpoint?.canVerify
+              ? "checkpoint_verification_required"
+              : "checkpoint_verification_unavailable",
+          ],
           checkpoint,
         };
       }
@@ -324,8 +372,17 @@ function deriveEnrolledLevelStates(
     // checkpoint can never fall through to `available`, and so the blocker is
     // visible even when the level is locked for an unrelated reason.
     const structurallyReachable = blockers.length === 0;
+    const checkpoint = checkpointFor(false);
     if (isCheckpoint) {
-      blockers.push("checkpoint_verification_unavailable");
+      // Two different facts, never conflated: "the platform cannot look" and
+      // "the platform can look, you have not passed yet". Reporting the first
+      // when the second is true would be the same dishonesty in reverse that
+      // the honest gate exists to prevent.
+      blockers.push(
+        checkpoint?.canVerify
+          ? "checkpoint_verification_required"
+          : "checkpoint_verification_unavailable",
+      );
     }
 
     let state: EffectiveLevelState;
@@ -452,7 +509,75 @@ async function resolveLevelStatesWithin(
     xpSummary = { kind: "disabled" };
   }
 
-  return deriveEnrolledLevelStates(context, xpSummary);
+  const checkpoints = await loadCheckpointSnapshots(client, context);
+  return deriveEnrolledLevelStates(context, xpSummary, checkpoints, evaluationTime);
+}
+
+/**
+ * Load the durable checkpoint facts for this enrollment, on the same read
+ * snapshot as everything else.
+ *
+ * Two bounded queries and only for levels that ARE financial checkpoints — a
+ * curriculum with no checkpoint touches neither new table. The selected columns
+ * are an explicit allow-list, so a future column on either table cannot reach
+ * the read model by being added.
+ */
+async function loadCheckpointSnapshots(
+  client: LevelStateCommandDb,
+  context: Extract<UserCurriculumContextResult, { kind: "enrolled" }>,
+): Promise<CheckpointStateSnapshots> {
+  const checkpointLevelIds = context.levels
+    .filter((level) => isFinancialCheckpointType(level.type))
+    .map((level) => level.id);
+  if (checkpointLevelIds.length === 0) return EMPTY_CHECKPOINT_SNAPSHOTS;
+
+  const requirementRows = await client.levelCheckpointRequirement.findMany({
+    where: { levelDefinitionId: { in: checkpointLevelIds } },
+    select: {
+      levelDefinitionId: true,
+      integrationCode: true,
+      thresholdCurrency: true,
+      thresholdMinorUnits: true,
+    },
+  });
+  const attemptRows = await client.checkpointVerificationAttempt.findMany({
+    where: {
+      enrollmentId: context.enrollment.id,
+      levelDefinitionId: { in: checkpointLevelIds },
+    },
+    orderBy: { id: "desc" },
+    select: {
+      levelDefinitionId: true,
+      outcome: true,
+      cooldownUntil: true,
+      completedAt: true,
+    },
+  });
+
+  const latestAttempts = new Map<number, CheckpointAttemptSnapshot>();
+  for (const row of attemptRows) {
+    // Rows arrive newest-first; the first per level is the latest.
+    if (latestAttempts.has(row.levelDefinitionId)) continue;
+    latestAttempts.set(row.levelDefinitionId, {
+      outcome: row.outcome,
+      cooldownUntil: row.cooldownUntil,
+      completedAt: row.completedAt,
+    });
+  }
+
+  return {
+    requirements: new Map(
+      requirementRows.map((row) => [
+        row.levelDefinitionId,
+        {
+          integrationCode: row.integrationCode,
+          thresholdCurrency: row.thresholdCurrency,
+          thresholdMinorUnits: row.thresholdMinorUnits,
+        },
+      ]),
+    ),
+    latestAttempts,
+  };
 }
 
 export async function resolveUserCurriculumLevelStates({

@@ -810,6 +810,34 @@ enum UserLevelProgressStatus {
   completed
 }
 
+/**
+ * L4VC-1 — the durable outcome vocabulary for a checkpoint verification attempt.
+ *
+ * Every member is either a verdict about a THRESHOLD (met / not_met) or an
+ * operational fact. None of them can describe an amount, so an attempt row can
+ * never record how much money a learner has — only whether a gate the platform
+ * already published was reached, or why the question could not be answered.
+ *
+ * `in_progress` is the claim state written before the provider is called; it is
+ * what makes "exactly one provider call for concurrent identical requests"
+ * enforceable by a unique index rather than by a lock.
+ */
+enum CheckpointVerificationOutcome {
+  in_progress
+  met
+  not_met
+  identity_unlinked
+  identity_mismatch
+  unsupported_currency
+  provider_disabled
+  provider_unconfigured
+  provider_timeout
+  provider_maintenance
+  provider_rate_limited
+  stale
+  invalid_provider_response
+}
+
 enum CurriculumXpSourceType {
   level_completion
   assessment_pass
@@ -980,12 +1008,70 @@ model LevelDefinition {
   reportAssignments       ReportAssignmentVersion[]
   reportBinding           LevelReportBinding?
   reportSubmissions       ReportSubmission[]
+  checkpointRequirement   LevelCheckpointRequirement?
+  checkpointAttempts      CheckpointVerificationAttempt[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
   @@unique([curriculumVersionId, stableCode])
   @@index([moduleId])
   @@index([curriculumVersionId, type])
+}
+
+/**
+ * L4VC-1 — the configured threshold for one financial-checkpoint level.
+ *
+ * One requirement per level (`levelDefinitionId` is unique). The threshold is an
+ * INTEGER in minor units so $50.00 is 5000 and no float rounding can ever move
+ * a gate. `integrationCode` names which provider integration answers for this
+ * level; it is a code, not a URL and not a credential.
+ *
+ * A level with no row here is `requirement_unconfigured` and is never verified —
+ * the platform will not invent a threshold.
+ */
+model LevelCheckpointRequirement {
+  id                  Int             @id @default(autoincrement())
+  levelDefinitionId   Int             @unique
+  integrationCode     String
+  thresholdCurrency   String
+  thresholdMinorUnits Int
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  levelDefinition     LevelDefinition @relation(fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([integrationCode])
+}
+
+/**
+ * L4VC-1 — one verification attempt, and the durable receipt that replays it.
+ *
+ * WHAT IT DELIBERATELY DOES NOT HAVE: a balance column, a demo balance column,
+ * a remaining-amount column, an account identifier, a token, or a `Json` bag a
+ * provider payload could be poured into. The privacy contract is enforced by
+ * the ABSENCE of columns, so no future code path can persist an observed
+ * amount without a schema change and a migration review.
+ *
+ * `observedAt` is a timestamp, not a measurement: it records how fresh the
+ * provider's answer was, which is what makes `stale` meaningful.
+ */
+model CheckpointVerificationAttempt {
+  id                Int                           @id @default(autoincrement())
+  enrollmentId      Int
+  levelDefinitionId Int
+  requestId         String
+  outcome           CheckpointVerificationOutcome
+  providerRequestId String?
+  observedAt        DateTime?
+  cooldownUntil     DateTime?
+  createdAt         DateTime                      @default(now())
+  completedAt       DateTime?
+  enrollment        UserCurriculumEnrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition   LevelDefinition               @relation(fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([enrollmentId, levelDefinitionId, requestId])
+  @@index([enrollmentId, requestId])
+  @@index([enrollmentId, levelDefinitionId, createdAt])
+  @@index([levelDefinitionId])
 }
 
 model UserCurriculumEnrollment {
@@ -1009,6 +1095,7 @@ model UserCurriculumEnrollment {
   assessmentAttempts     AssessmentAttempt[]
   lessonProgress         UserLessonProgress[]
   reportSubmissions      ReportSubmission[]
+  checkpointAttempts     CheckpointVerificationAttempt[]
 
   @@unique([id, curriculumVersionId])
   @@unique([id, userId, curriculumVersionId])

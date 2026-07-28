@@ -33,6 +33,8 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_REPORT_ENABLED",
   "CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED",
   "CURRICULUM_V2_CHECKPOINT_ENABLED",
+  "POCKET_BALANCE_PROVIDER_ENABLED",
+  "CHECKPOINT_PROVIDER_TEST_BACKEND",
   "REPORT_ATTACHMENT_S3_BUCKET",
   "REPORT_ATTACHMENT_S3_REGION",
   "REPORT_ATTACHMENT_S3_ENDPOINT",
@@ -68,6 +70,10 @@ const envSchema = z.object({
   CURRICULUM_V2_REPORT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_CHECKPOINT_ENABLED: z.enum(["true", "false"]).optional(),
+  POCKET_BALANCE_PROVIDER_ENABLED: z.enum(["true", "false"]).optional(),
+  CHECKPOINT_PROVIDER_TEST_BACKEND: z
+    .literal("unsafe-deterministic-mock-regression-only")
+    .optional(),
   REPORT_ATTACHMENT_S3_BUCKET: z.string().optional(),
   REPORT_ATTACHMENT_S3_REGION: z.string().optional(),
   REPORT_ATTACHMENT_S3_ENDPOINT: z.string().url().optional(),
@@ -123,6 +129,10 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
 
     if (env.REPORT_ATTACHMENT_TEST_BACKEND) {
       errors.push("REPORT_ATTACHMENT_TEST_BACKEND is a regression-only backend and must never be set in production");
+    }
+
+    if (env.CHECKPOINT_PROVIDER_TEST_BACKEND) {
+      errors.push("CHECKPOINT_PROVIDER_TEST_BACKEND is a regression-only balance provider and must never be set in production");
     }
   }
 
@@ -216,6 +226,36 @@ export function isCurriculumV2ReportAttachmentsEnabled(env: NodeJS.ProcessEnv = 
 // src/lib/curriculum/checkpoint.ts.
 export function isCurriculumV2CheckpointEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_CHECKPOINT_ENABLED === "true";
+}
+
+// Independent PROVIDER CAPABILITY gate (L4VC-1). Absent env is the safe
+// disabled default.
+//
+// Two flags, two different questions, deliberately not merged:
+//   CURRICULUM_V2_CHECKPOINT_ENABLED — may the platform run a checkpoint at all?
+//   POCKET_BALANCE_PROVIDER_ENABLED  — may it ask a balance provider?
+//
+// Verification requires BOTH, plus a configured adapter and a configured
+// requirement. Every other combination answers with a typed unavailable state
+// and performs no provider call.
+//
+// It is independent of POCKET_POSTBACK_ENABLED (affiliate postback intake — a
+// different system with different data and a different risk), of REPORT and of
+// XP. Enabling any of those must never enable balance verification as a side
+// effect, and enabling this one grants no postback, report or XP capability.
+export function isPocketBalanceProviderEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.POCKET_BALANCE_PROVIDER_ENABLED === "true";
+}
+
+// Regression-only deterministic balance provider. Activation requires the exact
+// opt-in marker AND a non-production runtime; production env validation
+// additionally hard-fails when the marker is present, so the mock cannot be
+// selected in production even by accident.
+export function isCheckpointProviderTestBackendEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return (
+    env.NODE_ENV !== "production" &&
+    env.CHECKPOINT_PROVIDER_TEST_BACKEND === "unsafe-deterministic-mock-regression-only"
+  );
 }
 
 // Regression-only in-memory attachment storage/scanner backend. Activation
