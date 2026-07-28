@@ -121,7 +121,7 @@ export async function PATCH(
     metadata: {
       before: {
         status: existingAccount.status,
-        balance: existingAccount.balance,
+        // DEVMECH-1: no current trading balance in audit metadata.
         depositAmount: existingAccount.depositAmount,
         tradesCount: existingAccount.tradesCount,
       },

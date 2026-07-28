@@ -27,7 +27,9 @@ export function serializeExchangeAccount(
     registrationStatus: account.registrationStatus,
     emailConfirmed: account.emailConfirmed,
     firstDepositConfirmed: account.firstDepositConfirmed,
-    balance: account.balance,
+    // DEVMECH-1: `balance` is a CURRENT TRADING BALANCE and is never
+    // serialised. `totalDeposits` below is historical transaction
+    // accounting, which is a different fact and is intentionally kept.
     depositAmount: account.depositAmount,
     tradesCount: account.tradesCount,
     totalDeposits: account.totalDeposits,

@@ -173,14 +173,16 @@ export async function GET(request: Request) {
           emailConfirmed: account?.emailConfirmed ?? false,
           firstDepositConfirmed: account?.firstDepositConfirmed ?? false,
           depositStatus: account?.firstDepositConfirmed ? "confirmed" : "pending",
-          balance: account?.balance ?? 0,
+          // DEVMECH-1: CRM never receives a current trading balance.
           traderId: account?.traderId ?? null,
           clickId: account?.clickId ?? null,
           totalDeposits: account?.totalDeposits ?? 0,
           totalWithdrawals: account?.totalWithdrawals ?? 0,
           totalCommission: account?.totalCommission ?? 0,
           checkpointStatus: user.checkpoint?.status ?? "none",
-          checkpointBalance: user.checkpoint?.currentBalance ?? 0,
+          // DEVMECH-1: the legacy V1 checkpoint balance is retired and is
+          // never exposed. L4 state comes from the curriculum read model.
+
           cohort: computedCohort,
           attribution,
           postbackEvents: postbackEvents.map((event) => ({

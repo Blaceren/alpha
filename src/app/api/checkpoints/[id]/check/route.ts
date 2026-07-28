@@ -7,8 +7,6 @@ import {
 } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
-import { getBalanceProvider } from "@/lib/exchange/balanceProvider";
-import { createCheckpointNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import {
@@ -84,15 +82,31 @@ export async function POST(request: Request, { params }: CheckpointCheckRoutePro
     return rateLimitedResponse();
   }
 
+  // DEVMECH-1 — the legacy V1 financial checkpoint is RETIRED, fail-closed.
+  //
+  // This route used to ask a legacy balance provider for the learner's account
+  // balance, persist it onto `ExchangeAccount.balance` and `Checkpoint
+  // .currentBalance`, and complete the checkpoint when that number cleared a
+  // threshold. Every part of that is now forbidden:
+  //
+  //   * it PERSISTED a current trading balance, in two places, plus a third
+  //     copy in AuditLog metadata and a fourth in the notification;
+  //   * it completed a financial gate from a value this platform cannot
+  //     authoritatively verify, bypassing `CheckpointBalanceProvider`, which is
+  //     the only sanctioned authority for "does this learner hold $50";
+  //   * it trusted `ExchangeAccount.traderId`, a non-unique column overwritten
+  //     by every postback goal (see PocketTraderIdentity).
+  //
+  // The curriculum V2 L4 checkpoint was never completable from here, and still
+  // is not. The route is kept — rather than deleted — because a V1 client still
+  // calls it, and a bounded, honest "unavailable" is a better answer to that
+  // client than a 404 that reads as a bug.
+  //
+  // Nothing below this line reads a balance, writes a balance, mutates any row,
+  // creates a notification, or records a financial value.
   const checkpoint = await prisma.checkpoint.findUnique({
     where: { id: checkpointId.id },
-    include: {
-      user: {
-        include: {
-          exchangeAccount: true,
-        },
-      },
-    },
+    select: { id: true, userId: true },
   });
 
   if (!checkpoint) {
@@ -103,71 +117,23 @@ export async function POST(request: Request, { params }: CheckpointCheckRoutePro
     return forbiddenResponse();
   }
 
-  const exchangeAccount = checkpoint.user?.exchangeAccount;
-  if (!exchangeAccount?.traderId) {
-    return NextResponse.json(
-      { error: "TRADER_ID_REQUIRED", message: "Для проверки контрольной точки нужен trader_id из Pocket postback." },
-      { status: 400 },
-    );
-  }
-  const provider = getBalanceProvider(exchangeAccount?.provider);
-  const providerResult = await provider.verifyCheckpoint(currentUser.id, checkpoint.requiredBalance);
-  const nextBalance = providerResult.balance ?? exchangeAccount?.balance ?? checkpoint.currentBalance;
-  const nextStatus = providerResult.ok && nextBalance >= checkpoint.requiredBalance ? "completed" : "frozen";
-  const progressStatus = nextStatus === "frozen" ? "frozen" : "active";
-
-  const updatedCheckpoint = await prisma.$transaction(async (tx) => {
-    if (checkpoint.user?.exchangeAccount && typeof providerResult.balance === "number") {
-      await tx.exchangeAccount.update({
-        where: { id: checkpoint.user.exchangeAccount.id },
-        data: { balance: nextBalance, lastVerifiedAt: new Date() },
-      });
-    }
-
-    return tx.checkpoint.update({
-      where: { id: checkpointId.id },
-      data: {
-        currentBalance: nextBalance,
-        status: nextStatus,
-      },
-    });
-  });
-
+  // Bounded, non-financial: an operator can see that a retired path was called,
+  // and nothing else. No balance, no threshold, no provider result.
   await createAuditLog({
     userId: currentUser.id,
-    action: "CHECKPOINT_CHECKED",
+    action: "CHECKPOINT_CHECK_REFUSED",
     entityType: "Checkpoint",
-    entityId: updatedCheckpoint.id,
-    metadata: {
-      requiredBalance: updatedCheckpoint.requiredBalance,
-      currentBalance: updatedCheckpoint.currentBalance,
-      status: updatedCheckpoint.status,
-      progressStatus,
-      provider: provider.id,
-      providerMessage: providerResult.message,
-    },
+    entityId: checkpoint.id,
+    metadata: { reason: "legacy_balance_verification_retired" },
     request,
   });
 
-  if (
-    (updatedCheckpoint.status === "frozen" ||
-      updatedCheckpoint.status === "completed") &&
-    updatedCheckpoint.status !== checkpoint.status
-  ) {
-    await createCheckpointNotification({
-      userId: currentUser.id,
-      status: updatedCheckpoint.status,
-      checkpointId: updatedCheckpoint.id,
-      currentBalance: updatedCheckpoint.currentBalance,
-      requiredBalance: updatedCheckpoint.requiredBalance,
-      request,
-    });
-  }
-
-  return NextResponse.json({
-    checkpoint: updatedCheckpoint,
-    progressStatus,
-    provider: provider.id,
-    message: providerResult.message,
-  });
+  return NextResponse.json(
+    {
+      error: "CHECKPOINT_VERIFICATION_UNAVAILABLE",
+      message:
+        "Проверка баланса по этому маршруту больше не выполняется. Финансовая контрольная точка проверяется только авторизованным поставщиком баланса.",
+    },
+    { status: 503, headers: { "Cache-Control": "no-store" } },
+  );
 }

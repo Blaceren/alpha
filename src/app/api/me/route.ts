@@ -123,7 +123,8 @@ export async function GET() {
               emailConfirmed: user.exchangeAccount.emailConfirmed,
               firstDepositConfirmed:
                 user.exchangeAccount.firstDepositConfirmed,
-              balance: user.exchangeAccount.balance,
+              // DEVMECH-1: no current trading balance is returned to a
+              // learner. Historical deposit totals remain.
               totalDeposits: user.exchangeAccount.totalDeposits,
               totalWithdrawals: user.exchangeAccount.totalWithdrawals,
               postbackEvents: user.exchangeAccount.postbackEvents.map(

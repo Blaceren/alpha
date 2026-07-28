@@ -75,7 +75,11 @@ export async function POST(request: Request) {
     data: {
       status: result.status,
       externalAccountId: result.externalAccountId ?? account.externalAccountId,
-      balance: result.balance ?? account.balance,
+      // DEVMECH-1: a current trading balance is never persisted. The
+      // legacy provider may report one; it is discarded here rather than
+      // written, because the only sanctioned authority for a financial
+      // gate is CheckpointBalanceProvider, which returns a verdict and
+      // never an amount. Historical deposit accounting is unaffected.
       depositAmount: result.depositAmount ?? account.depositAmount,
       totalDeposits: result.depositAmount ?? account.totalDeposits,
       tradesCount: result.tradesCount ?? account.tradesCount,
