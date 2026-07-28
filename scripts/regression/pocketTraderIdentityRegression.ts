@@ -171,10 +171,14 @@ async function main() {
     assert.equal(await bindingFor(learner.userId), null);
   });
 
-  await check("A3 a URL-borne secret is refused and binds nothing", async () => {
-    // This is exactly the shape of the operator's example postback URL
-    // (`...&ow=<secret>&playerid=...`). Presence of the parameter is not
-    // authentication, and the route rejects the request before any lookup.
+  await check("A3 a URL-borne secret binds nothing without valid ATA fields", async () => {
+    // PDP-1 changed this deliberately. `ow` is Pocket's OFFICIAL registration
+    // secret field, so it now authenticates a `goal=reg` request rather than
+    // being rejected outright. What has not changed — and is what this check
+    // actually protects — is that authentication alone binds nothing: this
+    // suite's affiliate-era clickid (`tq-pa1-click-N`) is not the ATA-generated
+    // `tq-<uuid>` format, so the strict direct-registration parser refuses it
+    // with a bounded 400 and no identity is written.
     const learner = await createLearner();
     const response = await postRegistration({
       clickId: learner.clickId,
@@ -182,8 +186,28 @@ async function main() {
       secret: null,
       secretInQuery: true,
     });
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 400);
+    assert.notEqual(response.status, 200, "an invalid registration must never succeed");
     assert.equal(await bindingFor(learner.userId), null);
+  });
+
+  await check("A3b the legacy query aliases are still refused outright", async () => {
+    // `secret` and `token` were ATA-invented aliases with no provider mandate.
+    // They remain rejected before any lookup, on every goal.
+    const learner = await createLearner();
+    for (const alias of ["secret", "token"]) {
+      const params = new URLSearchParams({
+        clickid: learner.clickId, goal: "reg",
+        playerid: POCKET_USER_ID, [alias]: SECRET,
+      });
+      const response = await route.GET(
+        new Request(`https://ata.test/api/postbacks/pocket?${params}`, {
+          method: "GET", headers: { "x-forwarded-for": nextIp() },
+        }),
+      );
+      assert.equal(response.status, 403, alias);
+      assert.equal(await bindingFor(learner.userId), null);
+    }
   });
 
   await check("A4 an unknown clickid binds nothing", async () => {

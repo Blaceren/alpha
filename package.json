@@ -83,6 +83,8 @@
     "test:regression:curriculum-zero-reward-completion": "tsx scripts/regression/curriculumZeroRewardCompletionRegression.ts",
     "test:regression:curriculum-checkpoint-honest-gate": "tsx scripts/regression/curriculumCheckpointHonestGateRegression.ts",
     "test:regression:curriculum-checkpoint-verification": "tsx scripts/regression/curriculumCheckpointVerificationCoreRegression.ts",
+    "test:regression:pocket-direct-postback-e2e": "tsx scripts/regression/pocketDirectPostbackE2E.ts",
+    "test:regression:pocket-direct-postback": "tsx scripts/regression/pocketDirectPostbackRegression.ts",
     "test:regression:pocket-partner-adapter": "tsx scripts/regression/pocketPartnerAdapterRegression.ts",
     "test:regression:pocket-trader-identity": "tsx scripts/regression/pocketTraderIdentityRegression.ts",
     "test:regression:pocket-partner-checkpoint-e2e": "tsx scripts/regression/pocketPartnerCheckpointE2E.ts",

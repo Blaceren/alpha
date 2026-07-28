@@ -354,16 +354,48 @@ async function main() {
       assert.equal(missing.text, wrong.text);
     });
 
-    await check("auth: a query-string secret is refused, not accepted", async () => {
-      for (const key of ["ow", "secret", "token"]) {
+    // PDP-1 changed this contract deliberately. Pocket's official DIRECT
+    // postback carries its shared secret as the `ow` QUERY parameter, so `ow`
+    // now authenticates — but ONLY for `goal=reg`, which moves no money. The
+    // legacy ATA aliases had no provider mandate and stay rejected everywhere,
+    // and every financial goal remains header-only.
+    await check("auth: legacy query-secret aliases are refused, not accepted", async () => {
+      for (const key of ["secret", "token"]) {
         const reply = await postback(regQuery(`auth-q-${key}`, { [key]: SECRET }));
         assert.equal(reply.status, 403, `${key} must not authenticate`);
       }
     });
 
-    await check("auth: a valid header does not rescue a query-supplied secret", async () => {
-      const reply = await postback(regQuery("auth-q-both", { ow: SECRET }), authed());
-      assert.equal(reply.status, 403, "query auth material must be rejected outright");
+    await check("auth: ow cannot authenticate a financial goal", async () => {
+      for (const goal of ["dep", "ftd", "redep", "commission", "withdrawal"]) {
+        const reply = await postback({
+          goal, clickid: CLICK_ID, playerid: "ps1-player",
+          event_id: `auth-q-fin-${goal}`, sum: "10", ow: SECRET,
+        });
+        assert.equal(reply.status, 403, `${goal} must stay header-only`);
+      }
+    });
+
+    await check("auth: a wrong ow is refused on the registration path too", async () => {
+      const reply = await postback(regQuery("auth-q-wrong", { ow: WRONG_SECRET }));
+      assert.equal(reply.status, 403, "a wrong query secret must not authenticate");
+    });
+
+    await check("auth: a valid header does not rescue a legacy query alias", async () => {
+      for (const key of ["secret", "token"]) {
+        const reply = await postback(regQuery(`auth-q-both-${key}`, { [key]: SECRET }), authed());
+        assert.equal(reply.status, 403, "legacy query auth material is rejected outright");
+      }
+    });
+
+    await check("auth: a correct ow authenticates a registration", async () => {
+      // It passes authentication and is then judged on its FIELDS: this legacy
+      // fixture uses an affiliate-era clickid and a non-numeric playerid, so
+      // the strict direct-registration parser refuses it with a bounded 400 —
+      // decisively not the 403 an authentication failure produces.
+      const reply = await postback(regQuery("auth-q-ok", { ow: SECRET }));
+      assert.equal(reply.status, 400, "authenticated, then rejected on field shape");
+      assert.notEqual(reply.status, 403);
     });
 
     await check("auth: a duplicated header is refused as ambiguous", async () => {
