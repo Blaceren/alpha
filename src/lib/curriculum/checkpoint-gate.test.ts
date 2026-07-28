@@ -135,6 +135,9 @@ describe("checkpoint view model", () => {
       canVerify: false,
       canStart: false,
       canComplete: false,
+      // L4VC-1 adds a WAIT in seconds. Null here — there is nothing to wait for
+      // when verification is switched off.
+      retryAfterSeconds: null,
     });
   });
 
@@ -162,6 +165,7 @@ describe("checkpoint view model", () => {
       canVerify: false,
       canStart: false,
       canComplete: false,
+      retryAfterSeconds: null,
     });
   });
 
@@ -169,7 +173,7 @@ describe("checkpoint view model", () => {
     const l4 = l4Of(
       atCheckpoint({
         ...UNAVAILABLE,
-        verificationState: "verified",
+        verificationState: "balance_verified_ok",
         verificationReason: "balance_ok",
         canVerify: true,
         canComplete: true,
@@ -189,6 +193,67 @@ describe("checkpoint view model", () => {
     const l4 = l4Of(atCheckpoint({ ...UNAVAILABLE, verificationReason: "balance_below_50_usd" }));
     expect(l4.checkpoint!.reason).toBe("unsupported");
     expect(JSON.stringify(l4)).not.toContain("balance");
+  });
+
+  it("L4VC-1 states are carried through exactly, and never widened", () => {
+    for (const [verificationState, verificationReason] of [
+      ["ready", "none"],
+      ["checking", "none"],
+      ["cooldown", "cooldown_active"],
+      ["not_met", "not_met"],
+      ["completed", "none"],
+      ["verification_unavailable", "provider_disabled"],
+      ["verification_unavailable", "identity_unlinked"],
+      ["verification_unavailable", "identity_mismatch"],
+      ["verification_unavailable", "unsupported_currency"],
+      ["verification_unavailable", "requirement_unconfigured"],
+      ["verification_unavailable", "provider_timeout"],
+      ["verification_unavailable", "provider_maintenance"],
+      ["verification_unavailable", "provider_rate_limited"],
+      ["verification_unavailable", "stale"],
+      ["verification_unavailable", "invalid_provider_response"],
+    ] as const) {
+      const l4 = l4Of(atCheckpoint({ ...UNAVAILABLE, verificationState, verificationReason }));
+      expect(l4.checkpoint!.verificationState).toBe(verificationState);
+      expect(l4.checkpoint!.reason).toBe(verificationReason);
+      // Backend said false, so the Academy says false — in every state.
+      expect(l4.checkpoint!.canVerify).toBe(false);
+      expect(l4.checkpoint!.canStart).toBe(false);
+      expect(l4.checkpoint!.canComplete).toBe(false);
+    }
+  });
+
+  it("canVerify is honoured only when the Backend grants it on a known state", () => {
+    const granted = l4Of(
+      atCheckpoint({ ...UNAVAILABLE, verificationState: "ready", verificationReason: "none", canVerify: true }),
+    );
+    expect(granted.checkpoint!.canVerify).toBe(true);
+    // ...but never for a state the Academy does not understand.
+    const invented = l4Of(
+      atCheckpoint({ ...UNAVAILABLE, verificationState: "auto_passed", verificationReason: "none", canVerify: true }),
+    );
+    expect(invented.checkpoint!.canVerify).toBe(false);
+    expect(invented.checkpoint!.verificationState).toBe("unsupported");
+  });
+
+  it("retryAfterSeconds is a bounded positive duration or null", () => {
+    const cooling = l4Of(
+      atCheckpoint({
+        ...UNAVAILABLE, verificationState: "cooldown", verificationReason: "cooldown_active",
+        retryAfterSeconds: 42,
+      }),
+    );
+    expect(cooling.checkpoint!.retryAfterSeconds).toBe(42);
+    // Absurd, negative, non-finite and over-long waits are dropped, not shown.
+    for (const bad of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, 99_999]) {
+      const l4 = l4Of(
+        atCheckpoint({
+          ...UNAVAILABLE, verificationState: "cooldown", verificationReason: "cooldown_active",
+          retryAfterSeconds: bad,
+        }),
+      );
+      expect(l4.checkpoint!.retryAfterSeconds).toBeNull();
+    }
   });
 
   it("L5 is not fabricated: the read exposes only the levels the Backend sent", () => {
