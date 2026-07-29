@@ -4,6 +4,7 @@ import {
   isCurriculumV2ReadEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { reconcilePocketRegistrationLevelCompletion } from "./pocket-registration-completion";
 import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
 import {
   resolvePublishedCurriculum,
@@ -229,7 +230,34 @@ async function recoverConcurrentEnrollment(
   });
 }
 
-export async function enrollUserInPublishedCurriculum({
+export async function enrollUserInPublishedCurriculum(
+  input: EnrollUserInPublishedCurriculumInput,
+): Promise<EnrollUserInPublishedCurriculumResult> {
+  const result = await enrollUserInPublishedCurriculumCore(input);
+
+  // L1OWNER-1 — the other half of the registration ordering.
+  //
+  // A learner may legally register with Pocket BEFORE enrolling: the referral
+  // link needs only a session. That registration binds a durable identity but
+  // cannot complete a curriculum that does not exist yet, so it returns
+  // `pending_enrollment`. This is where that debt is settled.
+  //
+  // It runs AFTER the enrolment transaction has committed, and it is fully
+  // idempotent: a learner with no identity is a no-op, and a learner who
+  // registered after enrolling has already been completed by the postback
+  // itself. A failure here never fails the enrolment — the enrolment is real
+  // either way, and an identical postback replay or the operator reconciliation
+  // command will settle it.
+  try {
+    await reconcilePocketRegistrationLevelCompletion(input.userId);
+  } catch {
+    /* enrolment stands; reconciliation is retryable */
+  }
+
+  return result;
+}
+
+async function enrollUserInPublishedCurriculumCore({
   userId,
   actorId,
   asOf = new Date(),

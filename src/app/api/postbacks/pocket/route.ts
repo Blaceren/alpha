@@ -14,6 +14,7 @@ import {
   readPostbackGoalForAuthMode,
   resolvePocketPostbackConfig,
 } from "@/lib/exchange/pocketPostbackAuth";
+import { reconcilePocketRegistrationLevelCompletion } from "@/lib/curriculum/pocket-registration-completion";
 import { bindPocketTraderIdentity } from "@/lib/exchange/pocketTraderIdentity";
 import { processExchangePostbackPayload } from "@/lib/exchange/postbackProcessor";
 import type { PocketPostbackType } from "@/lib/exchange/pocket";
@@ -273,6 +274,35 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
         processedAt: new Date(),
       },
     });
+  }
+
+  // L1OWNER-1 — the legal Level 1 completion.
+  //
+  // Reached only after the enabled gate, the rate limit, the timing-safe `ow`
+  // authentication, strict field validation, clickid resolution and a
+  // successful (or identically idempotent) identity binding. The reconciliation
+  // service re-verifies every one of those facts from durable state before it
+  // completes anything, so nothing here is trusted on the strength of having
+  // got this far.
+  //
+  // Deliberately NOT gated on `result.outcome === "bound"`: a request can bind
+  // the identity and then fail before completing, and gating on "newly created"
+  // would strand that learner forever. An identical replay must reconcile.
+  if (result.outcome === "bound" || result.outcome === "already_bound") {
+    const reconciled = await reconcilePocketRegistrationLevelCompletion(learner.userId);
+
+    // A transient failure must not be reported as a final success: Pocket's
+    // retry is the recovery path, and an identical replay reconciles.
+    if (reconciled.outcome === "transient_failure") {
+      await createAuditLog({
+        action: "POCKET_REGISTRATION_LEVEL_RECONCILE_DEFERRED",
+        entityType: "API_ROUTE",
+        entityId: ROUTE,
+        metadata: { route: ROUTE, outcome: reconciled.outcome },
+        request,
+      });
+      return respond(503, { ok: false });
+    }
   }
 
   return respond(200, { ok: true });

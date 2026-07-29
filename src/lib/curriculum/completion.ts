@@ -52,9 +52,28 @@ export type CurriculumXpBearingCompletionSource = Extract<
  */
 export type CurriculumCheckpointCompletionSource = "checkpoint_verification";
 
+/**
+ * L1OWNER-1 — the authenticated Pocket registration owner.
+ *
+ * Level 1 is `external_event:pocket_postback`: the learner completes it by
+ * registering with Pocket, and the only trustworthy witness of that is a
+ * postback ATA itself authenticated. Before this owner existed the pair had NO
+ * entry in `OWNER_RULES`, so a successful registration bound the identity, set
+ * the account connected, completed the legacy V1 task — and left curriculum L1
+ * untouched. Every learner was stuck on L1, and L2-L4 were unreachable; earlier
+ * end-to-end phases hid it by inserting UserLevelProgress rows directly.
+ *
+ * Like the checkpoint owner this is deliberately NOT XP-bearing: registration is
+ * a gate, not an achievement. Keeping it outside `CurriculumXpSourceType` means
+ * an XPTransaction for it does not typecheck, and the database CHECK constraint
+ * on `XPTransaction.sourceType` would reject it even if it did.
+ */
+export type CurriculumPocketRegistrationCompletionSource = "pocket_registration_postback";
+
 export type CurriculumLevelCompletionSource =
   | CurriculumXpBearingCompletionSource
-  | CurriculumCheckpointCompletionSource;
+  | CurriculumCheckpointCompletionSource
+  | CurriculumPocketRegistrationCompletionSource;
 
 const COMPLETION_SOURCES = new Set<string>([
   "level_completion",
@@ -62,6 +81,7 @@ const COMPLETION_SOURCES = new Set<string>([
   "report_approval",
   "mentor_completion",
   "checkpoint_verification",
+  "pocket_registration_postback",
 ]);
 
 /** The subset that may appear in the XP ledger. */
@@ -75,8 +95,11 @@ const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
 /** A source that can never award XP, whatever the level definition says. */
 function isZeroRewardOnlySource(
   sourceType: CurriculumLevelCompletionSource,
-): sourceType is CurriculumCheckpointCompletionSource {
-  return sourceType === "checkpoint_verification";
+): sourceType is CurriculumCheckpointCompletionSource | CurriculumPocketRegistrationCompletionSource {
+  return (
+    sourceType === "checkpoint_verification" ||
+    sourceType === "pocket_registration_postback"
+  );
 }
 
 type OwnerRule = {
@@ -110,6 +133,14 @@ const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
   checkpoint_verification: {
     initialStatus: "in_progress",
     pairs: new Set(["financial_checkpoint:balance_check"]),
+  },
+  // L1OWNER-1. Exactly ONE pair. There is deliberately no `external_event:*`
+  // wildcard and no generic "external" owner: a future external-event level
+  // with a different completion method must define its own trusted contract
+  // rather than inherit registration's.
+  pocket_registration_postback: {
+    initialStatus: "in_progress",
+    pairs: new Set(["external_event:pocket_postback"]),
   },
 };
 
@@ -471,6 +502,9 @@ function assertOwnerRule(
 
 const ASSESSMENT_ATTEMPT_SOURCE = /^assessment-attempt:([1-9]\d*)$/;
 const REPORT_REVIEW_SOURCE = /^report-review:([1-9]\d*)$/;
+/** `pocket-registration:<PocketTraderIdentity.id>` — never a Pocket user id. */
+const POCKET_REGISTRATION_SOURCE = /^pocket-registration:(\d+)$/;
+
 const CHECKPOINT_ATTEMPT_SOURCE = /^checkpoint-verification:([1-9]\d*)$/;
 
 async function assertLessonAssessmentProof(
@@ -672,6 +706,59 @@ async function assertCheckpointVerificationProof(
 }
 
 /**
+ * L1OWNER-1 — the trusted proof behind a Pocket registration completion.
+ *
+ * `PocketTraderIdentity` is the ONLY authority. It is written by exactly one
+ * code path — the authenticated registration postback — and it is unique on both
+ * `userId` and `pocketUserId`, so its existence for this learner is durable
+ * proof that a registration ATA authenticated actually happened.
+ *
+ * Deliberately NOT accepted as authority:
+ *   * `ExchangeAccount.traderId` — nullable, non-unique in both directions, and
+ *     written by every goal, so it proves nothing about registration;
+ *   * `registrationStatus` — a display flag that several paths can set;
+ *   * the legacy V1 task `lvl_01_pocket_registration` — a different system;
+ *   * AuditLog or notification text — narrative, not state;
+ *   * anything a learner or staff member can submit.
+ *
+ * The identity must belong to THIS learner: an identity bound to somebody else
+ * cannot complete this enrolment's level, which is what makes a Pocket-user
+ * conflict unable to complete L1.
+ */
+async function assertPocketRegistrationProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+) {
+  if (input.sourceType !== "pocket_registration_postback") return;
+
+  if (context.level.type !== "external_event" || context.level.completionMethod !== "pocket_postback") {
+    failure("COMPLETION_OWNER_MISMATCH", "registration proof targets a non-registration level");
+  }
+
+  const identity = await tx.pocketTraderIdentity.findUnique({
+    where: { userId: context.enrollment.userId },
+    select: { id: true, userId: true, source: true },
+  });
+
+  if (!identity || identity.userId !== context.enrollment.userId) {
+    failure("COMPLETION_STATE_CORRUPT", "pocket registration proof is missing");
+  }
+  // Only a registration postback may write this row today; refusing anything
+  // else keeps the proof honest if a future provenance is ever added.
+  if (identity!.source !== "registration_postback") {
+    failure("COMPLETION_STATE_CORRUPT", "pocket registration proof has an untrusted provenance");
+  }
+  // The source id names the identity row rather than any Pocket value, so no
+  // Pocket user id is written into completion evidence.
+  const match = POCKET_REGISTRATION_SOURCE.exec(input.sourceId);
+  const identityId = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(identityId) || identityId !== identity!.id) {
+    failure("COMPLETION_OWNER_MISMATCH", "registration proof identity is invalid");
+  }
+}
+
+/**
  * Reward contract (operator platform decision, 2026-07-25):
  *  - `xpReward` must be a non-negative integer;
  *  - `xpReward === 0` is a valid, completable level that awards no XP and creates
@@ -844,6 +931,7 @@ async function runCompletionTransaction(
   await assertLessonAssessmentProof(tx, context, input);
   await assertReportApprovalProof(tx, context, input);
   await assertCheckpointVerificationProof(tx, context, input);
+  await assertPocketRegistrationProof(tx, context, input);
   assertReward(context, input.sourceType);
   assertXpFlagForReward(context, input.sourceType);
 
