@@ -503,14 +503,20 @@ async function main() {
     // L4VC-1 adds the provider SEAM as the resolver's second dependency. Both
     // are ours: environment flags and our own typed interface.
     //
-    // L4PA-1 adds a third and final one: the official Pocket adapter. The list
-    // is asserted EXACTLY rather than loosened to a pattern, so a fourth
-    // dependency — an exchange module, an HTTP client, a credential source —
-    // still fails this check the moment it appears. The resolver itself remains
-    // free of any network call, which is the property that matters: it decides
-    // WHICH provider answers, and never talks to one.
+    // L4PA-1 adds a third: the official Pocket adapter. L4DSP-1 adds a fourth
+    // and fifth: the explicit provider-mode contract and the DEV-only simulator,
+    // neither of which is network-capable (the simulator's own suite proves that
+    // with a live network tripwire).
+    //
+    // The list stays asserted EXACTLY rather than loosened to a pattern, so a
+    // sixth dependency — an exchange module, an HTTP client, a credential
+    // source — still fails this check the moment it appears. The resolver
+    // remains free of any network call, which is the property that matters: it
+    // decides WHICH provider answers, and never talks to one.
     assert.deepEqual(specifiers.sort(), [
       "./checkpoint-provider",
+      "./checkpoint-provider-dev-simulator",
+      "./checkpoint-provider-mode",
       "./checkpoint-provider-pocket",
       "@/lib/env",
     ]);
