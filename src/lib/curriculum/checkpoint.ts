@@ -31,6 +31,8 @@ import {
   type CheckpointBalanceProvider,
 } from "./checkpoint-provider";
 import { resolvePocketPartnerProvider } from "./checkpoint-provider-pocket";
+import { resolveDevSimulatorProvider } from "./checkpoint-provider-dev-simulator";
+import { effectiveCheckpointProviderMode } from "./checkpoint-provider-mode";
 
 /**
  * Learner-visible verification state.
@@ -195,6 +197,48 @@ export function resolveCheckpointProvider(
   if (testProviderFactory && isCheckpointProviderTestBackendEnabled(env)) {
     return { provider: testProviderFactory(), usable: true, reason: "none" };
   }
+
+  // L4DSP-1: the explicit provider-selection contract. Reached only after BOTH
+  // capability flags have already said yes, so a mode can choose between
+  // implementations but can never grant permission to run one.
+  //
+  // A typo resolves to `null` and stops here. There is no "fall back to the
+  // configured adapter" branch, because the two ways a fallback could go are
+  // both unacceptable: silently answering a financial question with a simulator,
+  // or silently asking Pocket about a learner when the operator asked for a
+  // simulator.
+  const mode = effectiveCheckpointProviderMode(env);
+  if (mode === null) {
+    return {
+      provider: unconfiguredCheckpointProvider,
+      usable: false,
+      reason: "provider_unconfigured",
+    };
+  }
+  if (mode === "disabled") {
+    return {
+      provider: disabledCheckpointProvider,
+      usable: false,
+      reason: "provider_disabled",
+    };
+  }
+  if (mode === "dev_simulator") {
+    // The environment gate lives inside the resolver, NOT in the caller: asking
+    // for the simulator on a host that is not authoritatively `dev` produces
+    // `unconfigured` and never falls through to Pocket. Note that this branch
+    // cannot be reached by accident — `dev_simulator` has to be spelled out,
+    // and absence resolves to `pocket_partner` below.
+    const simulator = resolveDevSimulatorProvider(env);
+    if (simulator) {
+      return { provider: simulator, usable: true, reason: "none" };
+    }
+    return {
+      provider: unconfiguredCheckpointProvider,
+      usable: false,
+      reason: "provider_unconfigured",
+    };
+  }
+
   // L4PA-1: the official Pocket Partner adapter, selected only when its own
   // configuration fully validates (HTTPS, the exact approved host, a positive
   // Partner ID and a non-synthetic token — see pocketPartnerConfig.ts).

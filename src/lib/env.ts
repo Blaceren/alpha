@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { classifyEnvironment } from "@/lib/environment";
+import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
 
 export const DEV_SESSION_SECRET = "local-dev-session-secret";
 export const DEV_POSTBACK_SECRET = "dev-postback-secret";
@@ -35,6 +37,9 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_CHECKPOINT_ENABLED",
   "POCKET_BALANCE_PROVIDER_ENABLED",
   "CHECKPOINT_PROVIDER_TEST_BACKEND",
+  "ATA_ENVIRONMENT",
+  "CHECKPOINT_PROVIDER_MODE",
+  "CHECKPOINT_DEV_SIMULATOR_STATE_PATH",
   "POCKET_PARTNER_API_BASE_URL",
   "POCKET_PARTNER_ID",
   "POCKET_PARTNER_API_TOKEN",
@@ -79,6 +84,16 @@ const envSchema = z.object({
   CHECKPOINT_PROVIDER_TEST_BACKEND: z
     .literal("unsafe-deterministic-mock-regression-only")
     .optional(),
+  // L4DSP-1 — deployment classification and explicit provider selection.
+  // `ATA_ENVIRONMENT` is the authoritative environment identity; NODE_ENV is
+  // NOT, because this project runs a production build in DEV (see
+  // src/lib/environment.ts). Both are enumerated so a misspelling is a startup
+  // error rather than a silent reclassification.
+  ATA_ENVIRONMENT: z.enum(["dev", "staging", "production"]).optional(),
+  CHECKPOINT_PROVIDER_MODE: z
+    .enum(["disabled", "pocket_partner", "dev_simulator"])
+    .optional(),
+  CHECKPOINT_DEV_SIMULATOR_STATE_PATH: z.string().optional(),
   // L4PA-1 — official Pocket Partner user-info API. Server-only, all optional:
   // absent configuration means the adapter is unconfigured and the checkpoint
   // reports `provider_unconfigured`. The token is never read outside
@@ -127,6 +142,43 @@ function collectValidationErrors(env: NodeJS.ProcessEnv) {
 export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
   const { parsedEnv, errors } = collectValidationErrors(env);
   const isProduction = env.NODE_ENV === "production";
+
+  // L4DSP-1 — the DEV simulator's hard boundary.
+  //
+  // This check is OUTSIDE the `isProduction` block on purpose. `NODE_ENV` is
+  // `production` in this project's DEV runtime and absent in its env file, so
+  // hanging the rule on it would refuse in DEV and, worse, permit anywhere
+  // NODE_ENV happened not to be production. The rule is stated positively
+  // instead: naming the simulator requires the deployment to be authoritatively
+  // classified `dev`, and every other classification — production, staging,
+  // absent, misspelled, or contradicted by a public APP_URL — is an error.
+  //
+  // Because absence fails, an operator who forgets to classify a production host
+  // has not thereby enabled the simulator there. Forgetting is the safe way.
+  if (isDevSimulatorModeSelected(env)) {
+    const classification = classifyEnvironment(env);
+    if (classification.kind !== "classified" || classification.environment !== "dev") {
+      const detail =
+        classification.kind === "classified"
+          ? `environment is ${classification.environment}`
+          : `environment identity is ${classification.reason}`;
+      errors.push(
+        `CHECKPOINT_PROVIDER_MODE=dev_simulator requires ATA_ENVIRONMENT=dev (${detail})`,
+      );
+    }
+  }
+
+  // A state path is meaningless — and, on a real host, a liability — unless the
+  // deployment is DEV. Its mere presence elsewhere is a configuration error, in
+  // the same spirit as the regression-only markers below.
+  if (env.CHECKPOINT_DEV_SIMULATOR_STATE_PATH) {
+    const classification = classifyEnvironment(env);
+    if (classification.kind !== "classified" || classification.environment !== "dev") {
+      errors.push(
+        "CHECKPOINT_DEV_SIMULATOR_STATE_PATH is a DEV-only simulator path and requires ATA_ENVIRONMENT=dev",
+      );
+    }
+  }
 
   if (isProduction) {
     for (const key of REQUIRED_IN_PRODUCTION) {
