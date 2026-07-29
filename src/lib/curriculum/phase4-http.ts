@@ -7,6 +7,7 @@ import { AssessmentRuntimeError } from "./assessment-runtime";
 import { ContentDomainError } from "./content-errors";
 import { CurriculumDomainError } from "./errors";
 import { LessonProgressDomainError } from "./content-read-progress";
+import { isLevelStartDomainError } from "./level-state";
 import {
   isCurriculumV2AdminEnabled,
   isCurriculumV2AssessmentEnabled,
@@ -188,6 +189,27 @@ export function phase4Exception(error: unknown, label = "phase4 api") {
     const status = notFound.has(code) ? 404 : forbidden.has(code) ? 403 : conflict.has(code) ? 409 : unprocessable.has(code) ? 422 : code.endsWith("INPUT_INVALID") ? 400 : code.endsWith("DISABLED") ? 404 : code.endsWith("INTERNAL_ERROR") ? 500 : 409;
     const issues = "issues" in error ? error.issues : [];
     return phase4Error(code, status, issues);
+  }
+  if (isLevelStartDomainError(error)) {
+    // Starting a level fails for exactly three reasons, and the status has to
+    // tell them apart: the feature is off (404, indistinguishable from a route
+    // that does not exist), the actor may not act at all (403), or the learner
+    // is simply not standing where they think they are (409). The last one is
+    // the common case and is NOT an error condition of the system — it is a
+    // true statement about the learner's position, which is why the blockers
+    // the resolver produced travel with it. They are a closed vocabulary of
+    // codes and carry nothing identifying.
+    const code = error.code;
+    const status = code.endsWith("DISABLED")
+      ? 404
+      : code === "LEVEL_START_LEVEL_NOT_FOUND"
+        ? 404
+        : code === "LEVEL_START_USER_NOT_FOUND" ||
+            code === "LEVEL_START_USER_INACTIVE" ||
+            code === "LEVEL_START_LOCKED"
+          ? 403
+          : 409;
+    return phase4Error(code, status, error.blockers);
   }
   if (error instanceof LessonProgressDomainError || error instanceof AssessmentRuntimeError) {
     const code = error.code;

@@ -606,6 +606,13 @@ export type LevelStartDomainErrorCode =
   | "LEVEL_START_ENROLLMENT_COMPLETED"
   | "LEVEL_STATE_CORRUPT"
   | "LEVEL_START_NOT_AVAILABLE"
+  // The four codes below exist only for callers that name a target level (see
+  // `expectedStableCode`). They are raised before any write, so a learner who
+  // asks for the wrong level changes nothing at all.
+  | "LEVEL_START_LEVEL_NOT_FOUND"
+  | "LEVEL_START_NOT_CURRENT"
+  | "LEVEL_START_ALREADY_COMPLETED"
+  | "LEVEL_START_LOCKED"
   // A financial checkpoint is never started like a learning level: it is
   // resolved by an external authority. Typed separately from
   // LEVEL_START_NOT_AVAILABLE so "this gate cannot be verified" is never
@@ -638,6 +645,22 @@ export type StartCurrentCurriculumLevelInput = {
   actorUserId: number;
   asOf?: Date;
   db?: LevelStartCommandDb;
+  /**
+   * The level the caller believes it is starting.
+   *
+   * This is a GUARD, never a selector. There is deliberately no way to nominate
+   * which level gets started — this owner starts the learner's current level and
+   * nothing else. Supplying a stable code only asks the owner to refuse, without
+   * writing anything, if that is not the level it was about to start.
+   *
+   * It exists because an HTTP caller is working from a page that may be stale.
+   * Checking inside this transaction rather than in the caller is what makes
+   * "asking for a locked level mutates nothing" true: a check outside would read
+   * one snapshot, then start whatever became current a moment later.
+   *
+   * Omitted by trusted server-side callers, which have no page to be stale.
+   */
+  expectedStableCode?: string;
 };
 
 export type StartCurrentCurriculumLevelResult = {
@@ -725,16 +748,72 @@ async function loadStartState(
   return { result, state: currentState(result) };
 }
 
+/**
+ * Refuse, before any write, when the caller named a level this owner was not
+ * about to start.
+ *
+ * The distinctions matter to the learner: "that level does not exist" and "you
+ * finished that one already" and "that one is still locked" are three different
+ * facts, and collapsing them into one refusal would make a stale Academy page
+ * indistinguishable from a bypass attempt.
+ *
+ * A completed or locked level is by construction never the current level, so
+ * those branches are only reachable through the mismatch path.
+ */
+function assertExpectedStartTarget(
+  result: ResolvedLevelStateContext,
+  expectedStableCode: string,
+): void {
+  const target = result.levels.find(
+    (level) => level.levelDefinition.stableCode === expectedStableCode,
+  );
+  if (!target) {
+    throw new LevelStartDomainError(
+      "LEVEL_START_LEVEL_NOT_FOUND",
+      "named level is not part of the active curriculum",
+    );
+  }
+  if (target.levelDefinition.levelNumber === result.enrollment.currentLevel) {
+    return;
+  }
+  if (target.state === "completed") {
+    throw new LevelStartDomainError(
+      "LEVEL_START_ALREADY_COMPLETED",
+      "named level is already completed",
+      target.blockers,
+    );
+  }
+  if (target.state === "locked") {
+    throw new LevelStartDomainError(
+      "LEVEL_START_LOCKED",
+      "named level is locked",
+      target.blockers,
+    );
+  }
+  throw new LevelStartDomainError(
+    "LEVEL_START_NOT_CURRENT",
+    "named level is not the current level",
+    target.blockers,
+  );
+}
+
 async function runStartTransaction(
   tx: Prisma.TransactionClient,
   actorUserId: number,
   evaluationTime: Date,
+  expectedStableCode?: string,
 ): Promise<StartCurrentCurriculumLevelResult> {
   const { result, state } = await loadStartState(
     tx,
     actorUserId,
     evaluationTime,
   );
+
+  // Before every other refusal, and before every write: an untrusted caller that
+  // named the wrong level must leave no trace whatsoever.
+  if (expectedStableCode !== undefined) {
+    assertExpectedStartTarget(result, expectedStableCode);
+  }
 
   // A financial checkpoint is refused before anything else, with or without an
   // existing progress row: it is not a learning level, it cannot be started,
@@ -821,6 +900,7 @@ async function recoverConcurrentStart(
   db: LevelStartCommandDb,
   actorUserId: number,
   evaluationTime: Date,
+  expectedStableCode?: string,
 ): Promise<StartCurrentCurriculumLevelResult | null> {
   return db.$transaction(async (tx) => {
     const { result, state } = await loadStartState(
@@ -828,6 +908,9 @@ async function recoverConcurrentStart(
       actorUserId,
       evaluationTime,
     );
+    if (expectedStableCode !== undefined) {
+      assertExpectedStartTarget(result, expectedStableCode);
+    }
     if (
       !state.progress ||
       (state.state !== "in_progress" && state.state !== "pending_review")
@@ -848,6 +931,7 @@ export async function startCurrentCurriculumLevel({
   actorUserId,
   asOf,
   db = prisma,
+  expectedStableCode,
 }: StartCurrentCurriculumLevelInput): Promise<StartCurrentCurriculumLevelResult> {
   if (!isCurriculumV2EnrollmentEnabled()) {
     throw new LevelStartDomainError(
@@ -865,14 +949,17 @@ export async function startCurrentCurriculumLevel({
 
   try {
     return await db.$transaction((tx) =>
-      runStartTransaction(tx, actorUserId, evaluationTime),
+      runStartTransaction(tx, actorUserId, evaluationTime, expectedStableCode),
     );
   } catch (error) {
     if (!isPrismaUniqueConflict(error)) throw error;
+    // The loser of a concurrent identical start. The guard is re-applied so the
+    // recovery path cannot return a level the caller never asked for.
     const recovered = await recoverConcurrentStart(
       db,
       actorUserId,
       evaluationTime,
+      expectedStableCode,
     );
     if (recovered) return recovered;
     throw error;
