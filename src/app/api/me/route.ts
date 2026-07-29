@@ -144,8 +144,12 @@ export async function GET() {
               id: user.checkpoint.id,
               title: user.checkpoint.title,
               stepId: user.checkpoint.stepId,
+              // The configured THRESHOLD is retained: it is published
+              // platform configuration, not an observation about this
+              // learner's money.
               requiredBalance: user.checkpoint.requiredBalance,
-              currentBalance: user.checkpoint.currentBalance,
+              // DEVMECH-1/PLPD-1: the legacy checkpoint's CURRENT balance
+              // is an observed trading balance and is never returned.
               status: user.checkpoint.status,
             }
           : null,

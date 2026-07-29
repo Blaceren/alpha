@@ -133,11 +133,19 @@ export function createLevelUpNotification(input: {
   });
 }
 
+/**
+ * PLPD-1: this notification no longer carries an observed balance.
+ *
+ * Its only caller was the legacy financial checkpoint route, which is now
+ * retired fail-closed, so nothing constructs one today. The `currentBalance`
+ * parameter and metadata field are removed rather than left in place: a dead
+ * function whose signature still asks for a learner's balance is an invitation
+ * to reintroduce the leak the moment someone wires it up again.
+ */
 export function createCheckpointNotification(input: {
   userId: number;
   status: "frozen" | "completed";
   checkpointId: number;
-  currentBalance: number;
   requiredBalance: number;
   request?: Request;
 }) {
@@ -152,7 +160,6 @@ export function createCheckpointNotification(input: {
       : "Контрольная точка пройдена, прогресс снова активен.",
     metadata: {
       checkpointId: input.checkpointId,
-      currentBalance: input.currentBalance,
       requiredBalance: input.requiredBalance,
     },
     request: input.request,
