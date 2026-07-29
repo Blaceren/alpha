@@ -43,6 +43,12 @@ export interface AcademyVideoPlayerProps {
   aspectRatio?: "source" | string;
   /** How the frame is filled. "contain" (default) never distorts; "cover" crops to fill. */
   fit?: "contain" | "cover";
+  /**
+   * Showcase-only: render the synthetic branded pre-play graphic when no real
+   * `poster` is supplied. Production lessons leave this false so a missing
+   * poster shows a neutral frame, never a fake "Урок 18" placeholder.
+   */
+  demoPoster?: boolean;
   initialVolume?: number;
   onPlay?: () => void;
   onPause?: () => void;
@@ -86,10 +92,11 @@ function isEditableTarget(target: EventTarget | null) {
 
 /**
  * Self-contained "skip 10 seconds" glyph. The rotate arc reuses the exact
- * lucide RotateCcw/RotateCw geometry that the rest of Academy already uses, and
- * the "10" is locked to the centre of the same 24-unit viewBox. Because the
- * digits live inside the viewBox they scale with the arc, never drift with the
- * button size, and never fall back to the user's system font.
+ * lucide RotateCcw/RotateCw geometry the rest of Academy uses; the "10" is drawn
+ * as vector strokes (not SVG <text>) so it never depends on font loading, never
+ * falls back to a system/monospace font, and shares the arc's line weight. The
+ * digits are large and centred in the same 24-unit viewBox, so they read at the
+ * real control size without zooming and scale with the button.
  */
 function SkipTenIcon({ direction }: { direction: "back" | "forward" }) {
   return (
@@ -104,25 +111,13 @@ function SkipTenIcon({ direction }: { direction: "back" | "forward" }) {
       focusable="false"
     >
       {direction === "back" ? (
-        <>
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </>
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5" />
       ) : (
-        <>
-          <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-          <path d="M21 3v5h-5" />
-        </>
+        <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5" />
       )}
-      <text
-        className="avp__skip-icon-num"
-        x="12"
-        y="12"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        10
-      </text>
+      {/* "10" as vector strokes — no <text>, no font dependency. */}
+      <path d="M7.4 9.05 8.85 7.6V16.95M7.25 16.95h3.2" />
+      <ellipse cx="14.15" cy="12.3" rx="2.75" ry="4.7" />
     </svg>
   );
 }
@@ -137,6 +132,7 @@ export function AcademyVideoPlayer({
   className,
   aspectRatio = "source",
   fit = "contain",
+  demoPoster = false,
   initialVolume = 0.8,
   onPlay,
   onPause,
@@ -735,37 +731,37 @@ export function AcademyVideoPlayer({
         ))}
       </video>
 
-      {!started && (
-        <div
-          className={cn("avp__poster", poster && "avp__poster--image")}
-          aria-hidden="true"
-        >
-          {poster ? (
-            // Real lesson preview: filled like the video (contain by default) so
-            // it never crops or distorts. A plain <img> is intentional here — the
-            // poster is a blob:/arbitrary background layer, not a layout-driving
-            // next/image candidate, and must accept object URLs without remote
-            // config.
-            // eslint-disable-next-line @next/next/no-img-element
+      {!started &&
+        (poster ? (
+          <div className="avp__poster avp__poster--image" aria-hidden="true">
+            {/* Real lesson preview: filled like the video (contain by default)
+                so it never crops or distorts. A plain <img> is intentional — the
+                poster is a blob:/arbitrary background layer, not a layout-driving
+                next/image candidate, and must accept object URLs without remote
+                config. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="avp__poster-image" src={poster} alt="" />
-          ) : (
-            <>
-              <div className="avp__poster-grid" />
-              <div className="avp__poster-route">
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="avp__poster-copy">
-                <span>Академия / Урок 18</span>
-                <strong>{title}</strong>
-                {description && <p>{description}</p>}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+          </div>
+        ) : demoPoster ? (
+          // Showcase-only branded graphic — never a production fallback.
+          <div className="avp__poster" aria-hidden="true">
+            <div className="avp__poster-grid" />
+            <div className="avp__poster-route">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="avp__poster-copy">
+              <span>Академия / Урок 18</span>
+              <strong>{title}</strong>
+              {description && <p>{description}</p>}
+            </div>
+          </div>
+        ) : (
+          // Production default with no poster: a neutral frame, no fake lesson.
+          <div className="avp__poster avp__poster--plain" aria-hidden="true" />
+        ))}
 
       <div className="avp__shade" aria-hidden="true" />
 

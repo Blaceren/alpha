@@ -20,6 +20,12 @@
   --avp-glow: var(--glow-current, rgba(57, 211, 166, 0.22));
   --avp-danger: #ff8f96; /* no Academy danger token exists; error semantics only */
   --avp-danger-soft: rgba(255, 120, 128, 0.12);
+  /* Neutral (dark) surface for the primary play buttons — the teal accent is
+   * used only pointwise (timeline, thumbs, active toggles), not as a big fill. */
+  --avp-btn-dark: rgba(10, 15, 25, 0.86);
+  --avp-btn-dark-hover: rgba(18, 26, 40, 0.94);
+  --avp-btn-border: rgba(117, 142, 170, 0.28);
+  --avp-btn-ink: #f4f7fa;
 
   --avp-control-size: 42px;
   position: relative;
@@ -111,6 +117,12 @@
 }
 
 .avp__poster--image::before {
+  content: none;
+}
+
+/* Neutral production frame when a lesson has no poster: keep the subtle base
+ * gradient, drop the decorative ring and all synthetic lesson chrome. */
+.avp__poster--plain::before {
   content: none;
 }
 
@@ -286,20 +298,21 @@
 .avp__center-btn--main {
   width: clamp(56px, 8vw, 78px);
   height: clamp(56px, 8vw, 78px);
-  color: var(--avp-on-accent);
-  background: var(--avp-accent);
-  border-color: color-mix(in srgb, var(--avp-accent) 55%, #ffffff);
-  box-shadow: 0 16px 42px var(--avp-glow);
+  color: var(--avp-btn-ink);
+  background: var(--avp-btn-dark);
+  border-color: var(--avp-btn-border);
+  box-shadow: 0 16px 40px rgba(0, 3, 12, 0.44);
+  backdrop-filter: blur(6px);
 }
 
 .avp__center-btn--main:hover {
-  background: var(--avp-accent-hover);
-  border-color: color-mix(in srgb, var(--avp-accent) 55%, #ffffff);
+  background: var(--avp-btn-dark-hover);
+  border-color: color-mix(in srgb, var(--avp-accent) 42%, var(--avp-btn-border));
 }
 
 .avp__center-btn--main svg {
-  width: 38%;
-  height: 38%;
+  width: 40%;
+  height: 40%;
   margin-left: 4%;
 }
 
@@ -309,26 +322,21 @@
 }
 
 .avp__center-btn--skip svg {
-  width: 52%;
-  height: 52%;
+  width: 54%;
+  height: 54%;
 }
 
-/* Shared skip-10 glyph: arc + centred "10" in one 24-unit viewBox. The number
- * is drawn as SVG text in the Academy UI sans and centred with SVG baseline
- * primitives (text-anchor + dominant-baseline), so it scales with the arc and
- * never drifts, collides with the arc, or falls back to a system font. */
+/* Shared skip-10 glyph: arc + a large, centred "10" drawn as vector strokes in
+ * one 24-unit viewBox. Uniform 2px line weight for arc and digits keeps it
+ * cohesive; the higher-specificity rule wins over the generic icon sizing so the
+ * control-row copy is not thinned to 1.8. */
 .avp__skip-icon {
-  stroke-width: 1.9;
+  stroke-width: 2;
 }
 
-.avp__skip-icon-num {
-  fill: currentColor;
-  stroke: none;
-  font-family: var(--font-ui);
-  font-size: 8.4px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+.avp__icon-button .avp__skip-icon,
+.avp__center-btn .avp__skip-icon {
+  stroke-width: 2;
 }
 
 /* Seek feedback (−10 / +10) */
@@ -554,13 +562,15 @@
 }
 
 .avp__icon-button--primary {
-  color: var(--avp-on-accent);
-  background: var(--avp-accent);
+  color: var(--avp-btn-ink);
+  background: var(--avp-btn-dark);
+  box-shadow: inset 0 0 0 1px var(--avp-btn-border);
 }
 
 .avp__icon-button--primary:hover {
-  color: var(--avp-on-accent);
-  background: var(--avp-accent-hover);
+  color: var(--avp-btn-ink);
+  background: var(--avp-btn-dark-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--avp-accent) 42%, var(--avp-btn-border));
 }
 
 .avp__icon-button svg {

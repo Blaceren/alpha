@@ -488,6 +488,7 @@ export function VideoPlayerShowcase({
             key={`${state}-${playerSource}`}
             src={playerSource}
             poster={localPoster?.url}
+            demoPoster={!localVideo}
             onError={handlePlayerError}
             onPlay={handlePlayerPlay}
             title={localVideo?.name ?? "Поддержка и сопротивление"}
