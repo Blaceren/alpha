@@ -6,6 +6,7 @@ import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum
 import { LevelAssessment } from "@/features/assessment/level-assessment";
 import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
+import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import "@/features/curriculum-api/curriculum-api.css";
 
 const ASSESSMENT_LOCALE = "ru";
@@ -75,6 +76,10 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
             <h2>Материал</h2>
             {content.available && content.metadata ? (
               <div className="cur-content">
+                {/* The lesson video, when the published curriculum has one. It is
+                    view-only: playback records nothing and completes nothing —
+                    the assessment below remains this level's sole owner. */}
+                <LessonMedia media={content.media} title={content.metadata.title} />
                 <p className="cur-content__title">{content.metadata.title}</p>
                 {content.metadata.subtitle ? <p className="cur-content__subtitle">{content.metadata.subtitle}</p> : null}
                 <p className="cur-content__summary">{content.metadata.summary}</p>
@@ -85,9 +90,11 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
                   <li>Материал: {content.metadata.hasTranscript ? "есть расшифровка" : "без расшифровки"}</li>
                   <li>Локаль: {content.metadata.locale}</li>
                 </ul>
-                {content.metadata.videoDurationSeconds === null ? (
-                  /* Honest media-pending surface. Compatible with a later branded
-                     player; CI-3 does not introduce the player component. */
+                {content.media === null ? (
+                  /* Honest media-pending surface (CI-3), now keyed on whether a
+                     real playable asset exists rather than on a duration field —
+                     a published duration with no source would have promised a
+                     video the learner could not watch. */
                   <p className="cur-content__media-pending" data-media="pending">
                     Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас.
                   </p>

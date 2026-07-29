@@ -12,6 +12,7 @@ import type {
   BackendModule,
   BackendXp,
   BackendLevelContent,
+  BackendContentAsset,
 } from "@/lib/curriculum/backend-dto";
 import { mapLevelType, type AcademyLevelType } from "@/lib/curriculum/level-type";
 import { mapLevelState } from "@/lib/curriculum/progress-state";
@@ -21,6 +22,7 @@ import type {
   AcademyCurriculumView,
   AcademyLevelContent,
   AcademyLevelDetail,
+  AcademyLessonMedia,
   AcademyLevelSummary,
   AcademyModuleSummary,
   AcademyProgressSummary,
@@ -252,16 +254,66 @@ export function findLevel(view: AcademyCurriculumView, levelCode: string): { lev
   return null;
 }
 
+/**
+ * Pick the lesson's video out of the published content assets
+ * (L2START-PLAYER-1).
+ *
+ * Rules, in order: the first `video` asset by sort order wins; a poster is used
+ * only if the curriculum published an `image` asset for it; subtitles become
+ * captions. Nothing is synthesised. If there is no video asset the answer is
+ * `null` and the lesson page says so honestly rather than rendering an empty
+ * player.
+ *
+ * Locale filtering is deliberately permissive: an asset with no locale is
+ * language-neutral (the video itself usually is), and a locale-tagged asset is
+ * kept when it matches the localisation being shown.
+ */
+function mapLessonMedia(
+  content: BackendLevelContent,
+  locale: string,
+): AcademyLessonMedia | null {
+  const usable = (asset: BackendContentAsset) => asset.locale === null || asset.locale === locale;
+  const byOrder = [...content.content.assets].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const video = byOrder.find((asset) => asset.kind === "video" && usable(asset));
+  if (!video) return null;
+
+  const poster = byOrder.find((asset) => asset.kind === "image" && usable(asset));
+  const captions = byOrder
+    .filter((asset) => asset.kind === "subtitles" && usable(asset))
+    .map((asset) => ({
+      src: asset.url,
+      // The asset's own locale names the track's language; the lesson locale is
+      // the fallback for a language-neutral track.
+      srcLang: asset.locale ?? locale,
+      label: asset.locale ?? locale,
+    }));
+
+  return {
+    src: video.url,
+    mimeType: video.mimeType,
+    poster: poster?.url ?? null,
+    durationSeconds: video.durationSeconds ?? content.content.videoDurationSeconds,
+    captions,
+  };
+}
+
 export function mapLevelContent(
   content: BackendLevelContent | null,
   unavailableReason: AcademyLevelContent["unavailableReason"],
 ): AcademyLevelContent {
   if (!content) {
-    return { available: false, metadata: null, unavailableReason: unavailableReason ?? "unavailable" };
+    return {
+      available: false,
+      media: null,
+      metadata: null,
+      unavailableReason: unavailableReason ?? "unavailable",
+    };
   }
   const loc = content.content.localization;
   return {
     available: true,
+    media: mapLessonMedia(content, loc.locale),
     metadata: {
       versionNumber: content.content.versionNumber,
       videoDurationSeconds: content.content.videoDurationSeconds,

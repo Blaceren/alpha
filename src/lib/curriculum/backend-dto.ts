@@ -174,9 +174,33 @@ export type BackendLevelContent = {
       transcript: string | null;
       body: unknown;
     };
-    assets: unknown[];
+    assets: BackendContentAsset[];
   };
   progress: unknown | null;
+};
+
+/**
+ * One published media asset attached to a lesson's content version
+ * (L2START-PLAYER-1).
+ *
+ * This is not a new contract — the Backend has always returned these; the
+ * Academy simply never typed them, so the lesson page could not know a video
+ * existed. Typing them here is the whole of the change: no upload, no storage,
+ * no new Backend field.
+ *
+ * `url` is asserted https by the Backend's own asset schema. Unknown kinds are
+ * kept rather than dropped, so a future asset kind is inert here instead of
+ * invalidating the whole content payload.
+ */
+export type BackendContentAsset = {
+  kind: string;
+  assetCode: string;
+  locale: string | null;
+  url: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  durationSeconds: number | null;
+  sortOrder: number;
 };
 
 /* ------------------------------ guards ------------------------------- */
@@ -319,6 +343,63 @@ export function isBackendCurriculumRead(value: unknown): value is BackendCurricu
 
 export function isBackendCurriculumEnvelope(value: unknown): value is BackendCurriculumEnvelope {
   return isObject(value) && isBackendCurriculumRead(value.data);
+}
+
+/**
+ * A content asset the Academy is willing to believe.
+ *
+ * Deliberately strict about `url`: a lesson media source is handed straight to
+ * a <video> element, so anything that is not an absolute https URL is dropped
+ * rather than rendered. That rules out `javascript:` and `data:` sources, and
+ * also `blob:` — which is exactly what the showcase's local file picker
+ * produces, and must never reach a real lesson.
+ */
+function isHttpsUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "";
+  } catch {
+    return false;
+  }
+}
+
+export function isBackendContentAsset(value: unknown): value is BackendContentAsset {
+  if (!isObject(value)) return false;
+  return (
+    isStr(value.kind) &&
+    isStr(value.assetCode) &&
+    isStrOrNull(value.locale) &&
+    isHttpsUrl(value.url) &&
+    isStr(value.mimeType)
+  );
+}
+
+/**
+ * Read the asset list defensively.
+ *
+ * A malformed asset drops out on its own instead of invalidating the lesson: a
+ * learner who can read the text and take the assessment should not lose the
+ * whole level because one media row is wrong.
+ */
+export function readBackendContentAssets(value: unknown): BackendContentAsset[] {
+  if (!Array.isArray(value)) return [];
+  const assets: BackendContentAsset[] = [];
+  for (const entry of value) {
+    if (!isBackendContentAsset(entry)) continue;
+    const record = entry as unknown as Record<string, unknown>;
+    assets.push({
+      kind: entry.kind,
+      assetCode: entry.assetCode,
+      locale: entry.locale,
+      url: entry.url,
+      mimeType: entry.mimeType,
+      sizeBytes: isNum(record.sizeBytes) ? record.sizeBytes : null,
+      durationSeconds: isNum(record.durationSeconds) ? record.durationSeconds : null,
+      sortOrder: isNum(record.sortOrder) ? record.sortOrder : 0,
+    });
+  }
+  return assets;
 }
 
 export function isBackendLevelContent(value: unknown): value is BackendLevelContent {

@@ -120,8 +120,33 @@ export type AcademyProgressSummary = {
   updatedAt: string | null;
 };
 
+/**
+ * The lesson's playable media, when the curriculum actually has some
+ * (L2START-PLAYER-1).
+ *
+ * `null` is a real and expected answer, not a failure: a lesson may legitimately
+ * be text-only, and the published curriculum currently carries no video assets
+ * at all. Nothing here is ever invented to fill the gap — no placeholder source,
+ * no stock poster — because a fake video is worse for a learner than an honest
+ * "the video is being prepared".
+ */
+export type AcademyLessonMedia = {
+  /** Absolute https source, straight from the published content asset. */
+  src: string;
+  mimeType: string;
+  /** Absolute https poster image, or null when the curriculum supplies none. */
+  poster: string | null;
+  durationSeconds: number | null;
+  captions: ReadonlyArray<{ src: string; srcLang: string; label: string }>;
+};
+
 export type AcademyLevelContent = {
   available: boolean;
+  /**
+   * Present only when the published content carries a usable video asset.
+   * Null on every text-only lesson.
+   */
+  media: AcademyLessonMedia | null;
   /** Present when available: safe, display-only content metadata. */
   metadata: {
     versionNumber: number;
