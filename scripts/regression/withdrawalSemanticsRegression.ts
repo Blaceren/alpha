@@ -88,10 +88,12 @@ check("goal type normalization is unchanged", () => {
 // 5. Successful Withdrawal keeps the confirmed financial branch, and only it.
 check("Successful Withdrawal: confirmed branch applies withdrawal", () => {
   const { update } = resolveUpdate("Successful Withdrawal", 50);
-  assert.deepEqual(update, {
-    totalWithdrawals: { increment: 50 },
-    balance: { decrement: 50 },
-  });
+  // No `balance` key. DEVACT-1 removed every balance write from the postback
+  // processor: Pocket publishes no authoritative balance, so a running total
+  // maintained from affiliate events was a number the platform could not stand
+  // behind. The cumulative withdrawal aggregate is what remains.
+  assert.deepEqual(update, { totalWithdrawals: { increment: 50 } });
+  assert.equal("balance" in update, false);
 });
 
 check("Successful Withdrawal: does not change cumulative deposits", () => {
@@ -101,25 +103,25 @@ check("Successful Withdrawal: does not change cumulative deposits", () => {
 });
 
 // 6. Deposit events are not broken.
-check("First Deposit: unchanged confirmed deposit behaviour", () => {
+check("First Deposit: confirmed deposit behaviour, without a balance write", () => {
   const { update } = resolveUpdate("First Deposit", 100);
   assert.deepEqual(update, {
     status: "connected",
     firstDepositConfirmed: true,
     depositAmount: { increment: 100 },
     totalDeposits: { increment: 100 },
-    balance: { increment: 100 },
   });
+  assert.equal("balance" in update, false);
 });
 
-check("Re-deposit: unchanged redeposit behaviour", () => {
+check("Re-deposit: redeposit behaviour, without a balance write", () => {
   const { update } = resolveUpdate("Re-deposit", 70);
   assert.deepEqual(update, {
     depositAmount: { increment: 70 },
     totalDeposits: { increment: 70 },
-    balance: { increment: 70 },
   });
   assert.equal("firstDepositConfirmed" in update, false);
+  assert.equal("balance" in update, false);
 });
 
 // 7. Commission compatibility behaviour is locked (out of scope to change).
@@ -139,10 +141,13 @@ check("Unknown Pocket type: rejected branch, no financial change", () => {
   assert.equal(update.status, "rejected");
 });
 
-// 9. Explicit internal balance sync events (simulate/manual flow) still work.
-check("explicit eventType=balance still sets balance for non-withdrawal events", () => {
+// 9. The explicit balance-sync event writes nothing at all. It used to set the
+// stored balance directly; DEVACT-1 closed that path because no Pocket event
+// carries an authoritative balance, and this phase forbids persisting one.
+check("explicit eventType=balance sets nothing", () => {
   const update = buildPostbackAccountUpdate("balance", "balance", 250);
-  assert.deepEqual(update, { balance: 250 });
+  assert.deepEqual(update, {});
+  assert.equal("balance" in update, false);
 });
 
 // 10. Admin simulate endpoint helper: plain Withdrawal must be a financial
@@ -155,23 +160,23 @@ check("simulate Withdrawal: financial no-op account update", () => {
   }
 });
 
-check("simulate First Deposit: unchanged behaviour", () => {
+check("simulate First Deposit: no balance write either", () => {
   const update = buildSimulatedPostbackAccountUpdate("First Deposit", 500);
   assert.deepEqual(update, {
     firstDepositConfirmed: true,
     depositAmount: { increment: 500 },
     totalDeposits: { increment: 500 },
-    balance: { increment: 500 },
   });
+  assert.equal("balance" in update, false);
 });
 
-check("simulate Re-deposit: unchanged behaviour", () => {
+check("simulate Re-deposit: no balance write either", () => {
   const update = buildSimulatedPostbackAccountUpdate("Re-deposit", 300);
   assert.deepEqual(update, {
     depositAmount: { increment: 300 },
     totalDeposits: { increment: 300 },
-    balance: { increment: 300 },
   });
+  assert.equal("balance" in update, false);
 });
 
 check("simulate Registration/Email Confirmation: status flags only", () => {

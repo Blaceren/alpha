@@ -1178,7 +1178,12 @@ async function main() {
         source.indexOf("export async function startCurrentCurriculumLevel"),
       );
       assert.equal((start.match(/new Date\(\)/g) ?? []).length, 1);
-      assert.match(start, /runStartTransaction\(tx, actorUserId, evaluationTime\)/);
+      // The intent is that ONE evaluationTime is threaded through — no second
+      // clock and no API-supplied time. L2START-PLAYER-1 added a fourth
+      // argument (`expectedStableCode`, a refusal guard), so the assertion pins
+      // the clock argument's position rather than the whole argument list, which
+      // would otherwise have to be rewritten for every unrelated parameter.
+      assert.match(start, /runStartTransaction\(tx, actorUserId, evaluationTime[,)]/);
       assert.match(start, /recoverConcurrentStart\([\s\S]*evaluationTime/);
 
       const route = fs.readFileSync(
