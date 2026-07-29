@@ -41,10 +41,12 @@
   touch-action: manipulation;
 }
 
-/* Portrait / square source: drive size by height so the frame stays sane. */
+/* Portrait / square source: drive size by height so the frame stays sane,
+ * but never let the derived width overflow its container on narrow screens. */
 .avp--tall {
   width: auto;
   height: min(78vh, 760px);
+  max-width: 100%;
 }
 
 .avp:focus-visible {
@@ -76,6 +78,14 @@
   display: block;
   object-fit: var(--avp-fit, contain);
   background: var(--avp-field);
+  /* Fade the frame in once it can decode, so switching source never flashes a
+   * black box between the poster and the first frame. */
+  opacity: 0;
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+
+.avp--has-frame .avp__video {
+  opacity: 1;
 }
 
 .avp__poster {
@@ -93,6 +103,24 @@
       var(--avp-surface) 48%,
       var(--avp-field) 100%
     );
+}
+
+/* A real uploaded/lesson preview replaces the synthetic branded poster. */
+.avp__poster--image {
+  background: var(--avp-field);
+}
+
+.avp__poster--image::before {
+  content: none;
+}
+
+.avp__poster-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--avp-fit, contain);
+  object-position: center;
 }
 
 .avp__poster::before {
@@ -281,20 +309,26 @@
 }
 
 .avp__center-btn--skip svg {
-  width: 46%;
-  height: 46%;
+  width: 52%;
+  height: 52%;
+}
+
+/* Shared skip-10 glyph: arc + centred "10" in one 24-unit viewBox. The number
+ * is drawn as SVG text in the Academy UI sans and centred with SVG baseline
+ * primitives (text-anchor + dominant-baseline), so it scales with the arc and
+ * never drifts, collides with the arc, or falls back to a system font. */
+.avp__skip-icon {
   stroke-width: 1.9;
 }
 
-.avp__center-num {
-  position: absolute;
-  top: 53%;
-  left: 50%;
-  font-family: var(--font-mono);
-  font-size: 0.52rem;
-  font-weight: 700;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+.avp__skip-icon-num {
+  fill: currentColor;
+  stroke: none;
+  font-family: var(--font-ui);
+  font-size: 8.4px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 /* Seek feedback (−10 / +10) */
@@ -533,18 +567,6 @@
   width: 20px;
   height: 20px;
   stroke-width: 1.8;
-}
-
-.avp__skip-num {
-  position: absolute;
-  top: 53%;
-  left: 50%;
-  color: inherit;
-  font-family: var(--font-mono);
-  font-size: 0.5rem;
-  font-weight: 700;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
 }
 
 .avp__time {
@@ -807,6 +829,10 @@
 @media (prefers-reduced-motion: reduce) {
   .avp__spinner {
     animation: none;
+  }
+
+  .avp__video {
+    transition: none;
   }
 
   .avp__seek-feedback {

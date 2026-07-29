@@ -309,6 +309,92 @@
   outline-offset: 2px;
 }
 
+/* Dev-only poster/preview picker — production posters come from the backend. */
+.vps__poster-loader {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(6, 14, 26, 0.6);
+  border: 1px solid rgba(150, 175, 210, 0.12);
+  border-radius: 8px;
+}
+
+.vps__poster-loader-info {
+  min-width: 0;
+  flex: 1 1 200px;
+  display: grid;
+  gap: 3px;
+}
+
+.vps__poster-loader-info > span {
+  color: #6f9ad8;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vps__poster-loader-info strong {
+  overflow: hidden;
+  color: #dce6f4;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vps__poster-loader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vps__poster-select {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 11px;
+  color: #eef5ff;
+  font: 650 0.72rem/1 var(--font-ui);
+  background: #1d4fae;
+  border: 1px solid #346fdc;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.vps__poster-select:hover {
+  background: #245ec8;
+  border-color: #4f83e0;
+}
+
+.vps__poster-select:focus-visible {
+  outline: 2px solid #76a4f8;
+  outline-offset: 2px;
+}
+
+.vps__poster-loader svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 1.7;
+}
+
+.vps__poster-loader .vps__file-error {
+  flex: 1 1 100%;
+  max-width: none;
+  text-align: left;
+}
+
 /* Dev-only diagnostics for the local loader — never rendered in production. */
 .vps__diagnostics {
   grid-column: 1 / -1;

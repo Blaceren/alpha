@@ -1,6 +1,6 @@
 "use client";
 
-import { FileVideo2, RotateCcw, UploadCloud } from "lucide-react";
+import { FileVideo2, ImagePlus, RotateCcw, UploadCloud } from "lucide-react";
 import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AcademyVideoPlayer } from "@/components/media/academy-video-player";
@@ -28,11 +28,27 @@ const DEMO_SOURCE = "/showcase/video-player/academy-lesson-demo.webm";
 // is the final arbiter for codecs the browser cannot actually decode.
 const SUPPORTED_VIDEO_EXTENSIONS = new Set(["mp4", "webm", "m4v", "mov", "mkv"]);
 
+// Poster/preview images. In production the poster URL is supplied by the backend
+// (posterUrl); this local picker exists only in the showcase for manual checks.
+const SUPPORTED_IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "avif",
+  "gif",
+]);
+
 interface LocalVideo {
   name: string;
   size: number;
   type: string;
   extension: string;
+  url: string;
+}
+
+interface LocalPoster {
+  name: string;
   url: string;
 }
 
@@ -52,6 +68,14 @@ function isSupportedVideo(file: File) {
   return (
     type.startsWith("video/") ||
     SUPPORTED_VIDEO_EXTENSIONS.has(getExtension(file.name))
+  );
+}
+
+function isSupportedImage(file: File) {
+  const type = file.type.toLowerCase();
+  return (
+    type.startsWith("image/") ||
+    SUPPORTED_IMAGE_EXTENSIONS.has(getExtension(file.name))
   );
 }
 
@@ -110,12 +134,16 @@ export function VideoPlayerShowcase({
 }) {
   const [state, setState] = useState(initialState);
   const [localVideo, setLocalVideo] = useState<LocalVideo | null>(null);
+  const [localPoster, setLocalPoster] = useState<LocalPoster | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [posterError, setPosterError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const posterInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const posterUrlRef = useRef<string | null>(null);
 
   const stopCurrentVideo = useCallback(() => {
     const video = previewRef.current?.querySelector("video");
@@ -160,6 +188,34 @@ export function VideoPlayerShowcase({
     [stopCurrentVideo],
   );
 
+  const selectLocalPoster = useCallback((file: File | undefined) => {
+    if (!file) return;
+
+    if (!isSupportedImage(file)) {
+      setPosterError(
+        "Не похоже на изображение. Поддерживаются PNG, JPG, WebP, AVIF или GIF.",
+      );
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(file);
+    const previousUrl = posterUrlRef.current;
+    posterUrlRef.current = nextUrl;
+    setLocalPoster({ name: file.name, url: nextUrl });
+    setPosterError(null);
+
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+  }, []);
+
+  const resetLocalPoster = useCallback(() => {
+    const previousUrl = posterUrlRef.current;
+    posterUrlRef.current = null;
+    setLocalPoster(null);
+    setPosterError(null);
+    if (posterInputRef.current) posterInputRef.current.value = "";
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+  }, []);
+
   const resetLocalVideo = useCallback(() => {
     stopCurrentVideo();
     const previousUrl = objectUrlRef.current;
@@ -197,6 +253,11 @@ export function VideoPlayerShowcase({
     event.target.value = "";
   };
 
+  const handlePosterChange = (event: ChangeEvent<HTMLInputElement>) => {
+    selectLocalPoster(event.target.files?.[0]);
+    event.target.value = "";
+  };
+
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
@@ -214,6 +275,10 @@ export function VideoPlayerShowcase({
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
+      }
+      if (posterUrlRef.current) {
+        URL.revokeObjectURL(posterUrlRef.current);
+        posterUrlRef.current = null;
       }
     },
     [],
@@ -348,6 +413,46 @@ export function VideoPlayerShowcase({
             )}
           </div>
 
+          <div className="vps__poster-loader">
+            <div className="vps__poster-loader-info">
+              <span>Превью урока (постер)</span>
+              <strong>{localPoster?.name ?? "Постер не выбран"}</strong>
+            </div>
+            <input
+              ref={posterInputRef}
+              className="vps__file-input"
+              type="file"
+              accept="image/*,.png,.jpg,.jpeg,.webp,.avif,.gif"
+              aria-label="Выбрать превью"
+              onChange={handlePosterChange}
+            />
+            <div className="vps__poster-loader-actions">
+              <button
+                type="button"
+                className="vps__poster-select"
+                onClick={() => posterInputRef.current?.click()}
+              >
+                <ImagePlus aria-hidden="true" />
+                {localPoster ? "Заменить превью" : "Выбрать превью"}
+              </button>
+              {localPoster && (
+                <button
+                  type="button"
+                  className="vps__reset-source"
+                  onClick={resetLocalPoster}
+                >
+                  <RotateCcw aria-hidden="true" />
+                  Убрать
+                </button>
+              )}
+            </div>
+            {posterError && (
+              <p className="vps__file-error" role="alert">
+                {posterError}
+              </p>
+            )}
+          </div>
+
           {localVideo && (
             <dl className="vps__diagnostics" aria-label="Диагностика файла">
               <div>
@@ -382,6 +487,7 @@ export function VideoPlayerShowcase({
           <AcademyVideoPlayer
             key={`${state}-${playerSource}`}
             src={playerSource}
+            poster={localPoster?.url}
             onError={handlePlayerError}
             onPlay={handlePlayerPlay}
             title={localVideo?.name ?? "Поддержка и сопротивление"}

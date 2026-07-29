@@ -9,7 +9,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  RotateCw,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -85,6 +84,49 @@ function isEditableTarget(target: EventTarget | null) {
   );
 }
 
+/**
+ * Self-contained "skip 10 seconds" glyph. The rotate arc reuses the exact
+ * lucide RotateCcw/RotateCw geometry that the rest of Academy already uses, and
+ * the "10" is locked to the centre of the same 24-unit viewBox. Because the
+ * digits live inside the viewBox they scale with the arc, never drift with the
+ * button size, and never fall back to the user's system font.
+ */
+function SkipTenIcon({ direction }: { direction: "back" | "forward" }) {
+  return (
+    <svg
+      className="avp__skip-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {direction === "back" ? (
+        <>
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </>
+      ) : (
+        <>
+          <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </>
+      )}
+      <text
+        className="avp__skip-icon-num"
+        x="12"
+        y="12"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        10
+      </text>
+    </svg>
+  );
+}
+
 export function AcademyVideoPlayer({
   src,
   poster,
@@ -108,6 +150,7 @@ export function AcademyVideoPlayer({
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
   const keyboardFocusRef = useRef(false);
   const startedRef = useRef(false);
@@ -118,6 +161,7 @@ export function AcademyVideoPlayer({
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [hasFrame, setHasFrame] = useState(false);
   const [failed, setFailed] = useState(false);
   const [errorCode, setErrorCode] = useState<number | null>(null);
   const [ended, setEnded] = useState(false);
@@ -162,6 +206,13 @@ export function AcademyVideoPlayer({
   useEffect(() => {
     onErrorRef.current = onError;
   });
+
+  const clearPlayWait = useCallback(() => {
+    if (playWaitTimerRef.current) {
+      clearTimeout(playWaitTimerRef.current);
+      playWaitTimerRef.current = null;
+    }
+  }, []);
 
   // --- controls autohide --------------------------------------------------
   const clearHideTimer = useCallback(() => {
@@ -233,6 +284,7 @@ export function AcademyVideoPlayer({
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (playWaitTimerRef.current) clearTimeout(playWaitTimerRef.current);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     },
     [],
@@ -258,13 +310,18 @@ export function AcademyVideoPlayer({
     }
 
     if (video.ended) video.currentTime = 0;
-    setBuffering(true);
+    // Don't flash the spinner on an instant start: only reveal it if the
+    // browser is still stalling a moment after the play request. This removes
+    // the visible "jump" when play/pause is toggled on an already-buffered file.
+    clearPlayWait();
+    playWaitTimerRef.current = setTimeout(() => setBuffering(true), 320);
     try {
       await video.play();
     } catch {
+      clearPlayWait();
       setBuffering(false);
     }
-  }, [failed, playing, revealControls]);
+  }, [clearPlayWait, failed, playing, revealControls]);
 
   const retry = useCallback(() => {
     const video = videoRef.current;
@@ -491,6 +548,8 @@ export function AcademyVideoPlayer({
     setPlaying(true);
     setEnded(false);
     setBuffering(false);
+    setHasFrame(true);
+    clearPlayWait();
     clearError();
     setControlsVisible(true);
     scheduleControlsHide();
@@ -500,6 +559,7 @@ export function AcademyVideoPlayer({
   const handlePause = () => {
     setPlaying(false);
     setBuffering(false);
+    clearPlayWait();
     setControlsVisible(true);
     clearHideTimer();
     onPause?.();
@@ -508,6 +568,7 @@ export function AcademyVideoPlayer({
   const handleEnded = () => {
     setPlaying(false);
     setBuffering(false);
+    clearPlayWait();
     setEnded(true);
     setControlsVisible(true);
     clearHideTimer();
@@ -531,6 +592,13 @@ export function AcademyVideoPlayer({
     updateCaptionTracks(captionsOn);
   };
 
+  // Once the first frame is decodable the video layer can fade in over the
+  // poster instead of snapping from a black box.
+  const handleLoadedData = (event: SyntheticEvent<HTMLVideoElement>) => {
+    setHasFrame(true);
+    syncMetadata(event);
+  };
+
   // Changing src makes the browser fire emptied + loadstart; both fully reset
   // the media state so a previous file's duration/time/error never lingers.
   const handleEmptied = () => {
@@ -539,6 +607,8 @@ export function AcademyVideoPlayer({
     startedRef.current = false;
     setEnded(false);
     setBuffering(false);
+    setHasFrame(false);
+    clearPlayWait();
     setDuration(0);
     setCurrentTime(0);
     setVideoRatio(null);
@@ -547,6 +617,8 @@ export function AcademyVideoPlayer({
 
   const handleLoadStart = () => {
     setEnded(false);
+    setHasFrame(false);
+    clearPlayWait();
     setDuration(0);
     setCurrentTime(0);
     setVideoRatio(null);
@@ -555,6 +627,8 @@ export function AcademyVideoPlayer({
 
   const handleError = (event: SyntheticEvent<HTMLVideoElement>) => {
     setPlaying(false);
+    setBuffering(false);
+    clearPlayWait();
     setControlsVisible(true);
     clearHideTimer();
     reportError(event.currentTarget.error);
@@ -599,6 +673,7 @@ export function AcademyVideoPlayer({
         controlsVisible && "avp--controls-visible",
         scrubbing && "avp--scrubbing",
         isPortrait && "avp--tall",
+        hasFrame && "avp--has-frame",
         failed && "avp--failed",
         className,
       )}
@@ -628,17 +703,20 @@ export function AcademyVideoPlayer({
         onPause={handlePause}
         onWaiting={() => startedRef.current && setBuffering(true)}
         onPlaying={() => {
+          clearPlayWait();
           setBuffering(false);
+          setHasFrame(true);
           clearError();
         }}
         onCanPlay={() => {
+          clearPlayWait();
           setBuffering(false);
           clearError();
         }}
         onEmptied={handleEmptied}
         onLoadStart={handleLoadStart}
         onLoadedMetadata={syncMetadata}
-        onLoadedData={syncMetadata}
+        onLoadedData={handleLoadedData}
         onDurationChange={syncMetadata}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
@@ -658,19 +736,34 @@ export function AcademyVideoPlayer({
       </video>
 
       {!started && (
-        <div className="avp__poster" aria-hidden="true">
-          <div className="avp__poster-grid" />
-          <div className="avp__poster-route">
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="avp__poster-copy">
-            <span>Академия / Урок 18</span>
-            <strong>{title}</strong>
-            {description && <p>{description}</p>}
-          </div>
+        <div
+          className={cn("avp__poster", poster && "avp__poster--image")}
+          aria-hidden="true"
+        >
+          {poster ? (
+            // Real lesson preview: filled like the video (contain by default) so
+            // it never crops or distorts. A plain <img> is intentional here — the
+            // poster is a blob:/arbitrary background layer, not a layout-driving
+            // next/image candidate, and must accept object URLs without remote
+            // config.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="avp__poster-image" src={poster} alt="" />
+          ) : (
+            <>
+              <div className="avp__poster-grid" />
+              <div className="avp__poster-route">
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="avp__poster-copy">
+                <span>Академия / Урок 18</span>
+                <strong>{title}</strong>
+                {description && <p>{description}</p>}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -701,8 +794,7 @@ export function AcademyVideoPlayer({
             aria-label="Назад на 10 секунд"
             title="Назад 10 секунд"
           >
-            <RotateCcw aria-hidden="true" />
-            <span className="avp__center-num">10</span>
+            <SkipTenIcon direction="back" />
           </button>
           <button
             type="button"
@@ -724,8 +816,7 @@ export function AcademyVideoPlayer({
             aria-label="Вперёд на 10 секунд"
             title="Вперёд 10 секунд"
           >
-            <RotateCw aria-hidden="true" />
-            <span className="avp__center-num">10</span>
+            <SkipTenIcon direction="forward" />
           </button>
         </div>
       )}
@@ -812,8 +903,7 @@ export function AcademyVideoPlayer({
                 aria-label="Назад на 10 секунд"
                 title="Назад 10 секунд"
               >
-                <RotateCcw aria-hidden="true" />
-                <span className="avp__skip-num">10</span>
+                <SkipTenIcon direction="back" />
               </button>
               <button
                 type="button"
@@ -835,8 +925,7 @@ export function AcademyVideoPlayer({
                 aria-label="Вперёд на 10 секунд"
                 title="Вперёд 10 секунд"
               >
-                <RotateCw aria-hidden="true" />
-                <span className="avp__skip-num">10</span>
+                <SkipTenIcon direction="forward" />
               </button>
               <p
                 className="avp__time"
