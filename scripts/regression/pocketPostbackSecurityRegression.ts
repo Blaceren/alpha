@@ -537,7 +537,17 @@ async function main() {
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
       assert.equal(account?.totalDeposits, 100, "deposit must be credited exactly once");
-      assert.equal(account?.balance, 100);
+      // DEVACT-1 — a deposit must NOT credit a current trading balance.
+      //
+      // This assertion previously required `balance` to track the deposit
+      // total. That is a CURRENT TRADING BALANCE, which the platform is
+      // forbidden to persist: PLPD-1 removed it from every API response, but
+      // the postback path kept writing the column, so the figure accumulated
+      // where nothing displayed it. Historical accounting (`totalDeposits`,
+      // `depositAmount`, `firstDepositConfirmed`) is what carries the deposit,
+      // and it is asserted immediately above. The idempotency property this
+      // test exists to prove is unchanged and still enforced.
+      assert.equal(account?.balance, 0, "a deposit must never persist a current balance");
       assert.equal(account?.firstDepositConfirmed, true);
     });
 
@@ -570,7 +580,17 @@ async function main() {
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
       assert.equal(account?.totalDeposits, 150, "re-deposit must be credited exactly once");
-      assert.equal(account?.balance, 150);
+      // DEVACT-1 — a deposit must NOT credit a current trading balance.
+      //
+      // This assertion previously required `balance` to track the deposit
+      // total. That is a CURRENT TRADING BALANCE, which the platform is
+      // forbidden to persist: PLPD-1 removed it from every API response, but
+      // the postback path kept writing the column, so the figure accumulated
+      // where nothing displayed it. Historical accounting (`totalDeposits`,
+      // `depositAmount`, `firstDepositConfirmed`) is what carries the deposit,
+      // and it is asserted immediately above. The idempotency property this
+      // test exists to prove is unchanged and still enforced.
+      assert.equal(account?.balance, 0, "a deposit must never persist a current balance");
     });
 
     await check("replay: a conflicting duplicate fails safely without overwriting", async () => {
@@ -590,7 +610,17 @@ async function main() {
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
       assert.equal(account?.totalDeposits, 150, "a conflict must not move money");
-      assert.equal(account?.balance, 150);
+      // DEVACT-1 — a deposit must NOT credit a current trading balance.
+      //
+      // This assertion previously required `balance` to track the deposit
+      // total. That is a CURRENT TRADING BALANCE, which the platform is
+      // forbidden to persist: PLPD-1 removed it from every API response, but
+      // the postback path kept writing the column, so the figure accumulated
+      // where nothing displayed it. Historical accounting (`totalDeposits`,
+      // `depositAmount`, `firstDepositConfirmed`) is what carries the deposit,
+      // and it is asserted immediately above. The idempotency property this
+      // test exists to prove is unchanged and still enforced.
+      assert.equal(account?.balance, 0, "a deposit must never persist a current balance");
     });
 
     await check("replay: idempotency is durable, not process memory", async () => {
