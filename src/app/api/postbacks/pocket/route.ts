@@ -132,23 +132,6 @@ function parseAmount(value?: string) {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
-function buildFallbackEventId(input: {
-  clickId?: string;
-  traderId?: string;
-  type: PocketPostbackType;
-  amount?: number;
-  dateTime?: string;
-}) {
-  const fingerprint = [
-    input.clickId,
-    input.traderId,
-    input.type,
-    input.amount ?? "",
-    input.dateTime ?? "",
-  ].join("|");
-
-  return `pocket-${crypto.createHash("sha256").update(fingerprint).digest("hex").slice(0, 32)}`;
-}
 
 async function jsonFrom(response: Response) {
   try {
@@ -216,7 +199,7 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
 
   const learner = await prisma.exchangeAccount.findFirst({
     where: { clickId: fields.clickId },
-    select: { userId: true },
+    select: { id: true, userId: true },
   });
 
   if (!learner) {
@@ -250,6 +233,45 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
       entityId: String(learner.userId),
       metadata: { route: ROUTE, reason: result.outcome },
       request,
+    });
+  }
+
+  // DEVACT-1 — record the registration as product state, not only as identity.
+  //
+  // The direct `ow` path bound the identity and stopped there, so a learner who
+  // completed the OFFICIAL Pocket registration still read as `registrationStatus
+  // = false` everywhere — CRM included. The header-authenticated path has always
+  // set it (via buildPostbackAccountUpdate), so the two spellings of "the same
+  // event happened" disagreed, and the one that will actually be used in
+  // production was the one that under-reported.
+  //
+  // Deliberately narrow: registration status and a durable receipt only. No XP,
+  // no progression reward, no level completion, no balance, and the identity
+  // binding above is untouched — a conflicting binding still leaves the original
+  // identity in place while the account still records that a registration
+  // arrived.
+  if (result.outcome === "bound" || result.outcome === "already_bound") {
+    await prisma.exchangeAccount.update({
+      where: { id: learner.id },
+      data: { registrationStatus: true, status: "connected", rejectionReason: null },
+    });
+
+    await prisma.postbackEvent.create({
+      data: {
+        exchangeAccountId: learner.id,
+        // Pocket documents no transaction identifier for a registration, and a
+        // fabricated one would be a lie about provenance. Registration is not
+        // monetary, so nothing depends on deduplicating it.
+        externalEventId: null,
+        type: "Registration",
+        eventType: "registration",
+        normalizedEventType: "registration",
+        traderId: fields.playerId,
+        clickId: fields.clickId,
+        status: "processed",
+        rawPayload: "{}",
+        processedAt: new Date(),
+      },
     });
   }
 
@@ -398,15 +420,15 @@ export async function GET(request: Request) {
     type,
     userId: knownClick.userId,
     trader_id: traderId,
-    externalEventId:
-      eventId ??
-      buildFallbackEventId({
-        clickId,
-        traderId,
-        type,
-        amount,
-        dateTime,
-      }),
+    // DEVACT-1 — the provider's identifier only, never a derived one.
+    //
+    // This used to fall back to a SHA-256 of
+    // clickId|traderId|type|amount|dateTime. That is a forbidden deduplication
+    // key in both directions: two legitimate same-amount deposits in the same
+    // second collapse into one, and a redelivery whose timestamp differs looks
+    // like a new deposit. `undefined` here means the processor records the
+    // event without applying accounting — see PROVIDER_EVENT_IDENTITY_MISSING.
+    externalEventId: eventId,
     amount,
     currency,
     click_id: clickId,

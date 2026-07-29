@@ -38,7 +38,14 @@ export interface ExchangeProvider {
   }): Promise<ExchangeVerificationResult>;
 
   processPostback(input: {
-    externalEventId: string;
+    /**
+     * The PROVIDER's event identity, or null when it supplied none.
+     *
+     * Widened by DEVACT-1: ATA no longer fabricates an identifier to satisfy
+     * this field, because a fabricated one is not a provider event identity and
+     * silently defeated duplicate detection. No adapter reads it today.
+     */
+    externalEventId: string | null;
     externalAccountId: string;
     eventType: string;
     amount?: number;

@@ -19,6 +19,33 @@ import type { z } from "zod";
 
 type ReceivePostbackPayload = z.infer<typeof receivePostbackSchema>;
 
+/** Recorded on events accepted for evidence but deliberately not applied. */
+export const PROVIDER_EVENT_IDENTITY_MISSING = "provider_event_identity_missing";
+
+/**
+ * Whether this event would move money if applied.
+ *
+ * Deliberately broad: anything that increments a deposit total, a withdrawal
+ * total, or carries a positive amount under a deposit/withdrawal shape counts.
+ * Registration and email confirmation are NOT monetary and continue to work
+ * without a provider event id, which is what keeps identity binding available
+ * while deposit accounting stays closed.
+ */
+export function isMonetaryPostbackEvent(
+  normalizedEventType: string,
+  eventType: string,
+  amount: number,
+): boolean {
+  const monetaryNames = new Set([
+    "first_deposit",
+    "redeposit",
+    "successful_withdrawal",
+  ]);
+  if (monetaryNames.has(normalizedEventType)) return true;
+  if (eventType === "deposit" || eventType === "withdrawal") return amount > 0;
+  return false;
+}
+
 export function buildPostbackAccountUpdate(
   normalizedEventType: string,
   eventType: string,
@@ -42,13 +69,20 @@ export function buildPostbackAccountUpdate(
     };
   }
 
+  // DEVACT-1 — `balance` is a CURRENT TRADING BALANCE and is no longer written.
+  //
+  // PLPD-1 removed it from every API response and from the serializer, but the
+  // deposit postback path still PERSISTED it, so the column kept accumulating a
+  // number the platform is forbidden to hold. A deposit is a historical
+  // transaction; it is not a statement about what the learner has now (they may
+  // have traded it away a second later). `depositAmount`, `totalDeposits` and
+  // `firstDepositConfirmed` are historical accounting and are deliberately kept.
   if (normalizedEventType === "first_deposit") {
     return {
       status: "connected",
       firstDepositConfirmed: true,
       depositAmount: { increment: amount },
       totalDeposits: { increment: amount },
-      balance: { increment: amount },
     };
   }
 
@@ -56,7 +90,6 @@ export function buildPostbackAccountUpdate(
     return {
       depositAmount: { increment: amount },
       totalDeposits: { increment: amount },
-      balance: { increment: amount },
     };
   }
 
@@ -68,7 +101,6 @@ export function buildPostbackAccountUpdate(
     return {
       depositAmount: { increment: amount },
       totalDeposits: { increment: amount },
-      balance: { increment: amount },
     };
   }
 
@@ -79,9 +111,12 @@ export function buildPostbackAccountUpdate(
   }
 
   if (normalizedEventType === "successful_withdrawal") {
+    // Historical withdrawal accounting only. Decrementing `balance` here would
+    // be maintaining the same forbidden current-balance figure from the other
+    // direction, and would additionally be wrong: the platform never saw the
+    // deposits and trades in between, so its running total was never real.
     return {
       totalWithdrawals: { increment: amount },
-      balance: { decrement: amount },
     };
   }
 
@@ -95,8 +130,13 @@ export function buildPostbackAccountUpdate(
     return {};
   }
 
+  // A provider "balance" event is the purest form of the thing this platform is
+  // forbidden to hold: a current trading balance, asserted by whoever sent the
+  // postback. It is accepted and recorded as an event, but it changes no
+  // account state. L4 is answered by CheckpointBalanceProvider, never by a
+  // number someone posted to us.
   if (eventType === "balance") {
-    return { balance: amount };
+    return {};
   }
 
   if (eventType === "account_rejected") {
@@ -128,12 +168,14 @@ export function buildSimulatedPostbackAccountUpdate(
     return { emailConfirmed: true };
   }
 
+  // Simulation must mirror the real contract exactly, including what it may NOT
+  // write. A simulator that produced a balance the real path cannot produce
+  // would let a leak be built and pass its own tests.
   if (postbackType === "First Deposit") {
     return {
       firstDepositConfirmed: true,
       depositAmount: { increment: amount },
       totalDeposits: { increment: amount },
-      balance: { increment: amount },
     };
   }
 
@@ -141,7 +183,6 @@ export function buildSimulatedPostbackAccountUpdate(
     return {
       depositAmount: { increment: amount },
       totalDeposits: { increment: amount },
-      balance: { increment: amount },
     };
   }
 
@@ -199,7 +240,21 @@ export async function processExchangePostbackPayload(
   const amount = data.amount ?? 0;
   const normalizedEventType = normalizePocketEvent(type, data.eventType);
   const eventType = pocketEventToExchangeEvent(normalizedEventType);
-  const eventId = data.externalEventId ?? `postback-${crypto.randomUUID()}`;
+  // DEVACT-1 — the provider's event identity, or nothing.
+  //
+  // This used to be `data.externalEventId ?? \`postback-${crypto.randomUUID()}\``.
+  // A fresh UUID is unique BY CONSTRUCTION, so it defeated the very unique index
+  // it was stored in: two deliveries of the same deposit produced two different
+  // ids, skipped the duplicate read below entirely, and applied the accounting
+  // mutation TWICE. An identifier ATA invents is not a provider event identity
+  // and can never make a redelivery detectable.
+  //
+  // `externalEventId` is nullable, so the honest representation of "the provider
+  // gave us no event identity" is NULL — not a fabricated value. Multiple NULLs
+  // are permitted under the unique index, which is correct: unidentified events
+  // are not claimed to be distinct from one another, and none of them is allowed
+  // to move money (see the monetary guard below).
+  const providerEventId = data.externalEventId ?? null;
   const payload = rawPayload as Prisma.InputJsonValue;
   const attribution = extractPocketAttribution(rawPayload);
   const traderId = getPocketTraderId(rawPayload);
@@ -257,7 +312,7 @@ export async function processExchangePostbackPayload(
       .create({
         data: {
           exchangeAccountId: null,
-          externalEventId: eventId,
+          externalEventId: providerEventId,
           type: type ?? normalizedEventType,
           eventType,
           normalizedEventType,
@@ -290,7 +345,7 @@ export async function processExchangePostbackPayload(
       metadata: {
         eventType,
         normalizedEventType,
-        externalEventId: eventId,
+        externalEventId: providerEventId,
         traderId,
         clickId,
         reason: "Exchange account not found",
@@ -301,11 +356,68 @@ export async function processExchangePostbackPayload(
     return notFoundResponse("Биржевой аккаунт не найден");
   }
 
+  // DEVACT-1 — no provider event identity, no money movement.
+  //
+  // The operator-confirmed Pocket postback contract is `clickid`, `goal`,
+  // `playerid`, `ow`. It documents NO transaction identifier, so for a Pocket
+  // deposit there is currently nothing stable to deduplicate on. The previous
+  // code papered over that twice: the route hashed
+  // clickId|traderId|type|amount|dateTime into a synthetic id, and this module
+  // fell back to a random UUID. Both are forbidden deduplication keys — the
+  // hash collapses two legitimate same-amount deposits into one, and the UUID
+  // makes every redelivery look new.
+  //
+  // So a monetary event that carries no provider identity is ACCEPTED,
+  // VALIDATED and DURABLY RECORDED, but applies no accounting mutation and
+  // triggers no progression. The ledger keeps the evidence; the totals stay
+  // honest. When Pocket's transaction identifier is confirmed, supplying it is
+  // the only change needed — the idempotency machinery below already works.
+  if (isMonetaryPostbackEvent(normalizedEventType, eventType, amount) && !providerEventId) {
+    const unidentified = await prisma.postbackEvent.create({
+      data: {
+        exchangeAccountId: exchangeAccount.id,
+        externalEventId: null,
+        type: type ?? normalizedEventType,
+        eventType,
+        normalizedEventType,
+        externalAccountId: externalAccountLookup,
+        traderId,
+        clickId,
+        amount,
+        currency: data.currency,
+        status: "not_processed",
+        rawPayload: JSON.stringify(payload),
+        payload,
+        attribution,
+        rejectionReason: PROVIDER_EVENT_IDENTITY_MISSING,
+        processedAt: null,
+      },
+    });
+
+    await createAuditLog({
+      userId: exchangeAccount.userId,
+      action: "EXCHANGE_POSTBACK_NOT_PROCESSED",
+      entityType: "PostbackEvent",
+      entityId: unidentified.id,
+      metadata: {
+        eventType,
+        normalizedEventType,
+        reason: PROVIDER_EVENT_IDENTITY_MISSING,
+      },
+      request,
+    });
+
+    return NextResponse.json(
+      { ok: true, duplicate: false, processed: false, reason: PROVIDER_EVENT_IDENTITY_MISSING },
+      { status: 202 },
+    );
+  }
+
   const provider = getExchangeProvider(
     exchangeAccount.provider === "real_placeholder" ? "manual" : exchangeAccount.provider,
   );
   const providerResult = await provider.processPostback({
-    externalEventId: eventId,
+    externalEventId: providerEventId,
     externalAccountId:
       externalAccountLookup ??
       exchangeAccount.externalAccountId ??
@@ -325,7 +437,7 @@ export async function processExchangePostbackPayload(
       const postback = await tx.postbackEvent.create({
         data: {
           exchangeAccountId: exchangeAccount.id,
-          externalEventId: eventId,
+          externalEventId: providerEventId,
           type: type ?? normalizedEventType,
           eventType,
           normalizedEventType,
@@ -372,9 +484,14 @@ export async function processExchangePostbackPayload(
   // run the progression side effects. Return the same deterministic duplicate
   // body the fast path returns, without mutating or progressing anything.
   if (!event) {
-    const winner = await prisma.postbackEvent.findUnique({
-      where: { externalEventId: eventId },
-    });
+    // Only a NON-NULL provider event id can lose a unique-constraint race, so
+    // this lookup is unreachable with null; the guard keeps that fact explicit
+    // rather than relying on it.
+    const winner = providerEventId
+      ? await prisma.postbackEvent.findUnique({
+          where: { externalEventId: providerEventId },
+        })
+      : null;
 
     if (winner && conflictsWithStoredEvent(winner, incomingFacts)) {
       return conflictResponse();
@@ -404,7 +521,7 @@ export async function processExchangePostbackPayload(
       eventType: event.eventType,
       normalizedEventType,
       amount: event.amount,
-      externalEventId: eventId,
+      externalEventId: providerEventId,
       attribution,
     },
     request,
@@ -429,7 +546,7 @@ export async function processExchangePostbackPayload(
         eventType,
         normalizedEventType,
         amount: event.amount,
-        externalEventId: eventId,
+        externalEventId: providerEventId,
       },
       request,
     });
