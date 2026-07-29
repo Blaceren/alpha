@@ -6,6 +6,7 @@ import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum
 import { LevelAssessment } from "@/features/assessment/level-assessment";
 import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
+import { LevelStart } from "@/features/level-start/level-start";
 import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import "@/features/curriculum-api/curriculum-api.css";
 
@@ -108,6 +109,16 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
             <p className="cur-detail__readonly">Материал — только просмотр. Прогресс сохраняется на сервере.</p>
           </section>
           )}
+
+          {/* The legal level start (L2START-PLAYER-1). Offered only on a level
+              the Backend reports as `available` — the one state in which the
+              start owner will accept — and never on a financial checkpoint,
+              which is resolved by an external authority rather than started.
+              An in-progress or completed level shows nothing here: the material
+              and the check below are already open. */}
+          {summary.state === "available" && !isCheckpoint ? (
+            <LevelStart stableCode={summary.levelCode} />
+          ) : null}
 
           {/* Financial checkpoint (L4HG-1, L4VC-1). The Backend decides whether
               the condition can be verified at all and what the answer is; the

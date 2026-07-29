@@ -13,12 +13,19 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
  * workflow (draft save + submit + resubmit).
  * L4VC-1 adds EXACTLY ONE more: the L4 financial-checkpoint verification
  * (a single POST whose entire body is `{ requestId }`).
+ * L2START-PLAYER-1 adds EXACTLY ONE more: the legal level start (a single POST
+ * with NO body at all — the Backend takes the actor from the session and the
+ * stable code only tells it which level this page believes is current).
  *
  * This test therefore allows the assessment attempt surface, the report learner
- * surface and the checkpoint verification surface, and NOTHING else — no
- * reviewer/mentor review, no admin publish/archive/authoring, no
- * lesson-progress, no attachment, no other mutation — anywhere in the
- * curriculum/assessment/report/checkpoint code.
+ * surface, the checkpoint verification surface and the level-start surface, and
+ * NOTHING else — no reviewer/mentor review, no admin publish/archive/authoring,
+ * no lesson-progress, no attachment, no other mutation — anywhere in the
+ * curriculum/assessment/report/checkpoint/level-start code.
+ *
+ * The lesson MEDIA surface is scanned too, and is deliberately NOT sanctioned:
+ * the video player must never become a hidden progress owner, so any write it
+ * ever grew would fail here.
  */
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -45,6 +52,10 @@ const SCAN_DIRS = [
   "src/server/proxy/checkpoint-proxy.ts",
   "src/lib/checkpoint",
   "src/features/checkpoint",
+  "src/server/proxy/level-start-proxy.ts",
+  "src/lib/level-start",
+  "src/features/level-start",
+  "src/features/lesson-media",
 ].map((p) => path.join(REPO_ROOT, p));
 
 /** The sanctioned CI-3 assessment write surface (start + submit attempt). */
@@ -53,9 +64,16 @@ const ASSESSMENT_WRITE = /assessment-proxy|assessment-client|level-assessment|as
 const REPORT_WRITE = /report-proxy|report-client|level-report|report-machine|[\\/]report[\\/]/;
 /** The sanctioned L4VC-1 learner checkpoint write surface (verify). */
 const CHECKPOINT_WRITE = /checkpoint-proxy|checkpoint-client|level-checkpoint|checkpoint-machine|[\\/]checkpoint[\\/]/;
+/** The sanctioned L2START-PLAYER-1 learner level-start surface (start). */
+const LEVEL_START_WRITE = /level-start-proxy|level-start-client|[\\/]level-start[\\/]|[\\/]start[\\/]route\.tsx?$/;
 
 function sanctionedWrite(file: string): boolean {
-  return ASSESSMENT_WRITE.test(file) || REPORT_WRITE.test(file) || CHECKPOINT_WRITE.test(file);
+  return (
+    ASSESSMENT_WRITE.test(file) ||
+    REPORT_WRITE.test(file) ||
+    CHECKPOINT_WRITE.test(file) ||
+    LEVEL_START_WRITE.test(file)
+  );
 }
 
 function files(): string[] {
@@ -134,6 +152,45 @@ describe("curriculum write contract (CI-4: read-only + bounded assessment & repo
     for (const { f, src } of sources) {
       if (!CHECKPOINT_WRITE.test(f)) continue;
       expect(stripComments(src), `${f} references a forbidden financial field`).not.toMatch(forbidden);
+    }
+  });
+
+  it("level-start API paths are only ever the single start path", () => {
+    // The whole level-start write surface is ONE URL, matched against real API
+    // path literals so prose containing the word "start" is not mistaken for a
+    // route. A second start path anywhere would mean a second start owner.
+    const apiPath = /(?:\/api\/|curriculum\/levels\/)[A-Za-z0-9_${}().\\/[\]-]*\/start\b/g;
+    for (const { f, src } of sources) {
+      if ((src.match(apiPath) ?? []).length > 0) {
+        expect(LEVEL_START_WRITE.test(f), `${f} may only use a start path in the level-start surface`).toBe(true);
+      }
+    }
+  });
+
+  it("the level-start surface never sends a request body", () => {
+    // Structural: starting takes NO learner input. If a body, a status, a user
+    // id or a level selector ever appeared here, a learner could ask to be put
+    // into a state rather than asking to begin the one they are standing on.
+    // Matched against how a request body is actually built in this codebase
+    // (`body: JSON.stringify(...)`, `body: raw`, a form/urlencoded payload) so
+    // that reading the RESPONSE body — `body: parsed.value` handed to the error
+    // normalizer — is not mistaken for sending one.
+    const forbidden =
+      /body:\s*(JSON\.stringify|raw\b|new FormData|new URLSearchParams|["'])|\buserId\b|\blearnerId\b|\btargetStatus\b/;
+    const stripComments = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    for (const { f, src } of sources) {
+      if (!LEVEL_START_WRITE.test(f)) continue;
+      expect(stripComments(src), `${f} sends something with the start request`).not.toMatch(forbidden);
+    }
+  });
+
+  it("the lesson media surface issues no request of any kind", () => {
+    // The player renders a URL. It does not talk to the Backend, so it cannot
+    // become a progress owner by accident.
+    for (const { f, src } of sources) {
+      if (!f.includes(`${path.sep}lesson-media${path.sep}`)) continue;
+      expect(src, `${f} performs I/O`).not.toMatch(/\bfetch\(|XMLHttpRequest|navigator\.sendBeacon/);
     }
   });
 
