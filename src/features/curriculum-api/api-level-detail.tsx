@@ -7,6 +7,8 @@ import { LevelAssessment } from "@/features/assessment/level-assessment";
 import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
 import { LevelStart } from "@/features/level-start/level-start";
+import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
+import { shouldShowPocketRegistration } from "@/features/pocket-registration/model/pocket-registration-visibility";
 import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import "@/features/curriculum-api/curriculum-api.css";
 
@@ -46,6 +48,18 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
   // shown with a note about a type that "is not displayed yet" — which stopped
   // being true the moment this branch existed.
   const isCheckpoint = summary.typeInfo.type === "checkpoint";
+
+  // The Pocket registration action (POCKETCTA-1). An `external_event` level is
+  // completed by an authenticated Pocket postback, so the only thing the Academy
+  // can offer is the affiliate link — and only while the requirement is actually
+  // outstanding. `available` and `in_progress` are exactly the current-and-
+  // incomplete states, so a completed, pending or locked level shows nothing, and
+  // a learner with no enrolment is excluded explicitly rather than by implication.
+  const showPocketRegistration = shouldShowPocketRegistration({
+    isExternal: summary.typeInfo.isExternal,
+    state: summary.state,
+    contentUnavailableReason: content.unavailableReason,
+  });
 
   return (
     <AppShell userName={name} activeId="lessons">
@@ -119,6 +133,13 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
           {summary.state === "available" && !isCheckpoint ? (
             <LevelStart stableCode={summary.levelCode} />
           ) : null}
+
+          {/* The Pocket registration action (POCKETCTA-1). It obtains the external
+              affiliate URL from the authenticated Backend referral-link owner and
+              opens it; it completes nothing. Level 1 stays incomplete until the
+              real Pocket postback arrives, which is the only owner that can
+              complete it and unlock Level 2. */}
+          {showPocketRegistration ? <PocketRegistration /> : null}
 
           {/* Financial checkpoint (L4HG-1, L4VC-1). The Backend decides whether
               the condition can be verified at all and what the answer is; the
