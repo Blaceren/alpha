@@ -274,13 +274,15 @@ async function main() {
       assert.ok([200, 204].includes(logout.status));
     });
 
-    await check("20. CRM v1 surface is exactly session, users and owner-candidates", () => {
+    await check("20. CRM v1 surface is exactly session, users, owner-candidates and affiliates", () => {
       // `users` joined in Users Slice 2; `owner-candidates` joins in Owner v1
-      // (GET /api/crm/v1/owner-candidates). Every other top-level route stays
-      // banned, so this guard still proves audit and User 360 have not appeared
-      // and that owner mutation lives nested under users/[userId], not here.
+      // (GET /api/crm/v1/owner-candidates); `affiliates` joins in AFD-2 as the
+      // administrative partner/campaign/tracking-link foundation. Every other
+      // top-level route stays banned, so this guard still proves audit and User
+      // 360 have not appeared and that owner mutation lives nested under
+      // users/[userId], not here.
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["owner-candidates", "session", "users"]);
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
       // A top-level /api/crm/v1/notes or /owner route still must not exist:
       // notes and owner are nested under users/[userId] and asserted there.
       for (const banned of ["notes", "owner", "owners", "audit", "360", "user-360"]) {

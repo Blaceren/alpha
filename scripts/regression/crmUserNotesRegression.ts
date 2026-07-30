@@ -15,6 +15,7 @@ import {
   encodeNotesCursor,
   normalizeNoteBody,
 } from "../../src/lib/crm/user-notes";
+import { EXPECTED_MIGRATION_COUNT, expectedPriorMigrationCount } from "./support/migrationCount";
 
 // Real HTTP regression for GET/POST /api/crm/v1/users/[userId]/notes. Isolated
 // next dev server against a throwaway /tmp SQLite database. No deployed
@@ -923,10 +924,10 @@ async function main() {
 
     /* ----------------------------------------------- 76-82 database proofs */
 
-    await check("76. fresh database has exactly 33 migrations", () => {
+    await check("76. fresh database has exactly the canonical migration count", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, EXPECTED_MIGRATION_COUNT, `expected ${EXPECTED_MIGRATION_COUNT} migrations, found ${migrations.length}`);
       assert.ok(migrations.includes("20260720000000_crm_user_note_foundation"));
     });
 
@@ -1004,7 +1005,7 @@ async function main() {
             e !== "20260723000000_crm_user_owner_history",
         )
         .sort();
-      assert.equal(applied.length, 30, `expected 30 prior migrations, found ${applied.length}`);
+      assert.equal(applied.length, expectedPriorMigrationCount(3), `expected ${expectedPriorMigrationCount(3)} prior migrations, found ${applied.length}`);
 
       // Apply the 30 prior migrations AND record them in the runner's
       // bookkeeping table, so the result is byte-faithful to a real database at

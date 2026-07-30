@@ -9,6 +9,7 @@ import { CRM_STAFF_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles
 import { crmUserDetailResponseSchema } from "../../src/lib/crm/schemas";
 import { maskEmail } from "../../src/lib/crm/users";
 import { CRM_USER_DETAIL_DISPLAY_NAME_FALLBACK, PRISMA_INT_MAX } from "../../src/lib/crm/user-detail";
+import { EXPECTED_MIGRATION_COUNT } from "./support/migrationCount";
 
 // Real HTTP regression for GET /api/crm/v1/users/[userId]. Isolated next dev
 // server against a throwaway /tmp SQLite database. No deployed database, no
@@ -506,10 +507,10 @@ async function main() {
       void plainLearner;
     });
 
-    await check("59-62. fresh DB, 33 migrations, clean foreign keys", () => {
+    await check("59-62. fresh DB, expected migration count, clean foreign keys", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, EXPECTED_MIGRATION_COUNT, `expected ${EXPECTED_MIGRATION_COUNT} migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -521,9 +522,11 @@ async function main() {
 
     /* ----------------------------------------------------------- route scope */
 
-    await check("65-70. CRM v1 exposes session, users, owner-candidates and nested owner", () => {
+    await check("65-70. CRM v1 exposes session, users, owner-candidates, affiliates and nested owner", () => {
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["owner-candidates", "session", "users"]);
+      // `affiliates` joins in AFD-2 — an administrative namespace with no
+      // learner-facing route and no click, attribution or conversion data.
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
       // owner-candidates is a flat read-only route: exactly one route file.
       assert.deepEqual(fs.readdirSync(path.join(crmV1, "owner-candidates")).sort(), ["route.ts"]);
 

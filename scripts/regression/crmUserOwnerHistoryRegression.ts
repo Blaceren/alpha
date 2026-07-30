@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import type { StaffRole } from "@prisma/client";
 import { CRM_STAFF_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles";
 import { crmOwnerHistoryResponseSchema } from "../../src/lib/crm/schemas";
+import { EXPECTED_MIGRATION_COUNT, expectedPriorMigrationCount } from "./support/migrationCount";
 
 // Real HTTP regression for CRM Learner Owner History (OH-1):
 //   GET /api/crm/v1/users/[userId]/owner/history
@@ -541,9 +542,9 @@ async function main() {
 
     /* ==================================================== database integrity */
 
-    await check("28. fresh DB has 33 migrations incl. owner history; clean fk/integrity", () => {
+    await check("28. fresh DB has the expected migration count incl. owner history; clean fk/integrity", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations")).filter((e) => e !== "migration_lock.toml");
-      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, EXPECTED_MIGRATION_COUNT, `expected ${EXPECTED_MIGRATION_COUNT} migrations, found ${migrations.length}`);
       assert.ok(migrations.includes("20260723000000_crm_user_owner_history"));
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
@@ -599,13 +600,13 @@ async function main() {
 
     /* ==================================================== 32 -> 33 upgrade */
 
-    await check("33. upgrading a 32-migration DB to 33 preserves rows and adds an empty history table", () => {
+    await check("33. upgrading a pre-history DB preserves rows and adds an empty history table", () => {
       const upgradeUrl = `file:${upgradeDbPath}`;
       const migrationsDir = path.join(process.cwd(), "prisma", "migrations");
       const prior = fs.readdirSync(migrationsDir)
         .filter((e) => e !== "migration_lock.toml" && e !== "20260723000000_crm_user_owner_history")
         .sort();
-      assert.equal(prior.length, 32, `expected 32 prior migrations, found ${prior.length}`);
+      assert.equal(prior.length, expectedPriorMigrationCount(1), `expected ${expectedPriorMigrationCount(1)} prior migrations, found ${prior.length}`);
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

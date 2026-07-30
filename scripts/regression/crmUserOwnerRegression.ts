@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import type { StaffRole } from "@prisma/client";
 import { CRM_STAFF_ROLES, CRM_ELIGIBLE_OWNER_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles";
 import { crmOwnerResponseSchema, crmOwnerCandidatesResponseSchema } from "../../src/lib/crm/schemas";
+import { EXPECTED_MIGRATION_COUNT, expectedPriorMigrationCount } from "./support/migrationCount";
 
 // Real HTTP regression for CRM Learner Owner v1:
 //   GET  /api/crm/v1/users/[userId]/owner
@@ -705,9 +706,9 @@ async function main() {
 
     /* ==================================================== database integrity */
 
-    await check("41. fresh DB has 33 migrations, clean foreign_key_check and integrity_check", () => {
+    await check("41. fresh DB has the expected migration count, clean foreign_key_check and integrity_check", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations")).filter((e) => e !== "migration_lock.toml");
-      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, EXPECTED_MIGRATION_COUNT, `expected ${EXPECTED_MIGRATION_COUNT} migrations, found ${migrations.length}`);
       assert.ok(migrations.includes("20260721000000_crm_user_owner_foundation"));
       assert.ok(migrations.includes("20260723000000_crm_user_owner_history"));
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
@@ -751,7 +752,7 @@ async function main() {
             e !== "20260723000000_crm_user_owner_history",
         )
         .sort();
-      assert.equal(prior.length, 31, `expected 31 prior migrations, found ${prior.length}`);
+      assert.equal(prior.length, expectedPriorMigrationCount(2), `expected ${expectedPriorMigrationCount(2)} prior migrations, found ${prior.length}`);
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

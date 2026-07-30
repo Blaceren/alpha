@@ -13,6 +13,7 @@ import {
   maskEmail,
   CRM_USERS_DISPLAY_NAME_FALLBACK,
 } from "../../src/lib/crm/users";
+import { EXPECTED_MIGRATION_COUNT } from "./support/migrationCount";
 
 // Real HTTP regression for GET /api/crm/v1/users. Runs an isolated next dev
 // server against a throwaway /tmp SQLite database. No deployed database, no
@@ -730,10 +731,10 @@ async function main() {
       }
     });
 
-    await check("46. migration count is 33 and foreign keys are clean", () => {
+    await check("46. migration count matches the canonical constant and foreign keys are clean", () => {
       const migrations = fs.readdirSync(path.join(process.cwd(), "prisma", "migrations"))
         .filter((entry) => entry !== "migration_lock.toml");
-      assert.equal(migrations.length, 33, `expected 33 migrations, found ${migrations.length}`);
+      assert.equal(migrations.length, EXPECTED_MIGRATION_COUNT, `expected ${EXPECTED_MIGRATION_COUNT} migrations, found ${migrations.length}`);
       const fk = spawnSync("sqlite3", [dbPath, "PRAGMA foreign_key_check;"], { encoding: "utf8" });
       if (fk.status === 0) assert.equal(fk.stdout.trim(), "", `foreign_key_check reported ${fk.stdout}`);
     });
@@ -743,9 +744,12 @@ async function main() {
       assert.equal(rerun.status, 0, `${rerun.stdout}\n${rerun.stderr}`);
     });
 
-    await check("48. CRM v1 exposes session, users and owner-candidates — no 360/audit route", () => {
+    await check("48. CRM v1 exposes session, users, owner-candidates and affiliates — no 360/audit route", () => {
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["owner-candidates", "session", "users"]);
+      // `affiliates` joins in AFD-2 (partners, campaigns, tracking-links). It is
+      // an administrative namespace only: it serves no learner, exposes no
+      // public route and holds no click, attribution or conversion data.
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
       // Notes v1 and Owner v1 ship NESTED users/[userId]/{notes,owner} routes. A
       // top-level /api/crm/v1/notes or /owner route must still never exist, so
       // both stay banned here — this check only looks at the CRM v1 top level.

@@ -177,6 +177,9 @@ model User {
   crmOwnerState                   CrmUserOwner?                @relation("CrmUserOwnerLearner")
   crmOwnerHistory                 CrmUserOwnerHistory[]        @relation("CrmUserOwnerHistoryLearner")
   pocketTraderIdentity            PocketTraderIdentity?        @relation("PocketTraderIdentityLearner")
+  affiliatePartnersCreated        AffiliatePartner[]           @relation("AffiliatePartnerCreator")
+  affiliateCampaignsCreated       AffiliateCampaign[]          @relation("AffiliateCampaignCreator")
+  affiliateTrackingLinksCreated   AffiliateTrackingLink[]      @relation("AffiliateTrackingLinkCreator")
 }
 
 model XpEvent {
@@ -1117,6 +1120,117 @@ model PocketTraderIdentity {
   user         User     @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([clickId])
+}
+
+/// AFD-2 — administrative affiliate foundation.
+///
+/// These three tables describe WHO buys traffic and WHICH named link they were
+/// given. They deliberately hold no click, no visitor, no attribution, no
+/// conversion and no learner: acquisition data arrives in AFD-3B and lives in
+/// its own tables. Nothing here is reachable from an unauthenticated request.
+enum AffiliateEntityStatus {
+  active
+  paused
+  archived
+}
+
+/// Tracking-link lifecycle. `active` is absent BY DESIGN in AFD-2 — there is no
+/// public `/go/{publicCode}` route and no attribution owner to receive a click,
+/// so a link that claimed to be active would be lying. AFD-3B adds it.
+enum AffiliateTrackingLinkStatus {
+  draft
+  paused
+  archived
+}
+
+/// The server-owned logical destination of a tracking link. A KEY, never a URL:
+/// storing a URL would make every link a redirector for whatever an operator
+/// pasted, which is the open-redirect this design refuses to have.
+enum AffiliateLandingKey {
+  academy_registration
+}
+
+model AffiliatePartner {
+  id                           Int                     @id @default(autoincrement())
+  /// Immutable, lowercase, globally unique operator-facing handle.
+  code                         String                  @unique
+  displayName                  String
+  description                  String?
+  status                       AffiliateEntityStatus   @default(active)
+  /// Inherited by links that set no window of their own. Bounded 1..365.
+  defaultAttributionWindowDays Int                     @default(30)
+  createdByUserId              Int
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  archivedAt                   DateTime?
+  createdBy                    User                    @relation("AffiliatePartnerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  campaigns                    AffiliateCampaign[]
+  trackingLinks                AffiliateTrackingLink[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([createdByUserId])
+}
+
+model AffiliateCampaign {
+  id                 Int                     @id @default(autoincrement())
+  affiliatePartnerId Int
+  /// Immutable and lowercase. Unique WITHIN one partner, so two affiliates may
+  /// each run a campaign called `summer`.
+  code               String
+  displayName        String
+  notes              String?
+  status             AffiliateEntityStatus   @default(active)
+  createdByUserId    Int
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  archivedAt         DateTime?
+  partner            AffiliatePartner        @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy          User                    @relation("AffiliateCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trackingLinks      AffiliateTrackingLink[]
+
+  @@unique([affiliatePartnerId, code])
+  /// Composite target for the tracking-link FK that proves a link and its
+  /// campaign belong to the SAME partner without a runtime read.
+  @@unique([id, affiliatePartnerId])
+  @@index([affiliatePartnerId, status, createdAt])
+  @@index([createdAt])
+  @@index([createdByUserId])
+}
+
+model AffiliateTrackingLink {
+  id                     Int                         @id @default(autoincrement())
+  affiliatePartnerId     Int
+  affiliateCampaignId    Int?
+  /// Server-generated, 160-bit, URL-safe, immutable and globally unique. Never
+  /// accepted from a client, and it embeds no database id and no partner code.
+  publicCode             String                      @unique
+  displayName            String
+  status                 AffiliateTrackingLinkStatus @default(draft)
+  landingKey             AffiliateLandingKey         @default(academy_registration)
+  /// Names of INCOMING query parameters this link will accept in AFD-3B. These
+  /// are parameter NAMES, never captured values.
+  externalClickParameter String                      @default("clickid")
+  sub1Parameter          String?
+  sub2Parameter          String?
+  sub3Parameter          String?
+  sub4Parameter          String?
+  sub5Parameter          String?
+  /// Null inherits AffiliatePartner.defaultAttributionWindowDays.
+  attributionWindowDays  Int?
+  createdByUserId        Int
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  archivedAt             DateTime?
+  partner                AffiliatePartner            @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  campaign               AffiliateCampaign?          @relation(fields: [affiliateCampaignId, affiliatePartnerId], references: [id, affiliatePartnerId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy              User                        @relation("AffiliateTrackingLinkCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([affiliatePartnerId, status, createdAt])
+  @@index([affiliateCampaignId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([createdByUserId])
 }
 
 model UserCurriculumEnrollment {

@@ -212,3 +212,117 @@ export const crmErrorResponseSchema = z
   .strict();
 
 export type CrmErrorResponse = z.infer<typeof crmErrorResponseSchema>;
+
+/* ------------------------------------------------ AFD-2 affiliate contracts */
+
+// Every affiliate DTO is `.strict()` for the same reason the learner DTOs are:
+// a column added to these tables later — a click count, an attribution id, a
+// provider amount — must fail serialization here rather than silently appear in
+// a response that promised not to carry it.
+
+const affiliateEntityStatusSchema = z.enum(["active", "paused", "archived"]);
+const affiliateLinkStatusSchema = z.enum(["draft", "paused", "archived"]);
+// Stored status answers "what did an operator set"; availability answers "could
+// this be used". Both ship, because collapsing them hides either the operator's
+// choice or the reason a child is unusable.
+const affiliateAvailabilitySchema = z.enum(["available", "paused", "archived"]);
+
+export const affiliatePartnerSchema = z
+  .object({
+    id: z.string().min(1),
+    code: z.string().min(1),
+    displayName: z.string().min(1),
+    description: z.string().nullable(),
+    status: affiliateEntityStatusSchema,
+    availability: affiliateAvailabilitySchema,
+    defaultAttributionWindowDays: z.number().int().positive(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    archivedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export const affiliatePartnerListSchema = z
+  .object({
+    items: z.array(affiliatePartnerSchema),
+    total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const affiliateCampaignSchema = z
+  .object({
+    id: z.string().min(1),
+    affiliatePartnerId: z.string().min(1),
+    affiliatePartnerCode: z.string().min(1),
+    code: z.string().min(1),
+    displayName: z.string().min(1),
+    notes: z.string().nullable(),
+    status: affiliateEntityStatusSchema,
+    availability: affiliateAvailabilitySchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    archivedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export const affiliateCampaignListSchema = z
+  .object({
+    items: z.array(affiliateCampaignSchema),
+    total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const affiliateTrackingLinkSchema = z
+  .object({
+    id: z.string().min(1),
+    affiliatePartnerId: z.string().min(1),
+    affiliatePartnerCode: z.string().min(1),
+    affiliateCampaignId: z.string().min(1).nullable(),
+    affiliateCampaignCode: z.string().min(1).nullable(),
+    publicCode: z.string().length(32),
+    displayName: z.string().min(1),
+    status: affiliateLinkStatusSchema,
+    availability: affiliateAvailabilitySchema,
+    // A logical key, never a URL. The DTO carries no `url` field at all, so a
+    // CRM cannot render — and an operator cannot copy — a link that would
+    // resolve to anything before AFD-3B builds the public route.
+    landingKey: z.literal("academy_registration"),
+    externalClickParameter: z.string().min(1),
+    subParameters: z
+      .object({
+        sub1: z.string().nullable(),
+        sub2: z.string().nullable(),
+        sub3: z.string().nullable(),
+        sub4: z.string().nullable(),
+        sub5: z.string().nullable(),
+      })
+      .strict(),
+    attributionWindowDays: z.number().int().positive().nullable(),
+    effectiveAttributionWindowDays: z.number().int().positive(),
+    // The two fields that keep this phase honest. No click count, no conversion
+    // count and no zero-valued analytics field appears anywhere in this DTO,
+    // because a zero would read as "tracking is running and found nothing".
+    publicRouteState: z.literal("not_available_until_afd3b"),
+    activationState: z.literal("unavailable"),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    archivedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export const affiliateTrackingLinkListSchema = z
+  .object({
+    items: z.array(affiliateTrackingLinkSchema),
+    total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type AffiliatePartnerDto = z.infer<typeof affiliatePartnerSchema>;
+export type AffiliateCampaignDto = z.infer<typeof affiliateCampaignSchema>;
+export type AffiliateTrackingLinkDto = z.infer<typeof affiliateTrackingLinkSchema>;
