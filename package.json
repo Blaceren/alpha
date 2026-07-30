@@ -101,7 +101,8 @@
     "test:regression:pocket-l1-owner": "tsx scripts/regression/pocketRegistrationLevelOwnerRegression.ts",
     "test:regression:curriculum-level-start": "tsx scripts/regression/curriculumLevelStartRegression.ts",
     "test:regression:public-referral-url": "tsx scripts/regression/publicReferralUrlRegression.ts",
-    "test:regression:pocket-affiliate-url": "tsx scripts/regression/pocketAffiliateUrlRegression.ts"
+    "test:regression:pocket-affiliate-url": "tsx scripts/regression/pocketAffiliateUrlRegression.ts",
+    "test:regression:pocketcta-disposable-e2e": "tsx scripts/regression/pocketCtaDisposableE2E.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
