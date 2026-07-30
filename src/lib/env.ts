@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { classifyEnvironment } from "@/lib/environment";
 import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
+import { describePublicAppUrlRejection, resolvePublicAppUrl } from "@/lib/publicUrl";
 
 export const DEV_SESSION_SECRET = "local-dev-session-secret";
 export const DEV_POSTBACK_SECRET = "dev-postback-secret";
@@ -53,6 +54,7 @@ const OPTIONAL_ENV = [
   "REPORT_ATTACHMENT_CLAMAV_HOST",
   "REPORT_ATTACHMENT_CLAMAV_PORT",
   "REPORT_ATTACHMENT_TEST_BACKEND",
+  "PUBLIC_APP_URL",
 ] as const;
 
 const envSchema = z.object({
@@ -60,6 +62,10 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().optional(),
   POSTBACK_SECRET: z.string().optional(),
   APP_URL: z.string().url().optional(),
+  // Validated by `resolvePublicAppUrl` rather than by `z.string().url()`, which
+  // would happily accept http, embedded credentials, a query string or a
+  // loopback host. See the PUBLIC_APP_URL check in validateRuntimeEnv.
+  PUBLIC_APP_URL: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "s3", "r2"]).optional(),
   LOCAL_UPLOADS_DIR: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).optional(),
@@ -165,6 +171,25 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
       errors.push(
         `CHECKPOINT_PROVIDER_MODE=dev_simulator requires ATA_ENVIRONMENT=dev (${detail})`,
       );
+    }
+  }
+
+  // PUBLICURL-1 — the public learner-facing origin.
+  //
+  // A malformed value is an error rather than a silent fallback: the alternative
+  // is emitting a link built from an internal origin, which looks fine in a
+  // response body and is useless to the learner who received it. Absence is
+  // legal and handled by the caller's fail-closed policy (an empty link), so a
+  // deployment that has no public origin is not forced to invent one.
+  //
+  // This check deliberately does NOT consult classifyEnvironment. PUBLIC_APP_URL
+  // must never influence environment classification, the simulator's production
+  // prohibition, or cookie policy — that entanglement is exactly what this phase
+  // exists to undo.
+  {
+    const publicUrl = resolvePublicAppUrl(env);
+    if (publicUrl.kind === "invalid") {
+      errors.push(describePublicAppUrlRejection(publicUrl.reason));
     }
   }
 

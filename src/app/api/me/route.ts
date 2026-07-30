@@ -6,6 +6,7 @@ import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { validateJsonBody } from "@/lib/validation";
 import { getTrainingLevelFromProgress } from "@/lib/trainingLevel";
 import { z } from "zod";
+import { buildReferralInviteLink } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -92,7 +93,12 @@ export async function GET() {
           receivedAt: userReward.receivedAt,
         })),
         referrals: {
-          link: `${process.env.APP_URL ?? "http://localhost:3000"}/register?ref=${user.referralCode}`,
+          // PUBLICURL-1: the learner-facing origin comes from PUBLIC_APP_URL, not
+          // from APP_URL (which must stay a loopback origin so the DEV simulator
+          // interlock keeps classifying this deployment as `dev`) and not from any
+          // request header (which an attacker controls). Empty when no public
+          // origin is configured — see buildReferralInviteLink.
+          link: buildReferralInviteLink(user.referralCode),
           invitedCount: user.invitedReferrals.length,
           earnedXp: user.invitedReferrals.reduce(
             (total, referral) => total + referral.xpEarned,
