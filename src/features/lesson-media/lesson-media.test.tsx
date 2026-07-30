@@ -141,4 +141,16 @@ describe("the production lesson never reaches showcase code", () => {
     );
     expect(lesson).not.toMatch(/showcase/i);
   });
+
+  it("the showcase route does not exist in api mode", () => {
+    // A signed-in learner could otherwise navigate to it and be offered a file
+    // chooser, which is exactly what the production boundary forbids. In api mode
+    // — the real product against the real Backend — the route 404s.
+    const page = fs.readFileSync(
+      path.join(REPO_ROOT, "src/app/showcase/video-player/page.tsx"),
+      "utf8",
+    );
+    expect(page).toMatch(/getAcademyConfig\(\)\.mode === "api"/);
+    expect(page).toMatch(/notFound\(\)/);
+  });
 });
