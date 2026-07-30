@@ -2,6 +2,10 @@ import { z } from "zod";
 import { classifyEnvironment } from "@/lib/environment";
 import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
 import { describePublicAppUrlRejection, resolvePublicAppUrl } from "@/lib/publicUrl";
+import {
+  describePocketAffiliateUrlRejection,
+  resolvePocketAffiliateUrl,
+} from "@/lib/exchange/pocketAffiliateUrl";
 
 export const DEV_SESSION_SECRET = "local-dev-session-secret";
 export const DEV_POSTBACK_SECRET = "dev-postback-secret";
@@ -119,8 +123,11 @@ const envSchema = z.object({
   REPORT_ATTACHMENT_CLAMAV_HOST: z.string().optional(),
   REPORT_ATTACHMENT_CLAMAV_PORT: z.string().regex(/^\d+$/).optional(),
   REPORT_ATTACHMENT_TEST_BACKEND: z.literal("unsafe-in-memory-regression-only").optional(),
-  POCKET_AFFILIATE_BASE_URL: z.string().url().optional(),
-  POCKET_REFERRAL_URL: z.string().url().optional(),
+  // Validated by `resolvePocketAffiliateUrl` rather than by `z.string().url()`,
+  // which would accept http, embedded credentials, a fragment, a loopback host
+  // or an internal service port. See the affiliate check in validateRuntimeEnv.
+  POCKET_AFFILIATE_BASE_URL: z.string().optional(),
+  POCKET_REFERRAL_URL: z.string().optional(),
 });
 
 export type RuntimeEnvCheck = {
@@ -190,6 +197,18 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     const publicUrl = resolvePublicAppUrl(env);
     if (publicUrl.kind === "invalid") {
       errors.push(describePublicAppUrlRejection(publicUrl.reason));
+    }
+  }
+
+  // The external Pocket affiliate base URL (POCKETCTA-1). Same fail-closed
+  // reasoning as PUBLIC_APP_URL, and for the same reason: this value is opened
+  // in a learner's browser, so `z.string().url()` is not a sufficient gate. It
+  // is checked here rather than at first use so a misconfigured deployment
+  // fails at startup instead of at the moment a learner clicks the action.
+  {
+    const affiliateUrl = resolvePocketAffiliateUrl(env);
+    if (affiliateUrl.kind === "invalid") {
+      errors.push(describePocketAffiliateUrlRejection(affiliateUrl.reason, affiliateUrl.key));
     }
   }
 

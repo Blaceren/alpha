@@ -1,4 +1,12 @@
 import type { Prisma } from "@prisma/client";
+import {
+  POCKET_AFFILIATE_BASE_URL_KEY,
+  POCKET_DYNAMIC_PARAM_NAMES,
+  POCKET_LANDING_PARAM,
+  POCKET_LANDING_VALUE,
+  describePocketAffiliateUrlRejection,
+  resolvePocketAffiliateUrl,
+} from "@/lib/exchange/pocketAffiliateUrl";
 
 export const pocketPostbackTypes = [
   "Registration",
@@ -104,12 +112,45 @@ export function getPocketClickId(payload: Record<string, unknown>) {
   return typeof clickId === "string" ? clickId : undefined;
 }
 
+/**
+ * The validated external affiliate base URL.
+ *
+ * Fails closed on an absent *or* unusable value (POCKETCTA-1). Previously any
+ * string `z.string().url()` accepted was handed straight to the learner, so
+ * `http://`, a loopback host or an internal service port would have produced a
+ * link that either stripped attribution or could not be opened at all. The
+ * caller adds the learner's clickid to this base; it never edits it.
+ */
 export function getPocketReferralUrl() {
-  const referralUrl = process.env.POCKET_AFFILIATE_BASE_URL ?? process.env.POCKET_REFERRAL_URL;
+  const resolved = resolvePocketAffiliateUrl();
 
-  if (!referralUrl) {
-    throw new Error("POCKET_AFFILIATE_BASE_URL is required");
+  if (resolved.kind === "absent") {
+    throw new Error(`${POCKET_AFFILIATE_BASE_URL_KEY} is required`);
+  }
+  if (resolved.kind === "invalid") {
+    throw new Error(describePocketAffiliateUrlRejection(resolved.reason, resolved.key));
   }
 
-  return referralUrl;
+  return resolved.url;
+}
+
+/**
+ * Build one learner's Pocket registration URL.
+ *
+ * Parses the configured base with the URL parser and adds ONLY the learner's
+ * click-tracking parameters plus the system-owned `landing` — never by string
+ * concatenation, which is what would let a `&` in configuration silently graft
+ * one parameter onto another. `set` (not `append`) means each name appears
+ * exactly once and the operator's own parameters, including `cid`, are left
+ * untouched: none of the names written here collides with one of theirs.
+ */
+export function buildPocketReferralUrl(clickId: string): URL {
+  const url = new URL(getPocketReferralUrl());
+
+  for (const name of POCKET_DYNAMIC_PARAM_NAMES) {
+    url.searchParams.set(name, clickId);
+  }
+  url.searchParams.set(POCKET_LANDING_PARAM, POCKET_LANDING_VALUE);
+
+  return url;
 }

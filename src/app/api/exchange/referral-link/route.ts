@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
-import { getPocketReferralUrl } from "@/lib/exchange/pocket";
+import { buildPocketReferralUrl } from "@/lib/exchange/pocket";
+import { describePocketReferralUrlShape } from "@/lib/exchange/pocketAffiliateUrl";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
@@ -13,10 +14,7 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const existing = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
     const clickId = existing?.clickId ?? `tq-${crypto.randomUUID()}`;
-    const referralUrl = new URL(getPocketReferralUrl());
-    referralUrl.searchParams.set("click_id", clickId);
-    referralUrl.searchParams.set("clickid", clickId);
-    referralUrl.searchParams.set("landing", "Landing_1");
+    const referralUrl = buildPocketReferralUrl(clickId);
 
     const account = await prisma.exchangeAccount.upsert({
       where: { userId: user.id },
@@ -44,7 +42,14 @@ export async function POST(request: Request) {
       action: "POCKET_REFERRAL_OPENED",
       entityType: "ExchangeAccount",
       entityId: account.id,
-      metadata: { clickIdCreated: !existing?.clickId },
+      // STRUCTURE ONLY. The generated URL carries the learner's clickid, so it
+      // is never written to an audit record; what is recorded is the shape that
+      // proves the contract held — the operator's parameters survived, the
+      // learner's tracking parameters were added, and the counts add up.
+      metadata: {
+        clickIdCreated: !existing?.clickId,
+        referralUrlShape: describePocketReferralUrlShape(referralUrl),
+      },
       request,
     });
 
