@@ -9,6 +9,20 @@
 .login-card {
   width: 100%;
   max-width: 400px;
+  /*
+   * AFD-3A3. `.login` is a grid and this is its item; a grid item's default
+   * `min-width: auto` is its CONTENT minimum, so a child that cannot shrink
+   * below its intrinsic width pushes the track — and therefore the page — wider
+   * than the viewport. Measured at 320px: the card reached 358px and the
+   * document scrolled sideways.
+   *
+   * The Turnstile widget is exactly such a child (a fixed-width third-party
+   * frame), and adding it to /login is what made this visible here. It was
+   * already true on /register, and to a smaller degree on /login before any
+   * widget existed. `min-width: 0` lets the card shrink to the viewport and
+   * hands the overflow to `.auth-captcha__frame`, which scrolls.
+   */
+  min-width: 0;
   padding: 32px 28px;
   border: 1px solid var(--divider);
   border-radius: 16px;
@@ -42,11 +56,14 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Flex items default to `min-width: auto` for the same reason as above. */
+  min-width: 0;
 }
 
 .login-field {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 6px;
 }
 
@@ -234,30 +251,30 @@
  * layout must never cut the challenge off — an unreachable checkbox is an
  * unregisterable user.
  */
-.register-captcha {
+.auth-captcha {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.register-captcha__frame {
+.auth-captcha__frame {
   max-width: 100%;
   overflow-x: auto;
 }
 
-.register-captcha__status {
+.auth-captcha__status {
   margin: 0;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-.register-captcha__status:empty {
+.auth-captcha__status:empty {
   display: none;
 }
 
 /* Same treatment as an inline error: marked by glyph and text, not colour. */
-.register-captcha--failed {
+.auth-captcha--failed {
   margin: 0;
   padding: 10px 12px;
   font-size: 0.9rem;
@@ -268,17 +285,17 @@
   overflow-wrap: anywhere;
 }
 
-.register-captcha--failed::before {
+.auth-captcha--failed::before {
   content: "⚠ ";
 }
 
-.register-status {
+.auth-status {
   margin: 0;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-.register-status:empty {
+.auth-status:empty {
   display: none;
 }
 

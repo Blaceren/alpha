@@ -13,7 +13,8 @@
  */
 import { getAcademyConfig, AcademyConfigError } from "@/config/academy-config";
 import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/errors";
-import { getProxyRoute, type ProxyOperation } from "@/server/proxy/allow-list";
+import { getProxyRoute, type ProxyOperation, type ProxyRoute } from "@/server/proxy/allow-list";
+import { BACKEND_AUTH_SURFACE_HEADER } from "@/server/proxy/auth-surface";
 import { deriveTrustedClientIp, FORWARDED_CLIENT_IP_HEADERS } from "@/server/proxy/client-ip";
 
 /** 64 KiB is far more than any auth payload needs. */
@@ -45,7 +46,7 @@ function errorResponse(error: NormalizedError, status: number): Response {
   });
 }
 
-function buildForwardHeaders(request: Request, forwardClientIp: boolean): Headers {
+function buildForwardHeaders(request: Request, route: ProxyRoute): Headers {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
     if (FORWARD_REQUEST_HEADERS.has(key.toLowerCase())) {
@@ -59,13 +60,21 @@ function buildForwardHeaders(request: Request, forwardClientIp: boolean): Header
   // consults. `set` (not `append`) guarantees a single-element chain that the
   // browser had no part in. `null` means "no trustworthy value": we forward
   // nothing rather than guessing.
-  if (forwardClientIp) {
+  if (route.forwardClientIp) {
     const clientIp = deriveTrustedClientIp(request);
     if (clientIp !== null) {
       for (const header of FORWARDED_CLIENT_IP_HEADERS) {
         headers.set(header, clientIp);
       }
     }
+  }
+
+  // AFD-3A3: name the authentication surface, from the allow-list constant and
+  // from nowhere else. `set` after the loop above, so even if the forwarded
+  // allow-list ever grew this name by mistake, the browser's value is overwritten
+  // rather than trusted. Operations that raise no challenge send nothing.
+  if (route.authSurface !== null) {
+    headers.set(BACKEND_AUTH_SURFACE_HEADER, route.authSurface);
   }
 
   return headers;
@@ -136,7 +145,7 @@ export async function proxyToBackend(
   try {
     backendResponse = await fetch(target, {
       method: route.method,
-      headers: buildForwardHeaders(request, route.forwardClientIp),
+      headers: buildForwardHeaders(request, route),
       body,
       redirect: "manual",
       signal: controller.signal,

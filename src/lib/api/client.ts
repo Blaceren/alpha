@@ -42,6 +42,13 @@ export type ApiResult<T> =
 export type LoginCredentials = {
   email: string;
   password: string;
+  /**
+   * The solved Turnstile token (AFD-3A3). Optional in the TYPE because the
+   * Backend `loginSchema` declares it optional — omitting it is a refusal there,
+   * not a bypass. It travels in the JSON body only: never a header, never a
+   * query parameter, and never anywhere it could be persisted.
+   */
+  captchaToken?: string;
 };
 
 type RequestOptions = {
@@ -146,7 +153,13 @@ export function login(credentials: LoginCredentials): Promise<ApiResult<BackendL
   return apiRequest<BackendLoginResponse>({
     method: "POST",
     path: `${PROXY_BASE}/auth/login`,
-    jsonBody: { email: credentials.email, password: credentials.password },
+    jsonBody: {
+      email: credentials.email,
+      password: credentials.password,
+      // Mirrors the register client: the field is present only when there is a
+      // real token, so a `undefined` never serialises into the body.
+      ...(credentials.captchaToken ? { captchaToken: credentials.captchaToken } : {}),
+    },
     isLogin: true,
     validate: isBackendLoginResponse,
   });

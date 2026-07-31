@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/captcha-contract";
 import { readReferralCode, type ReferralCodeResult } from "@/lib/auth/referral-code";
 import { TurnstileWidget } from "@/features/auth/turnstile-widget";
+import { TURNSTILE_REGISTER_ACTION } from "@/lib/auth/turnstile";
 import { DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
 import {
   mapRegistrationFailure,
@@ -362,6 +363,7 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
       {hasCaptchaWidget(captcha) && captcha.mode === "provider" ? (
         <TurnstileWidget
           siteKey={captcha.siteKey}
+          action={TURNSTILE_REGISTER_ACTION}
           onToken={setCaptchaToken}
           // Expiry, timeout and provider error all mean the same thing to this
           // form: the token in hand is dead. Clearing it re-disables submit, so
@@ -371,7 +373,7 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
           describedById={captchaStatusId}
         />
       ) : (
-        <div className="register-captcha register-captcha--failed" data-testid="captcha-unavailable" role="alert">
+        <div className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
           Регистрация временно недоступна: проверка безопасности не настроена. Обратитесь к поддержке.
         </div>
       )}
@@ -386,13 +388,13 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
         {submitting ? "Создаём аккаунт…" : "Создать аккаунт"}
       </button>
 
-      <p id={captchaStatusId} className="register-status" role="status" aria-live="polite">
+      <p id={captchaStatusId} className="auth-status" role="status" aria-live="polite">
         {captcha.mode === "provider" && !captchaToken && !submitting
           ? "Пройдите проверку безопасности, чтобы продолжить."
           : ""}
       </p>
 
-      <p id={statusId} className="register-status" role="status" aria-live="polite">
+      <p id={statusId} className="auth-status" role="status" aria-live="polite">
         {submitting ? "Создаём аккаунт, подождите." : ""}
       </p>
 

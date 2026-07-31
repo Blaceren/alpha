@@ -24,12 +24,18 @@ export const TURNSTILE_SCRIPT_URL =
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
 /**
- * The action stamped on the registration challenge. Must match the Backend's
- * `TURNSTILE_EXPECTED_ACTION` when the operator pins one.
+ * The action stamped on each Academy challenge.
  *
- * Cloudflare's limit is 32 characters of `[A-Za-z0-9_-]`; this is 16.
+ * AFD-3A3: these are no longer advisory. The Backend pins one expected action
+ * PER SURFACE in `src/lib/captcha/surface.ts` and refuses a token carrying any
+ * other, so a token minted by the registration widget cannot log anybody in and
+ * a token minted here cannot register anybody. The two sides must agree exactly;
+ * these strings are the Academy half of that agreement.
+ *
+ * Cloudflare's limit is 32 characters of `[A-Za-z0-9_-]`.
  */
 export const TURNSTILE_REGISTER_ACTION = "academy_register";
+export const TURNSTILE_LOGIN_ACTION = "academy_login";
 
 /**
  * A conservative site-key shape: a leading digit, `x`, then key material.

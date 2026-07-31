@@ -100,6 +100,9 @@ describe("register proxy — route matrix", () => {
       isLogin: false,
       hasBody: true,
       forwardClientIp: true,
+      // AFD-3A3 — the Backend refuses a token whose action does not match this
+      // surface, so the registration route must declare its own.
+      authSurface: "academy_register",
     });
     // Adjacent Backend auth routes are not reachable: no operation names them.
     const paths = PROXY_OPERATIONS.map((op) => PROXY_ALLOW_LIST[op].backendPath);

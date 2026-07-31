@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import {
-  TURNSTILE_REGISTER_ACTION,
-  TURNSTILE_SCRIPT_URL,
-  type TurnstileApi,
-} from "@/lib/auth/turnstile";
+import { TURNSTILE_SCRIPT_URL, type TurnstileApi } from "@/lib/auth/turnstile";
 
 /**
  * AFD-3A2 — the Cloudflare Turnstile widget.
@@ -39,6 +35,13 @@ type LoadState = "loading" | "ready" | "failed";
 
 export type TurnstileWidgetProps = {
   siteKey: string;
+  /**
+   * The action stamped on this challenge (AFD-3A3). Supplied by the form rather
+   * than fixed here, because the widget is shared by registration and login and
+   * the Backend refuses a token whose action does not match the surface it
+   * arrived at. See `src/lib/auth/turnstile.ts` for the two values.
+   */
+  action: string;
   /** Called with a fresh token whenever the challenge is solved. */
   onToken: (token: string) => void;
   /**
@@ -89,6 +92,7 @@ function ensureScript(onReady: () => void, onFailure: () => void): () => void {
 
 export function TurnstileWidget({
   siteKey,
+  action,
   onToken,
   onTokenLost,
   resetSignal,
@@ -128,7 +132,7 @@ export function TurnstileWidget({
     try {
       id = turnstile.render(container, {
         sitekey: siteKey,
-        action: TURNSTILE_REGISTER_ACTION,
+        action,
         callback: (token: string) => handlers.current.onToken(token),
         "error-callback": () => handlers.current.onTokenLost("error"),
         "expired-callback": () => handlers.current.onTokenLost("expired"),
@@ -162,12 +166,12 @@ export function TurnstileWidget({
     // `resetSignal` is in the dependency list on purpose: a bump remounts the
     // widget, which is the most reliable way to obtain a genuinely fresh
     // challenge across every Turnstile version.
-  }, [loadState, siteKey, resetSignal, markFailed]);
+  }, [loadState, siteKey, action, resetSignal, markFailed]);
 
   if (loadState === "failed") {
     return (
       <div
-        className="register-captcha register-captcha--failed"
+        className="auth-captcha auth-captcha--failed"
         data-testid="turnstile-unavailable"
         role="alert"
       >
@@ -177,14 +181,14 @@ export function TurnstileWidget({
   }
 
   return (
-    <div className="register-captcha" data-testid="turnstile-widget">
+    <div className="auth-captcha" data-testid="turnstile-widget">
       <div
         ref={containerRef}
-        className="register-captcha__frame"
+        className="auth-captcha__frame"
         data-testid="turnstile-container"
         aria-describedby={describedById ?? statusId}
       />
-      <p id={statusId} className="register-captcha__status" role="status" aria-live="polite">
+      <p id={statusId} className="auth-captcha__status" role="status" aria-live="polite">
         {loadState === "loading" ? "Загружается проверка безопасности…" : ""}
       </p>
     </div>

@@ -1,5 +1,6 @@
 /**
- * CAPTCHA contract for the public registration surface.
+ * CAPTCHA contract for the Academy's anonymous surfaces — registration
+ * (AFD-3A2) and login (AFD-3A3).
  *
  * ## What changed in AFD-3A2
  *
@@ -32,7 +33,14 @@
  */
 import { isValidTurnstileSiteKey } from "@/lib/auth/turnstile";
 
-/** The exact optional field name in the Backend registration DTO. */
+/**
+ * The exact optional field name in the Backend DTO.
+ *
+ * One name for both surfaces, because the Backend's `loginSchema` and the
+ * `registerSchema` that extends it share it. Never a header, never a query
+ * parameter: a token in a URL ends up in browser history, in a Referer and in
+ * every access log between here and the Backend.
+ */
 export const CAPTCHA_TOKEN_FIELD = "captchaToken" as const;
 
 export type CaptchaContract =
@@ -68,11 +76,23 @@ export function hasCaptchaWidget(contract: CaptchaContract): boolean {
 }
 
 /**
- * Whether registration may be submitted at all.
+ * Whether a challenged form may be submitted at all.
  *
  * False when no provider is configured. The submit button is disabled rather
  * than allowed to post a request that cannot succeed.
+ *
+ * This is a USABILITY gate and never a security one — the Backend verifies the
+ * token against Cloudflare on every request regardless of what any button here
+ * does, and a caller who defeats the disabled attribute gains nothing but a
+ * rejected request.
  */
-export function canSubmitRegistration(contract: CaptchaContract, token: string | null): boolean {
+export function canSubmitChallenge(contract: CaptchaContract, token: string | null): boolean {
   return contract.mode === "provider" && token !== null && token !== "";
 }
+
+/**
+ * Registration's name for the same rule, kept so AFD-3A2's call sites and tests
+ * read unchanged. AFD-3A3 added the Academy login surface, which uses the
+ * general name.
+ */
+export const canSubmitRegistration = canSubmitChallenge;

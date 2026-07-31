@@ -15,7 +15,17 @@ import {
   TURNSTILE_ORIGIN,
   TURNSTILE_REGISTER_ACTION,
   TURNSTILE_SCRIPT_URL,
+  TURNSTILE_LOGIN_ACTION,
 } from "@/lib/auth/turnstile";
+
+/**
+ * AFD-3A3 made the action a prop, because the widget is now shared by
+ * registration and login and the Backend refuses a token whose action does not
+ * match the surface it arrived at. These cases are about the widget LIFECYCLE,
+ * which is identical either way, so they pin one action and a dedicated case
+ * below proves the prop is honoured rather than ignored.
+ */
+const WIDGET_ACTION = TURNSTILE_REGISTER_ACTION;
 import {
   installTurnstileDouble,
   resetTurnstileDouble,
@@ -44,6 +54,7 @@ describe("TurnstileWidget — script loading", () => {
     render(
       <TurnstileWidget
         siteKey={TEST_SITE_KEY}
+        action={WIDGET_ACTION}
         onToken={vi.fn()}
         onTokenLost={vi.fn()}
         resetSignal={0}
@@ -58,10 +69,10 @@ describe("TurnstileWidget — script loading", () => {
     turnstile.uninstall();
 
     const first = render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     await waitFor(() => expect(scriptTags()).toHaveLength(1));
@@ -79,7 +90,7 @@ describe("TurnstileWidget — script loading", () => {
   it("shows an unavailable state, not a silent pass, when the script fails", async () => {
     turnstile.uninstall();
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     const tag = await waitFor(() => {
@@ -97,7 +108,7 @@ describe("TurnstileWidget — script loading", () => {
     installTurnstileDouble({ throwOnRender: true });
 
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     expect(await screen.findByTestId("turnstile-unavailable")).toBeInTheDocument();
@@ -107,7 +118,7 @@ describe("TurnstileWidget — script loading", () => {
 describe("TurnstileWidget — render options", () => {
   it("passes the runtime site key and the documented action", async () => {
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
@@ -118,7 +129,7 @@ describe("TurnstileWidget — render options", () => {
 
   it("wires every token-destroying callback, not only success", async () => {
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
@@ -136,7 +147,7 @@ describe("TurnstileWidget — token lifecycle", () => {
   it("hands a solved token to the caller", async () => {
     const onToken = vi.fn();
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={onToken} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={onToken} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
@@ -154,6 +165,7 @@ describe("TurnstileWidget — token lifecycle", () => {
     render(
       <TurnstileWidget
         siteKey={TEST_SITE_KEY}
+        action={WIDGET_ACTION}
         onToken={vi.fn()}
         onTokenLost={onTokenLost}
         resetSignal={0}
@@ -168,7 +180,7 @@ describe("TurnstileWidget — token lifecycle", () => {
 
   it("does not re-render the widget when only the callbacks change identity", async () => {
     const view = render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
 
@@ -176,7 +188,7 @@ describe("TurnstileWidget — token lifecycle", () => {
     // depended on them, every keystroke in the email field would tear down the
     // challenge and issue a new one.
     view.rerender(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     expect(turnstile.renders).toHaveLength(1);
@@ -184,12 +196,12 @@ describe("TurnstileWidget — token lifecycle", () => {
 
   it("issues a fresh challenge when the reset signal is bumped", async () => {
     const view = render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
 
     view.rerender(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={1} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={1} />,
     );
 
     await waitFor(() => expect(turnstile.renders).toHaveLength(2));
@@ -200,7 +212,7 @@ describe("TurnstileWidget — token lifecycle", () => {
 
   it("removes its widget instance on unmount", async () => {
     const view = render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
 
@@ -218,7 +230,7 @@ describe("TurnstileWidget — token never escapes memory", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
     await waitFor(() => expect(turnstile.renders).toHaveLength(1));
     await turnstile.solve();
@@ -239,7 +251,7 @@ describe("TurnstileWidget — accessibility", () => {
   it("announces loading through a live region", () => {
     turnstile.uninstall();
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     const status = screen.getByRole("status");
@@ -251,7 +263,7 @@ describe("TurnstileWidget — accessibility", () => {
     resetTurnstileDouble();
     installTurnstileDouble({ throwOnRender: true });
     render(
-      <TurnstileWidget siteKey={TEST_SITE_KEY} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
     );
 
     // `role="alert"` so a screen-reader user is told the challenge is broken
@@ -260,5 +272,39 @@ describe("TurnstileWidget — accessibility", () => {
       "data-testid",
       "turnstile-unavailable",
     );
+  });
+});
+
+describe("TurnstileWidget — the action is caller-owned (AFD-3A3)", () => {
+  it("stamps exactly the action it was given, and re-renders when it changes", async () => {
+    const view = render(
+      <TurnstileWidget
+        siteKey={TEST_SITE_KEY}
+        action={TURNSTILE_REGISTER_ACTION}
+        onToken={vi.fn()}
+        onTokenLost={vi.fn()}
+        resetSignal={0}
+      />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    expect(turnstile.latest().action).toBe("academy_register");
+
+    // A form that changes surface must not keep challenging under the old
+    // action — the Backend would reject every token it produced.
+    view.rerender(
+      <TurnstileWidget
+        siteKey={TEST_SITE_KEY}
+        action={TURNSTILE_LOGIN_ACTION}
+        onToken={vi.fn()}
+        onTokenLost={vi.fn()}
+        resetSignal={0}
+      />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(2));
+    expect(turnstile.latest().action).toBe("academy_login");
+  });
+
+  it("keeps the two actions distinct", () => {
+    expect(TURNSTILE_REGISTER_ACTION).not.toBe(TURNSTILE_LOGIN_ACTION);
   });
 });
