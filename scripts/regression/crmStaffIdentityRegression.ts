@@ -52,12 +52,12 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "manage_settings", "edit_user_notes",
-    "view_user_notes", "create_user_notes",
+    "view_user_notes", "create_user_notes", "view_affiliate_analytics",
   ],
   crm_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "edit_user_notes",
-    "view_user_notes", "create_user_notes",
+    "view_user_notes", "create_user_notes", "view_affiliate_analytics",
   ],
   retention_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
@@ -67,7 +67,8 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
   mentor: [],
   support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
   moderator: [],
-  analyst: [],
+  // AFD-5A: analyst's first and only permission. Read-only by construction.
+  analyst: ["view_affiliate_analytics"],
   content_manager: [],
   read_only: [],
 };
@@ -103,19 +104,26 @@ async function main() {
     assert.equal(new Set(CRM_STAFF_ROLES).size, 9);
   });
 
-  await check("4. CrmPermission has exactly ten unique canonical values", () => {
-    // Notes v1 appended view_user_notes and create_user_notes. The accepted
-    // first eight keep their exact previous relative order.
-    assert.equal(CRM_PERMISSIONS.length, 10);
-    assert.equal(new Set(CRM_PERMISSIONS).size, 10);
+  await check("4. CrmPermission has exactly eleven unique canonical values", () => {
+    // Notes v1 appended view_user_notes and create_user_notes. AFD-5A appended
+    // view_affiliate_analytics. The accepted first eight keep their exact
+    // previous relative order, and so do the two Notes v1 entries — every
+    // addition APPENDS, so no existing position ever changes meaning.
+    assert.equal(CRM_PERMISSIONS.length, 11);
+    assert.equal(new Set(CRM_PERMISSIONS).size, 11);
     assert.deepEqual([...CRM_PERMISSIONS], [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
-      "view_user_notes", "create_user_notes",
+      "view_user_notes", "create_user_notes", "view_affiliate_analytics",
     ]);
     assert.deepEqual(CRM_PERMISSIONS.slice(0, 8), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
+    ]);
+    assert.deepEqual(CRM_PERMISSIONS.slice(0, 10), [
+      "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
+      "export", "view_audit", "manage_settings", "edit_user_notes",
+      "view_user_notes", "create_user_notes",
     ]);
   });
 
@@ -136,7 +144,11 @@ async function main() {
     assert.deepEqual(resolveEffectivePermissions("crm_manager"), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "edit_user_notes", "view_user_notes", "create_user_notes",
+      "view_affiliate_analytics",
     ]);
+    // analyst holds exactly the AFD-5A read permission and nothing else — in
+    // particular NOT manage_settings, which is what makes it read-only.
+    assert.deepEqual(resolveEffectivePermissions("analyst"), ["view_affiliate_analytics"]);
   });
 
   await check("8. no role grants a duplicate permission", () => {
@@ -146,14 +158,17 @@ async function main() {
     }
   });
 
-  await check("9. crm_admin receives all ten permissions", () => {
-    assert.equal(resolveEffectivePermissions("crm_admin").length, 10);
+  await check("9. crm_admin receives all eleven permissions", () => {
+    assert.equal(resolveEffectivePermissions("crm_admin").length, 11);
   });
 
   await check("10. crm_manager does not receive manage_settings", () => {
     const perms = resolveEffectivePermissions("crm_manager");
     assert.ok(!perms.includes("manage_settings"));
-    assert.equal(perms.length, 9);
+    // AFD-5A added view_affiliate_analytics: crm_manager is the only non-admin
+    // role holding view_audit, this matrix's marker for broad supervisory read.
+    assert.ok(perms.includes("view_affiliate_analytics"));
+    assert.equal(perms.length, 10);
   });
 
   await check("11. retention_manager receives neither view_audit nor manage_settings", () => {
@@ -170,10 +185,23 @@ async function main() {
     ]);
   });
 
-  await check("13. mentor, moderator, analyst, content_manager, read_only receive no permissions", () => {
-    for (const role of ["mentor", "moderator", "analyst", "content_manager", "read_only"]) {
+  await check("13. mentor, moderator, content_manager, read_only receive no permissions", () => {
+    // AFD-5A removed `analyst` from this list — it is now the designated
+    // analytics role and holds exactly one permission (asserted separately in
+    // 13b). Every other previously-empty role must STAY empty: the new read
+    // permission was a deliberate single grant, not a general loosening.
+    for (const role of ["mentor", "moderator", "content_manager", "read_only"]) {
       assert.deepEqual(resolveEffectivePermissions(role), [], `role ${role}`);
     }
+  });
+
+  await check("13b. analyst receives exactly the affiliate read permission and no mutation right", () => {
+    const perms = resolveEffectivePermissions("analyst");
+    assert.deepEqual(perms, ["view_affiliate_analytics"]);
+    assert.ok(!perms.includes("manage_settings"), "analyst must never gain manage_settings");
+    assert.ok(!perms.includes("export"));
+    assert.ok(!perms.includes("reveal_pii"));
+    assert.ok(!perms.includes("view_identity_full_email"));
   });
 
   await check("14. unknown StaffRole fails closed with no permissions", () => {

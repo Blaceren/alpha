@@ -4,6 +4,7 @@ import { validateCsrfToken } from "@/lib/csrf";
 import { getSession } from "@/lib/session";
 import { CrmAuthError, resolveCrmSession } from "@/lib/crm/session";
 import { isAffiliateAttributionEnabled } from "@/lib/affiliate/attribution-config";
+import { publicAppOrigin } from "@/lib/publicUrl";
 import {
   AffiliateAttributionDisabledError,
   AffiliateConflictError,
@@ -12,6 +13,7 @@ import {
   AffiliateNotFoundError,
   AFFILIATE_MAX_BODY_BYTES,
   assertCanManageAffiliates,
+  assertCanReadAffiliates,
   describeLinkActivationRefusal,
   effectiveAttributionWindowDays,
   effectiveAvailability,
@@ -109,6 +111,24 @@ export async function requireAffiliateManager(): Promise<CrmAffiliateSession> {
 }
 
 /**
+ * AFD-5A — session + the READ gate, for GET routes only.
+ *
+ * The ordering matters and is the same as the manager gate's: `resolveCrmSession`
+ * answers 401 for an anonymous caller and 403 for an authenticated learner with
+ * no StaffProfile, and only then is the permission consulted. A caller who fails
+ * either step never reaches a database lookup, so no affiliate row is read on
+ * behalf of someone not entitled to it.
+ *
+ * Every mutation deliberately keeps calling `requireAffiliateManager`. Nothing
+ * in this function can be reached by a POST or PATCH.
+ */
+export async function requireAffiliateReader(): Promise<CrmAffiliateSession> {
+  const session = await resolveCrmSession();
+  assertCanReadAffiliates(session.effectivePermissions);
+  return session;
+}
+
+/**
  * The authenticated actor as a User id, for `createdByUserId` and audit rows.
  *
  * `session.employeeId` is the StaffProfile cuid, NOT a User id — the two axes
@@ -164,6 +184,27 @@ export async function readBoundedJson(request: Request): Promise<unknown> {
 
 /* --------------------------------------------------------------- DTO shape */
 
+/**
+ * AFD-5A — the creator, projected to an opaque employee id plus a display-safe
+ * label and nothing else.
+ *
+ * The row carries `createdByUserId`, a User id on the LEARNER axis. That id is
+ * deliberately never serialized: the CRM's identity axis is the StaffProfile
+ * cuid, the two are separate by design, and leaking a User id here would give
+ * the CRM a second identifier for the same person. `null` when the creator has
+ * no StaffProfile — the affiliate outlives the staff member who created it, and
+ * saying "unknown" is better than inventing an actor.
+ */
+type CreatorRelation = { staffProfile: { id: string; displayName: string } | null } | null;
+
+function toActorDto(createdBy: CreatorRelation) {
+  if (!createdBy || !createdBy.staffProfile) return null;
+  return {
+    employeeId: createdBy.staffProfile.id,
+    displayName: createdBy.staffProfile.displayName,
+  };
+}
+
 type PartnerRow = {
   id: number;
   code: string;
@@ -174,6 +215,9 @@ type PartnerRow = {
   createdAt: Date;
   updatedAt: Date;
   archivedAt: Date | null;
+  createdBy: CreatorRelation;
+  campaigns: { id: number }[];
+  trackingLinks: { status: string }[];
 };
 
 export function toPartnerDto(row: PartnerRow): AffiliatePartnerDto {
@@ -187,6 +231,14 @@ export function toPartnerDto(row: PartnerRow): AffiliatePartnerDto {
     status,
     availability: effectiveAvailability(status, []),
     defaultAttributionWindowDays: row.defaultAttributionWindowDays,
+    // Configuration inventory, counted from the rows themselves. Not traffic:
+    // see the schema comment on `affiliateInventoryCountsSchema`.
+    inventory: {
+      campaigns: row.campaigns.length,
+      trackingLinks: row.trackingLinks.length,
+      activeTrackingLinks: row.trackingLinks.filter((link) => link.status === "active").length,
+    },
+    createdBy: toActorDto(row.createdBy),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
@@ -204,6 +256,8 @@ type CampaignRow = {
   updatedAt: Date;
   archivedAt: Date | null;
   partner: { code: string; status: string };
+  createdBy: CreatorRelation;
+  trackingLinks: { status: string }[];
 };
 
 export function toCampaignDto(row: CampaignRow): AffiliateCampaignDto {
@@ -216,6 +270,11 @@ export function toCampaignDto(row: CampaignRow): AffiliateCampaignDto {
     displayName: row.displayName,
     notes: row.notes,
     status,
+    inventory: {
+      trackingLinks: row.trackingLinks.length,
+      activeTrackingLinks: row.trackingLinks.filter((link) => link.status === "active").length,
+    },
+    createdBy: toActorDto(row.createdBy),
     // A campaign inherits its partner's unavailability: an active campaign
     // under a paused affiliate is not usable, and saying so is the point.
     availability: effectiveAvailability(status, [
@@ -247,7 +306,39 @@ type LinkRow = {
   archivedAt: Date | null;
   partner: { code: string; status: string; defaultAttributionWindowDays: number };
   campaign: { code: string; status: string } | null;
+  createdBy: CreatorRelation;
 };
+
+/**
+ * AFD-5A — the canonical public tracking URL.
+ *
+ * The path is derived from the immutable, server-generated `publicCode`; the
+ * origin comes from `publicAppOrigin()`, the validated public-origin owner
+ * introduced by PUBLICURL-1, which reads configuration ONLY and accepts no
+ * request. That is what makes this function un-poisonable: there is no
+ * parameter here through which a `Host` or `X-Forwarded-Host` header could
+ * reach the result.
+ *
+ * Returns a null URL rather than a fallback origin when none is configured.
+ */
+export function buildTrackingLinkPublicUrl(
+  publicCode: string,
+  env: NodeJS.ProcessEnv = process.env,
+): {
+  publicPath: string;
+  publicUrl: string | null;
+  publicUrlUnavailableReason: "public_origin_unavailable" | null;
+} {
+  const publicPath = `/go/${publicCode}`;
+  const origin = publicAppOrigin(env);
+  if (origin === null) {
+    return { publicPath, publicUrl: null, publicUrlUnavailableReason: "public_origin_unavailable" };
+  }
+  // Bare: no query string, no example click id, no placeholder. The tracker
+  // TEMPLATE the CRM may additionally display is a separate, clearly-labelled
+  // rendering and is never what this canonical field carries.
+  return { publicPath, publicUrl: `${origin}${publicPath}`, publicUrlUnavailableReason: null };
+}
 
 export function toTrackingLinkDto(row: LinkRow): AffiliateTrackingLinkDto {
   const status = row.status as TrackingLinkStatus;
@@ -329,13 +420,29 @@ export function toTrackingLinkDto(row: LinkRow): AffiliateTrackingLinkDto {
     ),
     publicRouteState,
     activationState,
+    ...buildTrackingLinkPublicUrl(row.publicCode),
+    createdBy: toActorDto(row.createdBy),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
   };
 }
 
-/** Relation selects reused by both the list and detail routes. */
+/**
+ * Relation selects reused by both the list and detail routes.
+ *
+ * The creator is projected through `staffProfile` so only the CRM identity axis
+ * — an opaque cuid and a display name — is ever loaded. `createdByUserId`
+ * itself is never selected, which is what stops it reaching a DTO by accident.
+ *
+ * The inventory counts are selected as narrow child rows rather than Prisma's
+ * `_count`, because `activeTrackingLinks` needs the status of each link and one
+ * pass over `{status}` answers both link counts without a second aggregate.
+ */
+const CREATOR_SELECT = {
+  select: { staffProfile: { select: { id: true, displayName: true } } },
+} as const;
+
 export const PARTNER_SELECT = {
   id: true,
   code: true,
@@ -346,6 +453,9 @@ export const PARTNER_SELECT = {
   createdAt: true,
   updatedAt: true,
   archivedAt: true,
+  createdBy: CREATOR_SELECT,
+  campaigns: { select: { id: true } },
+  trackingLinks: { select: { status: true } },
 } as const;
 
 export const CAMPAIGN_SELECT = {
@@ -359,6 +469,8 @@ export const CAMPAIGN_SELECT = {
   updatedAt: true,
   archivedAt: true,
   partner: { select: { code: true, status: true } },
+  createdBy: CREATOR_SELECT,
+  trackingLinks: { select: { status: true } },
 } as const;
 
 export const LINK_SELECT = {
@@ -381,4 +493,5 @@ export const LINK_SELECT = {
   archivedAt: true,
   partner: { select: { code: true, status: true, defaultAttributionWindowDays: true } },
   campaign: { select: { code: true, status: true } },
+  createdBy: CREATOR_SELECT,
 } as const;

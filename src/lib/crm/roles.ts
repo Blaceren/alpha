@@ -17,14 +17,23 @@ export const CRM_STAFF_ROLES = [
 
 export type CrmStaffRole = (typeof CRM_STAFF_ROLES)[number];
 
-// Canonical CRM permissions — exactly ten. The array order is the stable,
+// Canonical CRM permissions — exactly eleven. The array order is the stable,
 // canonical order in which effectivePermissions are always returned. The first
-// eight keep their accepted relative order; Notes v1 appends the last two.
+// eight keep their accepted relative order; Notes v1 appended two more; AFD-5A
+// appends the last one.
 //
 // `edit_user_notes` predates Notes v1 and is deliberately NOT reused for it. It
 // stays reserved for the future mutating operations on an existing note (edit,
 // delete, pin/unpin, visibility). Notes v1 is append-only, so it needs a read
 // permission and a create permission that are independent of it.
+//
+// `view_affiliate_analytics` (AFD-5A) is a READ permission over the affiliate
+// inventory — partners, campaigns, tracking links and, from AFD-5B, their
+// traffic analytics. It is APPENDED rather than inserted so the existing
+// canonical order is untouched and no client that pinned the first ten
+// positions changes meaning. It grants nothing beyond reading: every affiliate
+// mutation continues to require `manage_settings`, which is deliberately NOT
+// broadened here.
 export const CRM_PERMISSIONS = [
   "view_exact_financials",
   "view_identity_full_email",
@@ -36,6 +45,7 @@ export const CRM_PERMISSIONS = [
   "edit_user_notes",
   "view_user_notes",
   "create_user_notes",
+  "view_affiliate_analytics",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -49,6 +59,28 @@ void _staffRoleParity;
 // Locked role -> permission matrix. Typed as a full Record so every StaffRole
 // must have an explicit entry (a missing role stops compiling). Do not widen
 // these sets by intuition — they are a fixed product contract.
+//
+// AFD-5A GRANT RULE FOR `view_affiliate_analytics`. Three roles receive it, and
+// each for a reason the matrix itself proves rather than intuition:
+//
+//   • `analyst`   — the designated analytics role. AFD-5A exists to give it
+//                   read access to the affiliate inventory, and this is its
+//                   FIRST permission: it previously held none, so the grant
+//                   also proves the read gate cannot be satisfied by
+//                   `manage_settings` alone.
+//   • `crm_admin` — already owns affiliate configuration through
+//                   `manage_settings`; withholding the read permission would
+//                   make the read gate depend on the mutation permission.
+//   • `crm_manager` — the only NON-admin role holding `view_audit`, which is
+//                   this matrix's own marker for broad supervisory read
+//                   (`retention_manager` holds `export` and
+//                   `view_exact_financials` but NOT `view_audit`, and so is
+//                   deliberately excluded). Granting on that existing
+//                   discriminator keeps the decision derivable from the matrix.
+//
+// Every other role is untouched. `mentor`, `support`, `moderator`,
+// `content_manager` and `read_only` receive nothing, and no role gains
+// `manage_settings`.
 export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials",
@@ -61,6 +93,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "edit_user_notes",
     "view_user_notes",
     "create_user_notes",
+    "view_affiliate_analytics",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -72,6 +105,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "edit_user_notes",
     "view_user_notes",
     "create_user_notes",
+    "view_affiliate_analytics",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -89,7 +123,10 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
   mentor: [],
   support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
   moderator: [],
-  analyst: [],
+  // AFD-5A gives analyst its first permission — read-only affiliate inventory.
+  // Deliberately NOT `manage_settings`: an analyst may inspect configuration and
+  // must not be able to change it.
+  analyst: ["view_affiliate_analytics"],
   content_manager: [],
   read_only: [],
 };
@@ -140,6 +177,24 @@ export function canAssignOwner(permissions: readonly CrmPermission[]): boolean {
 }
 
 // ---------------------------------------------------------- Owner History OH-1
+
+// --------------------------------------------------------- Affiliates AFD-5A
+
+// Read gate for the affiliate inventory. Either permission satisfies it, and
+// they mean different things: `view_affiliate_analytics` is "may look at
+// affiliate configuration", `manage_settings` is "owns affiliate
+// configuration". An owner who could not read what they administer would be an
+// obviously broken contract, so `manage_settings` implies the read rather than
+// requiring administrators to hold both.
+//
+// This is the ONLY place the read rule is expressed. Authorization is purely
+// permission-based: no StaffRole name, no email, no User.role and no
+// client-supplied permission list is consulted here or by any caller.
+export function canViewAffiliates(permissions: readonly CrmPermission[]): boolean {
+  return (
+    permissions.includes("view_affiliate_analytics") || permissions.includes("manage_settings")
+  );
+}
 
 // Read gate for CRM Learner Owner HISTORY. It requires exactly `view_audit`,
 // held only by crm_admin and crm_manager — there is deliberately NO fallback to

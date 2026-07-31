@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { randomBase32Id } from "@/lib/affiliate/random-id";
-import type { CrmPermission } from "@/lib/crm/roles";
+import { canViewAffiliates, type CrmPermission } from "@/lib/crm/roles";
 
 /**
  * AFD-2 — the administrative affiliate foundation.
@@ -69,17 +69,32 @@ export class AffiliateForbiddenError extends Error {
 /* ----------------------------------------------------------- authorization */
 
 /**
- * AFD-2 uses `manage_settings` for BOTH reads and writes.
+ * MUTATION gate. Unchanged from AFD-2 and deliberately NOT widened by AFD-5A:
+ * creating, editing, activating, pausing and archiving an affiliate, a campaign
+ * or a tracking link all still require exactly `manage_settings`.
  *
- * TEMPORARY AND DELIBERATE. No affiliate-analytics read permission exists yet,
- * and AFD-1 established that inventing one here would mean editing the locked
- * CRM permission matrix — an explicit contract change that belongs to AFD-5,
- * where `view_affiliate_analytics` is introduced and granted to `analyst`.
- * Until then the narrow, admin-only grant is the honest choice: it under-grants
- * rather than over-grants, and no learner-facing behaviour depends on it.
+ * `view_affiliate_analytics` must never satisfy this check. That separation is
+ * the whole point of the read-only analyst: hiding a button in the CRM is a
+ * convenience, and this function is the actual enforcement.
  */
 export function assertCanManageAffiliates(permissions: readonly CrmPermission[]): void {
   if (!permissions.includes("manage_settings")) {
+    throw new AffiliateForbiddenError("crm.affiliates.forbidden");
+  }
+}
+
+/**
+ * READ gate, introduced by AFD-5A. AFD-2 shipped with `manage_settings` on both
+ * reads and writes because no affiliate read permission existed; the comment it
+ * left behind named this phase as the one that would add it.
+ *
+ * Satisfied by `view_affiliate_analytics` OR `manage_settings` — see
+ * `canViewAffiliates`, which owns the rule. Splitting reads from writes here is
+ * what lets an analyst open the section while every mutation route keeps
+ * calling `assertCanManageAffiliates` and answering 403.
+ */
+export function assertCanReadAffiliates(permissions: readonly CrmPermission[]): void {
+  if (!canViewAffiliates(permissions)) {
     throw new AffiliateForbiddenError("crm.affiliates.forbidden");
   }
 }

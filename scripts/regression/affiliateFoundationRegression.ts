@@ -11,6 +11,7 @@ import {
   AFFILIATE_PROTECTED_PARAMETERS,
   generatePublicCode,
 } from "../../src/lib/crm/affiliates";
+import { buildTrackingLinkPublicUrl } from "../../src/lib/crm/affiliate-routes";
 import {
   affiliateCampaignSchema,
   affiliatePartnerSchema,
@@ -170,9 +171,31 @@ const CAMPAIGNS = "/api/crm/v1/affiliates/campaigns";
 const LINKS = "/api/crm/v1/affiliates/tracking-links";
 
 // Derived from the canonical matrix, not hardcoded, so a matrix drift is caught
-// here too. In AFD-2 this is exactly {crm_admin}.
+// here too. In AFD-2 MANAGERS was exactly {crm_admin} and it must stay so.
 const MANAGERS = CRM_STAFF_ROLES.filter((r) => STAFF_ROLE_PERMISSIONS[r].includes("manage_settings"));
-const NON_MANAGERS = CRM_STAFF_ROLES.filter((r) => !STAFF_ROLE_PERMISSIONS[r].includes("manage_settings"));
+
+// AFD-5A — three derived cohorts instead of AFD-2's two. READERS is the exact
+// set the read gate admits; READ_ONLY_ROLES is the analyst contract (may look,
+// may not touch); NON_READERS must see nothing at all.
+const READERS = CRM_STAFF_ROLES.filter(
+  (r) =>
+    STAFF_ROLE_PERMISSIONS[r].includes("view_affiliate_analytics") ||
+    STAFF_ROLE_PERMISSIONS[r].includes("manage_settings"),
+);
+const READ_ONLY_ROLES = READERS.filter((r) => !STAFF_ROLE_PERMISSIONS[r].includes("manage_settings"));
+const NON_READERS = CRM_STAFF_ROLES.filter((r) => !READERS.includes(r));
+
+/**
+ * A ProcessEnv for the public-URL builder with PUBLIC_APP_URL under this test's
+ * control. It starts from the real environment and then DELETES the key, so an
+ * ambient value cannot make an "absent origin" case pass for the wrong reason.
+ */
+function publicUrlEnv(publicAppUrl: string | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.PUBLIC_APP_URL;
+  if (publicAppUrl !== undefined) env.PUBLIC_APP_URL = publicAppUrl;
+  return env;
+}
 
 function assertEnvelope(reply: Reply, status: number, code?: string) {
   assert.equal(reply.status, status, `expected ${status}, got ${reply.status}: ${reply.text}`);
@@ -238,19 +261,105 @@ async function main() {
       }
     });
 
-    await check("A3 every role WITHOUT manage_settings is 403 (analyst included)", async () => {
-      assert.ok(NON_MANAGERS.includes("analyst"), "analyst must lack manage_settings in AFD-2");
-      for (const role of NON_MANAGERS) {
+    await check("A3 every role WITHOUT either affiliate permission is 403 on read AND write", async () => {
+      // AFD-5A split reads from writes. A role holding neither
+      // view_affiliate_analytics nor manage_settings still sees the AFD-2
+      // behaviour: nothing at all.
+      assert.ok(NON_READERS.length > 0, "expected at least one role with no affiliate access");
+      assert.ok(!NON_READERS.includes("analyst"), "analyst must be a reader from AFD-5A on");
+      for (const role of NON_READERS) {
         const client = await loginAs(staffByRole.get(role)!.email);
-        const read = await client.request("GET", PARTNERS);
-        assertEnvelope(read, 403, "forbidden");
+        assertEnvelope(await client.request("GET", PARTNERS), 403, "forbidden");
         const write = await client.request("POST", PARTNERS, { code: nextCode("x"), displayName: "X" });
         assertEnvelope(write, 403, "forbidden");
       }
     });
 
-    await check("A4 manage_settings is held only by crm_admin in AFD-2", () => {
+    await check("A3b read-only roles may GET and are still 403 on every mutation", async () => {
+      // The read-only analyst contract, asserted against the matrix rather than
+      // a hardcoded role list: whoever can read but not manage must be able to
+      // look and unable to touch. Frontend hiding is irrelevant here — these are
+      // direct API calls with a valid session and a valid CSRF token.
+      assert.ok(READ_ONLY_ROLES.includes("analyst"), "analyst must be read-only");
+      assert.ok(!READ_ONLY_ROLES.includes("crm_admin"), "crm_admin manages, so it is not read-only");
+
+      // A REAL target, created by the manager, so every refusal below is proven
+      // against an existing row. A non-existent id would let a 404 masquerade as
+      // the 403 this check is about.
+      const seeded = await admin.request("POST", PARTNERS, {
+        code: nextCode("readonly-target"),
+        displayName: "Read-only target",
+      });
+      assert.equal(seeded.status, 201, seeded.text);
+      const partnerId = affiliatePartnerSchema.parse(seeded.body).id;
+
+      for (const role of READ_ONLY_ROLES) {
+        const client = await loginAs(staffByRole.get(role)!.email);
+
+        for (const url of [PARTNERS, CAMPAIGNS, LINKS]) {
+          const read = await client.request("GET", url);
+          assert.equal(read.status, 200, `${role} GET ${url}: ${read.text}`);
+          assert.ok(Array.isArray(read.body.items), `${role} GET ${url} has no items array`);
+        }
+
+        assertEnvelope(
+          await client.request("POST", PARTNERS, { code: nextCode("x"), displayName: "X" }),
+          403,
+          "forbidden",
+        );
+        assertEnvelope(
+          await client.request("POST", CAMPAIGNS, {
+            affiliatePartnerId: partnerId,
+            code: nextCode("c"),
+            displayName: "X",
+          }),
+          403,
+          "forbidden",
+        );
+        assertEnvelope(
+          await client.request("POST", LINKS, { affiliatePartnerId: partnerId, displayName: "X" }),
+          403,
+          "forbidden",
+        );
+        assertEnvelope(
+          await client.request("PATCH", `${PARTNERS}/${partnerId}`, { displayName: "Renamed" }),
+          403,
+          "forbidden",
+        );
+        assertEnvelope(
+          await client.request("PATCH", `${PARTNERS}/${partnerId}`, { status: "paused" }),
+          403,
+          "forbidden",
+        );
+      }
+    });
+
+    await check("A4 manage_settings is still held only by crm_admin after AFD-5A", () => {
+      // AFD-5A must not have widened the MUTATION permission while adding a read
+      // one. If this ever grows, an affiliate write gate silently opened.
       assert.deepEqual([...MANAGERS], ["crm_admin"]);
+    });
+
+    await check("A4b view_affiliate_analytics is granted to exactly the intended roles", () => {
+      const holders = CRM_STAFF_ROLES.filter((r) =>
+        STAFF_ROLE_PERMISSIONS[r].includes("view_affiliate_analytics"),
+      );
+      assert.deepEqual([...holders], ["crm_admin", "crm_manager", "analyst"]);
+      // No unintended role may read the affiliate inventory.
+      for (const role of ["mentor", "support", "moderator", "content_manager", "read_only", "retention_manager"] as const) {
+        assert.ok(
+          !STAFF_ROLE_PERMISSIONS[role].includes("view_affiliate_analytics"),
+          `${role} must not hold view_affiliate_analytics`,
+        );
+      }
+      // And the new permission must never imply the mutation permission.
+      for (const role of holders) {
+        if (role === "crm_admin") continue;
+        assert.ok(
+          !STAFF_ROLE_PERMISSIONS[role].includes("manage_settings"),
+          `${role} gained manage_settings — read permission must not escalate`,
+        );
+      }
     });
 
     await check("A5 crm_admin may read and write", async () => {
@@ -261,14 +370,37 @@ async function main() {
 
     await check("A6 UserRole alone never authorizes", async () => {
       // Every staff account above is UserRole "admin". Only the StaffProfile
-      // axis decided the 403s in A3, which proves UserRole is not consulted.
-      const analyst = await loginAs(staffByRole.get("analyst")!.email);
-      const user = await prisma.user.findUnique({
-        where: { email: staffByRole.get("analyst")!.email },
+      // permission axis decided the 403s in A3, which proves UserRole is not
+      // consulted.
+      //
+      // AFD-5A CHANGED THE PROBE, NOT THE RULE. AFD-2 used `analyst` here
+      // because it held no permission at all, so its 403 isolated the UserRole
+      // axis. Analyst now legitimately holds `view_affiliate_analytics`, so the
+      // probe moved to a role that still holds neither affiliate permission —
+      // otherwise this check would silently stop testing anything.
+      const probeRole = NON_READERS[0];
+      assert.ok(probeRole !== undefined, "need a role with no affiliate permission to probe with");
+      const probeEmail = staffByRole.get(probeRole)!.email;
+      const probe = await loginAs(probeEmail);
+      const probeUser = await prisma.user.findUnique({
+        where: { email: probeEmail },
         select: { role: true },
       });
-      assert.equal(user?.role, "admin");
-      assertEnvelope(await analyst.request("GET", PARTNERS), 403, "forbidden");
+      // UserRole "admin" — the strongest value on the learner axis — and still 403.
+      assert.equal(probeUser?.role, "admin");
+      assertEnvelope(await probe.request("GET", PARTNERS), 403, "forbidden");
+
+      // The converse, so the check proves the axis rather than just a refusal:
+      // analyst has the SAME UserRole "admin" and IS admitted, which can only
+      // come from its StaffProfile permission.
+      const analystEmail = staffByRole.get("analyst")!.email;
+      const analystUser = await prisma.user.findUnique({
+        where: { email: analystEmail },
+        select: { role: true },
+      });
+      assert.equal(analystUser?.role, "admin");
+      const analyst = await loginAs(analystEmail);
+      assert.equal((await analyst.request("GET", PARTNERS)).status, 200);
     });
 
     /* =========================================================== B. CSRF === */
@@ -613,15 +745,80 @@ async function main() {
       }
     });
 
-    await check("E6 the DTO exposes no URL field at all", async () => {
+    await check("E6 the DTO exposes no arbitrary destination, and no URL without a public origin", async () => {
+      // AFD-2 asserted "no URL field at all" because no public route existed.
+      // AFD-3B2 built `/go/{publicCode}` and AFD-5A publishes it, so the rule
+      // that survives is the one that always mattered: the DTO carries no
+      // OPERATOR- OR CLIENT-SUPPLIED destination of any kind.
       const reply = await admin.request("GET", `${LINKS}/${linkId}`);
       assert.equal(reply.status, 200, reply.text);
       const keys = Object.keys(reply.body);
-      for (const forbidden of ["url", "href", "link", "destination", "redirectUrl", "publicUrl"]) {
+      for (const forbidden of [
+        "url", "href", "link", "destination", "redirectUrl", "targetUrl",
+        "pocketUrl", "callbackUrl", "postbackUrl",
+      ]) {
         assert.ok(!keys.includes(forbidden), `DTO exposes ${forbidden}`);
       }
+
+      // This regression runs with no PUBLIC_APP_URL configured, so the canonical
+      // URL must be null and say why — never a guessed origin, and never the
+      // loopback APP_URL this test server is actually listening on.
+      assert.equal(reply.body.publicUrl, null, "publicUrl must fail closed with no public origin");
+      assert.equal(reply.body.publicUrlUnavailableReason, "public_origin_unavailable");
+      assert.match(String(reply.body.publicPath), /^\/go\/[a-z2-7]{32}$/);
+      assert.equal(reply.body.publicPath, `/go/${reply.body.publicCode}`);
+
+      // With no origin resolved, no absolute URL may appear anywhere in the DTO.
       assert.ok(!reply.text.includes("http://"), "DTO leaked an http URL");
       assert.ok(!reply.text.includes("https://"), "DTO leaked an https URL");
+      // And the internal test origin must never appear even as a substring.
+      assert.ok(!reply.text.includes(String(port)), "DTO leaked the internal service port");
+    });
+
+    await check("E6b the canonical URL is built from the configured origin and never from a header", () => {
+      // Exercised directly against the builder, because the header-immunity
+      // claim is a claim about its SIGNATURE: it takes an env and a code, and
+      // there is no request parameter through which a Host or X-Forwarded-Host
+      // could reach the result. A synthetic HTTPS origin is used — never the
+      // live public address.
+      const code = "abcdefghijklmnopqrstuvwxyz234567";
+      const origin = "https://affiliate-test.example";
+
+      const configured = buildTrackingLinkPublicUrl(code, publicUrlEnv(origin));
+      assert.equal(configured.publicPath, `/go/${code}`);
+      assert.equal(configured.publicUrl, `${origin}/go/${code}`);
+      assert.equal(configured.publicUrlUnavailableReason, null);
+      // Bare: no query, no example click id, no placeholder macro.
+      assert.ok(!configured.publicUrl!.includes("?"), "canonical URL must carry no query string");
+
+      // Absent, loopback, http and internal-port origins all fail closed rather
+      // than producing a link an operator could paste to an affiliate.
+      for (const rejected of [
+        undefined,
+        "http://example.com",
+        "https://127.0.0.1",
+        "https://localhost",
+        "https://example.com:3100",
+        "https://example.com/base",
+        "not-a-url",
+      ]) {
+        const result = buildTrackingLinkPublicUrl(code, publicUrlEnv(rejected));
+        assert.equal(result.publicUrl, null, `origin ${String(rejected)} must not produce a URL`);
+        assert.equal(result.publicUrlUnavailableReason, "public_origin_unavailable");
+        // The path is still shown, so the CRM can explain the link without it.
+        assert.equal(result.publicPath, `/go/${code}`);
+      }
+
+      // Host-shaped env keys are not consulted at all.
+      const hostile = publicUrlEnv(undefined);
+      hostile.HOST = "evil.example";
+      hostile.X_FORWARDED_HOST = "evil.example";
+      hostile.APP_URL = "https://evil.example";
+      assert.equal(
+        buildTrackingLinkPublicUrl(code, hostile).publicUrl,
+        null,
+        "only PUBLIC_APP_URL may produce a canonical URL",
+      );
     });
 
     await check("E7 protected parameter names are rejected", async () => {

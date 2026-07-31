@@ -229,6 +229,38 @@ const affiliateLinkStatusSchema = z.enum(["draft", "active", "paused", "archived
 // choice or the reason a child is unusable.
 const affiliateAvailabilitySchema = z.enum(["available", "paused", "archived"]);
 
+// AFD-5A — the staff member who created a row, as an opaque id plus a
+// display-safe label. Identical in shape to `crmOwnerHistoryActorSchema` on
+// purpose: the CRM already renders that shape, and no affiliate row needs a
+// second, differently-shaped notion of "who did this". Never an email, never a
+// StaffRole, never the underlying User id. Nullable because the creator's
+// StaffProfile may have been removed while the affiliate it created survives.
+const affiliateActorSchema = z
+  .object({
+    employeeId: z.string().min(1),
+    displayName: z.string().min(1),
+  })
+  .strict();
+
+// AFD-5A — INVENTORY counts. These count CONFIGURATION ROWS an operator typed
+// in, not traffic: how many campaigns exist under a partner, how many tracking
+// links, and how many of those links an operator has set `active`. They are
+// safe to render as zero, because zero campaigns is a true and useful fact
+// about configuration.
+//
+// This is the boundary that keeps AFD-5A honest: there is deliberately NO click
+// count, visitor count, registration count, conversion count, first-deposit
+// count or amount anywhere in these DTOs. A zero in one of THOSE would read as
+// "tracking is running and found nothing", which is a different and false
+// claim. Affiliate traffic analytics is AFD-5B.
+const affiliateInventoryCountsSchema = z
+  .object({
+    campaigns: z.number().int().nonnegative(),
+    trackingLinks: z.number().int().nonnegative(),
+    activeTrackingLinks: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const affiliatePartnerSchema = z
   .object({
     id: z.string().min(1),
@@ -238,6 +270,8 @@ export const affiliatePartnerSchema = z
     status: affiliateEntityStatusSchema,
     availability: affiliateAvailabilitySchema,
     defaultAttributionWindowDays: z.number().int().positive(),
+    inventory: affiliateInventoryCountsSchema,
+    createdBy: affiliateActorSchema.nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     archivedAt: z.string().datetime().nullable(),
@@ -263,6 +297,9 @@ export const affiliateCampaignSchema = z
     notes: z.string().nullable(),
     status: affiliateEntityStatusSchema,
     availability: affiliateAvailabilitySchema,
+    // Campaigns own no campaigns of their own, so only the link counts apply.
+    inventory: affiliateInventoryCountsSchema.omit({ campaigns: true }),
+    createdBy: affiliateActorSchema.nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     archivedAt: z.string().datetime().nullable(),
@@ -289,9 +326,10 @@ export const affiliateTrackingLinkSchema = z
     displayName: z.string().min(1),
     status: affiliateLinkStatusSchema,
     availability: affiliateAvailabilitySchema,
-    // A logical key, never a URL. The DTO carries no `url` field at all, so a
-    // CRM cannot render — and an operator cannot copy — a link that would
-    // resolve to anything before AFD-3B builds the public route.
+    // A logical key, never a URL. AFD-2 shipped no URL at all because the public
+    // route did not exist; AFD-3B2 built `/go/{publicCode}` and AFD-5A now
+    // publishes it, because a CRM that cannot show an operator the link they
+    // just configured is not a management surface.
     landingKey: z.literal("academy_registration"),
     externalClickParameter: z.string().min(1),
     subParameters: z
@@ -321,6 +359,33 @@ export const affiliateTrackingLinkSchema = z
       "parent_archived",
     ]),
     activationState: z.enum(["available", "feature_disabled", "blocked", "terminal"]),
+
+    /* ------------------------------------ AFD-5A generated-link contract */
+
+    // The path half of the tracking link: always exactly `/go/{publicCode}`,
+    // built from the immutable server-generated code. Origin-free, so it is
+    // always safe to render even when no public origin is configured.
+    publicPath: z.string().regex(/^\/go\/[a-z2-7]{32}$/),
+
+    // The complete, canonical, copyable URL — or `null` when this deployment
+    // has no usable public origin.
+    //
+    // THE ORIGIN COMES FROM `publicAppOrigin()` AND NOTHING ELSE. Not `Host`,
+    // not `X-Forwarded-Host`, not `Referer`, not the CRM's `location.host` and
+    // not a stored URL column. Those are all attacker- or environment-
+    // controlled, and a tracking URL built from one is a redirect gadget: an
+    // attacker sends one request with their own host, and the URL an operator
+    // later copies and hands to an affiliate points at the attacker.
+    //
+    // `null` rather than a guessed origin is the fail-closed answer, and it is
+    // why `publicPath` is exposed separately: the CRM can still show WHAT the
+    // link is while refusing to offer a URL it cannot vouch for.
+    publicUrl: z.string().url().nullable(),
+
+    // Why `publicUrl` is null, so the CRM explains rather than shrugs.
+    publicUrlUnavailableReason: z.enum(["public_origin_unavailable"]).nullable(),
+
+    createdBy: affiliateActorSchema.nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     archivedAt: z.string().datetime().nullable(),

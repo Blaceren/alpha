@@ -18,6 +18,7 @@ import {
   readBoundedJson,
   requireAffiliateCsrf,
   requireAffiliateManager,
+  requireAffiliateReader,
   resolveAffiliateActorUserId,
   toPartnerDto,
 } from "@/lib/crm/affiliate-routes";
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
   const headers = affiliateHeaders(requestId);
 
   try {
-    await requireAffiliateManager();
+    await requireAffiliateReader();
 
     const query = parseAffiliateListQuery(new URL(request.url).searchParams, LIST_KEYS);
 
