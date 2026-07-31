@@ -10,10 +10,22 @@ import {
   fingerprintEventId,
   goalAcceptsQuerySecret,
   hasQueryAuthMaterial,
+  isQueryAuthenticatedDepositAttempt,
+  parsePocketDepositFields,
   parsePocketRegistrationFields,
   readPostbackGoalForAuthMode,
   resolvePocketPostbackConfig,
+  POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL,
 } from "@/lib/exchange/pocketPostbackAuth";
+import { parsePocketDepositAmount } from "@/lib/exchange/pocketDepositAmount";
+import {
+  isPocketFirstDepositEnabled,
+  resolvePocketFirstDepositConfig,
+} from "@/lib/exchange/pocketFirstDepositConfig";
+import {
+  ingestPocketFirstDeposit,
+  reconcileFirstDepositAfterRegistration,
+} from "@/lib/exchange/pocketFirstDeposit";
 import { reconcilePocketRegistrationLevelCompletion } from "@/lib/curriculum/pocket-registration-completion";
 import { bindPocketTraderIdentity } from "@/lib/exchange/pocketTraderIdentity";
 import { processExchangePostbackPayload } from "@/lib/exchange/postbackProcessor";
@@ -305,6 +317,116 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
     }
   }
 
+  // AFD-4 — reconcile a deposit that arrived BEFORE this registration.
+  //
+  // Placed last, after the identity binding and the Level 1 completion have both
+  // committed on their own merits. A deposit is a measurement; it must never be
+  // able to fail a registration, roll back an identity binding or undo a level
+  // completion, so it runs outside their transaction and swallows its own
+  // failures. Nothing is lost when it does: the operator command re-reaches the
+  // same pending rows, and reconciliation is idempotent by construction.
+  if (result.outcome === "bound" || result.outcome === "already_bound") {
+    await reconcileFirstDepositAfterRegistration(prisma, fields.playerId);
+  }
+
+  return respond(200, { ok: true });
+}
+
+/**
+ * AFD-4 — the official direct Pocket FIRST DEPOSIT postback, past authentication.
+ *
+ * WHAT THIS HANDLER MAY NOT DO. It never binds a Pocket identity, never completes
+ * a level, never unlocks a level, never awards XP and never records a balance.
+ * `goal=reg` remains the sole owner of all of those, and the database itself
+ * enforces the identity half: `PocketTraderIdentity.source` is constrained to
+ * `registration_postback`.
+ *
+ * ONE RESPONSE FOR EVERY BUSINESS OUTCOME. Matched, pending, replayed and
+ * quarantined all return the same bounded `{ ok: true }`. An upstream postback
+ * sender has no business learning whether a click id exists, whether a player is
+ * already registered, whose learner a deposit landed on, or whether its delivery
+ * disagreed with an earlier one — and an attacker holding a stolen `ow` must not
+ * be handed an enumeration oracle on top of it.
+ *
+ * A CONFLICT IS ACKNOWLEDGED, NOT REJECTED. Returning an error for a business
+ * conflict would make Pocket retry an event that can never succeed, forever. The
+ * conflict is durable in the provider event row and in one bounded audit entry,
+ * which is where an operator should learn about it — not through a status code
+ * that also drives a retry storm.
+ */
+async function handleDirectFirstDeposit(params: URLSearchParams, request: Request) {
+  const fields = parsePocketDepositFields(params);
+
+  if (!fields.ok) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: fields.reason,
+      request,
+    });
+
+    return fail(400, "INVALID_DEPOSIT");
+  }
+
+  // Exact decimal, never a float. See pocketDepositAmount.ts for why.
+  const amount = parsePocketDepositAmount(fields.sum);
+
+  if (!amount.ok) {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: PocketRejectionReason.InvalidAmount,
+      request,
+    });
+
+    // Deliberately the same bounded body a malformed field produces: the amount
+    // is not echoed back and its rejection reason is not disclosed.
+    return fail(400, "INVALID_DEPOSIT");
+  }
+
+  // Re-resolved here rather than trusted from the gate above, so the currency
+  // stamped on the row comes from a single authoritative read.
+  const resolution = resolvePocketFirstDepositConfig();
+
+  if (resolution.kind !== "resolved" || !resolution.config.enabled) {
+    return unavailableResponse();
+  }
+
+  const result = await ingestPocketFirstDeposit(prisma, {
+    pocketClickId: fields.clickId,
+    pocketPlayerId: fields.playerId,
+    normalizedAmount: amount.normalized,
+    currency: resolution.config.currency,
+    now: new Date(),
+  });
+
+  if (result.outcome === "unknown_click") {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: PocketRejectionReason.UnknownClickId,
+      request,
+      // Non-reversible: an operator can correlate a support report without the
+      // raw click id ever entering the audit trail.
+      eventFingerprint: fingerprintEventId(fields.clickId),
+    });
+
+    // The same bounded 400 a malformed field produces, so a caller cannot
+    // distinguish "unknown click" from "malformed click".
+    return fail(400, "INVALID_DEPOSIT");
+  }
+
+  // Only conflicts are audited. A successful replay is ordinary transport
+  // behaviour and auditing every one of them would bury the events that matter
+  // under unbounded noise — the replay counter on the row already records it.
+  if (result.outcome === "conflict") {
+    await createAuditLog({
+      action: "POCKET_FIRST_DEPOSIT_CONFLICT",
+      entityType: "PocketProviderEvent",
+      entityId: String(result.providerEventId ?? ""),
+      // A bounded reason only. No click id, no player id, no amount.
+      metadata: { route: ROUTE, reason: result.conflictCode ?? "conflict" },
+      request,
+    });
+  }
+
   return respond(200, { ok: true });
 }
 
@@ -343,8 +465,23 @@ export async function GET(request: Request) {
   //    stronger `x-postback-secret` header, and still rejects URL-borne secrets
   //    outright. Reading `goal` here is a pure string read: no lookup, no write
   //    and no audit happens before authentication succeeds.
+  //    AFD-4 extends this by exactly one goal: `dep` may also authenticate with
+  //    `ow`, and ONLY while first-deposit ingestion is switched on. Every other
+  //    financial goal is unaffected and still rejects URL-borne secrets.
   const authGoal = readPostbackGoalForAuthMode(params);
-  const directRegistration = goalAcceptsQuerySecret(authGoal);
+  const firstDepositEnabled = isPocketFirstDepositEnabled();
+
+  // A deposit offered on the query contract while the feature is off is answered
+  // "unavailable", not "forbidden". 403 would send an operator hunting for a
+  // secret mismatch that does not exist, and — unlike a rejection — 503 is
+  // retry-safe, so a deposit delivered during a rollout window is not lost. It
+  // reveals only that a feature is off, which step 1 already reveals for the
+  // integration as a whole, and it happens before any lookup or write.
+  if (!firstDepositEnabled && isQueryAuthenticatedDepositAttempt(params)) {
+    return unavailableResponse();
+  }
+
+  const directRegistration = goalAcceptsQuerySecret(authGoal, firstDepositEnabled);
 
   // The legacy aliases have no provider mandate and are never acceptable. For
   // non-registration goals `ow` joins them, preserving the header-only contract
@@ -395,7 +532,13 @@ export async function GET(request: Request) {
   //    the legacy path below with its established response shape, so nothing
   //    that works today changes.
   if (usedQuerySecret) {
-    return handleDirectRegistration(params, request);
+    // AFD-4 — the query contract now carries two events. They are dispatched to
+    // separate owners with no shared mutation path: registration binds identity
+    // and completes Level 1 and never touches money, deposit records money and
+    // never touches identity or progression.
+    return authGoal === POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL
+      ? handleDirectFirstDeposit(params, request)
+      : handleDirectRegistration(params, request);
   }
 
   const clickId = firstParam(params, ["clickid", "click_id"]);

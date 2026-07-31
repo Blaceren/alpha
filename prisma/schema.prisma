@@ -184,6 +184,10 @@ model User {
   /// affiliate or was not, and the answer is frozen at registration.
   affiliateAttribution            AffiliateAttribution?        @relation("UserAffiliateAttribution")
   affiliateConversionEvents       AffiliateConversionEvent[]   @relation("UserAffiliateConversionEvents")
+  /// AFD-4. The Pocket provider events this learner was matched to. A list, not
+  /// an optional single row, because the owner is keyed by Pocket player and a
+  /// learner could in principle be matched by more than one event type later.
+  pocketProviderEvents            PocketProviderEvent[]        @relation("PocketProviderEventLearner")
 }
 
 model XpEvent {
@@ -1126,6 +1130,113 @@ model PocketTraderIdentity {
   @@index([clickId])
 }
 
+/// AFD-4 — which provider produced an event. One member today, named rather
+/// than assumed, so a second provider cannot silently inherit Pocket's
+/// idempotency namespace.
+enum PocketProviderEventProvider {
+  pocket
+}
+
+/// AFD-4 — the provider event types ATA can canonically own.
+///
+/// `first_deposit` is deliberately the only member. Pocket's callback carries no
+/// transaction id, no event id and no occurrence time, so ATA cannot tell a
+/// replay from a correction from a genuine second deposit. Adding `redeposit`
+/// here would be claiming a distinction the provider does not supply.
+enum PocketProviderEventType {
+  first_deposit
+}
+
+/// AFD-4 — how far an event has got towards being a countable conversion.
+///
+/// `pending_identity` is the honest state for a deposit that arrived before the
+/// registration that would tell us whose it is. `conflict` is a quarantine, not
+/// an error state: the row is kept exactly as first received so an operator can
+/// see what disagreed, and no later delivery may overwrite it.
+enum PocketProviderEventStatus {
+  pending_identity
+  matched
+  conflict
+}
+
+/// AFD-4 — whether the stored amount has a known unit. See
+/// `POCKET_DEPOSIT_CURRENCY`.
+enum PocketProviderEventCurrencyStatus {
+  unspecified
+  configured
+}
+
+/// AFD-4 — the bounded set of disagreements that quarantine an event.
+enum PocketProviderEventConflictCode {
+  /// A later delivery for this player named a different Pocket click id.
+  click_id_mismatch
+  /// A later delivery for this player reported a different amount.
+  amount_mismatch
+  /// The click resolves to one learner and the Pocket identity to another.
+  identity_owner_mismatch
+  /// The click id no longer resolves to any exchange account.
+  click_owner_missing
+}
+
+/// AFD-4 — the canonical record of one Pocket provider event.
+///
+/// THE DOMAIN INVARIANT THIS TABLE EXISTS TO ENFORCE: one Pocket player produces
+/// at most one canonical first deposit. That is a database fact here, not an
+/// application convention — `UNIQUE(provider, eventType, pocketPlayerId)` is
+/// what a replayed, retried or concurrent callback collides with.
+///
+/// WHY THE KEY IS THE PLAYER AND NOT A TRANSACTION ID. Pocket sends no unique
+/// deposit identifier. AFD-1 established that the existing
+/// `PostbackEvent.externalEventId` therefore stays null for deposits and the
+/// event records as `not_processed`. Synthesising a key from the amount and a
+/// timestamp — which an earlier revision of the legacy route did — is forbidden
+/// in both directions: two real deposits of the same size in the same second
+/// collapse into one, and a redelivery with a different clock looks like new
+/// money.
+///
+/// THE CANONICAL VALUES ARE IMMUTABLE. `pocketClickId` and `normalizedAmount`
+/// are written once, by the first accepted delivery, and no later delivery may
+/// change them. A delivery that disagrees is recorded as a conflict beside them,
+/// never on top of them.
+model PocketProviderEvent {
+  id                 Int                               @id @default(autoincrement())
+  provider           PocketProviderEventProvider       @default(pocket)
+  eventType          PocketProviderEventType
+  /// The Pocket click id as delivered. Immutable after the first acceptance.
+  pocketClickId      String
+  /// The Pocket player id. Together with provider and type, the identity of the
+  /// event.
+  pocketPlayerId     String
+  /// Null until the click owner and the Pocket identity agree on one learner.
+  matchedUserId      Int?
+  /// Canonical decimal TEXT, always two fractional digits. Never a float, and
+  /// never a balance.
+  normalizedAmount   String
+  /// Null whenever Pocket did not tell us the unit and no operator configured
+  /// one. Never defaulted to USD.
+  currencyCode       String?
+  currencyStatus     PocketProviderEventCurrencyStatus @default(unspecified)
+  status             PocketProviderEventStatus         @default(pending_identity)
+  firstReceivedAt    DateTime
+  lastReceivedAt     DateTime
+  /// Bounded count of identical redeliveries. Metadata about transport, not
+  /// about money: it never implies more than one deposit.
+  replayCount        Int                               @default(0)
+  conflictCode       PocketProviderEventConflictCode?
+  conflictDetectedAt DateTime?
+  matchedAt          DateTime?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+  matchedUser        User?                             @relation("PocketProviderEventLearner", fields: [matchedUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([provider, eventType, pocketPlayerId])
+  @@index([pocketClickId])
+  @@index([matchedUserId])
+  @@index([status, firstReceivedAt])
+  @@index([conflictCode])
+  @@index([lastReceivedAt])
+}
+
 /// AFD-2 — administrative affiliate foundation.
 ///
 /// These three tables describe WHO buys traffic and WHICH named link they were
@@ -1174,12 +1285,29 @@ enum AffiliateAttributionSelectionReason {
 /// Conversion-event types. Deposit-shaped events belong to AFD-4 and are absent.
 enum AffiliateConversionEventType {
   academy_registration
+  /// AFD-4. At most one per Pocket player, emitted only once the deposit's
+  /// Pocket identity has been legally bound by a trusted `goal=reg`.
+  first_deposit
+}
+
+/// AFD-4 — whether a money-bearing conversion knows its unit.
+///
+/// Null on rows that carry no money at all. On a `first_deposit` it is always
+/// present, and it is the field that makes an unknown currency an explicit,
+/// queryable state rather than an absence somebody later "fixes" by assuming
+/// dollars.
+enum AffiliateConversionCurrencyStatus {
+  unspecified
+  configured
 }
 
 /// The owner that produced a conversion event, and therefore the namespace its
 /// `sourceEventId` is unique within.
 enum AffiliateConversionSourceOwner {
   auth_register
+  /// AFD-4. Its `sourceEventId` names a PocketProviderEvent ROW, never a Pocket
+  /// player or click id, so no provider identifier reaches the ledger's key.
+  pocket_first_deposit
 }
 
 /// The server-owned logical destination of a tracking link. A KEY, never a URL:
@@ -1380,6 +1508,18 @@ model AffiliateConversionEvent {
   /// is mutable and re-registrable, and would make replay look like a new
   /// conversion.
   sourceEventId                  String
+  /// AFD-4 — the provider-reported conversion amount, as canonical decimal TEXT.
+  ///
+  /// Null for `academy_registration`, which has no money. Present for every
+  /// `first_deposit`. It is ONE IMMUTABLE REPORTED AMOUNT, not a balance, not a
+  /// running total and not something a later event adds to.
+  providerAmount                 String?
+  /// Null whenever the provider did not state a currency and no operator
+  /// configured one. Never defaulted to USD — see `currencyStatus`.
+  currencyCode                   String?
+  /// Records WHY `currencyCode` is null, so "we know it is unspecified" can
+  /// never be misread as "this row has not been backfilled yet".
+  currencyStatus                 AffiliateConversionCurrencyStatus?
   occurredAt                     DateTime
   createdAt                      DateTime                       @default(now())
   user                           User                           @relation("UserAffiliateConversionEvents", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)

@@ -366,14 +366,29 @@ async function main() {
       }
     });
 
+    // AFD-4 amended this contract for `dep` ALONE, and only behind
+    // POCKET_FIRST_DEPOSIT_ENABLED (default false, and unset in this suite).
+    // Every other financial goal stays header-only unconditionally, which is
+    // what this case now pins.
     await check("auth: ow cannot authenticate a financial goal", async () => {
-      for (const goal of ["dep", "ftd", "redep", "commission", "withdrawal"]) {
+      for (const goal of ["ftd", "redep", "commission", "withdrawal"]) {
         const reply = await postback({
           goal, clickid: CLICK_ID, playerid: "ps1-player",
           event_id: `auth-q-fin-${goal}`, sum: "10", ow: SECRET,
         });
         assert.equal(reply.status, 403, `${goal} must stay header-only`);
       }
+    });
+
+    await check("auth: ow cannot authenticate a deposit while first deposit is off", async () => {
+      const reply = await postback({
+        goal: "dep", clickid: CLICK_ID, playerid: "ps1-player",
+        event_id: "auth-q-fin-dep", sum: "10", ow: SECRET,
+      });
+      // Unavailable rather than forbidden: the feature is off, the credentials
+      // are not in question, and 503 is retry-safe. Nothing is processed either
+      // way -- no provider event, no conversion, no identity.
+      assert.equal(reply.status, 503, "a disabled deposit must not be processed");
     });
 
     await check("auth: a wrong ow is refused on the registration path too", async () => {

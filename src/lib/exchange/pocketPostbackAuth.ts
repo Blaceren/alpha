@@ -200,6 +200,28 @@ export const POCKET_POSTBACK_QUERY_SECRET_KEY = "ow";
 export const POCKET_QUERY_SECRET_GOALS: readonly string[] = ["reg"];
 
 /**
+ * AFD-4 — the goal that MAY join the list above, and only when the operator has
+ * switched first-deposit ingestion on.
+ *
+ * WHY THIS IS A DELIBERATE POLICY AMENDMENT, NOT A LOOSENING. PS-1/PS-2 made
+ * every financial goal header-only, and AFD-1 confirmed that `goal=dep` with
+ * `ow` returns 403 today. Pocket's actual deposit callback carries `ow` and
+ * nothing else, so ATA either accepts that contract for `dep` or never receives
+ * a deposit at all. What keeps the amendment narrow:
+ *
+ *   - `dep` is the ONLY financial goal added. `ftd`, `redep`, `commission` and
+ *     `withdrawal` still reject `ow` unconditionally and are unaffected by the
+ *     flag.
+ *   - It is off by default and requires `POCKET_POSTBACK_ENABLED` as well.
+ *   - The blast radius of a leaked `ow` is bounded by the domain, not by the
+ *     transport: a forged deposit cannot bind an identity, cannot complete a
+ *     level, cannot award XP, cannot move a balance, and cannot produce a second
+ *     event for a player that already has one. At worst it records one
+ *     quarantined or pending row for a player nobody registered.
+ */
+export const POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL = "dep";
+
+/**
  * Query aliases that are NEVER acceptable as authentication material.
  *
  * `ow` is deliberately absent: it is the official field and is handled by
@@ -259,9 +281,38 @@ export function readPostbackGoalForAuthMode(params: URLSearchParams): string | n
   return goals[0];
 }
 
-/** True when this goal may authenticate with the official `ow` query secret. */
-export function goalAcceptsQuerySecret(goal: string | null): boolean {
-  return goal !== null && POCKET_QUERY_SECRET_GOALS.includes(goal);
+/**
+ * True when this goal may authenticate with the official `ow` query secret.
+ *
+ * `firstDepositEnabled` is passed in rather than read here so this module stays
+ * a pure protocol layer with no configuration dependency, and so a test can
+ * exercise both policies without mutating the environment.
+ */
+export function goalAcceptsQuerySecret(
+  goal: string | null,
+  firstDepositEnabled = false,
+): boolean {
+  if (goal === null) return false;
+  if (POCKET_QUERY_SECRET_GOALS.includes(goal)) return true;
+  return firstDepositEnabled && goal === POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL;
+}
+
+/**
+ * True when this request is attempting the query-authenticated DEPOSIT contract
+ * — regardless of whether the feature is currently switched on.
+ *
+ * Used to answer a disabled deposit with "unavailable" rather than "forbidden".
+ * The distinction matters operationally: 403 tells Pocket its credentials are
+ * wrong and invites an operator to go looking for a secret mismatch that does
+ * not exist, whereas 503 says "not accepting these yet" and is retry-safe. It
+ * discloses only that a feature is off, which the route already discloses for
+ * the integration as a whole at step 1.
+ */
+export function isQueryAuthenticatedDepositAttempt(params: URLSearchParams): boolean {
+  return (
+    readPostbackGoalForAuthMode(params) === POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL &&
+    params.has(POCKET_POSTBACK_QUERY_SECRET_KEY)
+  );
 }
 
 /**
@@ -319,4 +370,75 @@ export function parsePocketRegistrationFields(
   }
 
   return { ok: true, clickId: clickIds[0], playerId: playerIds[0] };
+}
+
+/* ------------------------------------------------------------------------ */
+/* AFD-4 — the direct Pocket FIRST DEPOSIT postback                          */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Control characters are refused everywhere in the deposit contract.
+ *
+ * None of the four fields can legitimately contain one, and a stray CR or LF in
+ * a value is the classic way a log line or a header is split in two.
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
+export type PocketDepositFields =
+  | { ok: true; clickId: string; playerId: string; sum: string }
+  | { ok: false; reason: PocketRejectionReason };
+
+/**
+ * Strictly parse the identity- and money-bearing fields of a deposit postback.
+ *
+ * EVERY FIELD MUST APPEAR EXACTLY ONCE. `getAll` rather than `get` throughout,
+ * because "first one wins" on a duplicated parameter is how a request that says
+ * two different things gets silently resolved into whichever the parser happened
+ * to read first — and for `sum` that would be a silent choice about money.
+ *
+ * THE CLICK ID ACCEPTS TWO SPELLINGS BUT NEVER BOTH. Pocket's own contract uses
+ * `clickid`, while ATA's generated affiliate URL carries `click_id` as well
+ * (POCKETCTA-1 established that both are intentional). Exactly one of the two
+ * must be present: a request carrying both is ambiguous and is refused rather
+ * than resolved by precedence.
+ *
+ * THE AMOUNT IS NOT PARSED HERE. This function establishes only that a single,
+ * bounded, control-character-free `sum` was supplied. Its decimal validity is
+ * `parsePocketDepositAmount`'s job, so the money contract lives in exactly one
+ * place.
+ */
+export function parsePocketDepositFields(params: URLSearchParams): PocketDepositFields {
+  const clickIds = [...params.getAll("clickid"), ...params.getAll("click_id")];
+  const playerIds = params.getAll("playerid");
+  const sums = params.getAll("sum");
+
+  // Ambiguity first: a request that says two things must never be partially
+  // interpreted, whichever field is duplicated.
+  if (clickIds.length > 1 || playerIds.length > 1 || sums.length > 1) {
+    return { ok: false, reason: PocketRejectionReason.AmbiguousRegistrationParam };
+  }
+
+  if (clickIds.length === 0) {
+    return { ok: false, reason: PocketRejectionReason.MissingClickId };
+  }
+  if (playerIds.length === 0 || sums.length === 0) {
+    return { ok: false, reason: PocketRejectionReason.QueryShape };
+  }
+
+  if (
+    CONTROL_CHARACTERS.test(clickIds[0]) ||
+    CONTROL_CHARACTERS.test(playerIds[0]) ||
+    CONTROL_CHARACTERS.test(sums[0])
+  ) {
+    return { ok: false, reason: PocketRejectionReason.QueryShape };
+  }
+
+  if (!ATA_CLICK_ID.test(clickIds[0])) {
+    return { ok: false, reason: PocketRejectionReason.InvalidClickId };
+  }
+  if (!POCKET_PLAYER_ID.test(playerIds[0]) || !Number.isSafeInteger(Number(playerIds[0]))) {
+    return { ok: false, reason: PocketRejectionReason.InvalidPlayerId };
+  }
+
+  return { ok: true, clickId: clickIds[0], playerId: playerIds[0], sum: sums[0] };
 }

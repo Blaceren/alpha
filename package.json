@@ -98,6 +98,8 @@
     "test:regression:crm-user-owner-history": "tsx scripts/regression/crmUserOwnerHistoryRegression.ts",
     "test:regression:checkpoint-dev-simulator": "tsx scripts/regression/checkpointDevSimulatorRegression.ts",
     "test:regression:pocket-deposit-events": "tsx scripts/regression/pocketDepositEventRegression.ts",
+    "test:regression:pocket-first-deposit": "tsx scripts/regression/pocketFirstDepositRegression.ts",
+    "test:regression:pocket-first-deposit-e2e": "tsx scripts/regression/pocketFirstDepositIsolatedE2E.ts",
     "test:regression:pocket-l1-owner": "tsx scripts/regression/pocketRegistrationLevelOwnerRegression.ts",
     "test:regression:curriculum-level-start": "tsx scripts/regression/curriculumLevelStartRegression.ts",
     "test:regression:public-referral-url": "tsx scripts/regression/publicReferralUrlRegression.ts",

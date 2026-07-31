@@ -738,17 +738,22 @@ async function main() {
       }
     });
 
-    await check("E17 the acquisition tables exist and the deposit ones still do not", async () => {
-      // AFD-3B2 added the three acquisition tables this case used to forbid. The
-      // forbidden list keeps its remaining members, which are AFD-4 and later
-      // and must still be absent, and the case now also pins the positive fact
-      // that the acquisition tables really did arrive.
+    await check("E17 the acquisition and deposit tables exist and later ones still do not", async () => {
+      // AFD-3B2 added the three acquisition tables this case used to forbid, and
+      // AFD-4 added PocketProviderEvent. The forbidden list keeps its remaining
+      // members, which are AFD-5 and later and must still be absent, and the
+      // case pins the positive fact that the arrived tables really did arrive.
+      //
+      // AffiliateRedeposit stays forbidden ON PURPOSE and is not a scheduling
+      // detail: Pocket supplies no unique deposit transaction identifier, so a
+      // redeposit table could only ever be populated by guessing which
+      // redelivery was a second deposit. See 19_REDEPOSIT_BOUNDARY.md.
       const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
         "SELECT name FROM sqlite_master WHERE type='table'",
       );
       const names = rows.map((r) => r.name);
       for (const forbidden of [
-        "PocketProviderEvent", "AffiliatePostbackEndpoint", "AffiliatePostbackDelivery",
+        "AffiliatePostbackEndpoint", "AffiliatePostbackDelivery",
         "AffiliateFirstDeposit", "AffiliateRedeposit", "AffiliateOutbox",
       ]) {
         assert.ok(!names.includes(forbidden), `${forbidden} belongs to a later phase`);
@@ -756,6 +761,7 @@ async function main() {
       for (const expected of [
         "AffiliatePartner", "AffiliateCampaign", "AffiliateTrackingLink",
         "AffiliateClick", "AffiliateAttribution", "AffiliateConversionEvent",
+        "PocketProviderEvent",
       ]) {
         assert.ok(names.includes(expected), expected);
       }

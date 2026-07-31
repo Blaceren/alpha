@@ -263,15 +263,32 @@ async function main() {
   /* C. Goal                                                             */
   /* ------------------------------------------------------------------ */
 
+  // AFD-4 amended this contract for `dep` ALONE, and only behind
+  // POCKET_FIRST_DEPOSIT_ENABLED (default false, and unset in this suite). Every
+  // other financial goal stays header-only unconditionally, which is what this
+  // case now pins. The deposit contract itself is proven in
+  // pocketFirstDepositRegression.
   await check("C1 ow cannot authenticate any financial goal", async () => {
     const learner = await createLearner();
-    for (const goal of ["dep", "ftd", "redep", "commission", "withdrawal", "email"]) {
+    for (const goal of ["ftd", "redep", "commission", "withdrawal", "email"]) {
       const r = await send({
         clickid: learner.clickId, goal, ow: SECRET,
         playerid: nextPlayerId(), extra: { sum: "10", event_id: `pdp1-fin-${goal}` },
       });
       assert.equal(r.status, 403, `${goal} must stay header-only`);
     }
+    assert.equal(await bindingFor(learner.userId), null);
+  });
+
+  await check("C1b ow cannot authenticate a deposit while first deposit is off", async () => {
+    const learner = await createLearner();
+    const r = await send({
+      clickid: learner.clickId, goal: "dep", ow: SECRET,
+      playerid: nextPlayerId(), extra: { sum: "10", event_id: "pdp1-fin-dep" },
+    });
+    // Unavailable rather than forbidden -- the feature is off, not the secret.
+    assert.equal(r.status, 503);
+    // And whichever answer it gives, a deposit still binds no identity.
     assert.equal(await bindingFor(learner.userId), null);
   });
 
