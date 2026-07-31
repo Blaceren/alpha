@@ -6,6 +6,11 @@ import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveRegistrationReferral,
+  revalidateReferralReward,
+  type ReferralRewardState,
+} from "@/lib/referral/registrationReferral";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
   createSessionToken,
@@ -54,9 +59,22 @@ export async function POST(request: Request) {
   });
 
   if (!captcha.ok) {
+    // Fail closed BEFORE any database write. Nothing below this line has run,
+    // so a rejected or unverifiable challenge leaves no user, no referral row
+    // and no partial state — only an audit of the attempt.
+    await createAuditLog({
+      action: "CAPTCHA_REJECTED",
+      entityType: "API_ROUTE",
+      entityId: "/api/auth/register",
+      // The outcome is a bounded internal code. The token is NOT recorded here
+      // or anywhere else, and neither is the provider's raw answer.
+      metadata: { email, outcome: captcha.outcome, code: captcha.code },
+      request,
+    });
+
     return NextResponse.json(
-      { error: "CAPTCHA_FAILED", message: captcha.message ?? "Captcha не пройдена" },
-      { status: 400 },
+      { error: captcha.code, message: captcha.message },
+      { status: captcha.status },
     );
   }
 
@@ -72,22 +90,33 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-  const referralConfig = parsed.data.referralCode
-    ? await prisma.referralBonusConfig.findUnique({ where: { slug: "default" } })
-    : null;
-  const inviter = parsed.data.referralCode
-    ? await prisma.user.findUnique({ where: { referralCode: parsed.data.referralCode } })
-    : null;
 
-  if (parsed.data.referralCode && (!inviter || !referralConfig?.isActive)) {
+  // AFD-3A2. Inviter validity and bonus availability are resolved as separate
+  // facts (see src/lib/referral/registrationReferral.ts). Only an unknown or
+  // blocked inviter rejects; an absent or inactive bonus programme does not.
+  const referral = await resolveRegistrationReferral(prisma, parsed.data.referralCode);
+
+  if (referral.kind === "invalid") {
     return NextResponse.json(
       { error: "REFERRAL_INVALID", message: "Реферальная ссылка недействительна" },
       { status: 400 },
     );
   }
 
-  const invitedXp = inviter && referralConfig ? referralConfig.invitedXp : 0;
-  const user = await prisma.$transaction(async (tx) => {
+  const accepted = referral.kind === "accepted" ? referral : null;
+
+  // The transaction RETURNS the reward decision rather than assigning it to an
+  // outer variable: the audit and notification steps below run after the commit
+  // and must describe what the committed transaction actually did, not what was
+  // predicted before it opened.
+  const committed = await prisma.$transaction(async (tx) => {
+    // Re-read the mutable conditions inside the transaction. Demotion only: a
+    // withdrawn programme cancels the payout, it never cancels the account.
+    const reward: ReferralRewardState | null = accepted
+      ? await revalidateReferralReward(tx, accepted)
+      : null;
+    const bonus = accepted && reward === "payable" ? accepted.bonus : null;
+    const invitedXp = bonus?.invitedXp ?? 0;
     let created = await tx.user.create({
       data: {
         email: parsed.data.email,
@@ -144,30 +173,47 @@ export async function POST(request: Request) {
       });
     }
 
-    if (inviter && referralConfig) {
+    if (accepted) {
+      // The relationship is recorded whenever the inviter is valid. When no
+      // bonus is payable the row carries the schema's own "nothing granted"
+      // shape — zero amounts and a NULL `bonusGrantedAt` — which is a fact
+      // about this registration, not an invented zero-value reward.
+      //
+      // `invitedUserId` is `@unique`, so the relationship is unique per invitee
+      // at the database level; a duplicate is impossible rather than merely
+      // unlikely. Self-referral is likewise impossible: the invitee's row is
+      // created in this same transaction and cannot own a pre-existing code.
       await tx.referral.create({
         data: {
-          inviterUserId: inviter.id,
+          inviterUserId: accepted.inviterId,
           invitedUserId: created.id,
-          xpEarned: referralConfig.inviterXp,
-          invitedXpEarned: referralConfig.invitedXp,
-          bonusGrantedAt: new Date(),
+          xpEarned: bonus?.inviterXp ?? 0,
+          invitedXpEarned: bonus?.invitedXp ?? 0,
+          bonusGrantedAt: bonus ? new Date() : null,
         },
       });
-      await tx.user.update({
-        where: { id: inviter.id },
-        data: { xp: { increment: referralConfig.inviterXp } },
-      });
-      await tx.xpEvent.createMany({
-        data: [
-          { userId: inviter.id, amount: referralConfig.inviterXp, source: "referral_inviter", sourceId: String(created.id) },
-          { userId: created.id, amount: referralConfig.invitedXp, source: "referral_invited", sourceId: String(inviter.id) },
-        ],
-      });
+
+      // Everything below is REWARD, and runs only when a reward is payable.
+      // With no active configuration there is no inviter XP, no invitee XP and
+      // no XpEvent of any kind — the ledger records nothing at all.
+      if (bonus) {
+        await tx.user.update({
+          where: { id: accepted.inviterId },
+          data: { xp: { increment: bonus.inviterXp } },
+        });
+        await tx.xpEvent.createMany({
+          data: [
+            { userId: accepted.inviterId, amount: bonus.inviterXp, source: "referral_inviter", sourceId: String(created.id) },
+            { userId: created.id, amount: bonus.invitedXp, source: "referral_invited", sourceId: String(accepted.inviterId) },
+          ],
+        });
+      }
     }
 
-    return created;
+    return { created, reward, bonus };
   });
+
+  const user = committed.created;
   const verificationRequired = isEmailVerificationRequired();
   const verificationToken = verificationRequired
     ? await createEmailVerificationToken(user.id)
@@ -180,33 +226,51 @@ export async function POST(request: Request) {
     request,
   });
 
-  if (inviter && referralConfig) {
-    await prisma.notification.createMany({
-      data: [
-        {
-          userId: inviter.id,
-          type: "referral_bonus",
-          title: "Реферальный бонус",
-          message: `Начислено ${referralConfig.inviterXp} XP за приглашённого пользователя.`,
-          metadata: { invitedUserId: user.id },
-        },
-        {
-          userId: user.id,
-          type: "referral_bonus",
-          title: "Стартовый реферальный бонус",
-          message: `Начислено ${referralConfig.invitedXp} XP.`,
-          metadata: { inviterUserId: inviter.id },
-        },
-      ],
-    });
+  if (accepted) {
+    const { reward, bonus } = committed;
+
+    // The relationship is always audited, whether or not it paid. Previously
+    // only a PAID referral left a trace, so a relationship formed under an
+    // inactive programme was invisible to support.
     await createAuditLog({
-      userId: inviter.id,
-      action: "REFERRAL_BONUS_GRANTED",
+      userId: accepted.inviterId,
+      action: "REFERRAL_RELATION_CREATED",
       entityType: "User",
       entityId: user.id,
-      metadata: { inviterXp: referralConfig.inviterXp, invitedXp: referralConfig.invitedXp },
+      metadata: { reward: reward ?? "not_configured" },
       request,
     });
+
+    if (bonus) {
+      await prisma.notification.createMany({
+        data: [
+          {
+            userId: accepted.inviterId,
+            type: "referral_bonus",
+            title: "Реферальный бонус",
+            message: `Начислено ${bonus.inviterXp} XP за приглашённого пользователя.`,
+            metadata: { invitedUserId: user.id },
+          },
+          {
+            userId: user.id,
+            type: "referral_bonus",
+            title: "Стартовый реферальный бонус",
+            message: `Начислено ${bonus.invitedXp} XP.`,
+            metadata: { inviterUserId: accepted.inviterId },
+          },
+        ],
+      });
+      await createAuditLog({
+        userId: accepted.inviterId,
+        action: "REFERRAL_BONUS_GRANTED",
+        entityType: "User",
+        entityId: user.id,
+        metadata: { inviterXp: bonus.inviterXp, invitedXp: bonus.invitedXp },
+        request,
+      });
+    }
+    // No `else`. With no payable bonus there is no notification promising XP
+    // that was never granted — the invitee simply has an account.
   }
 
   const response = NextResponse.json(

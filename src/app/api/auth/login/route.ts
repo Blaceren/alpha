@@ -54,9 +54,14 @@ export async function POST(request: Request) {
   });
 
   if (!captcha.ok) {
+    // AFD-3A2: the code and status now come from the shared CAPTCHA outcome
+    // contract, so a provider outage reads as 503 CAPTCHA_UNAVAILABLE instead of
+    // accusing the person at the keyboard of failing a challenge that never ran.
+    // On an `ATA_ENVIRONMENT=dev` deployment without login enforcement this
+    // branch is unreachable, exactly as before — see src/lib/captcha.ts.
     return NextResponse.json(
-      { error: "CAPTCHA_FAILED", message: captcha.message ?? "Captcha не пройдена" },
-      { status: 400 },
+      { error: captcha.code, message: captcha.message },
+      { status: captcha.status },
     );
   }
 

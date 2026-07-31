@@ -1,5 +1,20 @@
 import { z } from "zod";
 import { classifyEnvironment } from "@/lib/environment";
+import {
+  CAPTCHA_LOGIN_ENFORCED_KEY,
+  CAPTCHA_PROVIDERS,
+  CAPTCHA_PROVIDER_KEY,
+  CAPTCHA_TEST_MODE_KEY,
+  CAPTCHA_TEST_MODE_MARKER,
+  TURNSTILE_EXPECTED_ACTION_KEY,
+  TURNSTILE_EXPECTED_HOSTNAMES_KEY,
+  TURNSTILE_SECRET_ENV_KEY,
+  TURNSTILE_TEST_PROVIDER,
+  describeCaptchaConfigRejection,
+  isCaptchaLoginEnforced,
+  isCaptchaProviderRequired,
+  resolveCaptchaConfig,
+} from "@/lib/captcha/provider";
 import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
 import { describePublicAppUrlRejection, resolvePublicAppUrl } from "@/lib/publicUrl";
 import {
@@ -25,7 +40,15 @@ const OPTIONAL_ENV = [
   "SMOKE_BASE_URL",
   "VISUAL_QA_BASE_URL",
   "EMAIL_VERIFICATION_REQUIRED",
-  "CAPTCHA_DEV_BYPASS",
+  // AFD-3A2 — the CAPTCHA provider contract. `CAPTCHA_DEV_BYPASS` used to live
+  // here and is deliberately GONE: it defaulted to an open door, and leaving it
+  // in the contract would suggest setting it still means something. It does not.
+  CAPTCHA_PROVIDER_KEY,
+  TURNSTILE_SECRET_ENV_KEY,
+  TURNSTILE_EXPECTED_ACTION_KEY,
+  TURNSTILE_EXPECTED_HOSTNAMES_KEY,
+  CAPTCHA_TEST_MODE_KEY,
+  CAPTCHA_LOGIN_ENFORCED_KEY,
   "ALLOW_PRODUCTION_SEED",
   "ALLOW_PRODUCTION_BETA_RESET",
   "BETA_RESET_CONFIRM",
@@ -76,7 +99,16 @@ const envSchema = z.object({
   SMOKE_BASE_URL: z.string().url().optional(),
   VISUAL_QA_BASE_URL: z.string().url().optional(),
   EMAIL_VERIFICATION_REQUIRED: z.enum(["true", "false"]).optional(),
-  CAPTCHA_DEV_BYPASS: z.enum(["true", "false"]).optional(),
+  // AFD-3A2. Enumerated so a misspelled provider is a startup error rather than
+  // a silent "unrecognised → unconfigured → every registration closed". The
+  // secret is `z.string()` only: its CONTENT is validated by
+  // `resolveCaptchaConfig`, which never quotes it in a message.
+  [CAPTCHA_PROVIDER_KEY]: z.enum(CAPTCHA_PROVIDERS).optional(),
+  [TURNSTILE_SECRET_ENV_KEY]: z.string().optional(),
+  [TURNSTILE_EXPECTED_ACTION_KEY]: z.string().optional(),
+  [TURNSTILE_EXPECTED_HOSTNAMES_KEY]: z.string().optional(),
+  [CAPTCHA_TEST_MODE_KEY]: z.literal(CAPTCHA_TEST_MODE_MARKER).optional(),
+  [CAPTCHA_LOGIN_ENFORCED_KEY]: z.enum(["true", "false"]).optional(),
   ALLOW_PRODUCTION_SEED: z.enum(["true", "false"]).optional(),
   ALLOW_PRODUCTION_BETA_RESET: z.enum(["true", "false"]).optional(),
   BETA_RESET_CONFIRM: z.string().optional(),
@@ -220,6 +252,59 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     if (classification.kind !== "classified" || classification.environment !== "dev") {
       errors.push(
         "CHECKPOINT_DEV_SIMULATOR_STATE_PATH is a DEV-only simulator path and requires ATA_ENVIRONMENT=dev",
+      );
+    }
+  }
+
+  // AFD-3A2 — the CAPTCHA provider.
+  //
+  // Like the simulator check above, this sits OUTSIDE the `isProduction` block
+  // and is keyed on `classifyEnvironment`, not `NODE_ENV`. The DEV runtime
+  // serves a production build, so `NODE_ENV === "production"` there: hanging
+  // these rules on it would demand a real Turnstile secret on a developer box
+  // and demand nothing at all on a host that happened to launch differently.
+  //
+  // Three separate obligations, each phrased so that FORGETTING FAILS:
+  //
+  //  1. Any configuration that is present must be COHERENT. A named provider
+  //     with a missing, empty or placeholder secret is a startup error rather
+  //     than a service that boots and then refuses every registration with an
+  //     opaque 503. Absent configuration is legal and simply closes the door.
+  //
+  //  2. Outside an explicit `ATA_ENVIRONMENT=dev` deployment, a working
+  //     provider is MANDATORY. An unclassified or misspelled environment counts
+  //     as "outside", so an operator who forgets to classify a real host has not
+  //     thereby excused it from having a CAPTCHA.
+  //
+  //  3. Outside dev, login must be enforced too. This is what keeps the
+  //     bounded DEV login exception in src/lib/captcha.ts from ever becoming a
+  //     production bypass: such a deployment does not boot.
+  {
+    const resolution = resolveCaptchaConfig(env);
+    const providerNamed = env[CAPTCHA_PROVIDER_KEY] !== undefined && env[CAPTCHA_PROVIDER_KEY] !== "";
+    const required = isCaptchaProviderRequired(env);
+
+    if (!resolution.configured && (providerNamed || required)) {
+      errors.push(describeCaptchaConfigRejection(resolution.reason));
+    }
+
+    // The isolated-test provider must never be reachable on a real host. The
+    // resolver already refuses it, but a hard startup failure means the mistake
+    // is caught by the operator at deploy time rather than by a learner at a
+    // registration form.
+    if (required && env[CAPTCHA_PROVIDER_KEY] === TURNSTILE_TEST_PROVIDER) {
+      errors.push(
+        `${CAPTCHA_PROVIDER_KEY}=${TURNSTILE_TEST_PROVIDER} is an isolated-test provider and requires ATA_ENVIRONMENT=dev`,
+      );
+    }
+    if (required && env[CAPTCHA_TEST_MODE_KEY]) {
+      errors.push(
+        `${CAPTCHA_TEST_MODE_KEY} is an isolated-test marker and must never be set outside ATA_ENVIRONMENT=dev`,
+      );
+    }
+    if (required && !isCaptchaLoginEnforced(env)) {
+      errors.push(
+        `${CAPTCHA_LOGIN_ENFORCED_KEY}=true is required outside ATA_ENVIRONMENT=dev`,
       );
     }
   }
