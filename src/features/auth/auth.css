@@ -224,6 +224,54 @@
   cursor: progress;
 }
 
+/*
+ * Turnstile (AFD-3A2).
+ *
+ * The widget is a third-party iframe whose intrinsic width is roughly 300px in
+ * its normal size. The container is therefore allowed to SCROLL rather than
+ * clip: at 390px with the card's padding the frame fits, but a compact
+ * viewport, a large text-size preference or the interactive challenge's taller
+ * layout must never cut the challenge off — an unreachable checkbox is an
+ * unregisterable user.
+ */
+.register-captcha {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.register-captcha__frame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.register-captcha__status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.register-captcha__status:empty {
+  display: none;
+}
+
+/* Same treatment as an inline error: marked by glyph and text, not colour. */
+.register-captcha--failed {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--signal-active) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 40%, transparent);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.register-captcha--failed::before {
+  content: "⚠ ";
+}
+
 .register-status {
   margin: 0;
   font-size: 0.85rem;

@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as api from "@/lib/api/client";
-import { hasCaptchaWidget, resolveCaptchaContract } from "@/lib/auth/captcha-contract";
+import {
+  canSubmitRegistration,
+  hasCaptchaWidget,
+  resolveCaptchaContract,
+} from "@/lib/auth/captcha-contract";
 import { readReferralCode, type ReferralCodeResult } from "@/lib/auth/referral-code";
+import { TurnstileWidget } from "@/features/auth/turnstile-widget";
 import { DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
 import {
   mapRegistrationFailure,
@@ -58,11 +63,21 @@ function ReferralNotice({ referral }: { referral: ReferralCodeResult }) {
   return null;
 }
 
-export function RegisterForm() {
+export type RegisterFormProps = {
+  /**
+   * The PUBLIC Turnstile site key, injected by the server at request time.
+   * `null` when the deployment has none — the form then renders an unavailable
+   * state and refuses to submit rather than posting a request the Backend will
+   * reject with `CAPTCHA_CONFIGURATION_ERROR`.
+   */
+  turnstileSiteKey: string | null;
+};
+
+export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referral = readReferralCode(searchParams);
-  const captcha = resolveCaptchaContract();
+  const captcha = resolveCaptchaContract(turnstileSiteKey);
 
   const emailId = useId();
   const nameId = useId();
@@ -70,12 +85,21 @@ export function RegisterForm() {
   const confirmId = useId();
   const summaryId = useId();
   const statusId = useId();
+  const captchaStatusId = useId();
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  /**
+   * The Turnstile token. Held in memory only — never written to the URL, to
+   * `localStorage`, to `sessionStorage`, to a cookie or to any log. It is
+   * single-use and expires after five minutes, so persisting it would be a
+   * replay hazard that buys nothing.
+   */
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  /** Bumped to force a brand-new challenge after a token-consuming failure. */
+  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<RegistrationFieldErrors>({});
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
 
@@ -89,6 +113,18 @@ export function RegisterForm() {
 
   const submitting = outcome.kind === "submitting";
   const created = outcome.kind === "created";
+  /**
+   * Submission requires a provider AND a live token. This is a usability gate,
+   * not a security one — the Backend verifies the token with Cloudflare on
+   * every request regardless of what this button does.
+   */
+  const canSubmit = canSubmitRegistration(captcha, captchaToken);
+
+  /** Discard the current token and make the widget issue a fresh challenge. */
+  const renewCaptcha = useCallback(() => {
+    setCaptchaToken(null);
+    setCaptchaResetSignal((value) => value + 1);
+  }, []);
 
   // Move focus to the error summary so a keyboard/screen-reader user is taken
   // straight to what went wrong instead of hunting for it.
@@ -105,6 +141,19 @@ export function RegisterForm() {
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) {
       setOutcome({ kind: "failed", failure: "VALIDATION_ERROR", requestId: null });
+      return;
+    }
+
+    // Backstop for a submission that reached here without a solved challenge —
+    // a keyboard Enter that raced the token, or a disabled attribute defeated
+    // in devtools. The Backend would refuse it anyway; refusing locally saves
+    // the user a round trip and a rate-limit slot.
+    if (!canSubmitRegistration(captcha, captchaToken)) {
+      setOutcome({
+        kind: "failed",
+        failure: captcha.mode === "provider" ? "CAPTCHA_FAILED" : "CAPTCHA_CONFIGURATION_ERROR",
+        requestId: null,
+      });
       return;
     }
 
@@ -128,8 +177,8 @@ export function RegisterForm() {
           name: normalizeName(name),
           // Only a code we vouched for is forwarded; a malformed one is dropped.
           referralCode: referral.status === "valid" ? referral.code : undefined,
-          // Absent today: the Backend exposes no CAPTCHA provider, and the
-          // Academy must not fabricate a success token. See captcha-contract.ts.
+          // The live Turnstile token, in the JSON body and nowhere else. The
+          // Backend verifies it with Cloudflare before creating anything.
           captchaToken: captchaToken ?? undefined,
         },
         controller.signal,
@@ -146,7 +195,10 @@ export function RegisterForm() {
         setConfirmPassword("");
       }
       if (shouldRenewCaptcha(failure)) {
-        setCaptchaToken(null);
+        // The token was consumed or invalidated server-side. Discard it AND
+        // reset the widget: a Turnstile token is single-use, so retrying with
+        // the same one can only produce `timeout-or-duplicate`.
+        renewCaptcha();
       }
       // The email is deliberately kept so a recoverable failure does not make
       // the user retype it.
@@ -307,15 +359,38 @@ export function RegisterForm() {
         ) : null}
       </div>
 
-      {hasCaptchaWidget(captcha) ? (
-        // Reserved for a real provider widget; unreachable today. The token it
-        // produces is handed to `setCaptchaToken` and forwarded unchanged.
-        <div className="register-field" data-testid="captcha-slot" />
-      ) : null}
+      {hasCaptchaWidget(captcha) && captcha.mode === "provider" ? (
+        <TurnstileWidget
+          siteKey={captcha.siteKey}
+          onToken={setCaptchaToken}
+          // Expiry, timeout and provider error all mean the same thing to this
+          // form: the token in hand is dead. Clearing it re-disables submit, so
+          // the user cannot post a challenge that has already lapsed.
+          onTokenLost={() => setCaptchaToken(null)}
+          resetSignal={captchaResetSignal}
+          describedById={captchaStatusId}
+        />
+      ) : (
+        <div className="register-captcha register-captcha--failed" data-testid="captcha-unavailable" role="alert">
+          Регистрация временно недоступна: проверка безопасности не настроена. Обратитесь к поддержке.
+        </div>
+      )}
 
-      <button type="submit" className="register-submit" disabled={submitting} aria-busy={submitting}>
+      <button
+        type="submit"
+        className="register-submit"
+        disabled={submitting || !canSubmit}
+        aria-busy={submitting}
+        aria-describedby={!canSubmit && !submitting ? captchaStatusId : undefined}
+      >
         {submitting ? "Создаём аккаунт…" : "Создать аккаунт"}
       </button>
+
+      <p id={captchaStatusId} className="register-status" role="status" aria-live="polite">
+        {captcha.mode === "provider" && !captchaToken && !submitting
+          ? "Пройдите проверку безопасности, чтобы продолжить."
+          : ""}
+      </p>
 
       <p id={statusId} className="register-status" role="status" aria-live="polite">
         {submitting ? "Создаём аккаунт, подождите." : ""}

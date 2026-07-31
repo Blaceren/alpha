@@ -24,6 +24,7 @@ describe("resolveAcademyConfig", () => {
       mode: "api",
       backendOrigin: "http://127.0.0.1:3212",
       requestTimeoutMs: 10_000,
+      turnstileSiteKey: null,
     });
   });
 

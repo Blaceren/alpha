@@ -270,3 +270,109 @@ describe("register proxy — bounds and response handling", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// ===========================================================================
+// AFD-3A2 — the Turnstile token crosses the proxy in the body, and only there.
+// ===========================================================================
+
+describe("register proxy — CAPTCHA token boundary", () => {
+  const TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+
+  it("forwards the token in the JSON body and puts it in no header or URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: {} }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proxyToBackend(
+      registerRequest({
+        body: JSON.stringify({ email: "a@b.co", password: "Passw0rd", captchaToken: TOKEN }),
+      }),
+      "register",
+    );
+
+    const call = fetchMock.mock.calls[0];
+    if (!call) throw new Error("fetch was not called");
+    const [url, init] = call as [string, RequestInit];
+
+    expect(url).toBe(REGISTER_PATH);
+    // A token in a URL would land in access logs, in `Referer`, and in browser
+    // history — all places a single-use credential must never reach.
+    expect(url).not.toContain(TOKEN);
+    // The proxy forwards the body as a byte buffer, so decode it rather than
+    // stringifying the object.
+    const body = init.body as ArrayBuffer;
+    expect(new TextDecoder().decode(body)).toContain(TOKEN);
+
+    const headers = new Headers(init.headers);
+    for (const [, value] of headers.entries()) {
+      expect(value).not.toContain(TOKEN);
+    }
+  });
+
+  it("does not log the token", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: {} }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proxyToBackend(
+      registerRequest({
+        body: JSON.stringify({ email: "a@b.co", password: "Passw0rd", captchaToken: TOKEN }),
+      }),
+      "register",
+    );
+
+    for (const spy of [log, error, warn]) {
+      expect(spy.mock.calls.flat().map(String).join(" ")).not.toContain(TOKEN);
+    }
+  });
+
+  it.each([
+    [503, "CAPTCHA_UNAVAILABLE"],
+    [503, "CAPTCHA_CONFIGURATION_ERROR"],
+    [400, "CAPTCHA_FAILED"],
+  ])("relays a %s %s envelope unchanged", async (status, code) => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ error: code }, { status }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proxyToBackend(registerRequest(), "register");
+
+    expect(res.status).toBe(status);
+    expect(await res.json()).toEqual({ error: code });
+  });
+
+  it("still forwards the trusted client IP alongside a token (AFD-3A regression)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: {} }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proxyToBackend(
+      registerRequest({
+        headers: { "x-real-ip": "203.0.113.9", "x-forwarded-for": "10.0.0.1, 192.168.1.1" },
+        body: JSON.stringify({ email: "a@b.co", password: "Passw0rd", captchaToken: TOKEN }),
+      }),
+      "register",
+    );
+
+    const headers = new Headers(fetchInit(fetchMock).headers);
+    // Backend rate-limits registration per resolved IP and hands that same IP
+    // to Siteverify as `remoteip`. Adding CAPTCHA must not have moved it.
+    expect(headers.get("x-real-ip")).toBe("203.0.113.9");
+    expect(headers.get("x-forwarded-for")).toBe("203.0.113.9");
+  });
+
+  it("forwards no Authorization header even when the browser sends one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: {} }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proxyToBackend(
+      registerRequest({
+        headers: { authorization: "Basic c3B5Om11c3Q=" },
+        body: JSON.stringify({ email: "a@b.co", password: "Passw0rd", captchaToken: TOKEN }),
+      }),
+      "register",
+    );
+
+    const headers = new Headers(fetchInit(fetchMock).headers);
+    expect(headers.get("authorization")).toBeNull();
+  });
+});

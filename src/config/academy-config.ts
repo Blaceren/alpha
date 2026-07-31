@@ -28,6 +28,20 @@ export type AcademyConfig = {
   /** Present only in `api` mode; always `null` in `fixture` mode. */
   backendOrigin: string | null;
   requestTimeoutMs: number;
+  /**
+   * The PUBLIC Cloudflare Turnstile site key (AFD-3A2), or `null` when none is
+   * configured.
+   *
+   * Injected at runtime and passed down to the registration page as a prop
+   * rather than compiled in as a `NEXT_PUBLIC_*` value, so one build serves
+   * every deployment and rotating the widget is not a release.
+   *
+   * Absence is legal and fails CLOSED at the surface: the registration form
+   * renders an unavailable state and blocks submission. It never means "skip
+   * the challenge". The SECRET counterpart lives only in the Backend and is
+   * deliberately unreadable from the Academy.
+   */
+  turnstileSiteKey: string | null;
 };
 
 export class AcademyConfigError extends Error {
@@ -136,9 +150,15 @@ export function resolveAcademyConfig(
   }
 
   const requestTimeoutMs = resolveTimeout(env.ACADEMY_REQUEST_TIMEOUT_MS);
+  // Deliberately NOT validated here. An absent or malformed key must not stop
+  // the Academy from serving its other 40 routes over one registration widget;
+  // the registration surface itself refuses to submit. See
+  // `resolveCaptchaContract`, which classifies absent and malformed separately.
+  const rawSiteKey = env.TURNSTILE_SITE_KEY?.trim();
+  const turnstileSiteKey = rawSiteKey === undefined || rawSiteKey === "" ? null : rawSiteKey;
 
   if (mode === "fixture") {
-    return { mode, backendOrigin: null, requestTimeoutMs };
+    return { mode, backendOrigin: null, requestTimeoutMs, turnstileSiteKey };
   }
 
   // api mode: Backend origin is mandatory (fail-closed).
@@ -149,7 +169,12 @@ export function resolveAcademyConfig(
     );
   }
 
-  return { mode, backendOrigin: normalizeBackendOrigin(rawOrigin), requestTimeoutMs };
+  return {
+    mode,
+    backendOrigin: normalizeBackendOrigin(rawOrigin),
+    requestTimeoutMs,
+    turnstileSiteKey,
+  };
 }
 
 let cached: AcademyConfig | null = null;

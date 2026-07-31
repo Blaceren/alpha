@@ -1,79 +1,78 @@
 /**
  * CAPTCHA contract for the public registration surface.
  *
- * ## Authoritative state of the Backend contract (discovered in AFD-3A)
+ * ## What changed in AFD-3A2
  *
- * `src/lib/captcha.ts` in the Backend is a **stub with no provider**:
+ * AFD-3A found the Backend `verifyCaptcha` to be a stub: `provider: "dev"`, no
+ * verification call, and a bypass that was ON by default and ON for a MISSING
+ * token. There was no site key, so this module reported `{ mode: "absent" }`
+ * and the form deliberately sent nothing rather than fabricate the
+ * `"dev-captcha-ok"` sentinel that the Backend's own legacy page ships.
  *
- *   - the result type hard-codes `provider: "dev"` — there is no Turnstile,
- *     hCaptcha or reCAPTCHA integration anywhere in the Backend;
- *   - `CAPTCHA_DEV_BYPASS !== "false"` means bypass is ON unless explicitly
- *     disabled, and the key is not set in the DEV runtime, so bypass is on;
- *   - while bypass is on, verification succeeds for a MISSING token or for the
- *     literal sentinel `"dev-captcha-ok"`;
- *   - while bypass is off, verification fails unconditionally — there is no
- *     provider to verify against, so registration becomes impossible rather
- *     than protected.
+ * The Backend now has a real provider. Cloudflare Turnstile is verified
+ * server-side against the fixed Siteverify endpoint, and registration fails
+ * closed when it cannot be verified. So this module now resolves a real
+ * contract from a runtime-injected site key.
  *
- * There is consequently **no public site key**, no server secret, no widget
- * contract and no verification endpoint. A real CAPTCHA cannot be integrated
- * from the Academy alone; the Backend must gain a provider first. AFD-3A is
- * explicitly forbidden from creating or rotating CAPTCHA credentials, so this
- * is reported as a blocker rather than papered over.
+ * ## The site key is public, and still not hardcoded
  *
- * ## What the Academy does about it
+ * A Turnstile site key is designed to be read by anyone — it is in the page
+ * source of every site that uses one. It is nonetheless injected at runtime
+ * rather than compiled in, because a key in source pins every deployment to one
+ * Cloudflare widget and turns rotation into a release. See
+ * `src/config/academy-config.ts`; the SECRET counterpart never leaves the
+ * Backend and is not readable from this package at all.
  *
- * It sends **no** `captchaToken`.
+ * ## Absent key is an unavailable state, never an open door
  *
- * The alternative — hard-coding `"dev-captcha-ok"`, which the Backend's own
- * legacy `/register` page does — would ship a fabricated client-generated
- * success token inside a PUBLIC browser bundle. That is a forbidden fake
- * success token, and it is not even load-bearing: with bypass on, an absent
- * token already passes; with bypass off, the sentinel fails too. Omitting the
- * field is behaviourally identical and honest.
- *
- * `captchaToken` is optional in the authoritative request DTO, so omitting it
- * is exactly DTO-conformant.
- *
- * ## Insertion point for a real provider
- *
- * When the Backend gains a provider, this module returns
- * `{ mode: "provider", provider, siteKey }`, the form renders that provider's
- * widget, and the resulting token is passed to `api.register({ captchaToken })`
- * — which already accepts and forwards it. No other file needs to change. The
- * site key is public by definition and would arrive as a `NEXT_PUBLIC_*` value;
- * the secret stays server-side in the Backend and never reaches this package.
+ * If no key is configured the form says so and refuses to submit. It does NOT
+ * hide the challenge and post anyway: the Backend would reject that with
+ * `CAPTCHA_CONFIGURATION_ERROR`, so a hidden challenge buys nothing except a
+ * confusing failure after the user has typed a password.
  */
+import { isValidTurnstileSiteKey } from "@/lib/auth/turnstile";
 
 /** The exact optional field name in the Backend registration DTO. */
 export const CAPTCHA_TOKEN_FIELD = "captchaToken" as const;
 
 export type CaptchaContract =
   /**
-   * No provider exists in the authoritative Backend. The form renders no
-   * widget and sends no token.
+   * No usable site key reached the browser. The form renders an unavailable
+   * state and blocks submission.
    */
-  | { mode: "absent" }
-  /** Reserved for a real provider. Not reachable today — see the note above. */
-  | { mode: "provider"; provider: string; siteKey: string };
+  | { mode: "unavailable"; reason: "site_key_absent" | "site_key_malformed" }
+  /** A provider is configured and its widget must be solved before submitting. */
+  | { mode: "provider"; provider: "turnstile"; siteKey: string };
 
 /**
  * Resolve the CAPTCHA contract available to the browser.
  *
- * Returns `{ mode: "absent" }` because the Backend exposes no provider. This is
- * a deliberate, discovered fact rather than a default: see the module comment.
+ * A malformed key is reported separately from an absent one so an operator who
+ * pasted a secret, a URL or a quoted value into `TURNSTILE_SITE_KEY` gets a
+ * distinguishable diagnostic. Neither variant is ever a pass.
  */
-export function resolveCaptchaContract(): CaptchaContract {
-  return { mode: "absent" };
+export function resolveCaptchaContract(siteKey: string | null | undefined): CaptchaContract {
+  if (siteKey === null || siteKey === undefined || siteKey.trim() === "") {
+    return { mode: "unavailable", reason: "site_key_absent" };
+  }
+  const trimmed = siteKey.trim();
+  if (!isValidTurnstileSiteKey(trimmed)) {
+    return { mode: "unavailable", reason: "site_key_malformed" };
+  }
+  return { mode: "provider", provider: "turnstile", siteKey: trimmed };
+}
+
+/** Whether the registration form should render a CAPTCHA widget. */
+export function hasCaptchaWidget(contract: CaptchaContract): boolean {
+  return contract.mode === "provider";
 }
 
 /**
- * Whether the registration form should render a CAPTCHA widget.
+ * Whether registration may be submitted at all.
  *
- * Kept as a named predicate so the form has one obvious branch to extend and so
- * tests can assert that today's public bundle renders no widget and fabricates
- * no token.
+ * False when no provider is configured. The submit button is disabled rather
+ * than allowed to post a request that cannot succeed.
  */
-export function hasCaptchaWidget(contract: CaptchaContract): boolean {
-  return contract.mode === "provider";
+export function canSubmitRegistration(contract: CaptchaContract, token: string | null): boolean {
+  return contract.mode === "provider" && token !== null && token !== "";
 }

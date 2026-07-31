@@ -16,8 +16,31 @@ vi.mock("@/lib/api/client", () => ({ register: vi.fn() }));
 import * as api from "@/lib/api/client";
 import { RegisterForm } from "@/features/auth/register-form";
 import { makeError, normalizeHttpError } from "@/lib/api/errors";
+import {
+  installTurnstileDouble,
+  resetTurnstileDouble,
+  TEST_SITE_KEY,
+  DUMMY_TOKEN,
+  type TurnstileDouble,
+} from "@/test/turnstile-double";
 
 const registerMock = vi.mocked(api.register);
+
+/**
+ * The live Turnstile double for the current test. Installed in `beforeEach` in
+ * auto-solve mode so the many tests that only exercise form behaviour get a
+ * token without each having to drive the challenge; the tests that care about
+ * the challenge itself re-install it with `autoSolve: false`.
+ */
+let turnstile: TurnstileDouble;
+
+/**
+ * Render with the PUBLISHED Cloudflare test site key. The key is documentation,
+ * not a credential, and the SECRET counterpart lives only in the Backend.
+ */
+function renderForm(siteKey: string | null = TEST_SITE_KEY) {
+  return render(<RegisterForm turnstileSiteKey={siteKey} />);
+}
 
 /** First (and only) payload the form sent. Fails loudly if it never called. */
 function sentPayload(): api.RegistrationInput {
@@ -40,10 +63,18 @@ function created(over: { required?: boolean } = {}) {
   };
 }
 
+/**
+ * Fill every required field AND wait for the challenge to produce a token.
+ *
+ * The wait is part of "the form is valid" now: submit is disabled until a token
+ * exists, so a test that typed three fields and clicked would click a disabled
+ * button and silently assert nothing.
+ */
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Email"), "Learner@Example.COM");
   await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
   await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
+  await waitFor(() => expect(submitButton()).toBeEnabled());
 }
 
 function submitButton() {
@@ -55,10 +86,12 @@ beforeEach(() => {
   refresh.mockClear();
   registerMock.mockReset();
   searchParams = new URLSearchParams();
+  turnstile = installTurnstileDouble();
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  resetTurnstileDouble();
 });
 
 describe("RegisterForm — DTO mapping", () => {
@@ -66,7 +99,7 @@ describe("RegisterForm — DTO mapping", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -90,7 +123,7 @@ describe("RegisterForm — DTO mapping", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -102,7 +135,7 @@ describe("RegisterForm — DTO mapping", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -114,7 +147,7 @@ describe("RegisterForm — DTO mapping", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -126,7 +159,7 @@ describe("RegisterForm — DTO mapping", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.type(screen.getByLabelText(/^Имя/), "  Аня  ");
     await user.click(submitButton());
@@ -135,17 +168,19 @@ describe("RegisterForm — DTO mapping", () => {
     expect(sentPayload().name).toBe("Аня");
   });
 
-  it("sends no fabricated CAPTCHA token while the Backend has no provider", async () => {
+  it("sends the token the widget produced, and never a fabricated one", async () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
     await waitFor(() => expect(registerMock).toHaveBeenCalled());
-    expect(sentPayload().captchaToken).toBeUndefined();
-    expect(screen.queryByTestId("captcha-slot")).toBeNull();
+    // Exactly what the challenge minted — not a sentinel, not a constant, not
+    // the "dev-captcha-ok" string the Backend's own legacy page hard-codes.
+    expect(sentPayload().captchaToken).toBe(DUMMY_TOKEN);
+    expect(sentPayload().captchaToken).not.toBe("dev-captcha-ok");
   });
 });
 
@@ -155,7 +190,7 @@ describe("RegisterForm — referral", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.getByTestId("referral-valid")).toBeTruthy();
     await fillValidForm(user);
     await user.click(submitButton());
@@ -168,7 +203,7 @@ describe("RegisterForm — referral", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.queryByTestId("referral-valid")).toBeNull();
     expect(screen.queryByTestId("referral-malformed")).toBeNull();
     await fillValidForm(user);
@@ -183,7 +218,7 @@ describe("RegisterForm — referral", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.getByTestId("referral-malformed")).toBeTruthy();
     await fillValidForm(user);
     await user.click(submitButton());
@@ -199,7 +234,7 @@ describe("RegisterForm — referral", () => {
       normalizeFailure({ status: 400, body: { error: "REFERRAL_INVALID", message: "…" } }),
     );
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -212,7 +247,7 @@ describe("RegisterForm — referral", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -228,7 +263,7 @@ function normalizeFailure(args: { status: number; body?: unknown }) {
 describe("RegisterForm — validation states", () => {
   it("blocks submission and shows a field error for an invalid email", async () => {
     const user = userEvent.setup();
-    render(<RegisterForm />);
+    renderForm();
 
     await user.type(screen.getByLabelText("Email"), "nope");
     await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
@@ -241,7 +276,7 @@ describe("RegisterForm — validation states", () => {
 
   it("blocks submission for a password that fails the Backend policy", async () => {
     const user = userEvent.setup();
-    render(<RegisterForm />);
+    renderForm();
 
     await user.type(screen.getByLabelText("Email"), "a@b.co");
     await user.type(screen.getByLabelText("Пароль"), "password");
@@ -254,7 +289,7 @@ describe("RegisterForm — validation states", () => {
 
   it("blocks submission when the confirmation does not match", async () => {
     const user = userEvent.setup();
-    render(<RegisterForm />);
+    renderForm();
 
     await user.type(screen.getByLabelText("Email"), "a@b.co");
     await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
@@ -271,7 +306,7 @@ describe("RegisterForm — server states", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(normalizeFailure({ status: 400, body: { error: "Email уже занят" } }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -289,7 +324,7 @@ describe("RegisterForm — server states", () => {
       normalizeFailure({ status: 429, body: { error: "RATE_LIMITED", message: "…" } }),
     );
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -302,7 +337,7 @@ describe("RegisterForm — server states", () => {
       normalizeFailure({ status: 400, body: { error: "CAPTCHA_FAILED", message: "…" } }),
     );
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -318,7 +353,7 @@ describe("RegisterForm — server states", () => {
       }),
     );
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -329,7 +364,7 @@ describe("RegisterForm — server states", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(normalizeFailure({ status: 502 }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -340,7 +375,7 @@ describe("RegisterForm — server states", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue({ ok: false, error: makeError("MALFORMED_RESPONSE") });
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -354,7 +389,7 @@ describe("RegisterForm — server states", () => {
       error: { ...normalizeHttpError({ status: 502 }), requestId: "req-42" },
     });
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -365,7 +400,7 @@ describe("RegisterForm — server states", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(normalizeFailure({ status: 502 }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -380,7 +415,7 @@ describe("RegisterForm — loading and duplicate submission", () => {
     let resolve!: (value: ReturnType<typeof created>) => void;
     registerMock.mockReturnValue(new Promise((r) => { resolve = r; }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -398,7 +433,7 @@ describe("RegisterForm — loading and duplicate submission", () => {
     let resolve!: (value: ReturnType<typeof created>) => void;
     registerMock.mockReturnValue(new Promise((r) => { resolve = r; }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     const button = submitButton();
     await user.click(button);
@@ -416,7 +451,7 @@ describe("RegisterForm — success", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -430,7 +465,7 @@ describe("RegisterForm — success", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -442,7 +477,7 @@ describe("RegisterForm — success", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created({ required: true }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -457,7 +492,7 @@ describe("RegisterForm — success", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -468,7 +503,7 @@ describe("RegisterForm — success", () => {
 
 describe("RegisterForm — accessibility", () => {
   it("labels every field explicitly", () => {
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.getByLabelText("Email")).toBeTruthy();
     expect(screen.getByLabelText(/^Имя/)).toBeTruthy();
     expect(screen.getByLabelText("Пароль")).toBeTruthy();
@@ -476,7 +511,7 @@ describe("RegisterForm — accessibility", () => {
   });
 
   it("uses autocomplete values appropriate to a new-account form", () => {
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.getByLabelText("Email").getAttribute("autocomplete")).toBe("email");
     expect(screen.getByLabelText("Пароль").getAttribute("autocomplete")).toBe("new-password");
     expect(screen.getByLabelText("Повторите пароль").getAttribute("autocomplete")).toBe("new-password");
@@ -484,7 +519,7 @@ describe("RegisterForm — accessibility", () => {
 
   it("associates each field error with its field", async () => {
     const user = userEvent.setup();
-    render(<RegisterForm />);
+    renderForm();
 
     await user.type(screen.getByLabelText("Email"), "nope");
     await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
@@ -502,7 +537,7 @@ describe("RegisterForm — accessibility", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(normalizeFailure({ status: 502 }));
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
@@ -515,7 +550,7 @@ describe("RegisterForm — accessibility", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.type(screen.getByLabelText("Повторите пароль"), "{Enter}");
 
@@ -523,7 +558,7 @@ describe("RegisterForm — accessibility", () => {
   });
 
   it("offers the login link for people who already have an account", () => {
-    render(<RegisterForm />);
+    renderForm();
     expect(screen.getByRole("link", { name: "Войти" }).getAttribute("href")).toBe("/login");
   });
 });
@@ -534,7 +569,7 @@ describe("RegisterForm — security", () => {
     registerMock.mockResolvedValue(created());
     const localSet = vi.spyOn(Storage.prototype, "setItem");
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
     await screen.findByText("Аккаунт создан");
@@ -550,7 +585,7 @@ describe("RegisterForm — security", () => {
       vi.spyOn(console, level).mockImplementation(() => {}),
     );
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
     await screen.findByTestId("register-error");
@@ -565,7 +600,7 @@ describe("RegisterForm — security", () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
     await screen.findByText("Аккаунт создан");
@@ -585,11 +620,206 @@ describe("RegisterForm — security", () => {
       },
     } as never);
 
-    render(<RegisterForm />);
+    renderForm();
     await fillValidForm(user);
     await user.click(submitButton());
 
     await screen.findByText("Аккаунт создан");
     expect(document.body.textContent).not.toContain("SECRET-DEV-TOKEN");
+  });
+});
+
+// ===========================================================================
+// AFD-3A2 — Turnstile integration in the registration form.
+// ===========================================================================
+
+describe("RegisterForm — Turnstile gating", () => {
+  it("blocks submission until the challenge produces a token", async () => {
+    const user = userEvent.setup();
+    resetTurnstileDouble();
+    turnstile = installTurnstileDouble({ autoSolve: false });
+    registerMock.mockResolvedValue(created());
+
+    renderForm();
+    await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
+
+    // Every field is valid; only the challenge is outstanding.
+    expect(submitButton()).toBeDisabled();
+    await user.click(submitButton());
+    expect(registerMock).not.toHaveBeenCalled();
+
+    await turnstile.solve();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+  });
+
+  it("tells the user, in a live region, that the challenge is outstanding", async () => {
+    resetTurnstileDouble();
+    turnstile = installTurnstileDouble({ autoSolve: false });
+
+    renderForm();
+
+    const statuses = screen.getAllByRole("status");
+    const text = statuses.map((node) => node.textContent).join(" ");
+    expect(text).toContain("Пройдите проверку безопасности");
+  });
+
+  it("re-disables submission when a solved token later expires", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await fillValidForm(user);
+    expect(submitButton()).toBeEnabled();
+
+    await turnstile.expire();
+
+    // A five-minute-old token is worthless; the form must not let it be sent.
+    await waitFor(() => expect(submitButton()).toBeDisabled());
+  });
+
+  it.each([
+    ["timeout", () => turnstile.timeout()],
+    ["provider error", () => turnstile.fail()],
+  ])("re-disables submission after a %s", async (_label, drive) => {
+    const user = userEvent.setup();
+    renderForm();
+    await fillValidForm(user);
+    expect(submitButton()).toBeEnabled();
+
+    await drive();
+
+    await waitFor(() => expect(submitButton()).toBeDisabled());
+  });
+
+  it("renders an unavailable state and blocks submission with no site key", async () => {
+    const user = userEvent.setup();
+    renderForm(null);
+
+    await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
+
+    // The decisive assertion: an unconfigured provider must NOT silently hide
+    // the challenge and let the request through.
+    expect(screen.getByTestId("captcha-unavailable")).toBeInTheDocument();
+    expect(screen.queryByTestId("turnstile-widget")).toBeNull();
+    expect(submitButton()).toBeDisabled();
+
+    await user.click(submitButton());
+    expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("renders an unavailable state for a malformed site key", () => {
+    renderForm("not-a-site-key");
+
+    expect(screen.getByTestId("captcha-unavailable")).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+  });
+});
+
+describe("RegisterForm — Turnstile failure recovery", () => {
+  async function submitAndFail(status: number, code: string) {
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue({
+      ok: false as const,
+      error: normalizeHttpError({ status, body: { error: code } }),
+    } as never);
+
+    renderForm();
+    await fillValidForm(user);
+    await user.click(submitButton());
+    await waitFor(() => expect(registerMock).toHaveBeenCalled());
+    return user;
+  }
+
+  it.each([
+    [400, "CAPTCHA_FAILED", "Проверка не пройдена"],
+    [503, "CAPTCHA_UNAVAILABLE", "Сервис проверки временно недоступен"],
+    [503, "CAPTCHA_CONFIGURATION_ERROR", "Проверка недоступна"],
+  ])("maps %s %s to its own message", async (status, code, expected) => {
+    await submitAndFail(status, code);
+    expect(await screen.findByTestId("register-error")).toHaveTextContent(expected);
+  });
+
+  it("resets the widget after a consumed-token failure", async () => {
+    const rendersBefore = turnstile.renders.length;
+    await submitAndFail(400, "CAPTCHA_FAILED");
+
+    // A Turnstile token is single-use: replaying it can only produce
+    // `timeout-or-duplicate`, so a new challenge is mandatory, not cosmetic.
+    await waitFor(() => expect(turnstile.renders.length).toBeGreaterThan(rendersBefore));
+    expect(turnstile.removed.length).toBeGreaterThan(0);
+  });
+
+  it("re-enables submission only once a NEW token arrives", async () => {
+    resetTurnstileDouble();
+    turnstile = installTurnstileDouble({ autoSolve: false });
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue({
+      ok: false as const,
+      error: normalizeHttpError({ status: 400, body: { error: "CAPTCHA_FAILED" } }),
+    } as never);
+
+    renderForm();
+    await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
+    await turnstile.solve("first-token");
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    await user.click(submitButton());
+
+    await waitFor(() => expect(submitButton()).toBeDisabled());
+    await turnstile.solve("second-token");
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+
+    await user.click(submitButton());
+    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(2));
+    // The retry must carry the NEW token, never the spent one.
+    const retry = registerMock.mock.calls[1];
+    if (!retry) throw new Error("the retry never reached api.register");
+    expect(retry[0].captchaToken).toBe("second-token");
+  });
+
+  it("keeps the referral code across a CAPTCHA failure and retry", async () => {
+    searchParams = new URLSearchParams("ref=invite-abc123");
+    await submitAndFail(400, "CAPTCHA_FAILED");
+
+    expect(sentPayload().referralCode).toBe("invite-abc123");
+    expect(screen.getByTestId("referral-valid")).toBeInTheDocument();
+  });
+});
+
+describe("RegisterForm — token confinement", () => {
+  it("puts the token in the request body and nowhere else", async () => {
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue(created());
+
+    renderForm();
+    await fillValidForm(user);
+    await user.click(submitButton());
+    await waitFor(() => expect(registerMock).toHaveBeenCalled());
+
+    expect(sentPayload().captchaToken).toBe(DUMMY_TOKEN);
+    expect(window.location.href).not.toContain(DUMMY_TOKEN);
+    expect(window.location.search).not.toContain(DUMMY_TOKEN);
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    expect(document.cookie).not.toContain(DUMMY_TOKEN);
+  });
+
+  it("adds no affiliate or attribution field alongside the token", async () => {
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue(created());
+
+    renderForm();
+    await fillValidForm(user);
+    await user.click(submitButton());
+    await waitFor(() => expect(registerMock).toHaveBeenCalled());
+
+    // ATA invitation referral is not affiliate acquisition attribution and not
+    // a Pocket click id. None of those belong in a registration payload.
+    for (const forbidden of ["ataClickId", "clickid", "click_id", "externalAffiliateClickId", "affiliateCode", "publicCode"]) {
+      expect(sentPayload()).not.toHaveProperty(forbidden);
+    }
   });
 });

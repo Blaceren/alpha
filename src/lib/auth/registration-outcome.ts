@@ -35,6 +35,10 @@ import type { NormalizedError } from "@/lib/api/errors";
 export type RegistrationFailure =
   | "EMAIL_TAKEN"
   | "CAPTCHA_FAILED"
+  /** AFD-3A2: 503 — Cloudflare could not be reached or answered unusably. */
+  | "CAPTCHA_UNAVAILABLE"
+  /** AFD-3A2: 503 — this platform's CAPTCHA configuration is broken. */
+  | "CAPTCHA_CONFIGURATION_ERROR"
   | "REFERRAL_INVALID"
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
@@ -45,6 +49,11 @@ export type RegistrationFailure =
 const MESSAGES: Record<RegistrationFailure, string> = {
   EMAIL_TAKEN: "Этот email уже зарегистрирован. Войдите или используйте другой адрес.",
   CAPTCHA_FAILED: "Проверка не пройдена. Пройдите её ещё раз.",
+  // Not the visitor's fault and not permanent: say so, and do not tell them to
+  // re-solve a challenge that never reached the verifier.
+  CAPTCHA_UNAVAILABLE: "Сервис проверки временно недоступен. Повторите попытку позже.",
+  // Deliberately says nothing about which part of the configuration is wrong.
+  CAPTCHA_CONFIGURATION_ERROR: "Проверка недоступна. Обратитесь к поддержке.",
   REFERRAL_INVALID: "Ссылка-приглашение недействительна. Зарегистрируйтесь по прямой ссылке.",
   VALIDATION_ERROR: "Проверьте введённые данные.",
   RATE_LIMITED: "Слишком много попыток регистрации. Попробуйте позже.",
@@ -60,6 +69,8 @@ const MESSAGES: Record<RegistrationFailure, string> = {
  */
 const RENEWS_CAPTCHA: ReadonlySet<RegistrationFailure> = new Set<RegistrationFailure>([
   "CAPTCHA_FAILED",
+  "CAPTCHA_UNAVAILABLE",
+  "CAPTCHA_CONFIGURATION_ERROR",
   "RATE_LIMITED",
   "TIMEOUT",
   "BACKEND_UNAVAILABLE",
@@ -104,7 +115,19 @@ export function mapRegistrationFailure(error: NormalizedError): RegistrationFail
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
     case "CONFIGURATION_ERROR":
-      return "BACKEND_UNAVAILABLE";
+      // AFD-3A2. The Backend answers 503 for a CAPTCHA outage and for a broken
+      // CAPTCHA configuration, which `categoryForStatus` maps to
+      // BACKEND_UNAVAILABLE. The stable code distinguishes them, so a visitor
+      // who hit a Cloudflare outage is not told "the service is unavailable"
+      // when the specific, actionable truth is available.
+      switch (error.code) {
+        case "CAPTCHA_UNAVAILABLE":
+          return "CAPTCHA_UNAVAILABLE";
+        case "CAPTCHA_CONFIGURATION_ERROR":
+          return "CAPTCHA_CONFIGURATION_ERROR";
+        default:
+          return "BACKEND_UNAVAILABLE";
+      }
 
     default:
       return "UNKNOWN";
