@@ -23,8 +23,10 @@ import {
 import {
   isBackendCsrfResponse,
   isBackendLoginResponse,
+  isBackendRegisterResponse,
   isBackendSessionResponse,
   type BackendLoginResponse,
+  type BackendRegisterResponse,
   type BackendSessionResponse,
 } from "@/lib/api/types";
 
@@ -147,6 +149,54 @@ export function login(credentials: LoginCredentials): Promise<ApiResult<BackendL
     jsonBody: { email: credentials.email, password: credentials.password },
     isLogin: true,
     validate: isBackendLoginResponse,
+  });
+}
+
+/**
+ * Fields the Academy is willing to send to the registration owner.
+ *
+ * This mirrors the authoritative Backend `registerSchema` EXACTLY — `email` and
+ * `password` required, `name`, `referralCode` and `captchaToken` optional — and
+ * invents nothing (no first/last name, phone, Telegram, country, consent or
+ * trading-experience field exists in that schema).
+ *
+ * The password-confirmation field on the form is client-only and never appears
+ * here.
+ */
+export type RegistrationInput = {
+  email: string;
+  password: string;
+  name?: string;
+  referralCode?: string;
+  captchaToken?: string;
+};
+
+/**
+ * Register a new account (AFD-3A).
+ *
+ * No auto-retry: registration is a mutation, and a silent second attempt could
+ * both create a duplicate and burn one of the caller's 3 rate-limited attempts.
+ * Optional fields are omitted from the payload entirely rather than sent as
+ * empty strings, which Backend's `.min(1)` would reject.
+ */
+export function register(
+  input: RegistrationInput,
+  signal?: AbortSignal,
+): Promise<ApiResult<BackendRegisterResponse>> {
+  const jsonBody: Record<string, string> = {
+    email: input.email,
+    password: input.password,
+  };
+  if (input.name) jsonBody.name = input.name;
+  if (input.referralCode) jsonBody.referralCode = input.referralCode;
+  if (input.captchaToken) jsonBody.captchaToken = input.captchaToken;
+
+  return apiRequest<BackendRegisterResponse>({
+    method: "POST",
+    path: `${PROXY_BASE}/auth/register`,
+    jsonBody,
+    validate: isBackendRegisterResponse,
+    signal,
   });
 }
 

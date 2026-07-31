@@ -14,6 +14,7 @@
 import { getAcademyConfig, AcademyConfigError } from "@/config/academy-config";
 import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/errors";
 import { getProxyRoute, type ProxyOperation } from "@/server/proxy/allow-list";
+import { deriveTrustedClientIp, FORWARDED_CLIENT_IP_HEADERS } from "@/server/proxy/client-ip";
 
 /** 64 KiB is far more than any auth payload needs. */
 export const MAX_BODY_BYTES = 64 * 1024;
@@ -44,13 +45,29 @@ function errorResponse(error: NormalizedError, status: number): Response {
   });
 }
 
-function buildForwardHeaders(request: Request): Headers {
+function buildForwardHeaders(request: Request, forwardClientIp: boolean): Headers {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
     if (FORWARD_REQUEST_HEADERS.has(key.toLowerCase())) {
       headers.set(key, value);
     }
   });
+
+  // The allow-list above already drops every client-controlled forwarding
+  // header. For IP-rate-limited operations we re-add exactly one address — the
+  // one the trusted ingress hop measured — under both header names Backend
+  // consults. `set` (not `append`) guarantees a single-element chain that the
+  // browser had no part in. `null` means "no trustworthy value": we forward
+  // nothing rather than guessing.
+  if (forwardClientIp) {
+    const clientIp = deriveTrustedClientIp(request);
+    if (clientIp !== null) {
+      for (const header of FORWARDED_CLIENT_IP_HEADERS) {
+        headers.set(header, clientIp);
+      }
+    }
+  }
+
   return headers;
 }
 
@@ -119,7 +136,7 @@ export async function proxyToBackend(
   try {
     backendResponse = await fetch(target, {
       method: route.method,
-      headers: buildForwardHeaders(request),
+      headers: buildForwardHeaders(request, route.forwardClientIp),
       body,
       redirect: "manual",
       signal: controller.signal,
