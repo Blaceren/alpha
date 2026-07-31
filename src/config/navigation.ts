@@ -55,6 +55,10 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Аналитика",
     items: [
       { key: "analytics", label: "Аналитика", href: "/analytics", icon: "BarChart3" },
+      // AFD-5A. Grouped under Аналитика because that is where an operator looks
+      // for traffic sources, but the section itself is configuration-only in
+      // this phase — it shows no metric of any kind.
+      { key: "affiliates", label: "Аффилейты", href: "/affiliates", icon: "Share2" },
       { key: "audit", label: "Audit", href: "/audit", icon: "ScrollText" },
     ],
   },

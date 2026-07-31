@@ -46,8 +46,9 @@ describe("effectivePermissions is the UI authority", () => {
     const session = sessionFromDto(ADMIN_ROLE_NO_PERMISSIONS);
     expect(session.role).toBe("crm_admin");
 
-    // The role-based matrix would grant all eight. The session grants none.
-    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(8);
+    // The role-based matrix would grant all nine (AFD-5A appended
+    // view_affiliate_analytics). The session grants none.
+    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(9);
     for (const permission of ROLE_PERMISSIONS.crm_admin) {
       expect(sessionGrants(session, permission)).toBe(false);
     }

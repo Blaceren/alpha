@@ -24,11 +24,12 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly twelve rewrite definitions", () => {
-    // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R).
-    // Pinning the count is the point: a new proxied path must be a deliberate
-    // change to this number, never a side effect.
-    expect(buildRewrites(env)).toHaveLength(12);
+  it("produces exactly eighteen rewrite definitions", () => {
+    // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
+    // + six affiliate management paths (AFD-5A). Pinning the count is the
+    // point: a new proxied path must be a deliberate change to this number,
+    // never a side effect.
+    expect(buildRewrites(env)).toHaveLength(18);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -52,7 +53,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the twelve reviewed paths", () => {
+  it("exposes exactly the eighteen reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -66,6 +67,12 @@ describe("rewrites — api mode", () => {
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
       "/api/curriculum/v2/report-submissions/:submissionRef/reject",
       "/api/curriculum/v2/report-submissions/:submissionRef/approve",
+      "/api/crm/v1/affiliates/partners",
+      "/api/crm/v1/affiliates/partners/:partnerId",
+      "/api/crm/v1/affiliates/campaigns",
+      "/api/crm/v1/affiliates/campaigns/:campaignId",
+      "/api/crm/v1/affiliates/tracking-links",
+      "/api/crm/v1/affiliates/tracking-links/:linkId",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -199,6 +206,12 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
       "/api/curriculum/v2/report-submissions/:submissionRef/reject",
       "/api/curriculum/v2/report-submissions/:submissionRef/approve",
+      "/api/crm/v1/affiliates/partners",
+      "/api/crm/v1/affiliates/partners/:partnerId",
+      "/api/crm/v1/affiliates/campaigns",
+      "/api/crm/v1/affiliates/campaigns/:campaignId",
+      "/api/crm/v1/affiliates/tracking-links",
+      "/api/crm/v1/affiliates/tracking-links/:linkId",
     ]);
     for (const forbidden of [
       "/api/:path*",

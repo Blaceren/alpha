@@ -15,9 +15,15 @@ import { z } from "zod";
 import { CRM_ROLES, type CrmRole, type Permission } from "@/domain/identity/roles";
 
 /**
- * The ten canonical permissions, as sent by the backend, in the backend's exact
- * canonical order. The first eight are the accepted session contract and keep
- * their exact relative order; CRM User Notes v1 appended the last two.
+ * The eleven canonical permissions, as sent by the backend, in the backend's
+ * exact canonical order. The first eight are the accepted session contract and
+ * keep their exact relative order; CRM User Notes v1 appended two more; AFD-5A
+ * appended `view_affiliate_analytics`.
+ *
+ * Every addition APPENDS. Because `PermissionSchema` is a closed enum, a
+ * permission missing from this list would make the whole session response fail
+ * to parse and log the operator out — so this array must track the backend's
+ * `CRM_PERMISSIONS` exactly, not approximately.
  */
 export const SESSION_PERMISSIONS = [
   "view_exact_financials",
@@ -30,6 +36,7 @@ export const SESSION_PERMISSIONS = [
   "edit_user_notes",
   "view_user_notes",
   "create_user_notes",
+  "view_affiliate_analytics",
 ] as const satisfies readonly Permission[];
 
 const RoleSchema = z.enum(CRM_ROLES as unknown as [CrmRole, ...CrmRole[]]);

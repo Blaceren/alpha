@@ -135,8 +135,28 @@ describe("SessionDtoSchema — closed to extra fields", () => {
 });
 
 describe("Notes v1 permission schema", () => {
-  it("declares exactly ten permissions in the backend's canonical order", () => {
+  it("declares exactly eleven permissions in the backend's canonical order", () => {
+    // AFD-5A appended view_affiliate_analytics. This list must track the
+    // backend's CRM_PERMISSIONS exactly: because PermissionSchema is a closed
+    // enum, a missing entry makes the whole session response fail to parse and
+    // logs the operator out.
     expect([...SESSION_PERMISSIONS]).toEqual([
+      "view_exact_financials",
+      "view_identity_full_email",
+      "reveal_pii",
+      "assign_owner",
+      "export",
+      "view_audit",
+      "manage_settings",
+      "edit_user_notes",
+      "view_user_notes",
+      "create_user_notes",
+      "view_affiliate_analytics",
+    ]);
+  });
+
+  it("keeps the ten pre-AFD-5A permissions in their exact prior order", () => {
+    expect(SESSION_PERMISSIONS.slice(0, 10)).toEqual([
       "view_exact_financials",
       "view_identity_full_email",
       "reveal_pii",

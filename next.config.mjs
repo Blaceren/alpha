@@ -115,6 +115,30 @@ export const REVIEW_CLAIM_PATH = "/api/curriculum/v2/report-submissions/:submiss
 export const REVIEW_REJECT_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/reject";
 export const REVIEW_APPROVE_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/approve";
 
+/* ------------------------------------------- Affiliate management (AFD-5A)
+ *
+ * Six exact paths — three collections and three single-segment details. Each
+ * `:id` matches EXACTLY ONE segment and there is no catch-all, so
+ * `/affiliates/partners/1/campaigns`, `/affiliates/tracking-links/1/activate`
+ * and any unlisted child are NOT proxied and fall through to the CRM app.
+ *
+ * The PUBLIC acquisition route `/go/{publicCode}` is deliberately ABSENT. It is
+ * learner-facing traffic served from the public origin, never something the CRM
+ * origin should forward — and the CRM never needs to call it to display a link.
+ * The AFD-4 Pocket postback paths are absent for the same reason.
+ *
+ * GET and the mutations share one definition per path; Next rewrites are
+ * method-agnostic. The backend enforces `view_affiliate_analytics` on GET and
+ * `manage_settings` + CSRF on POST/PATCH, so a proxied method the caller is not
+ * entitled to fails there with a 403 rather than here.
+ */
+export const AFFILIATE_PARTNERS_PATH = "/api/crm/v1/affiliates/partners";
+export const AFFILIATE_PARTNER_DETAIL_PATH = "/api/crm/v1/affiliates/partners/:partnerId";
+export const AFFILIATE_CAMPAIGNS_PATH = "/api/crm/v1/affiliates/campaigns";
+export const AFFILIATE_CAMPAIGN_DETAIL_PATH = "/api/crm/v1/affiliates/campaigns/:campaignId";
+export const AFFILIATE_LINKS_PATH = "/api/crm/v1/affiliates/tracking-links";
+export const AFFILIATE_LINK_DETAIL_PATH = "/api/crm/v1/affiliates/tracking-links/:linkId";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -129,6 +153,12 @@ export const PROXIED_PATHS = [
   REVIEW_CLAIM_PATH,
   REVIEW_REJECT_PATH,
   REVIEW_APPROVE_PATH,
+  AFFILIATE_PARTNERS_PATH,
+  AFFILIATE_PARTNER_DETAIL_PATH,
+  AFFILIATE_CAMPAIGNS_PATH,
+  AFFILIATE_CAMPAIGN_DETAIL_PATH,
+  AFFILIATE_LINKS_PATH,
+  AFFILIATE_LINK_DETAIL_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

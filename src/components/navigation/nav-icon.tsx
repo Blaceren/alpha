@@ -10,6 +10,7 @@ import {
   MessageSquare,
   ScrollText,
   Settings,
+  Share2,
   Users,
   Wallet,
   Workflow,
@@ -30,6 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
   BarChart3,
   ScrollText,
   Settings,
+  Share2,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {

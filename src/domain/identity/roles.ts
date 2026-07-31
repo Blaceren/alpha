@@ -55,6 +55,12 @@ export type SectionKey =
   | "automations"
   | "analytics"
   | "audit"
+  /**
+   * AFD-5A — the affiliate management workspace. Deliberately its own section
+   * rather than a tab under `analytics`: it is CONFIGURATION (partners,
+   * campaigns, tracking links), and AFD-5A ships no traffic analytics at all.
+   */
+  | "affiliates"
   | "settings";
 
 /**
@@ -83,4 +89,14 @@ export type Permission =
    * pin/unpin, visibility) and grants neither of these.
    */
   | "view_user_notes"
-  | "create_user_notes";
+  | "create_user_notes"
+  /**
+   * AFD-5A (backend `CRM_PERMISSIONS[10]`). A READ permission over the
+   * affiliate inventory — partners, campaigns and tracking links — and, from
+   * AFD-5B, their traffic analytics.
+   *
+   * It grants no mutation. Creating, editing, activating, pausing and archiving
+   * affiliate entities all still require `manage_settings`, and the backend is
+   * what enforces that: hiding a button here is a convenience, not the gate.
+   */
+  | "view_affiliate_analytics";

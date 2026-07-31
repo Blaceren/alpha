@@ -63,6 +63,14 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
   ],
   automations: ["crm_admin", "crm_manager", "retention_manager", "analyst"],
   analytics: ["crm_admin", "crm_manager", "retention_manager", "analyst", "read_only"],
+  /**
+   * AFD-5A. Exactly the roles the BACKEND grants `view_affiliate_analytics` —
+   * crm_admin, crm_manager and analyst — so navigation canon and the real
+   * authorization gate cannot disagree. `retention_manager` and `read_only` are
+   * deliberately absent even though they appear under `analytics`: the backend
+   * refuses them, and showing a section that answers 403 would be a lie.
+   */
+  affiliates: ["crm_admin", "crm_manager", "analyst"],
   audit: [
     "crm_admin",
     "crm_manager",
@@ -98,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "view_audit",
     "manage_settings",
     "edit_user_notes",
+    "view_affiliate_analytics",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -107,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "export",
     "view_audit",
     "edit_user_notes",
+    "view_affiliate_analytics",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -119,7 +129,9 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
   mentor: [],
   support: ["edit_user_notes"],
   moderator: [],
-  analyst: [],
+  // AFD-5A — analyst's first permission, mirroring the backend matrix. Read
+  // only: no `manage_settings`, so every affiliate mutation is refused.
+  analyst: ["view_affiliate_analytics"],
   content_manager: [],
   read_only: [],
 };
