@@ -221,7 +221,9 @@ export type CrmErrorResponse = z.infer<typeof crmErrorResponseSchema>;
 // a response that promised not to carry it.
 
 const affiliateEntityStatusSchema = z.enum(["active", "paused", "archived"]);
-const affiliateLinkStatusSchema = z.enum(["draft", "paused", "archived"]);
+// AFD-3B2 adds `active`: the public acquisition route and the attribution owner
+// now exist, so a link may truthfully claim to be live.
+const affiliateLinkStatusSchema = z.enum(["draft", "active", "paused", "archived"]);
 // Stored status answers "what did an operator set"; availability answers "could
 // this be used". Both ship, because collapsing them hides either the operator's
 // choice or the reason a child is unusable.
@@ -303,11 +305,22 @@ export const affiliateTrackingLinkSchema = z
       .strict(),
     attributionWindowDays: z.number().int().positive().nullable(),
     effectiveAttributionWindowDays: z.number().int().positive(),
-    // The two fields that keep this phase honest. No click count, no conversion
-    // count and no zero-valued analytics field appears anywhere in this DTO,
-    // because a zero would read as "tracking is running and found nothing".
-    publicRouteState: z.literal("not_available_until_afd3b"),
-    activationState: z.literal("unavailable"),
+    // AFD-3B2 turned these two from placeholders into live operational facts.
+    // `serving` means this exact link would create a qualified click right now;
+    // every other value names the reason it would not. `activationState` answers
+    // the different question of whether an operator could set it active today.
+    //
+    // Still no click count, no conversion count and no zero-valued analytics
+    // field anywhere in this DTO: affiliate analytics is AFD-5, and a zero here
+    // would read as "tracking is running and found nothing".
+    publicRouteState: z.enum([
+      "serving",
+      "feature_disabled",
+      "not_active",
+      "parent_paused",
+      "parent_archived",
+    ]),
+    activationState: z.enum(["available", "feature_disabled", "blocked", "terminal"]),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     archivedAt: z.string().datetime().nullable(),

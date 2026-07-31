@@ -16,6 +16,18 @@ import {
   resolveCaptchaConfig,
 } from "@/lib/captcha/provider";
 import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
+import {
+  AFFILIATE_ATTRIBUTION_ENABLED_KEY,
+  ATTRIBUTION_TOKEN_SECRET_KEY,
+  describeAttributionConfigRejection,
+  resolveAttributionConfig,
+} from "@/lib/affiliate/attribution-config";
+import {
+  AFFILIATE_GO_IP_LIMIT_KEY,
+  AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY,
+  AFFILIATE_GO_LINK_LIMIT_KEY,
+  AFFILIATE_GO_TRUST_FORWARDED_FOR_KEY,
+} from "@/lib/affiliate/go-abuse-limit";
 import { describePublicAppUrlRejection, resolvePublicAppUrl } from "@/lib/publicUrl";
 import {
   describePocketAffiliateUrlRejection,
@@ -82,6 +94,15 @@ const OPTIONAL_ENV = [
   "REPORT_ATTACHMENT_CLAMAV_PORT",
   "REPORT_ATTACHMENT_TEST_BACKEND",
   "PUBLIC_APP_URL",
+  // AFD-3B2 — acquisition attribution. Absent means disabled, which is the only
+  // safe default: a deployment that has not been given a signing secret must not
+  // be issuing attribution tokens.
+  AFFILIATE_ATTRIBUTION_ENABLED_KEY,
+  ATTRIBUTION_TOKEN_SECRET_KEY,
+  AFFILIATE_GO_TRUST_FORWARDED_FOR_KEY,
+  AFFILIATE_GO_IP_LIMIT_KEY,
+  AFFILIATE_GO_LINK_LIMIT_KEY,
+  AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY,
 ] as const;
 
 const envSchema = z.object({
@@ -160,6 +181,16 @@ const envSchema = z.object({
   // or an internal service port. See the affiliate check in validateRuntimeEnv.
   POCKET_AFFILIATE_BASE_URL: z.string().optional(),
   POCKET_REFERRAL_URL: z.string().optional(),
+  // AFD-3B2. Enumerated so a misspelled "TRUE" is a startup error rather than a
+  // silent "not exactly true → disabled" that an operator would read as enabled.
+  // The secret is `z.string()` only: its CONTENT is judged by
+  // `resolveAttributionConfig`, which never quotes it in a message.
+  [AFFILIATE_ATTRIBUTION_ENABLED_KEY]: z.enum(["true", "false"]).optional(),
+  [ATTRIBUTION_TOKEN_SECRET_KEY]: z.string().optional(),
+  [AFFILIATE_GO_TRUST_FORWARDED_FOR_KEY]: z.enum(["true", "false"]).optional(),
+  [AFFILIATE_GO_IP_LIMIT_KEY]: z.string().regex(/^\d+$/).optional(),
+  [AFFILIATE_GO_LINK_LIMIT_KEY]: z.string().regex(/^\d+$/).optional(),
+  [AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY]: z.string().regex(/^\d+$/).optional(),
 });
 
 export type RuntimeEnvCheck = {
@@ -241,6 +272,25 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     const affiliateUrl = resolvePocketAffiliateUrl(env);
     if (affiliateUrl.kind === "invalid") {
       errors.push(describePocketAffiliateUrlRejection(affiliateUrl.reason, affiliateUrl.key));
+    }
+  }
+
+  // AFD-3B2 — acquisition attribution.
+  //
+  // OUTSIDE the `isProduction` block, and unconditional, for the reason the
+  // CAPTCHA and simulator checks are: this project serves a production build in
+  // DEV, so `NODE_ENV` says nothing about where the code is running. The rule is
+  // simply that asking for attribution obliges the deployment to be able to sign
+  // a token, everywhere. There is no environment in which a half-enabled
+  // attribution — a route that answers and a signature anyone can forge — is a
+  // useful state to boot into, so this fails closed rather than degrading.
+  //
+  // Absence is legal and means disabled. An operator who has not configured
+  // attribution has not accidentally enabled it.
+  {
+    const resolution = resolveAttributionConfig(env);
+    if (resolution.kind === "invalid") {
+      errors.push(describeAttributionConfigRejection(resolution.reason));
     }
   }
 

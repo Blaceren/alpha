@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { randomBase32Id } from "@/lib/affiliate/random-id";
 import type { CrmPermission } from "@/lib/crm/roles";
 
 /**
@@ -93,24 +93,13 @@ export function assertCanManageAffiliates(permissions: readonly CrmPermission[])
  * without being sequential or guessable, and lowercase-only so a link that is
  * transcribed with different casing cannot become a second distinct code. This
  * is the ONLY producer of a publicCode; no request body can supply one.
+ *
+ * AFD-3B2 moved the encoder itself to src/lib/affiliate/random-id.ts, which is
+ * now the single producer of every opaque affiliate identifier — public codes,
+ * click ids, visitor ids and conversion event ids. The shape is unchanged.
  */
 export function generatePublicCode(): string {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-  const bytes = crypto.randomBytes(20); // 160 bits
-  let bits = 0;
-  let value = 0;
-  let out = "";
-
-  for (const byte of bytes) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out += alphabet[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-
-  return out;
+  return randomBase32Id();
 }
 
 /* -------------------------------------------------------------- validation */
@@ -241,7 +230,14 @@ export function assertOnlyKnownKeys(body: unknown, allowed: readonly string[]): 
 /* ------------------------------------------------------------- transitions */
 
 export type AffiliateStatus = "active" | "paused" | "archived";
-export type TrackingLinkStatus = "draft" | "paused" | "archived";
+export type TrackingLinkStatus = "draft" | "active" | "paused" | "archived";
+
+export const TRACKING_LINK_STATUSES: readonly TrackingLinkStatus[] = [
+  "draft",
+  "active",
+  "paused",
+  "archived",
+];
 
 const ENTITY_TRANSITIONS: Record<AffiliateStatus, readonly AffiliateStatus[]> = {
   active: ["paused", "archived"],
@@ -251,9 +247,31 @@ const ENTITY_TRANSITIONS: Record<AffiliateStatus, readonly AffiliateStatus[]> = 
   archived: [],
 };
 
+/**
+ * AFD-3B2 adds `active` to the link lifecycle.
+ *
+ * TWO EDGES ARE MISSING ON PURPOSE.
+ *
+ * `active → draft` is forbidden. Draft means "this link has never been able to
+ * carry traffic", and a link that HAS carried traffic can never truthfully
+ * return to that state. Pausing is the honest way to stop a live link, and it
+ * says so: `paused` preserves the fact that the link was once live, which is
+ * what an operator reconciling a payout needs to see.
+ *
+ * `archived → anything` is forbidden, unchanged from AFD-2. Un-archiving would
+ * resurrect a link whose code an affiliate may still be publishing.
+ *
+ * `paused → draft` remains legal, because a link that was paused straight out of
+ * draft never carried traffic. That edge existed before this phase and is not
+ * widened here — a link reaching `paused` from `active` can still take it, and
+ * that is a deliberate accepted looseness rather than an oversight: the phase's
+ * integrity guarantees rest on the click and attribution rows, which no status
+ * change can alter, not on the link's current status.
+ */
 const LINK_TRANSITIONS: Record<TrackingLinkStatus, readonly TrackingLinkStatus[]> = {
-  draft: ["paused", "archived"],
-  paused: ["draft", "archived"],
+  draft: ["active", "paused", "archived"],
+  active: ["paused", "archived"],
+  paused: ["active", "draft", "archived"],
   archived: [],
 };
 
@@ -272,20 +290,108 @@ export function assertLinkTransition(from: TrackingLinkStatus, to: TrackingLinkS
 }
 
 /**
- * The stable, explicit refusal to activate a link before AFD-3B.
+ * The stable, explicit refusal to activate a link on a deployment where
+ * acquisition attribution is switched off.
+ *
+ * AFD-2 refused activation because the machinery did not exist. AFD-3B2 builds
+ * the machinery, so the refusal changes meaning: activation is now a real
+ * operation that this particular deployment has not turned on. The code changed
+ * with the meaning rather than being kept for compatibility, because a CRM that
+ * rendered "activation is not available yet" for a deployment that simply has a
+ * flag off would be telling an operator the wrong thing.
  *
  * Deliberately NOT a silent coercion to draft: an operator who asked for
- * `active` must learn that activation does not exist yet, rather than watch the
- * request succeed and quietly produce something else. The error is its own
- * code so a future CRM can render a specific explanation.
+ * `active` must learn that the request was refused rather than watch it succeed
+ * and quietly produce something else.
  */
-export class AffiliateLinkActivationUnavailableError extends Error {
-  readonly code = "AFFILIATE_LINK_ACTIVATION_NOT_AVAILABLE" as const;
-  readonly messageKey = "crm.affiliates.link.activation_not_available";
+export class AffiliateAttributionDisabledError extends Error {
+  readonly code = "AFFILIATE_ATTRIBUTION_DISABLED" as const;
+  readonly messageKey = "crm.affiliates.link.attribution_disabled";
   constructor() {
-    super("AFFILIATE_LINK_ACTIVATION_NOT_AVAILABLE");
-    this.name = "AffiliateLinkActivationUnavailableError";
+    super("AFFILIATE_ATTRIBUTION_DISABLED");
+    this.name = "AffiliateAttributionDisabledError";
   }
+}
+
+/**
+ * Everything that must be true before a link may be set `active`.
+ *
+ * WHY THESE AND NOT MORE. Each condition below is one that would otherwise make
+ * an active link a lie: a link whose affiliate is paused would accept clicks
+ * nobody will be paid for, a link with an unsupported landing key would have
+ * nowhere to send a visitor, and a link with no valid window would snapshot a
+ * window that can never make a click eligible. Conditions that a link can
+ * recover from on its own — a campaign that is later paused, the feature switch
+ * being turned off — are NOT checked here, because they are answered fresh on
+ * every request by `effectiveAvailability`. Freezing them at activation time
+ * would mean a paused parent silently kept serving.
+ */
+export type LinkActivationRefusal =
+  | "attribution_disabled"
+  | "partner_not_active"
+  | "campaign_not_active"
+  | "landing_key_unsupported"
+  | "public_code_invalid"
+  | "parameter_mapping_invalid"
+  | "attribution_window_invalid";
+
+export type LinkActivationCandidate = {
+  readonly publicCode: string;
+  readonly landingKey: string;
+  readonly partnerStatus: AffiliateStatus;
+  readonly campaignStatus: AffiliateStatus | null;
+  readonly externalClickParameter: string;
+  readonly subParameters: readonly (string | null)[];
+  readonly attributionWindowDays: number | null;
+  readonly partnerDefaultAttributionWindowDays: number;
+};
+
+export const SUPPORTED_LANDING_KEYS: readonly string[] = ["academy_registration"];
+
+export function describeLinkActivationRefusal(
+  candidate: LinkActivationCandidate,
+  attributionEnabled: boolean,
+): LinkActivationRefusal | null {
+  if (!attributionEnabled) return "attribution_disabled";
+  if (candidate.partnerStatus !== "active") return "partner_not_active";
+  if (candidate.campaignStatus !== null && candidate.campaignStatus !== "active") {
+    return "campaign_not_active";
+  }
+  if (!SUPPORTED_LANDING_KEYS.includes(candidate.landingKey)) return "landing_key_unsupported";
+  if (!/^[a-z2-7]{32}$/.test(candidate.publicCode)) return "public_code_invalid";
+
+  // Re-validated rather than trusted: a mapping stored before a bound changed,
+  // or one written by a path that predates the current validator, must not go
+  // live. The names are checked as a COMPLETE set so a duplicate pair is caught.
+  const names = [candidate.externalClickParameter, ...candidate.subParameters];
+  const present = names.filter((name): name is string => name !== null);
+  if (present.length === 0) return "parameter_mapping_invalid";
+  for (const name of present) {
+    if (!PARAM_PATTERN.test(name) || name.length > AFFILIATE_PARAM_MAX) {
+      return "parameter_mapping_invalid";
+    }
+    if (AFFILIATE_PROTECTED_PARAMETERS.includes(name)) return "parameter_mapping_invalid";
+  }
+  if (new Set(present).size !== present.length) return "parameter_mapping_invalid";
+
+  const window = candidate.attributionWindowDays ?? candidate.partnerDefaultAttributionWindowDays;
+  if (!Number.isInteger(window) || window < AFFILIATE_WINDOW_MIN || window > AFFILIATE_WINDOW_MAX) {
+    return "attribution_window_invalid";
+  }
+
+  return null;
+}
+
+/**
+ * The effective attribution window a click made through this link would
+ * snapshot. Resolved in exactly one place so the CRM DTO, the activation check
+ * and the public route can never disagree about it.
+ */
+export function effectiveAttributionWindowDays(
+  linkWindow: number | null,
+  partnerDefault: number,
+): number {
+  return linkWindow ?? partnerDefault;
 }
 
 /* --------------------------------------------------- effective availability */
@@ -304,10 +410,34 @@ export function effectiveAvailability(
   if (parents.some((p) => p === "archived")) return "archived";
   if (own === "paused") return "paused";
   if (parents.some((p) => p === "paused")) return "paused";
-  // A draft link is not yet usable, but it is not paused either; AFD-2 has no
-  // usable link at all, so `paused` is the honest rendering of "not available".
+  // A draft link is not yet usable, but it is not paused either; `paused` is the
+  // honest rendering of "an operator has not made this available".
   if (own === "draft") return "paused";
   return "available";
+}
+
+/**
+ * The single question the public acquisition route asks: may this link create a
+ * qualified click RIGHT NOW.
+ *
+ * Three independent facts, all re-read per request and none of them cached on
+ * the link row. That is what makes the emergency stop real: turning the feature
+ * off, or pausing the affiliate, makes every one of its links stop serving
+ * immediately, without a migration, without a batch job and WITHOUT silently
+ * rewriting any child's stored status. An operator who later re-enables finds
+ * exactly the statuses they set.
+ */
+export function isLinkEffectivelyActive(input: {
+  linkStatus: TrackingLinkStatus;
+  partnerStatus: AffiliateStatus;
+  campaignStatus: AffiliateStatus | null;
+  attributionEnabled: boolean;
+}): boolean {
+  if (!input.attributionEnabled) return false;
+  if (input.linkStatus !== "active") return false;
+  const parents: AffiliateStatus[] = [input.partnerStatus];
+  if (input.campaignStatus !== null) parents.push(input.campaignStatus);
+  return effectiveAvailability(input.linkStatus, parents) === "available";
 }
 
 /* -------------------------------------------------------- query parameters */

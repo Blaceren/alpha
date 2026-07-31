@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { isAffiliateAttributionEnabled } from "@/lib/affiliate/attribution-config";
 import {
+  AffiliateAttributionDisabledError,
   AffiliateInputError,
-  AffiliateLinkActivationUnavailableError,
   AffiliateNotFoundError,
   assertLinkTransition,
   assertOnlyKnownKeys,
+  describeLinkActivationRefusal,
   normalizeDisplayName,
   normalizeParameterName,
   normalizeWindowDays,
   parseAffiliatePathId,
+  TRACKING_LINK_STATUSES,
+  type AffiliateStatus,
   type TrackingLinkStatus,
 } from "@/lib/crm/affiliates";
 import {
@@ -96,11 +100,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new AffiliateInputError("crm.affiliates.body_empty");
     }
 
-    // Activation is refused BEFORE anything is read or written, and with its own
-    // stable code, so an operator learns that activation does not exist yet
-    // rather than seeing their request quietly succeed as something else.
-    if (body.status === "active") {
-      throw new AffiliateLinkActivationUnavailableError();
+    // The feature switch is checked BEFORE anything is read or written, and with
+    // its own stable code, so an operator on a deployment with attribution off
+    // learns that rather than seeing their request quietly succeed as something
+    // else. Every other activation condition needs the stored row and is checked
+    // below, once it has been read.
+    if (body.status === "active" && !isAffiliateAttributionEnabled()) {
+      throw new AffiliateAttributionDisabledError();
     }
 
     const existing = await prisma.affiliateTrackingLink.findUnique({
@@ -108,6 +114,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       select: {
         id: true,
         status: true,
+        publicCode: true,
+        landingKey: true,
         affiliatePartnerId: true,
         affiliateCampaignId: true,
         externalClickParameter: true,
@@ -116,7 +124,11 @@ export async function PATCH(request: Request, context: RouteContext) {
         sub3Parameter: true,
         sub4Parameter: true,
         sub5Parameter: true,
-        partner: { select: { code: true, status: true } },
+        attributionWindowDays: true,
+        partner: {
+          select: { code: true, status: true, defaultAttributionWindowDays: true },
+        },
+        campaign: { select: { status: true } },
       },
     });
     if (!existing) throw new AffiliateNotFoundError("crm.affiliates.not_found");
@@ -182,12 +194,33 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
+    // The campaign this link will belong to after this request, which is what an
+    // activation in the same request must be judged against.
+    let nextCampaignStatus: AffiliateStatus | null = existing.campaign
+      ? (existing.campaign.status as AffiliateStatus)
+      : null;
+
     if (body.affiliateCampaignId !== undefined) {
-      // Reassignment is allowed only while the link is still draft or paused —
-      // i.e. before it can ever have carried traffic. AFD-3B must revisit this
-      // rule the moment a link can be active.
+      // AFD-3B2 revisits the AFD-2 rule, exactly as that phase's comment
+      // demanded. Links can now carry traffic, and a conversion event snapshots
+      // the campaign the link belongs to at attribution time — so moving a link
+      // that already has clicks would silently re-bill historical traffic to a
+      // campaign it never ran under.
+      //
+      // The gate is "has this link ever been clicked", not "is it active": a
+      // link that was active, was paused and is now being edited has exactly the
+      // same history problem, and a status check would miss it.
+      const carriedTraffic = await prisma.affiliateClick.count({
+        where: { trackingLinkId: id },
+        take: 1,
+      });
+      if (carriedTraffic > 0) {
+        throw new AffiliateInputError("crm.affiliates.link.campaign_locked_by_traffic");
+      }
+
       if (body.affiliateCampaignId === null) {
         data.affiliateCampaignId = null;
+        nextCampaignStatus = null;
       } else {
         if (typeof body.affiliateCampaignId !== "string" || !/^\d+$/.test(body.affiliateCampaignId)) {
           throw new AffiliateInputError("crm.affiliates.id_invalid");
@@ -207,17 +240,52 @@ export async function PATCH(request: Request, context: RouteContext) {
           throw new AffiliateInputError("crm.affiliates.parent_archived");
         }
         data.affiliateCampaignId = campaignId;
+        nextCampaignStatus = campaign.status as AffiliateStatus;
       }
       changedFields.push("affiliateCampaignId");
     }
 
     let nextStatus: TrackingLinkStatus | undefined;
     if (body.status !== undefined) {
-      if (typeof body.status !== "string" || !["draft", "paused", "archived"].includes(body.status)) {
+      if (
+        typeof body.status !== "string" ||
+        !TRACKING_LINK_STATUSES.includes(body.status as TrackingLinkStatus)
+      ) {
         throw new AffiliateInputError("crm.affiliates.status_invalid");
       }
       nextStatus = body.status as TrackingLinkStatus;
       assertLinkTransition(currentStatus, nextStatus);
+
+      if (nextStatus === "active") {
+        // The activation gate, evaluated against the row as it will be AFTER
+        // this same request's other edits: an operator fixing a parameter
+        // mapping and activating in one call must be judged on the mapping they
+        // are submitting, not the one they are replacing.
+        const refusal = describeLinkActivationRefusal(
+          {
+            publicCode: existing.publicCode,
+            landingKey: existing.landingKey,
+            partnerStatus: existing.partner.status as AffiliateStatus,
+            campaignStatus: nextCampaignStatus,
+            externalClickParameter:
+              (data.externalClickParameter as string | undefined) ?? existing.externalClickParameter,
+            subParameters: (["sub1Parameter", "sub2Parameter", "sub3Parameter", "sub4Parameter", "sub5Parameter"] as const).map(
+              (key) => (key in data ? (data[key] as string | null) : existing[key]),
+            ),
+            attributionWindowDays:
+              "attributionWindowDays" in data
+                ? (data.attributionWindowDays as number | null)
+                : existing.attributionWindowDays,
+            partnerDefaultAttributionWindowDays: existing.partner.defaultAttributionWindowDays,
+          },
+          isAffiliateAttributionEnabled(),
+        );
+        if (refusal === "attribution_disabled") throw new AffiliateAttributionDisabledError();
+        if (refusal !== null) {
+          throw new AffiliateInputError(`crm.affiliates.link.activation.${refusal}`);
+        }
+      }
+
       data.status = nextStatus;
       data.archivedAt = nextStatus === "archived" ? new Date() : null;
       changedFields.push("status");

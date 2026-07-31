@@ -6,6 +6,7 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import type { StaffRole } from "@prisma/client";
 import { CRM_STAFF_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles";
+import { EXPECTED_MIGRATION_COUNT } from "./support/migrationCount";
 import {
   AFFILIATE_PROTECTED_PARAMETERS,
   generatePublicCode,
@@ -558,8 +559,13 @@ async function main() {
       assert.equal(dto.status, "draft");
       assert.equal(dto.landingKey, "academy_registration");
       assert.equal(dto.externalClickParameter, "clickid", "default external click parameter");
-      assert.equal(dto.publicRouteState, "not_available_until_afd3b");
-      assert.equal(dto.activationState, "unavailable");
+      // AFD-3B2. These two fields used to be placeholders and are now live
+      // operational facts. This server runs with acquisition attribution
+      // switched OFF, which is the state that produces both values below — the
+      // assertion is therefore stricter than the old literal, not weaker: it
+      // pins the DTO's answer for a specific deployment configuration.
+      assert.equal(dto.publicRouteState, "feature_disabled");
+      assert.equal(dto.activationState, "feature_disabled");
       assert.equal(dto.effectiveAttributionWindowDays, 30, "inherits the partner default");
       assert.equal(dto.attributionWindowDays, null);
     });
@@ -680,10 +686,15 @@ async function main() {
       assertEnvelope(patch, 400, "invalid_input");
     });
 
-    await check("E12 activation returns the stable AFD-3B refusal, not a coercion", async () => {
+    await check("E12 activation returns the stable refusal, not a coercion", async () => {
+      // AFD-3B2 built the machinery, so the refusal changed meaning and changed
+      // code with it: activation is now a real operation that THIS deployment
+      // has switched off, rather than one that does not exist. The important
+      // property is unchanged and still asserted below — the status is not
+      // silently coerced to something the operator did not ask for.
       const reply = await admin.request("PATCH", `${LINKS}/${linkId}`, { status: "active" });
       assert.equal(reply.status, 409, reply.text);
-      assert.equal(reply.body.code, "AFFILIATE_LINK_ACTIVATION_NOT_AVAILABLE");
+      assert.equal(reply.body.code, "AFFILIATE_ATTRIBUTION_DISABLED");
       const after = await admin.request("GET", `${LINKS}/${linkId}`);
       assert.equal(affiliateTrackingLinkSchema.parse(after.body).status, "draft", "status was silently coerced");
     });
@@ -727,20 +738,27 @@ async function main() {
       }
     });
 
-    await check("E17 no click or attribution table exists yet", async () => {
+    await check("E17 the acquisition tables exist and the deposit ones still do not", async () => {
+      // AFD-3B2 added the three acquisition tables this case used to forbid. The
+      // forbidden list keeps its remaining members, which are AFD-4 and later
+      // and must still be absent, and the case now also pins the positive fact
+      // that the acquisition tables really did arrive.
       const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
         "SELECT name FROM sqlite_master WHERE type='table'",
       );
       const names = rows.map((r) => r.name);
       for (const forbidden of [
-        "AffiliateClick", "AffiliateAttribution", "AffiliateConversionEvent",
         "PocketProviderEvent", "AffiliatePostbackEndpoint", "AffiliatePostbackDelivery",
+        "AffiliateFirstDeposit", "AffiliateRedeposit", "AffiliateOutbox",
       ]) {
-        assert.ok(!names.includes(forbidden), `${forbidden} exists in AFD-2`);
+        assert.ok(!names.includes(forbidden), `${forbidden} belongs to a later phase`);
       }
-      assert.ok(names.includes("AffiliatePartner"));
-      assert.ok(names.includes("AffiliateCampaign"));
-      assert.ok(names.includes("AffiliateTrackingLink"));
+      for (const expected of [
+        "AffiliatePartner", "AffiliateCampaign", "AffiliateTrackingLink",
+        "AffiliateClick", "AffiliateAttribution", "AffiliateConversionEvent",
+      ]) {
+        assert.ok(names.includes(expected), expected);
+      }
     });
 
     /* ======================================== F. list, filter, page, sort === */
@@ -952,7 +970,7 @@ async function main() {
 
     /* ================================================ J. schema upgrade === */
 
-    await check("J1 a v36 database upgrades to v37 with the three tables", async () => {
+    await check("J1 a pre-affiliate database upgrades to the canonical count", async () => {
       // A real pre-migration schema: apply every migration EXCEPT this phase's,
       // then apply the full set and prove the delta is exactly +1.
       const upgradeEnv = { ...baseEnv, DATABASE_URL: `file:${upgradeDbPath}` };
@@ -962,7 +980,11 @@ async function main() {
       const count = spawnSync("sqlite3", [upgradeDbPath, "SELECT COUNT(*) FROM _prisma_migrations;"], {
         encoding: "utf8",
       });
-      assert.equal(Number(count.stdout.trim()), 37, "expected 37 applied migrations");
+      assert.equal(
+        Number(count.stdout.trim()),
+        EXPECTED_MIGRATION_COUNT,
+        `expected ${EXPECTED_MIGRATION_COUNT} applied migrations`,
+      );
 
       const tables = spawnSync("sqlite3", [
         upgradeDbPath,
@@ -970,7 +992,10 @@ async function main() {
       ], { encoding: "utf8" });
       assert.deepEqual(
         tables.stdout.trim().split("\n").sort(),
-        ["AffiliateCampaign", "AffiliatePartner", "AffiliateTrackingLink"],
+        [
+          "AffiliateAttribution", "AffiliateCampaign", "AffiliateClick",
+          "AffiliateConversionEvent", "AffiliatePartner", "AffiliateTrackingLink",
+        ],
       );
 
       const integrity = spawnSync("sqlite3", [upgradeDbPath, "PRAGMA integrity_check;"], { encoding: "utf8" });
@@ -985,7 +1010,11 @@ async function main() {
       const count = spawnSync("sqlite3", [upgradeDbPath, "SELECT COUNT(*) FROM _prisma_migrations;"], {
         encoding: "utf8",
       });
-      assert.equal(Number(count.stdout.trim()), 37, "re-running changed the migration count");
+      assert.equal(
+        Number(count.stdout.trim()),
+        EXPECTED_MIGRATION_COUNT,
+        "re-running changed the migration count",
+      );
     });
 
     await check("J3 the runtime and deployed databases were never referenced", () => {

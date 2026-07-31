@@ -1,6 +1,18 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { toPublicUser } from "@/lib/auth";
+import {
+  ATTRIBUTION_COOKIE_NAME,
+  clearedAttributionCookieOptions,
+} from "@/lib/affiliate/attribution-cookie";
+import { isAffiliateAttributionEnabled } from "@/lib/affiliate/attribution-config";
+import {
+  freezeAttribution,
+  isVisitorAlreadyAttributed,
+  recordRegistrationConversion,
+  resolveRegistrationAttribution,
+  type AcquisitionSelection,
+} from "@/lib/affiliate/registration-attribution";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
@@ -110,11 +122,41 @@ export async function POST(request: Request) {
 
   const accepted = referral.kind === "accepted" ? referral : null;
 
+  // AFD-3B2 — acquisition attribution.
+  //
+  // Resolved HERE, after every gate that can reject the request and before the
+  // transaction opens. After the gates, because a CAPTCHA failure, a duplicate
+  // email or an invalid inviter must leave no trace in the acquisition ledger.
+  // Before the transaction, because this is a read against several tables and
+  // holding a write transaction open across it would lengthen the lock for no
+  // reason.
+  //
+  // The ATA invitation referral above and this affiliate attribution are
+  // INDEPENDENT and deliberately not merged: one is a learner inviting a friend
+  // and the other is a paid acquisition channel. A registration can legitimately
+  // have both, one, or neither, and neither cancels the other.
+  //
+  // Nothing below may throw on the attribution path in a way that fails the
+  // registration. Resolution reads only, and every "no" it can return —
+  // disabled, no cookie, forged cookie, expired cookie, nothing eligible — is a
+  // direct registration, not an error.
+  const attributionEnabled = isAffiliateAttributionEnabled();
+  const now = new Date();
+  const attribution = attributionEnabled
+    ? await resolveRegistrationAttribution(prisma, request, now)
+    : ({ kind: "unattributed", reason: "feature_disabled" } as const);
+
   // The transaction RETURNS the reward decision rather than assigning it to an
   // outer variable: the audit and notification steps below run after the commit
   // and must describe what the committed transaction actually did, not what was
   // predicted before it opened.
-  const committed = await prisma.$transaction(async (tx) => {
+  //
+  // `attributionCandidate` is a LET because the transaction may be re-run once,
+  // without attribution, when a concurrent registration wins the same journey.
+  let attributionCandidate: AcquisitionSelection | null =
+    attribution.kind === "attributed" ? attribution.selection : null;
+
+  const runRegistration = () => prisma.$transaction(async (tx) => {
     // Re-read the mutable conditions inside the transaction. Demotion only: a
     // withdrawn programme cancels the payout, it never cancels the account.
     const reward: ReferralRewardState | null = accepted
@@ -215,8 +257,54 @@ export async function POST(request: Request) {
       }
     }
 
-    return { created, reward, bonus };
+    // AFD-3B2. Attribution and the conversion event are written INSIDE this
+    // transaction, after the user exists. Both are therefore covered by the
+    // rollback: a registration that fails for any reason leaves no attribution
+    // and no conversion event, and a conversion event that cannot be written
+    // takes the registration down with it rather than leaving a learner the
+    // ledger has no row for.
+    let attributionId: number | null = null;
+    if (attributionCandidate !== null) {
+      attributionId = await freezeAttribution(tx, created.id, attributionCandidate, now);
+    }
+
+    if (attributionEnabled) {
+      await recordRegistrationConversion(tx, {
+        userId: created.id,
+        attributionId,
+        selection: attributionCandidate,
+        occurredAt: now,
+      });
+    }
+
+    return { created, reward, bonus, attributionId };
   });
+
+  // THE REPLAY AND CONCURRENCY BOUNDARY.
+  //
+  // A copied token, or two browsers registering from the same journey at the
+  // same instant, both arrive here believing they are attributed. The database
+  // decides: `AffiliateAttribution.anonymousVisitorId` is UNIQUE, so exactly one
+  // transaction can commit with it and the other fails.
+  //
+  // The loser retries ONCE, without attribution, and becomes an honest direct
+  // registration. That is the only arrangement in which all three things stay
+  // true: both people get the account they asked for, exactly one attribution
+  // exists, and no affiliate is paid twice for one journey.
+  //
+  // The retry is bounded to a single attempt. The second run cannot hit the same
+  // collision, because it does not touch AffiliateAttribution at all — so a loop
+  // here could never make progress that one pass does not, and an unbounded one
+  // would be a way to hold the database open.
+  let committed: Awaited<ReturnType<typeof runRegistration>>;
+  try {
+    committed = await runRegistration();
+  } catch (error) {
+    if (attributionCandidate === null || !isVisitorAlreadyAttributed(error)) throw error;
+    // The whole transaction rolled back, so no partial user exists to clean up.
+    attributionCandidate = null;
+    committed = await runRegistration();
+  }
 
   const user = committed.created;
   const verificationRequired = isEmailVerificationRequired();
@@ -297,6 +385,33 @@ export async function POST(request: Request) {
       createSessionToken(user.id, user.role),
       sessionCookieOptions,
     );
+  }
+
+  // AFD-3B2 — the journey is over, so the pointer to it goes.
+  //
+  // Cleared on EVERY successful registration, not only an attributed one. A
+  // token that survives is a token that can be replayed, and one that was
+  // consumed here is now worthless while one that was not eligible will not
+  // become eligible later. Leaving it would only mean a browser carrying a
+  // stale journey into somebody else's signup.
+  //
+  // This produces a SECOND Set-Cookie on an unverified-email-free registration.
+  // Both are emitted as separate header values — Next.js `cookies.set` appends
+  // rather than replaces — and the Academy proxy re-emits each one individually
+  // via `getSetCookie()`, so neither cookie can be swallowed by the other or
+  // joined into one comma-separated line.
+  //
+  // Only cleared when the request actually carried one: sending a deletion to a
+  // browser that has no attribution cookie is noise in every response. A cookie
+  // that was present but unusable — forged, expired, or naming a journey with
+  // nothing eligible in it — is cleared too, so the browser stops re-presenting
+  // something that will never work.
+  const carriedAttributionCookie =
+    attribution.kind === "attributed" ||
+    (attribution.reason !== "feature_disabled" && attribution.reason !== "no_cookie");
+
+  if (attributionEnabled && carriedAttributionCookie) {
+    response.cookies.set(ATTRIBUTION_COOKIE_NAME, "", clearedAttributionCookieOptions());
   }
 
   return response;

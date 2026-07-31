@@ -180,6 +180,10 @@ model User {
   affiliatePartnersCreated        AffiliatePartner[]           @relation("AffiliatePartnerCreator")
   affiliateCampaignsCreated       AffiliateCampaign[]          @relation("AffiliateCampaignCreator")
   affiliateTrackingLinksCreated   AffiliateTrackingLink[]      @relation("AffiliateTrackingLinkCreator")
+  /// AFD-3B2. Optional and at most one: a learner either was acquired through an
+  /// affiliate or was not, and the answer is frozen at registration.
+  affiliateAttribution            AffiliateAttribution?        @relation("UserAffiliateAttribution")
+  affiliateConversionEvents       AffiliateConversionEvent[]   @relation("UserAffiliateConversionEvents")
 }
 
 model XpEvent {
@@ -1134,13 +1138,48 @@ enum AffiliateEntityStatus {
   archived
 }
 
-/// Tracking-link lifecycle. `active` is absent BY DESIGN in AFD-2 — there is no
-/// public `/go/{publicCode}` route and no attribution owner to receive a click,
-/// so a link that claimed to be active would be lying. AFD-3B adds it.
+/// Tracking-link lifecycle. AFD-3B2 adds `active`, which AFD-2 deliberately
+/// refused to invent before a public route and an attribution owner existed.
+/// Stored status is what an operator chose; whether a link can actually serve
+/// traffic also depends on the feature switch and on its parents, which is a
+/// runtime question answered by `effectiveAvailability`, not by this column.
 enum AffiliateTrackingLinkStatus {
   draft
+  active
   paused
   archived
+}
+
+/// How a click was treated by the public acquisition route. Only `qualified`
+/// can ever be attributed — the other two exist so that machine traffic and
+/// clicks by already-registered users are recorded honestly instead of being
+/// dropped or, worse, counted.
+enum AffiliateClickClassification {
+  qualified
+  prefetch
+  authenticated_user
+}
+
+/// The attribution model in force. One value in AFD-3B2, named rather than
+/// implied so a stored decision says which rule produced it.
+enum AffiliateAttributionModel {
+  last_eligible_affiliate_click
+}
+
+/// Why a particular click was selected.
+enum AffiliateAttributionSelectionReason {
+  registration_cookie
+}
+
+/// Conversion-event types. Deposit-shaped events belong to AFD-4 and are absent.
+enum AffiliateConversionEventType {
+  academy_registration
+}
+
+/// The owner that produced a conversion event, and therefore the namespace its
+/// `sourceEventId` is unique within.
+enum AffiliateConversionSourceOwner {
+  auth_register
 }
 
 /// The server-owned logical destination of a tracking link. A KEY, never a URL:
@@ -1166,6 +1205,7 @@ model AffiliatePartner {
   createdBy                    User                    @relation("AffiliatePartnerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   campaigns                    AffiliateCampaign[]
   trackingLinks                AffiliateTrackingLink[]
+  conversionEvents             AffiliateConversionEvent[]
 
   @@index([status, createdAt])
   @@index([createdAt])
@@ -1188,6 +1228,7 @@ model AffiliateCampaign {
   partner            AffiliatePartner        @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy          User                    @relation("AffiliateCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   trackingLinks      AffiliateTrackingLink[]
+  conversionEvents   AffiliateConversionEvent[]
 
   @@unique([affiliatePartnerId, code])
   /// Composite target for the tracking-link FK that proves a link and its
@@ -1225,12 +1266,135 @@ model AffiliateTrackingLink {
   partner                AffiliatePartner            @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   campaign               AffiliateCampaign?          @relation(fields: [affiliateCampaignId, affiliatePartnerId], references: [id, affiliatePartnerId], onDelete: Restrict, onUpdate: Cascade)
   createdBy              User                        @relation("AffiliateTrackingLinkCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  clicks                 AffiliateClick[]
+  conversionEvents       AffiliateConversionEvent[]
 
   @@index([affiliatePartnerId, status, createdAt])
   @@index([affiliateCampaignId, status, createdAt])
   @@index([status, createdAt])
   @@index([createdAt])
   @@index([createdByUserId])
+}
+
+/// AFD-3B2 — one row per request the public acquisition route accepted.
+///
+/// PRIVACY BY SHAPE. There is no column here for a raw IP address, a
+/// User-Agent, a complete request URL, a query string, a cookie or any
+/// authorization material, so none of them can be stored by accident. The only
+/// externally supplied values are those of parameters an operator explicitly
+/// configured on the link, each bounded and control-character-free.
+model AffiliateClick {
+  id                             Int                          @id @default(autoincrement())
+  /// OUR acquisition click id: 160 CSPRNG bits as 32 lowercase base32
+  /// characters, globally unique, never accepted from a client, and not the
+  /// affiliate network's click id nor any Pocket identifier.
+  ataClickId                     String                       @unique
+  trackingLinkId                 Int
+  /// The anonymous visitor journey this click belongs to. NULL for prefetch and
+  /// for authenticated-user clicks, which is what makes those permanently
+  /// unattributable at the database level rather than by convention.
+  anonymousVisitorId             String?
+  /// The AFFILIATE NETWORK's own click id, from the link-configured parameter.
+  /// Deliberately not unique: networks legitimately repeat values.
+  externalAffiliateClickId       String?
+  sub1                           String?
+  sub2                           String?
+  sub3                           String?
+  sub4                           String?
+  sub5                           String?
+  classification                 AffiliateClickClassification
+  /// The attribution window as it stood WHEN THE CLICK HAPPENED. Eligibility is
+  /// judged against this snapshot, so later edits to the link or the partner
+  /// cannot retroactively create or destroy attribution for past traffic.
+  effectiveAttributionWindowDays Int
+  /// A bare lowercase host, never a URL, a path or a query.
+  sanitizedReferrerHost          String?
+  occurredAt                     DateTime
+  createdAt                      DateTime                     @default(now())
+  trackingLink                   AffiliateTrackingLink        @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  firstTouchOf                   AffiliateAttribution[]       @relation("AffiliateAttributionFirstTouch")
+  lastTouchOf                    AffiliateAttribution[]       @relation("AffiliateAttributionLastTouch")
+  selectedBy                     AffiliateAttribution[]       @relation("AffiliateAttributionSelected")
+  conversionEvents               AffiliateConversionEvent[]
+
+  @@index([trackingLinkId, occurredAt])
+  @@index([anonymousVisitorId, occurredAt])
+  @@index([externalAffiliateClickId])
+  @@index([classification, occurredAt])
+}
+
+/// AFD-3B2 — the frozen answer to "which affiliate acquired this learner".
+///
+/// Written once, inside the registration transaction, and never again. There is
+/// no PATCH owner, no DELETE owner and no reattribution path in the application.
+/// The two unique constraints make the two dangerous mistakes unrepresentable:
+/// a user cannot acquire a second attribution, and one visitor journey cannot be
+/// spent twice — which is precisely what a copied or replayed token attempts.
+model AffiliateAttribution {
+  id                 Int                                 @id @default(autoincrement())
+  userId             Int                                 @unique
+  anonymousVisitorId String                              @unique
+  firstTouchClickId  Int
+  lastTouchClickId   Int
+  selectedClickId    Int
+  attributionModel   AffiliateAttributionModel
+  selectedAt         DateTime
+  /// Separate from `selectedAt` on purpose: when a decision was computed and
+  /// when it became immutable are different facts.
+  frozenAt           DateTime
+  selectionReason    AffiliateAttributionSelectionReason
+  createdAt          DateTime                            @default(now())
+  user               User                                @relation("UserAffiliateAttribution", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  firstTouchClick    AffiliateClick                      @relation("AffiliateAttributionFirstTouch", fields: [firstTouchClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lastTouchClick     AffiliateClick                      @relation("AffiliateAttributionLastTouch", fields: [lastTouchClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  selectedClick      AffiliateClick                      @relation("AffiliateAttributionSelected", fields: [selectedClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  conversionEvents   AffiliateConversionEvent[]
+
+  @@index([selectedClickId])
+  @@index([selectedAt])
+}
+
+/// AFD-3B2 — the append-only conversion ledger.
+///
+/// Exactly one `academy_registration` row per successful public registration,
+/// INCLUDING a direct one, whose affiliate columns are all NULL. A direct
+/// registration that produced no row would be indistinguishable from one the
+/// ledger missed, and "nobody referred this learner" must not look like "we do
+/// not know". The snapshots are denormalised so a payout report still reads the
+/// code an affiliate had at conversion time after a rename or an archive.
+model AffiliateConversionEvent {
+  id                             Int                            @id @default(autoincrement())
+  eventId                        String                         @unique
+  eventType                      AffiliateConversionEventType
+  userId                         Int
+  attributionId                  Int?
+  selectedClickId                Int?
+  affiliatePartnerId             Int?
+  affiliateCampaignId            Int?
+  trackingLinkId                 Int?
+  affiliateCodeSnapshot          String?
+  campaignCodeSnapshot           String?
+  trackingLinkPublicCodeSnapshot String?
+  sourceOwner                    AffiliateConversionSourceOwner
+  /// The producing owner's idempotency key. Never an email address — an email
+  /// is mutable and re-registrable, and would make replay look like a new
+  /// conversion.
+  sourceEventId                  String
+  occurredAt                     DateTime
+  createdAt                      DateTime                       @default(now())
+  user                           User                           @relation("UserAffiliateConversionEvents", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attribution                    AffiliateAttribution?          @relation(fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  selectedClick                  AffiliateClick?                @relation(fields: [selectedClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner                        AffiliatePartner?              @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  campaign                       AffiliateCampaign?             @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trackingLink                   AffiliateTrackingLink?         @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([eventType, sourceOwner, sourceEventId])
+  @@index([eventType, occurredAt])
+  @@index([affiliatePartnerId, occurredAt])
+  @@index([affiliateCampaignId, occurredAt])
+  @@index([trackingLinkId, occurredAt])
+  @@index([userId, occurredAt])
 }
 
 model UserCurriculumEnrollment {

@@ -7,6 +7,11 @@
  * failing for three phases and no longer guarded anything. A count that lives
  * in one place is updated once per migration phase and stays true.
  *
+ * AFD-3B2 finished the job: `curriculumReportRequiredWhenRegression` still held
+ * its own copy of the number, pinned to 34 and failing for four phases, and now
+ * imports this constant like everything else. There is no hand-written migration
+ * count left in the repository.
+ *
  * WHY IT IS NOT DERIVED FROM THE FILESYSTEM. Counting the directory and then
  * asserting the count matches the directory would always pass and prove
  * nothing. The value is deliberately typed by hand so that an unplanned
@@ -14,7 +19,7 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  */
-export const EXPECTED_MIGRATION_COUNT = 37;
+export const EXPECTED_MIGRATION_COUNT = 38;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

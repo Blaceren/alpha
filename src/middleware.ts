@@ -119,8 +119,39 @@ async function isSessionBlocked(request: NextRequest) {
   return status.blocked === true;
 }
 
+/**
+ * AFD-3B2 — the public acquisition route sets its OWN privacy headers.
+ *
+ * `addSecurityHeaders` sends `Referrer-Policy: strict-origin-when-cross-origin`,
+ * which is right for pages and wrong here: the referrer of a `/go` hop is the
+ * affiliate's own URL, carrying their click id, and it must not travel onward to
+ * /register. Middleware headers are applied to the final response, so leaving
+ * this to the route handler alone would risk the middleware's value winning.
+ * The path is matched here and the acquisition headers are applied instead.
+ */
+const ACQUISITION_PATH_PREFIX = "/go/";
+
+function isAcquisitionRoute(pathname: string) {
+  return pathname === "/go" || pathname.startsWith(ACQUISITION_PATH_PREFIX);
+}
+
+function addAcquisitionHeaders(response: NextResponse) {
+  addSecurityHeaders(response);
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Checked before the private-route test: `/go` is deliberately reachable
+  // without a session, and a visitor arriving from an affiliate must never be
+  // bounced to /login.
+  if (isAcquisitionRoute(pathname)) {
+    return addAcquisitionHeaders(NextResponse.next());
+  }
 
   if (!isPrivateRoute(pathname)) {
     return addSecurityHeaders(NextResponse.next());

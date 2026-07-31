@@ -3,15 +3,20 @@ import { createAuditLog } from "@/lib/audit";
 import { validateCsrfToken } from "@/lib/csrf";
 import { getSession } from "@/lib/session";
 import { CrmAuthError, resolveCrmSession } from "@/lib/crm/session";
+import { isAffiliateAttributionEnabled } from "@/lib/affiliate/attribution-config";
 import {
+  AffiliateAttributionDisabledError,
   AffiliateConflictError,
   AffiliateForbiddenError,
   AffiliateInputError,
-  AffiliateLinkActivationUnavailableError,
   AffiliateNotFoundError,
   AFFILIATE_MAX_BODY_BYTES,
   assertCanManageAffiliates,
+  describeLinkActivationRefusal,
+  effectiveAttributionWindowDays,
   effectiveAvailability,
+  type AffiliateStatus,
+  type TrackingLinkStatus,
 } from "@/lib/crm/affiliates";
 import type {
   AffiliateCampaignDto,
@@ -59,10 +64,10 @@ export function affiliateErrorResponse(
     );
   }
 
-  // The one bespoke code in this phase, because "you asked for active and
-  // activation does not exist yet" is a distinct, explainable product state
-  // rather than generic bad input.
-  if (error instanceof AffiliateLinkActivationUnavailableError) {
+  // The one bespoke code in this namespace, because "you asked for active and
+  // this deployment has attribution switched off" is a distinct, explainable
+  // operational state rather than generic bad input.
+  if (error instanceof AffiliateAttributionDisabledError) {
     return NextResponse.json(
       { code: error.code, messageKey: error.messageKey, requestId },
       { status: 409, headers },
@@ -245,11 +250,57 @@ type LinkRow = {
 };
 
 export function toTrackingLinkDto(row: LinkRow): AffiliateTrackingLinkDto {
-  const status = row.status as "draft" | "paused" | "archived";
-  const parents: ("active" | "paused" | "archived")[] = [
-    row.partner.status as "active" | "paused" | "archived",
-  ];
-  if (row.campaign) parents.push(row.campaign.status as "active" | "paused" | "archived");
+  const status = row.status as TrackingLinkStatus;
+  const partnerStatus = row.partner.status as AffiliateStatus;
+  const campaignStatus = row.campaign ? (row.campaign.status as AffiliateStatus) : null;
+  const parents: AffiliateStatus[] = [partnerStatus];
+  if (campaignStatus !== null) parents.push(campaignStatus);
+
+  // Read once per DTO, never captured at module load, so an operator who flips
+  // the switch sees the truth on the next request rather than the next restart.
+  const attributionEnabled = isAffiliateAttributionEnabled();
+  const availability = effectiveAvailability(status, parents);
+
+  // "Would this link serve traffic right now", answered with the reason.
+  const publicRouteState: AffiliateTrackingLinkDto["publicRouteState"] = !attributionEnabled
+    ? "feature_disabled"
+    : status !== "active"
+      ? "not_active"
+      : availability === "archived"
+        ? "parent_archived"
+        : availability === "paused"
+          ? "parent_paused"
+          : "serving";
+
+  // "Could an operator set this active today", which is a different question:
+  // an already-active link is still `available`, because re-activation from
+  // paused is the operation that field describes.
+  const activationState: AffiliateTrackingLinkDto["activationState"] =
+    status === "archived"
+      ? "terminal"
+      : !attributionEnabled
+        ? "feature_disabled"
+        : describeLinkActivationRefusal(
+              {
+                publicCode: row.publicCode,
+                landingKey: row.landingKey,
+                partnerStatus,
+                campaignStatus,
+                externalClickParameter: row.externalClickParameter,
+                subParameters: [
+                  row.sub1Parameter,
+                  row.sub2Parameter,
+                  row.sub3Parameter,
+                  row.sub4Parameter,
+                  row.sub5Parameter,
+                ],
+                attributionWindowDays: row.attributionWindowDays,
+                partnerDefaultAttributionWindowDays: row.partner.defaultAttributionWindowDays,
+              },
+              attributionEnabled,
+            ) === null
+          ? "available"
+          : "blocked";
 
   return {
     id: String(row.id),
@@ -272,10 +323,12 @@ export function toTrackingLinkDto(row: LinkRow): AffiliateTrackingLinkDto {
     },
     attributionWindowDays: row.attributionWindowDays,
     // Resolved here so a CRM never has to re-implement the inheritance rule.
-    effectiveAttributionWindowDays:
-      row.attributionWindowDays ?? row.partner.defaultAttributionWindowDays,
-    publicRouteState: "not_available_until_afd3b",
-    activationState: "unavailable",
+    effectiveAttributionWindowDays: effectiveAttributionWindowDays(
+      row.attributionWindowDays,
+      row.partner.defaultAttributionWindowDays,
+    ),
+    publicRouteState,
+    activationState,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,

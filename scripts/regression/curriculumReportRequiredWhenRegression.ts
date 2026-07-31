@@ -17,6 +17,7 @@ import path from "node:path";
 import { Prisma } from "@prisma/client";
 import { isReportDomainError } from "../../src/lib/curriculum/report-errors";
 import type { RequiredWhen, RequiredWhenFieldRef } from "../../src/lib/curriculum/report-required-when";
+import { EXPECTED_MIGRATION_COUNT } from "./support/migrationCount";
 
 const dbPath = `/tmp/ata-curriculum-required-when-${process.pid}.db`;
 const dbUrl = `file:${dbPath}`;
@@ -392,9 +393,13 @@ async function main() {
   });
 
   /* ============================ D. MIGRATION ============================ */
-  await check("D46/48 fresh schema at migration 34; old-style rows default to no condition", async () => {
+  await check("D46/48 fresh schema at the canonical migration count; old-style rows default to no condition", async () => {
     const applied = (await prisma.$queryRawUnsafe(`SELECT COUNT(*) c FROM _prisma_migrations`) as Array<{ c: number | bigint }>)[0].c;
-    assert.equal(Number(applied), 34);
+    // AFD-3B2. The number used to be written out here as 34 and had been failing
+    // since the repository passed 34, so it guarded nothing. It now comes from
+    // the single canonical owner and is just as strict: an unplanned migration
+    // still fails this gate, and the assertion is not weakened to a range.
+    assert.equal(Number(applied), EXPECTED_MIGRATION_COUNT);
     const cols = await prisma.$queryRawUnsafe(`PRAGMA table_info("ReportFieldDefinition")`) as Array<{ name: string }>;
     assert.ok(cols.some((c) => c.name === "requiredWhen"));
     // Simulate a pre-existing row written by old code (no requiredWhen provided).
