@@ -3,8 +3,13 @@ import {
   LoginRequestSchema,
   type LoginErrorCode,
 } from "@/data/contracts/api/auth";
-import { BACKEND_PATHS, callBackend } from "@/server/backend-client";
+import {
+  BACKEND_PATHS,
+  CRM_LOGIN_SURFACE,
+  callBackend,
+} from "@/server/backend-client";
 import { applyBridgedCookies, noStoreJson } from "@/server/auth-response";
+import { deriveTrustedClientIp } from "@/server/client-ip";
 import { SESSION_COOKIE_NAME } from "@/server/set-cookie-bridge";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +39,25 @@ function backendErrorCode(body: unknown): string | null {
  * 401 collapses "no such account" and "wrong password" exactly as the backend
  * does — preserving that is what keeps the endpoint free of account enumeration.
  */
+/**
+ * The backend's CAPTCHA codes, mapped onto CRM codes (AFD-3A3).
+ *
+ * Consulted BEFORE the status, because the status alone is ambiguous: 400 covers
+ * both a malformed body and a rejected challenge, and 503 covers both a provider
+ * outage and a broken configuration. Anything unrecognised falls through to the
+ * status mapping rather than being guessed at.
+ */
+const CAPTCHA_CODES: Record<string, LoginErrorCode> = {
+  CAPTCHA_FAILED: "captcha_failed",
+  CAPTCHA_UNAVAILABLE: "captcha_unavailable",
+  CAPTCHA_CONFIGURATION_ERROR: "captcha_configuration_error",
+};
+
 function mapLoginFailure(httpStatus: number, body: unknown): LoginErrorCode {
+  const backendCode = backendErrorCode(body);
+  if (backendCode !== null && backendCode in CAPTCHA_CODES) {
+    return CAPTCHA_CODES[backendCode] as LoginErrorCode;
+  }
   if (httpStatus === 400) return "invalid_input";
   if (httpStatus === 401) return "invalid_credentials";
   if (httpStatus === 403) {
@@ -98,7 +121,20 @@ export async function POST(request: Request) {
   const result = await callBackend({
     path: BACKEND_PATHS.login,
     method: "POST",
-    json: { email: parsed.data.email, password: parsed.data.password },
+    json: {
+      email: parsed.data.email,
+      password: parsed.data.password,
+      // AFD-3A3. Forwarded only when present: an absent token is a REFUSAL at
+      // the backend wherever login verification is enforced, never a bypass.
+      ...(parsed.data.captchaToken ? { captchaToken: parsed.data.captchaToken } : {}),
+    },
+    // A CONSTANT, so a caller cannot declare a surface whose action pin it
+    // would rather be judged against.
+    authSurface: CRM_LOGIN_SURFACE,
+    // The ingress-measured address, so staff logins do not all share one
+    // backend rate-limit bucket. `null` when no trustworthy value exists — we
+    // forward nothing rather than inventing one.
+    clientIp: deriveTrustedClientIp(request),
   });
 
   if (result.status === "misconfigured") {

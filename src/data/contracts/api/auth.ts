@@ -37,6 +37,15 @@ export const LoginRequestSchema = z
   .object({
     email: z.string().trim().toLowerCase().email(),
     password: z.string().min(6).max(200),
+    /**
+     * The solved Cloudflare Turnstile token (AFD-3A3).
+     *
+     * Optional here because the backend `loginSchema` declares it optional and
+     * this schema mirrors that schema — omitting it is a REFUSAL at the backend,
+     * never a bypass. The bound matches the backend's own 4 KiB token cap, so a
+     * megabyte of junk is rejected on this origin instead of being forwarded.
+     */
+    captchaToken: z.string().trim().min(1).max(4096).optional(),
   })
   .strict();
 
@@ -62,6 +71,16 @@ export const LOGIN_ERROR_CODES = [
    */
   "not_staff",
   "rate_limited",
+  /**
+   * AFD-3A3 — the three CAPTCHA outcomes the backend distinguishes. Kept
+   * separate from `invalid_credentials` because telling an employee their
+   * password is wrong when the challenge lapsed sends them to reset a password
+   * that was fine, and separate from each other because one is the visitor's to
+   * retry and two are the platform's to fix.
+   */
+  "captcha_failed",
+  "captcha_unavailable",
+  "captcha_configuration_error",
   "upstream_unavailable",
   "server_error",
 ] as const;

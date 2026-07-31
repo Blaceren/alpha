@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DemoBadge } from "@/components/crm-shell/demo-badge";
 import { getServerRuntimeMode } from "@/config/server-runtime";
+import { getTurnstileSiteKey } from "@/config/turnstile";
 import { LoginPanel, LoginPanelShell } from "@/features/auth/login-panel";
 
 /**
@@ -32,12 +33,18 @@ export default function LoginPage() {
   const mode = getServerRuntimeMode();
 
   if (mode === "api") {
+    // AFD-3A3: the PUBLIC Turnstile site key is read here, on the server, and
+    // passed down as a prop — the same contract the runtime mode uses. The
+    // SECRET counterpart is a backend credential and is not present in this
+    // package's environment at all.
+    const turnstileSiteKey = getTurnstileSiteKey();
+
     return (
       // The fallback is the form itself, not `null`. A null fallback renders a
       // blank page while the boundary is suspended — which is the first thing an
       // employee bounced off a protected route would see.
-      <Suspense fallback={<LoginPanelShell sessionExpired={false} />}>
-        <LoginPanel />
+      <Suspense fallback={<LoginPanelShell sessionExpired={false} turnstileSiteKey={turnstileSiteKey} />}>
+        <LoginPanel turnstileSiteKey={turnstileSiteKey} />
       </Suspense>
     );
   }

@@ -30,7 +30,28 @@
  * paths stay rewrites — they need none of that — and auth is handled here.
  */
 import { parseBackendOrigin } from "@/config/backend-origin";
+import { FORWARDED_CLIENT_IP_HEADERS } from "@/server/client-ip";
 import { bridgeSetCookies, type BridgedCookie } from "@/server/set-cookie-bridge";
+
+/**
+ * The header naming the authentication surface (AFD-3A3). Mirrors
+ * `AUTH_SURFACE_HEADER` in the backend's `src/lib/captcha/surface.ts`.
+ *
+ * The backend pins one expected Turnstile action per authentication form and
+ * refuses a token minted for a different one. It cannot infer the form from the
+ * path — the Academy and the CRM both submit to `POST /api/auth/login` — so the
+ * fronting server declares it. This module builds its outbound headers FROM
+ * SCRATCH, so the value can only ever come from a caller constant in this
+ * repository and never from a browser-supplied header of the same name.
+ *
+ * An UNSTAMPED request is refused by the backend with a configuration error
+ * rather than accepted unpinned, so forgetting to declare a surface breaks login
+ * loudly instead of quietly disabling the check.
+ */
+export const BACKEND_AUTH_SURFACE_HEADER = "x-ata-auth-surface";
+
+/** The CRM's only authentication surface. */
+export const CRM_LOGIN_SURFACE = "crm_login" as const;
 
 /**
  * Exactly the backend paths the CRM server may call. Each is a deliberate
@@ -80,6 +101,18 @@ export interface BackendCallInput {
   cookie?: string | null;
   /** Double-submit CSRF header, forwarded when the backend requires it. */
   csrfToken?: string | null;
+  /**
+   * The authentication surface to declare (AFD-3A3). A caller CONSTANT, never a
+   * value read from the incoming request.
+   */
+  authSurface?: string | null;
+  /**
+   * The trusted, ingress-measured client address to attribute this call to
+   * (AFD-3A3). Sent under both header names the backend consults, and only ever
+   * derived by `deriveTrustedClientIp` — a browser-supplied forwarding chain is
+   * never read, so it can neither set nor shift this value.
+   */
+  clientIp?: string | null;
   timeoutMs?: number;
   /** Injection seam for tests; production always uses global fetch. */
   fetchImpl?: typeof fetch;
@@ -101,6 +134,14 @@ export async function callBackend(input: BackendCallInput): Promise<BackendCallR
     if (input.json !== undefined) headers["Content-Type"] = "application/json";
     if (input.cookie) headers.Cookie = input.cookie;
     if (input.csrfToken) headers["x-csrf-token"] = input.csrfToken;
+    if (input.authSurface) headers[BACKEND_AUTH_SURFACE_HEADER] = input.authSurface;
+    if (input.clientIp) {
+      // Both names, one address. `getRequestIp` reads x-forwarded-for first and
+      // the backend's own Node server injects 127.0.0.1 for a hop that arrives
+      // without one, so setting only x-real-ip would silently collapse every
+      // staff login into a single rate-limit bucket.
+      for (const header of FORWARDED_CLIENT_IP_HEADERS) headers[header] = input.clientIp;
+    }
 
     const response = await fetchImpl(`${origin.origin}${input.path}`, {
       method: input.method,

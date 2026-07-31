@@ -122,12 +122,30 @@ function toLoginErrorCode(value: unknown): LoginErrorCode {
   return "server_error";
 }
 
+/**
+ * Login options (AFD-3A3).
+ *
+ * The token is an OPTION rather than a positional parameter so the existing
+ * `login(email, password, { fetchImpl })` call shape is unchanged — a new
+ * positional argument in the middle would silently reinterpret every existing
+ * caller's third argument.
+ */
+export interface LoginOptions extends AuthRequestOptions {
+  /**
+   * The solved Turnstile token. Travels in the JSON body only — never a header,
+   * never a query parameter, never anything that could be persisted or logged
+   * along the way. `undefined` omits the field entirely, which the backend
+   * treats as a refusal wherever login verification is enforced.
+   */
+  captchaToken?: string;
+}
+
 export async function login(
   email: string,
   password: string,
-  options: AuthRequestOptions = {},
+  options: LoginOptions = {},
 ): Promise<LoginOutcome> {
-  const { fetchImpl = fetch } = options;
+  const { fetchImpl = fetch, captchaToken } = options;
   const timeout = withTimeout(options);
 
   try {
@@ -136,12 +154,17 @@ export async function login(
       credentials: "same-origin",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
-      // Exactly two fields travel. No role, no actor, no return path.
+      // Exactly three fields travel, and only ever these. No role, no actor,
+      // no return path — the route's `.strict()` schema would reject a fourth.
       //
       // The email is trimmed here as well as by the server schema, so a value
       // copy-pasted with a trailing space produces the same request whichever
       // caller sent it. The server remains the authority.
-      body: JSON.stringify({ email: email.trim(), password }),
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+        ...(captchaToken ? { captchaToken } : {}),
+      }),
       signal: timeout.signal,
     });
 

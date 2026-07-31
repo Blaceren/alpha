@@ -24,7 +24,17 @@ import { LoginForm } from "@/features/auth/login-form";
  */
 export const SESSION_REQUIRED_REASON = "session_required";
 
-export function LoginPanelShell({ sessionExpired }: { sessionExpired: boolean }) {
+export interface LoginPanelProps {
+  sessionExpired: boolean;
+  /**
+   * The PUBLIC Turnstile site key, read on the server and threaded down as a
+   * prop (AFD-3A3). Never a `NEXT_PUBLIC_` build-time inline: that would pin one
+   * build to one Cloudflare widget and turn rotation into a release.
+   */
+  turnstileSiteKey: string | null;
+}
+
+export function LoginPanelShell({ sessionExpired, turnstileSiteKey }: LoginPanelProps) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6">
@@ -36,13 +46,18 @@ export function LoginPanelShell({ sessionExpired }: { sessionExpired: boolean })
           Alfa Trade Academy CRM — внутреннее рабочее пространство.
         </p>
 
-        <LoginForm sessionExpired={sessionExpired} />
+        <LoginForm sessionExpired={sessionExpired} turnstileSiteKey={turnstileSiteKey} />
       </div>
     </main>
   );
 }
 
-export function LoginPanel() {
+export function LoginPanel({ turnstileSiteKey }: { turnstileSiteKey: string | null }) {
   const params = useSearchParams();
-  return <LoginPanelShell sessionExpired={params?.get("reason") === SESSION_REQUIRED_REASON} />;
+  return (
+    <LoginPanelShell
+      sessionExpired={params?.get("reason") === SESSION_REQUIRED_REASON}
+      turnstileSiteKey={turnstileSiteKey}
+    />
+  );
 }
