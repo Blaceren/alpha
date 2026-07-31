@@ -37,10 +37,19 @@ export default function LoginPage() {
     setError("");
     setIsSubmitting(true);
 
+    // AFD-3A3: the hard-coded `captchaToken: "dev-captcha-ok"` that used to sit
+    // in this body is gone. It was never a token — it was a string chosen to
+    // satisfy a stub, and under a permissive provider secret it would have been
+    // accepted as one. This page is the Backend's own internal form on a
+    // loopback-only origin and has no widget; the public learner surface is the
+    // Academy's /login and the staff surface is the CRM's. Where login
+    // verification is enforced this form is therefore refused with the standard
+    // CAPTCHA error, which is the correct outcome for a form that cannot present
+    // a genuine challenge. Nothing here fabricates one.
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, captchaToken: "dev-captcha-ok" }),
+      body: JSON.stringify({ email, password }),
     });
 
     setIsSubmitting(false);

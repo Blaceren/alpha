@@ -4,6 +4,7 @@ import { toPublicUser } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
+import { resolveAuthSurface } from "@/lib/captcha/surface";
 import { isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
@@ -47,18 +48,45 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
+  // AFD-3A3: which login form is this? The Academy proxy and the CRM login
+  // route each stamp their own surface header; a browser cannot, because both
+  // build their outbound headers from an allow-list this name is not in and then
+  // `set` it themselves. An unresolved surface is refused inside `verifyCaptcha`
+  // rather than defaulting to either frontend.
+  const surface = resolveAuthSurface(request, "login");
+
   const captcha = await verifyCaptcha({
     token: parsed.data.captchaToken,
     purpose: "login",
+    surface,
     request,
   });
 
   if (!captcha.ok) {
-    // AFD-3A2: the code and status now come from the shared CAPTCHA outcome
+    // AFD-3A2: the code and status come from the shared CAPTCHA outcome
     // contract, so a provider outage reads as 503 CAPTCHA_UNAVAILABLE instead of
     // accusing the person at the keyboard of failing a challenge that never ran.
     // On an `ATA_ENVIRONMENT=dev` deployment without login enforcement this
     // branch is unreachable, exactly as before — see src/lib/captcha.ts.
+    //
+    // AFD-3A3: recorded, and recorded BEFORE any password comparison. Nothing
+    // below this line runs, so a failed challenge cannot be used as a password
+    // oracle — the response is identical whether or not the email exists. The
+    // surface name is a bounded internal constant; the token is not recorded
+    // here or anywhere else.
+    await createAuditLog({
+      action: "CAPTCHA_REJECTED",
+      entityType: "API_ROUTE",
+      entityId: "/api/auth/login",
+      metadata: {
+        email,
+        outcome: captcha.outcome,
+        code: captcha.code,
+        surface: surface?.name ?? null,
+      },
+      request,
+    });
+
     return NextResponse.json(
       { error: captcha.code, message: captcha.message },
       { status: captcha.status },

@@ -28,7 +28,12 @@ export default function RegisterPage() {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, captchaToken: "dev-captcha-ok", referralCode: referralCode || undefined }),
+      // AFD-3A3: the `"dev-captcha-ok"` sentinel is removed here for the same
+      // reason as on the login page — it is a fabricated token, not a solved
+      // challenge. Registration verification is unconditional, so this internal
+      // loopback form is refused; the public registration surface is the
+      // Academy's /register, which renders a real widget.
+      body: JSON.stringify({ name, email, password, referralCode: referralCode || undefined }),
     });
 
     setIsSubmitting(false);

@@ -23,7 +23,7 @@
  * success, and there is no retry: retrying a single-use token can only produce
  * `timeout-or-duplicate`, and retrying a failing provider only amplifies it.
  */
-import type { TurnstileConfig } from "./provider";
+import { TURNSTILE_TEST_PROVIDER, type TurnstileConfig } from "./provider";
 
 /** The fixed, official endpoint. Never overridable, never caller-derived. */
 export const TURNSTILE_SITEVERIFY_URL =
@@ -78,6 +78,14 @@ export type VerifyTurnstileInput = {
   readonly config: TurnstileConfig;
   /** The raw browser-supplied token. Never logged from here on. */
   readonly token: string;
+  /**
+   * The action THIS surface's widget stamps (AFD-3A3). Source-owned — it comes
+   * from `captcha/surface.ts`, never from the environment and never from the
+   * caller's request. Required: there is no unpinned call site left, and making
+   * it optional would reintroduce the "one valid token opens every form"
+   * behaviour this parameter exists to end.
+   */
+  readonly expectedAction: string;
   /**
    * The resolved client IP, or `null`. Optional in Cloudflare's contract and
    * optional here: an absent IP weakens the signal, it never fails the check.
@@ -169,7 +177,7 @@ export async function verifyTurnstileToken(
   const payload = await readBoundedJson(response);
   if (payload === null) return { kind: "malformed_provider_response" };
 
-  return evaluatePayload(payload, input.config);
+  return evaluatePayload(payload, input.config, input.expectedAction);
 }
 
 function isAbortError(error: unknown): boolean {
@@ -269,6 +277,7 @@ async function readBoundedJson(response: Response): Promise<Record<string, unkno
 function evaluatePayload(
   payload: Record<string, unknown>,
   config: TurnstileConfig,
+  expectedAction: string,
 ): TurnstileVerdict {
   const success = payload.success;
   if (typeof success !== "boolean") return { kind: "malformed_provider_response" };
@@ -291,13 +300,51 @@ function evaluatePayload(
     }
   }
 
-  if (config.expectedAction !== null) {
-    const action = payload.action;
-    // An absent action under a pinned expectation is a mismatch, not a pass:
-    // the operator asked for the comparison and it cannot be made.
-    if (typeof action !== "string") return { kind: "action_mismatch" };
-    if (action !== config.expectedAction) return { kind: "action_mismatch" };
+  // AFD-3A3: the action pin. A token minted by the registration widget carries
+  // `academy_register` and is REFUSED by the login owner even though Cloudflare
+  // called it genuine, because it is genuine evidence about a different form.
+  const action = payload.action;
+  if (typeof action === "string") {
+    // A stated action that disagrees is refused under EVERY provider. This is
+    // the property the pin exists for and it has no exception.
+    return action === expectedAction ? { kind: "success" } : { kind: "action_mismatch" };
   }
 
-  return { kind: "success" };
+  // No action stated. Normally that is a mismatch, not a pass: the comparison
+  // was required and could not be made. It is also what stops a hand-crafted
+  // token from being waved through by a permissive secret.
+  //
+  // The ONE exception is Cloudflare's own testing keys, which cannot carry an
+  // action: the "token" they mint is a fixed literal that encodes nothing, so
+  // Cloudflare has nothing to echo. Verified against the live endpoint — the
+  // answer is `{success: true, hostname: "example.com", metadata:
+  // {result_with_testing_key: true}}` with no `action` at any time.
+  //
+  // Refusing there would not make anything safer; it would make the isolated
+  // test provider incapable of ever succeeding, which means the end-to-end
+  // login flow could not be exercised at all before a deployment.
+  //
+  // The exception is bounded by TWO independent facts, not by a policy switch:
+  //
+  //   1. the deployment must have named the isolated test provider — already
+  //      gated on `ATA_ENVIRONMENT=dev`, an explicit opt-in marker and a
+  //      dummy-shaped secret, and refused at startup on production/staging;
+  //   2. CLOUDFLARE must itself declare the answer came from a testing key.
+  //
+  // A real secret cannot produce that marker, so this branch is unreachable on
+  // any deployment holding a genuine credential.
+  return isTestingKeyAnswer(payload, config) ? { kind: "success" } : { kind: "action_mismatch" };
+}
+
+/** Did Cloudflare mark this answer as produced by one of its testing keys? */
+function isTestingKeyAnswer(
+  payload: Record<string, unknown>,
+  config: TurnstileConfig,
+): boolean {
+  if (config.provider !== TURNSTILE_TEST_PROVIDER) return false;
+  const metadata = payload.metadata;
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) return false;
+  // A real boolean only. A truthy string or a 1 is not Cloudflare's contract,
+  // and treating one as the marker would be the beginning of a bypass.
+  return (metadata as Record<string, unknown>).result_with_testing_key === true;
 }

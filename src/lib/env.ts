@@ -307,6 +307,18 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
         `${CAPTCHA_LOGIN_ENFORCED_KEY}=true is required outside ATA_ENVIRONMENT=dev`,
       );
     }
+
+    // AFD-3A3 — the retired deployment-wide action pin, reported EVERYWHERE and
+    // not only where a provider is configured. An operator who set this key
+    // believes a pin is in force; the honest answer is that actions are now
+    // owned by src/lib/captcha/surface.ts, one per authentication surface, and
+    // that this key does nothing. Failing at startup says so once, loudly,
+    // instead of leaving a false belief in a runtime environment file.
+    if (env[TURNSTILE_EXPECTED_ACTION_KEY]) {
+      errors.push(
+        `${TURNSTILE_EXPECTED_ACTION_KEY} is retired — each authentication surface pins its own Turnstile action in source; unset this key`,
+      );
+    }
   }
 
   if (isProduction) {

@@ -39,10 +39,16 @@ import {
 import {
   TURNSTILE_MAX_RESPONSE_BYTES,
   TURNSTILE_SITEVERIFY_URL,
-  verifyTurnstileToken,
+  verifyTurnstileToken as verifyTurnstileTokenRaw,
+  type VerifyTurnstileInput,
 } from "../../src/lib/captcha/siteverify";
 import { captchaPublicCode, requiresFreshToken } from "../../src/lib/captcha/outcome";
 import { isCaptchaEnforced, verifyCaptcha } from "../../src/lib/captcha";
+// AFD-3A3: every enforced verification now names its surface, which supplies the
+// expected Turnstile action. This suite is the REGISTRATION contract, so it uses
+// exactly one; the login surfaces and the cross-action refusals are covered by
+// `loginTurnstileRegression.ts`.
+import { ACADEMY_REGISTER_SURFACE } from "../../src/lib/captcha/surface";
 import { validateRuntimeEnv, envContract } from "../../src/lib/env";
 
 let passed = 0;
@@ -95,15 +101,53 @@ function config(over: Partial<TurnstileConfig> = {}): TurnstileConfig {
   return {
     provider: TURNSTILE_PROVIDER,
     secret: REAL_SHAPED_SECRET,
-    expectedAction: null,
     expectedHostnames: null,
     timeoutMs: 2_000,
     ...over,
   };
 }
 
-/** A Siteverify answer with the documented JSON content type. */
+/**
+ * AFD-3A3 — the action pin is no longer optional, so this suite needs a default.
+ *
+ * `verifyTurnstileToken` now REQUIRES an expected action (see
+ * `captcha/surface.ts`). Every pre-existing case here predates that and cares
+ * about some other property, so the wrapper supplies the registration action
+ * unless a case names its own. Nothing is weakened: the comparison still runs on
+ * every call, and the cases that exercise it set both sides explicitly.
+ */
+const SUITE_ACTION = ACADEMY_REGISTER_SURFACE.action;
+
+function verifyTurnstileToken(
+  input: Omit<VerifyTurnstileInput, "expectedAction"> & { expectedAction?: string },
+) {
+  return verifyTurnstileTokenRaw({ expectedAction: SUITE_ACTION, ...input });
+}
+
+/**
+ * A Siteverify answer with the documented JSON content type.
+ *
+ * A SUCCESSFUL answer is stamped with `SUITE_ACTION` unless the case supplied
+ * its own `action`, because a real Cloudflare answer for a widget-minted token
+ * always carries one. Cases that need the action genuinely ABSENT use
+ * `providerJsonExact`.
+ */
 function providerJson(body: unknown, status = 200) {
+  let payload = body;
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
+    (body as Record<string, unknown>).success === true &&
+    !("action" in (body as Record<string, unknown>))
+  ) {
+    payload = { ...(body as Record<string, unknown>), action: SUITE_ACTION };
+  }
+  return providerJsonExact(payload, status);
+}
+
+/** The answer VERBATIM — no action is added. */
+function providerJsonExact(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
@@ -191,26 +235,32 @@ async function main() {
     assert.equal(!resolution.configured && resolution.reason, "secret_is_not_test_key");
   });
 
-  await check("expected action must satisfy Cloudflare's documented limits", () => {
-    const ok = resolveCaptchaConfig(
-      devEnv({
-        [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER,
-        [TURNSTILE_SECRET_ENV_KEY]: REAL_SHAPED_SECRET,
-        [TURNSTILE_EXPECTED_ACTION_KEY]: "academy_register",
-      }),
-    );
-    assert.equal(ok.configured && ok.config.expectedAction, "academy_register");
-
-    for (const bad of ["a".repeat(33), "has space", "has/slash", "emoji✨"]) {
+  await check("AFD-3A3: a deployment-wide expected action is refused outright", () => {
+    // One env-wide pin cannot be correct for three surfaces at once. Honouring
+    // it would silently stop at least two of them distinguishing their own
+    // tokens, so it is now a configuration REJECTION rather than an override —
+    // the operator finds out at startup instead of never.
+    for (const value of ["academy_register", "academy_login", "crm_login", "anything"]) {
       const resolution = resolveCaptchaConfig(
         devEnv({
           [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER,
           [TURNSTILE_SECRET_ENV_KEY]: REAL_SHAPED_SECRET,
-          [TURNSTILE_EXPECTED_ACTION_KEY]: bad,
+          [TURNSTILE_EXPECTED_ACTION_KEY]: value,
         }),
       );
-      assert.equal(resolution.configured, false, `action ${JSON.stringify(bad)} accepted`);
+      assert.equal(resolution.configured, false, `${value} was accepted as an env pin`);
+      assert.equal(!resolution.configured && resolution.reason, "expected_action_env_forbidden");
     }
+
+    // Absent (and empty) remain the normal, configured case.
+    const ok = resolveCaptchaConfig(
+      devEnv({
+        [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER,
+        [TURNSTILE_SECRET_ENV_KEY]: REAL_SHAPED_SECRET,
+        [TURNSTILE_EXPECTED_ACTION_KEY]: "",
+      }),
+    );
+    assert.equal(ok.configured, true);
   });
 
   await check("one bad hostname invalidates the whole allow-list", () => {
@@ -250,6 +300,7 @@ async function main() {
   await check("setting the old bypass key grants nothing", async () => {
     const result = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env: devEnv({ CAPTCHA_DEV_BYPASS: "true" }),
     });
@@ -264,7 +315,8 @@ async function main() {
   });
 
   await check("an unconfigured provider closes registration rather than opening it", async () => {
-    const result = await verifyCaptcha({ purpose: "register", token: TOKEN, env: devEnv() });
+    const result = await verifyCaptcha({ purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE, token: TOKEN, env: devEnv() });
     assert.equal(result.ok, false);
     assert.equal(!result.ok && result.code, "CAPTCHA_CONFIGURATION_ERROR");
   });
@@ -276,7 +328,8 @@ async function main() {
     });
     const stub = stubFetch(() => providerJson({ success: false, "error-codes": ["invalid-input-response"] }));
     for (const token of ["test", "dev-captcha-ok", "true", "1", "bypass"]) {
-      const result = await verifyCaptcha({ purpose: "register", token, env, fetchImpl: stub.impl });
+      const result = await verifyCaptcha({ purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE, token, env, fetchImpl: stub.impl });
       assert.equal(result.ok, false, `token ${JSON.stringify(token)} passed`);
     }
   });
@@ -286,6 +339,7 @@ async function main() {
     for (const token of [undefined, null, "", "   "]) {
       const result = await verifyCaptcha({
         purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
         token,
         env: devEnv({
           [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER,
@@ -438,6 +492,7 @@ async function main() {
     // says or fails to say, an unconfigured provider closes registration.
     const result = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env: {} as NodeJS.ProcessEnv,
     });
@@ -695,36 +750,46 @@ async function main() {
     assert.equal(verdict.kind, "success");
   });
 
-  await check("an action mismatch is rejected, and an absent action under a pin is too", async () => {
+  await check("an action mismatch is rejected, and an absent action is too", async () => {
     const mismatch = await verifyTurnstileToken({
-      config: config({ expectedAction: "academy_register" }),
+      config: config(),
       token: TOKEN,
-      fetchImpl: stubFetch(() => providerJson({ success: true, action: "login" })).impl,
+      expectedAction: "academy_register",
+      fetchImpl: stubFetch(() => providerJsonExact({ success: true, action: "login" })).impl,
     });
     assert.equal(mismatch.kind, "action_mismatch");
 
     const absent = await verifyTurnstileToken({
-      config: config({ expectedAction: "academy_register" }),
+      config: config(),
       token: TOKEN,
-      fetchImpl: stubFetch(() => providerJson({ success: true })).impl,
+      expectedAction: "academy_register",
+      fetchImpl: stubFetch(() => providerJsonExact({ success: true })).impl,
     });
     assert.equal(absent.kind, "action_mismatch");
 
     const match = await verifyTurnstileToken({
-      config: config({ expectedAction: "academy_register" }),
+      config: config(),
       token: TOKEN,
-      fetchImpl: stubFetch(() => providerJson({ success: true, action: "academy_register" })).impl,
+      expectedAction: "academy_register",
+      fetchImpl: stubFetch(() => providerJsonExact({ success: true, action: "academy_register" })).impl,
     });
     assert.equal(match.kind, "success");
   });
 
-  await check("no pin means no comparison, never a failed comparison ignored", async () => {
-    const verdict = await verifyTurnstileToken({
+  await check("AFD-3A3: the action comparison is unconditional — there is no unpinned call", async () => {
+    // Before AFD-3A3 an unset pin meant "do not compare", so a genuine token
+    // minted for ANY form passed everywhere. That branch no longer exists: the
+    // parameter is required, and an answer carrying a foreign action fails even
+    // though Cloudflare called the token genuine.
+    const foreign = await verifyTurnstileToken({
       config: config(),
       token: TOKEN,
-      fetchImpl: stubFetch(() => providerJson({ success: true, action: "anything", hostname: "x.example" })).impl,
+      expectedAction: "crm_login",
+      fetchImpl: stubFetch(() =>
+        providerJsonExact({ success: true, action: "academy_login", hostname: "x.example" }),
+      ).impl,
     });
-    assert.equal(verdict.kind, "success");
+    assert.equal(foreign.kind, "action_mismatch");
   });
 
   // ================================================ G. remote IP handling
@@ -736,6 +801,7 @@ async function main() {
     });
     await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       request,
       env: devEnv({
@@ -758,6 +824,7 @@ async function main() {
     });
     await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       request,
       env: devEnv({
@@ -776,6 +843,7 @@ async function main() {
     const request = new Request("https://academy.example.invalid/api/auth/register", { method: "POST" });
     await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       request,
       env: devEnv({
@@ -812,11 +880,15 @@ async function main() {
         [TURNSTILE_SECRET_ENV_KEY]: REAL_SHAPED_SECRET,
       });
       // Every branch: success, rejection, malformed, timeout, connection error.
-      await verifyCaptcha({ purpose: "register", token: TOKEN, env, fetchImpl: stubFetch(() => providerJson({ success: true })).impl });
-      await verifyCaptcha({ purpose: "register", token: TOKEN, env, fetchImpl: stubFetch(() => providerJson({ success: false, "error-codes": ["invalid-input-response"] })).impl });
-      await verifyCaptcha({ purpose: "register", token: TOKEN, env, fetchImpl: stubFetch(() => new Response("nope", { status: 200 })).impl });
+      await verifyCaptcha({ purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE, token: TOKEN, env, fetchImpl: stubFetch(() => providerJson({ success: true })).impl });
+      await verifyCaptcha({ purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE, token: TOKEN, env, fetchImpl: stubFetch(() => providerJson({ success: false, "error-codes": ["invalid-input-response"] })).impl });
+      await verifyCaptcha({ purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE, token: TOKEN, env, fetchImpl: stubFetch(() => new Response("nope", { status: 200 })).impl });
       await verifyCaptcha({
         purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
         token: TOKEN,
         env,
         // A rejection carrying the secret in its message, as real `fetch`
@@ -841,6 +913,7 @@ async function main() {
     });
     const result = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env,
       fetchImpl: stubFetch(() => providerJson({ success: false, hostname: "leak.example", "error-codes": ["invalid-input-response"] })).impl,
@@ -864,6 +937,7 @@ async function main() {
       ["provider_unavailable", "CAPTCHA_UNAVAILABLE"],
       ["malformed_provider_response", "CAPTCHA_UNAVAILABLE"],
       ["provider_misconfigured", "CAPTCHA_CONFIGURATION_ERROR"],
+      ["surface_unresolved", "CAPTCHA_CONFIGURATION_ERROR"],
     ];
     for (const [outcome, code] of expected) {
       assert.equal(captchaPublicCode(outcome), code, `${outcome} projected wrongly`);
@@ -873,11 +947,13 @@ async function main() {
   await check("a missing and an invalid secret are indistinguishable to a browser", async () => {
     const missing = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env: devEnv({ [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER }),
     });
     const invalid = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env: devEnv({
         [CAPTCHA_PROVIDER_KEY]: TURNSTILE_PROVIDER,
@@ -903,6 +979,7 @@ async function main() {
       "hostname_mismatch",
       "action_mismatch",
       "malformed_provider_response",
+      "surface_unresolved",
     ] as const) {
       assert.equal(requiresFreshToken(outcome), true, `${outcome} did not renew`);
     }
@@ -915,6 +992,7 @@ async function main() {
     });
     const rejected = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env,
       fetchImpl: stubFetch(() => providerJson({ success: false, "error-codes": ["invalid-input-response"] })).impl,
@@ -923,6 +1001,7 @@ async function main() {
 
     const unavailable = await verifyCaptcha({
       purpose: "register",
+      surface: ACADEMY_REGISTER_SURFACE,
       token: TOKEN,
       env,
       fetchImpl: stubFetch(() => providerJson({ success: true }, 503)).impl,

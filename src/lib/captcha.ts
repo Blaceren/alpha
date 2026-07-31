@@ -1,5 +1,5 @@
 /**
- * AFD-3A2 — CAPTCHA verification.
+ * AFD-3A2 / AFD-3A3 — CAPTCHA verification.
  *
  * WHAT THIS FILE USED TO BE
  * A stub. `provider: "dev"`, no integration, and one line of policy:
@@ -18,21 +18,26 @@
  * makes `purpose: "register"` skip verification. An unconfigured provider does
  * not open the door — it closes it, with a configuration error.
  *
- * LOGIN AND CHECKPOINT ARE A DECLARED, BOUNDED EXCEPTION.
- * AFD-3A2 owns the registration surface. The login surfaces still submit the
- * legacy hard-coded `"dev-captcha-ok"` sentinel from pages this phase is not
- * permitted to change, so enforcing Turnstile on login here would lock the
- * primary learner and the CRM administrator out of the live DEV deployment on
- * the day it shipped — a regression, not a hardening.
+ * LOGIN IS NOW A REAL SURFACE (AFD-3A3).
+ * AFD-3A2 could not enforce login: the Academy and CRM login pages had no
+ * widget, so switching enforcement on would have locked out the learner and the
+ * CRM administrator rather than protecting them. Both pages now render a real
+ * challenge and both fronting servers stamp which surface they are, so login is
+ * verified wherever `isCaptchaLoginEnforced` says it must be — and the legacy
+ * `"dev-captcha-ok"` sentinel that used to stand in for a token is gone from the
+ * source entirely.
  *
- * That exception is NOT a default bypass, because it cannot survive a real
- * deployment: `isCaptchaLoginEnforced` is required to be true anywhere that is
- * not an explicit `ATA_ENVIRONMENT=dev` box, and `validateRuntimeEnv` refuses to
- * start such a deployment without it. So the unverified login path exists in
- * exactly one place — a developer machine — and a production host that forgets
- * to think about it fails to boot rather than quietly accepting anyone.
+ * The remaining unverified-login path is exactly one place: an explicit
+ * `ATA_ENVIRONMENT=dev` box that has not set `CAPTCHA_LOGIN_ENFORCED`.
+ * `validateRuntimeEnv` refuses to start anything else without it, so a
+ * production host that forgets to think about login fails to boot rather than
+ * quietly accepting anyone.
  *
- * Migrating the login surfaces to a widget is tracked as follow-up AFD-3A3.
+ * EVERY ENFORCED VERIFICATION IS PINNED TO A SURFACE.
+ * A token is evidence about ONE form. `captcha/surface.ts` records which action
+ * each form's widget stamps, and a verification that cannot name its surface
+ * fails as a configuration error. See that file for why the surface is a
+ * proxy-stamped header and not a body field.
  */
 import {
   captchaPublicCode,
@@ -50,9 +55,11 @@ import {
   type CaptchaProviderName,
 } from "@/lib/captcha/provider";
 import { verifyTurnstileToken, type SiteverifyFetch } from "@/lib/captcha/siteverify";
+import type { AuthSurface } from "@/lib/captcha/surface";
 import { getRequestIp } from "@/lib/rateLimit";
 
-export type CaptchaPurpose = "login" | "register" | "checkpoint";
+export type { CaptchaPurpose } from "@/lib/captcha/purpose";
+import type { CaptchaPurpose } from "@/lib/captcha/purpose";
 
 export { CAPTCHA_LOGIN_ENFORCED_KEY, isCaptchaLoginEnforced } from "@/lib/captcha/provider";
 
@@ -62,6 +69,13 @@ const ALWAYS_ENFORCED: ReadonlySet<CaptchaPurpose> = new Set<CaptchaPurpose>(["r
 export type CaptchaVerificationInput = {
   token?: string | null;
   purpose: CaptchaPurpose;
+  /**
+   * Which form this challenge was raised for (AFD-3A3). Supplies the expected
+   * Turnstile action. `null` when a fronting server did not name one — that is a
+   * refusal, never a skipped comparison. Callers with exactly one surface (the
+   * registration owner) pass a source constant and can never be `null`.
+   */
+  surface?: AuthSurface | null;
   request?: Request;
   /** Test seam. Never set in product code. */
   env?: NodeJS.ProcessEnv;
@@ -112,9 +126,14 @@ function failure(outcome: Exclude<CaptchaOutcome, "success">): CaptchaVerificati
  *
  * Ordering matters and is deliberate:
  *   1. enforcement — is this purpose gated here at all?
- *   2. configuration — refuse before touching the network if we cannot verify;
- *   3. token presence — refuse before spending a provider round trip;
- *   4. provider — the only authority that can answer "yes".
+ *   2. surface — which form is this, and therefore which action is acceptable?
+ *   3. configuration — refuse before touching the network if we cannot verify;
+ *   4. token presence — refuse before spending a provider round trip;
+ *   5. provider — the only authority that can answer "yes".
+ *
+ * The surface check precedes the token check so that a deployment whose proxy
+ * is not stamping the header reports a configuration fault to its operator
+ * instead of a wall of "you failed the challenge" at honest visitors.
  *
  * The token is never logged, never audited and never echoed. Neither is the
  * secret, which this function does not even name — it lives inside the resolved
@@ -128,6 +147,13 @@ export async function verifyCaptcha(
   if (!isCaptchaEnforced(input.purpose, env)) {
     return { ok: true, outcome: "success", provider: "unenforced" };
   }
+
+  const surface = input.surface ?? null;
+  if (surface === null) return failure("surface_unresolved");
+  // Belt and braces: a caller could in principle hand over a surface belonging
+  // to another purpose. The registry says which purpose owns which surface, and
+  // disagreeing with it is a refusal rather than a reinterpretation.
+  if (surface.purpose !== input.purpose) return failure("surface_unresolved");
 
   const resolution = resolveCaptchaConfig(env);
   if (!resolution.configured) {
@@ -145,6 +171,7 @@ export async function verifyCaptcha(
   const verdict = await verifyTurnstileToken({
     config: resolution.config,
     token,
+    expectedAction: surface.action,
     // The canonical trusted resolver, and only it. A browser-supplied
     // `x-forwarded-for` is never read here — see AFD-3A's client-IP contract
     // for why the Academy proxy overwrites rather than appends to that chain.

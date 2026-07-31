@@ -37,6 +37,14 @@ import { classifyEnvironment, isDevEnvironment } from "@/lib/environment";
 /** Environment key names. Exported so tests and the operator handoff agree. */
 export const CAPTCHA_PROVIDER_KEY = "CAPTCHA_PROVIDER";
 export const TURNSTILE_SECRET_ENV_KEY = "TURNSTILE_SECRET_KEY";
+/**
+ * RETIRED IN AFD-3A3. A single deployment-wide expected action cannot express
+ * "the CRM login token must not open the Academy": there are three surfaces now
+ * and each pins its own action in source (`captcha/surface.ts`). The key is
+ * still NAMED here so that setting it is a loud configuration rejection rather
+ * than a value that is quietly ignored while an operator believes it is pinning
+ * something.
+ */
 export const TURNSTILE_EXPECTED_ACTION_KEY = "TURNSTILE_EXPECTED_ACTION";
 export const TURNSTILE_EXPECTED_HOSTNAMES_KEY = "TURNSTILE_EXPECTED_HOSTNAMES";
 export const CAPTCHA_TEST_MODE_KEY = "CAPTCHA_TEST_MODE";
@@ -76,14 +84,12 @@ export type CaptchaProviderName = (typeof CAPTCHA_PROVIDERS)[number];
 export const CAPTCHA_TEST_MODE_MARKER =
   "unsafe-official-turnstile-test-keys-isolated-only" as const;
 
-/** The action this platform stamps on the registration challenge. */
-export const REGISTER_ACTION = "academy_register" as const;
-
 /**
  * Cloudflare's documented limits for `action`: at most 32 characters, and only
- * alphanumerics, underscore and hyphen.
+ * alphanumerics, underscore and hyphen. Every action in `captcha/surface.ts` is
+ * asserted against this by that module's tests.
  */
-const ACTION_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+export const ACTION_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 
 /** A conservative hostname shape. No scheme, no port, no path, no wildcard. */
 const HOSTNAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
@@ -116,8 +122,8 @@ export type CaptchaConfigReason =
   | "test_provider_marker_absent"
   /** `CAPTCHA_TEST_MODE` is present but is not the exact marker. */
   | "test_marker_malformed"
-  /** `TURNSTILE_EXPECTED_ACTION` violates Cloudflare's documented limits. */
-  | "expected_action_invalid"
+  /** `TURNSTILE_EXPECTED_ACTION` was set. Actions are source-owned since AFD-3A3. */
+  | "expected_action_env_forbidden"
   /** `TURNSTILE_EXPECTED_HOSTNAMES` is present but unparseable or empty. */
   | "expected_hostnames_invalid";
 
@@ -129,12 +135,6 @@ export type TurnstileConfig = {
    * row or an API response.
    */
   readonly secret: string;
-  /**
-   * The action the token must carry, or `null` when the operator has not
-   * pinned one. `null` means "do not compare", never "accept anything after a
-   * failed comparison".
-   */
-  readonly expectedAction: string | null;
   /** Explicit hostname allow-list, or `null` when the operator has not pinned one. */
   readonly expectedHostnames: readonly string[] | null;
   readonly timeoutMs: number;
@@ -235,11 +235,12 @@ export function resolveCaptchaConfig(
     return unconfigured("secret_is_not_test_key");
   }
 
-  let expectedAction: string | null = null;
+  // AFD-3A3: a deployment-wide action pin is refused outright. It cannot be
+  // right for three surfaces at once, and honouring it would mean one of the
+  // three silently stopped distinguishing its own tokens from the others'.
   const rawAction = env[TURNSTILE_EXPECTED_ACTION_KEY];
   if (rawAction !== undefined && rawAction !== "") {
-    if (!ACTION_PATTERN.test(rawAction)) return unconfigured("expected_action_invalid");
-    expectedAction = rawAction;
+    return unconfigured("expected_action_env_forbidden");
   }
 
   let expectedHostnames: readonly string[] | null = null;
@@ -254,7 +255,6 @@ export function resolveCaptchaConfig(
     config: {
       provider,
       secret,
-      expectedAction,
       expectedHostnames,
       timeoutMs: TURNSTILE_DEFAULT_TIMEOUT_MS,
     },
@@ -285,8 +285,8 @@ export function describeCaptchaConfigRejection(reason: CaptchaConfigReason): str
       return `${CAPTCHA_PROVIDER_KEY}=${TURNSTILE_TEST_PROVIDER} requires ${CAPTCHA_TEST_MODE_KEY}=${CAPTCHA_TEST_MODE_MARKER}`;
     case "test_marker_malformed":
       return `${CAPTCHA_TEST_MODE_KEY} is an isolated-test marker and must be exactly ${CAPTCHA_TEST_MODE_MARKER}, only alongside ${CAPTCHA_PROVIDER_KEY}=${TURNSTILE_TEST_PROVIDER}`;
-    case "expected_action_invalid":
-      return `${TURNSTILE_EXPECTED_ACTION_KEY} must be 1-32 characters of [A-Za-z0-9_-]`;
+    case "expected_action_env_forbidden":
+      return `${TURNSTILE_EXPECTED_ACTION_KEY} is no longer configurable — each authentication surface pins its own Turnstile action in source; unset this key`;
     case "expected_hostnames_invalid":
       return `${TURNSTILE_EXPECTED_HOSTNAMES_KEY} must be a comma-separated list of bare hostnames`;
   }

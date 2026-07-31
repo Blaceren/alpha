@@ -25,7 +25,14 @@ export type CaptchaOutcome =
   | "provider_misconfigured"
   | "hostname_mismatch"
   | "action_mismatch"
-  | "malformed_provider_response";
+  | "malformed_provider_response"
+  /**
+   * AFD-3A3. The request reached an enforced surface without a trusted server
+   * having named which surface it is, so there is no action to check the token
+   * against. Reported as a platform configuration fault because that is what it
+   * is: the fronting proxy failed to stamp a header only it can stamp.
+   */
+  | "surface_unresolved";
 
 /** The only three codes an anonymous browser ever sees. */
 export type CaptchaPublicCode =
@@ -81,6 +88,10 @@ export function captchaPublicCode(outcome: Exclude<CaptchaOutcome, "success">): 
       return "CAPTCHA_UNAVAILABLE";
 
     case "provider_misconfigured":
+    // Indistinguishable from a missing secret to the anonymous browser, and for
+    // the same reason: both mean this deployment cannot currently verify anyone,
+    // and neither is something the visitor can act on beyond contacting support.
+    case "surface_unresolved":
       return "CAPTCHA_CONFIGURATION_ERROR";
   }
 }

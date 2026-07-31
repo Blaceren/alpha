@@ -105,6 +105,8 @@
     "test:regression:pocketcta-disposable-e2e": "tsx scripts/regression/pocketCtaDisposableE2E.ts",
     "test:regression:affiliate-foundation": "tsx scripts/regression/affiliateFoundationRegression.ts",
     "test:regression:captcha-turnstile": "tsx scripts/regression/captchaTurnstileRegression.ts",
+    "test:regression:login-turnstile": "tsx scripts/regression/loginTurnstileRegression.ts",
+    "test:regression:login-turnstile-e2e": "tsx scripts/regression/loginTurnstileIsolatedE2E.ts",
     "test:regression:registration-referral": "tsx scripts/regression/registrationReferralRegression.ts"
   },
   "dependencies": {

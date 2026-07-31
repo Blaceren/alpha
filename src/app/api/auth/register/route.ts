@@ -4,6 +4,7 @@ import { toPublicUser } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
+import { ACADEMY_REGISTER_SURFACE } from "@/lib/captcha/surface";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
 import {
@@ -55,6 +56,10 @@ export async function POST(request: Request) {
   const captcha = await verifyCaptcha({
     token: parsed.data.captchaToken,
     purpose: "register",
+    // Registration has exactly ONE surface, so it is named here in source
+    // rather than read from the request. Nothing a caller sends can change
+    // which action this route will accept.
+    surface: ACADEMY_REGISTER_SURFACE,
     request,
   });
 
