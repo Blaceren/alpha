@@ -196,6 +196,34 @@ export function canViewAffiliates(permissions: readonly CrmPermission[]): boolea
   );
 }
 
+/* --------------------------------------------------- Affiliate leads AFD-5B2B */
+
+// Full-identity reveal for ONE affiliate lead.
+//
+// NO NEW PERMISSION WAS ADDED. `reveal_pii` already exists in the canonical
+// matrix above, is named for exactly this operation, and is granted to exactly
+// the three roles AFD-5B2B's contract calls for — crm_admin, crm_manager and
+// retention_manager — while analyst, support, mentor, moderator,
+// content_manager and read_only hold neither it nor any equivalent. Minting a
+// second `view_affiliate_lead_pii` beside it would give one capability two
+// owners that could later disagree, which is how a role ends up able to read
+// PII through one surface and not another.
+//
+// `view_identity_full_email` was considered and NOT used. It is the FIELD-LEVEL
+// gate the CRM user list and detail already apply when they decide whether to
+// render an address, and it is held by the identical three roles — so the
+// choice narrows and widens nothing. `reveal_pii` is preferred because this is
+// an explicit, audited, single-record REVEAL rather than a field projection,
+// and the permission whose name states that should be the one that guards it.
+//
+// THIS GATE IS ADDITIONAL, NEVER ALTERNATIVE. The caller must already satisfy
+// `canViewAffiliates` to reach a lead at all. `view_affiliate_analytics` alone
+// therefore grants no PII whatsoever, and `manage_settings` — which is
+// deliberately not broadened here — does not imply this either.
+export function canRevealLeadPii(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("reveal_pii");
+}
+
 // Read gate for CRM Learner Owner HISTORY. It requires exactly `view_audit`,
 // held only by crm_admin and crm_manager — there is deliberately NO fallback to
 // `assign_owner`, so retention_manager (which may mutate the owner) still cannot
