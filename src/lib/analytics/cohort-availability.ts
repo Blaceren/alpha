@@ -65,7 +65,10 @@ export function buildCohortAvailability(input: {
     redeposits: unavailable("provider_transaction_identifier_missing"),
     currentBalance: unavailable("prohibited_not_collected"),
 
-    leadDrilldown: unavailable("deferred_to_afd5b2b"),
+    // AFD-5B2B shipped the per-lead drilldown at
+    // /api/crm/v1/affiliates/leads. Leaving "deferred_to_afd5b2b" here after
+    // that would be a claim this file knows to be false.
+    leadDrilldown: available,
     maturityScoring: unavailable("deferred_to_statistical_analyst_phase"),
     forecasting: unavailable("deferred_to_predictive_analytics_phase"),
   };

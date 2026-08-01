@@ -77,7 +77,11 @@ export function buildDataAvailability(input: {
     // reports that the MODE exists.
     acquisitionCohortMode: available,
 
-    leadDrilldown: unavailable("deferred_to_afd5b2b"),
+    // AFD-5B2B shipped it, for exactly the reason stated above: a stale
+    // "deferred_to_afd5b2b" would be this file publishing a claim it knows is
+    // false, and a client reading only this block must be able to discover that
+    // per-lead questions are answerable at /api/crm/v1/affiliates/leads.
+    leadDrilldown: available,
   };
 }
 
