@@ -36,6 +36,7 @@ import {
   type Listener,
   type OwnershipContext,
 } from "../../src/lib/testing/listenerOwnership";
+import { firstLeak, leaksValue } from "../../src/lib/testing/leakDetection";
 
 let passed = 0;
 let failed = 0;
@@ -712,7 +713,60 @@ async function main() {
     assert.equal(outcome.summary?.verdict, "FAIL");
   });
 
-  await check("46. the runner leaves no scratch directory behind", () => {
+  // ============================================== Part 4 — leak detection
+  //
+  // The redaction assertions in the Pocket suites searched a JSON dump with a
+  // raw substring match. A run failed with `http_500 leaked 260` because the
+  // random correlation handle was `pp-8bfefe8f-2609-…`. These prove the
+  // replacement still detects a real leak — that is the whole point of the
+  // change being safe.
+
+  await check("46. positive control: a genuinely leaked value is still detected", () => {
+    // Every shape a leak actually takes in JSON.
+    assert.equal(leaksValue('{"amount":260}', "260"), true, "bare number value");
+    assert.equal(leaksValue('{"amount":"260"}', "260"), true, "quoted string value");
+    assert.equal(leaksValue('{"a":1,"amount":260,"b":2}', "260"), true, "mid-object value");
+    assert.equal(leaksValue("balance was 260 at the time", "260"), true, "prose");
+    assert.equal(leaksValue('{"list":[260]}', "260"), true, "array element");
+    assert.equal(leaksValue('{"secret":"pocket-ps1-synthetic-secret-value"}', "pocket-ps1-synthetic-secret-value"), true);
+    assert.equal(leaksValue('{"clickId":"tq-ps1-known-click"}', "tq-ps1-known-click"), true);
+    assert.equal(
+      firstLeak('{"a":"x","amount":260}', ["nothing-here", "260"]),
+      "260",
+      "firstLeak reports which value leaked",
+    );
+  });
+
+  await check("47. a random identifier that merely contains the digits is not a leak", () => {
+    // The exact false positive that failed a manifest run.
+    const serialised =
+      '{"outcome":{"kind":"unavailable","reason":"provider_maintenance"},' +
+      '"providerRequestId":"pp-8bfefe8f-2609-47f9-8425-eb631f37be89",' +
+      '"observedAt":"2026-08-01T20:23:19.051Z"}';
+    assert.equal(serialised.includes("260"), true, "the old substring check would have failed here");
+    assert.equal(leaksValue(serialised, "260"), false, "but nothing leaked");
+
+    // Other identifier shapes that must not trip it.
+    assert.equal(leaksValue('{"id":"cm260abc123"}', "260"), false, "inside a cuid");
+    assert.equal(leaksValue('{"at":"2026-08-01T02:60:00.000Z"}', "260"), false, "inside a timestamp");
+    assert.equal(leaksValue('{"amount":"1260.00"}', "260"), false, "inside a larger amount");
+    assert.equal(leaksValue('{"amount":"260.50"}', "260"), false, "a different amount is not this one");
+    assert.equal(firstLeak(serialised, ["260", "999"]), null);
+  });
+
+  await check("48. values too short to be evidence are never treated as leaks", () => {
+    assert.equal(leaksValue('{"x":"5"}', "5"), false, "a single character matches almost anything");
+    assert.equal(leaksValue("anything", ""), false);
+    assert.equal(leaksValue("anything", null), false);
+    assert.equal(leaksValue("anything", undefined), false);
+  });
+
+  await check("49. regex metacharacters in a value are matched literally", () => {
+    assert.equal(leaksValue('{"v":"a.c"}', "a.c"), true);
+    assert.equal(leaksValue('{"v":"abc"}', "a.c"), false, "the dot must not act as a wildcard");
+  });
+
+  await check("50. the runner leaves no scratch directory behind", () => {
     for (const dir of scratchDirs) fs.rmSync(dir, { recursive: true, force: true });
     for (const dir of scratchDirs) assert.equal(fs.existsSync(dir), false);
   });

@@ -23,6 +23,8 @@
  *   I. safety        — no XP, no level completion, no balance, no leakage.
  */
 import assert from "node:assert/strict";
+
+import { leaksValue } from "../../src/lib/testing/leakDetection";
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -1599,9 +1601,14 @@ async function main() {
     assert.ok(!dump.includes(SECRET));
     assert.ok(!dump.includes("ow="));
     for (const event of await prisma.pocketProviderEvent.findMany({ take: 20 })) {
-      assert.ok(!dump.includes(event.pocketClickId), "an audit row leaked a click id");
-      assert.ok(!dump.includes(event.pocketPlayerId), "an audit row leaked a player id");
-      assert.ok(!dump.includes(event.normalizedAmount), "an audit row leaked an amount");
+      // AFD-5B2A-FINAL — these were raw substring matches. An amount like `260`
+      // occurs by chance inside a cuid, a UUID or an ISO timestamp in the same
+      // dump, so the check failed without anything having leaked. `leaksValue`
+      // requires the value to appear on token boundaries, which is how a real
+      // leak appears in JSON; detection is unchanged.
+      assert.ok(!leaksValue(dump, event.pocketClickId), "an audit row leaked a click id");
+      assert.ok(!leaksValue(dump, event.pocketPlayerId), "an audit row leaked a player id");
+      assert.ok(!leaksValue(dump, event.normalizedAmount), "an audit row leaked an amount");
     }
   });
 

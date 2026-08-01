@@ -17,6 +17,8 @@
  *   G. redaction   — token, hash, URL and balance appear nowhere in any output.
  */
 import assert from "node:assert/strict";
+
+import { leaksValue } from "../../src/lib/testing/leakDetection";
 import crypto from "node:crypto";
 
 // `NODE_ENV` is typed read-only, but the loopback base URL is only accepted in
@@ -591,8 +593,13 @@ async function main() {
         const result = await callMock(server, scenario);
         const serialised = safeJson(result);
         for (const forbidden of FORBIDDEN_TOKENS) {
+          // AFD-5B2A-FINAL — a raw substring match here failed a run with
+          // `http_500 leaked 260` because the random correlation handle was
+          // `pp-8bfefe8f-2609-…`. A leaked value appears in JSON as a value, on
+          // token boundaries; a coincidence is glued to identifier characters.
+          // See `leaksValue`: detection of a real leak is unchanged.
           assert.ok(
-            !serialised.includes(forbidden),
+            !leaksValue(serialised, forbidden),
             `${scenario} leaked ${forbidden}: ${serialised}`,
           );
         }
