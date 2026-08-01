@@ -118,6 +118,9 @@
     "test:regression:affiliate-analytics-e2e": "tsx scripts/regression/affiliateAnalyticsIsolatedE2E.ts",
     "test:regression:affiliate-cohorts": "tsx scripts/regression/affiliateCohortAnalyticsRegression.ts",
     "test:regression:affiliate-cohorts-e2e": "tsx scripts/regression/affiliateCohortAnalyticsIsolatedE2E.ts",
+    "test:regression:affiliate-leads": "tsx scripts/regression/affiliateLeadDrilldownRegression.ts",
+    "test:regression:affiliate-leads-plan": "tsx scripts/regression/affiliateLeadQueryPlan.ts",
+    "test:regression:affiliate-leads-e2e": "tsx scripts/regression/affiliateLeadDrilldownIsolatedE2E.ts",
     "test:regression:acceptance-manifest": "tsx scripts/regression/acceptanceManifestRunnerRegression.ts"
   },
   "dependencies": {
