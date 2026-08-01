@@ -10,7 +10,10 @@ const suites = [
   ["1B.5 definitions admin HTTP", "test:regression:curriculum-definitions-api", 43],
   ["V1 withdrawal compatibility", "test:regression:withdrawal", 21],
   ["2B.1 enrollment schema", "test:regression:curriculum-enrollment-schema", 29],
-  ["2B.2 resolver", "test:regression:curriculum-resolver", 34],
+  // 35 since AFD-5B2A-FINAL: the connection-local `total_changes()` no-write
+  // probe was replaced with a committed-content digest, and a positive control
+  // proving that digest detects a deliberate write was added alongside it.
+  ["2B.2 resolver", "test:regression:curriculum-resolver", 35],
   ["2B.3 enrollment command", "test:regression:curriculum-enrollment-command", 37],
   ["2B.4 level state and start", "test:regression:curriculum-level-state", 40],
   ["2B.5 curriculum read HTTP", "test:regression:curriculum-read-api", 40],

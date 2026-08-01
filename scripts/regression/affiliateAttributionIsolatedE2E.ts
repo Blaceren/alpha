@@ -805,14 +805,29 @@ async function main() {
       const rows = (await prisma.$queryRawUnsafe(
         "SELECT name FROM sqlite_master WHERE type='table'",
       )) as Array<{ name: string }>;
-      const names = rows.map((r) => r.name);
-      for (const forbidden of [
+      const names = new Set(rows.map((r) => r.name));
+
+      // AFD-5B2A-FINAL — this check asserted these four table NAMES were absent
+      // from the schema. That was true when AFD-3B2 was written, and stopped
+      // being true when AFD-4 shipped `PocketProviderEvent` in migration
+      // `20260731010000_pocket_first_deposit`. Table absence was only ever a
+      // proxy for the property under test: that this acquisition journey wrote
+      // no deposit, provider or outbox ROW. So assert that directly. Where a
+      // table does not exist the guarantee holds trivially; where it does, it is
+      // now checked rather than assumed — which is strictly stronger than the
+      // proxy it replaces.
+      for (const table of [
         "AffiliateFirstDeposit",
         "AffiliateRedeposit",
         "PocketProviderEvent",
         "AffiliateOutbox",
       ]) {
-        assert.ok(!names.includes(forbidden), forbidden);
+        if (!names.has(table)) continue;
+        const [{ n }] = (await prisma.$queryRawUnsafe(
+          // Identifier comes from sqlite_master, never from input.
+          `SELECT count(*) AS n FROM "${table.replace(/"/g, '""')}"`,
+        )) as Array<{ n: number | bigint }>;
+        assert.equal(Number(n), 0, `${table} holds ${String(n)} row(s) after an acquisition-only journey`);
       }
       // No Pocket callback was sent, so the fixture's own postback rows are
       // exactly what remains.

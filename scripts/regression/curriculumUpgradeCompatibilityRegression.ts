@@ -1135,17 +1135,29 @@ async function main() {
     cleanupDb();
   }
 
-  await check("28. temporary DB, journals and listener removed after test", () => {
+  await check("28. temporary DB, journals and listener removed after test", async () => {
     assert.equal(fs.existsSync(dbPath), false);
     for (const suffix of ["-journal", "-wal", "-shm"]) {
       assert.equal(fs.existsSync(`${dbPath}${suffix}`), false);
     }
-    const listener = spawnSync(
-      "bash",
-      ["-lc", `ss -tln 2>/dev/null | grep -E '[:.]${PORT} ' || true`],
-      { encoding: "utf8" },
-    );
-    assert.equal((listener.stdout ?? "").trim(), "");
+    // AFD-5B2A-FINAL — this sampled the port exactly once, immediately after
+    // SIGKILL. The kernel does not release a LISTEN socket the instant its
+    // owning process dies, so a suite that had cleaned up perfectly could still
+    // be reported as leaking a listener; that is what failed inside the phase 3
+    // gate. The guarantee is unchanged — this port must end up free — but it is
+    // now given a bounded chance to become free instead of being judged on a
+    // single sample. A genuinely leaked listener still fails, 20 seconds later.
+    const probe = () =>
+      (spawnSync("bash", ["-lc", `ss -tln 2>/dev/null | grep -E '[:.]${PORT} ' || true`], {
+        encoding: "utf8",
+      }).stdout ?? "").trim();
+    const deadline = Date.now() + 20_000;
+    let listener = probe();
+    while (listener !== "" && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+      listener = probe();
+    }
+    assert.equal(listener, "", `port ${PORT} still bound 20s after teardown: ${listener}`);
   });
 
   assert.equal(passed + failed, 30, "upgrade regression scenario count drifted");
