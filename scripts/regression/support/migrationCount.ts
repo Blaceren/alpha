@@ -19,7 +19,7 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  */
-export const EXPECTED_MIGRATION_COUNT = 39;
+export const EXPECTED_MIGRATION_COUNT = 40;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

@@ -1128,6 +1128,9 @@ model PocketTraderIdentity {
   user         User     @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([clickId])
+  /// AFD-5B1 — the trusted Pocket-registration metric counts this table by
+  /// `boundAt`. Without this the date-ranged count was a full table scan.
+  @@index([source, boundAt])
 }
 
 /// AFD-4 — which provider produced an event. One member today, named rather
@@ -1233,6 +1236,9 @@ model PocketProviderEvent {
   @@index([pocketClickId])
   @@index([matchedUserId])
   @@index([status, firstReceivedAt])
+  /// AFD-5B1 — conflicting deposits are counted by `conflictDetectedAt`, which
+  /// the composite above does not carry, so its range was unindexed.
+  @@index([status, conflictDetectedAt])
   @@index([conflictCode])
   @@index([lastReceivedAt])
 }

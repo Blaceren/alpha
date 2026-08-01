@@ -390,17 +390,18 @@ async function main() {
   /* B. Migration                                                        */
   /* ------------------------------------------------------------------ */
 
-  await check("B1 the canonical migration count is 39 and matches the directory", () => {
+  await check("B1 the canonical migration count is 40 and matches the directory", () => {
     const entries = fs
       .readdirSync(path.join(process.cwd(), "prisma", "migrations"), { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name);
-    assert.equal(EXPECTED_MIGRATION_COUNT, 39);
+    // AFD-5B1 added the index-only migration 40.
+    assert.equal(EXPECTED_MIGRATION_COUNT, 40);
     assert.equal(entries.length, EXPECTED_MIGRATION_COUNT);
     assert.ok(entries.includes(MIGRATION_NAME));
   });
 
-  await check("B2 the applied database reports 39 migrations", async () => {
+  await check("B2 the applied database reports 40 migrations", async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
       'SELECT COUNT(*) AS c FROM "_prisma_migrations" WHERE "rolled_back_at" IS NULL',
     );
@@ -503,11 +504,15 @@ async function main() {
     "B9 upgrading a 38-migration database to 39 preserves academy_registration rows",
     () => {
       const migrationsDir = path.join(process.cwd(), "prisma", "migrations");
-      const prior = fs
+      // Every migration that lands BEFORE this one, in order. Not "all except
+      // this one": AFD-5B1's index-only migration 40 targets a table AFD-4
+      // creates, so excluding only AFD-4 would produce an unbuildable schema.
+      const ordered = fs
         .readdirSync(migrationsDir)
-        .filter((e) => e !== "migration_lock.toml" && e !== MIGRATION_NAME)
+        .filter((e) => e !== "migration_lock.toml")
         .sort();
-      assert.equal(prior.length, expectedPriorMigrationCount(1));
+      const prior = ordered.slice(0, ordered.indexOf(MIGRATION_NAME));
+      assert.equal(prior.length, expectedPriorMigrationCount(2));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

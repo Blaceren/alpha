@@ -113,7 +113,9 @@
     "test:regression:captcha-turnstile": "tsx scripts/regression/captchaTurnstileRegression.ts",
     "test:regression:login-turnstile": "tsx scripts/regression/loginTurnstileRegression.ts",
     "test:regression:login-turnstile-e2e": "tsx scripts/regression/loginTurnstileIsolatedE2E.ts",
-    "test:regression:registration-referral": "tsx scripts/regression/registrationReferralRegression.ts"
+    "test:regression:registration-referral": "tsx scripts/regression/registrationReferralRegression.ts",
+    "test:regression:affiliate-analytics": "tsx scripts/regression/affiliateAnalyticsRegression.ts",
+    "test:regression:affiliate-analytics-e2e": "tsx scripts/regression/affiliateAnalyticsIsolatedE2E.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
