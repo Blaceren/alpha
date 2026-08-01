@@ -1050,9 +1050,13 @@ async function main() {
       assert.equal(availability.currentBalance.available, false);
       assert.equal(availability.currentBalance.reason, "prohibited_not_collected");
       assert.equal(availability.educationQuality.available, false);
-      assert.equal(availability.acquisitionCohortMode.available, false);
-      assert.equal(availability.acquisitionCohortMode.reason, "deferred_to_afd5b2");
+      // AFD-5B2A shipped the acquisition-cohort mode, so the event-date response
+      // now reports it as available. Leaving this pinned to the old
+      // "deferred_to_afd5b2" would have made the suite guard a claim the API had
+      // stopped being entitled to make.
+      assert.equal(availability.acquisitionCohortMode.available, true);
       assert.equal(availability.leadDrilldown.available, false);
+      assert.equal(availability.leadDrilldown.reason, "deferred_to_afd5b2b");
       assert.equal(availability.pocketRegistrations.available, true);
       assert.equal(availability.firstDeposits.available, true);
       // No metric named below may appear as a countable zero anywhere.

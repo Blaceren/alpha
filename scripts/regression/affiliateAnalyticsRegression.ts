@@ -523,13 +523,17 @@ async function main() {
       "prohibited_not_collected",
     );
     assert.equal(availability.educationQuality.available, false);
-    assert.equal(availability.acquisitionCohortMode.available, false);
-    assert.equal(
-      availability.acquisitionCohortMode.available === false &&
-        availability.acquisitionCohortMode.reason,
-      "deferred_to_afd5b2",
-    );
+    // AFD-5B2A SHIPPED the acquisition-cohort mode, so this entry now reports
+    // `available`. It was pinned to "deferred_to_afd5b2" while that was true;
+    // leaving it pinned afterwards would have made this suite guard a claim the
+    // API had stopped being entitled to make. The cohort routes carry their own
+    // availability block — this one only says the MODE exists.
+    assert.equal(availability.acquisitionCohortMode.available, true);
     assert.equal(availability.leadDrilldown.available, false);
+    assert.equal(
+      availability.leadDrilldown.available === false && availability.leadDrilldown.reason,
+      "deferred_to_afd5b2b",
+    );
     // Every unavailable entry states WHY, and none of them is expressible as a
     // number — an availability state can never be rendered as a zero metric.
     for (const [name, entry] of Object.entries(availability)) {

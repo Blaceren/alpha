@@ -69,8 +69,15 @@ export function buildDataAvailability(input: {
 
     educationQuality: unavailable("authoritative_product_event_catalog_not_implemented"),
 
-    acquisitionCohortMode: unavailable("deferred_to_afd5b2"),
-    leadDrilldown: unavailable("deferred_to_afd5b2"),
+    // AFD-5B2A shipped it. An event-date response still says so, because a
+    // client reading only this block must be able to discover that the cohort
+    // question is answerable elsewhere — and because leaving a stale
+    // "deferred" here would be this file publishing a claim it knows is false.
+    // The cohort routes have their own availability block; this one only
+    // reports that the MODE exists.
+    acquisitionCohortMode: available,
+
+    leadDrilldown: unavailable("deferred_to_afd5b2b"),
   };
 }
 
