@@ -1055,8 +1055,8 @@ async function main() {
       // "deferred_to_afd5b2" would have made the suite guard a claim the API had
       // stopped being entitled to make.
       assert.equal(availability.acquisitionCohortMode.available, true);
-      assert.equal(availability.leadDrilldown.available, false);
-      assert.equal(availability.leadDrilldown.reason, "deferred_to_afd5b2b");
+      // AFD-5B2B shipped it; pinning the old deferral would guard a false claim.
+      assert.equal(availability.leadDrilldown.available, true);
       assert.equal(availability.pocketRegistrations.available, true);
       assert.equal(availability.firstDeposits.available, true);
       // No metric named below may appear as a countable zero anywhere.

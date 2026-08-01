@@ -1285,7 +1285,9 @@ async function main() {
       educationQuality: "authoritative_product_event_catalog_not_implemented",
       redeposits: "provider_transaction_identifier_missing",
       currentBalance: "prohibited_not_collected",
-      leadDrilldown: "deferred_to_afd5b2b",
+      // leadDrilldown is deliberately absent: AFD-5B2B shipped it, so it is no
+      // longer an unavailable dimension with a reason. It is asserted available
+      // in its own case below.
       maturityScoring: "deferred_to_statistical_analyst_phase",
       forecasting: "deferred_to_predictive_analytics_phase",
     };
@@ -1323,10 +1325,9 @@ async function main() {
     // AFD-5B1 said "deferred_to_afd5b2". That claim is no longer true, and a
     // stale deferral is a lie the API tells about itself.
     assert.deepEqual(availability.acquisitionCohortMode, { available: true });
-    assert.deepEqual(availability.leadDrilldown, {
-      available: false,
-      reason: "deferred_to_afd5b2b",
-    });
+    // AFD-5B2B shipped the lead drilldown. Same rule as the line above: a stale
+    // deferral is a lie the API tells about itself.
+    assert.deepEqual(availability.leadDrilldown, { available: true });
   });
 
   /* =================================================================== */

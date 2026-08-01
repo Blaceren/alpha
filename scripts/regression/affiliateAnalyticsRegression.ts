@@ -529,11 +529,10 @@ async function main() {
     // API had stopped being entitled to make. The cohort routes carry their own
     // availability block — this one only says the MODE exists.
     assert.equal(availability.acquisitionCohortMode.available, true);
-    assert.equal(availability.leadDrilldown.available, false);
-    assert.equal(
-      availability.leadDrilldown.available === false && availability.leadDrilldown.reason,
-      "deferred_to_afd5b2b",
-    );
+    // AFD-5B2B shipped the per-lead drilldown, so this flips for exactly the
+    // reason the comment above gives: a stale deferral would make this suite
+    // guard a claim the API has stopped being entitled to make.
+    assert.equal(availability.leadDrilldown.available, true);
     // Every unavailable entry states WHY, and none of them is expressible as a
     // number — an availability state can never be rendered as a zero metric.
     for (const [name, entry] of Object.entries(availability)) {

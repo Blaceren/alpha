@@ -779,7 +779,8 @@ async function main() {
       educationQuality: "authoritative_product_event_catalog_not_implemented",
       redeposits: "provider_transaction_identifier_missing",
       currentBalance: "prohibited_not_collected",
-      leadDrilldown: "deferred_to_afd5b2b",
+      // leadDrilldown is deliberately absent: AFD-5B2B shipped it, so it is no
+      // longer an unavailable dimension carrying a reason.
       maturityScoring: "deferred_to_statistical_analyst_phase",
       forecasting: "deferred_to_predictive_analytics_phase",
     };
@@ -788,6 +789,11 @@ async function main() {
       assert.equal(state.available, false, `${key} must be unavailable`);
       assert.equal(state.reason, reason, `${key} reason`);
     }
+
+    // AFD-5B2B shipped the per-lead drilldown, so this dimension moved out of
+    // the map above and is asserted positively here — an availability that
+    // simply stopped being checked would be worse than one asserted wrongly.
+    assert.deepEqual(obj(availability.leadDrilldown), { available: true });
   });
 
   /* -------------------- 40 event-date versus cohort mode ----------------- */
