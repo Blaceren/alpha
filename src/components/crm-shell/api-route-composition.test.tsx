@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { resetClientRuntimeMode } from "@/config/client-runtime-mode";
 import { AppShell } from "./app-shell";
 
@@ -261,6 +261,51 @@ describe("api mode — the affiliate section", () => {
     stubPermissions = [];
     renderAt("/affiliates/analytics", "api");
     expect(await screen.findByText("Недостаточно прав")).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------ affiliate leads (AFD-5C2) */
+
+describe("api mode — the affiliate lead routes", () => {
+  it("mounts the lead list at exactly /affiliates/leads", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/leads", "api");
+    expect(
+      await screen.findByRole("heading", { name: "Лиды аффилейтов", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+  });
+
+  it("does not read `leads` as a partner id", async () => {
+    // The exact leads path is matched BEFORE /affiliates/{partnerId}; if it were
+    // not, this route would render a detail page for a partner named "leads" and
+    // the lead list would be unreachable.
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/leads", "api");
+    await screen.findByRole("heading", { name: "Лиды аффилейтов", level: 1 });
+    expect(screen.queryByText("Некорректный идентификатор")).not.toBeInTheDocument();
+  });
+
+  it("mounts the lead detail at /affiliates/leads/{leadId}", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/leads/v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "api");
+    // The detail heading is the masked address once loaded; before that the
+    // route must at least not be the deferred placeholder.
+    await waitFor(() =>
+      expect(screen.queryByText("Раздел ещё не подключён")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps a route BELOW the lead detail deferred", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/leads/v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/reveal", "api");
+    expect(await screen.findByText("Раздел ещё не подключён")).toBeInTheDocument();
+  });
+
+  it("renders the lead denial for a session granted neither", async () => {
+    stubPermissions = [];
+    renderAt("/affiliates/leads", "api");
+    expect(await screen.findByText("Раздел недоступен")).toBeInTheDocument();
   });
 });
 

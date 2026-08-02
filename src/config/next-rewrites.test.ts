@@ -24,12 +24,13 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly twenty-five rewrite definitions", () => {
+  it("produces exactly twenty-eight rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
-    // analytics paths (AFD-5C1). Pinning the count is the point: a new proxied
-    // path must be a deliberate change to this number, never a side effect.
-    expect(buildRewrites(env)).toHaveLength(25);
+    // analytics paths (AFD-5C1) + three affiliate lead paths (AFD-5C2). Pinning
+    // the count is the point: a new proxied path must be a deliberate change to
+    // this number, never a side effect.
+    expect(buildRewrites(env)).toHaveLength(28);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -53,7 +54,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the twenty-five reviewed paths", () => {
+  it("exposes exactly the twenty-eight reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -80,6 +81,9 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/affiliates/analytics/cohorts/summary",
       "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
       "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
+      "/api/crm/v1/affiliates/leads",
+      "/api/crm/v1/affiliates/leads/:leadId",
+      "/api/crm/v1/affiliates/leads/:leadId/reveal",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -158,6 +162,45 @@ describe("rewrites — api mode", () => {
     expect(USER_NOTES_PATH).not.toContain(":noteId");
   });
 
+  /* --------------------------------------------- affiliate leads (AFD-5C2) */
+
+  it("proxies exactly three lead paths", () => {
+    const leads = buildRewrites(env).filter((r) => r.source.includes("/affiliates/leads"));
+    expect(leads.map((r) => r.source)).toEqual([
+      "/api/crm/v1/affiliates/leads",
+      "/api/crm/v1/affiliates/leads/:leadId",
+      "/api/crm/v1/affiliates/leads/:leadId/reveal",
+    ]);
+  });
+
+  it("gives each lead path exactly one dynamic segment and no catch-all", () => {
+    for (const source of [
+      "/api/crm/v1/affiliates/leads/:leadId",
+      "/api/crm/v1/affiliates/leads/:leadId/reveal",
+    ]) {
+      expect(source.match(/:/g)).toHaveLength(1);
+      expect(source).not.toContain("*");
+    }
+    expect("/api/crm/v1/affiliates/leads").not.toContain(":");
+  });
+
+  it("makes a bulk reveal structurally unroutable through this origin", () => {
+    // The reveal path names ONE segment. There is no shape here that could
+    // carry an id array, a wildcard, a filter or an export format.
+    const sources = buildRewrites(env).map((r) => r.source);
+    for (const forbidden of [
+      "/api/crm/v1/affiliates/leads/:path*",
+      "/api/crm/v1/affiliates/leads/reveal",
+      "/api/crm/v1/affiliates/leads/bulk-reveal",
+      "/api/crm/v1/affiliates/leads/export",
+      "/api/crm/v1/affiliates/leads/:leadId/reveal/:path*",
+      "/api/crm/v1/affiliates/leads/:leadId/export",
+      "/api/crm/v1/affiliates/leads/:leadId/:sub",
+    ]) {
+      expect(sources).not.toContain(forbidden);
+    }
+  });
+
   it("keeps the first two entries exact static paths", () => {
     const rules = buildRewrites(env);
     expect(rules[0]?.source).not.toContain(":");
@@ -226,6 +269,9 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/affiliates/analytics/cohorts/summary",
       "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
       "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
+      "/api/crm/v1/affiliates/leads",
+      "/api/crm/v1/affiliates/leads/:leadId",
+      "/api/crm/v1/affiliates/leads/:leadId/reveal",
     ]);
     for (const forbidden of [
       "/api/:path*",
