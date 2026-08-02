@@ -38,6 +38,16 @@ import {
 } from "../../src/lib/testing/listenerOwnership";
 import { firstLeak, leaksValue } from "../../src/lib/testing/leakDetection";
 
+/**
+ * The one suite no acceptance sweep may ever run, named once.
+ *
+ * It reads the live POSTBACK_SECRET, sends a real callback to the live DEV
+ * backend and creates a live account. Every shipped manifest is checked below
+ * for it — historical ones included, because there is no phase in which running
+ * it becomes acceptable.
+ */
+const FORBIDDEN_SUITE = "test:regression:pocketcta-disposable-e2e";
+
 let passed = 0;
 let failed = 0;
 
@@ -434,27 +444,61 @@ async function main() {
     assert.equal(results[0].durationMs < 120_000, true, `waited ${results[0].durationMs}ms`);
   });
 
-  await check("32. the shipped AFD-5B2A manifest is structurally valid", () => {
+  /**
+   * The CURRENT phase's manifest, and the reason this is not hard-coded.
+   *
+   * The full-inventory rule below can only hold for the manifest of the phase
+   * being run. A historical manifest is a record of what a PREVIOUS phase
+   * reviewed, and every suite added since is legitimately absent from it —
+   * pinning the check to an old file would either fail the moment anybody adds
+   * a suite (as AFD-5B2B's three did) or force a phase to retro-edit an
+   * accepted artifact. So the newest manifest is discovered from disk.
+   */
+  const manifestFiles = fs
+    .readdirSync(path.join(process.cwd(), "config"))
+    .filter((name) => /^acceptance-manifest-.+\.json$/.test(name))
+    .sort();
+  const currentManifestFile = manifestFiles[manifestFiles.length - 1];
+
+  await check("32. every shipped acceptance manifest is structurally valid", () => {
+    assert.ok(manifestFiles.length > 0, "no acceptance manifest is shipped");
+    for (const name of manifestFiles) {
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), "config", name), "utf8"),
+      ) as AcceptanceManifest;
+      assert.deepEqual(validateManifest(manifest), [], name);
+      // The forbidden suite stays forbidden in EVERY manifest, historical ones
+      // included: it reads the live POSTBACK_SECRET and hits the live callback,
+      // and there is no phase in which running it is acceptable.
+      assert.equal(
+        manifest.forbidden.some((entry) => entry.script === FORBIDDEN_SUITE),
+        true,
+        `${name}: ${FORBIDDEN_SUITE} must remain forbidden`,
+      );
+      assert.equal(
+        manifest.runnable.some((entry) => entry.script === FORBIDDEN_SUITE),
+        false,
+        `${name}: ${FORBIDDEN_SUITE} must never be runnable`,
+      );
+    }
+  });
+
+  await check("32b. the current manifest covers the WHOLE suite inventory", () => {
     const shipped = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "config", "acceptance-manifest-afd5b2a.json"), "utf8"),
+      fs.readFileSync(path.join(process.cwd(), "config", currentManifestFile), "utf8"),
     ) as AcceptanceManifest;
-    assert.deepEqual(validateManifest(shipped), []);
     const scripts = (JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     }).scripts;
-    const suites = Object.keys(scripts).filter((n) => n.startsWith("test:regression:") || n.startsWith("smoke:"));
-    const inventory = [...shipped.runnable, ...shipped.excluded, ...shipped.forbidden].map((entry) => entry.script);
-    // The inventory is the whole suite inventory — nothing quietly dropped.
-    assert.deepEqual([...inventory].sort(), [...suites].sort());
-    assert.equal(
-      shipped.forbidden.some((entry) => entry.script === "test:regression:pocketcta-disposable-e2e"),
-      true,
-      "pocketcta-disposable-e2e must remain forbidden",
+    const suites = Object.keys(scripts).filter(
+      (n) => n.startsWith("test:regression:") || n.startsWith("smoke:"),
     );
-    assert.equal(
-      shipped.runnable.some((entry) => entry.script === "test:regression:pocketcta-disposable-e2e"),
-      false,
+    const inventory = [...shipped.runnable, ...shipped.excluded, ...shipped.forbidden].map(
+      (entry) => entry.script,
     );
+    // Nothing quietly dropped: a suite that exists but is in no bucket has been
+    // silently un-run, which is the failure this whole runner exists to prevent.
+    assert.deepEqual([...inventory].sort(), [...suites].sort(), currentManifestFile);
   });
 
   await check("33. an interrupted producer writes its summary and exits non-zero", async () => {
