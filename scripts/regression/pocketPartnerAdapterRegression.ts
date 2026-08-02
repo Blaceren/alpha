@@ -728,7 +728,18 @@ async function main() {
         }
         const serialised = safeJson(result);
         for (const forbidden of FORBIDDEN_TOKENS) {
-          assert.ok(!serialised.includes(forbidden), `${scenario} leaked ${forbidden}`);
+          // AFD-5B2B — the SECOND call site of the same rule. AFD-5B2A replaced
+          // the raw substring match above with `leaksValue` after `260` matched
+          // inside a random correlation handle, but this one kept `includes`
+          // and failed the same way: `real_just_below_threshold leaked 260`,
+          // where the 260 lived inside the opaque `providerRequestId`. Short
+          // numeric tokens will keep colliding with UUIDs and timestamps, so
+          // both sites now use the boundary-aware matcher. Detection of a real
+          // leak — a value appearing as a JSON value — is unchanged.
+          assert.ok(
+            !leaksValue(serialised, forbidden),
+            `${scenario} leaked ${forbidden}: ${serialised}`,
+          );
         }
       }
     });
