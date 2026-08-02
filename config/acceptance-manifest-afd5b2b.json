@@ -231,7 +231,12 @@
       "script": "test:regression:affiliate-acquisition-http"
     },
     {
-      "script": "test:regression:affiliate-attribution-e2e"
+      "script": "test:regression:affiliate-attribution-e2e",
+      "requiredEnv": [
+        "AFD3B2_TURNSTILE_TEST_SECRET",
+        "AFD3B2_TURNSTILE_TEST_SITE_KEY"
+      ],
+      "timeoutMs": 1800000
     },
     {
       "script": "test:regression:affiliate-crm-management-e2e"
