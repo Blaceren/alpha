@@ -146,13 +146,6 @@ export const AFFILIATE_LINK_DETAIL_PATH = "/api/crm/v1/affiliates/tracking-links
  * no catch-all, so an analytics route added to the backend later is NOT proxied
  * until somebody adds it here on purpose.
  *
- * THE LEAD PATHS ARE DELIBERATELY ABSENT. AFD-5B2B shipped
- * `/api/crm/v1/affiliates/leads`, `/leads/:leadId` and `/leads/:leadId/reveal`
- * in the backend, and AFD-5C1 does not implement that UI. Because the CRM origin
- * forwards only what is listed here, the lead and PII-reveal APIs are
- * UNREACHABLE through this origin — that is the enforcement of "no lead API
- * call", not a convention the feature code is trusted to observe.
- *
  * Next rewrites are method-agnostic, and these backend routes export only `GET`.
  * A POST reaching one of them finds no handler and fails there.
  */
@@ -166,6 +159,30 @@ export const ANALYTICS_COHORT_TIMESERIES_PATH =
   "/api/crm/v1/affiliates/analytics/cohorts/timeseries";
 export const ANALYTICS_COHORT_BREAKDOWN_PATH =
   "/api/crm/v1/affiliates/analytics/cohorts/breakdown";
+
+/* ---------------------------------------------- Affiliate leads (AFD-5C2)
+ *
+ * Three exact paths: the list, one lead, and that lead's PII reveal.
+ *
+ * `:leadId` matches EXACTLY ONE path segment — it is not `:leadId*` and not a
+ * catch-all — so `/affiliates/leads/x/y` and any child other than the literal
+ * `/reveal` are NOT proxied and fall through to the CRM app. There is no
+ * `/leads/export`, no `/leads/bulk` and no `/leads/:leadId/reveal/:anything`,
+ * because no such path is written here and the list is the whole allow-list.
+ *
+ * THE REVEAL IS ONE LEAD BY CONSTRUCTION. The proxied path names a single
+ * segment, so there is no URL shape through this origin that could carry an id
+ * array, a wildcard or a filter — a bulk reveal is not refused downstream, it is
+ * unroutable.
+ *
+ * Next rewrites are method-agnostic. The backend list and detail routes export
+ * only `GET` and the reveal route only `POST`, so a method that does not belong
+ * to a path finds no handler and fails there — and the reveal additionally
+ * requires `reveal_pii` and a valid CSRF token regardless of how it was reached.
+ */
+export const AFFILIATE_LEADS_PATH = "/api/crm/v1/affiliates/leads";
+export const AFFILIATE_LEAD_DETAIL_PATH = "/api/crm/v1/affiliates/leads/:leadId";
+export const AFFILIATE_LEAD_REVEAL_PATH = "/api/crm/v1/affiliates/leads/:leadId/reveal";
 
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
@@ -194,6 +211,9 @@ export const PROXIED_PATHS = [
   ANALYTICS_COHORT_SUMMARY_PATH,
   ANALYTICS_COHORT_TIMESERIES_PATH,
   ANALYTICS_COHORT_BREAKDOWN_PATH,
+  AFFILIATE_LEADS_PATH,
+  AFFILIATE_LEAD_DETAIL_PATH,
+  AFFILIATE_LEAD_REVEAL_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

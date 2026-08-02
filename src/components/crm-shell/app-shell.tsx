@@ -12,6 +12,7 @@ import {
   API_USERS_PATH,
   AFFILIATES_PATH,
   AFFILIATE_ANALYTICS_PATH,
+  AFFILIATE_LEADS_PATH,
 } from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
@@ -20,6 +21,8 @@ import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace"
 import { AffiliateDetailWorkspace } from "@/features/affiliates/affiliate-detail-workspace";
 import { TrackingLinkDetailWorkspace } from "@/features/affiliates/tracking-link-detail-workspace";
 import { AffiliateAnalyticsWorkspace } from "@/features/affiliate-analytics/analytics-workspace";
+import { AffiliateLeadsWorkspace } from "@/features/affiliate-leads/leads-workspace";
+import { AffiliateLeadDetailWorkspace } from "@/features/affiliate-leads/lead-detail-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
@@ -155,6 +158,36 @@ function ApiModeLanding() {
       <ApiShell session={session}>
         <React.Suspense fallback={null}>
           <AffiliateAnalyticsWorkspace />
+        </React.Suspense>
+      </ApiShell>
+    );
+  }
+
+  /* --------------------------------------------------------- leads (AFD-5C2)
+   *
+   * The DETAIL is tested before the LIST. `/affiliates/leads` is an exact match
+   * and `/affiliates/leads/{leadId}` is a pattern, so order between those two is
+   * not strictly load-bearing — but both must be tested before
+   * `/affiliates/{partnerId}`, or "leads" is read as a partner id.
+   *
+   * `{leadId}` is passed through unvalidated: the workspace itself rejects a
+   * malformed reference locally without a request, and the backend owns the real
+   * parse. Nothing here decodes the reference or derives anything from it.
+   */
+  const lead = /^\/affiliates\/leads\/([^/]+)$/.exec(pathname ?? "");
+  if (lead) {
+    return (
+      <ApiShell session={session}>
+        <AffiliateLeadDetailWorkspace leadId={decodeURIComponent(lead[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
+  if (pathname === AFFILIATE_LEADS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <React.Suspense fallback={null}>
+          <AffiliateLeadsWorkspace />
         </React.Suspense>
       </ApiShell>
     );

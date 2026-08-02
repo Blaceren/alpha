@@ -22,14 +22,20 @@ import { SignOutButton } from "@/features/auth/sign-out-button";
 export const API_USERS_PATH = "/users";
 
 /**
- * The affiliate section (AFD-5A inventory, AFD-5C1 analytics).
+ * The affiliate section (AFD-5A inventory, AFD-5C1 analytics, AFD-5C2 leads).
  *
- * Both are exact, terminal paths. `AFFILIATE_ANALYTICS_PATH` must be matched
- * BEFORE the `/affiliates/{partnerId}` pattern, or "analytics" is read as a
- * partner id and the analytics route silently becomes a 404-shaped detail page.
+ * The first three are exact, terminal paths and each must be matched BEFORE the
+ * `/affiliates/{partnerId}` pattern, or "analytics" and "leads" are read as
+ * partner ids and those routes silently become 404-shaped detail pages.
+ *
+ * `AFFILIATE_LEADS_PATH` is additionally the PREFIX of the lead detail route
+ * `/affiliates/leads/{leadId}`, which is matched by its own pattern — see
+ * `app-shell.tsx`, where the detail is tested before the list so the list's
+ * exact match cannot swallow it.
  */
 export const AFFILIATES_PATH = "/affiliates";
 export const AFFILIATE_ANALYTICS_PATH = "/affiliates/analytics";
+export const AFFILIATE_LEADS_PATH = "/affiliates/leads";
 
 export function ApiShell({
   session,

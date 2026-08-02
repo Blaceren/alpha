@@ -8,23 +8,25 @@
  * (§15): an operator looking for affiliate numbers looks under affiliates, and a
  * separate "Analytics" root would compete with the CRM's existing one.
  *
- * BOTH TABS REQUIRE THE SAME READ PERMISSION the section already required, so
- * this component makes no permission decision of its own — it is rendered only
- * inside surfaces that have already established `canRead`, and the backend
+ * ALL THREE TABS REQUIRE THE SAME READ PERMISSION the section already required,
+ * so this component makes no permission decision of its own — it is rendered
+ * only inside surfaces that have already established `canRead`, and the backend
  * answers 403 regardless of what is displayed here.
  *
- * NO LEAD TAB EXISTS. AFD-5C2 will add one; until it does, there is nothing here
- * that hints at a surface that cannot be opened.
+ * AFD-5C2 adds Лиды. It carries NO COUNT: a badge would either need a request
+ * this component does not make, or a number invented from a page of results —
+ * and a keyset list has no total to show.
  */
 import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export type AffiliateSection = "management" | "analytics";
+export type AffiliateSection = "management" | "analytics" | "leads";
 
 const TABS: readonly { key: AffiliateSection; label: string; href: string }[] = [
   { key: "management", label: "Управление", href: "/affiliates" },
   { key: "analytics", label: "Аналитика", href: "/affiliates/analytics" },
+  { key: "leads", label: "Лиды", href: "/affiliates/leads" },
 ];
 
 export function AffiliateSectionTabs({ active }: { active: AffiliateSection }) {
