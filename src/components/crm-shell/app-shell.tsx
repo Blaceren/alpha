@@ -6,10 +6,20 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { usePathname } from "next/navigation";
 import { MockSessionProvider, useSession } from "./session-context";
 import { SessionBoundary } from "./session-boundary";
-import { ApiShell, ApiRouteDeferred, API_USERS_PATH } from "./api-shell";
+import {
+  ApiShell,
+  ApiRouteDeferred,
+  API_USERS_PATH,
+  AFFILIATES_PATH,
+  AFFILIATE_ANALYTICS_PATH,
+} from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
+import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace";
+import { AffiliateDetailWorkspace } from "@/features/affiliates/affiliate-detail-workspace";
+import { TrackingLinkDetailWorkspace } from "@/features/affiliates/tracking-link-detail-workspace";
+import { AffiliateAnalyticsWorkspace } from "@/features/affiliate-analytics/analytics-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
@@ -75,6 +85,10 @@ export function AppShell({
  *                        renders a local invalid-id state without a request.
  *                        This is NOT the mock User360Workspace — that aggregate
  *                        has no backend and is never mounted in api mode.
+ *   /affiliates       -> the AFD-5A affiliate inventory workspace
+ *   /affiliates/analytics       -> the AFD-5C1 analytics workspace
+ *   /affiliates/links/{linkId}  -> the AFD-5A tracking-link detail
+ *   /affiliates/{partnerId}     -> the AFD-5A partner detail
  *   anything else     -> the truthful deferred state, including any nested
  *                        route under a learner (notes, owner, …), which has no
  *                        backend and must not appear to exist.
@@ -111,6 +125,57 @@ function ApiModeLanding() {
     return (
       <ApiShell session={session}>
         <ApiUserDetailWorkspace userId={decodeURIComponent(detail[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
+  /* ------------------------------------------------ affiliates (AFD-5A/5C1)
+   *
+   * AFD-5A shipped four fully API-backed affiliate workspaces but never mounted
+   * them here, so in api mode the whole Аффилейты section answered with the
+   * deferred placeholder — the workspaces existed and were unreachable. AFD-5C1
+   * needs `/affiliates/analytics` to be reachable at all, and its sub-navigation
+   * links back to `/affiliates`, so both are wired up together with the two
+   * detail routes the list links to. Nothing about the workspaces themselves
+   * changes; only the route composition does.
+   *
+   * Matching is EXACT, in the same style as the learner routes above: a nested
+   * path nobody has built stays deferred rather than appearing to exist.
+   */
+  if (pathname === AFFILIATES_PATH) {
+    return (
+      <ApiShell session={session}>
+        <AffiliatesWorkspace />
+      </ApiShell>
+    );
+  }
+
+  if (pathname === AFFILIATE_ANALYTICS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <React.Suspense fallback={null}>
+          <AffiliateAnalyticsWorkspace />
+        </React.Suspense>
+      </ApiShell>
+    );
+  }
+
+  // `/affiliates/links/{linkId}` is matched BEFORE `/affiliates/{partnerId}`,
+  // because `links` would otherwise be read as a partner id.
+  const link = /^\/affiliates\/links\/([^/]+)$/.exec(pathname ?? "");
+  if (link) {
+    return (
+      <ApiShell session={session}>
+        <TrackingLinkDetailWorkspace linkId={decodeURIComponent(link[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
+  const partner = /^\/affiliates\/([^/]+)$/.exec(pathname ?? "");
+  if (partner) {
+    return (
+      <ApiShell session={session}>
+        <AffiliateDetailWorkspace partnerId={decodeURIComponent(partner[1] ?? "")} />
       </ApiShell>
     );
   }

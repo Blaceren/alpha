@@ -9,9 +9,16 @@ let pathname = "/users";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => pathname,
+  // The analytics workspace reads its whole state from the query string.
+  useSearchParams: () => new URLSearchParams(""),
 }));
 
 // Keep the boundary deterministic: a validated session, no network.
+// AFD-5C1: the affiliate nav item is permission-gated, so the stub session's
+// permissions must be settable per test. Default stays [] — the pre-existing
+// bounded-shell expectations depend on it.
+let stubPermissions: string[] = [];
+
 vi.mock("@/application/session-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/application/session-client")>();
   return {
@@ -22,7 +29,7 @@ vi.mock("@/application/session-client", async (importOriginal) => {
         employeeId: "emp_stub_1",
         displayName: "Ирина Соколова",
         role: "support" as const,
-        effectivePermissions: [],
+        effectivePermissions: stubPermissions as never,
         permissionVersion: 1,
         expiresAt: "2099-12-31T23:59:59.000Z",
       },
@@ -63,7 +70,34 @@ vi.mock("@/data/api/api-crm-data-provider", async (importOriginal) => {
   };
 });
 
-beforeEach(() => resetClientRuntimeMode());
+vi.mock("@/application/api/affiliates-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/application/api/affiliates-client")>();
+  return {
+    ...actual,
+    fetchAffiliatePartners: async () => ({
+      status: "success" as const,
+      data: { items: [], total: 0, limit: 25, offset: 0 },
+    }),
+  };
+});
+
+vi.mock("@/application/api/affiliate-analytics-client", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/application/api/affiliate-analytics-client")
+  >();
+  return {
+    ...actual,
+    fetchAnalyticsFilters: async () => ({ status: "upstream_unavailable" as const }),
+    fetchEventDateSummary: async () => ({ status: "upstream_unavailable" as const }),
+    fetchEventDateTimeseries: async () => ({ status: "upstream_unavailable" as const }),
+    fetchEventDateBreakdown: async () => ({ status: "upstream_unavailable" as const }),
+  };
+});
+
+beforeEach(() => {
+  stubPermissions = [];
+  resetClientRuntimeMode();
+});
 afterEach(() => resetClientRuntimeMode());
 
 const FEATURE_CHILD = "MOCK FEATURE CHILD";
@@ -158,6 +192,75 @@ describe("api mode — every other route stays deferred", () => {
     await screen.findByText("Раздел ещё не подключён");
     const link = screen.getByRole("link", { name: "Перейти к пользователям" });
     expect(link).toHaveAttribute("href", "/users");
+  });
+});
+
+/* ----------------------------------------------------- affiliates (AFD-5C1) */
+
+describe("api mode — the affiliate section", () => {
+  it("mounts the inventory workspace at exactly /affiliates", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates", "api");
+    expect(await screen.findByRole("heading", { name: "Аффилейты", level: 1 })).toBeInTheDocument();
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+  });
+
+  it("mounts the analytics workspace at exactly /affiliates/analytics", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/analytics", "api");
+    expect(
+      await screen.findByRole("heading", { name: "Аналитика аффилейтов", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+  });
+
+  it("does not read `analytics` as a partner id", async () => {
+    // The exact analytics path is matched BEFORE /affiliates/{partnerId}; if it
+    // were not, this route would render a detail page for a partner named
+    // "analytics" and the analytics workspace would be unreachable.
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/analytics", "api");
+    await screen.findByRole("heading", { name: "Аналитика аффилейтов", level: 1 });
+    expect(screen.queryByText("Некорректный идентификатор")).not.toBeInTheDocument();
+  });
+
+  it("keeps an unbuilt nested affiliate route deferred", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/analytics/leads", "api");
+    expect(await screen.findByText("Раздел ещё не подключён")).toBeInTheDocument();
+  });
+
+  it("shows the affiliate nav item to a session granted analytics", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates", "api");
+    await screen.findByRole("heading", { name: "Аффилейты", level: 1 });
+    const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
+    expect(within(nav).getByRole("link", { name: "Аффилейты" })).toBeInTheDocument();
+  });
+
+  it("shows the affiliate nav item to a session granted manage_settings", async () => {
+    stubPermissions = ["manage_settings"];
+    renderAt("/users", "api");
+    await screen.findByRole("heading", { name: "Пользователи", level: 1 });
+    const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
+    expect(within(nav).getByRole("link", { name: "Аффилейты" })).toBeInTheDocument();
+  });
+
+  it("hides the affiliate nav item from a session granted neither", async () => {
+    stubPermissions = [];
+    renderAt("/users", "api");
+    await screen.findByRole("heading", { name: "Пользователи", level: 1 });
+    const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
+    expect(within(nav).queryByRole("link", { name: "Аффилейты" })).not.toBeInTheDocument();
+    expect(within(nav).getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("renders the analytics denial for a session granted neither", async () => {
+    // The route still MOUNTS — the backend is the boundary — but the workspace
+    // itself refuses rather than issuing requests that could only 403.
+    stubPermissions = [];
+    renderAt("/affiliates/analytics", "api");
+    expect(await screen.findByText("Недостаточно прав")).toBeInTheDocument();
   });
 });
 

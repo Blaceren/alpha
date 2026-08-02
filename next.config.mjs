@@ -139,6 +139,34 @@ export const AFFILIATE_CAMPAIGN_DETAIL_PATH = "/api/crm/v1/affiliates/campaigns/
 export const AFFILIATE_LINKS_PATH = "/api/crm/v1/affiliates/tracking-links";
 export const AFFILIATE_LINK_DETAIL_PATH = "/api/crm/v1/affiliates/tracking-links/:linkId";
 
+/* ------------------------------------------ Affiliate analytics (AFD-5C1)
+ *
+ * Seven exact, terminal, READ-ONLY paths — four event-date and three cohort.
+ * Every one is a literal string: there is no `:id`, no `/analytics/:path*` and
+ * no catch-all, so an analytics route added to the backend later is NOT proxied
+ * until somebody adds it here on purpose.
+ *
+ * THE LEAD PATHS ARE DELIBERATELY ABSENT. AFD-5B2B shipped
+ * `/api/crm/v1/affiliates/leads`, `/leads/:leadId` and `/leads/:leadId/reveal`
+ * in the backend, and AFD-5C1 does not implement that UI. Because the CRM origin
+ * forwards only what is listed here, the lead and PII-reveal APIs are
+ * UNREACHABLE through this origin — that is the enforcement of "no lead API
+ * call", not a convention the feature code is trusted to observe.
+ *
+ * Next rewrites are method-agnostic, and these backend routes export only `GET`.
+ * A POST reaching one of them finds no handler and fails there.
+ */
+export const ANALYTICS_FILTERS_PATH = "/api/crm/v1/affiliates/analytics/filters";
+export const ANALYTICS_SUMMARY_PATH = "/api/crm/v1/affiliates/analytics/summary";
+export const ANALYTICS_TIMESERIES_PATH = "/api/crm/v1/affiliates/analytics/timeseries";
+export const ANALYTICS_BREAKDOWN_PATH = "/api/crm/v1/affiliates/analytics/breakdown";
+export const ANALYTICS_COHORT_SUMMARY_PATH =
+  "/api/crm/v1/affiliates/analytics/cohorts/summary";
+export const ANALYTICS_COHORT_TIMESERIES_PATH =
+  "/api/crm/v1/affiliates/analytics/cohorts/timeseries";
+export const ANALYTICS_COHORT_BREAKDOWN_PATH =
+  "/api/crm/v1/affiliates/analytics/cohorts/breakdown";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -159,6 +187,13 @@ export const PROXIED_PATHS = [
   AFFILIATE_CAMPAIGN_DETAIL_PATH,
   AFFILIATE_LINKS_PATH,
   AFFILIATE_LINK_DETAIL_PATH,
+  ANALYTICS_FILTERS_PATH,
+  ANALYTICS_SUMMARY_PATH,
+  ANALYTICS_TIMESERIES_PATH,
+  ANALYTICS_BREAKDOWN_PATH,
+  ANALYTICS_COHORT_SUMMARY_PATH,
+  ANALYTICS_COHORT_TIMESERIES_PATH,
+  ANALYTICS_COHORT_BREAKDOWN_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

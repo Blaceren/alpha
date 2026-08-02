@@ -14,6 +14,7 @@ import {
 } from "@/application/api/affiliates-client";
 import type { AffiliatePartner, AffiliatePartnerList } from "@/data/contracts/api/affiliates";
 import { useAffiliateAccess } from "./use-affiliate-access";
+import { AffiliateSectionTabs } from "./affiliate-section-tabs";
 import {
   AVAILABILITY_LABEL,
   ENTITY_STATUS_LABEL,
@@ -89,7 +90,7 @@ export function AffiliatesWorkspace() {
     <div className="space-y-4">
       <PageHeader
         title="Аффилейты"
-        description="Партнёры, кампании и трекинговые ссылки. Данные о трафике появятся позже."
+        description="Партнёры, кампании и трекинговые ссылки. Метрики трафика — на вкладке «Аналитика»."
         actions={
           canManage ? (
             <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
@@ -98,6 +99,10 @@ export function AffiliatesWorkspace() {
           ) : null
         }
       />
+
+      {/* AFD-5C1. This page remains inventory-only; the tab is the way to the
+          traffic numbers, which deliberately do not appear in these columns. */}
+      <AffiliateSectionTabs active="management" />
 
       {readOnly ? (
         <p

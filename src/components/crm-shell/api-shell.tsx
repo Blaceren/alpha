@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { CRM_ROLE_LABEL } from "@/domain/identity/roles";
+import { grants } from "@/domain/identity/access";
 import type { EmployeeSession } from "@/domain/identity/session";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
@@ -19,6 +20,16 @@ import { SignOutButton } from "@/features/auth/sign-out-button";
  * backend origin or environment.
  */
 export const API_USERS_PATH = "/users";
+
+/**
+ * The affiliate section (AFD-5A inventory, AFD-5C1 analytics).
+ *
+ * Both are exact, terminal paths. `AFFILIATE_ANALYTICS_PATH` must be matched
+ * BEFORE the `/affiliates/{partnerId}` pattern, or "analytics" is read as a
+ * partner id and the analytics route silently becomes a 404-shaped detail page.
+ */
+export const AFFILIATES_PATH = "/affiliates";
+export const AFFILIATE_ANALYTICS_PATH = "/affiliates/analytics";
 
 export function ApiShell({
   session,
@@ -42,7 +53,7 @@ export function ApiShell({
         on narrow viewports because the badge beside it already carries the brand,
         and the identity text is the one element allowed to give — it truncates.
       */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 sm:gap-3 sm:px-4">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent text-2xs font-bold text-accent-foreground">
           ATA
         </span>
@@ -55,8 +66,37 @@ export function ApiShell({
         */}
         <span className="hidden text-sm font-semibold text-text-primary md:inline">ATA CRM</span>
 
-        <nav aria-label="Разделы CRM" className="ml-4 shrink-0">
-          <ul>
+        {/*
+          AFD-5C1: the affiliate item appears only when the BACKEND's
+          `effectivePermissions` grant `view_affiliate_analytics` or
+          `manage_settings`. It is not recomputed from the role, so a session
+          reporting `role=crm_admin, effectivePermissions=[]` offers nothing —
+          and hiding it is an honesty measure, not the access control, which the
+          backend enforces with a 403 regardless of what is rendered here.
+        */}
+        {/*
+          `min-w-0` + `overflow-x-auto`, NOT `shrink-0`.
+
+          The header's width floor is the sum of its children's min-content
+          widths, and a `shrink-0` navigation adds its full width to that floor.
+          With one item that fitted; AFD-5C1's second item pushed the floor past
+          320px, and the sign-out button — the one control an employee must
+          always be able to reach — was carried off-screen, taking the whole
+          document into horizontal scroll with it. Measured, not guessed: at
+          320px the sign-out button ended at x=365 against a 320px document.
+
+          Letting the nav shrink and scroll inside ITSELF keeps both items
+          reachable at every width without the document ever scrolling.
+        */}
+        <nav
+          aria-label="Разделы CRM"
+          // `flex-1 basis-0`: the nav takes exactly the space the fixed items leave
+          // over, rather than claiming its content width and shrinking only
+          // proportionally. That is what keeps the sign-out button — the one
+          // control an employee must always reach — inside the viewport.
+          className="ml-1 min-w-0 flex-1 basis-0 overflow-x-auto sm:ml-4"
+        >
+          <ul className="flex items-center gap-1 whitespace-nowrap">
             <li>
               <Link
                 href={API_USERS_PATH}
@@ -66,10 +106,21 @@ export function ApiShell({
                 Пользователи
               </Link>
             </li>
+            {grants(session.effectivePermissions, "view_affiliate_analytics") ||
+            grants(session.effectivePermissions, "manage_settings") ? (
+              <li>
+                <Link
+                  href={AFFILIATES_PATH}
+                  className="rounded px-2 py-1 text-sm font-medium text-text-primary hover:bg-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Аффилейты
+                </Link>
+              </li>
+            ) : null}
           </ul>
         </nav>
 
-        <div className="ml-auto flex min-w-0 items-center gap-3">
+        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
           {/*
             `min-w-0` + `truncate`: without both, the name's min-content width is a
             hard floor no amount of available space can reduce. `title` keeps the
@@ -85,7 +136,7 @@ export function ApiShell({
         </div>
       </header>
 
-      <main id="crm-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 focus:outline-none">
+      <main id="crm-content" tabIndex={-1} className="flex-1 overflow-y-auto p-2 focus:outline-none sm:p-4">
         {/*
           `min-w-0` lets this container shrink below its content width. Without it,
           `main`'s default `min-width: auto` as a column flex item allows wide

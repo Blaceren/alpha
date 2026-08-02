@@ -24,12 +24,12 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly eighteen rewrite definitions", () => {
+  it("produces exactly twenty-five rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
-    // + six affiliate management paths (AFD-5A). Pinning the count is the
-    // point: a new proxied path must be a deliberate change to this number,
-    // never a side effect.
-    expect(buildRewrites(env)).toHaveLength(18);
+    // + six affiliate management paths (AFD-5A) + seven read-only affiliate
+    // analytics paths (AFD-5C1). Pinning the count is the point: a new proxied
+    // path must be a deliberate change to this number, never a side effect.
+    expect(buildRewrites(env)).toHaveLength(25);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -53,7 +53,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the eighteen reviewed paths", () => {
+  it("exposes exactly the twenty-five reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -73,6 +73,13 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/affiliates/campaigns/:campaignId",
       "/api/crm/v1/affiliates/tracking-links",
       "/api/crm/v1/affiliates/tracking-links/:linkId",
+      "/api/crm/v1/affiliates/analytics/filters",
+      "/api/crm/v1/affiliates/analytics/summary",
+      "/api/crm/v1/affiliates/analytics/timeseries",
+      "/api/crm/v1/affiliates/analytics/breakdown",
+      "/api/crm/v1/affiliates/analytics/cohorts/summary",
+      "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
+      "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -212,6 +219,13 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/affiliates/campaigns/:campaignId",
       "/api/crm/v1/affiliates/tracking-links",
       "/api/crm/v1/affiliates/tracking-links/:linkId",
+      "/api/crm/v1/affiliates/analytics/filters",
+      "/api/crm/v1/affiliates/analytics/summary",
+      "/api/crm/v1/affiliates/analytics/timeseries",
+      "/api/crm/v1/affiliates/analytics/breakdown",
+      "/api/crm/v1/affiliates/analytics/cohorts/summary",
+      "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
+      "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
     ]);
     for (const forbidden of [
       "/api/:path*",
