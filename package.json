@@ -121,7 +121,9 @@
     "test:regression:affiliate-leads": "tsx scripts/regression/affiliateLeadDrilldownRegression.ts",
     "test:regression:affiliate-leads-plan": "tsx scripts/regression/affiliateLeadQueryPlan.ts",
     "test:regression:affiliate-leads-e2e": "tsx scripts/regression/affiliateLeadDrilldownIsolatedE2E.ts",
-    "test:regression:acceptance-manifest": "tsx scripts/regression/acceptanceManifestRunnerRegression.ts"
+    "test:regression:acceptance-manifest": "tsx scripts/regression/acceptanceManifestRunnerRegression.ts",
+    "test:regression:ai-analyst": "tsx scripts/regression/affiliateAiAnalystRegression.ts",
+    "test:regression:ai-analyst-e2e": "tsx scripts/regression/affiliateAiAnalystIsolatedE2E.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
