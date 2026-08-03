@@ -557,14 +557,20 @@ async function main() {
 
   /* ============================ G. SCHEMA AND MIGRATION =================== */
 
-  await check("G1 the canonical migration count is 40 and matches the directory", () => {
+  // AGENT-FOUNDATION-1 moved this literal from 40 to 41. It is a deliberate
+  // tripwire, not a nuisance: an unplanned migration must fail this gate, so
+  // the number is typed by hand rather than counted from the directory. The
+  // migration it now expects is the additive Agent Core foundation, which adds
+  // nine tables and changes nothing this suite measures.
+  await check("G1 the canonical migration count is 41 and matches the directory", () => {
     const entries = fs
       .readdirSync(path.join(projectRoot, "prisma", "migrations"), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
-    assert.equal(EXPECTED_MIGRATION_COUNT, 40);
+    assert.equal(EXPECTED_MIGRATION_COUNT, 41);
     assert.equal(entries.length, EXPECTED_MIGRATION_COUNT);
     assert.ok(entries.includes("20260801000000_analytics_event_date_indexes"));
+    assert.ok(entries.includes("20260804000000_agent_core_foundation"));
   });
 
   await check("G2 migration 40 is index-only and additive", () => {

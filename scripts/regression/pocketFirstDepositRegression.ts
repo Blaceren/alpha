@@ -392,18 +392,20 @@ async function main() {
   /* B. Migration                                                        */
   /* ------------------------------------------------------------------ */
 
-  await check("B1 the canonical migration count is 40 and matches the directory", () => {
+  await check("B1 the canonical migration count is 41 and matches the directory", () => {
     const entries = fs
       .readdirSync(path.join(process.cwd(), "prisma", "migrations"), { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name);
-    // AFD-5B1 added the index-only migration 40.
-    assert.equal(EXPECTED_MIGRATION_COUNT, 40);
+    // AFD-5B1 added the index-only migration 40. AGENT-FOUNDATION-1 added the
+    // additive Agent Core migration 41, which creates nine new tables and
+    // touches nothing this suite measures.
+    assert.equal(EXPECTED_MIGRATION_COUNT, 41);
     assert.equal(entries.length, EXPECTED_MIGRATION_COUNT);
     assert.ok(entries.includes(MIGRATION_NAME));
   });
 
-  await check("B2 the applied database reports 40 migrations", async () => {
+  await check("B2 the applied database reports 41 migrations", async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
       'SELECT COUNT(*) AS c FROM "_prisma_migrations" WHERE "rolled_back_at" IS NULL',
     );
@@ -514,7 +516,13 @@ async function main() {
         .filter((e) => e !== "migration_lock.toml")
         .sort();
       const prior = ordered.slice(0, ordered.indexOf(MIGRATION_NAME));
-      assert.equal(prior.length, expectedPriorMigrationCount(2));
+      // The argument is "how many migrations land at or after AFD-4's". It was
+      // 2 (AFD-4 itself and AFD-5B1's index-only 40); AGENT-FOUNDATION-1's
+      // additive Agent Core migration 41 makes it 3. Expressed relative to
+      // EXPECTED_MIGRATION_COUNT so it cannot drift away from the canonical
+      // total, but the offset itself is a third migration-count pin and moves
+      // deliberately, in the same commit as the migration.
+      assert.equal(prior.length, expectedPriorMigrationCount(3));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

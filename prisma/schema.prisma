@@ -761,6 +761,13 @@ model AuditLog {
   userAgent  String?
   createdAt  DateTime @default(now())
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // AGENT-FOUNDATION-1 — AuditLog remains the single audit surface. An agent
+  // action that CHANGES THE PRODUCT points at its audit row from here rather
+  // than keeping a private audit trail. Back-reference only: AuditLog gains no
+  // column, and the Agent Core is deliberately not a writer to it — AuditLog is
+  // used as a live tripwire and must not become chatty.
+  agentActionExecutions AgentActionExecution[] @relation("AgentActionExecutionAudit")
 }
 
 model TesterFeedback {
@@ -2278,6 +2285,15 @@ model StaffProfile {
   previousOwnerHistory CrmUserOwnerHistory[] @relation("CrmUserOwnerHistoryPrevious")
   nextOwnerHistory     CrmUserOwnerHistory[] @relation("CrmUserOwnerHistoryNext")
 
+  // AGENT-FOUNDATION-1 — the two Agent Core axes that name a human. Both are
+  // Restrict-referenced, so a staff profile that initiated a run or decided a
+  // proposal cannot be deleted out from under the immutable record. This is a
+  // back-reference only: StaffProfile gains no column and remains the single
+  // canonical staff identity, because the Agent Core does not introduce a
+  // second staff model.
+  initiatedAgentRuns      AgentRun[]            @relation("AgentRunInitiator")
+  agentActionDecisions    AgentActionDecision[] @relation("AgentActionDecisionStaff")
+
   @@index([staffRole])
 }
 
@@ -2393,4 +2409,650 @@ model CrmUserOwnerHistory {
   @@index([actorStaffId])
   @@index([previousOwnerId])
   @@index([nextOwnerId])
+}
+
+// ===========================================================================
+// AGENT-FOUNDATION-1 — the shared Agent Core.
+// ===========================================================================
+//
+// Nine tables recording WHAT AN AGENT DID and WHAT IT POINTED AT. Common
+// foundation for curie_atlas, curie_pulse, curie_mentor and curie_sentinel.
+//
+// THE OWNERSHIP RULE. Authoritative product data stays with its existing owner.
+// Nothing below copies an affiliate aggregate, a learner's progression, a
+// lesson event, a Pocket event, a deposit, a balance, a report or any personal
+// detail. An evidence row carries a typed REFERENCE and a consumer re-reads the
+// value from the owner through the owner's own permission gate. That is what
+// keeps a stale agent output from becoming a second, divergent source of truth,
+// and it is why these tables can be classified as holding no PII at all.
+//
+// THERE IS NO AgentDefinition MODEL, deliberately. An agent's identity, version
+// and capabilities live in src/lib/agents/agent-registry.ts, where they are a
+// reviewable artefact. A row would let an operator invent an agent at runtime
+// that no review ever saw. AgentRun stores agentCode and agentVersion as
+// denormalised strings so a stored run stays interpretable after the registry
+// moves on.
+//
+// APPEND-ORIENTED. Findings, evidence, decisions and terminal executions are
+// immutable. The only permitted mutation anywhere below is a status transition
+// along an edge declared in src/lib/agents/agent-core-contract.ts, performed as
+// a compare-and-swap so that an illegal or concurrent transition fails without
+// mutating anything.
+//
+// NOTHING RUNS. No scheduler, no model provider, no execution provider, no
+// network client, no message transport. ModelInvocation and
+// AgentActionExecution exist so that enabling them later is a reviewed
+// configuration decision rather than a migration under time pressure.
+
+enum AgentExecutionMode {
+  deterministic
+  model_assisted
+  model_only
+}
+
+enum AgentTriggerType {
+  interactive
+  scheduled
+  handoff
+  system
+  test
+}
+
+enum AgentRunStatus {
+  created
+  running
+  completed
+  failed
+  cancelled
+}
+
+/// The closed list of things a run can be ABOUT. subjectRef is an INTERNAL
+/// OPAQUE REFERENCE — an internal primary key as a string. It is never an
+/// email, a phone number, a raw Pocket player id or an external click id.
+///
+/// `learner` is pseudonymous, NOT anonymous: anyone holding the learner table
+/// resolves it to a person in one join. It is classified pseudonymous_subject
+/// and staff_restricted, and no public Agent API exposes it.
+enum AgentSubjectType {
+  learner
+  affiliate_partner
+  affiliate_campaign
+  affiliate_tracking_link
+  curriculum_level
+}
+
+/// Proposed retention categories. NO PURGE SCHEDULER EXISTS and no row is
+/// automatically deleted. No duration is invented anywhere in this schema:
+/// purgeAfter is nullable and stays NULL until a policy decides a number.
+enum AgentRetentionClass {
+  operational_short
+  analytical_standard
+  decision_record
+  execution_record
+  evaluation_record
+}
+
+enum AgentFindingSeverity {
+  info
+  warning
+  critical
+}
+
+enum AgentFindingStatus {
+  active
+  superseded
+  expired
+  withdrawn
+}
+
+/// How much a finding is entitled to claim. There is no `inferred` and no
+/// `predicted` tier, because the Core has no mechanism that could justify one.
+enum AgentSupportTier {
+  measured
+  derived
+  insufficient
+}
+
+/// Closed evidence domains. Only affiliate_analytics and agent_run have an
+/// accepted owner to re-read from today and only those two may be written —
+/// enforced in source, not by this enum, which is deliberately wider so the
+/// column never has to be altered later.
+enum AgentEvidenceDomain {
+  affiliate_analytics
+  curriculum
+  progression
+  assessment
+  report
+  pocket_event
+  money_event
+  product_event
+  communication_event
+  agent_run
+}
+
+enum AgentHandoffStatus {
+  proposed
+  accepted
+  rejected
+  expired
+  cancelled
+}
+
+enum AgentActionStatus {
+  proposed
+  awaiting_approval
+  approved
+  rejected
+  expired
+  cancelled
+  execution_pending
+  executed
+  execution_failed
+}
+
+/// The closed set of actions an agent may ever PROPOSE. Every member is
+/// educational or supportive.
+///
+/// PERMANENTLY ABSENT, because the platform teaches trading rather than selling
+/// it: deposit encouragement, trading encouragement, any bid/CPA/payout change,
+/// affiliate enablement or disablement, and any financial-pressure messaging.
+enum AgentActionClass {
+  education_reminder
+  continue_learning
+  complete_registration
+  review_feedback
+  support_followup
+}
+
+/// Where an action would eventually be delivered. NO PROVIDER IS IMPLEMENTED
+/// for any of these and no message can be sent. The `email`, `push` and `sms`
+/// members name a TRANSPORT, never a recipient: no column in this schema holds
+/// an address, and parametersJson cannot express one.
+enum AgentActionChannel {
+  in_app
+  email
+  push
+  sms
+  human_task
+}
+
+enum AgentDecisionType {
+  approved
+  rejected
+  cancelled
+}
+
+enum AgentExecutionStatus {
+  pending
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum AgentEvaluatorType {
+  deterministic
+  human
+  model
+}
+
+enum AgentEvaluationTargetType {
+  agent_run
+  agent_finding
+  agent_action_proposal
+}
+
+enum AgentEvaluationResult {
+  passed
+  failed
+  inconclusive
+  not_applicable
+}
+
+enum ModelInvocationStatus {
+  pending
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum ModelValidationStatus {
+  not_run
+  valid
+  invalid_schema
+  invalid_policy
+  unsupported_claim
+}
+
+/// One bounded execution attempt by one agent.
+model AgentRun {
+  id String @id @default(cuid())
+
+  /// Denormalised registry identity. Stored as strings, not as a foreign key,
+  /// so a run stays interpretable after the source registry moves on.
+  agentCode    String
+  agentVersion String
+
+  /// Only `deterministic` is executable in this phase. The other two members
+  /// are schema-ready and refused by runtime policy.
+  executionMode AgentExecutionMode
+  triggerType   AgentTriggerType
+  status        AgentRunStatus     @default(created)
+
+  /// The implementation and catalog that produced the findings, kept separate
+  /// from agentVersion: a rule-ordering fix and a new finding code must stay
+  /// distinguishable to a consumer deciding whether two runs are comparable.
+  engineVersion  String?
+  catalogVersion String?
+
+  /// Correlates this run with the HTTP request that caused it. Never a URL and
+  /// never a query string.
+  requestId String
+
+  /// A stable hash of the RESOLVED question, never the raw request. Two
+  /// spellings of one window collide, and the same spelling on two different
+  /// days does not.
+  inputFingerprint String
+
+  /// Optional for interactive runs, required by the future scheduled, handoff
+  /// and action workflows. Unique per agent WHEN PRESENT — SQLite treats NULLs
+  /// as distinct, so many keyless runs coexist under one agent.
+  idempotencyKey String?
+
+  /// Both absent for a global run, both present for a subject-scoped run. The
+  /// pairing is enforced by a CHECK constraint in the migration as well as in
+  /// the service, because a half-scoped run is a silently wrong answer.
+  subjectType AgentSubjectType?
+  subjectRef  String?
+
+  /// Nullable for future system runs. When present it is the canonical CRM
+  /// staff identity — this schema does not introduce a second staff model.
+  initiatedByStaffId String?
+
+  retentionClass AgentRetentionClass @default(analytical_standard)
+  purgeAfter     DateTime?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  failureCode String?
+
+  findingCount Int @default(0)
+  warningCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  initiatedByStaff StaffProfile? @relation("AgentRunInitiator", fields: [initiatedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  findings          AgentFinding[]        @relation("AgentFindingRun")
+  handoffs          AgentHandoff[]        @relation("AgentHandoffSource")
+  acceptedHandoffs  AgentHandoff[]        @relation("AgentHandoffAccepted")
+  actionProposals   AgentActionProposal[] @relation("AgentActionProposalRun")
+  modelInvocations  ModelInvocation[]     @relation("ModelInvocationRun")
+
+  /// THE IDEMPOTENCY CONTRACT: the same logical question, asked twice under one
+  /// agent, returns the first run instead of doing the work again.
+  @@unique([agentCode, idempotencyKey])
+  /// "What did this agent do lately" — the run list, per agent, newest first.
+  @@index([agentCode, createdAt])
+  /// "What is unfinished" — the operational sweep over non-terminal runs.
+  @@index([status, createdAt])
+  /// "Everything ever run about this subject" — the subject timeline.
+  @@index([subjectType, subjectRef, createdAt])
+  /// "Has this exact question been asked before" — the pre-run lookup, which
+  /// must not scan a growing table.
+  @@index([inputFingerprint])
+  /// Supports the Restrict deletion lookup on the staff axis, matching the
+  /// CrmUserOwner and CrmUserOwnerHistory convention.
+  @@index([initiatedByStaffId])
+}
+
+/// One structured statement. NOT prose.
+///
+/// The authoritative representation is code + messageKey + validated operands +
+/// evidence. There is deliberately NO rendered-message column: a sentence is
+/// produced from the catalog template for the code at read time, so "no invented
+/// causes" is a property of a fixed reviewable list rather than of whatever a
+/// writer felt like storing.
+model AgentFinding {
+  id    String @id @default(cuid())
+  runId String
+
+  /// Stable within a run, so a consumer can address a finding across re-reads
+  /// without depending on row order.
+  findingKey String
+
+  /// From the closed catalog in agent-payload-policy.ts. A code may be added,
+  /// never repurposed.
+  code     String
+  category String
+  severity AgentFindingSeverity
+
+  /// Names the sentence template. Never the sentence.
+  messageKey String
+
+  /// A bounded, flat map of scalars validated against the versioned schema
+  /// registered for `code`. Unknown keys, PII-shaped keys, nested values and
+  /// oversized payloads are all rejected at write time.
+  operandsJson         Json
+  operandsSchemaVersion Int  @default(1)
+
+  supportTier AgentSupportTier
+  status      AgentFindingStatus @default(active)
+  expiresAt   DateTime?
+  createdAt   DateTime           @default(now())
+
+  run      AgentRun                 @relation("AgentFindingRun", fields: [runId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  evidence AgentEvidenceReference[] @relation("AgentEvidenceFinding")
+  proposals AgentActionProposal[]   @relation("AgentActionProposalFinding")
+
+  /// A finding key is claimed once per run.
+  @@unique([runId, findingKey])
+  /// "All findings of this run" — the read that renders a report.
+  @@index([runId])
+  /// "Every occurrence of this code over time" — the trend read.
+  @@index([code, createdAt])
+  /// "Everything that needs a look" — the severity sweep.
+  @@index([severity, createdAt])
+  /// "What is active and expiring" — the future expiry sweep.
+  @@index([status, expiresAt])
+}
+
+/// What a finding points at, WITHOUT copying it.
+///
+/// IMMUTABLE AFTER CREATION. There is no updatedAt, no status and no service
+/// method that writes to an existing row.
+model AgentEvidenceReference {
+  id        String @id @default(cuid())
+  findingId String
+
+  sourceDomain AgentEvidenceDomain
+  /// The kind of thing within the domain — an aggregate name, never a table.
+  sourceType String
+  /// An internal opaque reference to the authoritative record.
+  sourceRef String
+  /// Which field of it, in the owner's own spelling.
+  fieldPath String
+
+  /// How to tell whether the value has moved since it was observed, without
+  /// storing the value's history.
+  sourceVersion     String?
+  sourceFingerprint String?
+
+  /// OPTIONAL and bounded to metricKey + metricValue + unit: the minimal value
+  /// needed to reproduce the finding. Never an entire DTO, an entire API
+  /// response, a user profile or a provider payload — none of which is a flat
+  /// map with a metricKey, so none of which can be stored here.
+  observedValueJson Json?
+
+  createdAt DateTime @default(now())
+
+  finding AgentFinding @relation("AgentEvidenceFinding", fields: [findingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// "The evidence behind this finding" — the only read this table has.
+  @@index([findingId])
+}
+
+/// A structured request from one agent run to another agent.
+///
+/// NO CONSUMER AND NO BACKGROUND WORKER EXISTS. Nothing accepts a handoff and
+/// no target run is ever created from one in this phase.
+model AgentHandoff {
+  id          String @id @default(cuid())
+  sourceRunId String
+
+  targetAgentCode    String
+  /// Null for a reserved target, which has no published version to pin.
+  targetAgentVersion String?
+
+  /// A code, not an instruction. payloadJson carries validated operands only:
+  /// there is no message, note or instruction key in any handoff schema.
+  handoffCode          String
+  payloadJson          Json
+  payloadSchemaVersion Int    @default(1)
+
+  /// Collapses repeated proposals of the same request. Unique when present.
+  deduplicationKey String?
+
+  status    AgentHandoffStatus @default(proposed)
+  expiresAt DateTime?
+
+  /// Set only when a future phase actually consumes one. Always NULL here.
+  acceptedRunId String?
+
+  createdAt     DateTime  @default(now())
+  acceptedAt    DateTime?
+  rejectedAt    DateTime?
+  rejectionCode String?
+
+  sourceRun   AgentRun  @relation("AgentHandoffSource", fields: [sourceRunId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  acceptedRun AgentRun? @relation("AgentHandoffAccepted", fields: [acceptedRunId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([deduplicationKey])
+  /// "What is waiting for this agent" — the future consumer's only query.
+  @@index([targetAgentCode, status, createdAt])
+  /// "Everything this run asked for" — the source-run read.
+  @@index([sourceRunId])
+  /// Supports the Restrict deletion lookup on the accepted-run axis.
+  @@index([acceptedRunId])
+}
+
+/// A PROPOSED action. Inert: it has no effect until a human decides it.
+model AgentActionProposal {
+  id              String  @id @default(cuid())
+  sourceRunId     String
+  sourceFindingId String?
+
+  actionClass AgentActionClass
+
+  /// A proposal is always ABOUT something. Unlike a run, there is no global
+  /// proposal — an action with no subject has no one it could apply to.
+  subjectType AgentSubjectType
+  subjectRef  String
+
+  /// Stable codes naming the findings that motivated this, never a rationale
+  /// sentence. A flat, bounded, validated map like every other JSON column.
+  reasonCodesJson Json
+
+  channel AgentActionChannel
+
+  /// Names a REVIEWED template. The agent never authors the message, chooses
+  /// the link or addresses the recipient — parametersJson has no body, text,
+  /// url, recipient or destination key in any registered schema.
+  templateKey             String
+  parametersJson          Json
+  parametersSchemaVersion Int    @default(1)
+
+  deduplicationKey String?
+
+  status AgentActionStatus @default(proposed)
+
+  /// ALWAYS TRUE. Enforced by a CHECK constraint in the migration, not merely
+  /// by a default: automatic approval and automatic execution are forbidden,
+  /// and a column that could be set false would make that a convention.
+  requiresHumanApproval Boolean @default(true)
+
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  sourceRun     AgentRun      @relation("AgentActionProposalRun", fields: [sourceRunId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sourceFinding AgentFinding? @relation("AgentActionProposalFinding", fields: [sourceFindingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  decision   AgentActionDecision?    @relation("AgentActionDecisionProposal")
+  executions AgentActionExecution[]  @relation("AgentActionExecutionProposal")
+
+  @@unique([deduplicationKey])
+  /// "What is proposed about this subject" — the review queue, per subject.
+  @@index([subjectType, subjectRef, status])
+  /// "What is pending and expiring" — the future expiry sweep.
+  @@index([status, expiresAt])
+  /// "Everything this run proposed" — the source-run read.
+  @@index([sourceRunId])
+  /// Supports the Restrict deletion lookup on the finding axis.
+  @@index([sourceFindingId])
+}
+
+/// The HUMAN GATE. One decision per proposal, ever, and it is immutable.
+///
+/// decidedByStaffId is NOT NULL: there is no system approval and no anonymous
+/// approval. An agent never holds more authority than the human who decided.
+model AgentActionDecision {
+  id         String @id @default(cuid())
+  proposalId String @unique
+
+  decision     AgentDecisionType
+  decisionCode String
+
+  decidedByStaffId String
+
+  /// Which policy version authorised this, so a decision stays interpretable
+  /// after the policy moves.
+  policyVersion String
+
+  createdAt DateTime @default(now())
+
+  proposal      AgentActionProposal @relation("AgentActionDecisionProposal", fields: [proposalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  decidedByStaff StaffProfile       @relation("AgentActionDecisionStaff", fields: [decidedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// Supports the Restrict deletion lookup on the staff axis.
+  @@index([decidedByStaffId])
+}
+
+/// A future execution attempt.
+///
+/// NO EXECUTION PROVIDER IS REGISTERED and no execution service is enabled.
+/// The provider registry is an empty array in source, so no row here can be
+/// created by any code path in this phase.
+model AgentActionExecution {
+  id            String @id @default(cuid())
+  proposalId    String
+  attemptNumber Int
+
+  executionProvider String
+  status            AgentExecutionStatus @default(pending)
+
+  /// The effect-level idempotency key. This is the second of the two levels —
+  /// AgentRun(agentCode, idempotencyKey) prevents duplicate WORK, this prevents
+  /// duplicate EFFECT.
+  idempotencyKey String @unique
+
+  /// OPAQUE ONLY. Never a recipient address, an email, a phone number or a raw
+  /// provider payload.
+  externalReceiptRef String?
+
+  /// The single audit surface stays AuditLog. Agent Core owns its own
+  /// structured history, and anything that CHANGES THE PRODUCT is recorded
+  /// there through this reference rather than in a private audit trail.
+  auditLogId Int?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  failureCode String?
+  createdAt   DateTime  @default(now())
+
+  proposal AgentActionProposal @relation("AgentActionExecutionProposal", fields: [proposalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  auditLog AuditLog?           @relation("AgentActionExecutionAudit", fields: [auditLogId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// One row per attempt, so a retry can never overwrite the record of the
+  /// attempt it is retrying.
+  @@unique([proposalId, attemptNumber])
+  /// "What is executing or recently failed" — the operational sweep.
+  @@index([status, createdAt])
+  /// Supports the Restrict deletion lookup on the audit axis.
+  @@index([auditLogId])
+}
+
+/// An assessment of a run, a finding or a proposal.
+///
+/// Kept separate from its target so that re-evaluating a historical run never
+/// mutates it. Only deterministic evaluators are enabled: there is no Curie
+/// Sentinel runtime and no model grader.
+model AgentEvaluation {
+  id String @id @default(cuid())
+
+  evaluatorType AgentEvaluatorType
+  evaluatorCode String
+
+  targetType AgentEvaluationTargetType
+  targetRef  String
+
+  evaluationCode String
+
+  /// An exact decimal string, never a float. A score somebody compares across
+  /// runs must not depend on binary rounding.
+  scoreValue String?
+
+  result AgentEvaluationResult
+
+  /// A code, a count and a bound. Never a free-form evaluation report: a
+  /// sentence stored here would become authoritative evidence nobody reviewed.
+  evidenceJson          Json?
+  evidenceSchemaVersion Int   @default(1)
+
+  createdAt DateTime @default(now())
+
+  /// "How has this target been evaluated" — the only read this table has.
+  @@index([targetType, targetRef, createdAt])
+  /// "Every result of this check over time" — the quality trend read.
+  @@index([evaluationCode, createdAt])
+}
+
+/// SCHEMA-ONLY infrastructure for a model provider that does not exist.
+///
+/// NO PROVIDER IS SELECTED, no API key is read, no network client exists and
+/// every invocation attempt fails closed with MODEL_PROVIDER_DISABLED.
+///
+/// DELIBERATELY ABSENT, and a regression asserts each by name: any prompt, any
+/// system prompt, any raw response, any completion, any feature packet, any
+/// credential. This table records THAT a call happened and what it cost — never
+/// what was said.
+model ModelInvocation {
+  id    String  @id @default(cuid())
+  runId String?
+
+  providerCode String
+  modelCode    String
+  modelVersion String?
+
+  /// Versions of the reviewed prompt and the expected output schema. These name
+  /// artefacts held in source — they are not the artefacts themselves.
+  promptVersion       String?
+  outputSchemaVersion String?
+
+  attemptNumber Int @default(1)
+
+  status           ModelInvocationStatus @default(pending)
+  validationStatus ModelValidationStatus @default(not_run)
+
+  inputTokenCount  Int?
+  outputTokenCount Int?
+  cachedTokenCount Int?
+  latencyMs        Int?
+
+  /// Minor units of an explicit currency. Never a float, for the same reason
+  /// money is never a float anywhere else in this schema.
+  costMinorUnits Int?
+  costCurrency   String?
+
+  /// The provider's own opaque request id. Never a URL, a payload or a key.
+  externalRequestRef String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  failureCode String?
+  createdAt   DateTime  @default(now())
+
+  run AgentRun? @relation("ModelInvocationRun", fields: [runId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// One row per attempt of a run.
+  @@unique([runId, attemptNumber])
+  /// "Every model call this run made" — the run drill-down.
+  @@index([runId])
+  /// "Usage and cost by provider and model over time" — the billing read.
+  @@index([providerCode, modelCode, createdAt])
+  /// "What is in flight or recently failed" — the operational sweep.
+  @@index([status, createdAt])
 }

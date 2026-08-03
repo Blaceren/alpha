@@ -445,20 +445,44 @@ async function main() {
   });
 
   /**
-   * The CURRENT phase's manifest, and the reason this is not hard-coded.
+   * The CURRENT phase's manifest.
    *
    * The full-inventory rule below can only hold for the manifest of the phase
    * being run. A historical manifest is a record of what a PREVIOUS phase
    * reviewed, and every suite added since is legitimately absent from it —
    * pinning the check to an old file would either fail the moment anybody adds
    * a suite (as AFD-5B2B's three did) or force a phase to retro-edit an
-   * accepted artifact. So the newest manifest is discovered from disk.
+   * accepted artifact.
+   *
+   * IT WAS DISCOVERED BY SORTING FILENAMES AND TAKING THE LAST, AND THAT WAS
+   * WRONG. The heuristic assumed alphabetical order tracks chronology, which
+   * held only by luck across `afd5b2a` → `afd5b2b` → `afd5d1` → `product-rc1`.
+   * AGENT-FOUNDATION-1 broke it: `acceptance-manifest-agent-foundation-af1.json`
+   * sorts BEFORE `acceptance-manifest-product-rc1.json`, so the check selected
+   * an accepted historical artifact as "current" and failed against it. The
+   * alternative — naming manifests so they happen to sort last — would be
+   * gaming the check rather than satisfying it, and would break again on the
+   * first phase whose name starts with an early letter.
+   *
+   * So the current manifest is now named EXPLICITLY, in one place, and a phase
+   * that ships a manifest updates it in the same commit. This is the same
+   * discipline as `EXPECTED_MIGRATION_COUNT`: a value typed by hand so that an
+   * unplanned change fails the gate instead of being silently absorbed.
    */
+  const CURRENT_ACCEPTANCE_MANIFEST = "acceptance-manifest-agent-foundation-af1.json";
+
   const manifestFiles = fs
     .readdirSync(path.join(process.cwd(), "config"))
     .filter((name) => /^acceptance-manifest-.+\.json$/.test(name))
     .sort();
-  const currentManifestFile = manifestFiles[manifestFiles.length - 1];
+  const currentManifestFile = CURRENT_ACCEPTANCE_MANIFEST;
+
+  await check("32a. the named current manifest exists and is one of the shipped ones", () => {
+    assert.ok(
+      manifestFiles.includes(CURRENT_ACCEPTANCE_MANIFEST),
+      `${CURRENT_ACCEPTANCE_MANIFEST} is named as current but is not shipped in config/`,
+    );
+  });
 
   await check("32. every shipped acceptance manifest is structurally valid", () => {
     assert.ok(manifestFiles.length > 0, "no acceptance manifest is shipped");
