@@ -12,7 +12,7 @@ import { resolveBusinessTimezone } from "@/lib/analytics/business-time";
 import { serializeCutoff, serializeFilters } from "@/lib/analytics/cohort-routes";
 import { buildAnalysisReport } from "@/lib/analysis/analysis-report";
 import { loadCohortInput, loadEventDateInput } from "@/lib/analysis/analysis-input";
-import { parseAnalysisRequest } from "@/lib/analysis/analysis-request";
+import { analysisInputFingerprint, parseAnalysisRequest } from "@/lib/analysis/analysis-request";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,7 +20,7 @@ export const revalidate = 0;
 // POST /api/crm/v1/affiliates/analytics/analysis
 //
 // A structured, machine-readable reading of the ALREADY-COMPUTED affiliate
-// analytics: observations, warnings, opportunities and questions, each a code
+// analytics: observations, warnings, positive signals and questions, each a code
 // from a closed catalog with the evidence that produced it.
 //
 // THIS ROUTE ADDS NO ANALYTICS. It calls exactly the loaders the shipped
@@ -97,13 +97,19 @@ export async function POST(request: Request) {
             cutoff: parsed.cutoff!,
           });
 
-    const report = buildAnalysisReport(input);
+    const report = buildAnalysisReport(input, analysisInputFingerprint(parsed));
 
     return NextResponse.json(
       {
         ...report,
         // The request, echoed as the server resolved it: an operator must be
         // able to see which window and which filters produced these sentences.
+        //
+        // `group` and `dimension` are TWO DIFFERENT THINGS and both are echoed.
+        // `group` is the time bucket width (day | week | month); `dimension` is
+        // the breakdown axis (affiliate | campaign | tracking_link). Neither
+        // implies the other, and an operator reading only one of them would
+        // misread the report.
         request: {
           mode: parsed.mode,
           period: serializePeriod(parsed.period),
@@ -112,6 +118,12 @@ export async function POST(request: Request) {
           group: parsed.group,
           dimension: parsed.dimension,
         },
+        // PRODUCT-RC-1 — echoed in the BODY as well as the `X-Request-Id`
+        // header. The error envelope has always carried it; a success that
+        // carried it only in a header meant an operator who pasted a saved JSON
+        // report into a ticket had thrown away the one value that lets support
+        // find the corresponding server-side request.
+        requestId,
         generatedAt: now.toISOString(),
       },
       { headers },

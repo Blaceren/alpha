@@ -16,6 +16,7 @@
  * the GET routes call, so this endpoint cannot drift into a second calendar, a
  * second week start or a second interval convention.
  */
+import crypto from "node:crypto";
 import { AffiliateInputError } from "@/lib/crm/affiliates";
 import {
   DATE_PRESETS,
@@ -191,4 +192,59 @@ export function parseAnalysisRequest(
     group: rawGroup as BucketGroup,
     dimension: rawDimension as BreakdownDimension,
   };
+}
+
+/* --------------------------------------------------------- fingerprinting */
+
+/**
+ * PRODUCT-RC-1 — a stable fingerprint of the RESOLVED request.
+ *
+ * WHAT GOES IN. Exactly the six things that decide which numbers come back:
+ * mode, the resolved window, the resolved cutoff, the three dimension filters,
+ * the time bucket and the breakdown dimension. Nothing else — not the clock, not
+ * the caller, not the request id — because two operators asking the same
+ * question at different moments must get the same fingerprint, and the same
+ * operator asking about a different window must not.
+ *
+ * WHY RESOLVED AND NOT RAW. `{"preset":"last_30_days"}` and the custom dates it
+ * resolves to are the same question and fingerprint identically. The same raw
+ * body sent a day apart resolves to two different windows and fingerprints
+ * differently. Hashing the raw body would get both cases exactly backwards.
+ *
+ * WHY A HAND-BUILT STRING AND NOT `JSON.stringify`. Object key order is a
+ * property of how the object was built, so stringify would let an innocuous
+ * refactor of `parseAnalysisRequest` silently change every fingerprint the
+ * product has ever published. The field order here is fixed by this function and
+ * by nothing else.
+ *
+ * Domain-separated so a fingerprint can never be confused with, or replayed as,
+ * a hash from another part of the system. Truncated to 16 hex characters: ample
+ * to distinguish the questions an operator can actually ask, far too little to
+ * attack a preimage — and it carries no id an unauthorised caller could not
+ * already have supplied itself.
+ */
+export function analysisInputFingerprint(request: AnalysisRequest): string {
+  const parts = [
+    `mode=${request.mode}`,
+    // NOT `resolvedPreset`. A preset NAME is presentation: `last_30_days` and
+    // the `custom` dates it resolves to select the same rows and return the same
+    // numbers, so they are the same question and must fingerprint the same. The
+    // rolling nature of a preset is already captured — completely — by the
+    // resolved bounds below, which move when the window moves.
+    `tz=${request.period.timezone}`,
+    `startUtc=${request.period.startUtc === null ? "null" : request.period.startUtc.toISOString()}`,
+    `endUtc=${request.period.endUtc.toISOString()}`,
+    `cutoffUtc=${request.cutoff === null ? "null" : request.cutoff.cutoffUtc.toISOString()}`,
+    `partner=${request.filters.affiliatePartnerId ?? "null"}`,
+    `campaign=${request.filters.affiliateCampaignId ?? "null"}`,
+    `link=${request.filters.affiliateTrackingLinkId ?? "null"}`,
+    `group=${request.group}`,
+    `dimension=${request.dimension}`,
+  ];
+
+  return crypto
+    .createHash("sha256")
+    .update(`ata.analysis.input.v1:${parts.join("&")}`)
+    .digest("hex")
+    .slice(0, 16);
 }

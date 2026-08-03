@@ -16,8 +16,12 @@ import fs from "node:fs";
 
 import { ANALYSIS_CATALOG, CATALOG_CODES } from "../../src/lib/analysis/analysis-catalog";
 import {
+  ANALYSIS_CATALOG_VERSION,
+  ANALYSIS_ENGINE_VERSION,
   ANALYSIS_SECTIONS,
   ANALYSIS_THRESHOLDS,
+  CURIE_ATLAS_AGENT_CODE,
+  CURIE_ATLAS_AGENT_VERSION,
   FINDING_CODES,
   FINDING_SEVERITIES,
   groupBySection,
@@ -38,7 +42,10 @@ import {
   toScaled,
 } from "../../src/lib/analysis/analysis-format";
 import { buildAnalysisReport } from "../../src/lib/analysis/analysis-report";
-import { parseAnalysisRequest } from "../../src/lib/analysis/analysis-request";
+import {
+  analysisInputFingerprint,
+  parseAnalysisRequest,
+} from "../../src/lib/analysis/analysis-request";
 import { runRules } from "../../src/lib/analysis/analysis-rules";
 import type { AnalysisInput, EventDateInput, CohortInput } from "../../src/lib/analysis/analysis-input";
 import { computeRatios } from "../../src/lib/analytics/affiliate-queries";
@@ -46,6 +53,22 @@ import { ZERO_COUNTS, type MetricCounts } from "../../src/lib/analytics/affiliat
 import type { ResolvedPeriod } from "../../src/lib/analytics/periods";
 import type { ResolvedCutoff } from "../../src/lib/analytics/cohort-time";
 import { EMPTY_MEDIANS, ZERO_COHORT_COUNTS, computeCohortRates } from "../../src/lib/analytics/cohort-queries";
+
+/**
+ * PRODUCT-RC-1 — `buildAnalysisReport` now takes the resolved request's
+ * fingerprint, which these unit cases do not have: they construct an
+ * `AnalysisInput` directly, bypassing the request grammar on purpose so a rule
+ * can be exercised without also exercising the parser.
+ *
+ * A FIXED value keeps every assertion below about the FINDINGS. The fingerprint
+ * is not asserted here by accident — it is proven on its own terms in cases
+ * 46-49, over real parsed requests, which is the only place it means anything.
+ */
+const FIXED_FINGERPRINT = "00000000feedface";
+
+function buildReport(input: AnalysisInput) {
+  return buildAnalysisReport(input, FIXED_FINGERPRINT);
+}
 
 const MSK = "Europe/Moscow";
 const OUT = process.env.AFD5D1_OUT ?? "";
@@ -450,7 +473,7 @@ check("13 differences and shares are exact", () => {
 /* ===================== 14. insufficient_data ========================== */
 
 check("14 an empty period returns insufficient_data and NOTHING else", () => {
-  const report = buildAnalysisReport(eventInput({ counts: counts() }));
+  const report = buildReport(eventInput({ counts: counts() }));
 
   assert.equal(report.dataSufficiency.status, "insufficient_data");
   assert.equal(
@@ -460,7 +483,7 @@ check("14 an empty period returns insufficient_data and NOTHING else", () => {
     "no_events_in_period",
   );
   assert.deepEqual(report.observations, []);
-  assert.deepEqual(report.opportunities, []);
+  assert.deepEqual(report.positiveSignals, []);
   assert.equal(report.warnings.length, 1);
   assert.equal(report.warnings[0]!.code, "insufficient_data");
   assert.match(report.warnings[0]!.message, /insufficient_data/);
@@ -469,7 +492,7 @@ check("14 an empty period returns insufficient_data and NOTHING else", () => {
 });
 
 check("15 an empty cohort returns insufficient_data with its own reason", () => {
-  const report = buildAnalysisReport(cohortInput({ counts: { ...ZERO_COHORT_COUNTS } }));
+  const report = buildReport(cohortInput({ counts: { ...ZERO_COHORT_COUNTS } }));
   assert.equal(report.dataSufficiency.status, "insufficient_data");
   assert.equal(
     report.dataSufficiency.status === "insufficient_data"
@@ -478,7 +501,7 @@ check("15 an empty cohort returns insufficient_data with its own reason", () => 
     "empty_cohort",
   );
   assert.deepEqual(report.observations, []);
-  assert.deepEqual(report.opportunities, []);
+  assert.deepEqual(report.positiveSignals, []);
 });
 
 check("16 an empty period NEVER prints a rate, a change or a zero percent", () => {
@@ -610,7 +633,7 @@ check("24 an unavailable amount states the reason and prints no number", () => {
   assert.ok(!/USD|\d+\.\d\d/.test(message!));
 });
 
-/* ================= 25. opportunities carry no advice =================== */
+/* =============== 25. positive signals carry no advice ================= */
 
 check("25 a member contrast states two numbers and recommends nothing", () => {
   // Aggregate 20 %, member 1 % — a 19 p.p. gap, comfortably over the published
@@ -664,7 +687,7 @@ check("27 a member below the volume threshold is not contrasted at all", () => {
 /* ================= 28. questions state what is unavailable ============= */
 
 check("28 every report answers the four questions it cannot answer", () => {
-  const report = buildAnalysisReport(eventInput());
+  const report = buildReport(eventInput());
   const codes = report.questions.map((finding) => finding.code);
   for (const expected of [
     "question_cause_not_available",
@@ -679,7 +702,7 @@ check("28 every report answers the four questions it cannot answer", () => {
 });
 
 check("29 the questions say the report does NOT answer, never that it might", () => {
-  const report = buildAnalysisReport(eventInput());
+  const report = buildReport(eventInput());
   for (const question of report.questions) {
     assert.match(question.message, /отчёт не отвечает/i);
   }
@@ -705,7 +728,7 @@ check("30 no rendered sentence or evidence key can carry identity", () => {
   const forbidden = /@|email|e-mail|userId|user_id|leadId|pocketPlayerId|clickId|ataClickId|anonymousVisitorId|passwordHash/i;
 
   for (const input of inputs) {
-    const report = buildAnalysisReport(input);
+    const report = buildReport(input);
     const serialized = JSON.stringify(report);
     assert.ok(!forbidden.test(serialized), `identity-shaped token in report: ${serialized.slice(0, 200)}`);
   }
@@ -737,14 +760,18 @@ check("32 the same input produces a byte-identical report, twice", () => {
       { localLabel: "b", counts: counts({ qualifiedClicks: 500, academyRegistrations: 40 }) },
     ],
   });
-  assert.equal(JSON.stringify(buildAnalysisReport(input)), JSON.stringify(buildAnalysisReport(input)));
+  assert.equal(JSON.stringify(buildReport(input)), JSON.stringify(buildReport(input)));
 });
 
 check("33 the engine announces itself and states that no model was invoked", () => {
-  const report = buildAnalysisReport(eventInput());
+  const report = buildReport(eventInput());
   assert.equal(report.engine.kind, "deterministic");
   assert.equal(report.engine.modelInvoked, false);
   assert.equal(typeof report.engine.catalogVersion, "string");
+  // PRODUCT-RC-1 — the engine's own version is published SEPARATELY from the
+  // catalog's, so a rule change and a code change are distinguishable.
+  assert.equal(report.engine.engineVersion, ANALYSIS_ENGINE_VERSION);
+  assert.notEqual(report.engine.engineVersion, report.engine.catalogVersion);
 });
 
 /* ====================== 34. the request contract ====================== */
@@ -816,13 +843,13 @@ check("40 an invalid mode, group or dimension is refused", () => {
 /* ===================== 41. sections and the overview =================== */
 
 check("41 findings land in the four published sections and nowhere else", () => {
-  const report = buildAnalysisReport(
+  const report = buildReport(
     eventInput({ counts: counts({ qualifiedClicks: 100, academyRegistrations: 10, conflictingDeposits: 1 }) }),
   );
   const all = [
     ...report.observations,
     ...report.warnings,
-    ...report.opportunities,
+    ...report.positiveSignals,
     ...report.questions,
   ];
   for (const finding of all) {
@@ -834,7 +861,7 @@ check("41 findings land in the four published sections and nowhere else", () => 
 });
 
 check("42 the overview copies the aggregates and invents no score", () => {
-  const report = buildAnalysisReport(
+  const report = buildReport(
     eventInput({ counts: counts({ qualifiedClicks: 1000, academyRegistrations: 100 }) }),
   );
   assert.equal(report.overview.headlineMetrics.qualifiedClicks, "1000");
@@ -844,7 +871,7 @@ check("42 the overview copies the aggregates and invents no score", () => {
 });
 
 check("43 thresholds are published so a reader can see why a finding fired", () => {
-  const report = buildAnalysisReport(eventInput());
+  const report = buildReport(eventInput());
   assert.equal(report.thresholds.minRateDenominator, ANALYSIS_THRESHOLDS.minRateDenominator);
   assert.ok(Object.keys(report.thresholds).length >= 7);
 });
@@ -852,7 +879,7 @@ check("43 thresholds are published so a reader can see why a finding fired", () 
 /* ============================ 44. cohort mode ========================= */
 
 check("44 cohort mode reports its own rates and medians, never event-date ones", () => {
-  const report = buildAnalysisReport(cohortInput());
+  const report = buildReport(cohortInput());
   const codes = report.observations.map((finding) => finding.code);
   assert.ok(codes.includes("cohort_size"));
   assert.ok(codes.includes("cohort_rate_level"));
@@ -863,7 +890,7 @@ check("44 cohort mode reports its own rates and medians, never event-date ones",
 });
 
 check("45 a clamped cutoff and integrity findings are reported", () => {
-  const report = buildAnalysisReport(
+  const report = buildReport(
     cohortInput({
       cutoff: { ...CUTOFF, clampedToReportClock: true } as ResolvedCutoff,
       integrity: { missingOrDuplicateRegistrationCount: 3, duplicateFirstDepositCount: 1 },
@@ -876,7 +903,7 @@ check("45 a clamped cutoff and integrity findings are reported", () => {
 });
 
 check("46 a negative duration is reported and excluded, never clamped", () => {
-  const report = buildAnalysisReport(
+  const report = buildReport(
     cohortInput({
       medians: {
         ...EMPTY_MEDIANS,
@@ -891,6 +918,154 @@ check("46 a negative duration is reported and excluded, never clamped", () => {
   const message = report.warnings.find((finding) => finding.code === "negative_duration_observed");
   assert.ok(message);
   assert.match(message!.message, /исключены из медианы/);
+});
+
+
+/* ============ 47-52. PRODUCT-RC-1 published contract ================== */
+
+check("47 the report names the agent that produced it", () => {
+  const report = buildReport(eventInput());
+  assert.equal(report.agent.code, "curie_atlas");
+  assert.equal(report.agent.code, CURIE_ATLAS_AGENT_CODE);
+  assert.equal(report.agent.version, CURIE_ATLAS_AGENT_VERSION);
+  assert.equal(report.agent.version, "1.0.0");
+  // Three versions, three things. If any two are the same VALUE that is fine,
+  // but they must be three distinct FIELDS a consumer can read independently.
+  const keys = Object.keys(report.agent).concat(Object.keys(report.engine));
+  for (const key of ["code", "version", "kind", "engineVersion", "catalogVersion", "modelInvoked"]) {
+    assert.ok(keys.includes(key), `envelope is missing ${key}`);
+  }
+  assert.equal(report.engine.catalogVersion, ANALYSIS_CATALOG_VERSION);
+});
+
+check("48 the third collection is positiveSignals and there is no legacy alias", () => {
+  const report = buildReport(eventInput());
+  assert.ok(Array.isArray(report.positiveSignals));
+  // The rename is a rename, not an addition. A consumer written against the
+  // pre-normalization shape must FAIL LOUDLY rather than silently read an
+  // alias that would quietly stop being maintained.
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(report, "opportunities"),
+    "an `opportunities` compatibility alias was published",
+  );
+  // The section tag travels with the field name.
+  assert.ok(!(ANALYSIS_SECTIONS as readonly string[]).includes("opportunity"));
+  assert.ok((ANALYSIS_SECTIONS as readonly string[]).includes("positive_signal"));
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(report.overview.findingCounts, "positive_signal"),
+    "findingCounts still counts an `opportunity` section",
+  );
+});
+
+check("49 the fingerprint identifies the RESOLVED question, not the raw body", () => {
+  const at = new Date("2026-07-15T09:00:00.000Z");
+
+  // Two spellings of the same window fingerprint IDENTICALLY. `custom` with the
+  // dates last_30_days resolves to is the same question asked twice.
+  const preset = parseAnalysisRequest({ preset: "last_30_days" }, MSK, at);
+  const explicit = parseAnalysisRequest(
+    {
+      preset: "custom",
+      startDate: preset.period.startLocal!.slice(0, 10),
+      endDate: preset.period.endLocal.slice(0, 10),
+    },
+    MSK,
+    at,
+  );
+  assert.equal(analysisInputFingerprint(preset), analysisInputFingerprint(explicit));
+
+  // The SAME raw body a month later is a DIFFERENT question and must not collide.
+  const later = parseAnalysisRequest({ preset: "last_30_days" }, MSK, new Date("2026-08-15T09:00:00.000Z"));
+  assert.notEqual(analysisInputFingerprint(preset), analysisInputFingerprint(later));
+});
+
+check("50 every request field that changes the numbers changes the fingerprint", () => {
+  const at = new Date("2026-07-15T09:00:00.000Z");
+  const base = { preset: "last_30_days" } as Record<string, unknown>;
+  const baseline = analysisInputFingerprint(parseAnalysisRequest(base, MSK, at));
+
+  const variants: Record<string, unknown>[] = [
+    { ...base, mode: "acquisition_cohort" },
+    { ...base, group: "week" },
+    { ...base, group: "month" },
+    { ...base, dimension: "campaign" },
+    { ...base, dimension: "tracking_link" },
+    { ...base, affiliatePartnerId: 7 },
+    { ...base, affiliateCampaignId: 7 },
+    { ...base, affiliateTrackingLinkId: 7 },
+    { ...base, preset: "today" },
+  ];
+
+  const seen = new Set<string>([baseline]);
+  for (const variant of variants) {
+    const fingerprint = analysisInputFingerprint(parseAnalysisRequest(variant, MSK, at));
+    assert.notEqual(fingerprint, baseline, `${JSON.stringify(variant)} collided with the baseline`);
+    assert.ok(!seen.has(fingerprint), `${JSON.stringify(variant)} collided with another variant`);
+    seen.add(fingerprint);
+    assert.match(fingerprint, /^[0-9a-f]{16}$/);
+  }
+
+  // Same input, same fingerprint — twice, so the hash is not salted per call.
+  assert.equal(
+    analysisInputFingerprint(parseAnalysisRequest(base, MSK, at)),
+    analysisInputFingerprint(parseAnalysisRequest(base, MSK, at)),
+  );
+});
+
+check("51 the same normalized request produces byte-identical output", () => {
+  const at = new Date("2026-07-15T09:00:00.000Z");
+  const parsed = parseAnalysisRequest({ preset: "last_30_days", dimension: "campaign" }, MSK, at);
+  const fingerprint = analysisInputFingerprint(parsed);
+
+  const input = eventInput({
+    counts: counts({ qualifiedClicks: 900, academyRegistrations: 120, pocketRegistrations: 40 }),
+    breakdownTotals: counts({ qualifiedClicks: 900, academyRegistrations: 120 }),
+    breakdown: [
+      { dimensionId: 3, counts: counts({ qualifiedClicks: 500, academyRegistrations: 5 }), lastActivityAt: null },
+      { dimensionId: 4, counts: counts({ qualifiedClicks: 400, academyRegistrations: 115 }), lastActivityAt: null },
+    ],
+    buckets: [
+      { localLabel: "a", counts: counts({ qualifiedClicks: 400, academyRegistrations: 80 }) },
+      { localLabel: "b", counts: counts({ qualifiedClicks: 500, academyRegistrations: 40 }) },
+    ],
+  });
+
+  const first = JSON.stringify(buildAnalysisReport(input, fingerprint));
+  const second = JSON.stringify(buildAnalysisReport(input, fingerprint));
+  assert.equal(first, second);
+  // Not vacuous: this report actually says something.
+  const parsedFirst = JSON.parse(first) as { positiveSignals: unknown[]; observations: unknown[] };
+  assert.ok(parsedFirst.observations.length > 0);
+  assert.ok(parsedFirst.positiveSignals.length > 0);
+});
+
+check("52 every positive signal is factual and recommends nothing", () => {
+  const input = eventInput({
+    counts: counts({ qualifiedClicks: 1000, academyRegistrations: 200, pocketRegistrations: 60 }),
+    breakdownTotals: counts({ qualifiedClicks: 1000, academyRegistrations: 200 }),
+    breakdown: [
+      { dimensionId: 7, counts: counts({ qualifiedClicks: 200, academyRegistrations: 2 }), lastActivityAt: null },
+      { dimensionId: 8, counts: counts({ qualifiedClicks: 300, academyRegistrations: 0 }), lastActivityAt: null },
+      { dimensionId: 9, counts: counts({ qualifiedClicks: 500, academyRegistrations: 198 }), lastActivityAt: null },
+    ],
+  });
+
+  const report = buildReport(input);
+  assert.ok(report.positiveSignals.length > 0, "expected at least one positive signal");
+
+  for (const finding of report.positiveSignals) {
+    assert.equal(finding.section, "positive_signal");
+    // A signal is a measurement, never a severity ladder rung.
+    assert.equal(finding.severity, "info");
+    // Its numbers must be traceable — this is what makes "no invented cause"
+    // checkable rather than merely promised.
+    assert.ok(finding.evidence.length > 0, `${finding.code} carried no evidence`);
+    // And its sentence must survive the forbidden lexicon: no cause, no
+    // forecast, no quality judgement, no advice.
+    for (const { word } of FORBIDDEN_LEXICON) {
+      assert.ok(!word.test(finding.message), `${finding.code} matched ${String(word)}`);
+    }
+  }
 });
 
 /* ------------------------------------------------------------- summary */

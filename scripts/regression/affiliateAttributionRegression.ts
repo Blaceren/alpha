@@ -12,6 +12,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -345,7 +346,6 @@ async function main() {
   await check("B10 a signed payload with an extra key is refused", () => {
     const decoded = { v: 1, vid: visitorId, iat: 1, exp: 2_000_000_000, extra: "x" };
     const payload = Buffer.from(JSON.stringify(decoded), "utf8").toString("base64url");
-    const crypto = require("node:crypto") as typeof import("node:crypto");
     const signature = crypto
       .createHmac("sha256", TEST_SECRET)
       .update(`1.${payload}`)
@@ -358,7 +358,6 @@ async function main() {
     const iat = Math.floor(issuedAt.getTime() / 1000);
     const decoded = { v: 1, vid: visitorId, iat, exp: iat + 400 * 24 * 60 * 60 };
     const payload = Buffer.from(JSON.stringify(decoded), "utf8").toString("base64url");
-    const crypto = require("node:crypto") as typeof import("node:crypto");
     const signature = crypto
       .createHmac("sha256", TEST_SECRET)
       .update(`1.${payload}`)

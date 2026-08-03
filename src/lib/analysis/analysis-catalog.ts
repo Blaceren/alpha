@@ -362,10 +362,10 @@ export const ANALYSIS_CATALOG: Readonly<Record<FindingCode, CatalogEntry>> = {
       `Значения за пределами отсечки в отчёт не входят.`,
   },
 
-  /* ------------------------------------------------------- opportunities */
+  /* ----------------------------------------------------- positive signals */
 
   member_clicks_without_registrations: {
-    section: "opportunity",
+    section: "positive_signal",
     severity: "info",
     requiredOperands: ["dimension", "dimensionId", "clicks"],
     render: (o) =>
@@ -374,7 +374,7 @@ export const ANALYSIS_CATALOG: Readonly<Record<FindingCode, CatalogEntry>> = {
   },
 
   member_registrations_without_deposits: {
-    section: "opportunity",
+    section: "positive_signal",
     severity: "info",
     requiredOperands: ["dimension", "dimensionId", "pocketRegistrations"],
     render: (o) =>
@@ -384,7 +384,7 @@ export const ANALYSIS_CATALOG: Readonly<Record<FindingCode, CatalogEntry>> = {
   },
 
   member_rate_differs_from_aggregate: {
-    section: "opportunity",
+    section: "positive_signal",
     severity: "info",
     requiredOperands: [
       "dimension",

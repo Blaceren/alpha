@@ -32,7 +32,7 @@ export type AnalysisMode = (typeof ANALYSIS_MODES)[number];
 export const ANALYSIS_SECTIONS = [
   "observation",
   "warning",
-  "opportunity",
+  "positive_signal",
   "question",
 ] as const;
 export type AnalysisSection = (typeof ANALYSIS_SECTIONS)[number];
@@ -100,7 +100,7 @@ export const FINDING_CODES = [
   "cohort_duplicate_first_deposit",
   "cohort_cutoff_clamped",
 
-  /* ---- opportunities: measured differences, stated without advice ----- */
+  /* ---- positive signals: measured differences, stated without advice -- */
   "member_clicks_without_registrations",
   "member_registrations_without_deposits",
   "member_rate_differs_from_aggregate",
@@ -205,7 +205,7 @@ export type InsufficiencyReason = (typeof INSUFFICIENCY_REASONS)[number];
  * The sufficiency verdict.
  *
  * WHEN IT IS `insufficient_data`, THE REPORT STAYS SILENT rather than
- * speculating: `observations` and `opportunities` are empty, and only the
+ * speculating: `observations` and `positiveSignals` are empty, and only the
  * insufficiency finding and the standing `questions` remain. Printing "0 %" and
  * "no change" over an empty period would be a description of nothing, offered in
  * the shape of a description of something.
@@ -218,6 +218,39 @@ export type DataSufficiency =
       readonly evidence: readonly Evidence[];
     };
 
+/* ----------------------------------------------------------------- agent */
+
+/**
+ * WHO produced this report, as distinct from HOW.
+ *
+ * PRODUCT-RC-1 publishes this because "the analysis endpoint" is about to stop
+ * being the only agent. `curie_pulse`, `curie_mentor` and `curie_sentinel` will
+ * answer on their own routes with their own catalogs, and a consumer that stored
+ * a report needs to know which agent said it without inferring that from a URL
+ * it may no longer have.
+ *
+ * The code is a STABLE IDENTITY, not a display name: it may be added to, never
+ * repurposed. The version moves when the published contract or the catalog's
+ * meaning moves — it is the agent's public semver, and it is deliberately
+ * separate from the engine and catalog versions below, because an agent can keep
+ * its promise across an engine swap.
+ */
+export const CURIE_ATLAS_AGENT_CODE = "curie_atlas" as const;
+
+/**
+ * 1.0.0 — the first published contract.
+ *
+ * This is the version at which `positiveSignals` (not `opportunities`) is the
+ * name of the third collection. Nothing consumed the pre-normalization shape;
+ * there is no 0.x to be compatible with, and no alias is published.
+ */
+export const CURIE_ATLAS_AGENT_VERSION = "1.0.0";
+
+export type AgentDescriptor = {
+  readonly code: typeof CURIE_ATLAS_AGENT_CODE;
+  readonly version: string;
+};
+
 /* ---------------------------------------------------------------- engine */
 
 /**
@@ -228,12 +261,33 @@ export type DataSufficiency =
  * leaves the process. A later phase may add an engine over the SAME catalog, and
  * it will announce itself here — the endpoint, the JSON schema and the analytics
  * calculations do not change when it does.
+ *
+ * THREE VERSIONS, THREE THINGS. They move independently and a reader must be
+ * able to tell which one moved:
+ *
+ *   - `agent.version`   — the published contract this report obeys;
+ *   - `engineVersion`   — the implementation that turned inputs into findings;
+ *   - `catalogVersion`  — the closed set of codes and sentence templates.
+ *
+ * Collapsing them into one number would mean a rule-ordering fix and a new
+ * finding code were indistinguishable to a consumer deciding whether its stored
+ * reports are still comparable.
  */
 export type EngineDescriptor = {
   readonly kind: "deterministic";
+  readonly engineVersion: string;
   readonly catalogVersion: string;
   readonly modelInvoked: false;
 };
+
+/**
+ * The deterministic rule implementation's own version.
+ *
+ * Bump this when the RULES change — a threshold comparison, an ordering, a
+ * rounding — even if every code and template stays identical. Two reports with
+ * the same catalog version but different engine versions may legitimately differ.
+ */
+export const ANALYSIS_ENGINE_VERSION = "1.0.0";
 
 export const ANALYSIS_CATALOG_VERSION = "afd5d1.1";
 
@@ -260,12 +314,30 @@ export type AnalysisOverview = {
 /* --------------------------------------------------------------- response */
 
 export type AnalysisReport = {
+  readonly agent: AgentDescriptor;
   readonly engine: EngineDescriptor;
+  /**
+   * A stable hash of the RESOLVED request — the window, cutoff, filters,
+   * grouping and dimension as the server understood them, not as the caller
+   * spelled them.
+   *
+   * RESOLVED, NOT RAW, on purpose. `preset: "last_30_days"` and the explicit
+   * custom dates it resolves to are the same question, and two operators
+   * comparing reports need them to fingerprint the same. Conversely the same raw
+   * body sent on two different days resolves to two different windows and must
+   * NOT collide.
+   *
+   * It is not a cache key and not a secret: it carries no id an unauthorised
+   * caller could not already supply, and it is truncated far below any preimage
+   * concern. Its only job is to let a consumer answer "is this the same question
+   * I asked before" without diffing a nested object.
+   */
+  readonly inputFingerprint: string;
   readonly overview: AnalysisOverview;
   readonly dataSufficiency: DataSufficiency;
   readonly observations: readonly Finding[];
   readonly warnings: readonly Finding[];
-  readonly opportunities: readonly Finding[];
+  readonly positiveSignals: readonly Finding[];
   readonly questions: readonly Finding[];
   readonly thresholds: AnalysisThresholds;
 };
@@ -276,13 +348,13 @@ export type AnalysisReport = {
 export function groupBySection(findings: readonly Finding[]): {
   observations: Finding[];
   warnings: Finding[];
-  opportunities: Finding[];
+  positiveSignals: Finding[];
   questions: Finding[];
 } {
   return {
     observations: findings.filter((finding) => finding.section === "observation"),
     warnings: findings.filter((finding) => finding.section === "warning"),
-    opportunities: findings.filter((finding) => finding.section === "opportunity"),
+    positiveSignals: findings.filter((finding) => finding.section === "positive_signal"),
     questions: findings.filter((finding) => finding.section === "question"),
   };
 }

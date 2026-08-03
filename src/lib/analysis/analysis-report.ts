@@ -7,7 +7,10 @@
  */
 import {
   ANALYSIS_CATALOG_VERSION,
+  ANALYSIS_ENGINE_VERSION,
   ANALYSIS_THRESHOLDS,
+  CURIE_ATLAS_AGENT_CODE,
+  CURIE_ATLAS_AGENT_VERSION,
   groupBySection,
   INSUFFICIENT_DATA,
   type AnalysisOverview,
@@ -50,7 +53,7 @@ function overviewOf(input: AnalysisInput, findings: readonly Finding[]): Analysi
     findingCounts: {
       observation: grouped.observations.length,
       warning: grouped.warnings.length,
-      opportunity: grouped.opportunities.length,
+      positive_signal: grouped.positiveSignals.length,
       question: grouped.questions.length,
     },
     headlineMetrics,
@@ -87,26 +90,42 @@ function sufficiencyOf(input: AnalysisInput): DataSufficiency {
 /**
  * Build the report.
  *
- * The engine is announced explicitly, including `modelInvoked: false`, so a
- * consumer never has to infer how the sentences were produced — and so the day
- * an engine over the same catalog is added, the difference is visible in the
- * payload rather than only in a changelog.
+ * The agent and the engine are both announced explicitly, including
+ * `modelInvoked: false`, so a consumer never has to infer WHO said this or HOW
+ * the sentences were produced — and so the day an engine over the same catalog
+ * is added, the difference is visible in the payload rather than only in a
+ * changelog.
+ *
+ * `inputFingerprint` is a PARAMETER rather than something computed here, because
+ * it is a property of the resolved REQUEST and this function only ever sees the
+ * loaded aggregates. Passing it in keeps the one function that knows the request
+ * grammar (`analysisInputFingerprint`) as the only place that decides what
+ * identifies a question.
  */
-export function buildAnalysisReport(input: AnalysisInput): AnalysisReport {
+export function buildAnalysisReport(
+  input: AnalysisInput,
+  inputFingerprint: string,
+): AnalysisReport {
   const findings = renderFindings(runRules(input));
   const grouped = groupBySection(findings);
 
   return {
+    agent: {
+      code: CURIE_ATLAS_AGENT_CODE,
+      version: CURIE_ATLAS_AGENT_VERSION,
+    },
     engine: {
       kind: "deterministic",
+      engineVersion: ANALYSIS_ENGINE_VERSION,
       catalogVersion: ANALYSIS_CATALOG_VERSION,
       modelInvoked: false,
     },
+    inputFingerprint,
     overview: overviewOf(input, findings),
     dataSufficiency: sufficiencyOf(input),
     observations: grouped.observations,
     warnings: grouped.warnings,
-    opportunities: grouped.opportunities,
+    positiveSignals: grouped.positiveSignals,
     questions: grouped.questions,
     thresholds: ANALYSIS_THRESHOLDS,
   };

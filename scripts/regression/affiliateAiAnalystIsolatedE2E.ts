@@ -590,7 +590,7 @@ async function main() {
 
   await check("11 every finding's evidence names a metric the aggregates publish", async () => {
     const analysis = await analyst.postWithCsrf(ANALYSIS, WINDOW);
-    const sections = ["observations", "warnings", "opportunities"] as const;
+    const sections = ["observations", "warnings", "positiveSignals"] as const;
     let evidenceCount = 0;
     for (const section of sections) {
       for (const finding of arr(analysis.body[section])) {
@@ -621,7 +621,7 @@ async function main() {
 
     // Beta's link produced clicks and no registrations: the report must say so,
     // naming the member by id and quoting the click count the breakdown gives.
-    const finding = arr(analysis.body.opportunities).find(
+    const finding = arr(analysis.body.positiveSignals).find(
       (entry) => entry.code === "member_clicks_without_registrations",
     );
     assert.ok(finding, "expected a clicks-without-registrations finding");
@@ -667,7 +667,7 @@ async function main() {
     for (const body of [WINDOW, { ...WINDOW, mode: "acquisition_cohort" }]) {
       const reply = await analyst.postWithCsrf(ANALYSIS, body);
       assert.equal(reply.status, 200, reply.text);
-      for (const section of ["observations", "warnings", "opportunities", "questions"] as const) {
+      for (const section of ["observations", "warnings", "positiveSignals", "questions"] as const) {
         for (const finding of arr(reply.body[section])) {
           const message = String(finding.message);
           for (const pattern of FORBIDDEN) {
@@ -703,6 +703,58 @@ async function main() {
     const engine = obj(reply.body.engine);
     assert.equal(engine.kind, "deterministic");
     assert.equal(engine.modelInvoked, false);
+    assert.equal(typeof engine.engineVersion, "string");
+    assert.equal(typeof engine.catalogVersion, "string");
+  });
+
+  await check("16b the report names the agent, the fingerprint and the request id", async () => {
+    const reply = await analyst.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(reply.status, 200, reply.text);
+
+    const agent = obj(reply.body.agent);
+    assert.equal(agent.code, "curie_atlas");
+    assert.equal(agent.version, "1.0.0");
+
+    // PRODUCT-RC-1 — the fingerprint is published and is a 16-hex token.
+    assert.match(String(reply.body.inputFingerprint), /^[0-9a-f]{16}$/);
+
+    // The request id is in the BODY as well as the header, and they agree.
+    const header = reply.headers.get("x-request-id");
+    assert.ok(header, "X-Request-Id header missing");
+    assert.equal(reply.body.requestId, header);
+
+    // The rename reached the wire: no legacy alias is served.
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(reply.body, "opportunities"),
+      "an `opportunities` alias reached the response",
+    );
+    assert.ok(Array.isArray(reply.body.positiveSignals));
+
+    // `group` and `dimension` are BOTH echoed and are different concepts.
+    const request = obj(reply.body.request);
+    assert.ok(["day", "week", "month"].includes(String(request.group)));
+    assert.ok(["affiliate", "campaign", "tracking_link"].includes(String(request.dimension)));
+  });
+
+  await check("16c the same normalized request is byte-identical apart from per-call ids", async () => {
+    const first = await analyst.postWithCsrf(ANALYSIS, WINDOW);
+    const second = await analyst.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(first.status, 200, first.text);
+    assert.equal(second.status, 200, second.text);
+
+    // The fingerprint is a property of the QUESTION, so it must match across
+    // two calls even though the request id and the clock do not.
+    assert.equal(first.body.inputFingerprint, second.body.inputFingerprint);
+    assert.notEqual(first.body.requestId, second.body.requestId);
+
+    // Everything except the two per-call fields must be byte-identical.
+    const strip = (body: Record<string, unknown>) => {
+      const copy = { ...body };
+      delete copy.requestId;
+      delete copy.generatedAt;
+      return JSON.stringify(copy);
+    };
+    assert.equal(strip(obj(first.body)), strip(obj(second.body)));
   });
 
   await check("17 an empty period returns insufficient_data and no observations", async () => {
@@ -716,20 +768,28 @@ async function main() {
     assert.equal(sufficiency.status, "insufficient_data");
     assert.equal(sufficiency.reason, "no_events_in_period");
     assert.deepEqual(reply.body.observations, []);
-    assert.deepEqual(reply.body.opportunities, []);
+    assert.deepEqual(reply.body.positiveSignals, []);
     assert.match(String(arr(reply.body.warnings)[0]?.message), /insufficient_data/);
   });
 
   await check("18 two identical requests produce identical findings", async () => {
     const first = await analyst.postWithCsrf(ANALYSIS, WINDOW);
     const second = await analyst.postWithCsrf(ANALYSIS, WINDOW);
-    // `generatedAt` is the only field allowed to move between two runs.
+    // `generatedAt` and `requestId` are the ONLY fields allowed to move between
+    // two runs. `requestId` joined that list in PRODUCT-RC-1, when it began
+    // being echoed in the body as well as the header — it is per-call by
+    // definition, and case 16c asserts that it genuinely differs rather than
+    // being stripped here to hide a constant.
     const strip = (reply: Reply) => {
       const copy = { ...reply.body } as Record<string, unknown>;
       delete copy.generatedAt;
+      delete copy.requestId;
       return JSON.stringify(copy);
     };
     assert.equal(strip(first), strip(second));
+    // Nothing else is excused: the fingerprint, being a property of the
+    // question rather than of the call, must be inside the compared payload.
+    assert.match(String(first.body.inputFingerprint), /^[0-9a-f]{16}$/);
   });
 
   /* --------------------------------------------- 19-21 modes and filters */
