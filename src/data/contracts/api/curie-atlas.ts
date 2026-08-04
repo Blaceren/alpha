@@ -211,16 +211,113 @@ export const atlasComparisonKindSchema = z.enum(ATLAS_COMPARISON_KINDS);
  * measurement nobody made. `.strict()` plus the required nulls makes the shape
  * TOTAL: the CRM never has to decide whether a missing field means zero.
  */
+/**
+ * AFD-5D3 — THE EXACT ACCEPTED REPRESENTATION, taken from the backend.
+ *
+ * The values are NUMERIC IN MEANING and carried as EXACT DECIMAL STRINGS. That
+ * is not a hedge: an exact decimal string and an IEEE double are not
+ * interchangeable, and a percentage-point delta is precisely where binary
+ * rounding shows. Accepting a JSON number here would silently import that
+ * rounding, so a number is rejected — the VALUE is numeric, its TRANSPORT is a
+ * string.
+ *
+ * Measured from `analysis-support.ts` against the real engine:
+ *
+ *   count_change        current "10"   baseline "25"   absolute "-15" (SIGNED)
+ *                       percentagePoint null           relative "60.0" (UNSIGNED)
+ *   rate_change         current "35.0" baseline "40.0" absolute null
+ *                       percentagePoint "5.0" (UNSIGNED)  relative null
+ *   member_vs_aggregate current "40.0" baseline "25.0" absolute null
+ *                       percentagePoint "15.0" (UNSIGNED) relative null
+ *
+ * Direction is carried by the finding's own sentence and, for counts, by the
+ * SIGN of `absoluteDelta`. The percentage magnitudes are unsigned by design.
+ *
+ * Each kind's shape is enforced EXACTLY: a field that does not apply must be
+ * `null`, never absent and never zero, and a field that does apply must be a
+ * well-formed decimal. A partial or cross-kind structure is rejected.
+ */
+
+/** A finite decimal. Rejects "", "NaN", "Infinity", "1e5", "1,5" and "0x10". */
+const DECIMAL = /^-?\d+(?:\.\d+)?$/;
+/** A whole count or a signed integer delta. */
+const INTEGER = /^-?\d+$/;
+/** A percentage magnitude the engine publishes: unsigned, at most one decimal. */
+const PERCENT_MAGNITUDE = /^\d+(?:\.\d)?$/;
+
+function isDecimal(value: string): boolean {
+  return DECIMAL.test(value) && Number.isFinite(Number(value));
+}
+
+/** A rate must be a real percentage: 0…100, and no more precision than published. */
+function isRatePercent(value: string): boolean {
+  if (!PERCENT_MAGNITUDE.test(value)) return false;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100;
+}
+
 export const atlasComparisonSchema = z
   .object({
     kind: atlasComparisonKindSchema,
-    currentValue: z.string(),
-    baselineValue: z.string(),
-    absoluteDelta: z.string().nullable(),
-    percentagePointDelta: z.string().nullable(),
-    relativeDelta: z.string().nullable(),
+    currentValue: z.string().min(1),
+    baselineValue: z.string().min(1),
+    absoluteDelta: z.string().min(1).nullable(),
+    percentagePointDelta: z.string().min(1).nullable(),
+    relativeDelta: z.string().min(1).nullable(),
   })
-  .strict();
+  .strict()
+  .superRefine((comparison, ctx) => {
+    const fail = (path: string, message: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+
+    if (comparison.kind === "count_change") {
+      // Counts are whole numbers; the delta is signed; there is no
+      // percentage-point move for a count.
+      if (!INTEGER.test(comparison.currentValue)) fail("currentValue", "count must be an integer");
+      if (!INTEGER.test(comparison.baselineValue)) fail("baselineValue", "count must be an integer");
+      if (comparison.absoluteDelta !== null && !INTEGER.test(comparison.absoluteDelta)) {
+        fail("absoluteDelta", "a count delta must be a signed integer");
+      }
+      if (comparison.percentagePointDelta !== null) {
+        fail("percentagePointDelta", "a count change has no percentage-point delta");
+      }
+      if (comparison.relativeDelta !== null && !isDecimal(comparison.relativeDelta)) {
+        fail("relativeDelta", "the relative move must be a finite decimal");
+      }
+      // The delta must agree with the two values it claims to relate.
+      if (comparison.absoluteDelta !== null) {
+        const expected = Number(comparison.currentValue) - Number(comparison.baselineValue);
+        if (Number(comparison.absoluteDelta) !== expected) {
+          fail("absoluteDelta", "the delta disagrees with current − baseline");
+        }
+      }
+      return;
+    }
+
+    // rate_change and member_vs_aggregate share one shape: two percentages and a
+    // percentage-POINT difference between them.
+    if (!isRatePercent(comparison.currentValue)) fail("currentValue", "not a 0–100 percentage");
+    if (!isRatePercent(comparison.baselineValue)) fail("baselineValue", "not a 0–100 percentage");
+    if (comparison.absoluteDelta !== null) {
+      fail("absoluteDelta", "a rate comparison has no absolute delta");
+    }
+    if (comparison.relativeDelta !== null) {
+      fail("relativeDelta", "a rate comparison publishes points, not a relative move");
+    }
+    if (comparison.percentagePointDelta !== null) {
+      if (!isRatePercent(comparison.percentagePointDelta)) {
+        fail("percentagePointDelta", "a points delta must be an unsigned 0–100 magnitude");
+      } else {
+        const expected = Math.abs(
+          Number(comparison.currentValue) - Number(comparison.baselineValue),
+        );
+        // One decimal place is the published precision, so compare at that scale.
+        if (Math.round(Number(comparison.percentagePointDelta) * 10) !== Math.round(expected * 10)) {
+          fail("percentagePointDelta", "the points delta disagrees with its own two values");
+        }
+      }
+    }
+  });
 
 export type AtlasComparison = z.infer<typeof atlasComparisonSchema>;
 
@@ -251,19 +348,57 @@ export type AtlasFinding = z.infer<typeof atlasFindingSchema>;
  * state in the browser. The backend now publishes a three-valued status plus a
  * list of coded issues, and this UI renders exactly that.
  *
- * `code` is `z.string()` rather than an enum ON PURPOSE, and it is the one place
- * strictness is deliberately relaxed: an unknown reason code must render through
- * a safe fallback rather than blank a page, so a backend that adds a code is a
- * labelling gap and not an outage. The known codes are listed in
- * `KNOWN_REASON_CODES` for labelling, never for validation.
+ * AFD-5D3 CLOSED THE REASON VOCABULARY. AFD-5D2A had `code` as an open
+ * `z.string()` so an unknown reason degraded to a fallback label instead of
+ * blanking the page. That is no longer accepted: the contract publishes seven
+ * reason codes and an eighth is a violation of it, handled like any other —
+ * reject the whole response and show the bounded contract-error state.
+ *
+ * `KNOWN_REASON_CODES` is therefore now a VALIDATION vocabulary as well as a
+ * labelling one.
  */
 export const ATLAS_SUFFICIENCY_STATUSES = ["complete", "partial", "insufficient"] as const;
 export const atlasSufficiencyStatusSchema = z.enum(ATLAS_SUFFICIENCY_STATUSES);
 export type AtlasSufficiencyStatus = (typeof ATLAS_SUFFICIENCY_STATUSES)[number];
 
+/**
+ * The backend's closed reason catalog. AFD-5D3 made this the VALIDATION
+ * vocabulary, not merely a labelling one — see `atlasSufficiencyIssueSchema`.
+ */
+export const KNOWN_REASON_CODES = [
+  "SAMPLE_TOO_SMALL",
+  "COHORT_FOLLOWUP_INCOMPLETE",
+  "COMPARISON_PERIOD_UNAVAILABLE",
+  "MIXED_CURRENCY",
+  "BREAKDOWN_TRUNCATED",
+  "METRIC_UNAVAILABLE",
+  "INTEGRITY_WARNING",
+] as const;
+
+/**
+ * AFD-5D3 — the reason vocabulary is CLOSED.
+ *
+ * AFD-5D2A left `code` as an open `z.string()` so that a backend adding a reason
+ * would produce a labelling gap rather than a blank page. AFD-5D3 reverses that
+ * by decision: the published contract is a closed seven-code catalog, and a code
+ * outside it is a CONTRACT VIOLATION, not a presentation gap.
+ *
+ * THE TRADE THIS MAKES, STATED PLAINLY. A backend that starts emitting an eighth
+ * reason code now fails the whole response here until the CRM ships the code.
+ * That couples the two releases, and it is the intended behaviour: an
+ * unrecognised limitation must never be rendered as a vague sentence an operator
+ * might read as "nothing important".
+ *
+ * There is deliberately NO fallback label. Inventing generic prose for a code
+ * this release does not understand would be exactly the invented analytical
+ * meaning the whole agent is built to avoid.
+ */
+export const atlasReasonCodeSchema = z.enum(KNOWN_REASON_CODES);
+export type AtlasReasonCode = (typeof KNOWN_REASON_CODES)[number];
+
 export const atlasSufficiencyIssueSchema = z
   .object({
-    code: z.string().min(1),
+    code: atlasReasonCodeSchema,
     scope: z.string().min(1).optional(),
     details: z.record(z.string(), z.string()).optional(),
     evidence: z.array(atlasEvidenceSchema),
@@ -281,16 +416,6 @@ export const atlasSufficiencySchema = z
 
 export type AtlasSufficiency = z.infer<typeof atlasSufficiencySchema>;
 
-/** The backend's closed catalog, for LABELLING ONLY. */
-export const KNOWN_REASON_CODES = [
-  "SAMPLE_TOO_SMALL",
-  "COHORT_FOLLOWUP_INCOMPLETE",
-  "COMPARISON_PERIOD_UNAVAILABLE",
-  "MIXED_CURRENCY",
-  "BREAKDOWN_TRUNCATED",
-  "METRIC_UNAVAILABLE",
-  "INTEGRITY_WARNING",
-] as const;
 
 /**
  * AFD-5D2A — the top-level result status, the one word an operator acts on.

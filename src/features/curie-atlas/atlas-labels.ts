@@ -18,6 +18,7 @@ import type {
   AtlasEvidenceSource,
   AtlasGroup,
   AtlasMode,
+  AtlasReasonCode,
   AtlasReport,
   AtlasSection,
   AtlasSeverity,
@@ -255,7 +256,7 @@ export const SUFFICIENCY_STATUS_LABEL: Record<string, string> = {
  * than guessed at here. An unknown code still renders through the fallback,
  * because a backend that adds a code must not blank an operator's screen.
  */
-export const REASON_CODE_LABEL: Record<string, string> = {
+export const REASON_CODE_LABEL: Record<AtlasReasonCode, string> = {
   SAMPLE_TOO_SMALL: "Выборка меньше порога, на котором доля считается надёжной.",
   COHORT_FOLLOWUP_INCOMPLETE:
     "Окно наблюдения когорты обрезано моментом построения отчёта: когорта ещё дозревает.",
@@ -267,11 +268,20 @@ export const REASON_CODE_LABEL: Record<string, string> = {
   INTEGRITY_WARNING: "Два сохранённых представления одних данных расходятся.",
 };
 
-export const REASON_CODE_FALLBACK =
-  "Бэкенд вернул код ограничения, который эта версия интерфейса не знает. Код указан в технических деталях.";
-
-export function reasonCodeLabel(code: string): string {
-  return REASON_CODE_LABEL[code] ?? REASON_CODE_FALLBACK;
+/**
+ * AFD-5D3 — THERE IS NO UNKNOWN-CODE FALLBACK, deliberately.
+ *
+ * AFD-5D2A rendered an unrecognised reason through generic prose so a backend
+ * addition degraded to a labelling gap. That is no longer accepted: the reason
+ * vocabulary is CLOSED at the contract, so an unknown code never reaches this
+ * function — the whole response is rejected first.
+ *
+ * Writing a generic sentence for a limitation this release does not understand
+ * would be inventing analytical meaning, which is the one thing this agent
+ * exists not to do. A missing label must be a contract error, not a paraphrase.
+ */
+export function reasonCodeLabel(code: AtlasReasonCode): string {
+  return REASON_CODE_LABEL[code];
 }
 
 export function isKnownReasonCode(code: string): boolean {

@@ -10,7 +10,6 @@ import {
   ATLAS_MODE_BADGE,
   ATLAS_SUBTITLE,
   ATLAS_TITLE,
-  REASON_CODE_FALLBACK,
   RESULT_STATUS_LABEL,
   SECTION_HEADING,
   headlineMetricLabel,
@@ -83,7 +82,7 @@ describe("backend statuses are rendered, never derived", () => {
   });
 
   it("labels every backend reason code and falls back safely", () => {
-    for (const code of [
+    for (const code of ([
       "SAMPLE_TOO_SMALL",
       "COHORT_FOLLOWUP_INCOMPLETE",
       "COMPARISON_PERIOD_UNAVAILABLE",
@@ -91,12 +90,15 @@ describe("backend statuses are rendered, never derived", () => {
       "BREAKDOWN_TRUNCATED",
       "METRIC_UNAVAILABLE",
       "INTEGRITY_WARNING",
-    ]) {
+    ] as const)) {
       expect(isKnownReasonCode(code)).toBe(true);
-      expect(reasonCodeLabel(code)).not.toBe(REASON_CODE_FALLBACK);
+      // AFD-5D3: every published code has a REAL sentence. There is no fallback
+      // to fall back to, so a missing label is a compile error, not prose.
+      expect(reasonCodeLabel(code).length).toBeGreaterThan(10);
     }
+    // An unknown code never reaches the labeller — the contract rejects the
+    // response first — but `isKnownReasonCode` still answers honestly.
     expect(isKnownReasonCode("WHAT_IS_THIS")).toBe(false);
-    expect(reasonCodeLabel("WHAT_IS_THIS")).toBe(REASON_CODE_FALLBACK);
   });
 
   it("labels every support tier and passes an unknown one through", () => {

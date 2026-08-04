@@ -150,17 +150,51 @@ describe("curie atlas response contract", () => {
 
   /* --------------------------------------------------------- tolerated shapes */
 
-  it("ACCEPTS an unknown sufficiency reason CODE", () => {
-    // An unknown reason must render through a fallback, not blank the page.
-    // Making `code` an enum would turn a backend addition into a crash.
+  it("REJECTS an unknown sufficiency reason CODE", () => {
+    // AFD-5D3 REVERSED AFD-5D2A HERE. The reason vocabulary is closed, so an
+    // eighth code is a contract violation and the whole response is refused.
+    //
+    // The trade is explicit: a backend that adds a reason now blanks this screen
+    // until the CRM ships the code. That is preferred to rendering an
+    // unrecognised limitation through generic prose an operator could read as
+    // "nothing important".
     const report = limitedReport([
       {
-        code: "SOMETHING_NEW",
+        code: "SOMETHING_NEW" as never,
         scope: "series",
         evidence: [{ key: "k", value: "1", source: "summary" }],
       },
     ]);
-    expect(atlasReportSchema.safeParse(report).success).toBe(true);
+    expect(atlasReportSchema.safeParse(report).success).toBe(false);
+  });
+
+  it("accepts every one of the seven published reason codes", () => {
+    // The positive half: closing the vocabulary must not reject what the backend
+    // legitimately emits today.
+    for (const code of KNOWN_REASON_CODES) {
+      const report = limitedReport([
+        { code, scope: "series", evidence: [{ key: "k", value: "1", source: "summary" }] },
+      ]);
+      expect(atlasReportSchema.safeParse(report).success, `rejected ${code}`).toBe(true);
+    }
+  });
+
+  it("rejects the WHOLE response when one issue among valid ones is unknown", () => {
+    // Partial trust is the failure mode worth naming: a response carrying good
+    // findings AND one unknown reason must not render its good half.
+    const report = limitedReport([
+      {
+        code: "SAMPLE_TOO_SMALL",
+        scope: "series",
+        evidence: [{ key: "k", value: "1", source: "summary" }],
+      },
+      {
+        code: "NOT_A_REAL_REASON" as never,
+        scope: "series",
+        evidence: [{ key: "k", value: "1", source: "summary" }],
+      },
+    ]);
+    expect(atlasReportSchema.safeParse(report).success).toBe(false);
   });
 
   it("ACCEPTS an unknown headline metric key", () => {

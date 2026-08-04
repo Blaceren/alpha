@@ -129,10 +129,10 @@ export function atlasReport(over: Partial<AtlasReport> = {}): AtlasReport {
         supportTier: "strong",
         comparison: {
           kind: "member_vs_aggregate",
-          currentValue: "34.000000",
-          baselineValue: "22.000000",
+          currentValue: "34.0",
+          baselineValue: "22.0",
           absoluteDelta: null,
-          percentagePointDelta: "12.000000",
+          percentagePointDelta: "12.0",
           relativeDelta: null,
         },
       }),
@@ -264,7 +264,7 @@ export function countChangeFinding(): AtlasFinding {
       baselineValue: "100",
       absoluteDelta: "300",
       percentagePointDelta: null,
-      relativeDelta: "300.000000",
+      relativeDelta: "300.0",
     },
   });
 }

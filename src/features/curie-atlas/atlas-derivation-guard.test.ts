@@ -22,6 +22,8 @@ import { describe, expect, it } from "vitest";
 const FEATURE_DIR = path.join(process.cwd(), "src", "features", "curie-atlas");
 const CONTRACT = path.join(process.cwd(), "src", "data", "contracts", "api", "curie-atlas.ts");
 const CLIENT = path.join(process.cwd(), "src", "application", "api", "curie-atlas-client.ts");
+/** The contract is scanned by a stricter, dedicated case — see below. */
+const relativeContract = path.relative(process.cwd(), CONTRACT);
 
 /** Every shipped source file of the feature. Tests are excluded deliberately. */
 function featureSources(): { file: string; source: string }[] {
@@ -95,7 +97,19 @@ describe("the CRM derives no analytical meaning", () => {
   });
 
   it("never computes a delta", () => {
-    for (const { file, source } of featureSources()) {
+    // AFD-5D3 NARROWED THE SCOPE OF THIS SCAN, deliberately and by one file.
+    //
+    // The contract now VALIDATES that a published delta agrees with the two
+    // values it relates — `absoluteDelta === currentValue − baselineValue` — so
+    // an internally contradictory comparison is refused. That arithmetic is a
+    // CHECK, not a derivation: its only output is accept-or-reject, it never
+    // reaches a rendered value, and it exists precisely to stop a bad number
+    // being displayed.
+    //
+    // Presentation code is still scanned exactly as before, and the contract is
+    // held to a stricter rule in the case below: its arithmetic must live inside
+    // `superRefine` and nowhere else.
+    for (const { file, source } of featureSources().filter((entry) => entry.file !== relativeContract)) {
       const body = code(source);
       // No `current − baseline` in any spelling.
       expect(body, `${file} subtracts values`).not.toMatch(
@@ -109,6 +123,31 @@ describe("the CRM derives no analytical meaning", () => {
         /(parseFloat|Number)\(\s*(finding|comparison|evidence|item)\./,
       );
     }
+  });
+
+  it("the contract's only arithmetic is inside superRefine, and it renders nothing", () => {
+    const source = fs.readFileSync(CONTRACT, "utf8");
+    const body = code(source);
+
+    // Every arithmetic use of a comparison value must sit inside the refinement.
+    const refineStart = body.indexOf("superRefine");
+    expect(refineStart, "the contract has no superRefine to contain its arithmetic").toBeGreaterThan(0);
+    const beforeRefine = body.slice(0, refineStart);
+    expect(beforeRefine, "arithmetic outside superRefine").not.toMatch(
+      /(parseFloat|Number)\(\s*comparison\./,
+    );
+
+    // The refinement may only ADD ISSUES. It must never return a value, which is
+    // what would turn a check into a derivation.
+    const refineBody = body.slice(refineStart);
+    expect(refineBody).toMatch(/ctx\.addIssue/);
+    expect(refineBody, "the refinement transforms the value").not.toMatch(/\.transform\(/);
+    expect(refineBody, "the refinement returns a computed value").not.toMatch(
+      /return\s+(Number|parseFloat|String)\(/,
+    );
+
+    // And no rendered value is produced anywhere in the contract.
+    expect(body, "the contract calls toFixed").not.toMatch(/toFixed\(/);
   });
 
   it("never treats a missing field as a verdict", () => {
@@ -138,8 +177,13 @@ describe("the CRM derives no analytical meaning", () => {
     const contract = fs.readFileSync(CONTRACT, "utf8");
     // `code` must stay a plain string in the schema: an enum would turn a new
     // backend reason into a blank page.
-    expect(contract).toMatch(/code: z\.string\(\)\.min\(1\)/);
+    // AFD-5D3 CLOSED THE VOCABULARY, reversing AFD-5D2A. `code` is now an enum,
+    // so an unknown reason is a contract violation rather than a labelling gap,
+    // and there is deliberately NO fallback sentence: paraphrasing a limitation
+    // this release does not understand would be invented analytical meaning.
+    expect(contract).toMatch(/code: atlasReasonCodeSchema/);
     const labels = fs.readFileSync(path.join(FEATURE_DIR, "atlas-labels.ts"), "utf8");
-    expect(labels).toMatch(/REASON_CODE_FALLBACK/);
+    expect(labels).not.toMatch(/REASON_CODE_FALLBACK/);
+    expect(labels).toMatch(/Record<AtlasReasonCode, string>/);
   });
 });

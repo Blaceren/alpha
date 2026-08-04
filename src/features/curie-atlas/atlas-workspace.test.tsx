@@ -480,7 +480,7 @@ describe("data sufficiency", () => {
       "BREAKDOWN_TRUNCATED",
       "METRIC_UNAVAILABLE",
       "INTEGRITY_WARNING",
-    ]) {
+    ] as const) {
       runMock.mockResolvedValue(
         ok(limitedReport([issue({ code, details: undefined, scope: "series" })])),
       );
@@ -496,17 +496,55 @@ describe("data sufficiency", () => {
     }
   });
 
-  it("renders an UNKNOWN reason code through the fallback without crashing", async () => {
+  it("shows the bounded contract-error state when the response is refused", async () => {
+    // AFD-5D3: an unknown reason code is a schema mismatch, which the CLIENT
+    // maps to `contract_violation` (asserted in the client suite and in the DTO
+    // suite). What the WORKSPACE owes is this: refuse to render any part of the
+    // response, and say so without leaking it.
+    //
+    // The earlier draft of this test mocked a bad REPORT, which proved nothing —
+    // the mock replaces the client, so no parsing ever ran.
     const user = userEvent.setup();
-    runMock.mockResolvedValue(ok(limitedReport([issue({ code: "A_BRAND_NEW_REASON" })])));
+    runMock.mockResolvedValue({ status: "contract_violation", reason: "schema_mismatch" });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.queryByTestId("atlas-result")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("atlas-issue")).not.toBeInTheDocument();
+
+    const body = document.body.textContent ?? "";
+    expect(body).not.toMatch(/ZodError|at Object\.|node_modules|schema_mismatch/);
+  });
+
+  it("does not relabel a previous good snapshot as the refused request's answer", async () => {
+    // THE ACCEPTED UX CONTRACT PRESERVES the last good report when a later run
+    // fails — that is deliberate, and this test does not fight it. What it
+    // checks is the thing that would actually mislead: the preserved report must
+    // still describe the request that PRODUCED it, and must be marked stale once
+    // the operator's selection has moved away from it.
+    //
+    // The first draft asserted the result disappears. It does not, and asserting
+    // that would have been inventing product behaviour to satisfy a test.
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(limitedReport([issue({ code: "SAMPLE_TOO_SMALL" })])));
     renderWorkspace();
     await runAnalysis(user);
+    const first = screen.getByTestId("atlas-result");
+    expect(first).toHaveAttribute("data-stale", "false");
 
-    const rendered = screen.getByTestId("atlas-issue");
-    expect(rendered).toHaveTextContent(/не знает/);
-    // The raw code is available to diagnostics rather than lost.
-    await user.click(within(rendered).getByText("Технические детали"));
-    expect(within(rendered).getByText("A_BRAND_NEW_REASON")).toBeInTheDocument();
+    // Move the selection, so a preserved report is no longer the answer to what
+    // is on screen, then let the next run be refused by the contract.
+    await user.selectOptions(screen.getByLabelText(/Группировка/), "week");
+    runMock.mockResolvedValue({ status: "contract_violation", reason: "schema_mismatch" });
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+    // The old report is still there, and it is now honestly labelled STALE.
+    const preserved = screen.getByTestId("atlas-result");
+    expect(preserved).toHaveAttribute("data-stale", "true");
+    // And nothing from the refused response leaked into it.
+    expect(document.body.textContent ?? "").not.toMatch(/schema_mismatch|ZodError/);
   });
 
   it("shows the backend issue details without computing any of them", async () => {
@@ -569,7 +607,9 @@ describe("support tier and comparison are rendered, never computed", () => {
     expect(comparison).toHaveTextContent("100");
     expect(comparison).toHaveTextContent("400");
     expect(comparison).toHaveTextContent("300");
-    expect(comparison).toHaveTextContent("300.000000");
+    // AFD-5D3 corrected this: `countChangePercent` publishes ONE decimal, so a
+    // six-decimal expectation was asserting a value the engine cannot produce.
+    expect(comparison).toHaveTextContent("300.0");
   });
 
   it("omits a comparison field the backend returned as null", async () => {
