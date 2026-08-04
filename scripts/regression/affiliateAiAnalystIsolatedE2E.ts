@@ -248,7 +248,7 @@ async function main() {
   /* -------------------------------------------------- synthetic identities */
 
   const staff: Record<string, string> = {};
-  for (const role of ["crm_admin", "analyst", "support"] as const) {
+  for (const role of ["crm_admin", "analyst", "support", "mentor"] as const) {
     const email = `afd5d1-e2e-${role}@example.invalid`;
     const user = await prisma.user.create({
       data: { email, name: `E2E ${role}`, role: "admin", passwordHash: hash },
@@ -898,6 +898,273 @@ async function main() {
       const reply = await analyst.request("GET", url);
       assert.equal(reply.status, 200, `${url}: ${reply.text}`);
     }
+  });
+
+  /* ================================================================== */
+  /* AFD-5D3 — ADVERSARIAL HTTP SECURITY                                */
+  /*                                                                    */
+  /* The cases above prove the endpoint works and refuses the obvious   */
+  /* wrong callers. These attack the session and request boundaries.    */
+  /*                                                                    */
+  /* ONE SESSION PER ROLE, HOISTED. The backend rate-limits login to    */
+  /* five attempts per ten minutes per (ip, email). A case that logs in */
+  /* for itself is spending a budget the whole section shares, and the  */
+  /* first draft of this section exhausted it and failed six cases with */
+  /* a 429 that had nothing to do with what they were testing.          */
+  /* ================================================================== */
+
+  const secAnalyst = await loginAs(staff.analyst!);
+  const secAdmin = await loginAs(staff.crm_admin!);
+  const secMentor = await loginAs(staff.mentor!);
+
+  await check("S1 a mentor is refused, on the staff-role axis rather than the user axis", async () => {
+    // `mentor` is a real StaffRole with a staff profile and a working login, so
+    // this is not the anonymous case wearing a different hat: it proves the
+    // permission is checked, not merely the presence of staff.
+    const mentor = secMentor;
+    const reply = await mentor.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(reply.status, 403, `mentor received ${reply.status}: ${reply.text}`);
+  });
+
+  await check("S2 an INVALID csrf token is refused, not merely a missing one", async () => {
+    // A missing token is already covered. A present-but-wrong token is the case
+    // that distinguishes a real double-submit check from a presence check.
+    const client = secAnalyst;
+    await client.request("GET", "/api/csrf");
+    const reply = await client.request("POST", ANALYSIS, WINDOW, {
+      "x-csrf-token": "0000000000000000000000000000000000000000",
+    });
+    assert.equal(reply.status, 403, `invalid csrf accepted: ${reply.status} ${reply.text}`);
+    assert.match(String(obj(reply.body).messageKey ?? ""), /csrf/i);
+  });
+
+  await check("S3 a csrf token from ANOTHER session is refused", async () => {
+    // The token must be bound to the session that minted it. If it is not, a
+    // token leaked from any other session is a working forgery.
+    const victim = secAnalyst;
+    const attacker = secAdmin;
+    await victim.request("GET", "/api/csrf");
+    const victimToken = victim.cookies.get("trading_platform_csrf");
+    assert.ok(victimToken);
+
+    // The attacker keeps its OWN session cookie and presents the victim's token.
+    const reply = await attacker.request("POST", ANALYSIS, WINDOW, {
+      "x-csrf-token": victimToken!,
+    });
+    assert.equal(reply.status, 403, `cross-session token accepted: ${reply.status}`);
+  });
+
+  await check("S4 a tampered session cookie is refused", async () => {
+    // A CLONED cookie jar, not the shared client: tampering with the shared
+    // session would poison every case after this one, and the failure would
+    // look like a permission bug rather than this test's own doing.
+    const client = new Client();
+    for (const [name, value] of secAnalyst.cookies) client.cookies.set(name, value);
+    await client.request("GET", "/api/csrf");
+    const token = client.cookies.get("trading_platform_csrf");
+    const session = client.cookies.get("trading_platform_session");
+    assert.ok(session, "no session cookie to tamper with");
+    // Flip the last character: a signature check must reject it.
+    const tampered = session!.slice(0, -1) + (session!.endsWith("a") ? "b" : "a");
+    client.cookies.set("trading_platform_session", tampered);
+    const reply = await client.request("POST", ANALYSIS, WINDOW, { "x-csrf-token": token! });
+    assert.ok(
+      reply.status === 401 || reply.status === 403,
+      `tampered session produced ${reply.status}`,
+    );
+  });
+
+  await check("S5 an oversized body is refused without a stack trace", async () => {
+    const client = secAnalyst;
+    await client.request("GET", "/api/csrf");
+    const token = client.cookies.get("trading_platform_csrf");
+    // One megabyte of filler under an unknown key.
+    const huge = { ...WINDOW, padding: "x".repeat(1_000_000) };
+    const reply = await client.request("POST", ANALYSIS, huge, { "x-csrf-token": token! });
+    assert.ok(reply.status >= 400 && reply.status < 500, `oversized body produced ${reply.status}`);
+    for (const leak of ["at Object.", "node_modules", "SELECT ", "prisma", "Error:"]) {
+      assert.ok(!reply.text.includes(leak), `error body leaks "${leak}": ${reply.text.slice(0, 200)}`);
+    }
+  });
+
+  await check("S6 PII-shaped filter values are refused by the accepted owner", async () => {
+    const client = secAnalyst;
+    const hostile = [
+      "learner@example.invalid",
+      "+7 999 123-45-67",
+      "1 OR 1=1",
+      "../../etc/passwd",
+      "<script>alert(1)</script>",
+      "%00",
+    ];
+    for (const value of hostile) {
+      const reply = await client.postWithCsrf(ANALYSIS, {
+        ...WINDOW,
+        affiliatePartnerId: value,
+      });
+      assert.ok(
+        reply.status >= 400 && reply.status < 500,
+        `hostile partner id "${value}" produced ${reply.status}`,
+      );
+      assert.ok(!reply.text.includes(value), `the error echoed the hostile value back: ${reply.text.slice(0, 160)}`);
+    }
+  });
+
+  await check("S7 concurrent identical requests agree exactly", async () => {
+    // Determinism under concurrency, not just in sequence. Shared mutable state
+    // in the engine would show here and nowhere else.
+    const client = secAnalyst;
+    await client.request("GET", "/api/csrf");
+    const token = client.cookies.get("trading_platform_csrf");
+    const replies = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        client.request("POST", ANALYSIS, WINDOW, { "x-csrf-token": token! }),
+      ),
+    );
+    for (const reply of replies) assert.equal(reply.status, 200, reply.text);
+
+    const fingerprints = new Set(replies.map((r) => String(obj(r.body).inputFingerprint)));
+    assert.equal(fingerprints.size, 1, `concurrent requests disagreed: ${[...fingerprints]}`);
+
+    // The analytical body must be identical; only per-call identifiers may move.
+    const bodies = replies.map((r) => {
+      const body = { ...obj(r.body) };
+      delete body.requestId;
+      delete body.generatedAt;
+      return JSON.stringify(body);
+    });
+    assert.equal(new Set(bodies).size, 1, "concurrent requests produced different findings");
+  });
+
+  await check("S8 concurrent DIFFERENT requests do not contaminate each other", async () => {
+    const client = secAnalyst;
+    await client.request("GET", "/api/csrf");
+    const token = client.cookies.get("trading_platform_csrf");
+
+    const eventDate = client.request("POST", ANALYSIS, WINDOW, { "x-csrf-token": token! });
+    const cohort = client.request("POST", ANALYSIS, { ...WINDOW, mode: "acquisition_cohort" }, {
+      "x-csrf-token": token!,
+    });
+    const [a, b] = await Promise.all([eventDate, cohort]);
+    assert.equal(a.status, 200, a.text);
+    assert.equal(b.status, 200, b.text);
+
+    assert.equal(obj(obj(a.body).request!).mode, "event_date");
+    assert.equal(obj(obj(b.body).request!).mode, "acquisition_cohort");
+    assert.notEqual(
+      String(obj(a.body).inputFingerprint),
+      String(obj(b.body).inputFingerprint),
+      "two different questions produced one fingerprint",
+    );
+  });
+
+  await check("S9 the analysis writes ZERO Agent Core rows, before and after", async () => {
+    // The tables exist in this candidate's schema (migration 41), so "empty" is
+    // a measurement rather than an absence of somewhere to look.
+    const AGENT_TABLES = [
+      "AgentRun",
+      "AgentFinding",
+      "AgentEvidenceReference",
+      "AgentHandoff",
+      "AgentActionProposal",
+      "AgentActionDecision",
+      "AgentActionExecution",
+      "AgentEvaluation",
+      "ModelInvocation",
+    ];
+    async function counts() {
+      const out: Record<string, number> = {};
+      for (const table of AGENT_TABLES) {
+        const rows = await prisma.$queryRawUnsafe<Array<{ n: bigint | number }>>(
+          `SELECT COUNT(*) AS n FROM "${table}"`,
+        );
+        out[table] = Number(rows[0]?.n ?? 0);
+      }
+      return out;
+    }
+    const before = await counts();
+    const client = secAnalyst;
+    await client.postWithCsrf(ANALYSIS, WINDOW);
+    await client.postWithCsrf(ANALYSIS, { ...WINDOW, mode: "acquisition_cohort" });
+    const after = await counts();
+
+    for (const table of AGENT_TABLES) {
+      assert.equal(before[table], 0, `${table} was not empty BEFORE the analysis`);
+      assert.equal(after[table], 0, `${table} gained rows: ${after[table]}`);
+    }
+  });
+
+  await check("S10 no response or error body ever exposes SQL, a stack or a secret", async () => {
+    const client = secAnalyst;
+    const probes: unknown[] = [
+      WINDOW,
+      { ...WINDOW, group: "century" },
+      { ...WINDOW, dimension: "learner" },
+      { ...WINDOW, startDate: "not-a-date" },
+      { ...WINDOW, startDate: "2026-07-31", endDate: "2026-07-01" },
+      { ...WINDOW, preset: "last_7_days", startDate: "2026-07-01" },
+      [],
+      "string body",
+      null,
+    ];
+    for (const probe of probes) {
+      const reply = await client.postWithCsrf(ANALYSIS, probe);
+      for (const leak of [
+        "SELECT ",
+        "FROM \"",
+        "at Object.",
+        "/home/ubuntu",
+        "node_modules",
+        SESSION_SECRET,
+        ATTRIBUTION_SECRET,
+        TURNSTILE_TEST_SECRET,
+      ]) {
+        assert.ok(
+          !reply.text.includes(leak),
+          `body for ${JSON.stringify(probe).slice(0, 40)} leaks "${leak}"`,
+        );
+      }
+    }
+  });
+
+  await check("S11 an inverted or absurd period is refused, never silently swapped", async () => {
+    const client = secAnalyst;
+    const inverted = await client.postWithCsrf(ANALYSIS, {
+      mode: "event_date",
+      preset: "custom",
+      startDate: "2026-07-31",
+      endDate: "2026-07-01",
+    });
+    assert.ok(inverted.status >= 400 && inverted.status < 500, `inverted period: ${inverted.status}`);
+
+    const absurd = await client.postWithCsrf(ANALYSIS, {
+      mode: "event_date",
+      preset: "custom",
+      startDate: "1900-01-01",
+      endDate: "2999-12-31",
+    });
+    assert.ok(
+      absurd.status >= 400 && absurd.status < 500,
+      `a 1100-year period was accepted with ${absurd.status}`,
+    );
+  });
+
+  await check("S12 the response stays bounded in size and finding count", async () => {
+    const client = secAnalyst;
+    const reply = await client.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(reply.status, 200);
+    const body = obj(reply.body);
+    const findings =
+      arr(body.observations).length +
+      arr(body.warnings).length +
+      arr(body.positiveSignals).length +
+      arr(body.questions).length;
+    // The catalog has 33 codes; a breakdown may repeat member-scoped ones, so
+    // this is a sanity bound rather than a tight one. Unbounded growth is what
+    // it exists to catch.
+    assert.ok(findings > 0, "a real window produced no findings at all");
+    assert.ok(findings < 500, `finding count is unbounded: ${findings}`);
+    assert.ok(reply.text.length < 2_000_000, `response size is unbounded: ${reply.text.length}`);
   });
 
   // A real response, captured for review. Written only when asked for, and it

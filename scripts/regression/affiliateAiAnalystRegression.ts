@@ -305,7 +305,16 @@ const FORBIDDEN_LEXICON: readonly { readonly word: RegExp; readonly kind: string
   { word: stem("лендинг"), kind: "causal" },
   { word: stem("прогноз"), kind: "predictive" },
   { word: stem("ожидается"), kind: "predictive" },
-  { word: word("будет"), kind: "predictive" },
+  // THE FUTURE AUXILIARY, IN EVERY PERSON AND NUMBER.
+  //
+  // AFD-5D3 found that only the 3rd-person singular «будет» was covered, so
+  // «Пользователи будут пополнять счёт» — verbatim one of the claims the phase
+  // brief prohibits — passed this check. Five of the six forms were missed.
+  //
+  // Anchored at both ends, so «будни» and «будильник» are untouched.
+  { word: word("буду|будешь|будет|будем|будете|будут"), kind: "predictive" },
+  // «в будущем», «будущий период» — a forecast by another route.
+  { word: stem("будущ"), kind: "predictive" },
   { word: stem("спрогнозир"), kind: "predictive" },
   { word: stem("рекоменд"), kind: "advisory" },
   { word: stem("советуе"), kind: "advisory" },
