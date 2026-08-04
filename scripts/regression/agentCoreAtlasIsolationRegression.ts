@@ -175,22 +175,61 @@ async function main() {
   await check("A1b the analysis library changed ONLY in the reviewed files", () => {
     // The complement of A1: the library did move, and exactly where AFD-5D2A
     // said it would. A change to a file not on this list is unreviewed.
+    //
+    // MODIFICATIONS AND ADDITIONS ARE ASSERTED SEPARATELY, which matters: an
+    // edit to an accepted file and a brand-new module are different risks, and a
+    // check that merges them cannot tell you which happened.
+    //
+    // The first version of this case used `--name-only` and listed four files.
+    // It passed while the two new modules were still UNTRACKED — git does not
+    // report untracked files in a diff — and failed the moment they were
+    // committed. It had been measuring an incomplete picture. `--name-status`
+    // against the committed tree is not sensitive to staging state, and the
+    // directory listing below closes the untracked-file hole for good.
     const diff = spawnSync(
       "git",
-      ["diff", "--name-only", RC_BASELINE, "--", "src/lib/analysis"],
+      ["diff", "--name-status", RC_BASELINE, "--", "src/lib/analysis"],
       { cwd: projectRoot, encoding: "utf8" },
     );
     assert.equal(diff.status, 0, diff.stderr);
-    const changed = diff.stdout.trim().split("\n").filter(Boolean).sort();
-    assert.deepEqual(changed, [
+
+    const modified: string[] = [];
+    const added: string[] = [];
+    for (const line of diff.stdout.trim().split("\n").filter(Boolean)) {
+      const [status, file] = line.split(/\s+/);
+      if (status === "M") modified.push(file!);
+      else if (status === "A") added.push(file!);
+      else assert.fail(`unexpected change type ${status} on ${file}`);
+    }
+
+    assert.deepEqual(modified.sort(), [
       "src/lib/analysis/analysis-contract.ts",
       "src/lib/analysis/analysis-engine.ts",
       "src/lib/analysis/analysis-report.ts",
       "src/lib/analysis/analysis-rules.ts",
     ]);
-    // The two NEW modules are additions, not edits to accepted files.
-    assert.ok(fs.existsSync(path.join(projectRoot, "src/lib/analysis/analysis-sufficiency.ts")));
-    assert.ok(fs.existsSync(path.join(projectRoot, "src/lib/analysis/analysis-support.ts")));
+    assert.deepEqual(added.sort(), [
+      "src/lib/analysis/analysis-sufficiency.ts",
+      "src/lib/analysis/analysis-support.ts",
+    ]);
+
+    // Nothing was DELETED: every module the RC published is still there.
+    const baseline = spawnSync(
+      "git",
+      ["ls-tree", "--name-only", RC_BASELINE, "src/lib/analysis/"],
+      { cwd: projectRoot, encoding: "utf8" },
+    );
+    assert.equal(baseline.status, 0, baseline.stderr);
+    const baselineFiles = baseline.stdout.trim().split("\n").filter(Boolean).sort();
+
+    // And the directory on disk holds EXACTLY the baseline set plus the two
+    // reviewed additions — which catches an untracked file a diff would miss.
+    const onDisk = fs
+      .readdirSync(path.join(projectRoot, "src/lib/analysis"))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => `src/lib/analysis/${name}`)
+      .sort();
+    assert.deepEqual(onDisk, [...baselineFiles, ...added].sort());
   });
 
   await check("A2 the analytics loaders this phase relies on are also untouched", () => {
