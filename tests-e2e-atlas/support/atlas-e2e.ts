@@ -26,9 +26,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** The exact backend candidate this phase is verified against. */
-export const BACKEND_COMMIT = "4511acf82dfb793426c9bb336c89fbaa7afcb2c9";
-export const BACKEND_DIR = "/home/ubuntu/workspaces/ata-agent-foundation-af1";
-export const CRM_DIR = "/home/ubuntu/workspaces/ata-suite/crm-curie-atlas-afd5d2";
+/**
+ * AFD-5D2A pins the CONTRACT-CLOSURE backend rather than a fixed commit: this
+ * phase changes the backend, so a hard-coded hash would be stale the moment the
+ * commit is made. The branch is asserted instead, and the worktree must be
+ * tracked-clean at both ends of every run.
+ */
+export const BACKEND_BRANCH = "fix/atlas-contract-afd5d2a";
+export const BACKEND_DIR = "/home/ubuntu/workspaces/ata-atlas-contract-afd5d2a";
+export const CRM_DIR = "/home/ubuntu/workspaces/ata-suite/crm-atlas-closure-afd5d2a";
 
 /**
  * Ports owned by live runtimes or external listeners. Binding one would collide
@@ -42,16 +48,16 @@ function pickPort(base: number): number {
   return port;
 }
 
-export const backendPort = pickPort(3520);
-export const crmPort = pickPort(3560);
+export const backendPort = pickPort(3620);
+export const crmPort = pickPort(3660);
 export const backendUrl = `http://127.0.0.1:${backendPort}`;
 export const crmUrl = `http://127.0.0.1:${crmPort}`;
 
-export const dbPath = `/tmp/ata-afd5d2-e2e-${process.pid}.db`;
+export const dbPath = `/tmp/ata-afd5d2a-e2e-${process.pid}.db`;
 export const dbUrl = `file:${dbPath}`;
 
 export const PASSWORD = "CurieAtlasE2E123!";
-export const SESSION_SECRET = "afd5d2-isolated-e2e-session-secret-value";
+export const SESSION_SECRET = "afd5d2a-isolated-e2e-session-secret-value";
 export const ATTRIBUTION_SECRET = "Zm9vYmFyQmF6UXV4MTIzNDU2Nzg5MFFXRVJUWXVpb3A9";
 
 /** The nine Agent Core tables. Asserted empty after every analysis. */
@@ -246,11 +252,13 @@ export function startCrm(): Managed {
 
 /** Assert the backend worktree was not modified by running it. */
 export function assertBackendUnchanged(): void {
-  const head = spawnSync("git", ["-C", BACKEND_DIR, "rev-parse", "HEAD"], {
-    encoding: "utf8",
-  }).stdout.trim();
-  if (head !== BACKEND_COMMIT) {
-    throw new Error(`backend HEAD moved: expected ${BACKEND_COMMIT}, found ${head}`);
+  const branch = spawnSync(
+    "git",
+    ["-C", BACKEND_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
+    { encoding: "utf8" },
+  ).stdout.trim();
+  if (branch !== BACKEND_BRANCH) {
+    throw new Error(`backend branch moved: expected ${BACKEND_BRANCH}, found ${branch}`);
   }
   const status = spawnSync(
     "git",

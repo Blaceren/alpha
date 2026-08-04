@@ -36,7 +36,7 @@ function requiredPort(name: string, fallback: number): number {
   return value;
 }
 
-const CRM_PORT = requiredPort("ATLAS_E2E_CRM_PORT", 3581);
+const CRM_PORT = requiredPort("ATLAS_E2E_CRM_PORT", 3681);
 
 const BACKEND_ORIGIN = process.env.ATLAS_E2E_BACKEND_ORIGIN;
 if (!BACKEND_ORIGIN) {
@@ -53,7 +53,7 @@ export const ATLAS_E2E = {
   backendOrigin: BACKEND_ORIGIN,
   /** Used as a leak canary: this must never appear in the browser. */
   backendPortToken: new URL(BACKEND_ORIGIN).port,
-  analyst: "afd5d2-e2e-analyst@example.invalid",
+  analyst: "afd5d2a-e2e-analyst@example.invalid",
   password: process.env.ATLAS_E2E_PASSWORD ?? "CurieAtlasE2E123!",
 } as const;
 

@@ -376,7 +376,7 @@ export function CurieAtlasWorkspace() {
         aria-labelledby="atlas-controls"
         className="space-y-4 rounded-md border border-border bg-surface p-2 sm:p-4"
       >
-        <SectionHeading id="atlas-controls" title="Параметры анализа" level={3} />
+        <SectionHeading id="atlas-controls" title="Параметры анализа" level={2} />
 
         <ModeSelector
           mode={draft.mode}

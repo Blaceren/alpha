@@ -9,6 +9,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import { ATLAS_E2E } from "../playwright.atlas.config";
+import { loginAsAnalyst } from "./support/session";
 
 const RUN = '[data-testid="atlas-run"]';
 const RESULT = '[data-testid="atlas-result"]';
@@ -25,18 +26,7 @@ const RESULT = '[data-testid="atlas-result"]';
  * The request still goes through the REAL CRM route to the REAL backend, so the
  * session cookie, its attributes and the proxy hop are all genuinely exercised.
  */
-async function login(page: Page) {
-  const response = await page.request.post("/api/crm/auth/login", {
-    data: {
-      email: ATLAS_E2E.analyst,
-      password: ATLAS_E2E.password,
-      captchaToken: "afd5d2-atlas-ui-e2e-token",
-    },
-  });
-  expect(response.status(), "analyst login must succeed").toBe(200);
-  const { cookies } = await page.request.storageState();
-  await page.context().addCookies(cookies);
-}
+const login = loginAsAnalyst;
 
 /** The double-submit CSRF token the CRM sets as a readable cookie. */
 async function csrfToken(page: Page): Promise<string> {

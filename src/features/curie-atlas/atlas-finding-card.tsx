@@ -32,11 +32,14 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import type { AtlasEvidence, AtlasFinding } from "@/data/contracts/api/curie-atlas";
 import {
+  COMPARISON_FIELD_LABEL,
+  COMPARISON_KIND_LABEL,
   EVIDENCE_DISCLOSURE,
   EVIDENCE_SOURCE_LABEL,
   SEVERITY_GLYPH,
   SEVERITY_LABEL,
   TECHNICAL_DETAILS,
+  supportTierLabel,
 } from "./atlas-labels";
 
 /** Resolves a dimension member id to an authorised human label, or null. */
@@ -118,7 +121,7 @@ export function AtlasFindingCard({
   finding: AtlasFinding;
   resolveDimensionLabel?: DimensionLabelResolver;
 }) {
-  const hasEvidence = finding.evidence.length > 0;
+  const hasEvidence = finding.evidence.length > 0 || finding.comparison !== null;
   const scopeLabel =
     finding.dimensionId === null
       ? null
@@ -154,6 +157,12 @@ export function AtlasFindingCard({
 
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-secondary">
             <span>{SEVERITY_LABEL[finding.severity]}</span>
+            <span aria-hidden="true">·</span>
+            {/* AFD-5D2A — rendered, never computed. There is no denominator
+                inspection anywhere in this feature. */}
+            <span data-testid="atlas-support-tier" data-tier={finding.supportTier}>
+              {supportTierLabel(finding.supportTier)}
+            </span>
             {scopeLabel ? (
               <>
                 <span aria-hidden="true">·</span>
@@ -185,7 +194,39 @@ export function AtlasFindingCard({
                 </span>
                 {EVIDENCE_DISCLOSURE}
               </summary>
-              <div className="mt-2 rounded-md border border-border bg-elevated p-2">
+              <div className="mt-2 space-y-2 rounded-md border border-border bg-elevated p-2">
+                {/* AFD-5D2A — the BACKEND's comparison. Every number here was
+                    computed server-side; this component subtracts nothing and
+                    divides nothing. Fields that do not apply arrive as null and
+                    are omitted rather than shown as a zero nobody measured. */}
+                {finding.comparison ? (
+                  <div data-testid="atlas-comparison" data-kind={finding.comparison.kind}>
+                    <p className="text-[11px] font-medium text-text-secondary">
+                      {COMPARISON_KIND_LABEL[finding.comparison.kind] ?? finding.comparison.kind}
+                    </p>
+                    <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+                      {(
+                        [
+                          "baselineValue",
+                          "currentValue",
+                          "absoluteDelta",
+                          "percentagePointDelta",
+                          "relativeDelta",
+                        ] as const
+                      ).map((field) => {
+                        const value = finding.comparison?.[field] ?? null;
+                        if (value === null) return null;
+                        return (
+                          <React.Fragment key={field}>
+                            <dt className="text-text-secondary">{COMPARISON_FIELD_LABEL[field]}</dt>
+                            <dd className="tabular-nums text-text-primary">{value}</dd>
+                          </React.Fragment>
+                        );
+                      })}
+                    </dl>
+                  </div>
+                ) : null}
+
                 <EvidenceTable
                   evidence={finding.evidence}
                   resolveDimensionLabel={resolveDimensionLabel}
@@ -206,6 +247,8 @@ export function AtlasFindingCard({
               <dd className="font-mono">{finding.section}</dd>
               <dt>Уровень</dt>
               <dd className="font-mono">{finding.severity}</dd>
+              <dt>Опора</dt>
+              <dd className="font-mono">{finding.supportTier}</dd>
               {finding.dimensionId === null ? null : (
                 <>
                   <dt>Идентификатор элемента</dt>
@@ -237,10 +280,10 @@ export function AtlasFindingSection({
 }) {
   return (
     <section aria-labelledby={id} className="space-y-2">
-      <h3 id={id} className="text-sm font-semibold text-text-primary">
+      <h2 id={id} className="text-sm font-semibold text-text-primary">
         {heading}{" "}
         <span className="font-normal text-text-muted">({findings.length})</span>
-      </h3>
+      </h2>
       {findings.length === 0 ? (
         <p className="rounded-md border border-border bg-surface p-3 text-xs text-text-secondary">
           {emptyText}

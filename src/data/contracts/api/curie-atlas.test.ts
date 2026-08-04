@@ -11,13 +11,15 @@ import { describe, expect, it } from "vitest";
 import {
   ATLAS_BODY_KEY_ORDER,
   atlasReportSchema,
-  KNOWN_INSUFFICIENCY_REASONS,
+  KNOWN_REASON_CODES,
 } from "./curie-atlas";
 import {
   ATLAS_DEFAULT_CUTOFF,
   atlasReport,
   cohortReport,
+  countChangeFinding,
   insufficientReport,
+  limitedReport,
 } from "@/test/atlas-fixtures";
 
 describe("curie atlas response contract", () => {
@@ -148,10 +150,17 @@ describe("curie atlas response contract", () => {
 
   /* --------------------------------------------------------- tolerated shapes */
 
-  it("ACCEPTS an unknown insufficiency reason code", () => {
-    // §12: an unknown reason must render through a fallback, not blank the page.
-    // Making `reason` an enum would turn a backend addition into a crash.
-    expect(atlasReportSchema.safeParse(insufficientReport("SOMETHING_NEW")).success).toBe(true);
+  it("ACCEPTS an unknown sufficiency reason CODE", () => {
+    // An unknown reason must render through a fallback, not blank the page.
+    // Making `code` an enum would turn a backend addition into a crash.
+    const report = limitedReport([
+      {
+        code: "SOMETHING_NEW",
+        scope: "series",
+        evidence: [{ key: "k", value: "1", source: "summary" }],
+      },
+    ]);
+    expect(atlasReportSchema.safeParse(report).success).toBe(true);
   });
 
   it("ACCEPTS an unknown headline metric key", () => {
@@ -191,18 +200,95 @@ describe("curie atlas response contract", () => {
     ]);
   });
 
-  it("lists the two reasons this backend emits plus the five the brief names", () => {
-    expect(KNOWN_INSUFFICIENCY_REASONS).toContain("no_events_in_period");
-    expect(KNOWN_INSUFFICIENCY_REASONS).toContain("empty_cohort");
-    for (const forward of [
-      "SAMPLE_TOO_SMALL",
-      "COHORT_FOLLOWUP_INCOMPLETE",
-      "MIXED_CURRENCY",
-      "COMPARISON_PERIOD_UNAVAILABLE",
+  it("lists exactly the seven backend reason codes", () => {
+    expect([...KNOWN_REASON_CODES].sort()).toEqual([
       "BREAKDOWN_TRUNCATED",
+      "COHORT_FOLLOWUP_INCOMPLETE",
+      "COMPARISON_PERIOD_UNAVAILABLE",
+      "INTEGRITY_WARNING",
+      "METRIC_UNAVAILABLE",
+      "MIXED_CURRENCY",
+      "SAMPLE_TOO_SMALL",
+    ]);
+  });
+
+  /* ---------------------------------------- AFD-5D2A: the new required fields */
+
+  it("REJECTS a response with no top-level status", () => {
+    const { status: _status, ...withoutStatus } = atlasReport();
+    expect(atlasReportSchema.safeParse(withoutStatus).success).toBe(false);
+  });
+
+  it("REJECTS an unsupported top-level status", () => {
+    expect(atlasReportSchema.safeParse({ ...atlasReport(), status: "degraded" }).success).toBe(false);
+  });
+
+  it("REJECTS an unsupported sufficiency status", () => {
+    const report = atlasReport();
+    expect(
+      atlasReportSchema.safeParse({
+        ...report,
+        dataSufficiency: { status: "sufficient", issues: [] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("REJECTS a finding with no supportTier", () => {
+    const report = atlasReport();
+    const { supportTier: _tier, ...noTier } = report.observations[0]!;
+    expect(atlasReportSchema.safeParse({ ...report, observations: [noTier] }).success).toBe(false);
+  });
+
+  it("REJECTS an unknown supportTier", () => {
+    const report = atlasReport();
+    expect(
+      atlasReportSchema.safeParse({
+        ...report,
+        observations: [{ ...report.observations[0]!, supportTier: "certain" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("REJECTS a finding with no comparison field at all", () => {
+    const report = atlasReport();
+    const { comparison: _c, ...noComparison } = report.observations[0]!;
+    expect(atlasReportSchema.safeParse({ ...report, observations: [noComparison] }).success).toBe(false);
+  });
+
+  it("REJECTS a malformed comparison", () => {
+    const report = atlasReport();
+    for (const bad of [
+      { kind: "guess", currentValue: "1", baselineValue: "0", absoluteDelta: null, percentagePointDelta: null, relativeDelta: null },
+      { kind: "count_change", currentValue: 1, baselineValue: "0", absoluteDelta: null, percentagePointDelta: null, relativeDelta: null },
+      { kind: "count_change", currentValue: "1", baselineValue: "0" },
     ]) {
-      expect(KNOWN_INSUFFICIENCY_REASONS).toContain(forward);
+      expect(
+        atlasReportSchema.safeParse({
+          ...report,
+          observations: [{ ...report.observations[0]!, comparison: bad }],
+        }).success,
+      ).toBe(false);
     }
+  });
+
+  it("ACCEPTS a fully populated comparison and a null one", () => {
+    expect(atlasReportSchema.safeParse(atlasReport({ observations: [countChangeFinding()] })).success).toBe(true);
+    expect(atlasReportSchema.safeParse(atlasReport()).success).toBe(true);
+  });
+
+  it("ACCEPTS a sufficiency issue with and without scope and details", () => {
+    const minimal = limitedReport([
+      { code: "INTEGRITY_WARNING", evidence: [{ key: "k", value: "1", source: "integrity" }] },
+    ]);
+    expect(atlasReportSchema.safeParse(minimal).success).toBe(true);
+  });
+
+  it("REJECTS a sufficiency issue with no evidence", () => {
+    const report = limitedReport([{ code: "MIXED_CURRENCY", evidence: [] }]);
+    // An issue with no evidence still parses structurally (an empty array is a
+    // valid array); the BACKEND refuses to publish one. Pinned here so the
+    // division of responsibility is explicit rather than assumed.
+    expect(atlasReportSchema.safeParse(report).success).toBe(true);
   });
 
   /* ------------------------------------------------------------------ privacy */

@@ -181,6 +181,49 @@ export type AtlasEvidence = z.infer<typeof atlasEvidenceSchema>;
  * `code` is a stable identifier a consumer may branch on. It is not shown as
  * primary user-facing text; it appears only inside technical details.
  */
+/**
+ * AFD-5D2A — how well-supported a finding is, DECIDED BY THE BACKEND.
+ *
+ * A closed enum, so an unknown tier is a parse failure rather than a string the
+ * UI prints. The CRM computes nothing: it has no access to a denominator and no
+ * code path that inspects one.
+ */
+export const ATLAS_SUPPORT_TIERS = ["descriptive", "moderate", "strong"] as const;
+export const atlasSupportTierSchema = z.enum(ATLAS_SUPPORT_TIERS);
+export type AtlasSupportTier = (typeof ATLAS_SUPPORT_TIERS)[number];
+
+export const ATLAS_COMPARISON_KINDS = [
+  "count_change",
+  "rate_change",
+  "member_vs_aggregate",
+] as const;
+export const atlasComparisonKindSchema = z.enum(ATLAS_COMPARISON_KINDS);
+
+/**
+ * AFD-5D2A — the structured comparison, computed by the BACKEND.
+ *
+ * Every field is a string or null, never a number: an exact decimal string and
+ * a JavaScript number are not interchangeable, and a percentage-point delta is
+ * precisely where binary rounding would show.
+ *
+ * A field that does not apply is `null`, never absent and never `0` — a count
+ * change has no percentage-point delta, and publishing zero for one would be a
+ * measurement nobody made. `.strict()` plus the required nulls makes the shape
+ * TOTAL: the CRM never has to decide whether a missing field means zero.
+ */
+export const atlasComparisonSchema = z
+  .object({
+    kind: atlasComparisonKindSchema,
+    currentValue: z.string(),
+    baselineValue: z.string(),
+    absoluteDelta: z.string().nullable(),
+    percentagePointDelta: z.string().nullable(),
+    relativeDelta: z.string().nullable(),
+  })
+  .strict();
+
+export type AtlasComparison = z.infer<typeof atlasComparisonSchema>;
+
 export const atlasFindingSchema = z
   .object({
     code: z.string().min(1),
@@ -189,6 +232,10 @@ export const atlasFindingSchema = z
     message: z.string().min(1),
     evidence: z.array(atlasEvidenceSchema),
     dimensionId: z.number().int().nullable(),
+    /** REQUIRED. A finding without a backend tier is a contract violation. */
+    supportTier: atlasSupportTierSchema,
+    /** REQUIRED, and `null` for the majority of findings that are not comparisons. */
+    comparison: atlasComparisonSchema.nullable(),
   })
   .strict();
 
@@ -197,55 +244,64 @@ export type AtlasFinding = z.infer<typeof atlasFindingSchema>;
 /* -------------------------------------------------------------- sufficiency */
 
 /**
- * The sufficiency verdict, as a discriminated union.
+ * AFD-5D2A — the sufficiency verdict, NORMALIZED AND BACKEND-OWNED.
  *
- * TWO STATUSES EXIST IN THIS BACKEND RELEASE: `sufficient` and
- * `insufficient_data`. There is no `partial` status in the DTO. The phase brief
- * anticipates a third result state, and this CRM derives one for PRESENTATION
- * only — see `deriveResultStatus` in `atlas-status.ts`, which is built from the
- * backend's own availability and integrity findings and is never presented as a
- * backend status.
+ * AFD-5D2 received a two-branch union that could not express "this report is
+ * real but one comparison is missing", which is why its CRM derived a `partial`
+ * state in the browser. The backend now publishes a three-valued status plus a
+ * list of coded issues, and this UI renders exactly that.
  *
- * `reason` is `z.string()` rather than an enum ON PURPOSE. §12 requires that an
- * unknown reason code render through a safe generic fallback instead of
- * crashing the page, and an enum here would turn a new backend reason into a
- * blank screen. The known codes are enumerated in `KNOWN_INSUFFICIENCY_REASONS`
- * for labelling, not for validation.
+ * `code` is `z.string()` rather than an enum ON PURPOSE, and it is the one place
+ * strictness is deliberately relaxed: an unknown reason code must render through
+ * a safe fallback rather than blank a page, so a backend that adds a code is a
+ * labelling gap and not an outage. The known codes are listed in
+ * `KNOWN_REASON_CODES` for labelling, never for validation.
  */
-export const atlasSufficiencySchema = z.union([
-  z.object({ status: z.literal("sufficient") }).strict(),
-  z
-    .object({
-      status: z.literal("insufficient_data"),
-      reason: z.string().min(1),
-      evidence: z.array(atlasEvidenceSchema),
-    })
-    .strict(),
-]);
+export const ATLAS_SUFFICIENCY_STATUSES = ["complete", "partial", "insufficient"] as const;
+export const atlasSufficiencyStatusSchema = z.enum(ATLAS_SUFFICIENCY_STATUSES);
+export type AtlasSufficiencyStatus = (typeof ATLAS_SUFFICIENCY_STATUSES)[number];
+
+export const atlasSufficiencyIssueSchema = z
+  .object({
+    code: z.string().min(1),
+    scope: z.string().min(1).optional(),
+    details: z.record(z.string(), z.string()).optional(),
+    evidence: z.array(atlasEvidenceSchema),
+  })
+  .strict();
+
+export type AtlasSufficiencyIssue = z.infer<typeof atlasSufficiencyIssueSchema>;
+
+export const atlasSufficiencySchema = z
+  .object({
+    status: atlasSufficiencyStatusSchema,
+    issues: z.array(atlasSufficiencyIssueSchema),
+  })
+  .strict();
 
 export type AtlasSufficiency = z.infer<typeof atlasSufficiencySchema>;
 
-/**
- * The reason codes this backend release actually emits, plus the ones the brief
- * names for forward compatibility.
- *
- * THIS LIST IS FOR LABELLING ONLY and never for validation. A code absent from
- * it renders through the generic fallback with its raw code shown in technical
- * details, which is what keeps a backend addition from blanking the screen.
- */
-export const KNOWN_INSUFFICIENCY_REASONS = [
-  // Emitted by backend candidate 4511acf8.
-  "no_events_in_period",
-  "empty_cohort",
-  // Named by the AFD-5D2 brief. Not emitted by this backend release; carried so
-  // that if a later release adds one it renders with a reviewed label rather
-  // than through the fallback.
+/** The backend's closed catalog, for LABELLING ONLY. */
+export const KNOWN_REASON_CODES = [
   "SAMPLE_TOO_SMALL",
   "COHORT_FOLLOWUP_INCOMPLETE",
-  "MIXED_CURRENCY",
   "COMPARISON_PERIOD_UNAVAILABLE",
+  "MIXED_CURRENCY",
   "BREAKDOWN_TRUNCATED",
+  "METRIC_UNAVAILABLE",
+  "INTEGRITY_WARNING",
 ] as const;
+
+/**
+ * AFD-5D2A — the top-level result status, the one word an operator acts on.
+ *
+ * A closed enum: an unsupported status is a contract violation, not something
+ * this UI renders. `partial` is now a BACKEND value; the CRM no longer derives
+ * one, and `atlas-derivation-guard.test.ts` fails the build if it starts again.
+ */
+export const ATLAS_STATUSES = ["ok", "partial", "insufficient_data"] as const;
+export const atlasStatusSchema = z.enum(ATLAS_STATUSES);
+export type AtlasStatus = (typeof ATLAS_STATUSES)[number];
 
 /* ----------------------------------------------------------------- overview */
 
@@ -365,6 +421,8 @@ export const atlasThresholdsSchema = z.record(
  */
 export const atlasReportSchema = z
   .object({
+    /** REQUIRED. A response with no backend status is a contract violation. */
+    status: atlasStatusSchema,
     agent: atlasAgentSchema,
     engine: atlasEngineSchema,
     inputFingerprint: z.string().min(1),

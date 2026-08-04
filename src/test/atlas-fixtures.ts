@@ -17,7 +17,12 @@
  * backend publishes them; there is no email, no name, no lead, no click id and
  * no Pocket identifier, because the DTO has nowhere to put one.
  */
-import type { AtlasEvidence, AtlasFinding, AtlasReport } from "@/data/contracts/api/curie-atlas";
+import type {
+  AtlasEvidence,
+  AtlasFinding,
+  AtlasReport,
+  AtlasSufficiencyIssue,
+} from "@/data/contracts/api/curie-atlas";
 
 export const ATLAS_PERIOD = {
   resolvedPreset: "last_30_days",
@@ -51,6 +56,20 @@ export function finding(over: Partial<AtlasFinding> = {}): AtlasFinding {
     message: "За период засчитано 1240 кликов и 96 регистраций в Академии.",
     evidence: [evidence()],
     dimensionId: null,
+    // AFD-5D2A — both are backend-owned and REQUIRED on every finding.
+    supportTier: "descriptive",
+    comparison: null,
+    ...over,
+  };
+}
+
+/** One backend sufficiency issue. */
+export function issue(over: Partial<AtlasSufficiencyIssue> = {}): AtlasSufficiencyIssue {
+  return {
+    code: "SAMPLE_TOO_SMALL",
+    scope: "qualifiedClickToAcademyRegistrationRate",
+    details: { denominatorMetric: "qualifiedClicks", denominator: "18", threshold: "30" },
+    evidence: [evidence({ key: "qualifiedClicks", value: "18" })],
     ...over,
   };
 }
@@ -87,7 +106,8 @@ export function atlasReport(over: Partial<AtlasReport> = {}): AtlasReport {
         conflictingDeposits: "0",
       },
     },
-    dataSufficiency: { status: "sufficient" },
+    status: "ok",
+    dataSufficiency: { status: "complete", issues: [] },
     observations: [finding()],
     warnings: [
       finding({
@@ -106,6 +126,15 @@ export function atlasReport(over: Partial<AtlasReport> = {}): AtlasReport {
         message: "У элемента разреза доля регистраций выше совокупной на 12 п.п.",
         evidence: [evidence({ key: "memberRate", value: "0.34", source: "breakdown", dimensionId: 1 })],
         dimensionId: 1,
+        supportTier: "strong",
+        comparison: {
+          kind: "member_vs_aggregate",
+          currentValue: "34.000000",
+          baselineValue: "22.000000",
+          absoluteDelta: null,
+          percentagePointDelta: "12.000000",
+          relativeDelta: null,
+        },
       }),
     ],
     questions: [
@@ -141,16 +170,12 @@ export function atlasReport(over: Partial<AtlasReport> = {}): AtlasReport {
 }
 
 /** An insufficient-data report, with the reason this backend actually emits. */
-export function insufficientReport(reason = "no_events_in_period"): AtlasReport {
+export function insufficientReport(): AtlasReport {
   return atlasReport({
-    dataSufficiency: {
-      status: "insufficient_data",
-      reason,
-      evidence: [
-        evidence({ key: "qualifiedClicks", value: "0" }),
-        evidence({ key: "academyRegistrations", value: "0" }),
-      ],
-    },
+    status: "insufficient_data",
+    // An empty period raises NO issues: emptiness is a valid factual result, and
+    // the backend deliberately publishes none. See analysis-sufficiency.ts.
+    dataSufficiency: { status: "insufficient", issues: [] },
     overview: {
       ...atlasReport().overview,
       findingCounts: { observation: 0, warning: 0, positive_signal: 0, question: 1 },
@@ -170,14 +195,28 @@ export function insufficientReport(reason = "no_events_in_period"): AtlasReport 
 }
 
 /**
- * A report that is `sufficient` but carries an availability-sourced operand.
+ * A `partial` report — the BACKEND's verdict, not a derived one.
  *
- * This is the shape the UI presents as `partial` — see `deriveResultStatus`. The
- * backend status is still `sufficient`; the limitation is a fact the backend
- * itself stated through its evidence source.
+ * AFD-5D2 had to infer this state from evidence sources. AFD-5D2A receives it:
+ * `status: "partial"` with a coded issue list the backend owns.
  */
-export function limitedReport(): AtlasReport {
+export function limitedReport(issues: readonly AtlasSufficiencyIssue[] = [
+  issue({
+    code: "MIXED_CURRENCY",
+    scope: "firstDepositAmount",
+    details: { reason: "currency_unspecified_or_mixed" },
+    evidence: [
+      evidence({
+        key: "firstDepositAmount.unavailableReason",
+        value: "currency_unspecified_or_mixed",
+        source: "availability",
+      }),
+    ],
+  }),
+]): AtlasReport {
   return atlasReport({
+    status: "partial",
+    dataSufficiency: { status: "partial", issues: [...issues] },
     warnings: [
       finding({
         code: "amount_aggregation_unavailable",
@@ -209,6 +248,26 @@ export const ATLAS_DEFAULT_CUTOFF = {
   clampedToReportClock: false,
   intervalConvention: "cutoff_exclusive",
 } as const;
+
+/** A finding carrying a COUNT comparison, for delta rendering. */
+export function countChangeFinding(): AtlasFinding {
+  return finding({
+    code: "series_count_change",
+    section: "observation",
+    severity: "info",
+    message: "Засчитанные клики выросли с 100 до 400 между 2026-07-01 и 2026-07-02.",
+    evidence: [evidence({ key: "qualifiedClicks.first", value: "100", source: "timeseries" })],
+    supportTier: "moderate",
+    comparison: {
+      kind: "count_change",
+      currentValue: "400",
+      baselineValue: "100",
+      absoluteDelta: "300",
+      percentagePointDelta: null,
+      relativeDelta: "300.000000",
+    },
+  });
+}
 
 /** A cohort-mode report, carrying a resolved cutoff. */
 export function cohortReport(): AtlasReport {

@@ -44,7 +44,7 @@ async function main() {
 
   const staff: Record<string, string> = {};
   for (const role of ["crm_admin", "analyst", "support"] as const) {
-    const email = `afd5d2-e2e-${role}@example.invalid`;
+    const email = `afd5d2a-e2e-${role}@example.invalid`;
     const user = await prisma.user.create({
       data: { email, name: `E2E ${role}`, role: "admin", passwordHash: hash },
     });
@@ -57,7 +57,7 @@ async function main() {
   // A learner with NO staff profile: the "learner is refused" case.
   await prisma.user.create({
     data: {
-      email: "afd5d2-e2e-learner@example.invalid",
+      email: "afd5d2a-e2e-learner@example.invalid",
       name: "E2E learner",
       role: "user",
       passwordHash: hash,

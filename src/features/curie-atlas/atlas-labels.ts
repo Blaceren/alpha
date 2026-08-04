@@ -208,58 +208,22 @@ export function adjustmentHintFor(reason: string): string | null {
     : null;
 }
 
-/* ------------------------------------------------------ presentation status */
+/* -------------------------------------------------------- backend statuses */
 
 /**
- * THE ONE DERIVED CONCEPT IN THIS UI, and the reason it exists.
+ * AFD-5D2A — THE CRM NO LONGER DERIVES A STATUS. IT RENDERS ONE.
  *
- * §12 of the brief describes three result states — `ok`, `partial`,
- * `insufficient_data`. The backend DTO carries only TWO: `dataSufficiency.status`
- * is `sufficient | insufficient_data`. There is no `partial` in the contract,
- * and inventing a backend status would be exactly the reinterpretation §3
- * forbids.
+ * AFD-5D2 computed a presentation-level `partial` here, from the evidence
+ * sources the backend happened to cite. That was disclosed at the time and it
+ * was the wrong owner: a browser deciding whether a report is complete is a
+ * second analytical engine, and two engines eventually disagree.
  *
- * So `partial` is derived HERE, for PRESENTATION ONLY, and only from facts the
- * backend itself stated:
- *
- *   - the status is `sufficient`, AND
- *   - at least one returned finding cites evidence whose source is
- *     `availability` or `integrity`.
- *
- * Those two evidence sources are the backend's own way of saying "a capability
- * was unavailable" or "a stored value disagrees with another stored value". A
- * report carrying one is complete as far as it goes and incomplete in a way the
- * operator must see — which is precisely what §12's `partial` describes.
- *
- * WHAT THIS FUNCTION NEVER DOES: it never contradicts the backend. It cannot
- * turn `insufficient_data` into `ok`, it cannot turn `sufficient` into
- * `insufficient_data`, and it adds no finding. The raw backend status is
- * displayed beside the derived one, labelled as the backend's, so an operator
- * can always see which is which.
+ * The backend now publishes `status` as a top-level field. Everything below is
+ * a LOOKUP TABLE from that value to Russian copy. There is no function in this
+ * file that inspects findings, evidence, denominators or availability to reach
+ * a verdict — `atlas-derivation-guard.test.ts` fails the build if one returns.
  */
 export type AtlasResultStatus = "ok" | "partial" | "insufficient_data";
-
-export const AVAILABILITY_EVIDENCE_SOURCES: readonly AtlasEvidenceSource[] = [
-  "availability",
-  "integrity",
-];
-
-export function deriveResultStatus(report: AtlasReport): AtlasResultStatus {
-  if (report.dataSufficiency.status === "insufficient_data") return "insufficient_data";
-
-  const limited = [
-    ...report.warnings,
-    ...report.observations,
-    ...report.positiveSignals,
-    ...report.questions,
-  ].some((finding) =>
-    finding.evidence.some((item) =>
-      (AVAILABILITY_EVIDENCE_SOURCES as readonly string[]).includes(item.source),
-    ),
-  );
-
-  return limited ? "partial" : "ok";
-}
 
 export const RESULT_STATUS_LABEL: Record<AtlasResultStatus, string> = {
   ok: "Данных достаточно",
@@ -270,15 +234,97 @@ export const RESULT_STATUS_LABEL: Record<AtlasResultStatus, string> = {
 export const RESULT_STATUS_NOTE: Record<AtlasResultStatus, string> = {
   ok: "Бэкенд подтвердил достаточность данных для выбранных параметров.",
   partial:
-    "Бэкенд подтвердил достаточность данных, но часть показателей помечена как недоступная или несогласованная. Отчёт неполон — смотрите предупреждения.",
+    "Бэкенд сообщил, что часть сравнений или разделов недоступна. Отчёт неполон — ограничения перечислены ниже.",
   insufficient_data:
     "Бэкенд сообщил, что данных для выбранных параметров недостаточно. Разделы с наблюдениями не заполняются.",
 };
 
-/** The backend's own word, shown beside the derived status so both are visible. */
-export const BACKEND_SUFFICIENCY_LABEL: Record<string, string> = {
-  sufficient: "sufficient",
-  insufficient_data: "insufficient_data",
+/** The sufficiency vocabulary, rendered as the backend's own word. */
+export const SUFFICIENCY_STATUS_LABEL: Record<string, string> = {
+  complete: "полные",
+  partial: "неполные",
+  insufficient: "недостаточные",
+};
+
+/* -------------------------------------------------- sufficiency reason codes */
+
+/**
+ * Russian copy for the CLOSED backend catalog.
+ *
+ * Every one of these is now emitted — or catalogued — by the backend rather
+ * than guessed at here. An unknown code still renders through the fallback,
+ * because a backend that adds a code must not blank an operator's screen.
+ */
+export const REASON_CODE_LABEL: Record<string, string> = {
+  SAMPLE_TOO_SMALL: "Выборка меньше порога, на котором доля считается надёжной.",
+  COHORT_FOLLOWUP_INCOMPLETE:
+    "Окно наблюдения когорты обрезано моментом построения отчёта: когорта ещё дозревает.",
+  COMPARISON_PERIOD_UNAVAILABLE:
+    "Сравнить не с чем: в периоде меньше двух интервалов.",
+  MIXED_CURRENCY: "В периоде несколько валют, суммы депозитов не агрегируются.",
+  BREAKDOWN_TRUNCATED: "Разбивка усечена: показаны не все элементы.",
+  METRIC_UNAVAILABLE: "Показатель не удалось рассчитать.",
+  INTEGRITY_WARNING: "Два сохранённых представления одних данных расходятся.",
+};
+
+export const REASON_CODE_FALLBACK =
+  "Бэкенд вернул код ограничения, который эта версия интерфейса не знает. Код указан в технических деталях.";
+
+export function reasonCodeLabel(code: string): string {
+  return REASON_CODE_LABEL[code] ?? REASON_CODE_FALLBACK;
+}
+
+export function isKnownReasonCode(code: string): boolean {
+  return Object.prototype.hasOwnProperty.call(REASON_CODE_LABEL, code);
+}
+
+/** Human labels for the `scope` a backend issue names. */
+export const ISSUE_SCOPE_LABEL: Record<string, string> = {
+  series: "Временной ряд",
+  cohort: "Когорта",
+  registration: "Регистрации",
+  firstDeposit: "Первые депозиты",
+  firstDepositAmount: "Сумма первых депозитов",
+  qualifiedClicks: "Засчитанные клики",
+  academyRegistrations: "Регистрации в Академии",
+  pocketRegistrations: "Регистрации в Pocket",
+  confirmedFirstDeposits: "Подтверждённые первые депозиты",
+};
+
+export function issueScopeLabel(scope: string): string {
+  return ISSUE_SCOPE_LABEL[scope] ?? scope;
+}
+
+/* ------------------------------------------------------------ support tier */
+
+/**
+ * Backend-owned. The CRM renders the returned value and NEVER computes one:
+ * there is no denominator inspection anywhere in this feature.
+ */
+export const SUPPORT_TIER_LABEL: Record<string, string> = {
+  descriptive: "Описательный",
+  moderate: "Умеренная опора",
+  strong: "Сильная опора",
+};
+
+export function supportTierLabel(tier: string): string {
+  return SUPPORT_TIER_LABEL[tier] ?? tier;
+}
+
+/* -------------------------------------------------------------- comparison */
+
+export const COMPARISON_KIND_LABEL: Record<string, string> = {
+  count_change: "Изменение количества",
+  rate_change: "Изменение доли",
+  member_vs_aggregate: "Элемент против совокупности",
+};
+
+export const COMPARISON_FIELD_LABEL: Record<string, string> = {
+  currentValue: "Текущее значение",
+  baselineValue: "База сравнения",
+  absoluteDelta: "Абсолютная разница",
+  percentagePointDelta: "Разница в п.п.",
+  relativeDelta: "Относительное изменение, %",
 };
 
 /* ---------------------------------------------------------------- entity labels */

@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 
 import {
-  BACKEND_COMMIT,
+  BACKEND_BRANCH,
   BACKEND_DIR,
   PASSWORD,
   assertBackendUnchanged,
@@ -31,12 +31,12 @@ import {
 
 async function main() {
   cleanupDb();
-  console.log(`backend candidate ${BACKEND_COMMIT}`);
+  console.log(`backend candidate ${BACKEND_BRANCH}`);
   assertBackendUnchanged();
 
   migrate();
 
-  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d2-seed.ts`;
+  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d2a-seed.ts`;
   fs.copyFileSync(`${process.cwd()}/tests-e2e-atlas/support/seed.ts`, stagedSeed);
   const seeded = spawnSync("npx", ["tsx", stagedSeed], {
     cwd: BACKEND_DIR,

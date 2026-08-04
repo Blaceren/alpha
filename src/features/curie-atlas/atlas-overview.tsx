@@ -25,7 +25,6 @@ import { SectionHeading } from "@/features/affiliate-analytics/analytics-primiti
 import type { DimensionLabelResolver } from "./atlas-finding-card";
 import {
   ATLAS_MODE_BADGE,
-  BACKEND_SUFFICIENCY_LABEL,
   COVERAGE_LABEL,
   DIMENSION_LABEL,
   GROUP_LABEL,
@@ -34,12 +33,12 @@ import {
   RESULT_STATUS_LABEL,
   RESULT_STATUS_NOTE,
   SUFFICIENCY_HEADING,
+  SUFFICIENCY_STATUS_LABEL,
   TECHNICAL_DETAILS,
-  adjustmentHintFor,
-  deriveResultStatus,
   headlineMetricLabel,
-  insufficiencyReasonLabel,
-  isKnownInsufficiencyReason,
+  isKnownReasonCode,
+  issueScopeLabel,
+  reasonCodeLabel,
 } from "./atlas-labels";
 
 /* ------------------------------------------------------------------ helpers */
@@ -74,7 +73,8 @@ export function AtlasOverviewPanel({
   stale: boolean;
   resolveDimensionLabel?: DimensionLabelResolver;
 }) {
-  const status = deriveResultStatus(report);
+  // AFD-5D2A — READ, never derived. `report.status` is the backend's own word.
+  const status = report.status;
   const { request, overview } = report;
 
   /**
@@ -109,7 +109,7 @@ export function AtlasOverviewPanel({
       <SectionHeading
         id="atlas-overview"
         title={OVERVIEW_HEADING}
-        level={3}
+        level={2}
         actions={
           <span
             data-testid="atlas-result-status"
@@ -175,7 +175,7 @@ export function AtlasOverviewPanel({
 
       {/* Headline metrics, exactly as published. No client arithmetic. */}
       <div>
-        <h4 className="text-xs font-medium text-text-secondary">Ключевые показатели</h4>
+        <h3 className="text-xs font-medium text-text-secondary">Ключевые показатели</h3>
         <dl className="mt-1.5 grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-[auto_1fr]">
           {Object.entries(overview.headlineMetrics).map(([key, value]) => (
             <Row key={key} term={headlineMetricLabel(key)}>
@@ -206,11 +206,10 @@ export function AtlasOverviewPanel({
           <dd className="font-mono">{report.engine.engineVersion}</dd>
           <dt>Версия каталога</dt>
           <dd className="font-mono">{report.engine.catalogVersion}</dd>
-          <dt>Статус бэкенда</dt>
-          <dd className="font-mono">
-            {BACKEND_SUFFICIENCY_LABEL[report.dataSufficiency.status] ??
-              report.dataSufficiency.status}
-          </dd>
+          <dt>Статус (бэкенд)</dt>
+          <dd className="font-mono">{report.status}</dd>
+          <dt>Достаточность (бэкенд)</dt>
+          <dd className="font-mono">{report.dataSufficiency.status}</dd>
           {request.filters.affiliatePartnerId ? (
             <>
               <dt>Фильтр: аффилейт</dt>
@@ -238,7 +237,9 @@ export function AtlasOverviewPanel({
 /* --------------------------------------------------------------- sufficiency */
 
 export function AtlasSufficiencyPanel({ report }: { report: AtlasReport }) {
-  const status = deriveResultStatus(report);
+  // AFD-5D2A — every value below is READ from the response. There is no
+  // classification, no threshold comparison and no evidence inspection here.
+  const status = report.status;
   const sufficiency = report.dataSufficiency;
 
   return (
@@ -246,54 +247,65 @@ export function AtlasSufficiencyPanel({ report }: { report: AtlasReport }) {
       aria-labelledby="atlas-sufficiency"
       className="space-y-2 rounded-md border border-border bg-surface p-3"
     >
-      <h3 id="atlas-sufficiency" className="text-sm font-semibold text-text-primary">
+      <h2 id="atlas-sufficiency" className="text-sm font-semibold text-text-primary">
         {SUFFICIENCY_HEADING}
-      </h3>
+      </h2>
 
       <p className="text-xs leading-relaxed text-text-secondary">
-        {RESULT_STATUS_NOTE[status]}
+        {RESULT_STATUS_NOTE[status]}{" "}
+        <span className="text-text-muted">
+          Бэкенд оценил данные как {SUFFICIENCY_STATUS_LABEL[sufficiency.status] ?? sufficiency.status}.
+        </span>
       </p>
 
-      {sufficiency.status === "insufficient_data" ? (
-        <div className="space-y-2">
-          <p
-            data-testid="atlas-insufficient-reason"
-            className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text-primary"
-          >
-            {insufficiencyReasonLabel(sufficiency.reason)}
-          </p>
+      {sufficiency.issues.length === 0 ? (
+        <p className="text-xs text-text-secondary" data-testid="atlas-no-issues">
+          Ограничений бэкенд не сообщил.
+        </p>
+      ) : (
+        <ul className="space-y-2" data-testid="atlas-issues">
+          {sufficiency.issues.map((issue, index) => (
+            <li
+              key={`${issue.code}-${issue.scope ?? "global"}-${index}`}
+              data-testid="atlas-issue"
+              data-code={issue.code}
+              className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2"
+            >
+              {/* The user-facing explanation. The CODE is never the headline. */}
+              <p className="break-words text-xs text-text-primary">{reasonCodeLabel(issue.code)}</p>
 
-          {/* A neutral hint ONLY when the returned reason supports it (§12). */}
-          {adjustmentHintFor(sufficiency.reason) ? (
-            <p className="text-xs text-text-secondary">
-              {adjustmentHintFor(sufficiency.reason)}
-            </p>
-          ) : null}
+              {issue.scope ? (
+                <p className="mt-0.5 text-[11px] text-text-secondary">
+                  {issueScopeLabel(issue.scope)}
+                </p>
+              ) : null}
 
-          {sufficiency.evidence.length > 0 ? (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-text-secondary">
-              {sufficiency.evidence.map((item, index) => (
-                <React.Fragment key={`${item.key}-${index}`}>
-                  <dt>{item.key}</dt>
-                  <dd className="tabular-nums text-text-primary">{item.value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
-          ) : null}
+              {issue.details ? (
+                <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-text-secondary">
+                  {Object.entries(issue.details).map(([key, value]) => (
+                    <React.Fragment key={key}>
+                      <dt>{key}</dt>
+                      <dd className="tabular-nums text-text-primary">{value}</dd>
+                    </React.Fragment>
+                  ))}
+                </dl>
+              ) : null}
 
-          {/* An unknown code is reported to diagnostics without crashing (§12). */}
-          {!isKnownInsufficiencyReason(sufficiency.reason) ? (
-            <details>
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded text-[11px] text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                {TECHNICAL_DETAILS}
-              </summary>
-              <p className="mt-1 break-all font-mono text-[11px] text-text-primary">
-                {sufficiency.reason}
-              </p>
-            </details>
-          ) : null}
-        </div>
-      ) : null}
+              {/* An unknown code still renders; its raw value goes to diagnostics. */}
+              {!isKnownReasonCode(issue.code) ? (
+                <details className="mt-1">
+                  <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded text-[11px] text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                    {TECHNICAL_DETAILS}
+                  </summary>
+                  <p className="mt-1 break-all font-mono text-[11px] text-text-primary">
+                    {issue.code}
+                  </p>
+                </details>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

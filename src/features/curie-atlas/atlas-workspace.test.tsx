@@ -17,7 +17,10 @@ import { CurieAtlasWorkspace } from "./atlas-workspace";
 import {
   atlasReport,
   cohortReport,
+  countChangeFinding,
+  finding,
   insufficientReport,
+  issue,
   limitedReport,
 } from "@/test/atlas-fixtures";
 
@@ -286,6 +289,37 @@ describe("result rendering", () => {
     }
   });
 
+  it("skips no heading level, so the page outline is navigable", async () => {
+    // AFD-5D2A — added because the browser accessibility matrix caught a real
+    // defect: the workspace rendered `h1` then jumped straight to `h3`, with no
+    // `h2` anywhere. A screen-reader user navigating by heading level lands in a
+    // subsection of a section that does not exist.
+    //
+    // Pinned HERE as well as in the browser so the outline is protected without
+    // needing Chromium: this is the cheap test that fails first.
+    const user = userEvent.setup();
+    const { container } = renderWorkspace();
+    await runAnalysis(user);
+
+    const levels = Array.from(container.querySelectorAll("h1,h2,h3,h4,h5,h6")).map((node) =>
+      Number(node.tagName.slice(1)),
+    );
+    expect(levels.length).toBeGreaterThan(3);
+    for (let i = 1; i < levels.length; i += 1) {
+      expect(
+        levels[i]! - levels[i - 1]!,
+        `heading jumps from h${levels[i - 1]} to h${levels[i]}`,
+      ).toBeLessThanOrEqual(1);
+    }
+    // The workspace owns the page's single h1 ("Curie Atlas"); everything below
+    // it is an h2 section. Verified against the real DOM rather than assumed —
+    // the first draft of this assertion guessed the shell owned the h1, and the
+    // test said otherwise.
+    expect(levels[0]).toBe(1);
+    expect(levels.filter((level) => level === 1)).toHaveLength(1);
+    expect(levels).toContain(2);
+  });
+
   it("never renders the word opportunities", async () => {
     const user = userEvent.setup();
     const { container } = renderWorkspace();
@@ -406,51 +440,163 @@ describe("data sufficiency", () => {
     await runAnalysis(user);
 
     expect(screen.getByTestId("atlas-result-status")).toHaveTextContent("с ограничениями");
-    expect(screen.getByText(/Отчёт неполон/)).toBeInTheDocument();
-    expect(screen.getByText(/несколько валют/)).toBeInTheDocument();
+    expect(screen.getByText(/часть сравнений или разделов недоступна/)).toBeInTheDocument();
+
+    // The limitation appears TWICE by design, and both are wanted: once as the
+    // backend's coded sufficiency issue, and once as the warning FINDING the
+    // engine also emitted. They are different objects saying the same true
+    // thing, so the assertion names each rather than demanding uniqueness.
+    const issueBlock = screen.getByTestId("atlas-issue");
+    expect(issueBlock).toHaveAttribute("data-code", "MIXED_CURRENCY");
+    expect(issueBlock).toHaveTextContent(/несколько валют/);
+
+    const warnings = screen.getByRole("heading", { name: /Предупреждения/ }).closest("section");
+    expect(within(warnings as HTMLElement).getByText(/несколько валют/)).toBeInTheDocument();
   });
 
-  it("shows insufficient_data with the factual reason and no zero percentages", async () => {
+  it("shows insufficient_data and no zero performance", async () => {
     const user = userEvent.setup();
     runMock.mockResolvedValue(ok(insufficientReport()));
     renderWorkspace();
     await runAnalysis(user);
 
     expect(screen.getByTestId("atlas-result-status")).toHaveTextContent("Недостаточно данных");
-    expect(screen.getByTestId("atlas-insufficient-reason")).toHaveTextContent("нет событий");
-    // No observation is presented as measured performance.
+    // AFD-5D2A — an empty period raises NO issues: emptiness is a factual
+    // result, not a data problem, and the backend deliberately publishes none.
+    expect(screen.getByTestId("atlas-no-issues")).toBeInTheDocument();
     const observations = screen.getByRole("heading", { name: /Наблюдения/ }).closest("section");
     expect(
       within(observations as HTMLElement).getByText("Наблюдений по этим параметрам нет."),
     ).toBeInTheDocument();
   });
 
-  it("offers an adjustment hint only when the reason supports it", async () => {
+  it("renders EVERY backend reason code as a user-facing explanation", async () => {
     const user = userEvent.setup();
-    runMock.mockResolvedValue(ok(insufficientReport("no_events_in_period")));
-    const view = renderWorkspace();
-    await runAnalysis(user);
-    expect(screen.getByText(/расширить период/)).toBeInTheDocument();
+    for (const code of [
+      "SAMPLE_TOO_SMALL",
+      "COHORT_FOLLOWUP_INCOMPLETE",
+      "COMPARISON_PERIOD_UNAVAILABLE",
+      "MIXED_CURRENCY",
+      "BREAKDOWN_TRUNCATED",
+      "METRIC_UNAVAILABLE",
+      "INTEGRITY_WARNING",
+    ]) {
+      runMock.mockResolvedValue(
+        ok(limitedReport([issue({ code, details: undefined, scope: "series" })])),
+      );
+      const view = renderWorkspace();
+      await runAnalysis(user);
 
-    view.unmount();
-    runMock.mockResolvedValue(ok(insufficientReport("MIXED_CURRENCY")));
-    renderWorkspace();
-    await runAnalysis(user);
-    expect(screen.queryByText(/расширить период/)).not.toBeInTheDocument();
+      const rendered = screen.getByTestId("atlas-issue");
+      expect(rendered).toHaveAttribute("data-code", code);
+      // The CODE is never the headline: a human sentence is.
+      expect(rendered.textContent ?? "").not.toContain(code);
+      expect((rendered.textContent ?? "").length).toBeGreaterThan(10);
+      view.unmount();
+    }
   });
 
   it("renders an UNKNOWN reason code through the fallback without crashing", async () => {
     const user = userEvent.setup();
-    runMock.mockResolvedValue(ok(insufficientReport("A_BRAND_NEW_REASON")));
+    runMock.mockResolvedValue(ok(limitedReport([issue({ code: "A_BRAND_NEW_REASON" })])));
     renderWorkspace();
     await runAnalysis(user);
 
-    expect(screen.getByTestId("atlas-insufficient-reason")).toHaveTextContent(
-      /не знает/,
+    const rendered = screen.getByTestId("atlas-issue");
+    expect(rendered).toHaveTextContent(/не знает/);
+    // The raw code is available to diagnostics rather than lost.
+    await user.click(within(rendered).getByText("Технические детали"));
+    expect(within(rendered).getByText("A_BRAND_NEW_REASON")).toBeInTheDocument();
+  });
+
+  it("shows the backend issue details without computing any of them", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(limitedReport([issue()])));
+    renderWorkspace();
+    await runAnalysis(user);
+
+    const rendered = screen.getByTestId("atlas-issue");
+    expect(rendered).toHaveTextContent("18");
+    expect(rendered).toHaveTextContent("30");
+  });
+});
+
+/* ------------------------------------------- AFD-5D2A: backend-owned values */
+
+describe("support tier and comparison are rendered, never computed", () => {
+  it("renders the backend support tier on every finding", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    const tiers = screen.getAllByTestId("atlas-support-tier");
+    expect(tiers.length).toBeGreaterThan(0);
+    // The fixture's positive signal is `strong`; the default finding is
+    // `descriptive`. Both come off the wire.
+    expect(tiers.map((t) => t.getAttribute("data-tier"))).toContain("descriptive");
+    expect(tiers.map((t) => t.getAttribute("data-tier"))).toContain("strong");
+  });
+
+  it("renders all three tiers exactly as returned", async () => {
+    const user = userEvent.setup();
+    for (const [tier, label] of [
+      ["descriptive", "Описательный"],
+      ["moderate", "Умеренная опора"],
+      ["strong", "Сильная опора"],
+    ] as const) {
+      runMock.mockResolvedValue(
+        ok(atlasReport({ observations: [finding({ supportTier: tier })], warnings: [], positiveSignals: [], questions: [] })),
+      );
+      const view = renderWorkspace();
+      await runAnalysis(user);
+      expect(screen.getByTestId("atlas-support-tier")).toHaveTextContent(label);
+      view.unmount();
+    }
+  });
+
+  it("renders the backend comparison and computes no delta of its own", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(
+      ok(atlasReport({ observations: [countChangeFinding()], warnings: [], positiveSignals: [], questions: [] })),
     );
-    // And the raw code is available to diagnostics.
-    await user.click(screen.getAllByText("Технические детали").at(-1) as HTMLElement);
-    expect(screen.getByText("A_BRAND_NEW_REASON")).toBeInTheDocument();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    await user.click(screen.getAllByText("Показать данные")[0]!);
+    const comparison = screen.getByTestId("atlas-comparison");
+    expect(comparison).toHaveAttribute("data-kind", "count_change");
+    // Exactly the backend's values, verbatim.
+    expect(comparison).toHaveTextContent("100");
+    expect(comparison).toHaveTextContent("400");
+    expect(comparison).toHaveTextContent("300");
+    expect(comparison).toHaveTextContent("300.000000");
+  });
+
+  it("omits a comparison field the backend returned as null", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(
+      ok(atlasReport({ observations: [countChangeFinding()], warnings: [], positiveSignals: [], questions: [] })),
+    );
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.click(screen.getAllByText("Показать данные")[0]!);
+
+    const comparison = screen.getByTestId("atlas-comparison");
+    // A count change has no percentage-point delta. It must not be shown at all,
+    // and certainly not as a zero nobody measured.
+    expect(comparison).not.toHaveTextContent("Разница в п.п.");
+  });
+
+  it("renders no comparison block for a finding that is not one", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.click(screen.getAllByText("Показать данные")[0]!);
+    // The default observation carries `comparison: null`.
+    const observations = screen.getByRole("heading", { name: /Наблюдения/ }).closest("section");
+    expect(
+      within(observations as HTMLElement).queryByTestId("atlas-comparison"),
+    ).not.toBeInTheDocument();
   });
 });
 

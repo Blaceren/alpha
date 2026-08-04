@@ -10,22 +10,14 @@ import {
   ATLAS_MODE_BADGE,
   ATLAS_SUBTITLE,
   ATLAS_TITLE,
-  INSUFFICIENCY_REASON_FALLBACK,
+  REASON_CODE_FALLBACK,
   RESULT_STATUS_LABEL,
   SECTION_HEADING,
-  adjustmentHintFor,
-  deriveResultStatus,
   headlineMetricLabel,
-  insufficiencyReasonLabel,
-  isKnownInsufficiencyReason,
+  isKnownReasonCode,
+  reasonCodeLabel,
+  supportTierLabel,
 } from "./atlas-labels";
-import {
-  atlasReport,
-  evidence,
-  finding,
-  insufficientReport,
-  limitedReport,
-} from "@/test/atlas-fixtures";
 
 describe("atlas copy", () => {
   it("uses the required section headings", () => {
@@ -77,100 +69,40 @@ describe("atlas copy", () => {
   });
 });
 
-describe("insufficiency reasons", () => {
-  it("labels the two codes this backend emits", () => {
-    expect(insufficiencyReasonLabel("no_events_in_period")).toContain("нет событий");
-    expect(insufficiencyReasonLabel("empty_cohort")).toContain("нет учеников");
-    expect(isKnownInsufficiencyReason("no_events_in_period")).toBe(true);
-  });
-
-  it("labels the forward-compatible codes the brief names", () => {
-    for (const code of [
-      "SAMPLE_TOO_SMALL",
-      "COHORT_FOLLOWUP_INCOMPLETE",
-      "MIXED_CURRENCY",
-      "COMPARISON_PERIOD_UNAVAILABLE",
-      "BREAKDOWN_TRUNCATED",
-    ]) {
-      expect(isKnownInsufficiencyReason(code)).toBe(true);
-      expect(insufficiencyReasonLabel(code)).not.toBe(INSUFFICIENCY_REASON_FALLBACK);
-    }
-  });
-
-  it("falls back safely on an unknown code instead of guessing", () => {
-    expect(insufficiencyReasonLabel("WHAT_IS_THIS")).toBe(INSUFFICIENCY_REASON_FALLBACK);
-    expect(isKnownInsufficiencyReason("WHAT_IS_THIS")).toBe(false);
-  });
-
-  it("offers an adjustment hint ONLY when the reason supports one", () => {
-    expect(adjustmentHintFor("no_events_in_period")).not.toBeNull();
-    expect(adjustmentHintFor("empty_cohort")).not.toBeNull();
-    // Widening a period does not fix mixed currency, and saying so would be
-    // advice that cannot work.
-    expect(adjustmentHintFor("MIXED_CURRENCY")).toBeNull();
-    expect(adjustmentHintFor("COMPARISON_PERIOD_UNAVAILABLE")).toBeNull();
-    expect(adjustmentHintFor("WHAT_IS_THIS")).toBeNull();
-  });
-
-  it("never claims more traffic will solve the problem", () => {
-    for (const code of ["no_events_in_period", "empty_cohort", "SAMPLE_TOO_SMALL"]) {
-      const hint = adjustmentHintFor(code) ?? "";
-      expect(hint.toLowerCase()).not.toContain("больше трафика");
-      expect(hint.toLowerCase()).not.toContain("увеличьте трафик");
-    }
-  });
-});
-
-describe("deriveResultStatus", () => {
-  it("returns ok for a sufficient report with no availability caveat", () => {
-    expect(deriveResultStatus(atlasReport())).toBe("ok");
-  });
-
-  it("returns insufficient_data whenever the backend says so", () => {
-    expect(deriveResultStatus(insufficientReport())).toBe("insufficient_data");
-  });
-
-  it("returns partial when the backend cited an availability operand", () => {
-    expect(deriveResultStatus(limitedReport())).toBe("partial");
-  });
-
-  it("returns partial when the backend cited an integrity operand", () => {
-    const report = atlasReport({
-      warnings: [
-        finding({
-          code: "series_reconciliation_mismatch",
-          section: "warning",
-          severity: "attention",
-          message: "Сумма по интервалам не совпадает с итогом периода.",
-          evidence: [evidence({ key: "seriesTotal", value: "1230", source: "integrity" })],
-        }),
-      ],
-    });
-    expect(deriveResultStatus(report)).toBe("partial");
-  });
-
-  it("NEVER overrides an insufficient_data verdict, even with no caveats", () => {
-    // The derived value may narrow the presentation, never contradict the
-    // backend. This is the property that keeps it honest.
-    const report = insufficientReport();
-    expect(report.warnings).toEqual([]);
-    expect(deriveResultStatus(report)).toBe("insufficient_data");
-  });
-
-  it("NEVER promotes a sufficient report to insufficient_data", () => {
-    const noisy = atlasReport({
-      warnings: [
-        finding({ section: "warning", severity: "attention", evidence: [evidence()] }),
-        finding({ section: "warning", severity: "attention", evidence: [evidence()] }),
-      ],
-    });
-    // Many warnings, none of them availability- or integrity-sourced.
-    expect(deriveResultStatus(noisy)).toBe("ok");
-  });
-
-  it("labels all three presentation states", () => {
+describe("backend statuses are rendered, never derived", () => {
+  it("labels all three backend statuses", () => {
     expect(RESULT_STATUS_LABEL.ok).toBe("Данных достаточно");
     expect(RESULT_STATUS_LABEL.partial).toContain("ограничени");
     expect(RESULT_STATUS_LABEL.insufficient_data).toBe("Недостаточно данных");
+  });
+
+  it("exports NO function that derives a status", async () => {
+    const labels = await import("./atlas-labels");
+    expect("deriveResultStatus" in labels).toBe(false);
+    expect("AVAILABILITY_EVIDENCE_SOURCES" in labels).toBe(false);
+  });
+
+  it("labels every backend reason code and falls back safely", () => {
+    for (const code of [
+      "SAMPLE_TOO_SMALL",
+      "COHORT_FOLLOWUP_INCOMPLETE",
+      "COMPARISON_PERIOD_UNAVAILABLE",
+      "MIXED_CURRENCY",
+      "BREAKDOWN_TRUNCATED",
+      "METRIC_UNAVAILABLE",
+      "INTEGRITY_WARNING",
+    ]) {
+      expect(isKnownReasonCode(code)).toBe(true);
+      expect(reasonCodeLabel(code)).not.toBe(REASON_CODE_FALLBACK);
+    }
+    expect(isKnownReasonCode("WHAT_IS_THIS")).toBe(false);
+    expect(reasonCodeLabel("WHAT_IS_THIS")).toBe(REASON_CODE_FALLBACK);
+  });
+
+  it("labels every support tier and passes an unknown one through", () => {
+    expect(supportTierLabel("descriptive")).toBe("Описательный");
+    expect(supportTierLabel("moderate")).toContain("Умеренная");
+    expect(supportTierLabel("strong")).toContain("Сильная");
+    expect(supportTierLabel("certain")).toBe("certain");
   });
 });
