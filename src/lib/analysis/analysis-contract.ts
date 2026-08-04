@@ -23,6 +23,11 @@
  * traffic-quality score, any statement of cause.
  */
 
+import type { FindingComparison, SupportTier } from "./analysis-support";
+import type { AnalysisStatus, DataSufficiency } from "./analysis-sufficiency";
+export type { FindingComparison, SupportTier };
+export type { AnalysisStatus };
+
 /* ------------------------------------------------------------------- modes */
 
 /** The two reporting modes, matching the accepted analytics routes exactly. */
@@ -160,6 +165,23 @@ export type Finding = {
   readonly message: string;
   readonly evidence: readonly Evidence[];
   readonly dimensionId: number | null;
+  /**
+   * AFD-5D2A — how well-supported this finding is, decided HERE.
+   *
+   * Previously the CRM had no such value and could only have invented one from
+   * a denominator it would have had to find itself. It is computed from the
+   * finding's own operands and the published thresholds — see
+   * `analysis-support.ts`.
+   */
+  readonly supportTier: SupportTier;
+  /**
+   * AFD-5D2A — the structured comparison, when this finding is one.
+   *
+   * `null` for the majority of findings, which state a value rather than a
+   * change. Every number in it was already computed by the rules; nothing here
+   * is derived in a consumer.
+   */
+  readonly comparison: FindingComparison | null;
 };
 
 /* ------------------------------------------------------------- thresholds */
@@ -187,6 +209,23 @@ export const ANALYSIS_THRESHOLDS = {
   memberRateDifferenceMinPoints: "10",
   /** A single member holding at least this share is reported as concentration. */
   concentrationSharePercent: "60",
+  /**
+   * AFD-5D2A — the denominator at or above which a rate-bearing finding is
+   * published as `strong` support.
+   *
+   * THIS IS THE ONE NEW NUMBER IN THE PHASE, and it is stated plainly rather
+   * than buried. Three support tiers need two boundaries; the catalog already
+   * had exactly one (`minRateDenominator`), so the upper boundary had to be
+   * introduced or the third tier would have been unreachable.
+   *
+   * IT IS A REPORTING CONVENTION, NOT A STATISTICAL CLAIM. It says "at this many
+   * observations the report is willing to call the rate well-supported"; it does
+   * not compute a confidence interval, a significance level or a power estimate,
+   * and nothing in this phase does. Like every other threshold here it is
+   * PUBLISHED in `thresholds`, so a reader can see the rule that produced the
+   * label without reading source, and a later phase can move it under review.
+   */
+  strongSupportMinDenominator: 100,
 } as const;
 
 export type AnalysisThresholds = typeof ANALYSIS_THRESHOLDS;
@@ -202,21 +241,18 @@ export const INSUFFICIENCY_REASONS = [
 export type InsufficiencyReason = (typeof INSUFFICIENCY_REASONS)[number];
 
 /**
- * The sufficiency verdict.
+ * The sufficiency verdict — REDEFINED BY AFD-5D2A.
  *
- * WHEN IT IS `insufficient_data`, THE REPORT STAYS SILENT rather than
- * speculating: `observations` and `positiveSignals` are empty, and only the
- * insufficiency finding and the standing `questions` remain. Printing "0 %" and
- * "no change" over an empty period would be a description of nothing, offered in
- * the shape of a description of something.
+ * It was a two-branch union (`sufficient` | `insufficient_data` + one reason).
+ * That shape could not express "this report is real but one comparison is
+ * missing", which is why AFD-5D2's CRM ended up deriving a `partial` state in
+ * the browser. The verdict now lives in `analysis-sufficiency.ts` and carries a
+ * three-valued status plus a list of coded issues.
+ *
+ * `INSUFFICIENCY_REASONS` above is kept because the `insufficient_data` FINDING
+ * still names why the period was empty; it is not the sufficiency contract.
  */
-export type DataSufficiency =
-  | { readonly status: "sufficient" }
-  | {
-      readonly status: typeof INSUFFICIENT_DATA;
-      readonly reason: InsufficiencyReason;
-      readonly evidence: readonly Evidence[];
-    };
+export type { DataSufficiency, SufficiencyIssue } from "./analysis-sufficiency";
 
 /* ----------------------------------------------------------------- agent */
 
@@ -314,6 +350,15 @@ export type AnalysisOverview = {
 /* --------------------------------------------------------------- response */
 
 export type AnalysisReport = {
+  /**
+   * AFD-5D2A — the one word an operator acts on, decided by the BACKEND.
+   *
+   * `ok` — read it. `partial` — read the issues first. `insufficient_data` —
+   * there is nothing here to read. It is first in the type because it is first
+   * in the reader's decision, and because a consumer that branches on nothing
+   * else must still branch on this.
+   */
+  readonly status: AnalysisStatus;
   readonly agent: AgentDescriptor;
   readonly engine: EngineDescriptor;
   /**

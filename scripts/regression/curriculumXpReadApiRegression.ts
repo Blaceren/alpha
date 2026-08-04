@@ -10,6 +10,31 @@ import bcrypt from "bcryptjs";
 
 const dbPath = `/tmp/ata-curriculum-xp-api-${process.pid}.db`;
 const dbUrl = `file:${dbPath}`;
+/**
+ * AFD-5D2A — the URL the IN-SUITE fixture client uses, pinned to ONE connection.
+ *
+ * WHY. This suite seeds a deliberately corrupt relation by bracketing an
+ * FK-violating UPDATE with `PRAGMA foreign_keys=OFF` / `=ON`. `PRAGMA
+ * foreign_keys` is a PER-CONNECTION setting in SQLite, and Prisma dispatches
+ * each `$executeRawUnsafe` through a connection POOL — so the UPDATE could land
+ * on a connection that never received the `OFF` and be rejected with SQLite
+ * error 787, `FOREIGN KEY constraint failed`, before the first assertion ran.
+ *
+ * That is what made `curriculum-phase4` intermittently red on BOTH this
+ * candidate and the untouched RC baseline: a harness isolation defect, not a
+ * product defect. Measured directly — after one explicit `OFF`, 95 of 160
+ * pooled reads still reported `foreign_keys=ON`; with the pool pinned to one
+ * connection, 160 of 160 read `OFF` across three runs.
+ *
+ * FOREIGN KEYS ARE NOT WEAKENED ANYWHERE. They stay enforced for the product,
+ * for the server, and for every other statement in this suite. The only change
+ * is that the fixture's own `OFF`/`ON` bracket now applies to the connection
+ * that actually performs the write.
+ *
+ * The SERVER child deliberately keeps the unpinned `dbUrl` below, so the code
+ * under test runs against a normal pool exactly as it does in production.
+ */
+const fixtureDbUrl = `${dbUrl}?connection_limit=1`;
 const PORT = 3960 + (process.pid % 30);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const PASSWORD = "CurriculumXpRead123!";
@@ -222,7 +247,8 @@ async function main() {
     });
     assert.equal(migration.status, 0, `${migration.stdout}\n${migration.stderr}`);
 
-    process.env.DATABASE_URL = dbUrl;
+    // The fixture client is pinned to one connection; see `fixtureDbUrl`.
+    process.env.DATABASE_URL = fixtureDbUrl;
     process.env.CURRICULUM_V2_READ_ENABLED = "true";
     process.env.CURRICULUM_V2_XP_ENABLED = "true";
     ({ prisma } = await import("../../src/lib/prisma"));

@@ -12,13 +12,18 @@ import {
   CURIE_ATLAS_AGENT_CODE,
   CURIE_ATLAS_AGENT_VERSION,
   groupBySection,
-  INSUFFICIENT_DATA,
   type AnalysisOverview,
   type AnalysisReport,
-  type DataSufficiency,
   type Finding,
 } from "./analysis-contract";
 import { renderFindings } from "./analysis-engine";
+import {
+  analysisStatusOf,
+  buildDataSufficiency,
+  sufficiencyIssuesOf,
+  type AnalysisStatus,
+  type DataSufficiency,
+} from "./analysis-sufficiency";
 import type { AnalysisInput } from "./analysis-input";
 import { cohortHasData, eventDateHasData, runRules } from "./analysis-rules";
 
@@ -60,33 +65,6 @@ function overviewOf(input: AnalysisInput, findings: readonly Finding[]): Analysi
   };
 }
 
-function sufficiencyOf(input: AnalysisInput): DataSufficiency {
-  if (input.mode === "event_date") {
-    if (eventDateHasData(input)) return { status: "sufficient" };
-    return {
-      status: INSUFFICIENT_DATA,
-      reason: "no_events_in_period",
-      evidence: [
-        { key: "qualifiedClicks", value: String(input.counts.qualifiedClicks), source: "summary" },
-        {
-          key: "academyRegistrations",
-          value: String(input.counts.academyRegistrations),
-          source: "summary",
-        },
-      ],
-    };
-  }
-
-  if (cohortHasData(input)) return { status: "sufficient" };
-  return {
-    status: INSUFFICIENT_DATA,
-    reason: "empty_cohort",
-    evidence: [
-      { key: "cohortLearners", value: String(input.counts.cohortLearners), source: "summary" },
-    ],
-  };
-}
-
 /**
  * Build the report.
  *
@@ -109,7 +87,15 @@ export function buildAnalysisReport(
   const findings = renderFindings(runRules(input));
   const grouped = groupBySection(findings);
 
+  // AFD-5D2A — the verdict is computed HERE, from the same input the rules read.
+  // `status` and `dataSufficiency.status` are two views of one decision and
+  // cannot disagree: `buildDataSufficiency` asserts that.
+  const issues = sufficiencyIssuesOf(input);
+  const status: AnalysisStatus = analysisStatusOf(input, issues);
+  const dataSufficiency: DataSufficiency = buildDataSufficiency(input, issues, status);
+
   return {
+    status,
     agent: {
       code: CURIE_ATLAS_AGENT_CODE,
       version: CURIE_ATLAS_AGENT_VERSION,
@@ -122,7 +108,7 @@ export function buildAnalysisReport(
     },
     inputFingerprint,
     overview: overviewOf(input, findings),
-    dataSufficiency: sufficiencyOf(input),
+    dataSufficiency,
     observations: grouped.observations,
     warnings: grouped.warnings,
     positiveSignals: grouped.positiveSignals,

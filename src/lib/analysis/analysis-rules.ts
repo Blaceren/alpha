@@ -403,6 +403,11 @@ function eventDateContrasts(input: EventDateInput): RawFinding[] {
         aggregatePercent: ratioToPercent(aggregate),
         differencePoints: points,
         direction: ratioGreater(memberRate, aggregate) ? "up" : "down",
+        // AFD-5D2A — the denominator this member's rate rests on, so the
+        // published support tier is read from the finding itself rather than
+        // recomputed anywhere. It is the same `clicks` count the eligibility
+        // test above already used; no new value is produced.
+        memberDenominator: String(clicks),
       },
       evidence: [
         ev("qualifiedClickToAcademyRegistrationRate", memberRate, "breakdown", row.dimensionId),

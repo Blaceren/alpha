@@ -27,6 +27,7 @@ import {
   type RawFinding,
 } from "./analysis-contract";
 import type { AnalysisInput } from "./analysis-input";
+import { comparisonOf, supportTierOf } from "./analysis-support";
 
 /**
  * The contract a findings producer must satisfy.
@@ -87,6 +88,10 @@ export function renderFindings(raw: readonly RawFinding[]): Finding[] {
       message: entry.render(finding.operands),
       evidence: finding.evidence,
       dimensionId: finding.dimensionId ?? null,
+      // AFD-5D2A — both decided HERE, from the finding's own operands and the
+      // published thresholds. A consumer renders them and never recomputes them.
+      supportTier: supportTierOf(finding),
+      comparison: comparisonOf(finding),
     };
   });
 }

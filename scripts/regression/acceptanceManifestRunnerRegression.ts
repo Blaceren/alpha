@@ -469,7 +469,7 @@ async function main() {
    * discipline as `EXPECTED_MIGRATION_COUNT`: a value typed by hand so that an
    * unplanned change fails the gate instead of being silently absorbed.
    */
-  const CURRENT_ACCEPTANCE_MANIFEST = "acceptance-manifest-agent-foundation-af1.json";
+  const CURRENT_ACCEPTANCE_MANIFEST = "acceptance-manifest-atlas-closure-afd5d2a.json";
 
   const manifestFiles = fs
     .readdirSync(path.join(process.cwd(), "config"))

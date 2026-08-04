@@ -146,21 +146,51 @@ async function main() {
   /* A. The endpoint's source is untouched                               */
   /* ------------------------------------------------------------------ */
 
-  await check("A1 the Atlas route and analysis library are byte-identical to the RC", () => {
-    // The most direct possible statement of "the endpoint is unchanged": git
-    // itself reports no difference against the release candidate this phase
-    // branched from.
+  await check("A1 the Atlas ROUTE is byte-identical to the RC", () => {
+    // AFD-5D2A NARROWED THIS ASSERTION, deliberately.
+    //
+    // AGENT-FOUNDATION-1 asserted that neither the route NOR the analysis
+    // library had moved, which was correct for a phase that added nine Agent
+    // Core tables and touched nothing else. AFD-5D2A exists precisely to change
+    // the analysis library: it moves result status, data sufficiency, support
+    // tier and comparison deltas from the CRM to the backend engine.
+    //
+    // What must STILL be true, and is asserted here, is that the ROUTE is
+    // untouched: the same permission gate, the same CSRF check, the same body
+    // bound, the same loaders, the same echo. The contract grew; the endpoint's
+    // behaviour around it did not.
     const diff = spawnSync(
       "git",
-      ["diff", "--name-only", RC_BASELINE, "--", ATLAS_ROUTE, "src/lib/analysis"],
+      ["diff", "--name-only", RC_BASELINE, "--", ATLAS_ROUTE],
       { cwd: projectRoot, encoding: "utf8" },
     );
     assert.equal(diff.status, 0, diff.stderr);
     assert.equal(
       diff.stdout.trim(),
       "",
-      `AGENT-FOUNDATION-1 must not modify the Atlas endpoint, but changed:\n${diff.stdout}`,
+      `the Atlas route must not change, but did:\n${diff.stdout}`,
     );
+  });
+
+  await check("A1b the analysis library changed ONLY in the reviewed files", () => {
+    // The complement of A1: the library did move, and exactly where AFD-5D2A
+    // said it would. A change to a file not on this list is unreviewed.
+    const diff = spawnSync(
+      "git",
+      ["diff", "--name-only", RC_BASELINE, "--", "src/lib/analysis"],
+      { cwd: projectRoot, encoding: "utf8" },
+    );
+    assert.equal(diff.status, 0, diff.stderr);
+    const changed = diff.stdout.trim().split("\n").filter(Boolean).sort();
+    assert.deepEqual(changed, [
+      "src/lib/analysis/analysis-contract.ts",
+      "src/lib/analysis/analysis-engine.ts",
+      "src/lib/analysis/analysis-report.ts",
+      "src/lib/analysis/analysis-rules.ts",
+    ]);
+    // The two NEW modules are additions, not edits to accepted files.
+    assert.ok(fs.existsSync(path.join(projectRoot, "src/lib/analysis/analysis-sufficiency.ts")));
+    assert.ok(fs.existsSync(path.join(projectRoot, "src/lib/analysis/analysis-support.ts")));
   });
 
   await check("A2 the analytics loaders this phase relies on are also untouched", () => {
@@ -196,7 +226,10 @@ async function main() {
     const { report } = await buildReport({ mode: "event_date" });
     // The published contract, in the accepted order. A field added here without
     // a contract decision is exactly the drift this case exists to catch.
+    // AFD-5D2A adds `status` as the FIRST field: it is first in the reader's
+    // decision, and a consumer that branches on nothing else must branch on it.
     assert.deepEqual(Object.keys(report), [
+      "status",
       "agent",
       "engine",
       "inputFingerprint",

@@ -475,13 +475,15 @@ check("13 differences and shares are exact", () => {
 check("14 an empty period returns insufficient_data and NOTHING else", () => {
   const report = buildReport(eventInput({ counts: counts() }));
 
-  assert.equal(report.dataSufficiency.status, "insufficient_data");
-  assert.equal(
-    report.dataSufficiency.status === "insufficient_data"
-      ? report.dataSufficiency.reason
-      : null,
-    "no_events_in_period",
-  );
+  // AFD-5D2A moved the verdict to a three-valued status plus coded issues. The
+  // top-level `status` is the operator-facing word; `dataSufficiency.status` is
+  // the same decision in the sufficiency vocabulary, and the two cannot
+  // disagree — `buildDataSufficiency` asserts that at build time.
+  assert.equal(report.status, "insufficient_data");
+  assert.equal(report.dataSufficiency.status, "insufficient");
+  // An EMPTY period raises no issue: emptiness is a valid factual result, not a
+  // data problem, and the `insufficient_data` FINDING already names the reason.
+  assert.deepEqual(report.dataSufficiency.issues, []);
   assert.deepEqual(report.observations, []);
   assert.deepEqual(report.positiveSignals, []);
   assert.equal(report.warnings.length, 1);
@@ -493,13 +495,10 @@ check("14 an empty period returns insufficient_data and NOTHING else", () => {
 
 check("15 an empty cohort returns insufficient_data with its own reason", () => {
   const report = buildReport(cohortInput({ counts: { ...ZERO_COHORT_COUNTS } }));
-  assert.equal(report.dataSufficiency.status, "insufficient_data");
-  assert.equal(
-    report.dataSufficiency.status === "insufficient_data"
-      ? report.dataSufficiency.reason
-      : null,
-    "empty_cohort",
-  );
+  assert.equal(report.status, "insufficient_data");
+  assert.equal(report.dataSufficiency.status, "insufficient");
+  // Same rule as case 14: an empty cohort is a factual answer, not an issue.
+  assert.deepEqual(report.dataSufficiency.issues, []);
   assert.deepEqual(report.observations, []);
   assert.deepEqual(report.positiveSignals, []);
 });

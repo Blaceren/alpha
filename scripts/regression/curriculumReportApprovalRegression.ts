@@ -39,7 +39,15 @@ async function main() {
     cwd: process.cwd(), env: { ...process.env, DATABASE_URL: dbUrl }, encoding: "utf8",
   });
   if (migration.status !== 0) throw new Error(`${migration.stdout}\n${migration.stderr}`);
-  process.env.DATABASE_URL = dbUrl;
+  // AFD-5D2A — pinned to ONE connection, for the same reason as
+  // `curriculumXpReadApiRegression`: this suite brackets a deliberately
+  // FK-violating fixture write with `PRAGMA foreign_keys = OFF` / `= ON`, and
+  // that pragma is PER-CONNECTION in SQLite. Through Prisma's pool the UPDATE
+  // could land on a connection that never saw the `OFF` and fail with error
+  // 787. The defect had not yet fired here; it is the same defect. Foreign keys
+  // remain enforced — only the bracket is made to apply to the writing
+  // connection.
+  process.env.DATABASE_URL = `${dbUrl}?connection_limit=1`;
   process.env.CURRICULUM_V2_READ_ENABLED = "true";
   process.env.CURRICULUM_V2_ENROLLMENT_ENABLED = "true";
   process.env.CURRICULUM_V2_REPORT_ENABLED = "true";

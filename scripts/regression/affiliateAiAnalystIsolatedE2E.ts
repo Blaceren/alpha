@@ -764,12 +764,67 @@ async function main() {
       endDate: "2020-02-01",
     });
     assert.equal(reply.status, 200, reply.text);
+    // AFD-5D2A — the verdict is now a top-level `status` plus a three-valued
+    // sufficiency status and a coded issue list. An EMPTY period raises no
+    // issues: emptiness is a valid factual result, and the `insufficient_data`
+    // FINDING already names why.
+    assert.equal(reply.body.status, "insufficient_data");
     const sufficiency = obj(reply.body.dataSufficiency);
-    assert.equal(sufficiency.status, "insufficient_data");
-    assert.equal(sufficiency.reason, "no_events_in_period");
+    assert.equal(sufficiency.status, "insufficient");
+    assert.deepEqual(sufficiency.issues, []);
     assert.deepEqual(reply.body.observations, []);
     assert.deepEqual(reply.body.positiveSignals, []);
     assert.match(String(arr(reply.body.warnings)[0]?.message), /insufficient_data/);
+  });
+
+  await check("17b every published finding carries a backend support tier", async () => {
+    const reply = await analyst.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(reply.status, 200, reply.text);
+    const all = [
+      ...arr(reply.body.observations),
+      ...arr(reply.body.warnings),
+      ...arr(reply.body.positiveSignals),
+      ...arr(reply.body.questions),
+    ];
+    assert.ok(all.length > 0);
+    for (const finding of all) {
+      const tier = obj(finding).supportTier;
+      assert.ok(
+        ["descriptive", "moderate", "strong"].includes(String(tier)),
+        `finding ${String(obj(finding).code)} has tier ${String(tier)}`,
+      );
+      // The field is always PRESENT, `null` when the finding is not a
+      // comparison — never absent, so a consumer never guesses.
+      assert.ok("comparison" in obj(finding));
+    }
+  });
+
+  await check("17c a real window publishes ok or partial, never a derived state", async () => {
+    const reply = await analyst.postWithCsrf(ANALYSIS, WINDOW);
+    assert.equal(reply.status, 200, reply.text);
+    assert.ok(["ok", "partial"].includes(String(reply.body.status)));
+    const sufficiency = obj(reply.body.dataSufficiency);
+    assert.ok(["complete", "partial"].includes(String(sufficiency.status)));
+    // The two views of one decision agree.
+    const expected =
+      reply.body.status === "partial" ? "partial" : "complete";
+    assert.equal(sufficiency.status, expected);
+    // Every issue names a code from the closed catalog.
+    for (const issue of arr(sufficiency.issues)) {
+      assert.ok(
+        [
+          "SAMPLE_TOO_SMALL",
+          "COHORT_FOLLOWUP_INCOMPLETE",
+          "COMPARISON_PERIOD_UNAVAILABLE",
+          "MIXED_CURRENCY",
+          "BREAKDOWN_TRUNCATED",
+          "METRIC_UNAVAILABLE",
+          "INTEGRITY_WARNING",
+        ].includes(String(obj(issue).code)),
+        `unknown reason code ${String(obj(issue).code)}`,
+      );
+      assert.ok(arr(obj(issue).evidence).length > 0, "an issue carries no evidence");
+    }
   });
 
   await check("18 two identical requests produce identical findings", async () => {
