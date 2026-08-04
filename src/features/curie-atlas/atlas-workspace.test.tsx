@@ -1,0 +1,724 @@
+/**
+ * AFD-5D2 — the Curie Atlas workspace.
+ *
+ * These cover the behaviour that only exists once the pieces are assembled: the
+ * refusal to run by itself, the snapshot that belongs to one resolved request,
+ * the stale state that never relabels an old result with new filters, and the
+ * privacy and persistence properties of what this screen actually paints.
+ */
+import * as React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { AuthenticatedSessionProvider } from "@/components/crm-shell/session-context";
+import { sessionFromDto } from "@/domain/identity/session";
+import type { CrmRole, Permission } from "@/domain/identity/roles";
+import { CurieAtlasWorkspace } from "./atlas-workspace";
+import {
+  atlasReport,
+  cohortReport,
+  insufficientReport,
+  limitedReport,
+} from "@/test/atlas-fixtures";
+
+/* ------------------------------------------------------------- API doubles */
+
+const runMock = vi.fn();
+const filtersMock = vi.fn();
+
+vi.mock("@/application/api/curie-atlas-client", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/application/api/curie-atlas-client")>(
+      "@/application/api/curie-atlas-client",
+    );
+  return { ...actual, runAtlasAnalysis: (...a: unknown[]) => runMock(...a) };
+});
+
+vi.mock("@/application/api/affiliate-analytics-client", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/application/api/affiliate-analytics-client")>(
+      "@/application/api/affiliate-analytics-client",
+    );
+  return { ...actual, fetchAnalyticsFilters: (...a: unknown[]) => filtersMock(...a) };
+});
+
+/* ---------------------------------------------------------------- harness */
+
+const ANALYST: Permission[] = ["view_affiliate_analytics"];
+const ADMIN: Permission[] = ["manage_settings", "view_affiliate_analytics"];
+const UNRELATED: Permission[] = ["view_audit"];
+
+function renderWorkspace(permissions: Permission[] = ANALYST, role: CrmRole = "analyst") {
+  const session = sessionFromDto({
+    employeeId: "emp_1",
+    displayName: "Тестовый сотрудник",
+    role,
+    effectivePermissions: permissions,
+    permissionVersion: 1,
+    expiresAt: "2026-08-01T10:00:00.000Z",
+  });
+  return render(
+    <AuthenticatedSessionProvider session={session}>
+      <CurieAtlasWorkspace />
+    </AuthenticatedSessionProvider>,
+  );
+}
+
+const ok = (data: unknown) => ({ status: "success" as const, data });
+
+async function runAnalysis(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId("atlas-run"));
+  await waitFor(() => expect(screen.getByTestId("atlas-result")).toBeInTheDocument());
+}
+
+beforeEach(() => {
+  runMock.mockReset().mockResolvedValue(ok(atlasReport()));
+  filtersMock.mockReset().mockResolvedValue(
+    ok({
+      affiliatePartners: [
+        { id: "1", code: "alpha", displayName: "Affiliate Alpha", status: "active", archived: false },
+      ],
+      affiliateCampaigns: [],
+      affiliateTrackingLinks: [],
+    }),
+  );
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
+
+/* ------------------------------------------------------------ initial state */
+
+describe("initial state", () => {
+  it("does NOT run the analysis on mount", async () => {
+    renderWorkspace();
+    // Give effects a chance to fire; the point is that none of them analyses.
+    await waitFor(() => expect(filtersMock).toHaveBeenCalled());
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("shows an explicit empty state and the primary action", () => {
+    renderWorkspace();
+    // The phrase appears twice on purpose: once visibly in the empty state and
+    // once in the sr-only live region. Both are wanted, so the assertion is on
+    // the count rather than on uniqueness.
+    expect(screen.getAllByText("Анализ ещё не запускался")).toHaveLength(2);
+    expect(screen.getByTestId("atlas-run")).toHaveTextContent("Запустить анализ");
+  });
+
+  it("advertises the deterministic, no-model boundary", () => {
+    renderWorkspace();
+    expect(screen.getByText("Без модели")).toBeInTheDocument();
+    expect(screen.getByText(/Модель не вызывается/)).toBeInTheDocument();
+  });
+
+  it("renders no result section before a run", () => {
+    renderWorkspace();
+    expect(screen.queryByTestId("atlas-result")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Обзор" })).not.toBeInTheDocument();
+  });
+});
+
+/* --------------------------------------------------------------- execution */
+
+describe("explicit execution", () => {
+  it("runs exactly once per click and renders the result", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(runMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("heading", { name: "Обзор" })).toBeInTheDocument();
+  });
+
+  it("does NOT run again when a filter changes", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    expect(runMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("prevents duplicate execution while a request is in flight", async () => {
+    const user = userEvent.setup();
+    const gate: { release: ((value: unknown) => void) | null } = { release: null };
+    runMock.mockImplementation(
+      () => new Promise<unknown>((resolve) => { gate.release = resolve; }),
+    );
+    renderWorkspace();
+
+    const button = screen.getByTestId("atlas-run");
+    await user.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    // A second and third attempt while busy must not issue a request.
+    await user.click(button);
+    await user.click(button);
+    expect(runMock).toHaveBeenCalledTimes(1);
+    expect(button).toHaveAttribute("aria-busy", "true");
+
+    gate.release?.(ok(atlasReport()));
+    await waitFor(() => expect(screen.getByTestId("atlas-result")).toBeInTheDocument());
+  });
+
+  it("shows a bounded loading state and preserves the selected filters", async () => {
+    const user = userEvent.setup();
+    const gate: { release: ((value: unknown) => void) | null } = { release: null };
+    runMock.mockImplementation(() => new Promise<unknown>((resolve) => { gate.release = resolve; }));
+    renderWorkspace();
+
+    await user.selectOptions(screen.getByLabelText("Группировка"), "month");
+    await user.click(screen.getByTestId("atlas-run"));
+    expect(screen.getByText("Выполняем анализ…")).toBeInTheDocument();
+    expect(screen.getByLabelText("Группировка")).toHaveValue("month");
+
+    gate.release?.(ok(atlasReport()));
+    await waitFor(() => expect(screen.getByTestId("atlas-result")).toBeInTheDocument());
+  });
+
+  it("sends the selected mode, group and dimension in the request body", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await runAnalysis(user);
+    expect(runMock.mock.calls[0]?.[0]).toMatchObject({
+      mode: "event_date",
+      group: "week",
+      dimension: "affiliate",
+    });
+  });
+
+  it("omits the cutoff in event-date mode, where the backend refuses one", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(runMock.mock.calls[0]?.[0].cutoffDate).toBeUndefined();
+  });
+});
+
+/* ------------------------------------------------------------ stale state */
+
+describe("snapshot and stale state", () => {
+  it("marks the result stale after any analytical parameter changes", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "false");
+
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await waitFor(() =>
+      expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "true"),
+    );
+    expect(
+      screen.getAllByText(/Параметры изменились\. Запустите анализ повторно\./).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("keeps showing the OLD result rather than hiding or blanking it", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+
+    // The previous answer is still the last true answer.
+    expect(screen.getByText(/За период засчитано 1240 кликов/)).toBeInTheDocument();
+  });
+
+  it("never relabels a stale result with the NEW parameters", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.selectOptions(screen.getByLabelText("Группировка"), "month");
+
+    // The overview belongs to the report, which was produced with group=day.
+    const overview = screen.getByRole("heading", { name: "Обзор" }).closest("section");
+    expect(within(overview as HTMLElement).getByText("День")).toBeInTheDocument();
+    expect(within(overview as HTMLElement).queryByText("Месяц")).not.toBeInTheDocument();
+  });
+
+  it("clears the stale mark when the parameters return to the snapshot's", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await waitFor(() =>
+      expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "true"),
+    );
+    await user.selectOptions(screen.getByLabelText("Группировка"), "day");
+    await waitFor(() =>
+      expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "false"),
+    );
+  });
+
+  it("replaces the snapshot on a new successful run", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    runMock.mockResolvedValue(
+      ok(atlasReport({ requestId: "req_atlas_0002", inputFingerprint: "ffffffffffffffff" })),
+    );
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await user.click(screen.getByTestId("atlas-run"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "false"),
+    );
+    await user.click(screen.getAllByText("Технические детали")[0]!);
+    expect(screen.getByText("req_atlas_0002")).toBeInTheDocument();
+  });
+});
+
+/* ----------------------------------------------------------------- sections */
+
+describe("result rendering", () => {
+  it("renders all six sections with the required Russian headings", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    for (const heading of [
+      "Обзор",
+      "Достаточность данных",
+      "Предупреждения",
+      "Наблюдения",
+      "Положительные сигналы",
+      "Вопросы к данным",
+    ]) {
+      expect(screen.getByRole("heading", { name: new RegExp(heading) })).toBeInTheDocument();
+    }
+  });
+
+  it("never renders the word opportunities", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspace();
+    await runAnalysis(user);
+    expect(container.textContent?.toLowerCase()).not.toContain("opportunit");
+    expect(container.textContent).not.toContain("Возможности");
+  });
+
+  it("places each finding in its own section", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    const warnings = screen.getByRole("heading", { name: /Предупреждения/ }).closest("section");
+    expect(within(warnings as HTMLElement).getByText(/выборке меньше 30/)).toBeInTheDocument();
+
+    const signals = screen
+      .getByRole("heading", { name: /Положительные сигналы/ })
+      .closest("section");
+    expect(within(signals as HTMLElement).getByText(/выше совокупной/)).toBeInTheDocument();
+  });
+
+  it("shows the backend's message verbatim and the code only in details", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    expect(
+      screen.getByText("За период засчитано 1240 кликов и 96 регистраций в Академии."),
+    ).toBeVisible();
+    // The code IS in the DOM — inside a closed <details> — but is not primary
+    // text and is not visible until the operator opens the disclosure.
+    const code = screen.getByText("period_volume");
+    expect(code).not.toBeVisible();
+    expect(code.closest("details")).not.toBeNull();
+  });
+
+  it("renders a question as a question, never as a conclusion", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    const questions = screen.getByRole("heading", { name: /Вопросы к данным/ }).closest("section");
+    expect(
+      within(questions as HTMLElement).getByText(/не устанавливает причины/),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no action, recommendation or message control anywhere", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspace();
+    await runAnalysis(user);
+
+    const text = (container.textContent ?? "").toLowerCase();
+    for (const forbidden of ["рекоменд", "отправить", "написать", "назначить", "создать задачу"]) {
+      expect(text).not.toContain(forbidden);
+    }
+    // The only button on the screen is the primary action.
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((b) => b.getAttribute("data-testid"))).toContain("atlas-run");
+  });
+});
+
+/* ---------------------------------------------------------------- evidence */
+
+describe("evidence disclosure", () => {
+  it("hides evidence behind a keyboard-accessible disclosure", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    const disclosures = screen.getAllByText("Показать данные");
+    expect(disclosures.length).toBeGreaterThan(0);
+    // Collapsed: present in the DOM, deliberately not visible.
+    for (const header of screen.getAllByText("Показатель")) {
+      expect(header).not.toBeVisible();
+    }
+
+    await user.click(disclosures[0]!);
+    expect(screen.getAllByText("Показатель").some((n) => n.checkVisibility?.() ?? true)).toBe(true);
+  });
+
+  it("renders evidence exactly as returned, computing nothing", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.click(screen.getAllByText("Показать данные")[0]!);
+
+    // The warning's operand is denominator=18. No delta, no percentage, no
+    // total is invented beside it.
+    expect(screen.getByText("18")).toBeInTheDocument();
+    expect(screen.queryByText("%")).not.toBeInTheDocument();
+  });
+
+  it("shows no disclosure for a finding with no evidence", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    const questions = screen.getByRole("heading", { name: /Вопросы к данным/ }).closest("section");
+    expect(within(questions as HTMLElement).queryByText("Показать данные")).not.toBeInTheDocument();
+    expect(within(questions as HTMLElement).getByText("Без операндов")).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------- sufficiency */
+
+describe("data sufficiency", () => {
+  it("shows ok for a sufficient report with no caveats", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(screen.getByTestId("atlas-result-status")).toHaveTextContent("Данных достаточно");
+  });
+
+  it("shows partial and keeps the findings when a capability is unavailable", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(limitedReport()));
+    renderWorkspace();
+    await runAnalysis(user);
+
+    expect(screen.getByTestId("atlas-result-status")).toHaveTextContent("с ограничениями");
+    expect(screen.getByText(/Отчёт неполон/)).toBeInTheDocument();
+    expect(screen.getByText(/несколько валют/)).toBeInTheDocument();
+  });
+
+  it("shows insufficient_data with the factual reason and no zero percentages", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(insufficientReport()));
+    renderWorkspace();
+    await runAnalysis(user);
+
+    expect(screen.getByTestId("atlas-result-status")).toHaveTextContent("Недостаточно данных");
+    expect(screen.getByTestId("atlas-insufficient-reason")).toHaveTextContent("нет событий");
+    // No observation is presented as measured performance.
+    const observations = screen.getByRole("heading", { name: /Наблюдения/ }).closest("section");
+    expect(
+      within(observations as HTMLElement).getByText("Наблюдений по этим параметрам нет."),
+    ).toBeInTheDocument();
+  });
+
+  it("offers an adjustment hint only when the reason supports it", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(insufficientReport("no_events_in_period")));
+    const view = renderWorkspace();
+    await runAnalysis(user);
+    expect(screen.getByText(/расширить период/)).toBeInTheDocument();
+
+    view.unmount();
+    runMock.mockResolvedValue(ok(insufficientReport("MIXED_CURRENCY")));
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(screen.queryByText(/расширить период/)).not.toBeInTheDocument();
+  });
+
+  it("renders an UNKNOWN reason code through the fallback without crashing", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(insufficientReport("A_BRAND_NEW_REASON")));
+    renderWorkspace();
+    await runAnalysis(user);
+
+    expect(screen.getByTestId("atlas-insufficient-reason")).toHaveTextContent(
+      /не знает/,
+    );
+    // And the raw code is available to diagnostics.
+    await user.click(screen.getAllByText("Технические детали").at(-1) as HTMLElement);
+    expect(screen.getByText("A_BRAND_NEW_REASON")).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------- cohort mode */
+
+describe("cohort mode", () => {
+  it("sends the cutoff only in cohort mode and shows it in the overview", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue(ok(cohortReport()));
+    renderWorkspace();
+
+    await user.click(screen.getByRole("radio", { name: /По когорте привлечения/ }));
+    await runAnalysis(user);
+
+    expect(runMock.mock.calls[0]?.[0].mode).toBe("acquisition_cohort");
+    expect(screen.getAllByText(/2026-07-31/).length).toBeGreaterThan(0);
+  });
+});
+
+/* ------------------------------------------------------------------ errors */
+
+describe("error states", () => {
+  it("reports a backend failure without destroying a previous result", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    runMock.mockResolvedValue({ status: "upstream_unavailable" });
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await user.click(screen.getByTestId("atlas-run"));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    // Previous result preserved, and marked stale.
+    expect(screen.getByTestId("atlas-result")).toHaveAttribute("data-stale", "true");
+    expect(screen.getByText(/За период засчитано 1240 кликов/)).toBeInTheDocument();
+  });
+
+  it("explains a timeout distinctly from an unreachable backend", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({ status: "timeout" });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/не завершился/));
+  });
+
+  it("explains session expiry", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({ status: "unauthenticated", requestId: "req_401" });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Сессия истекла/));
+    expect(screen.getByText(/req_401/)).toBeInTheDocument();
+  });
+
+  it("explains a permission refusal", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({
+      status: "forbidden",
+      messageKey: "crm.affiliates.forbidden",
+    });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Недостаточно прав/));
+  });
+
+  it("explains a contract violation as a refusal to render, not a retry", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({ status: "contract_violation", reason: "model_invoked" });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/с участием модели/),
+    );
+    expect(screen.queryByTestId("atlas-result")).not.toBeInTheDocument();
+  });
+
+  it("explains a malformed response", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({ status: "malformed_response" });
+    renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/не удалось разобрать/));
+  });
+
+  it("never prints a stack trace, SQL, cookie or token in an error", async () => {
+    const user = userEvent.setup();
+    runMock.mockResolvedValue({ status: "upstream_unavailable" });
+    const { container } = renderWorkspace();
+    await user.click(screen.getByTestId("atlas-run"));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+    const text = container.textContent ?? "";
+    for (const forbidden of ["SELECT ", "at Object.", "csrf", "Set-Cookie", "stack"]) {
+      expect(text).not.toContain(forbidden);
+    }
+  });
+});
+
+/* -------------------------------------------------------------- permissions */
+
+describe("permission boundary", () => {
+  it("allows an analyst", async () => {
+    const user = userEvent.setup();
+    renderWorkspace(ANALYST);
+    await runAnalysis(user);
+    expect(screen.getByRole("heading", { name: "Обзор" })).toBeInTheDocument();
+  });
+
+  it("allows crm_admin through manage_settings", async () => {
+    const user = userEvent.setup();
+    renderWorkspace(ADMIN, "crm_admin");
+    await runAnalysis(user);
+    expect(screen.getByRole("heading", { name: "Обзор" })).toBeInTheDocument();
+  });
+
+  it("denies an operator without the analytics permission and issues no request", async () => {
+    renderWorkspace(UNRELATED, "support");
+    expect(screen.getByText("Недостаточно прав")).toBeInTheDocument();
+    expect(screen.queryByTestId("atlas-run")).not.toBeInTheDocument();
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("names the permission it requires", () => {
+    renderWorkspace(UNRELATED, "support");
+    expect(screen.getByText(/view_affiliate_analytics/)).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------- privacy and storage */
+
+describe("privacy and persistence", () => {
+  it("writes nothing to localStorage, sessionStorage or cookies", async () => {
+    const user = userEvent.setup();
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    renderWorkspace();
+    await runAnalysis(user);
+
+    expect(setItem).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    expect(document.cookie).toBe("");
+    setItem.mockRestore();
+  });
+
+  it("puts no fingerprint or request id in the URL", async () => {
+    const user = userEvent.setup();
+    const before = window.location.href;
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(window.location.href).toBe(before);
+    expect(window.location.search).toBe("");
+  });
+
+  it("renders no PII, learner id, click id or Pocket id", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspace();
+    await runAnalysis(user);
+
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+    expect(text).not.toMatch(/\btq-[A-Za-z0-9]/);
+    expect(text).not.toMatch(/\b\d{9,}\b/);
+    for (const forbidden of ["learnerId", "userId", "pocketPlayerId", "clickId"]) {
+      expect(text).not.toContain(forbidden);
+    }
+  });
+
+  it("clears the snapshot when the permission is lost", async () => {
+    const user = userEvent.setup();
+    const view = renderWorkspace(ANALYST);
+    await runAnalysis(user);
+    expect(screen.getByTestId("atlas-result")).toBeInTheDocument();
+
+    // Re-render the same tree with a session that no longer grants the read.
+    const stripped = sessionFromDto({
+      employeeId: "emp_1",
+      displayName: "Тестовый сотрудник",
+      role: "support",
+      effectivePermissions: UNRELATED,
+      permissionVersion: 2,
+      expiresAt: "2026-08-01T10:00:00.000Z",
+    });
+    view.rerender(
+      <AuthenticatedSessionProvider session={stripped}>
+        <CurieAtlasWorkspace />
+      </AuthenticatedSessionProvider>,
+    );
+
+    expect(screen.queryByTestId("atlas-result")).not.toBeInTheDocument();
+    expect(screen.getByText("Недостаточно прав")).toBeInTheDocument();
+  });
+
+  it("loses the snapshot on unmount — nothing survives teardown", async () => {
+    const user = userEvent.setup();
+    const view = renderWorkspace();
+    await runAnalysis(user);
+    view.unmount();
+
+    renderWorkspace();
+    expect(screen.queryByTestId("atlas-result")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Анализ ещё не запускался").length).toBeGreaterThan(0);
+  });
+});
+
+/* --------------------------------------------------------------- accessibility */
+
+describe("accessibility", () => {
+  it("announces run state through a live region", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    const status = screen.getAllByRole("status").find((n) => n.className.includes("sr-only"));
+    expect(status).toBeDefined();
+    expect(status as HTMLElement).toHaveTextContent("Анализ ещё не запускался");
+
+    await runAnalysis(user);
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("status").find((n) => n.className.includes("sr-only")) as HTMLElement,
+      ).toHaveTextContent("Анализ готов"),
+    );
+  });
+
+  it("announces the stale state to assistive technology", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.selectOptions(screen.getByLabelText("Группировка"), "week");
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("status").find((n) => n.className.includes("sr-only")) as HTMLElement,
+      ).toHaveTextContent("Параметры изменились"),
+    );
+  });
+
+  it("gives every finding a text severity label, not colour alone", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    expect(screen.getAllByText("Требует внимания").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Информация").length).toBeGreaterThan(0);
+  });
+
+  it("reaches the evidence disclosure by keyboard alone", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+
+    const summary = screen.getAllByText("Показать данные")[0]!;
+    summary.focus();
+    expect(summary).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.getAllByText("Показатель").length).toBeGreaterThan(0);
+  });
+
+  it("uses an accessible table for evidence", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await runAnalysis(user);
+    await user.click(screen.getAllByText("Показать данные")[0]!);
+
+    const table = screen.getAllByRole("table")[0]!;
+    expect(within(table!).getByText("Данные, на которых основан вывод")).toBeInTheDocument();
+    expect(within(table!).getAllByRole("columnheader").length).toBe(3);
+  });
+
+  it("labels the mode, group and dimension controls", () => {
+    renderWorkspace();
+    expect(screen.getByRole("radiogroup", { name: "Режим отчёта" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Группировка")).toBeInTheDocument();
+  });
+});

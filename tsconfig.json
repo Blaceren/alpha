@@ -23,5 +23,10 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "tests-e2e", "playwright.config.ts"]
+  "exclude": [
+    "node_modules",
+    "tests-e2e",
+    "playwright.config.ts",
+    "tests-e2e-atlas/support/seed.ts"
+  ]
 }

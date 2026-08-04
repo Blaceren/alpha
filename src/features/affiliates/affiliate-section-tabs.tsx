@@ -21,11 +21,25 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export type AffiliateSection = "management" | "analytics" | "leads";
+export type AffiliateSection = "management" | "analytics" | "atlas" | "leads";
 
+/**
+ * AFD-5D2 adds Curie Atlas, immediately after Аналитика.
+ *
+ * Its position and its URL both say the same thing: it reads the analytics this
+ * section already publishes and adds no data of its own. The route is nested
+ * under `/affiliates/analytics/` rather than being a sibling, so the address bar
+ * agrees with the information architecture — Аффилейты → Аналитика → Curie
+ * Atlas — and a top-level "AI" section, which would compete with the CRM's
+ * existing Аналитика root and overstate what this is, never appears.
+ *
+ * IT CARRIES NO BADGE AND NO COUNT. There is nothing to count: Atlas holds no
+ * queue and no unread state, and it runs only when an operator asks.
+ */
 const TABS: readonly { key: AffiliateSection; label: string; href: string }[] = [
   { key: "management", label: "Управление", href: "/affiliates" },
   { key: "analytics", label: "Аналитика", href: "/affiliates/analytics" },
+  { key: "atlas", label: "Curie Atlas", href: "/affiliates/analytics/atlas" },
   { key: "leads", label: "Лиды", href: "/affiliates/leads" },
 ];
 

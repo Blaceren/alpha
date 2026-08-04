@@ -160,6 +160,25 @@ export const ANALYTICS_COHORT_TIMESERIES_PATH =
 export const ANALYTICS_COHORT_BREAKDOWN_PATH =
   "/api/crm/v1/affiliates/analytics/cohorts/breakdown";
 
+/* --------------------------------------------------- Curie Atlas (AFD-5D2)
+ *
+ * One exact, terminal path. It is the FIRST analytics path that is not a GET:
+ * the backend route exports only `POST`, because the analysis request carries a
+ * mode, two period shapes, a cutoff, three filters, a grouping and a dimension,
+ * which as a query string would be a URL nobody can review.
+ *
+ * Next rewrites are method-agnostic, so a GET reaching this path finds no
+ * handler and fails at the backend. The backend independently enforces
+ * `view_affiliate_analytics` AND a valid CSRF token, so a proxied method or a
+ * caller not entitled to it fails there rather than here.
+ *
+ * It is listed separately from the seven read paths above because it is a
+ * separate decision: AFD-5C1 deliberately proxied only literal read routes, and
+ * "the analysis route is also under /analytics/" is not by itself a reason to
+ * forward it.
+ */
+export const ANALYTICS_ANALYSIS_PATH = "/api/crm/v1/affiliates/analytics/analysis";
+
 /* ---------------------------------------------- Affiliate leads (AFD-5C2)
  *
  * Three exact paths: the list, one lead, and that lead's PII reveal.
@@ -211,6 +230,7 @@ export const PROXIED_PATHS = [
   ANALYTICS_COHORT_SUMMARY_PATH,
   ANALYTICS_COHORT_TIMESERIES_PATH,
   ANALYTICS_COHORT_BREAKDOWN_PATH,
+  ANALYTICS_ANALYSIS_PATH,
   AFFILIATE_LEADS_PATH,
   AFFILIATE_LEAD_DETAIL_PATH,
   AFFILIATE_LEAD_REVEAL_PATH,

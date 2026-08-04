@@ -12,6 +12,7 @@ import {
   API_USERS_PATH,
   AFFILIATES_PATH,
   AFFILIATE_ANALYTICS_PATH,
+  AFFILIATE_ATLAS_PATH,
   AFFILIATE_LEADS_PATH,
 } from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
@@ -21,6 +22,7 @@ import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace"
 import { AffiliateDetailWorkspace } from "@/features/affiliates/affiliate-detail-workspace";
 import { TrackingLinkDetailWorkspace } from "@/features/affiliates/tracking-link-detail-workspace";
 import { AffiliateAnalyticsWorkspace } from "@/features/affiliate-analytics/analytics-workspace";
+import { CurieAtlasWorkspace } from "@/features/curie-atlas/atlas-workspace";
 import { AffiliateLeadsWorkspace } from "@/features/affiliate-leads/leads-workspace";
 import { AffiliateLeadDetailWorkspace } from "@/features/affiliate-leads/lead-detail-workspace";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
@@ -159,6 +161,21 @@ function ApiModeLanding() {
         <React.Suspense fallback={null}>
           <AffiliateAnalyticsWorkspace />
         </React.Suspense>
+      </ApiShell>
+    );
+  }
+
+  /* --------------------------------------------------- Curie Atlas (AFD-5D2)
+   *
+   * A CHILD of the analytics path, matched exactly. It needs no Suspense
+   * boundary: unlike the analytics workspace it reads no search params, because
+   * an Atlas result is not addressable by URL and its draft selection is local
+   * state.
+   */
+  if (pathname === AFFILIATE_ATLAS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <CurieAtlasWorkspace />
       </ApiShell>
     );
   }

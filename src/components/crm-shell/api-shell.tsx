@@ -35,6 +35,15 @@ export const API_USERS_PATH = "/users";
  */
 export const AFFILIATES_PATH = "/affiliates";
 export const AFFILIATE_ANALYTICS_PATH = "/affiliates/analytics";
+/**
+ * AFD-5D2 — Curie Atlas, a CHILD of the analytics path.
+ *
+ * Because it is a child, it must be matched BEFORE `AFFILIATE_ANALYTICS_PATH`
+ * would be — they are both exact matches so order between them is not strictly
+ * load-bearing, but both must precede the `/affiliates/{partnerId}` pattern for
+ * the same reason the other three do.
+ */
+export const AFFILIATE_ATLAS_PATH = "/affiliates/analytics/atlas";
 export const AFFILIATE_LEADS_PATH = "/affiliates/leads";
 
 export function ApiShell({

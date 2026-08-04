@@ -27,10 +27,11 @@ describe("rewrites — api mode", () => {
   it("produces exactly twenty-eight rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
-    // analytics paths (AFD-5C1) + three affiliate lead paths (AFD-5C2). Pinning
-    // the count is the point: a new proxied path must be a deliberate change to
-    // this number, never a side effect.
-    expect(buildRewrites(env)).toHaveLength(28);
+    // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
+    // + three affiliate lead paths (AFD-5C2). Pinning the count is the point:
+    // a new proxied path must be a deliberate change to this number, never a
+    // side effect.
+    expect(buildRewrites(env)).toHaveLength(29);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -54,7 +55,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the twenty-eight reviewed paths", () => {
+  it("exposes exactly the twenty-nine reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -81,6 +82,7 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/affiliates/analytics/cohorts/summary",
       "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
       "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
+      "/api/crm/v1/affiliates/analytics/analysis",
       "/api/crm/v1/affiliates/leads",
       "/api/crm/v1/affiliates/leads/:leadId",
       "/api/crm/v1/affiliates/leads/:leadId/reveal",
@@ -269,6 +271,7 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/affiliates/analytics/cohorts/summary",
       "/api/crm/v1/affiliates/analytics/cohorts/timeseries",
       "/api/crm/v1/affiliates/analytics/cohorts/breakdown",
+      "/api/crm/v1/affiliates/analytics/analysis",
       "/api/crm/v1/affiliates/leads",
       "/api/crm/v1/affiliates/leads/:leadId",
       "/api/crm/v1/affiliates/leads/:leadId/reveal",
