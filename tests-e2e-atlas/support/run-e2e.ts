@@ -36,7 +36,7 @@ async function main() {
 
   migrate();
 
-  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d2a-seed.ts`;
+  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d3-seed.ts`;
   fs.copyFileSync(`${process.cwd()}/tests-e2e-atlas/support/seed.ts`, stagedSeed);
   const seeded = spawnSync("npx", ["tsx", stagedSeed], {
     cwd: BACKEND_DIR,

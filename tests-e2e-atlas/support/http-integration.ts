@@ -159,7 +159,7 @@ async function main() {
    * worktree stays tracked-clean, `assertBackendUnchanged()` proves it before
    * and after, and the staged file is removed in the `finally` block.
    */
-  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d2a-seed.ts`;
+  const stagedSeed = `${BACKEND_DIR}/node_modules/.afd5d3-seed.ts`;
   fs.copyFileSync(`${process.cwd()}/tests-e2e-atlas/support/seed.ts`, stagedSeed);
 
   const seeded = spawnSync("npx", ["tsx", stagedSeed], {
@@ -179,9 +179,9 @@ async function main() {
 
     /* ------------------------------------------------- one session per role */
 
-    const analyst = await loginAs("afd5d2a-e2e-analyst@example.invalid");
-    const admin = await loginAs("afd5d2a-e2e-crm_admin@example.invalid");
-    const support = await loginAs("afd5d2a-e2e-support@example.invalid");
+    const analyst = await loginAs("afd5d3-e2e-analyst@example.invalid");
+    const admin = await loginAs("afd5d3-e2e-crm_admin@example.invalid");
+    const support = await loginAs("afd5d3-e2e-support@example.invalid");
 
     /* ---------------------------------------------------- permission matrix */
 
@@ -216,7 +216,7 @@ async function main() {
       // The stronger statement: a learner is refused one step EARLIER than the
       // analysis route, because the CRM session is a staff surface. There is no
       // authenticated learner who could then be refused by the analysis route.
-      const { client, status } = await attemptLogin("afd5d2a-e2e-learner@example.invalid");
+      const { client, status } = await attemptLogin("afd5d3-e2e-learner@example.invalid");
       assert(status !== 200, `a learner must not obtain a CRM session, got ${status}`);
       const response = await analyse(client);
       assert(

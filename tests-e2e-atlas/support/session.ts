@@ -39,7 +39,7 @@ export async function loginAsAnalyst(page: Page): Promise<void> {
     data: {
       email: ATLAS_E2E.analyst,
       password: ATLAS_E2E.password,
-      captchaToken: "afd5d2a-atlas-ui-e2e-token",
+      captchaToken: "afd5d3-atlas-ui-e2e-token",
     },
   });
 

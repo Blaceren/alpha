@@ -53,7 +53,7 @@ export const ATLAS_E2E = {
   backendOrigin: BACKEND_ORIGIN,
   /** Used as a leak canary: this must never appear in the browser. */
   backendPortToken: new URL(BACKEND_ORIGIN).port,
-  analyst: "afd5d2a-e2e-analyst@example.invalid",
+  analyst: "afd5d3-e2e-analyst@example.invalid",
   password: process.env.ATLAS_E2E_PASSWORD ?? "CurieAtlasE2E123!",
 } as const;
 
