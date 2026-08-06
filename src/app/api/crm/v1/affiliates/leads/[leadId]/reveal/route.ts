@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAuditLog } from "@/lib/audit";
+import { createAuditLogStrict } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { AffiliateForbiddenError, AffiliateInputError } from "@/lib/crm/affiliates";
 import {
@@ -94,7 +94,14 @@ export async function POST(request: Request, context: RouteContext) {
     // the signed session rather than derived from the employee id.
     const actorUserId = await resolveAffiliateActorUserId();
 
-    await createAuditLog({
+    // STRICT, not the best-effort `createAuditLog` every other route uses. A
+    // reveal that was served must be a reveal that was recorded — so a
+    // persistence failure here has to abort the reveal, not be logged and
+    // ignored. The rejection propagates out of this try block to the catch
+    // below, which returns the same safe, PII-free envelope as any other
+    // failure: there is no code path from here that still returns `identity`
+    // once this call has thrown.
+    await createAuditLogStrict({
       userId: actorUserId,
       action: "AFFILIATE_LEAD_PII_REVEALED",
       entityType: "AFFILIATE_LEAD",
