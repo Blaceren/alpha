@@ -747,6 +747,166 @@ async function main() {
   });
 
   /* ==================================================================== */
+  /* F1 — a caller-supplied env may narrow, never widen                    */
+  /* ==================================================================== */
+
+  /**
+   * The independent audit's finding: `attestStagingGate` took its answer from
+   * the CALLER-SUPPLIED `env`, so a direct server-side caller on a non-staging
+   * host could persist a durable, audited attestation row before the completion
+   * primitive refused the effect. The row is the evidence trail, so creating one
+   * that claims a staging attestation happened on a production deployment is
+   * itself the defect — moving the failure later is not a fix.
+   *
+   * The contract now: the REAL process environment and the SUPPLIED environment
+   * must BOTH permit it.
+   */
+  await check("A8.16a the real and supplied environments must BOTH permit the attestation", async () => {
+    type Case = {
+      label: string;
+      real: Record<string, string | undefined>;
+      supplied?: Record<string, string | undefined>;
+      allowed: boolean;
+    };
+    const cases: Case[] = [
+      // 1. real staging + supplied staging, flag true -> the one legal case.
+      { label: "real staging + supplied staging", real: {}, supplied: {}, allowed: true },
+      // 2. the supplied env NARROWS. Still refused, as it always was.
+      {
+        label: "real staging + supplied production",
+        real: {},
+        supplied: { ATA_ENVIRONMENT: "production" },
+        allowed: false,
+      },
+      // 3. THE FINDING. The supplied env tries to WIDEN a production host.
+      {
+        label: "real production + supplied staging",
+        real: { ATA_ENVIRONMENT: "production" },
+        supplied: {},
+        allowed: false,
+      },
+      // 4. neither permits.
+      {
+        label: "real production + supplied production",
+        real: { ATA_ENVIRONMENT: "production" },
+        supplied: { ATA_ENVIRONMENT: "production" },
+        allowed: false,
+      },
+      // 5/6. the flag itself, absent and explicitly false, on a real staging host.
+      {
+        label: "real staging, flag absent",
+        real: { STAGING_ATTESTATION_ENABLED: undefined },
+        supplied: {},
+        allowed: false,
+      },
+      {
+        label: "real staging, flag false",
+        real: { STAGING_ATTESTATION_ENABLED: "false" },
+        supplied: {},
+        allowed: false,
+      },
+      // 7. dev is not staging, and forgetting is the safe direction.
+      { label: "real dev + supplied staging", real: { ATA_ENVIRONMENT: "dev" }, supplied: {}, allowed: false },
+      {
+        label: "real unclassified + supplied staging",
+        real: { ATA_ENVIRONMENT: undefined },
+        supplied: {},
+        allowed: false,
+      },
+    ];
+
+    for (const scenario of cases) {
+      const f = await registrationFixture();
+      // `reset()` leaves the process on staging; now describe the REAL host.
+      applyProcessEnv(stagingEnv(scenario.real));
+      const call = () =>
+        attest.attestStagingGate({
+          operatorUserId: f.operator.id,
+          eventClass: "pocket_registration",
+          learnerUserId: f.learner.id,
+          stableCode: REGISTRATION_STABLE_CODE,
+          requestId: "attest-f1-both-0001",
+          evaluationTime: EVALUATION_TIME,
+          db: prisma,
+          // `undefined` means "no env supplied at all", i.e. the real default.
+          ...(scenario.supplied ? { env: stagingEnv(scenario.supplied) } : {}),
+        });
+
+      if (scenario.allowed) {
+        const receipt = await call();
+        assert.equal(receipt.completed, true, scenario.label);
+        assert.equal(receipt.xpAwarded, 0, scenario.label);
+        assert.equal(await prisma.stagingAttestation.count(), 1, scenario.label);
+      } else {
+        await expectCode(call, "STAGING_ATTESTATION_DISABLED");
+        // THE POINT: nothing durable, not even the attestation row.
+        assert.equal(await prisma.stagingAttestation.count(), 0, `${scenario.label}: attestation row`);
+        assert.equal(
+          await prisma.auditLog.count({
+            where: { action: "CURRICULUM_STAGING_ATTESTATION_RECORDED" },
+          }),
+          0,
+          `${scenario.label}: attestation audit`,
+        );
+        assert.equal(
+          await prisma.userLevelProgress.count({ where: { status: "completed" } }),
+          0,
+          `${scenario.label}: completions`,
+        );
+        assert.equal(await prisma.xPTransaction.count(), 0, `${scenario.label}: XP rows`);
+        const enrollment = await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+          where: { id: f.enrolled.id },
+        });
+        assert.equal(enrollment.currentLevel, 1, `${scenario.label}: progression`);
+        assert.equal(enrollment.highestCompletedLevel, 0, `${scenario.label}: progression`);
+      }
+      applyProcessEnv(stagingEnv());
+    }
+  });
+
+  await check("A8.16b the forged-env scenario writes NOTHING on a production host", async () => {
+    const f = await registrationFixture();
+    const before = {
+      attestations: await prisma.stagingAttestation.count(),
+      audits: await prisma.auditLog.count(),
+      progress: await prisma.userLevelProgress.count(),
+      xp: await prisma.xPTransaction.count(),
+    };
+
+    // The deployment is production. Only the caller lies.
+    applyProcessEnv(stagingEnv({ ATA_ENVIRONMENT: "production" }));
+    await expectCode(
+      () =>
+        attest.attestStagingGate({
+          operatorUserId: f.operator.id,
+          eventClass: "pocket_registration",
+          learnerUserId: f.learner.id,
+          stableCode: REGISTRATION_STABLE_CODE,
+          requestId: "attest-f1-forged-0001",
+          evaluationTime: EVALUATION_TIME,
+          db: prisma,
+          env: stagingEnv(),
+        }),
+      "STAGING_ATTESTATION_DISABLED",
+    );
+    applyProcessEnv(stagingEnv());
+
+    assert.deepEqual(
+      {
+        attestations: await prisma.stagingAttestation.count(),
+        audits: await prisma.auditLog.count(),
+        progress: await prisma.userLevelProgress.count(),
+        xp: await prisma.xPTransaction.count(),
+      },
+      before,
+      "a forged env must leave no trace of any kind",
+    );
+    assert.equal(before.attestations, 0);
+    assert.equal(before.audits, 0);
+    assert.equal(before.xp, 0);
+  });
+
+  /* ==================================================================== */
   /* Exactness and idempotency                                             */
   /* ==================================================================== */
 
@@ -1040,20 +1200,63 @@ async function main() {
     assert.match(sql, /CHECK \("environment" IN \('staging'\)\)/);
   });
 
-  await check("A8.28 the staging owners are zero-reward-only in the completion primitive", () => {
-    const source = fs.readFileSync("src/lib/curriculum/completion.ts", "utf8");
-    const block = source.slice(
-      source.indexOf("function isZeroRewardOnlySource"),
-      source.indexOf("function isStagingAttestedSource"),
+  /**
+   * F2 moved the zero-reward owner vocabulary into `completion-pairs.ts` so the
+   * package validator and the completion engine answer "which owners award
+   * nothing" from ONE list. This check used to pin the engine's old literal
+   * comparisons with a regex, which asserted the spelling rather than the
+   * guarantee; it now asserts the guarantee itself — from the shared vocabulary
+   * and from behaviour.
+   */
+  await check("A8.28 the staging owners can never award XP", async () => {
+    const pairs = await import("../../src/lib/curriculum/completion-pairs");
+
+    // 1. Both staging owners are members of the one zero-reward list.
+    assert.equal(pairs.ZERO_REWARD_ONLY_OWNERS.has("staging_attested_registration"), true);
+    assert.equal(pairs.ZERO_REWARD_ONLY_OWNERS.has("staging_attested_checkpoint"), true);
+
+    // 2. The XP-capable owners are exactly the four learner-driven ones, so no
+    //    staging source can reach the ledger. Disjointness, not a source slice.
+    const xpCapableOwners = Object.keys(pairs.PRODUCTION_COMPLETION_PAIRS)
+      .filter((owner) => !pairs.ZERO_REWARD_ONLY_OWNERS.has(owner))
+      .sort();
+    assert.deepEqual(xpCapableOwners, [
+      "assessment_pass",
+      "level_completion",
+      "mentor_completion",
+      "report_approval",
+    ]);
+
+    // 3. Behaviour: a gate MIS-AUTHORED with a reward is refused outright
+    //    rather than completed, and mints nothing.
+    const f = await registrationFixture();
+    await prisma.levelDefinition.update({
+      where: { id: f.level.id },
+      data: { xpReward: 5 },
+    });
+    await expectCode(
+      () =>
+        attest.attestStagingGate({
+          operatorUserId: f.operator.id,
+          eventClass: "pocket_registration",
+          learnerUserId: f.learner.id,
+          stableCode: REGISTRATION_STABLE_CODE,
+          requestId: "attest-zero-reward-0001",
+          evaluationTime: EVALUATION_TIME,
+          db: prisma,
+        }),
+      "STAGING_ATTESTATION_COMPLETION_REFUSED",
     );
-    assert.match(block, /sourceType === "staging_attested_registration"/);
-    assert.match(block, /sourceType === "staging_attested_checkpoint"/);
-    // Neither staging source may appear in the XP-bearing list.
-    const xpBearing = source.slice(
-      source.indexOf("const XP_BEARING_SOURCES"),
-      source.indexOf("/** A source that can never award XP"),
+    assert.equal(await prisma.xPTransaction.count(), 0, "no XP row");
+    assert.equal(
+      await prisma.userLevelProgress.count({ where: { status: "completed" } }),
+      0,
+      "the level must not complete",
     );
-    assert.equal(xpBearing.includes("staging_attested"), false);
+    const enrollment = await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+      where: { id: f.enrolled.id },
+    });
+    assert.equal(enrollment.currentLevel, 1, "no unlock");
   });
 
   await prisma.$disconnect();

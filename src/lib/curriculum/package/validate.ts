@@ -18,7 +18,10 @@ import {
   type ProvenanceRecord,
 } from "@/lib/curriculum/package/schema";
 import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
-import { isOwnedCompletionPair } from "@/lib/curriculum/completion-pairs";
+import {
+  isOwnedCompletionPair,
+  isZeroRewardCompletionPair,
+} from "@/lib/curriculum/completion-pairs";
 import {
   describeStableCodeIssue,
   isCanonicalCurriculumCode,
@@ -269,6 +272,35 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         };
         if (pkg.status === "approved") issues.push(unowned);
         else warnings.push(unowned);
+      }
+
+      // A level that completes through a ZERO-REWARD owner must declare no
+      // reward. `completion.ts` refuses the combination outright
+      // (`COMPLETION_REWARD_INVALID`), and nothing on the platform can clear
+      // that refusal, so a package that ships one has produced a level the
+      // learner reaches, satisfies, and can never leave — the same permanent
+      // lock `requiredCheckpointLevel` and `visibilityRule` produce, and it is
+      // refused here for the same reason.
+      //
+      // Driven by the shared vocabulary (`isZeroRewardCompletionPair`), not by
+      // `GATED_TYPES`: the rule belongs to the OWNER, so it stays correct if a
+      // zero-reward owner ever exists for a level type that is not gated, and
+      // it cannot disagree with the engine.
+      //
+      // An ERROR for `draft` as well as `approved`, unlike
+      // `LEVEL_COMPLETION_PAIR_UNOWNED` above. That is the existing policy for
+      // this class, not a new one: every gate completion-contract violation in
+      // this file (`GATE_SOURCE_MISMATCH`, `GATE_SELF_COMPLETABLE`,
+      // `GATE_COMPLETION_METHOD_SELF_COMPLETABLE`) is unconditional. A draft is
+      // allowed to be mid-authoring about WHICH owner a level has; it is not
+      // allowed to declare a contract that owner can never honour.
+      if (isZeroRewardCompletionPair(level.type, level.completionMethod) && level.xpReward !== 0) {
+        issue(
+          issues,
+          "LEVEL_GATE_REWARD_UNSUPPORTED",
+          `${levelPath}.xpReward`,
+          `${level.type}:${level.completionMethod} completes through a zero-reward owner and must declare xpReward 0`,
+        );
       }
 
       const isContentBearing = CONTENT_BEARING_TYPES.has(level.type);

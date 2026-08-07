@@ -80,3 +80,82 @@ export const OWNED_COMPLETION_PAIRS: ReadonlySet<CurriculumCompletionPair> = new
 export function isOwnedCompletionPair(type: string, completionMethod: string): boolean {
   return OWNED_COMPLETION_PAIRS.has(completionPair(type, completionMethod));
 }
+
+/* ------------------------------------------------------------------------ */
+/* Zero-reward owners                                                        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The owners that can NEVER award XP, whatever a level definition says.
+ *
+ * These are the GATES. A gate is not a piece of work the learner did, it is a
+ * fact about the world the platform waited for — a Pocket registration it
+ * authenticated, a balance a provider reported — so there is nothing to reward
+ * and `completion.ts` refuses a non-zero reward on one outright
+ * (`COMPLETION_REWARD_INVALID`). They are also, not coincidentally, the owners
+ * that are absent from `CurriculumXpSourceType` and from the
+ * `XPTransaction.sourceType` CHECK constraint, so an XP row for one is
+ * impossible at three independent layers.
+ *
+ * The learner-driven owners are deliberately NOT here. `level_completion`,
+ * `assessment_pass`, `report_approval` and `mentor_completion` may all legally
+ * carry a positive reward; they simply are not required to.
+ */
+export const ZERO_REWARD_ONLY_PRODUCTION_OWNERS = [
+  "checkpoint_verification",
+  "pocket_registration_postback",
+] as const satisfies readonly (keyof typeof PRODUCTION_COMPLETION_PAIRS)[];
+
+/**
+ * A8 — the staging owners stand in for exactly those gates, so they inherit the
+ * rule. Listed separately for the same reason the pair maps are separate: what
+ * a PACKAGE may declare and what OWNERS exist in a deployment are two
+ * questions that must never be answered from one list by accident.
+ */
+export const ZERO_REWARD_ONLY_STAGING_OWNERS = [
+  "staging_attested_registration",
+  "staging_attested_checkpoint",
+] as const satisfies readonly (keyof typeof STAGING_ATTESTED_COMPLETION_PAIRS)[];
+
+/**
+ * Every zero-reward owner name, production and staging.
+ *
+ * `completion.ts` builds its runtime predicate from this set rather than
+ * repeating the names, so "which owners award nothing" has exactly one answer
+ * and the package validator below cannot drift away from the engine.
+ */
+export const ZERO_REWARD_ONLY_OWNERS: ReadonlySet<string> = new Set<string>([
+  ...ZERO_REWARD_ONLY_PRODUCTION_OWNERS,
+  ...ZERO_REWARD_ONLY_STAGING_OWNERS,
+]);
+
+/**
+ * The pairs a package may declare that complete through a zero-reward owner.
+ *
+ * Built from the PRODUCTION owners only, exactly like `OWNED_COMPLETION_PAIRS`:
+ * the staging owners target the same two pairs, so including them would change
+ * nothing today and would quietly widen this rule the moment a staging-only
+ * pair ever existed.
+ */
+export const ZERO_REWARD_COMPLETION_PAIRS: ReadonlySet<CurriculumCompletionPair> =
+  new Set(
+    ZERO_REWARD_ONLY_PRODUCTION_OWNERS.flatMap(
+      (owner) => PRODUCTION_COMPLETION_PAIRS[owner] as readonly CurriculumCompletionPair[],
+    ),
+  );
+
+/**
+ * Must a level declaring this pair carry `xpReward === 0`?
+ *
+ * A package that answers no here ships a level whose completion the engine will
+ * refuse for as long as it exists — the learner reaches it, the gate resolves,
+ * and `assertReward` rejects the completion because the definition advertises a
+ * reward the owner may not pay. There is no owner that can clear that, so it is
+ * a permanent lock, which is why the validator refuses it at authoring time.
+ */
+export function isZeroRewardCompletionPair(
+  type: string,
+  completionMethod: string,
+): boolean {
+  return ZERO_REWARD_COMPLETION_PAIRS.has(completionPair(type, completionMethod));
+}

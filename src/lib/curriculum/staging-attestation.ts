@@ -423,9 +423,30 @@ export async function attestStagingGate({
   ...rawInput
 }: AttestStagingGateInput): Promise<StagingAttestationReceipt> {
   // The environment gate runs FIRST, before anything is read or written, so a
-  // deployment that is not staging costs nothing and can leave no trace. It is
-  // checked again inside the completion primitive.
-  if (!isStagingAttestationUsable(env)) {
+  // deployment that is not staging costs nothing and can leave no trace.
+  //
+  // BOTH POLICIES MUST SAY YES, and that is the whole point of asking twice.
+  //
+  //   `isStagingAttestationUsable()`     the REAL process environment
+  //   `isStagingAttestationUsable(env)`  the environment this CALLER supplied
+  //
+  // The injected `env` exists so a test can describe a deployment it is not
+  // running on. Consulting it ALONE would make it an authority, and a
+  // caller-supplied authority is not one: a direct server-side caller on a
+  // production host could then hand in `{ ATA_ENVIRONMENT: "staging" }` and
+  // persist a durable, audited `StagingAttestation` row — the completion would
+  // still be refused downstream, but the evidence trail would already carry a
+  // row that says a staging attestation was made on a production deployment.
+  //
+  // Requiring both means a supplied environment can only ever NARROW the
+  // capability, never widen it. `env` defaults to `process.env`, so for every
+  // real caller the two questions are the same question and nothing changes.
+  //
+  // This is deliberately NOT a substitute for the re-check inside the
+  // completion primitive (`assertStagingAttestationProof`), which asks the real
+  // `process.env` again at the moment the level is completed. Two independent
+  // gates, one at the write and one at the effect.
+  if (!isStagingAttestationUsable() || !isStagingAttestationUsable(env)) {
     fail("STAGING_ATTESTATION_DISABLED", "staging attestation is not available here");
   }
 

@@ -15,6 +15,7 @@ import { isFinancialCheckpointType } from "./checkpoint";
 import {
   PRODUCTION_COMPLETION_PAIRS,
   STAGING_ATTESTED_COMPLETION_PAIRS,
+  ZERO_REWARD_ONLY_OWNERS,
 } from "./completion-pairs";
 import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
 import { isStagingAttestationUsable } from "./staging-attestation-policy";
@@ -120,23 +121,25 @@ const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
   "mentor_completion",
 ];
 
-/** A source that can never award XP, whatever the level definition says. */
+/**
+ * A source that can never award XP, whatever the level definition says.
+ *
+ * The membership comes from `completion-pairs.ts` rather than being repeated
+ * here, so the package validator — which refuses a positive reward on a
+ * zero-reward pair at authoring time — and this engine, which refuses the
+ * completion at runtime, are answering from ONE list. A8's two staging owners
+ * are in it for the same reason the two production gates are: a QA attestation
+ * stands in for a gate, and a gate awards nothing.
+ *
+ * The explicit return type keeps the narrowing a `Set` lookup cannot express.
+ */
 function isZeroRewardOnlySource(
   sourceType: CurriculumLevelCompletionSource,
 ): sourceType is
   | CurriculumCheckpointCompletionSource
   | CurriculumPocketRegistrationCompletionSource
   | CurriculumStagingAttestedCompletionSource {
-  return (
-    sourceType === "checkpoint_verification" ||
-    sourceType === "pocket_registration_postback" ||
-    // A8. A QA attestation stands in for a gate, and a gate awards nothing.
-    // A staging attestation therefore cannot mint XP even if the level it
-    // targets were ever mis-authored with a positive reward — `assertReward`
-    // refuses that combination outright.
-    sourceType === "staging_attested_registration" ||
-    sourceType === "staging_attested_checkpoint"
-  );
+  return ZERO_REWARD_ONLY_OWNERS.has(sourceType);
 }
 
 /** A8 — the two staging-only owners, as a runtime predicate. */

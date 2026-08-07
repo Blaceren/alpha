@@ -96,6 +96,8 @@ async function main() {
   const pairs = await import("../../src/lib/curriculum/completion-pairs");
   const practical = await import("../../src/lib/curriculum/practical-mapping");
   const packageValidate = await import("../../src/lib/curriculum/package/validate");
+  const packageSchema = await import("../../src/lib/curriculum/package/schema");
+  const packageFingerprint = await import("../../src/lib/curriculum/package/fingerprint");
 
   let sequence = 0;
 
@@ -1261,6 +1263,176 @@ async function main() {
       /requiredCheckpointLevel:\s*\n?\s*level\.checkpointLevelCode/.test(source),
       false,
     );
+  });
+
+  /* ==================================================================== */
+  /* F2 — a zero-reward gate may not declare a reward                      */
+  /* ==================================================================== */
+
+  /**
+   * The independent audit's finding: `completion.ts` refuses a positive reward
+   * on a gate owner (`COMPLETION_REWARD_INVALID`) and nothing can clear that
+   * refusal, but package validation let such a package through — so a package
+   * could validate, be approved, be imported, and ship a level the learner
+   * reaches and can never leave.
+   *
+   * `findGate` locates the level by its PAIR rather than by index, so these
+   * tests keep testing the rule and not the fixture's ordering.
+   */
+  function findGate(pkg: Record<string, unknown>, type: string, completionMethod: string) {
+    const level = (pkg.modules as PkgModule[])
+      .flatMap((m) => m.levels)
+      .find(
+        (candidate) =>
+          candidate.type === type && candidate.completionMethod === completionMethod,
+      );
+    assert.ok(level, `fixture must contain a ${type}:${completionMethod} level`);
+    return level;
+  }
+
+  function rewardIssue(result: ReturnType<typeof packageValidate.validateCurriculumPackage>) {
+    const issues = (result as { issues?: Array<{ code: string; path: string }> }).issues ?? [];
+    return issues.find((i) => i.code === "LEVEL_GATE_REWARD_UNSUPPORTED");
+  }
+
+  for (const gate of [
+    { type: "external_event", completionMethod: "pocket_postback" },
+    { type: "financial_checkpoint", completionMethod: "balance_check" },
+  ]) {
+    const pair = `${gate.type}:${gate.completionMethod}`;
+
+    await check(`F2.1 ${pair} with xpReward > 0 is rejected in an approved package`, () => {
+      const pkg = loadPackage("ata-v2-first-slice.rev3.approved.json");
+      findGate(pkg, gate.type, gate.completionMethod).xpReward = 250;
+      const result = packageValidate.validateCurriculumPackage(pkg);
+      assert.equal(result.ok, false, `${pair} must not validate with a reward`);
+      const explicit = rewardIssue(result);
+      assert.ok(
+        explicit,
+        `expected LEVEL_GATE_REWARD_UNSUPPORTED, got ${(result as { issues: Array<{ code: string }> }).issues
+          .map((i) => i.code)
+          .join(",")}`,
+      );
+      assert.match(explicit.path, /xpReward$/);
+    });
+
+    // The draft policy is the EXISTING one for a broken completion contract:
+    // every GATE_* violation in validate.ts is unconditional, so this is too.
+    await check(`F2.2 ${pair} with xpReward > 0 is an ERROR in a draft package too`, () => {
+      const pkg = loadPackage("ata-v2-first-slice.draft.json");
+      assert.equal(pkg.status, "draft", "fixture must be a draft");
+      findGate(pkg, gate.type, gate.completionMethod).xpReward = 1;
+      const result = packageValidate.validateCurriculumPackage(pkg);
+      assert.equal(result.ok, false, "a draft may not declare an impossible contract");
+      assert.ok(rewardIssue(result), "must be an issue, not a warning");
+      const warnings = (result as { warnings?: Array<{ code: string }> }).warnings ?? [];
+      assert.equal(
+        warnings.some((w) => w.code === "LEVEL_GATE_REWARD_UNSUPPORTED"),
+        false,
+        "must not be downgraded to a warning",
+      );
+    });
+
+    await check(`F2.3 ${pair} with an explicit xpReward of 0 stays valid`, () => {
+      const pkg = loadPackage("ata-v2-first-slice.rev3.approved.json");
+      findGate(pkg, gate.type, gate.completionMethod).xpReward = 0;
+      const result = packageValidate.validateCurriculumPackage(pkg);
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues, null, 2));
+    });
+  }
+
+  /**
+   * The learner-driven owners MAY carry a reward. Misclassifying any of them as
+   * zero-reward would break the XP product outright, so this is asserted two
+   * ways: the rule raises nothing for them, and a package that actually awards
+   * XP on them still validates completely.
+   *
+   * `xpReward` is inside the content fingerprint, so the second half has to
+   * re-derive `contentFingerprint` — otherwise it would be testing the
+   * fingerprint rather than the reward rule.
+   */
+  function rewardOrdinaryLevels(pkg: Record<string, unknown>, amount: number) {
+    let rewarded = 0;
+    for (const level of (pkg.modules as PkgModule[]).flatMap((m) => m.levels)) {
+      if (pairs.isZeroRewardCompletionPair(level.type as string, level.completionMethod as string)) {
+        continue;
+      }
+      level.xpReward = amount;
+      rewarded += 1;
+    }
+    assert.ok(rewarded >= 2, "fixture must contain at least a lesson and an assessment level");
+    return pkg;
+  }
+
+  await check("F2.4 an XP-bearing lesson, assessment and report raise no gate-reward issue", () => {
+    const pkg = rewardOrdinaryLevels(loadPackage("ata-v2-first-slice.rev3.approved.json"), 120);
+    const result = packageValidate.validateCurriculumPackage(pkg);
+    const issues = (result as { issues?: Array<{ code: string }> }).issues ?? [];
+    const warnings = (result as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    assert.equal(
+      [...issues, ...warnings].some((i) => i.code === "LEVEL_GATE_REWARD_UNSUPPORTED"),
+      false,
+      `ordinary owners must keep their reward: ${issues.map((i) => i.code).join(",")}`,
+    );
+  });
+
+  await check("F2.4b an XP-bearing package validates fully once its fingerprint is re-derived", () => {
+    const pkg = rewardOrdinaryLevels(loadPackage("ata-v2-first-slice.rev3.approved.json"), 120);
+    const parsed = packageSchema.curriculumPackageSchema.parse(pkg);
+    pkg.contentFingerprint = packageFingerprint.calculateFingerprint(parsed);
+    const result = packageValidate.validateCurriculumPackage(pkg);
+    assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues, null, 2));
+  });
+
+  await check("F2.5 the validator and the engine read ONE zero-reward list", () => {
+    // Drift between "which owners award nothing" in the validator and in
+    // completion.ts is the whole reason F2 existed. They must be the same list.
+    assert.deepEqual(
+      [...pairs.ZERO_REWARD_COMPLETION_PAIRS].sort(),
+      ["external_event:pocket_postback", "financial_checkpoint:balance_check"].sort(),
+    );
+    // The learner-driven owners are NOT zero-reward.
+    for (const pair of [
+      "lesson:lesson",
+      "lesson:manual",
+      "lesson:assessment_pass",
+      "final_exam:assessment_pass",
+      "report:report_approval",
+      "mentor_review:mentor_review",
+    ]) {
+      const [type, completionMethod] = pair.split(":");
+      assert.equal(
+        pairs.isZeroRewardCompletionPair(type, completionMethod),
+        false,
+        `${pair} must remain able to award XP`,
+      );
+    }
+    // completion.ts consumes the shared set rather than repeating the names.
+    const engine = fs.readFileSync("src/lib/curriculum/completion.ts", "utf8");
+    assert.match(engine, /ZERO_REWARD_ONLY_OWNERS\.has\(sourceType\)/);
+    assert.deepEqual([...pairs.ZERO_REWARD_ONLY_OWNERS].sort(), [
+      "checkpoint_verification",
+      "pocket_registration_postback",
+      "staging_attested_checkpoint",
+      "staging_attested_registration",
+    ]);
+  });
+
+  await check("F2.6 every shipped package still validates unchanged", () => {
+    for (const file of [
+      "ata-v2-first-slice.rev3.approved.json",
+      "ata-v2-first-slice.approved.json",
+      "ata-v2-first-slice.draft.json",
+    ]) {
+      const result = packageValidate.validateCurriculumPackage(loadPackage(file));
+      assert.equal(result.ok, true, `${file}: ${JSON.stringify(result.ok ? [] : result.issues)}`);
+      const warnings = (result as { warnings?: Array<{ code: string }> }).warnings ?? [];
+      assert.equal(
+        warnings.some((w) => w.code === "LEVEL_GATE_REWARD_UNSUPPORTED"),
+        false,
+        `${file} must not gain a new warning`,
+      );
+    }
   });
 
   /* ==================================================================== */
