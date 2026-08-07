@@ -25,6 +25,14 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   // an unavailable provider writes nothing, so the presence of this action is
   // itself the proof that a threshold was met.
   checkpointVerified: "CURRICULUM_CHECKPOINT_VERIFIED",
+  // A8. Written in the SAME transaction that creates a StagingAttestation, so a
+  // durable attestation without an audit record is not a state the database can
+  // hold. Recorded before any completion is attempted, so an attestation whose
+  // completion later fails is still fully accounted for.
+  stagingAttestationRecorded: "CURRICULUM_STAGING_ATTESTATION_RECORDED",
+  // A4. The learner moving their own mentor-review level into `pending_review`.
+  // A learner-owned transition, and the only one they own on this level.
+  mentorReviewRequested: "CURRICULUM_MENTOR_REVIEW_REQUESTED",
   xpAwarded: "CURRICULUM_XP_AWARDED",
   contentVersionCreated: "CONTENT_VERSION_CREATED",
   contentVersionUpdated: "CONTENT_VERSION_UPDATED",

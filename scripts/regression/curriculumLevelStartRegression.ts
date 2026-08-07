@@ -707,7 +707,6 @@ async function main() {
     for (const candidate of [
       "src/app/api/curriculum/v2/progress/route.ts",
       "src/app/api/curriculum/v2/levels/[stableCode]/status/route.ts",
-      "src/app/api/curriculum/v2/levels/[stableCode]/complete/route.ts",
       "src/app/api/curriculum/v2/levels/[stableCode]/progress/route.ts",
     ]) {
       assert.equal(fs.existsSync(candidate), false, candidate);
@@ -721,6 +720,50 @@ async function main() {
     assert.equal(source.includes("userLevelProgress"), false);
     assert.equal(source.includes("prisma"), false);
     assert.match(source, /startCurrentCurriculumLevel/);
+  });
+
+  // A1 amends this suite deliberately. The completion route USED to be listed
+  // above as a route that must not exist, because at the time nothing could
+  // legally complete a level over HTTP and any such route would have been a
+  // second progression implementation. Product decision R1 makes `lesson:manual`
+  // the completion contract for 13 of the 20 canonical practical levels, so the
+  // route now has to exist — and the guarantee that mattered is restated here as
+  // a positive obligation rather than dropped: it must DELEGATE, and it must not
+  // be a generic completion endpoint.
+  await check("19a-bis the manual completion route delegates and is not generic", () => {
+    const routePath = "src/app/api/curriculum/v2/levels/[stableCode]/complete/route.ts";
+    assert.equal(fs.existsSync(routePath), true, routePath);
+    const source = fs.readFileSync(routePath, "utf8");
+    // The route's CODE, with comments stripped: the doc comment names the very
+    // identifiers the route must not use, and a substring match cannot tell
+    // "documents that this is forbidden" from "does it".
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    // No second progression implementation: no direct durable writes here.
+    for (const forbidden of [
+      "userLevelProgress",
+      "xPTransaction",
+      "userCurriculumEnrollment",
+      "prisma",
+      "auditLog",
+    ]) {
+      assert.equal(code.includes(forbidden), false, forbidden);
+    }
+    // The caller cannot nominate a learner, an enrollment, a level id or a
+    // reward: none of those identifiers may appear in the route's code at all.
+    for (const forbidden of ["userId", "enrollmentId", "levelDefinitionId", "xpReward", "sourceType"]) {
+      assert.equal(code.includes(forbidden), false, forbidden);
+    }
+    assert.match(code, /completeManualLevel/);
+    assert.match(code, /gatePhase4Self/);
+    assert.match(code, /strictObject/);
+    // Still no generic completion endpoint anywhere.
+    for (const candidate of [
+      "src/app/api/curriculum/v2/complete/route.ts",
+      "src/app/api/curriculum/v2/levels/complete/route.ts",
+      "src/app/api/curriculum/v2/level-completion/route.ts",
+    ]) {
+      assert.equal(fs.existsSync(candidate), false, candidate);
+    }
   });
 
   await check("19b only the start route may be reached without a started level", async () => {

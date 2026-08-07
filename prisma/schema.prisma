@@ -188,6 +188,11 @@ model User {
   /// an optional single row, because the owner is keyed by Pocket player and a
   /// learner could in principle be matched by more than one event type later.
   pocketProviderEvents            PocketProviderEvent[]        @relation("PocketProviderEventLearner")
+  /// A8. QA attestations this operator made on a PREPROD deployment. There is
+  /// deliberately no learner-side back-relation: an attestation is a fact about
+  /// an ENROLLMENT, made by an operator, and is never presented as something
+  /// the learner did.
+  stagingAttestationsMade         StagingAttestation[]         @relation("StagingAttestationOperator")
 }
 
 model XpEvent {
@@ -1029,6 +1034,7 @@ model LevelDefinition {
   reportSubmissions       ReportSubmission[]
   checkpointRequirement   LevelCheckpointRequirement?
   checkpointAttempts      CheckpointVerificationAttempt[]
+  stagingAttestations     StagingAttestation[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -1090,6 +1096,76 @@ model CheckpointVerificationAttempt {
   @@unique([enrollmentId, levelDefinitionId, requestId])
   @@index([enrollmentId, requestId])
   @@index([enrollmentId, levelDefinitionId, createdAt])
+  @@index([levelDefinitionId])
+}
+
+/// A8 — the two QA event classes an operator may attest on PREPROD.
+///
+/// Named rather than free text so a third class cannot appear at runtime, and
+/// so each class is bound to exactly one completion owner in
+/// src/lib/curriculum/completion.ts.
+enum StagingAttestationEventClass {
+  /// Stands in for the authenticated Pocket registration postback (level 1).
+  pocket_registration
+  /// Stands in for a passed financial checkpoint gate.
+  financial_checkpoint
+}
+
+/**
+ * A8 — a PREPROD operator's attestation that a QA gate should be considered
+ * satisfied.
+ *
+ * WHAT ONE ROW MEANS, EXACTLY
+ * "An authorized operator, on a deployment authoritatively classified
+ * `staging`, attested that this enrollment's gate at this level should be
+ * treated as satisfied for QA." It does NOT mean the learner deposited money,
+ * and it does NOT mean Pocket witnessed a registration. Production is
+ * unaffected: it remains Pocket-authoritative for both.
+ *
+ * WHAT THIS TABLE CANNOT REPRESENT, STRUCTURALLY
+ * There is no amount column, no currency column, no balance column, no Pocket
+ * user id, no click id and no provider payload. A staging attestation therefore
+ * cannot fabricate a financial event or a partner event even by mistake — the
+ * shape has nowhere to put one. It is also NOT a
+ * `CheckpointVerificationAttempt`: that table means "the platform asked a
+ * balance provider", and writing a fake `met` row into it would corrupt both
+ * the cooldown window and the meaning of every honest row.
+ *
+ * WHY `environment` IS STORED ON THE ROW
+ * The runtime gate already refuses outside staging. Recording the
+ * classification the row was MADE under means a database copied from PREPROD to
+ * anywhere else still carries rows that identify themselves as staging-only,
+ * and the completion primitive re-checks it. A CHECK constraint pins the column
+ * to the single legal value.
+ *
+ * IDEMPOTENCY AND EXACTNESS
+ * `(enrollmentId, levelDefinitionId, requestId)` is unique, so an identical
+ * retry resolves to the one row instead of a second attestation.
+ * `(enrollmentId, levelDefinitionId, eventClass)` is unique too, so a gate can
+ * be attested exactly once however many request identities are tried.
+ */
+model StagingAttestation {
+  id                Int                          @id @default(autoincrement())
+  eventClass        StagingAttestationEventClass
+  enrollmentId      Int
+  levelDefinitionId Int
+  /// Operator-supplied idempotency identity. Never a learner value.
+  requestId         String
+  /// The operator. Never the learner: the domain refuses self-attestation.
+  attestedById      Int
+  /// Always the literal `staging`. Pinned by a CHECK constraint.
+  environment       String                       @default("staging")
+  attestedAt        DateTime                     @default(now())
+  createdAt         DateTime                     @default(now())
+
+  enrollment      UserCurriculumEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition LevelDefinition          @relation(fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attestedBy      User                     @relation("StagingAttestationOperator", fields: [attestedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([enrollmentId, levelDefinitionId, requestId])
+  @@unique([enrollmentId, levelDefinitionId, eventClass])
+  @@index([enrollmentId, requestId])
+  @@index([attestedById, attestedAt])
   @@index([levelDefinitionId])
 }
 
@@ -1572,6 +1648,7 @@ model UserCurriculumEnrollment {
   lessonProgress         UserLessonProgress[]
   reportSubmissions      ReportSubmission[]
   checkpointAttempts     CheckpointVerificationAttempt[]
+  stagingAttestations    StagingAttestation[]
 
   @@unique([id, curriculumVersionId])
   @@unique([id, userId, curriculumVersionId])

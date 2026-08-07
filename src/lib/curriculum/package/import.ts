@@ -288,8 +288,14 @@ async function writePackage(
           xpReward: level.xpReward,
           requiredXp: level.requiredXp,
           requiredPreviousLevel: previous ?? null,
-          requiredCheckpointLevel:
-            level.checkpointLevelCode !== null ? levelNumberByCode.get(level.checkpointLevelCode) ?? null : null,
+          // A5. Always NULL, and not merely because validation refused a
+          // non-null `checkpointLevelCode` upstream. `requiredCheckpointLevel`
+          // and `visibilityRule` are the two columns that permanently lock a
+          // level with no owner to clear them, so the importer — the one code
+          // path that could ever set them at scale — is not given the option.
+          // `visibilityRule` is left to its schema default of NULL for the same
+          // reason and is deliberately absent from this object.
+          requiredCheckpointLevel: null,
           featureUnlockCode: level.gate?.integrationCode ?? null,
           status: "active",
         },

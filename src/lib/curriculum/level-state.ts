@@ -272,6 +272,34 @@ function deriveEnrolledLevelStates(
     });
   }
 
+  /**
+   * The lowest level number that is NOT completed.
+   *
+   * The blocker below used to be decided by re-walking every earlier level for
+   * every level — O(n²) over a 100-level curriculum, on the hot read path that
+   * `/current`, the level-start owner and every completion share. This is the
+   * same predicate computed once.
+   *
+   * Equivalence, by definition rather than by invariant: a level L was blocked
+   * exactly when some `previous` in [1, L) was absent from `completedNumbers`,
+   * and such a `previous` exists exactly when the SMALLEST absent number is
+   * below L. So `firstIncompleteLevel < L` is the same test, level for level.
+   *
+   * Deliberately NOT derived from `maximumCompleted` or `highestCompletedLevel`:
+   * those are equal to this value minus one only because the contiguity and
+   * summary checks above already passed. Scanning for the first hole keeps this
+   * correct on its own terms, so a future change to those checks cannot silently
+   * change the unlock policy.
+   *
+   * The scan stops at the first hole, so it costs O(completed) once, not O(n)
+   * per level. `definitions.length` bounds it: `completedNumbers` only ever
+   * holds level numbers that exist.
+   */
+  let firstIncompleteLevel = 1;
+  while (completedNumbers.has(firstIncompleteLevel)) {
+    firstIncompleteLevel += 1;
+  }
+
   const levels: EffectiveLevelStateItem[] = definitions.map((levelDefinition) => {
     const moduleDefinition = moduleById.get(levelDefinition.moduleId)!;
     const progress = progressByLevelId.get(levelDefinition.id) ?? null;
@@ -343,11 +371,10 @@ function deriveEnrolledLevelStates(
     ) {
       blockers.push("definition_inactive");
     }
-    for (let previous = 1; previous < levelDefinition.levelNumber; previous += 1) {
-      if (!completedNumbers.has(previous)) {
-        blockers.push("sequence_incomplete");
-        break;
-      }
+    // O(1). Same predicate as the removed inner scan: "some earlier level is
+    // not completed" <-> "the first incomplete level precedes this one".
+    if (firstIncompleteLevel < levelDefinition.levelNumber) {
+      blockers.push("sequence_incomplete");
     }
     // XP gate uses only the V2 ledger authority. requiredXp === 0 always passes.
     // Fail closed when the engine is unavailable; only report insufficiency when

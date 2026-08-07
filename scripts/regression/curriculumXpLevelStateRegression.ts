@@ -1190,8 +1190,18 @@ async function main() {
         path.join("src", "app", "api", "curriculum", "v2", "current", "route.ts"),
         "utf8",
       );
-      assert.match(route, /searchParams\.size !== 0/);
-      assert.equal(route.includes('searchParams.get("asOf")'), false);
+      // A6 replaced the "reject every query parameter" rule with a strict
+      // allow-list, so the guarantee this check exists for — no API-supplied
+      // clock, and nothing unrecognised silently accepted — is now asserted
+      // against the allow-list instead. `shape` is the ONLY legal parameter,
+      // and an unrecognised name still rejects.
+      assert.match(route, /if \(key !== "shape"\) return null;/);
+      assert.match(route, /const RESPONSE_SHAPES = \["full", "summary"\] as const;/);
+      // Stronger than before: `asOf` may not appear in the route's CODE at all.
+      // (Comments strip out first — the doc comment names `asOf` as an example
+      // of a query the route rejects, which is the opposite of using it.)
+      const routeCode = route.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+      assert.equal(routeCode.includes("asOf"), false);
 
       const xpSource = fs.readFileSync(
         path.join("src", "lib", "curriculum", "xp.ts"),

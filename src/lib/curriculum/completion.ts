@@ -12,7 +12,12 @@ import {
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { isFinancialCheckpointType } from "./checkpoint";
+import {
+  PRODUCTION_COMPLETION_PAIRS,
+  STAGING_ATTESTED_COMPLETION_PAIRS,
+} from "./completion-pairs";
 import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
+import { isStagingAttestationUsable } from "./staging-attestation-policy";
 import {
   validatePinnedEnrollmentSnapshot,
   type EnrollmentResolutionGraph,
@@ -70,10 +75,31 @@ export type CurriculumCheckpointCompletionSource = "checkpoint_verification";
  */
 export type CurriculumPocketRegistrationCompletionSource = "pocket_registration_postback";
 
+/**
+ * A8 — the STAGING-ONLY QA attestation owners.
+ *
+ * They say one thing and one thing only: "an authorized PREPROD operator
+ * attested that this gate should be considered satisfied for QA". They do NOT
+ * say the learner deposited money and they do NOT say Pocket witnessed a
+ * registration. That distinction is why they are separate sources rather than a
+ * second way to reach `checkpoint_verification` /
+ * `pocket_registration_postback`: the completion audit, the progress row's
+ * provenance and every later reader can tell a QA attestation from a real
+ * financial or partner event by its source alone, permanently.
+ *
+ * Like the two production gate owners they are deliberately NOT members of
+ * `CurriculumXpSourceType`, so an XPTransaction for a staging attestation does
+ * not typecheck and the database CHECK constraint would reject it anyway.
+ */
+export type CurriculumStagingAttestedCompletionSource =
+  | "staging_attested_registration"
+  | "staging_attested_checkpoint";
+
 export type CurriculumLevelCompletionSource =
   | CurriculumXpBearingCompletionSource
   | CurriculumCheckpointCompletionSource
-  | CurriculumPocketRegistrationCompletionSource;
+  | CurriculumPocketRegistrationCompletionSource
+  | CurriculumStagingAttestedCompletionSource;
 
 const COMPLETION_SOURCES = new Set<string>([
   "level_completion",
@@ -82,6 +108,8 @@ const COMPLETION_SOURCES = new Set<string>([
   "mentor_completion",
   "checkpoint_verification",
   "pocket_registration_postback",
+  "staging_attested_registration",
+  "staging_attested_checkpoint",
 ]);
 
 /** The subset that may appear in the XP ledger. */
@@ -95,10 +123,29 @@ const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
 /** A source that can never award XP, whatever the level definition says. */
 function isZeroRewardOnlySource(
   sourceType: CurriculumLevelCompletionSource,
-): sourceType is CurriculumCheckpointCompletionSource | CurriculumPocketRegistrationCompletionSource {
+): sourceType is
+  | CurriculumCheckpointCompletionSource
+  | CurriculumPocketRegistrationCompletionSource
+  | CurriculumStagingAttestedCompletionSource {
   return (
     sourceType === "checkpoint_verification" ||
-    sourceType === "pocket_registration_postback"
+    sourceType === "pocket_registration_postback" ||
+    // A8. A QA attestation stands in for a gate, and a gate awards nothing.
+    // A staging attestation therefore cannot mint XP even if the level it
+    // targets were ever mis-authored with a positive reward — `assertReward`
+    // refuses that combination outright.
+    sourceType === "staging_attested_registration" ||
+    sourceType === "staging_attested_checkpoint"
+  );
+}
+
+/** A8 — the two staging-only owners, as a runtime predicate. */
+function isStagingAttestedSource(
+  sourceType: CurriculumLevelCompletionSource,
+): sourceType is CurriculumStagingAttestedCompletionSource {
+  return (
+    sourceType === "staging_attested_registration" ||
+    sourceType === "staging_attested_checkpoint"
   );
 }
 
@@ -108,31 +155,41 @@ type OwnerRule = {
 };
 
 // Only mappings already made unambiguous by the V2 definition vocabulary are
-// accepted. Scenario/practice/external/checkpoint definitions remain unavailable
-// until their owning phase defines a durable authorization contract.
+// accepted. Scenario/practice definitions remain unavailable until their owning
+// phase defines a durable authorization contract.
+//
+// The pair lists come from `completion-pairs.ts` so package validation can
+// check a curriculum against the SAME vocabulary the runtime enforces; the
+// `initialStatus` — the progress state an owner is allowed to take over from —
+// stays here, because it is authorization rather than vocabulary.
 const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
+  // Product decision R1: `lesson:manual` is how a practical level completes.
+  // Real practical content, an explicit learner action, one canonical engine.
   level_completion: {
     initialStatus: "in_progress",
-    pairs: new Set(["lesson:lesson", "lesson:manual"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.level_completion),
   },
   assessment_pass: {
     initialStatus: "in_progress",
-    pairs: new Set(["lesson:assessment_pass", "final_exam:assessment_pass"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.assessment_pass),
   },
   report_approval: {
     initialStatus: "pending_review",
-    pairs: new Set(["report:report_approval"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.report_approval),
   },
+  // A4. `pending_review` is the whole authorization boundary: the learner puts
+  // their own progress there and cannot leave it, and only an authorized
+  // reviewer — never the learner — hands it to this owner.
   mentor_completion: {
     initialStatus: "pending_review",
-    pairs: new Set(["mentor_review:mentor_review"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.mentor_completion),
   },
   // L4VC-1. The verification engine is the ONLY owner of a financial
   // checkpoint: it is not startable by the learner, not completable by an
   // assessment, a report or a mentor, and there is no staff override.
   checkpoint_verification: {
     initialStatus: "in_progress",
-    pairs: new Set(["financial_checkpoint:balance_check"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.checkpoint_verification),
   },
   // L1OWNER-1. Exactly ONE pair. There is deliberately no `external_event:*`
   // wildcard and no generic "external" owner: a future external-event level
@@ -140,7 +197,21 @@ const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
   // rather than inherit registration's.
   pocket_registration_postback: {
     initialStatus: "in_progress",
-    pairs: new Set(["external_event:pocket_postback"]),
+    pairs: new Set(PRODUCTION_COMPLETION_PAIRS.pocket_registration_postback),
+  },
+  // A8 — STAGING-ONLY. Same pairs as the two production owners above, and a
+  // completely separate trust story: each requires a durable StagingAttestation
+  // written by an authorized operator on a deployment authoritatively
+  // classified `staging`, and each re-checks that classification here (see
+  // `assertStagingAttestationProof`) so calling the primitive directly in
+  // production fails closed rather than relying on the HTTP layer.
+  staging_attested_registration: {
+    initialStatus: "in_progress",
+    pairs: new Set(STAGING_ATTESTED_COMPLETION_PAIRS.staging_attested_registration),
+  },
+  staging_attested_checkpoint: {
+    initialStatus: "in_progress",
+    pairs: new Set(STAGING_ATTESTED_COMPLETION_PAIRS.staging_attested_checkpoint),
   },
 };
 
@@ -507,6 +578,9 @@ const POCKET_REGISTRATION_SOURCE = /^pocket-registration:(\d+)$/;
 
 const CHECKPOINT_ATTEMPT_SOURCE = /^checkpoint-verification:([1-9]\d*)$/;
 
+/** A8 — `staging-attestation:<StagingAttestation.id>`. Never a learner value. */
+const STAGING_ATTESTATION_SOURCE = /^staging-attestation:([1-9]\d*)$/;
+
 async function assertLessonAssessmentProof(
   tx: Prisma.TransactionClient,
   context: CompletionContext,
@@ -759,6 +833,104 @@ async function assertPocketRegistrationProof(
 }
 
 /**
+ * A8 — the trusted proof behind a staging QA attestation.
+ *
+ * FOUR INDEPENDENT THINGS MUST ALL HOLD, and each of them fails closed:
+ *
+ *  1. THE DEPLOYMENT IS `staging`. Re-checked HERE, inside the completion
+ *     transaction, not only at the HTTP edge. `isStagingAttestationUsable`
+ *     demands an explicit `ATA_ENVIRONMENT=staging` declaration plus the
+ *     dedicated opt-in flag, so an absent, misspelled or `production`
+ *     classification refuses — forgetting is the safe direction. A caller that
+ *     reaches this primitive directly, from a script or a future route, gets
+ *     the same refusal the route would have given.
+ *
+ *  2. A DURABLE ATTESTATION ROW EXISTS. `StagingAttestation` is written by one
+ *     code path only, which requires an authorized operator, a CSRF-validated
+ *     browser mutation and an audit record. Its existence is the proof; nothing
+ *     a learner can submit is.
+ *
+ *  3. IT NAMES THIS ENROLLMENT AND THIS LEVEL. An attestation for somebody
+ *     else, or for another level, completes nothing.
+ *
+ *  4. ITS EVENT CLASS MATCHES THE OWNER AND THE LEVEL'S PAIR. A registration
+ *     attestation cannot pass a financial checkpoint and vice versa.
+ *
+ * WHAT IS DELIBERATELY ABSENT: any amount, any balance, any currency, any
+ * Pocket identifier. The row has no field one could occupy, so "a staging
+ * attestation cannot invent a deposit" is structural rather than reviewed.
+ */
+async function assertStagingAttestationProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+) {
+  if (!isStagingAttestedSource(input.sourceType)) return;
+
+  if (!isStagingAttestationUsable()) {
+    failure(
+      "COMPLETION_OWNER_UNAVAILABLE",
+      "staging attestation is unavailable in this environment",
+    );
+  }
+
+  const expectedEventClass =
+    input.sourceType === "staging_attested_registration"
+      ? "pocket_registration"
+      : "financial_checkpoint";
+  const expectedPair =
+    input.sourceType === "staging_attested_registration"
+      ? { type: "external_event", completionMethod: "pocket_postback" }
+      : { type: "financial_checkpoint", completionMethod: "balance_check" };
+  if (
+    context.level.type !== expectedPair.type ||
+    context.level.completionMethod !== expectedPair.completionMethod
+  ) {
+    failure("COMPLETION_OWNER_MISMATCH", "staging attestation targets the wrong level kind");
+  }
+
+  const match = STAGING_ATTESTATION_SOURCE.exec(input.sourceId);
+  const attestationId = match ? Number(match[1]) : 0;
+  if (!Number.isSafeInteger(attestationId) || attestationId <= 0) {
+    failure("COMPLETION_OWNER_MISMATCH", "staging attestation identity is invalid");
+  }
+
+  const attestation = await tx.stagingAttestation.findUnique({
+    where: { id: attestationId },
+    select: {
+      id: true,
+      eventClass: true,
+      enrollmentId: true,
+      levelDefinitionId: true,
+      environment: true,
+      attestedById: true,
+      requestId: true,
+    },
+  });
+  if (
+    !attestation ||
+    attestation.enrollmentId !== context.enrollment.id ||
+    attestation.levelDefinitionId !== context.level.id ||
+    attestation.eventClass !== expectedEventClass ||
+    // The environment the attestation was MADE in is recorded on the row, so a
+    // row created on a staging host can never be replayed as proof anywhere
+    // else even if the database were copied.
+    attestation.environment !== "staging" ||
+    !Number.isSafeInteger(attestation.attestedById) ||
+    attestation.attestedById <= 0 ||
+    attestation.requestId.trim().length < 8
+  ) {
+    failure("COMPLETION_STATE_CORRUPT", "staging attestation proof is missing or corrupt");
+  }
+
+  // The operator who attested may never be the learner. Checked again here so
+  // the rule survives any future caller of this primitive.
+  if (attestation!.attestedById === context.enrollment.userId) {
+    failure("COMPLETION_OWNER_MISMATCH", "a learner cannot attest their own gate");
+  }
+}
+
+/**
  * Reward contract (operator platform decision, 2026-07-25):
  *  - `xpReward` must be a non-negative integer;
  *  - `xpReward === 0` is a valid, completable level that awards no XP and creates
@@ -777,7 +949,7 @@ function assertReward(
   // closed here means a mis-authored checkpoint is refused rather than silently
   // completed without the reward its definition advertises.
   if (isZeroRewardOnlySource(sourceType) && context.level.xpReward !== 0) {
-    failure("COMPLETION_REWARD_INVALID", "financial checkpoint must award no XP");
+    failure("COMPLETION_REWARD_INVALID", "gate completion must award no XP");
   }
 }
 
@@ -799,8 +971,8 @@ function xpInput(
 ) {
   if (isZeroRewardOnlySource(input.sourceType)) {
     // Unreachable: every caller is guarded by `awardsXp`. Kept as a hard stop so
-    // a future edit cannot route a checkpoint into the XP ledger.
-    failure("COMPLETION_REWARD_INVALID", "financial checkpoint must award no XP");
+    // a future edit cannot route a gate owner into the XP ledger.
+    failure("COMPLETION_REWARD_INVALID", "gate completion must award no XP");
   }
   return {
     enrollmentId: context.enrollment.id,
@@ -932,6 +1104,7 @@ async function runCompletionTransaction(
   await assertReportApprovalProof(tx, context, input);
   await assertCheckpointVerificationProof(tx, context, input);
   await assertPocketRegistrationProof(tx, context, input);
+  await assertStagingAttestationProof(tx, context, input);
   assertReward(context, input.sourceType);
   assertXpFlagForReward(context, input.sourceType);
 

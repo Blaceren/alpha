@@ -424,14 +424,23 @@ async function main() {
       assert.equal(metadata.curriculumVersionId, createdVersionId);
       assert.equal(metadata.curriculumCode, "ata-v2");
       assert.equal(metadata.versionNumber, 1);
+      // A3 added `provenance` so an audit reader can tell an operator
+      // enrollment from an automatic one without parsing prose. The ADMIN
+      // command must always say `admin_command`; `system_registration` belongs
+      // to `enrollActiveCurriculumForNewUser` and can never appear here.
+      assert.equal(metadata.provenance, "admin_command");
       assert.deepEqual(Object.keys(metadata).sort(), [
         "actorId",
         "curriculumCode",
         "curriculumVersionId",
         "enrollmentId",
+        "provenance",
         "targetUserId",
         "versionNumber",
       ]);
+      // Still no PII: the key set above is exhaustive and carries only ids.
+      const serialized = JSON.stringify(metadata);
+      assert.equal(serialized.includes("@"), false);
     });
 
     let repeated: UserCurriculumEnrollment | null = null;

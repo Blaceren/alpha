@@ -52,6 +52,43 @@ export type EnrollUserInPublishedCurriculumResult = {
   enrollment: UserCurriculumEnrollment;
 };
 
+/**
+ * A3 — who asked for this enrollment.
+ *
+ * Two actors, deliberately modelled as a discriminated union rather than as
+ * "actorId, or null for the system". A nullable id is a shape in which
+ * forgetting to pass one silently becomes a system enrollment, and the whole
+ * point of this type is that the SYSTEM actor cannot be reached by omission —
+ * it has to be named.
+ *
+ * `admin` is the shipped operator command and its authorization is completely
+ * unchanged: an active `admin` user, resolved from the database inside the
+ * transaction.
+ *
+ * `system` is server-only. It has no user behind it, so there is no role to
+ * check and, critically, NO CLIENT-PROVIDED ACTOR to trust: the only way to
+ * reach it is `enrollActiveCurriculumForNewUser`, which takes no actor
+ * parameter at all.
+ */
+export type EnrollmentActor =
+  | { readonly kind: "admin"; readonly actorId: number }
+  | { readonly kind: "system"; readonly provenance: SystemEnrollmentProvenance };
+
+/**
+ * Why the platform enrolled somebody on its own authority. A closed vocabulary:
+ * an audit reader can tell registration auto-enrollment from any future system
+ * path without parsing prose.
+ */
+export type SystemEnrollmentProvenance = "system_registration";
+
+export type EnrollActiveCurriculumForNewUserInput = {
+  userId: number;
+  asOf?: Date;
+  db?: EnrollmentCommandDb;
+  /** Defaults to `system_registration`, the only member today. */
+  provenance?: SystemEnrollmentProvenance;
+};
+
 const enrollmentGraphInclude = {
   curriculumVersion: { include: { modules: true, levels: true } },
   levelProgress: { include: { levelDefinition: true } },
@@ -100,17 +137,26 @@ function existingActiveFromHistory(
 
 async function runEnrollmentTransaction(
   tx: Prisma.TransactionClient,
-  input: { userId: number; actorId: number; asOf: Date },
+  input: { userId: number; actor: EnrollmentActor; asOf: Date },
 ): Promise<EnrollUserInPublishedCurriculumResult> {
-  const actor = await tx.user.findUnique({
-    where: { id: input.actorId },
-    select: { id: true, role: true, status: true },
-  });
-  if (!actor || actor.role !== "admin" || actor.status !== "active") {
-    throw new EnrollmentDomainError(
-      "ENROLLMENT_ACTOR_FORBIDDEN",
-      "enrollment actor must be an active admin",
-    );
+  // The admin authorization below is UNCHANGED from the shipped command: an
+  // active `admin`, resolved from the database inside this transaction. The
+  // system branch does not weaken it — it is a different actor with no user
+  // identity at all, and the two cannot be confused because a caller has to
+  // name which one it is.
+  let auditActorId: number | null = null;
+  if (input.actor.kind === "admin") {
+    const actor = await tx.user.findUnique({
+      where: { id: input.actor.actorId },
+      select: { id: true, role: true, status: true },
+    });
+    if (!actor || actor.role !== "admin" || actor.status !== "active") {
+      throw new EnrollmentDomainError(
+        "ENROLLMENT_ACTOR_FORBIDDEN",
+        "enrollment actor must be an active admin",
+      );
+    }
+    auditActorId = actor.id;
   }
 
   const targetUser = await tx.user.findUnique({
@@ -193,12 +239,21 @@ async function runEnrollmentTransaction(
 
   await tx.auditLog.create({
     data: {
-      userId: actor.id,
+      // NULL for a system enrollment: there is no user who did it, and naming
+      // the learner here would say they enrolled themselves.
+      userId: auditActorId,
       action: CURRICULUM_AUDIT_ACTIONS.userEnrolled,
       entityType: "UserCurriculumEnrollment",
       entityId: String(enrollment.id),
+      // Identities, a curriculum and a provenance. No email, no name, no IP,
+      // no referral code — nothing that identifies the learner beyond the id
+      // every other curriculum audit already carries.
       metadata: {
-        actorId: actor.id,
+        actorId: auditActorId,
+        // A closed vocabulary, so an audit reader can tell an operator
+        // enrollment from an automatic one without parsing prose.
+        provenance:
+          input.actor.kind === "system" ? input.actor.provenance : "admin_command",
         targetUserId: targetUser.id,
         enrollmentId: enrollment.id,
         curriculumVersionId: target.curriculumVersion.id,
@@ -263,6 +318,32 @@ async function enrollUserInPublishedCurriculumCore({
   asOf = new Date(),
   db = prisma,
 }: EnrollUserInPublishedCurriculumInput): Promise<EnrollUserInPublishedCurriculumResult> {
+  return enrollInPublishedCurriculum({
+    userId,
+    actor: { kind: "admin", actorId },
+    asOf,
+    db,
+  });
+}
+
+/**
+ * The one enrollment body both actors share.
+ *
+ * Flags, transaction shape, history validation, pinning, concurrent-conflict
+ * recovery and audit are identical whoever asked. Only the actor differs, and
+ * only where it must: the admin authorization check and the audit provenance.
+ */
+async function enrollInPublishedCurriculum({
+  userId,
+  actor,
+  asOf,
+  db,
+}: {
+  userId: number;
+  actor: EnrollmentActor;
+  asOf: Date;
+  db: EnrollmentCommandDb;
+}): Promise<EnrollUserInPublishedCurriculumResult> {
   if (!isCurriculumV2EnrollmentEnabled()) {
     throw new EnrollmentDomainError(
       "ENROLLMENT_DISABLED",
@@ -278,7 +359,7 @@ async function enrollUserInPublishedCurriculumCore({
 
   try {
     return await db.$transaction((tx) =>
-      runEnrollmentTransaction(tx, { userId, actorId, asOf }),
+      runEnrollmentTransaction(tx, { userId, actor, asOf }),
     );
   } catch (error) {
     if (!isPrismaUniqueConflict(error)) throw error;
@@ -287,4 +368,63 @@ async function enrollUserInPublishedCurriculumCore({
     if (recovered) return recovered;
     throw error;
   }
+}
+
+/**
+ * A3 — enroll a learner in the active published ata-v2 curriculum, on the
+ * platform's own authority.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM THE ADMIN COMMAND
+ * Automatic enrollment at registration is not an operator action, and modelling
+ * it as one would mean either inventing a fake admin actor or relaxing
+ * `ENROLLMENT_ACTOR_FORBIDDEN` so that "no actor" passes. The first lies in the
+ * audit trail; the second turns the admin authorization into something an
+ * omission can bypass. A named system actor does neither: the admin rule is
+ * byte-for-byte what it was, and this path is reachable only from server code.
+ *
+ * WHAT A CALLER CANNOT DO
+ * There is NO actor parameter. A caller cannot nominate who is enrolling, and
+ * therefore cannot present a learner-supplied id as an authority. It cannot
+ * choose a curriculum either: the target is resolved as the active published
+ * `ata-v2` version and pinned onto the enrollment, exactly as the admin command
+ * resolves and pins it.
+ *
+ * IDEMPOTENCY AND CONCURRENCY
+ * A learner who already has an active enrollment gets it back with
+ * `created: false` — the same answer the admin command gives. Two concurrent
+ * registrations for one learner resolve through the shipped
+ * `recoverConcurrentEnrollment` path, so the loser of the unique-index race
+ * returns the winner's enrollment instead of failing.
+ *
+ * FLAGS STILL GOVERN. With `CURRICULUM_V2_ENROLLMENT_ENABLED` or
+ * `CURRICULUM_V2_READ_ENABLED` absent this throws `ENROLLMENT_DISABLED` /
+ * `CURRICULUM_READ_DISABLED` and writes nothing at all — which is what makes it
+ * safe to call from a registration flow while the flags are off.
+ *
+ * NOT WIRED INTO REGISTRATION IN THIS PHASE — see the Phase A report.
+ */
+export async function enrollActiveCurriculumForNewUser({
+  userId,
+  asOf = new Date(),
+  db = prisma,
+  provenance = "system_registration",
+}: EnrollActiveCurriculumForNewUserInput): Promise<EnrollUserInPublishedCurriculumResult> {
+  const result = await enrollInPublishedCurriculum({
+    userId,
+    actor: { kind: "system", provenance },
+    asOf,
+    db,
+  });
+
+  // L1OWNER-1, same settlement the admin command performs: a learner who
+  // registered with Pocket before enrolling has a durable identity and a debt
+  // this enrollment can now settle. Idempotent, and a failure never fails the
+  // enrollment.
+  try {
+    await reconcilePocketRegistrationLevelCompletion(userId);
+  } catch {
+    /* enrolment stands; reconciliation is retryable */
+  }
+
+  return result;
 }

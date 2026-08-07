@@ -18,6 +18,7 @@ import {
   type ProvenanceRecord,
 } from "@/lib/curriculum/package/schema";
 import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
+import { isOwnedCompletionPair } from "@/lib/curriculum/completion-pairs";
 import {
   describeStableCodeIssue,
   isCanonicalCurriculumCode,
@@ -103,9 +104,72 @@ function requiresApproval(record: ProvenanceRecord): boolean {
   return record.approvalRequired || !PRODUCTION_PROVENANCE.has(record.classification);
 }
 
+/**
+ * A5 — the two prerequisite fields that have no owner, named explicitly.
+ *
+ * `LevelDefinition.requiredCheckpointLevel` and `LevelDefinition.visibilityRule`
+ * both exist in the database and BOTH permanently lock a level:
+ * `deriveEnrolledLevelStates` answers `checkpoint_engine_unavailable` for the
+ * first and `visibility_rule_unsupported` for the second, and no owner clears
+ * either blocker. A package that sets one therefore ships a level nobody can
+ * ever reach, and the failure surfaces to a learner as a level that is simply
+ * stuck — with no error anywhere to explain it.
+ *
+ * So they are refused at import time, by name, with stable codes. Not warned
+ * about, not dropped silently, not "supported later": refused now, so the
+ * package author is told at the point where it is still a JSON edit.
+ *
+ * WHY THIS RUNS BEFORE THE SCHEMA PARSE
+ * `curriculumPackageSchema` is `strictObject`, so an unknown key is already a
+ * hard error — but it is a GENERIC `SCHEMA_INVALID` ("Unrecognized key"), and
+ * the schema returns early, so the author would never see which semantic they
+ * asked for. Scanning the raw input first means a package that reaches for
+ * either field gets the specific code, whether it spelled it the package way
+ * (`checkpointLevelCode`) or the database way.
+ *
+ * MODULE-LEVEL `checkpointLevelCode` IS DELIBERATELY NOT TOUCHED. It maps to
+ * `ModuleDefinition.checkpointLevel`, which is descriptive curriculum metadata
+ * read by the module read model. It gates nothing and locks nothing.
+ */
+const UNSUPPORTED_PREREQUISITE_KEYS: Record<string, { code: string; reason: string }> = {
+  requiredCheckpointLevel: {
+    code: "LEVEL_CHECKPOINT_PREREQUISITE_UNSUPPORTED",
+    reason:
+      "checkpoint prerequisites have no completion owner and permanently lock the level",
+  },
+  visibilityRule: {
+    code: "LEVEL_VISIBILITY_RULE_UNSUPPORTED",
+    reason: "visibility rules have no evaluator and permanently lock the level",
+  },
+};
+
+function scanUnsupportedPrerequisiteFields(
+  value: unknown,
+  path: string,
+  issues: PackageIssue[],
+): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => scanUnsupportedPrerequisiteFields(item, `${path}[${index}]`, issues));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const unsupported = UNSUPPORTED_PREREQUISITE_KEYS[key];
+    // `null` is the shipped, supported value and must stay legal: refusing it
+    // would refuse every package that spells the absence out.
+    if (unsupported && child !== null && child !== undefined) {
+      issue(issues, unsupported.code, `${path}.${key}`, unsupported.reason);
+    }
+    scanUnsupportedPrerequisiteFields(child, `${path}.${key}`, issues);
+  }
+}
+
 export function validateCurriculumPackage(input: unknown): PackageValidationResult {
   const issues: PackageIssue[] = [];
   const warnings: PackageIssue[] = [];
+
+  /* -------- 0. unsupported prerequisite fields (A5), before parse ------- */
+  scanUnsupportedPrerequisiteFields(input, "package", issues);
 
   /* ---------------------------- 1. schema ---------------------------- */
   const parsed = curriculumPackageSchema.safeParse(input);
@@ -171,6 +235,42 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
       }
 
       /* ------------------- 3. per-level semantics ------------------- */
+
+      // A5. `checkpointLevelCode` is the package spelling of
+      // `LevelDefinition.requiredCheckpointLevel` — the importer writes one
+      // from the other. Refused for the same reason the raw scan refuses the
+      // database spelling: nothing on the platform clears the
+      // `checkpoint_engine_unavailable` blocker it produces, so a level that
+      // carries it is locked forever.
+      if (level.checkpointLevelCode !== null) {
+        issue(
+          issues,
+          "LEVEL_CHECKPOINT_PREREQUISITE_UNSUPPORTED",
+          `${levelPath}.checkpointLevelCode`,
+          "checkpoint prerequisites have no completion owner and permanently lock the level",
+        );
+      }
+
+      // A2/R1. Every level must declare a pair some production owner can
+      // actually complete. Checked against the SAME vocabulary the runtime
+      // enforces (src/lib/curriculum/completion-pairs.ts), so a package can no
+      // longer ship, say, a `practice:*` level that reaches
+      // `COMPLETION_OWNER_UNAVAILABLE` for every learner who gets to it.
+      //
+      // A hard error for an `approved` package and a warning for a `draft`,
+      // matching how the provenance gates already treat "structure known,
+      // decision not yet made": a draft is allowed to be mid-authoring, a
+      // package declared production-ready is not.
+      if (!isOwnedCompletionPair(level.type, level.completionMethod)) {
+        const unowned = {
+          code: "LEVEL_COMPLETION_PAIR_UNOWNED",
+          path: `${levelPath}.completionMethod`,
+          message: `${level.type}:${level.completionMethod} has no completion owner`,
+        };
+        if (pkg.status === "approved") issues.push(unowned);
+        else warnings.push(unowned);
+      }
+
       const isContentBearing = CONTENT_BEARING_TYPES.has(level.type);
       const isGated = GATED_TYPES.has(level.type);
 

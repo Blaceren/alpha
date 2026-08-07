@@ -66,32 +66,76 @@ export type PocketRegistrationReconcileResult = {
 type Db = { $transaction: <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T> };
 
 /**
+ * A8/R3 — the PREPROD-only alternative witness.
+ *
+ * When present, the trusted evidence is a durable `StagingAttestation` written
+ * by an authorized operator on a staging deployment instead of a
+ * `PocketTraderIdentity` written by an authenticated postback. Everything else
+ * about this function is unchanged: the same start owner, the same completion
+ * primitive, the same idempotency, the same zero-XP contract. There is still
+ * exactly one progression engine for level 1.
+ *
+ * The completion SOURCE differs, permanently and visibly, so a QA attestation
+ * can never be mistaken for a real Pocket registration. The environment gate
+ * itself lives in the completion primitive, which refuses a
+ * `staging_attested_registration` outside staging — so this option cannot
+ * become a production bypass by being passed.
+ */
+export type PocketRegistrationStagingAttestation = {
+  readonly attestationId: number;
+};
+
+/**
  * Reconcile one learner, idempotently.
  *
  * `actorUserId` is the learner: the completion is recorded as having been made
  * on their behalf by a trusted server event, not by a staff member. There is no
  * parameter through which a caller could nominate a different level, a
- * different learner, or a different completion source.
+ * different learner, or a different completion source — `stagingAttestation`
+ * selects the WITNESS, not the level and not the learner.
  */
 export async function reconcilePocketRegistrationLevelCompletion(
   learnerUserId: number,
-  options: { db?: Db; evaluationTime?: Date } = {},
+  options: {
+    db?: Db;
+    evaluationTime?: Date;
+    stagingAttestation?: PocketRegistrationStagingAttestation;
+  } = {},
 ): Promise<PocketRegistrationReconcileResult> {
   if (!Number.isSafeInteger(learnerUserId) || learnerUserId <= 0) {
     return { outcome: "not_eligible", detail: "invalid learner" };
   }
   const db = (options.db ?? prisma) as Db;
   const now = options.evaluationTime ?? new Date();
+  const attestation = options.stagingAttestation ?? null;
 
-  // The identity is the trusted evidence and is checked BEFORE any curriculum
-  // work, so a learner without one costs nothing and can leave no trace.
-  const identity = await prisma.pocketTraderIdentity.findUnique({
-    where: { userId: learnerUserId },
-    select: { id: true, source: true },
-  });
-  if (!identity) return { outcome: "identity_missing" };
-  if (identity.source !== "registration_postback") {
-    return { outcome: "identity_missing", detail: "untrusted provenance" };
+  // The witness is checked BEFORE any curriculum work, so a learner with none
+  // costs nothing and can leave no trace.
+  //
+  // In staging-attested mode there is deliberately NO PocketTraderIdentity
+  // lookup and no identity is created: the whole point is that no Pocket
+  // registration happened, and inventing a binding would be the fake partner
+  // event this design exists to avoid.
+  let sourceType: "pocket_registration_postback" | "staging_attested_registration";
+  let sourceId: string;
+  if (attestation) {
+    if (!Number.isSafeInteger(attestation.attestationId) || attestation.attestationId <= 0) {
+      return { outcome: "not_eligible", detail: "invalid attestation" };
+    }
+    sourceType = "staging_attested_registration";
+    sourceId = `staging-attestation:${attestation.attestationId}`;
+  } else {
+    const identity = await prisma.pocketTraderIdentity.findUnique({
+      where: { userId: learnerUserId },
+      select: { id: true, source: true },
+    });
+    if (!identity) return { outcome: "identity_missing" };
+    if (identity.source !== "registration_postback") {
+      return { outcome: "identity_missing", detail: "untrusted provenance" };
+    }
+    sourceType = "pocket_registration_postback";
+    // Names the identity ROW, never a Pocket user id.
+    sourceId = `pocket-registration:${identity.id}`;
   }
 
   const enrollment = await prisma.userCurriculumEnrollment.findFirst({
@@ -145,10 +189,12 @@ export async function reconcilePocketRegistrationLevelCompletion(
       const completion = await completeCurriculumLevelInTransaction(tx, {
         enrollmentId: enrollment.id,
         levelDefinitionId: level.id,
-        sourceType: "pocket_registration_postback",
-        // Names the identity ROW, never a Pocket user id.
-        sourceId: `pocket-registration:${identity.id}`,
-        actorId: learnerUserId,
+        sourceType,
+        sourceId,
+        // A postback completes on the learner's behalf. A staging attestation
+        // is an OPERATOR act and records no learner actor, so the completion
+        // audit never says the learner registered when they did not.
+        actorId: attestation ? null : learnerUserId,
         evaluationTime: now,
       });
 

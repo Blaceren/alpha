@@ -9,6 +9,10 @@ import { CurriculumDomainError } from "./errors";
 import { LessonProgressDomainError } from "./content-read-progress";
 import { isLevelStartDomainError } from "./level-state";
 import {
+  isManualCompletionError,
+  type ManualCompletionErrorCode,
+} from "./manual-completion";
+import {
   isCurriculumV2AdminEnabled,
   isCurriculumV2AssessmentEnabled,
   isCurriculumV2ContentEnabled,
@@ -182,8 +186,40 @@ const notFound = new Set([
 const forbidden = new Set(["CONTENT_ACTOR_FORBIDDEN", "ASSESSMENT_ACTOR_FORBIDDEN", "CONTENT_USER_NOT_FOUND", "ASSESSMENT_USER_NOT_FOUND"]);
 const unprocessable = new Set(["CONTENT_PUBLICATION_INVALID", "ASSESSMENT_PUBLICATION_INVALID"]);
 
+/**
+ * A1 — manual completion refusals.
+ *
+ * Every code has its own status because every one is a different fact the
+ * client has to act on differently: 404 means the feature or the level is not
+ * there, 403 means the actor may not act at all, 409 means the learner is not
+ * where they think they are (or somebody already finished this), and 400 means
+ * the request itself was malformed. Collapsing them would make "you already
+ * completed this" indistinguishable from "you cannot complete this".
+ */
+const MANUAL_COMPLETION_STATUS: Record<ManualCompletionErrorCode, number> = {
+  MANUAL_COMPLETION_DISABLED: 404,
+  MANUAL_COMPLETION_INPUT_INVALID: 400,
+  MANUAL_COMPLETION_FORBIDDEN: 403,
+  MANUAL_COMPLETION_NOT_ENROLLED: 409,
+  MANUAL_COMPLETION_LEVEL_NOT_FOUND: 404,
+  MANUAL_COMPLETION_LEVEL_WRONG_OWNER: 409,
+  MANUAL_COMPLETION_LEVEL_NOT_CURRENT: 409,
+  MANUAL_COMPLETION_LEVEL_NOT_STARTED: 409,
+  MANUAL_COMPLETION_REQUEST_CONFLICT: 409,
+  MANUAL_COMPLETION_STATE_CORRUPT: 409,
+  MANUAL_COMPLETION_INTERNAL_ERROR: 500,
+};
+
 export function phase4Exception(error: unknown, label = "phase4 api") {
   if (error instanceof Phase4HttpError) return phase4Error(error.code, error.status, error.issues);
+  if (isManualCompletionError(error)) {
+    const status = MANUAL_COMPLETION_STATUS[error.code] ?? 500;
+    if (status === 500) {
+      console.error(`${label} internal error`);
+      return phase4Error("MANUAL_COMPLETION_INTERNAL_ERROR", 500);
+    }
+    return phase4Error(error.code, status);
+  }
   if (error instanceof ContentDomainError || error instanceof AssessmentDomainError || error instanceof CurriculumDomainError) {
     const code = error.code;
     const status = notFound.has(code) ? 404 : forbidden.has(code) ? 403 : conflict.has(code) ? 409 : unprocessable.has(code) ? 422 : code.endsWith("INPUT_INVALID") ? 400 : code.endsWith("DISABLED") ? 404 : code.endsWith("INTERNAL_ERROR") ? 500 : 409;

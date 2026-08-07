@@ -17,6 +17,12 @@ import {
 } from "@/lib/captcha/provider";
 import { isDevSimulatorModeSelected } from "@/lib/curriculum/checkpoint-provider-mode";
 import {
+  describeStagingAttestationRejection,
+  isStagingAttestationFlagSet,
+  STAGING_ATTESTATION_ENABLED_KEY,
+} from "@/lib/curriculum/staging-attestation-policy";
+import { describeEnvironment } from "@/lib/environment";
+import {
   AFFILIATE_ATTRIBUTION_ENABLED_KEY,
   ATTRIBUTION_TOKEN_SECRET_KEY,
   describeAttributionConfigRejection,
@@ -80,6 +86,10 @@ const OPTIONAL_ENV = [
   "ATA_ENVIRONMENT",
   "CHECKPOINT_PROVIDER_MODE",
   "CHECKPOINT_DEV_SIMULATOR_STATE_PATH",
+  // A8 — PREPROD QA attestation. Absent means disabled, which is the only safe
+  // default: a deployment that has not explicitly asked for QA attestation must
+  // not be able to mark gates satisfied.
+  STAGING_ATTESTATION_ENABLED_KEY,
   "POCKET_PARTNER_API_BASE_URL",
   "POCKET_PARTNER_ID",
   "POCKET_PARTNER_API_TOKEN",
@@ -157,6 +167,10 @@ const envSchema = z.object({
     .enum(["disabled", "pocket_partner", "dev_simulator"])
     .optional(),
   CHECKPOINT_DEV_SIMULATOR_STATE_PATH: z.string().optional(),
+  // A8. Enumerated so a misspelled "TRUE" is a startup error rather than a
+  // silent "not exactly true -> disabled" that an operator would read as
+  // enabled — the same reasoning as the affiliate attribution flag.
+  [STAGING_ATTESTATION_ENABLED_KEY]: z.enum(["true", "false"]).optional(),
   // L4PA-1 — official Pocket Partner user-info API. Server-only, all optional:
   // absent configuration means the adapter is unconfigured and the checkpoint
   // reports `provider_unconfigured`. The token is never read outside
@@ -294,6 +308,30 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     }
   }
 
+  // A8 — the STAGING_ATTESTED capability's hard boundary.
+  //
+  // OUTSIDE the `isProduction` block, and keyed on `classifyEnvironment` rather
+  // than on `NODE_ENV`, for the reason the simulator and CAPTCHA checks are:
+  // this project serves a production build in DEV and in PREPROD, so `NODE_ENV`
+  // says nothing about where the code is running.
+  //
+  // The rule is stated positively so that FORGETTING FAILS: asking for QA
+  // attestation obliges the deployment to be authoritatively classified
+  // `staging`. Production is an error. So is `dev`, so is an unclassified host
+  // and so is a misspelled one. A production deployment that has this key set to
+  // `true` does not boot at all, which means the mistake is caught by the
+  // operator at deploy time rather than by whoever notices a gate was waved
+  // through later.
+  //
+  // Absence is legal and means disabled, so no existing deployment is affected
+  // and no operator can enable this by omission.
+  if (isStagingAttestationFlagSet(env)) {
+    const classification = classifyEnvironment(env);
+    if (classification.kind !== "classified" || classification.environment !== "staging") {
+      errors.push(describeStagingAttestationRejection(describeEnvironment(env)));
+    }
+  }
+
   // A state path is meaningless — and, on a real host, a liability — unless the
   // deployment is DEV. Its mere presence elsewhere is a configuration error, in
   // the same spirit as the regression-only markers below.
@@ -402,6 +440,15 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     if (env.POCKET_PARTNER_API_TEST_MODE) {
       errors.push("POCKET_PARTNER_API_TEST_MODE is a regression-only marker and must never be set in production");
     }
+
+    // A8 is deliberately NOT re-checked here against `NODE_ENV`.
+    //
+    // It would look like useful defence in depth and it would be a bug: PREPROD
+    // runs `NODE_ENV=production` with `ATA_ENVIRONMENT=staging` (this project
+    // serves a production BUILD everywhere), so a rule here would refuse the one
+    // deployment the capability exists for while adding nothing on a real
+    // production host — which is already refused by the classification check
+    // above, on the only signal that actually distinguishes deployments.
   }
 
   return {

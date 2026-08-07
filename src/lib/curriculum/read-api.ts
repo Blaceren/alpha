@@ -254,6 +254,178 @@ export function mapCompletedCurriculumRead(
   };
 }
 
+/* ------------------------------------------------------------------------ */
+/* A6 — the slim Home shape                                                  */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Home needs six facts: where the learner is, how far along, which module,
+ * what the current level is and whether it can be acted on, what comes next,
+ * and how much XP there is. The default `/current` response answers those by
+ * serialising the ENTIRE curriculum graph — for the 100-level curriculum that
+ * is 100 level objects with their definitions, blockers, progress and
+ * checkpoint blocks, every time the Home screen loads, to render one card.
+ *
+ * This is the same resolution, projected down. It runs the identical resolver
+ * on the identical snapshot — no second source of truth, no separate progress
+ * calculation — and then emits only the fields above.
+ *
+ * WHAT IS DELIBERATELY ABSENT: every field of every other level, and anything
+ * that identifies the learner. There is no email, no name, no id, no IP, no
+ * referral code and no balance — a checkpoint's block here is the same bounded
+ * read model the full response uses, which has no field a financial value could
+ * occupy.
+ *
+ * FACTS, NOT A CTA. `presentationState`, `blockers`, `type` and
+ * `completionMethod` travel so Home can decide what its button says. Deciding
+ * that here would put product copy in a serializer and give Home a second place
+ * to disagree with the level map about what is possible.
+ */
+function summaryLevel(item: ResolvedLevelStates["levels"][number]) {
+  return {
+    levelNumber: item.levelDefinition.levelNumber,
+    stableCode: item.levelDefinition.stableCode,
+    type: item.levelDefinition.type,
+    title: item.levelDefinition.title,
+    shortDescription: item.levelDefinition.shortDescription,
+    completionMethod: item.levelDefinition.completionMethod,
+    xpReward: item.levelDefinition.xpReward,
+    requiredXp: item.levelDefinition.requiredXp,
+    durableStatus: item.progress?.status ?? null,
+    presentationState: item.state,
+    blockers: [...item.blockers],
+    checkpoint: mapCheckpoint(item.checkpoint),
+  };
+}
+
+/** Whole percent, floored, clamped. 0 levels means 0 rather than NaN. */
+function percentComplete(completed: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.floor((completed * 100) / total)));
+}
+
+export function mapEnrolledCurriculumSummary(levelStates: ResolvedLevelStates) {
+  const current = levelStates.levels.find(
+    (item) => item.levelDefinition.levelNumber === levelStates.enrollment.currentLevel,
+  );
+  if (!current) throw new Error("current level definition missing");
+  const next =
+    levelStates.levels.find(
+      (item) =>
+        item.levelDefinition.levelNumber === levelStates.enrollment.currentLevel + 1,
+    ) ?? null;
+  const moduleDefinition =
+    levelStates.modules.find(
+      (candidate) => candidate.id === current.levelDefinition.moduleId,
+    ) ?? null;
+  const totalLevels = levelStates.levels.length;
+  const completedLevels = levelStates.levels.filter(
+    (item) => item.state === "completed",
+  ).length;
+
+  const xp: CurriculumReadXp =
+    levelStates.xp.kind === "disabled"
+      ? { kind: "disabled" }
+      : mapXp(levelStates.xp, current.levelDefinition.requiredXp);
+
+  return {
+    kind: "enrolled" as const,
+    shape: "summary" as const,
+    curriculum: mapCurriculum(levelStates.curriculumVersion),
+    enrollment: mapEnrollment(levelStates.enrollment),
+    progress: {
+      currentLevel: levelStates.enrollment.currentLevel,
+      highestCompletedLevel: levelStates.enrollment.highestCompletedLevel,
+      completedLevels,
+      totalLevels,
+      percentComplete: percentComplete(completedLevels, totalLevels),
+    },
+    // `null` when the current level's module is somehow not in the resolved
+    // set. The resolver already refuses that shape as corrupt, so this is a
+    // belt-and-braces null rather than a state Home should expect.
+    currentModule: moduleDefinition ? mapModule(moduleDefinition) : null,
+    currentLevel: summaryLevel(current),
+    nextLevel: next
+      ? {
+          levelNumber: next.levelDefinition.levelNumber,
+          stableCode: next.levelDefinition.stableCode,
+          type: next.levelDefinition.type,
+          title: next.levelDefinition.title,
+          presentationState: next.state,
+        }
+      : null,
+    xp,
+  };
+}
+
+export function mapCompletedCurriculumSummary(
+  context: CompletedContext,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp,
+) {
+  const totalLevels = context.levels.length;
+  const completedLevels = context.progress.filter(
+    (progress) => progress.status === "completed",
+  ).length;
+  const mappedXp = !xp ? undefined : xp.kind === "disabled" ? xp : mapXp(xp, null);
+  return {
+    kind: "completed" as const,
+    shape: "summary" as const,
+    curriculum: mapCurriculum(context.curriculumVersion),
+    enrollment: mapEnrollment(context.enrollment),
+    progress: {
+      currentLevel: context.enrollment.currentLevel,
+      highestCompletedLevel: context.enrollment.highestCompletedLevel,
+      completedLevels,
+      totalLevels,
+      percentComplete: percentComplete(completedLevels, totalLevels),
+    },
+    // A finished enrollment has no module to be working in and nothing next.
+    currentModule: null,
+    currentLevel: null,
+    nextLevel: null,
+    ...(mappedXp ? { xp: mappedXp } : {}),
+  };
+}
+
+export function mapCandidateCurriculumSummary(
+  context: Extract<UserCurriculumContextResult, { kind: "candidate" }>,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }>,
+) {
+  return {
+    kind: "candidate" as const,
+    shape: "summary" as const,
+    curriculum: {
+      ...mapCurriculum(context.curriculumVersion),
+      moduleCount: context.modules.length,
+      levelCount: context.levels.length,
+    },
+    enrollment: null,
+    progress: {
+      currentLevel: null,
+      highestCompletedLevel: 0,
+      completedLevels: 0,
+      totalLevels: context.levels.length,
+      percentComplete: 0,
+    },
+    currentModule: null,
+    currentLevel: null,
+    nextLevel: null,
+    ...(xp ? { xp } : {}),
+  };
+}
+
+export function mapUnavailableCurriculumSummary(
+  context: Extract<UserCurriculumContextResult, { kind: "unavailable" }>,
+  xp?: Extract<CurriculumReadXp, { kind: "disabled" }>,
+) {
+  return {
+    kind: "unavailable" as const,
+    shape: "summary" as const,
+    reason: context.reason,
+    ...(xp ? { xp } : {}),
+  };
+}
+
 export function mapUnavailableCurriculumRead(
   context: Extract<UserCurriculumContextResult, { kind: "unavailable" }>,
   xp?: Extract<CurriculumReadXp, { kind: "disabled" }>,
