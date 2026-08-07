@@ -7,6 +7,22 @@ import { getTurnstileSiteKey } from "@/config/turnstile";
 import { LoginPanel, LoginPanelShell } from "@/features/auth/login-panel";
 
 /**
+ * Route-segment config: this route is rendered per request, never prerendered.
+ *
+ * `getTurnstileSiteKey()` below reads `TURNSTILE_SITE_KEY` from the server
+ * environment. Without this declaration Next.js prerenders /login at build
+ * time and freezes whatever the key was THEN into both the HTML and the RSC
+ * payload — for a build that has no key, `null`. Runtime environment and a
+ * restart cannot recover it, which is precisely the build-time pinning that
+ * `config/turnstile.ts` exists to avoid; static generation reintroduced it
+ * through a different door.
+ *
+ * Scope is deliberately this page alone. /login sits outside the `(crm)` route
+ * group and inherits only the root layout, so no other route is affected.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Staff login.
  *
  * In **api mode** this is a real credential form. Authentication is performed by
