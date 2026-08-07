@@ -8,6 +8,7 @@ import {
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { STABLE_CODE_PATTERN } from "./constants";
+import { contentBodySectionCodes } from "./content-body";
 import {
   contentAssetPayloadSchema,
   contentLocalizationPayloadSchema,
@@ -404,9 +405,14 @@ async function resolveContentWithin(
   if (!parsedLocalization.success || parsedAssets.some((item) => !item.success)) {
     return { kind: "corrupt", reason: "content_corrupt" };
   }
+  // PHASE-C. The anchor vocabulary comes from `contentBodySectionCodes`, never
+  // from `body.sections` directly: v1 and v2 bodies both have sections, but only
+  // the shared reader is guaranteed to stay correct when the format evolves. A
+  // caller that reaches into the raw body works today and silently accepts any
+  // section code the moment a new format lands.
   const sectionCodes = new Set(
     parsedLocalizations.flatMap((item) =>
-      item.success ? item.data.body.sections.map((section) => section.code) : [],
+      item.success ? contentBodySectionCodes(item.data.body) : [],
     ),
   );
   const progressRow = await tx.userLessonProgress.findUnique({
@@ -571,7 +577,7 @@ async function saveWithin(
   if (allLocalizations.length === 0 || allLocalizations.some((item) => !item.success)) {
     throw new LessonProgressDomainError("CONTENT_STATE_CORRUPT", "content localization is corrupt");
   }
-  const sectionCodes = new Set(allLocalizations.flatMap((item) => item.success ? item.data.body.sections.map((section) => section.code) : []));
+  const sectionCodes = new Set(allLocalizations.flatMap((item) => item.success ? contentBodySectionCodes(item.data.body) : []));
   const normalized = normalizeSave(data, sectionCodes, content.videoDurationSeconds);
   const payloadFingerprint = fingerprint(data.actorUserId, scope, content.id, normalized);
 

@@ -1,39 +1,34 @@
+/**
+ * Authoring-command schemas for the content domain.
+ *
+ * PHASE-C: the two private anti-XSS regexes that used to live here are gone.
+ * They are now the shared sanitizer contract in `content-safe-text.ts`, which
+ * the PACKAGE path uses too — before that, the package path had no sanitization
+ * at all and the two paths wrote the same column under different rules. The
+ * `legacy_v1` policy passed below reproduces this file's original behaviour
+ * exactly, plus the hardening documented in that module.
+ *
+ * The body contract likewise moved to `content-body.ts`, which accepts legacy v1
+ * AND the v2 block model behind an explicit format tag.
+ */
 import { z } from "zod";
+import { contentBodySchema } from "@/lib/curriculum/content-body";
+import {
+  byteLength,
+  describeUnsafeText,
+  isSafeText,
+  optionalSafeText as sharedOptionalSafeText,
+  safeText as sharedSafeText,
+} from "@/lib/curriculum/content-safe-text";
 
 const MAX_INT = 2_147_483_647;
-const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TRANSCRIPT_BYTES = 200 * 1024;
-const SAFE_MARKDOWN_LINK = /\]\((?!https:\/\/)[^)]+\)/i;
-const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
 const STABLE_CONTENT_CODE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 
-function byteLength(value: string) {
-  return Buffer.byteLength(value, "utf8");
-}
-
-function safeText(max: number, label: string) {
-  return z
-    .string()
-    .trim()
-    .min(1, `${label} must not be empty`)
-    .max(max, `${label} is too long`)
-    .refine(
-      (value) => !UNSAFE_TEXT.test(value) && !SAFE_MARKDOWN_LINK.test(value),
-      `${label} contains unsafe HTML, URI, or markdown link content`,
-    );
-}
-
-function optionalSafeText(max: number, label: string) {
-  return z
-    .string()
-    .trim()
-    .max(max, `${label} is too long`)
-    .refine(
-      (value) => value.length === 0 || (!UNSAFE_TEXT.test(value) && !SAFE_MARKDOWN_LINK.test(value)),
-      `${label} contains unsafe HTML, URI, or markdown link content`,
-    );
-}
+const safeText = (max: number, label: string) => sharedSafeText(max, label, "legacy_v1");
+const optionalSafeText = (max: number, label: string) =>
+  sharedOptionalSafeText(max, label, "legacy_v1");
 
 export const normalizedLocaleSchema = z
   .string()
@@ -42,62 +37,7 @@ export const normalizedLocaleSchema = z
   .max(35)
   .regex(NORMALIZED_LOCALE, "locale must be a normalized BCP-47 language tag");
 
-const bodyText = (label: string) => safeText(8_000, label);
-const bodyTitle = (label: string) => safeText(300, label);
-
-export const contentBodySchema = z
-  .strictObject({
-    sections: z
-      .array(
-        z.strictObject({
-          code: z.string().trim().max(64).regex(STABLE_CONTENT_CODE),
-          title: bodyTitle("section title"),
-          body: bodyText("section body"),
-        }),
-      )
-      .max(30)
-      .superRefine((sections, context) => {
-        const seen = new Set<string>();
-        sections.forEach((section, index) => {
-          if (seen.has(section.code)) {
-            context.addIssue({
-              code: "custom",
-              path: [index, "code"],
-              message: "section code must be unique within the localization",
-            });
-          }
-          seen.add(section.code);
-        });
-      }),
-    examples: z
-      .array(z.strictObject({ title: bodyTitle("example title"), body: bodyText("example body") }))
-      .max(50),
-    commonMistakes: z
-      .array(
-        z.strictObject({
-          mistake: bodyText("common mistake"),
-          correction: bodyText("common mistake correction"),
-        }),
-      )
-      .max(50),
-    glossary: z
-      .array(
-        z.strictObject({
-          term: bodyTitle("glossary term"),
-          definition: bodyText("glossary definition"),
-        }),
-      )
-      .max(50),
-    nextAction: z.strictObject({
-      label: bodyTitle("next action label"),
-      body: bodyText("next action body"),
-    }),
-    riskDisclaimer: bodyText("risk disclaimer"),
-  })
-  .refine(
-    (value) => byteLength(JSON.stringify(value)) <= MAX_BODY_BYTES,
-    `content body must not exceed ${MAX_BODY_BYTES} UTF-8 bytes`,
-  );
+export { contentBodySchema };
 
 const actorId = z.number().int().positive().max(MAX_INT);
 const entityId = z.number().int().positive().max(MAX_INT);
@@ -142,8 +82,8 @@ const localizationFields = {
     .trim()
     .refine((value) => byteLength(value) <= MAX_TRANSCRIPT_BYTES, "transcript is too large")
     .refine(
-      (value) => value.length === 0 || (!UNSAFE_TEXT.test(value) && !SAFE_MARKDOWN_LINK.test(value)),
-      "transcript contains unsafe HTML, URI, or markdown link content",
+      (value) => value.length === 0 || isSafeText(value, "legacy_v1"),
+      describeUnsafeText("transcript"),
     )
     .nullable(),
   body: contentBodySchema,

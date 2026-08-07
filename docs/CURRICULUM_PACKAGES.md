@@ -14,8 +14,16 @@ curriculum outside the admin authoring API.
 | `src/lib/curriculum/package/fingerprint.ts` | deterministic sha256 over the semantic projection |
 | `src/lib/curriculum/package/validate.ts` | strict validation |
 | `src/lib/curriculum/package/import.ts` | transactional, idempotent importer |
+| `src/lib/curriculum/package/ata-profile.ts` | the ATA-100 PRODUCT profile (Phase C) |
+| `src/lib/curriculum/content-body.ts` | body format identity + v1/v2 compatibility reader |
+| `src/lib/curriculum/content-blocks.ts` | Content Body v2 block catalog |
+| `src/lib/curriculum/content-safe-text.ts` | the shared sanitizer contract |
+| `src/lib/curriculum/product-ata-100.ts` | canonical 100-level structural source |
+| `src/lib/curriculum/product-vocabulary.ts` | canonical tool / rank / community vocabulary |
 | `scripts/curriculum/importCurriculumPackage.ts` | CLI |
 | `scripts/curriculum/fingerprintCurriculumPackage.ts` | fingerprint / `--check` |
+| `scripts/curriculum/buildCanonical100.ts` | deterministic ATA-100 converter |
+| `curriculum/canonical/*.json` | source-controlled canonical inputs |
 | `curriculum/packages/*.json` | the packages themselves |
 
 ## Stable codes — read this first
@@ -77,9 +85,45 @@ approvals, non-production provenance, placeholder markers, missing content on a
 content-bearing level and missing report definitions are all hard errors. This is
 what keeps an incomplete package from ever being labelled publishable.
 
+## Generic engine vs ATA product profile (Phase C)
+
+`validate.ts` is the GENERIC engine: it validates a curriculum of any size and
+knows nothing about ATA having a hundred levels. `ata-profile.ts` is the ATA-100
+PRODUCT contract — exactly 100 levels, 20 modules, canonical codes and titles, the
+committed unlock vocabulary, the approved gate and practical structure — applied
+deliberately, only to a package that claims to be the full ATA curriculum.
+
+The 4-level `ata-v2.first-slice` therefore keeps passing generic validation and is
+never judged against the 100-level product contract. It stays in the repository as
+the historical approved slice, the backward-compatibility fixture for legacy v1
+content bodies, and the source of levels 1–4 in the canonical package.
+
+The profile separates structural **issues** (always blocking) from editorial
+**gaps** (blocking only for an `approved` package) and returns a completeness
+report. See `docs/ATA_100_CONTENT_ARCHITECTURE.md`.
+
+## Content body format
+
+`ContentLocalization.body` accepts legacy **v1** (no format tag) and **v2**
+(`{"format":"ata.lesson.blocks","version":2,…}`), triaged by an explicit tag
+before any branch schema runs. No database migration is involved — the column is
+`JSONB CHECK (json_valid(...))`. See `docs/CONTENT_BLOCKS_V2.md`.
+
+## Canonical ATA-100 package
+
+```bash
+npm run curriculum:canonical100:build   # regenerate curriculum/packages/ata-v2-canonical-100.draft.json
+npm run curriculum:canonical100:check   # fail if the artifact has drifted from its inputs
+```
+
+Deterministic: same inputs → identical bytes and fingerprint. Reads no other
+repository, no database and no network, and can never emit an `approved` package.
+
 ## Tests
 
 ```bash
 npm run test:regression:curriculum-package            # validation, fingerprint, importer, guards, code corpus
 npm run test:regression:curriculum-package-roundtrip  # real /current -> /content against an isolated Backend
+npm run test:regression:curriculum-content-blocks     # body format, block catalog, sanitizer, assets, tools
+npm run test:regression:curriculum-ata100             # ATA-100 profile, unlock vocabulary, converter determinism
 ```

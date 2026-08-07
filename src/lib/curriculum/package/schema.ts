@@ -13,6 +13,8 @@
  */
 import { z } from "zod";
 import { requiredWhenSchema } from "@/lib/curriculum/report-required-when";
+import { contentBodySchema } from "@/lib/curriculum/content-body";
+import { optionalSafeText, safeText } from "@/lib/curriculum/content-safe-text";
 
 export const PACKAGE_SCHEMA_VERSION = "ata.curriculum.package/1" as const;
 export const MIN_IMPORTER_VERSION = 1 as const;
@@ -52,8 +54,27 @@ const provenanceRecordSchema = z.strictObject({
 export type ProvenanceRecord = z.infer<typeof provenanceRecordSchema>;
 
 const localeSchema = z.string().trim().regex(/^[a-z]{2}(-[a-z0-9]{2,8})?$/);
-const text = (max: number) => z.string().trim().min(1).max(max);
-const optionalText = (max: number) => z.string().trim().max(max);
+
+/**
+ * PHASE-C. Every learner-visible string in a package now goes through the shared
+ * sanitizer (`content-safe-text.ts`) instead of a bare
+ * `z.string().trim().min(1)`.
+ *
+ * This closes a real hole rather than tidying one. The importer does NOT call
+ * `validateContentPublication`, so before this change a package could carry
+ * `<script>` in a lesson section, a report prompt or a gate explanation, pass
+ * package validation, be imported, and only be refused later at publication —
+ * and gate explanations and report prompts never go through publication
+ * validation at all.
+ *
+ * The `legacy_v1` policy is used for these fields (not `blocks_v2`): it keeps the
+ * https-markdown-link allowance that report instructions have always had, while
+ * still refusing HTML, event handlers, non-https schemes, encoded tag openers
+ * and control/bidi characters. The shipped approved packages contain none of
+ * those, so nothing already approved changes meaning.
+ */
+const text = (max: number, label = "text") => safeText(max, label, "legacy_v1");
+const optionalText = (max: number, label = "text") => optionalSafeText(max, label, "legacy_v1");
 
 const levelTypeSchema = z.enum([
   "external_event",
@@ -88,37 +109,54 @@ const reportFieldTypeSchema = z.enum([
 
 /* ------------------------------- content -------------------------------- */
 
-const contentSectionSchema = z.strictObject({
-  code: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64),
-  title: text(300),
-  body: text(8_000),
-});
-
-const contentBodySchema = z.strictObject({
-  sections: z.array(contentSectionSchema).max(30),
-  examples: z.array(z.strictObject({ title: text(300), body: text(8_000) })).max(50),
-  commonMistakes: z.array(z.strictObject({ mistake: text(8_000), correction: text(8_000) })).max(50),
-  glossary: z.array(z.strictObject({ term: text(300), definition: text(8_000) })).max(50),
-  nextAction: z.strictObject({ label: text(300), body: text(8_000) }),
-  riskDisclaimer: text(8_000),
-});
-
+/**
+ * PHASE-C. `body` is now the VERSIONED body contract
+ * (`src/lib/curriculum/content-body.ts`): legacy v1 or the v2 block model,
+ * triaged by an explicit `format`/`version` tag. The shape is no longer restated
+ * here — restating it is what let the package schema and the authoring schema
+ * drift into two different definitions of the same column.
+ */
 const contentLocalizationSchema = z.strictObject({
   locale: localeSchema,
-  title: text(300),
-  subtitle: optionalText(1_000),
-  learningObjectiveExtension: optionalText(4_000),
-  summary: optionalText(8_000),
-  transcript: z.string().trim().max(200_000).nullable(),
+  title: text(300, "content title"),
+  subtitle: optionalText(1_000, "content subtitle"),
+  learningObjectiveExtension: optionalText(4_000, "learningObjectiveExtension"),
+  summary: optionalText(8_000, "content summary"),
+  transcript: optionalText(200_000, "transcript").nullable(),
   body: contentBodySchema,
 });
 
+/**
+ * PHASE-C §10 — the asset URL contract is enforced HERE, not only at publication.
+ *
+ * `contentAssetPayloadSchema` (the authoring path) has always required absolute
+ * HTTPS without userinfo; the package path accepted any non-empty string, so an
+ * `http://` or `javascript:` asset URL could be imported and would only be
+ * caught if someone later republished the content version. The two paths write
+ * the same column, so they now enforce the same rule.
+ *
+ * Structural only: the URL must be well-formed and safe. Whether the object is
+ * actually reachable is FUTURE ASSET AVAILABILITY QA and deliberately not part
+ * of package validation — validating a package must never require the network.
+ */
 const contentAssetSchema = z.strictObject({
   kind: z.enum(["video", "subtitles", "image", "chart", "attachment"]),
   assetCode: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64),
   locale: localeSchema.nullable(),
-  url: z.string().trim().min(1).max(2_000),
-  mimeType: z.string().trim().min(1).max(255),
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2_000)
+    .refine((value) => {
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "";
+      } catch {
+        return false;
+      }
+    }, "asset URL must be absolute HTTPS without userinfo"),
+  mimeType: z.string().trim().min(1).max(255).regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i),
   sizeBytes: z.number().int().positive().nullable(),
   durationSeconds: z.number().int().positive().nullable(),
   sortOrder: z.number().int().min(0).max(999),

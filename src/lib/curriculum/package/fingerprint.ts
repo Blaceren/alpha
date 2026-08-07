@@ -22,11 +22,118 @@ import type {
   PackageLevel,
   PackageReport,
 } from "@/lib/curriculum/package/schema";
+import { isBlocksV2, type ContentBody } from "@/lib/curriculum/content-body";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 function byKey<T>(items: readonly T[], key: (item: T) => string): T[] {
   return [...items].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
+/**
+ * PHASE-C — the body projection is FORMAT-AWARE.
+ *
+ * Two rules keep the fingerprint honest across the v1/v2 transition:
+ *
+ *  1. A v1 body projects EXACTLY as it always did, field for field, in the
+ *     original order. Re-fingerprinting `ata-v2.first-slice` must produce the
+ *     byte-identical hash it was approved with, or the approved package stops
+ *     importing — so the legacy branch is frozen, not "refactored".
+ *
+ *  2. A v2 body projects through its own explicit walk, INCLUDING the `format`
+ *     and `version` tags. Migrating a body from v1 to v2 is a semantic change to
+ *     the content contract and must move the hash; two bodies that render the
+ *     same but declare different formats are not the same content.
+ *
+ * Blocks are projected key-by-key in a fixed order like everything else here,
+ * never by `JSON.stringify` over author key order, so an editor that reorders
+ * keys cannot move the fingerprint.
+ */
+function projectBody(body: ContentBody): Json {
+  if (!isBlocksV2(body)) {
+    return {
+      sections: body.sections.map((s) => ({ code: s.code, title: s.title, body: s.body })),
+      examples: body.examples.map((e) => ({ title: e.title, body: e.body })),
+      commonMistakes: body.commonMistakes.map((m) => ({ mistake: m.mistake, correction: m.correction })),
+      glossary: body.glossary.map((g) => ({ term: g.term, definition: g.definition })),
+      nextAction: { label: body.nextAction.label, body: body.nextAction.body },
+      riskDisclaimer: body.riskDisclaimer,
+    };
+  }
+  return {
+    format: body.format,
+    version: body.version,
+    sections: body.sections.map((section) => ({
+      code: section.code,
+      title: section.title,
+      blocks: section.blocks.map((block): Json => {
+        switch (block.type) {
+          case "heading":
+            return { type: block.type, level: block.level, text: block.text };
+          case "rich_text":
+            return { type: block.type, text: block.text };
+          case "callout":
+            return { type: block.type, variant: block.variant, title: block.title, body: block.body };
+          case "image":
+            return { type: block.type, assetCode: block.assetCode, alt: block.alt, caption: block.caption };
+          case "video":
+            return {
+              type: block.type,
+              assetCode: block.assetCode,
+              title: block.title,
+              captionsAssetCode: block.captionsAssetCode,
+              caption: block.caption,
+            };
+          case "list":
+            return { type: block.type, ordered: block.ordered, items: [...block.items] };
+          case "table":
+            return {
+              type: block.type,
+              caption: block.caption,
+              headers: [...block.headers],
+              rows: block.rows.map((row) => [...row]),
+            };
+          case "example":
+            return { type: block.type, title: block.title, body: block.body };
+          case "common_mistake":
+            return { type: block.type, mistake: block.mistake, correction: block.correction };
+          case "glossary":
+            return {
+              type: block.type,
+              entries: block.entries.map((entry) => ({ term: entry.term, definition: entry.definition })),
+            };
+          case "exercise":
+            return {
+              type: block.type,
+              code: block.code,
+              title: block.title,
+              instructions: block.instructions,
+              expectedAction: block.expectedAction,
+              estimatedMinutes: block.estimatedMinutes,
+            };
+          case "tool_link":
+            return { type: block.type, toolCode: block.toolCode, label: block.label, context: block.context };
+          case "cta":
+            return {
+              type: block.type,
+              action: block.action,
+              label: block.label,
+              body: block.body,
+              toolCode: block.toolCode,
+            };
+          case "divider":
+            return { type: block.type };
+          case "download":
+            return {
+              type: block.type,
+              assetCode: block.assetCode,
+              label: block.label,
+              description: block.description,
+            };
+        }
+      }),
+    })),
+  };
 }
 
 function projectContent(content: PackageContent | null): Json {
@@ -43,14 +150,7 @@ function projectContent(content: PackageContent | null): Json {
       learningObjectiveExtension: l.learningObjectiveExtension,
       summary: l.summary,
       transcript: l.transcript,
-      body: {
-        sections: l.body.sections.map((s) => ({ code: s.code, title: s.title, body: s.body })),
-        examples: l.body.examples.map((e) => ({ title: e.title, body: e.body })),
-        commonMistakes: l.body.commonMistakes.map((m) => ({ mistake: m.mistake, correction: m.correction })),
-        glossary: l.body.glossary.map((g) => ({ term: g.term, definition: g.definition })),
-        nextAction: { label: l.body.nextAction.label, body: l.body.nextAction.body },
-        riskDisclaimer: l.body.riskDisclaimer,
-      },
+      body: projectBody(l.body),
     })),
     assets: byKey(content.assets, (a) => a.assetCode).map((a) => ({
       kind: a.kind,

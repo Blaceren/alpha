@@ -32,6 +32,15 @@ import {
   validateRequiredWhen,
   type RequiredWhenFieldRef,
 } from "@/lib/curriculum/report-required-when";
+import {
+  contentBodyAssetReferences,
+  contentBodyHasRiskDisclaimer,
+  contentBodySectionCodes,
+  contentBodyTeachingCharacters,
+  contentBodyToolReferences,
+  isBlocksV2,
+} from "@/lib/curriculum/content-body";
+import { findObsoleteBrand, isProductToolCode } from "@/lib/curriculum/product-vocabulary";
 
 export type PackageIssue = { code: string; path: string; message: string };
 
@@ -39,18 +48,86 @@ export type PackageValidationResult =
   | { ok: true; package: CurriculumPackage; fingerprint: string; warnings: PackageIssue[] }
   | { ok: false; issues: PackageIssue[] };
 
-const PLACEHOLDER_MARKERS = [
-  "TODO",
-  "TBD",
-  "FIXME",
-  "PLACEHOLDER",
-  "LOREM IPSUM",
-  "УТОЧНЯЕТСЯ",
-  "ЗАГЛУШКА",
+/**
+ * PHASE-C §16 — markers that must never survive into an APPROVED package.
+ *
+ * Matched with word boundaries against the UPPER-CASED string, so «Заглушка» in
+ * a real sentence is caught while ordinary prose is not. The boundary matters:
+ * a naive `includes("TBD")` fires on any word containing those letters, and a
+ * naive `includes("СКОРО")` fires on «скоро» inside a legitimate sentence such
+ * as «рынок скоро вернётся к диапазону» — which is exactly the ridiculous false
+ * positive §16 warns about. Each marker below is therefore either a standalone
+ * authoring token or a phrase that has no innocent reading in lesson prose.
+ */
+const PLACEHOLDER_MARKERS: ReadonlyArray<{ marker: string; pattern: RegExp }> = [
+  { marker: "TODO", pattern: /\bTODO\b/i },
+  { marker: "TBD", pattern: /\bTBD\b/i },
+  { marker: "FIXME", pattern: /\bFIXME\b/i },
+  { marker: "PLACEHOLDER", pattern: /\bplaceholders?\b/i },
+  { marker: "LOREM IPSUM", pattern: /\blorem\s+ipsum\b/i },
+  { marker: "COMING SOON", pattern: /\bcoming\s+soon\b/i },
+  { marker: "XXX", pattern: /\bXXX+\b/ },
+  { marker: "УТОЧНЯЕТСЯ", pattern: /\bуточняется\b/i },
+  { marker: "ЗАГЛУШКА", pattern: /\bзаглушк[аиуеой]\b/i },
+  { marker: "ГОТОВИТСЯ", pattern: /\b(?:готовится|готовятся)\b/i },
+  // «скоро» alone is ordinary Russian. Only the authoring idioms are refused.
+  { marker: "СКОРО", pattern: /\b(?:скоро\s+(?:будет|появится|здесь)|уже\s+скоро)\b/i },
+  { marker: "В РАЗРАБОТКЕ", pattern: /\bв\s+разработке\b/i },
+  { marker: "ЧЕРНОВИК", pattern: /\bчерновик\b/i },
 ];
 
-/** Level types that must carry renderable content to be publishable. */
-const CONTENT_BEARING_TYPES = new Set(["lesson", "scenario", "practice", "final_exam"]);
+/**
+ * PHASE-C — content compatibility, split into THREE questions that used to be
+ * answered by one set.
+ *
+ * `CONTENT_BEARING_TYPES` conflated "may carry content", "may carry an
+ * assessment" and "must carry content once approved". That conflation was
+ * already wrong against the runtime: `content-read-progress.ts` serves content
+ * for `lesson`, `report`, `mentor_review` and `final_exam`
+ * (`READABLE_LEVEL_TYPES`), but the package validator refused to let a `report`
+ * or `mentor_review` level carry any — so the two practical/report level kinds
+ * that §17 requires to ship instructions could not express them at all.
+ *
+ * Splitting the questions fixes that without widening anything else:
+ *
+ *  - ALLOWED mirrors the runtime read path exactly. Nothing new becomes
+ *    readable; the package format simply stops refusing what the runtime
+ *    already serves.
+ *  - ASSESSMENT is UNCHANGED. A report or mentor-review level still may not
+ *    carry an assessment — completion for those belongs to report approval and
+ *    mentor review, and a second grading path would be a second owner.
+ *  - REQUIRED-FOR-APPROVED is UNCHANGED. Making content mandatory on approved
+ *    `report` levels would retroactively invalidate the shipped approved
+ *    package, whose L3 report level carries its prompt in the report definition
+ *    and no separate content. The ATA-100 PROFILE is where the stronger
+ *    per-kind content requirement lives (§17/§21).
+ */
+const CONTENT_ALLOWED_TYPES = new Set([
+  "lesson",
+  "scenario",
+  "practice",
+  "final_exam",
+  "report",
+  "mentor_review",
+]);
+const ASSESSMENT_ALLOWED_TYPES = new Set(["lesson", "scenario", "practice", "final_exam"]);
+const CONTENT_REQUIRED_FOR_APPROVED_TYPES = new Set([
+  "lesson",
+  "scenario",
+  "practice",
+  "final_exam",
+]);
+
+/**
+ * The minimum prose an APPROVED content-bearing level must actually teach.
+ *
+ * Deliberately low. This is not an editorial quality bar — it is the floor that
+ * separates "a lesson" from "a heading, a divider and a CTA", which is the
+ * schema-valid-but-learner-empty state §17 refuses. Editorial sufficiency is a
+ * human review; structural emptiness is a machine check.
+ */
+const MIN_APPROVED_TEACHING_CHARACTERS = 400;
+
 /** Level types that are gated outside the learner UI and never self-completable. */
 const GATED_TYPES = new Set(["external_event", "financial_checkpoint"]);
 
@@ -72,8 +149,7 @@ function issue(list: PackageIssue[], code: string, path: string, message: string
 }
 
 function containsPlaceholder(value: string): string | null {
-  const upper = value.toUpperCase();
-  return PLACEHOLDER_MARKERS.find((marker) => upper.includes(marker)) ?? null;
+  return PLACEHOLDER_MARKERS.find((entry) => entry.pattern.test(value))?.marker ?? null;
 }
 
 function looksLikeSecret(key: string): boolean {
@@ -303,7 +379,8 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         );
       }
 
-      const isContentBearing = CONTENT_BEARING_TYPES.has(level.type);
+      const isContentAllowed = CONTENT_ALLOWED_TYPES.has(level.type);
+      const isAssessmentAllowed = ASSESSMENT_ALLOWED_TYPES.has(level.type);
       const isGated = GATED_TYPES.has(level.type);
 
       if (isGated) {
@@ -347,10 +424,10 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         issue(issues, "REPORT_NOT_ALLOWED", `${levelPath}.report`, `${level.type} level must not carry a report`);
       }
 
-      if (!isContentBearing && level.content) {
+      if (!isContentAllowed && level.content) {
         issue(issues, "CONTENT_TYPE_INCOMPATIBLE", `${levelPath}.content`, `${level.type} level must not carry lesson content`);
       }
-      if (!isContentBearing && level.assessment) {
+      if (!isAssessmentAllowed && level.assessment) {
         issue(issues, "ASSESSMENT_TYPE_INCOMPATIBLE", `${levelPath}.assessment`, `${level.type} level must not carry an assessment`);
       }
 
@@ -364,19 +441,82 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         if (!level.content.localizations.some((l) => l.locale === pkg.locale)) {
           issue(issues, "CONTENT_LOCALIZATION_MISSING", `${contentPath}.localizations`, `missing package locale ${pkg.locale}`);
         }
+        /* ---- PHASE-C: asset table, then every reference into it ---- */
+        const assetKindByCode = new Map<string, string>();
+        const assetSortOrders = new Set<number>();
+        level.content.assets.forEach((asset, ai) => {
+          const assetPath = `${contentPath}.assets[${ai}]`;
+          if (assetKindByCode.has(asset.assetCode)) {
+            issue(issues, "CONTENT_ASSET_CODE_DUPLICATE", `${assetPath}.assetCode`, "duplicate assetCode within the content version");
+          }
+          assetKindByCode.set(asset.assetCode, asset.kind);
+          if (assetSortOrders.has(asset.sortOrder)) {
+            issue(issues, "CONTENT_ASSET_ORDER_DUPLICATE", `${assetPath}.sortOrder`, "duplicate asset sortOrder within the content version");
+          }
+          assetSortOrders.add(asset.sortOrder);
+        });
+        // A video asset without a declared duration cannot drive the lesson
+        // read-progress threshold, which `content-read-progress.ts` computes
+        // from `videoDurationSeconds`. Mirrors CONTENT_VIDEO_DURATION_REQUIRED
+        // on the authoring path, which the importer never runs.
+        if (
+          level.content.assets.some((asset) => asset.kind === "video") &&
+          level.content.videoDurationSeconds === null
+        ) {
+          issue(issues, "CONTENT_VIDEO_DURATION_REQUIRED", `${contentPath}.videoDurationSeconds`, "content with a video asset must declare videoDurationSeconds");
+        }
+
         const localeCodes = new Set<string>();
         level.content.localizations.forEach((l, i) => {
+          const localizationPath = `${contentPath}.localizations[${i}]`;
           if (localeCodes.has(l.locale)) {
-            issue(issues, "CONTENT_LOCALE_DUPLICATE", `${contentPath}.localizations[${i}].locale`, "duplicate locale");
+            issue(issues, "CONTENT_LOCALE_DUPLICATE", `${localizationPath}.locale`, "duplicate locale");
           }
           localeCodes.add(l.locale);
+
+          // Section codes are durable learner state (`completedSections`), so a
+          // duplicate is refused for BOTH formats. v2 also refuses it inside its
+          // own schema; this keeps one code for one defect either way.
           const sectionCodes = new Set<string>();
-          l.body.sections.forEach((s, si) => {
-            if (sectionCodes.has(s.code)) {
-              issue(issues, "CONTENT_SECTION_DUPLICATE", `${contentPath}.localizations[${i}].body.sections[${si}].code`, "duplicate section code");
+          contentBodySectionCodes(l.body).forEach((code, si) => {
+            if (sectionCodes.has(code)) {
+              issue(issues, "CONTENT_SECTION_DUPLICATE", `${localizationPath}.body.sections[${si}].code`, "duplicate section code");
             }
-            sectionCodes.add(s.code);
+            sectionCodes.add(code);
           });
+
+          // §10 — a block may only reference an asset that this package ships,
+          // and only one of a compatible KIND. Structural: nothing here opens a
+          // socket, and a package validates identically with no network.
+          for (const reference of contentBodyAssetReferences(l.body)) {
+            const referencePath = `${localizationPath}.body.${reference.path}`;
+            const kind = assetKindByCode.get(reference.assetCode);
+            if (kind === undefined) {
+              issue(issues, "CONTENT_ASSET_REFERENCE_MISSING", referencePath, "block references an assetCode that is not declared by this content version");
+            } else if (!reference.kinds.includes(kind)) {
+              issue(
+                issues,
+                "CONTENT_ASSET_REFERENCE_KIND_MISMATCH",
+                referencePath,
+                `block requires an asset of kind ${reference.kinds.join("/")} but the referenced asset is ${kind}`,
+              );
+            }
+          }
+
+          // §11 — tool codes come from the Backend-owned product vocabulary. An
+          // unknown code is an error in a DRAFT too: a tool either exists or it
+          // does not, and there is no authoring state in which inventing one is
+          // legitimate.
+          for (const reference of contentBodyToolReferences(l.body)) {
+            if (!isProductToolCode(reference.toolCode)) {
+              issue(
+                issues,
+                "CONTENT_TOOL_CODE_UNKNOWN",
+                `${localizationPath}.body.${reference.path}`,
+                "block references a tool code that is not in the canonical product vocabulary",
+              );
+            }
+          }
         });
       }
 
@@ -649,6 +789,14 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         if (marker) {
           issue(issues, "PLACEHOLDER_IN_APPROVED_PACKAGE", path, `approved package contains placeholder marker ${marker}`);
         }
+        // §15 — an approved package must not ship a retired product brand.
+        // Scoped to the PACKAGE, so historical documents, tests and the
+        // editorial-source manifest (which records the substitution by name)
+        // are untouched: they are not production package inputs.
+        const brand = findObsoleteBrand(value);
+        if (brand) {
+          issue(issues, "OBSOLETE_BRAND_IN_APPROVED_PACKAGE", path, `approved package contains obsolete product brand ${brand}`);
+        }
       },
       () => {},
     );
@@ -657,7 +805,34 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
       if (level.type === "report" && !level.report) {
         issue(issues, "REPORT_REQUIRED_FOR_APPROVED", `${path}.report`, "report level in an approved package requires a report definition");
       }
-      if (!CONTENT_BEARING_TYPES.has(level.type)) continue;
+      // §17 — content that EXISTS in an approved package must be real, whatever
+      // the level type. Checked for every level that carries content, not only
+      // the types where content is mandatory: shipping an empty lesson body on
+      // an optional-content level is the same defect.
+      if (level.content) {
+        for (const [li, localization] of level.content.localizations.entries()) {
+          const bodyPath = `${path}.content.localizations[${li}].body`;
+          if (contentBodyTeachingCharacters(localization.body) < MIN_APPROVED_TEACHING_CHARACTERS) {
+            issue(
+              issues,
+              "CONTENT_BODY_LEARNER_EMPTY",
+              bodyPath,
+              `approved content must teach something: fewer than ${MIN_APPROVED_TEACHING_CHARACTERS} characters of educational text`,
+            );
+          }
+          if (!contentBodyHasRiskDisclaimer(localization.body)) {
+            issue(
+              issues,
+              "CONTENT_RISK_DISCLAIMER_MISSING",
+              bodyPath,
+              isBlocksV2(localization.body)
+                ? "approved content must carry a callout block with variant risk"
+                : "approved content must carry a non-empty riskDisclaimer",
+            );
+          }
+        }
+      }
+      if (!CONTENT_REQUIRED_FOR_APPROVED_TYPES.has(level.type)) continue;
       if (!level.content) {
         issue(issues, "CONTENT_REQUIRED_FOR_APPROVED", `${path}.content`, "content-bearing level in an approved package requires content");
         continue;
