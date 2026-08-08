@@ -16,6 +16,8 @@ import {
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
+import { isEnrollmentDomainError } from "@/lib/curriculum/enrollment";
+import { autoEnrollNewRegistrationInTransaction } from "@/lib/curriculum/registration-enrollment";
 import { ACADEMY_REGISTER_SURFACE } from "@/lib/captcha/surface";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
@@ -31,6 +33,38 @@ import {
   sessionCookieOptions,
 } from "@/lib/session";
 import { registerSchema, validateJsonBody } from "@/lib/validation";
+
+/**
+ * PHASE-F — the fail-closed answer when auto-enrollment is ON and the curriculum
+ * configuration cannot deliver an enrollment.
+ *
+ * 503, not 500: the platform is temporarily unable to complete a registration it
+ * would otherwise accept, and retrying after the configuration is fixed is the
+ * correct behaviour for both the learner and the Academy's error mapping.
+ *
+ * The registration transaction has already rolled back by the time this runs, so
+ * there is no account, no session and no learner identity to name — the audit
+ * carries the bounded domain code and nothing else.
+ */
+async function enrollmentUnavailable(
+  error: { code: string },
+  request: Request,
+): Promise<NextResponse> {
+  await createAuditLog({
+    action: "REGISTRATION_ENROLLMENT_FAILED",
+    entityType: "API_ROUTE",
+    entityId: "/api/auth/register",
+    metadata: { code: error.code },
+    request,
+  });
+  return NextResponse.json(
+    {
+      error: "REGISTRATION_UNAVAILABLE",
+      message: "Регистрация временно недоступна. Попробуйте позже.",
+    },
+    { status: 503 },
+  );
+}
 
 export async function POST(request: Request) {
   const parsed = await validateJsonBody(request, registerSchema);
@@ -277,7 +311,29 @@ export async function POST(request: Request) {
       });
     }
 
-    return { created, reward, bonus, attributionId };
+    // PHASE-F — automatic curriculum enrollment, INSIDE this transaction.
+    //
+    // Last, deliberately: the learner, their legacy task progress, the referral
+    // relationship and the attribution are all established first, so the
+    // enrollment is written against a complete registration rather than a
+    // half-built one, and so nothing above changes shape when the flag is off.
+    //
+    // OFF (the default, and the live state today) → a no-op that reads and
+    // writes nothing, and every line of this transaction behaves exactly as it
+    // did before this phase.
+    //
+    // ON → an enrollment pinned to the single active published curriculum. A
+    // refusal THROWS, which rolls this whole transaction back: no user, no
+    // referral, no attribution, no conversion event. The handler below turns
+    // that into an explicit 503 rather than a 201, because a registration that
+    // silently failed to deliver the curriculum is worse than one that visibly
+    // did not happen.
+    const enrollment = await autoEnrollNewRegistrationInTransaction(tx, {
+      userId: created.id,
+      asOf: now,
+    });
+
+    return { created, reward, bonus, attributionId, enrollment };
   });
 
   // THE REPLAY AND CONCURRENCY BOUNDARY.
@@ -300,10 +356,21 @@ export async function POST(request: Request) {
   try {
     committed = await runRegistration();
   } catch (error) {
+    // PHASE-F. An enrollment refusal is NOT an attribution collision and must
+    // never be retried as one: re-running the transaction would hit the same
+    // broken curriculum configuration, and dropping attribution to "fix" it
+    // would corrupt the acquisition ledger for a reason unrelated to it. It
+    // leaves this handler as an explicit, bounded 503.
+    if (isEnrollmentDomainError(error)) return enrollmentUnavailable(error, request);
     if (attributionCandidate === null || !isVisitorAlreadyAttributed(error)) throw error;
     // The whole transaction rolled back, so no partial user exists to clean up.
     attributionCandidate = null;
-    committed = await runRegistration();
+    try {
+      committed = await runRegistration();
+    } catch (retryError) {
+      if (isEnrollmentDomainError(retryError)) return enrollmentUnavailable(retryError, request);
+      throw retryError;
+    }
   }
 
   const user = committed.created;

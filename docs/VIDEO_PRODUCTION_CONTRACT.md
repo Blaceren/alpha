@@ -190,22 +190,30 @@ not do is invent a code outside this list.
 
 ---
 
-## 8. XP is unresolved, and says so
+## 8. XP is a PRODUCT decision, and this artifact does not carry it
 
-No accepted source defines an ATA XP schedule: Academy's fixture states in its own
-header that it carries "no XP logic", `CURRICULUM_AND_UNLOCKS.md` never mentions
-XP, and `les-prog.txt` mentions it only as a concept. This phase does **not**
-invent one.
+When this contract was written no accepted source defined an ATA XP schedule, so
+every non-gate reward shipped as `xpRewardStatus: "unresolved"`.
 
-`PackageLevel.xpRewardStatus` carries the distinction:
+Phase F decided it. The schedule lives in
+`src/lib/curriculum/product-xp-policy.ts` and is documented in
+`docs/ATA_100_CONTENT_ARCHITECTURE.md` §4; the canonical ATA-100 builder reads it
+and every level of the canonical draft now declares `xpRewardStatus: "approved"`.
 
-- `approved` — the zero is a real product decision. Gates only.
-- `unresolved` — a compatibility placeholder; the decision is outstanding.
+**Nothing about that touches this artifact.** The video production contract is
+*editorial* truth — takes, hooks, question banks, section structure. XP is
+*runtime product policy*. The Blueprint did not author the schedule and this file
+must never be edited to suggest it did; a reward is not a fact about a video.
 
-Absence defaults to `unresolved` for non-gate levels, because silence is not a
-decision. A **draft** may carry it freely; an **approved** ATA-100 package cannot
-ship while it is unresolved (`ATA100_XP_SCHEDULE_UNRESOLVED` is a gap, and gaps
-block approval).
+`PackageLevel.xpRewardStatus` still carries the distinction, and the safe default
+is unchanged:
+
+- `approved` — the reward is a real product decision.
+- `unresolved` — a placeholder; the decision is outstanding.
+
+Absence still defaults to `unresolved` for non-gate levels, because silence is
+not a decision, and an **approved** ATA-100 package still cannot ship with one
+(`ATA100_XP_SCHEDULE_UNRESOLVED` is a gap, and gaps block approval).
 
 ---
 

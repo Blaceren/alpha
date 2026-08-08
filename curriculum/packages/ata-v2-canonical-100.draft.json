@@ -9,7 +9,7 @@
   "curriculumTitle": "Alfa Trade Academy — программа 1–100",
   "curriculumDescription": "Канонические 100 уровней и 20 модулей Alfa Trade Academy: структура, прогрессия, контрольные точки и разблокировки.",
   "locale": "ru",
-  "createdFrom": "scripts/curriculum/buildCanonical100.ts — структура из src/lib/curriculum/product-ata-100.ts, черновой материал из curriculum/canonical/ata-100-editorial-source.json, уровни 1–4 перенесены без изменений из ata-v2-first-slice.rev3.approved.json",
+  "createdFrom": "scripts/curriculum/buildCanonical100.ts — структура из src/lib/curriculum/product-ata-100.ts, черновой материал из curriculum/canonical/ata-100-editorial-source.json, уровни 1–4 перенесены без изменений из ata-v2-first-slice.rev3.approved.json, награды XP из утверждённой продуктовой политики src/lib/curriculum/product-xp-policy.ts",
   "approval": {
     "approvedBy": null,
     "approvedAt": null,
@@ -1095,7 +1095,7 @@
       "blocksReadiness": true
     }
   ],
-  "contentFingerprint": "0b393dcce2d176fb8850c65f5ccb0f744e6a1f4345614be6b87cc49bd094dfdc",
+  "contentFingerprint": "412449e532bd56fc10f5588900ae67700965207a4b438b9fc6d83c2c5909a882",
   "modules": [
     {
       "moduleCode": "module.01",
@@ -1151,7 +1151,8 @@
             "conflicts": [],
             "approvalRequired": false,
             "note": null
-          }
+          },
+          "xpRewardStatus": "approved"
         },
         {
           "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
@@ -1161,7 +1162,7 @@
           "shortDescription": "",
           "learningObjective": "Понять устройство академии: модули, уровни и контрольные точки.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
           "prerequisiteLevelCodes": [
             "v2.l001.registraciya-pocket"
@@ -1455,7 +1456,8 @@
             "conflicts": [],
             "approvalRequired": false,
             "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
-          }
+          },
+          "xpRewardStatus": "approved"
         },
         {
           "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
@@ -1465,7 +1467,7 @@
           "shortDescription": "Отчёт по 5 demo-сделкам",
           "learningObjective": "Совершить пять demo-сделок и описать их в отчёте.",
           "completionMethod": "report_approval",
-          "xpReward": 0,
+          "xpReward": 500,
           "requiredXp": 0,
           "prerequisiteLevelCodes": [
             "v2.l002.kak-ustroen-alfa-trade-academy"
@@ -2348,7 +2350,8 @@
             "conflicts": [],
             "approvalRequired": false,
             "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
-          }
+          },
+          "xpRewardStatus": "approved"
         },
         {
           "levelCode": "v2.l004.kontrolnaya-tochka-50",
@@ -2398,7 +2401,8 @@
             "conflicts": [],
             "approvalRequired": false,
             "note": null
-          }
+          },
+          "xpRewardStatus": "approved"
         }
       ]
     },
@@ -2418,9 +2422,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Жизненный цикл сделки» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l004.kontrolnaya-tochka-50"
           ],
@@ -2694,9 +2698,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Экспирация и payout» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l005.zhiznennyy-cikl-sdelki"
           ],
@@ -2970,9 +2974,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Активы, время и OTC» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l006.ekspiraciya-i-payout"
           ],
@@ -3246,9 +3250,9 @@
           "shortDescription": "Сценарии «войти / ждать / отказаться»",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Войти или отказаться» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l007.aktivy-vremya-i-otc"
           ],
@@ -3522,9 +3526,9 @@
           "shortDescription": "Собственный checklist",
           "learningObjective": "Setup, режим рынка, новости, риск, эмоциональное состояние, условия отказа.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l008.voyti-ili-otkazatsya"
           ],
@@ -3682,9 +3686,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Торговый капитал» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l010.kontrolnaya-tochka-100"
           ],
@@ -3958,9 +3962,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Размер позиции и серии убытков» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l011.torgovyy-kapital"
           ],
@@ -4234,9 +4238,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Дневной лимит потерь» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l012.razmer-pozicii-i-serii-ubytkov"
           ],
@@ -4510,9 +4514,9 @@
           "shortDescription": "Risk Plan",
           "learningObjective": "Размер позиции, дневной лимит, пауза, запрещённые действия, условия возвращения.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l013.dnevnoy-limit-poter"
           ],
@@ -4670,9 +4674,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Свечи» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l015.kontrolnaya-tochka-150"
           ],
@@ -4946,9 +4950,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Тренд и диапазон» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l016.svechi"
           ],
@@ -5210,9 +5214,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Поддержка и сопротивление» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l017.trend-i-diapazon"
           ],
@@ -5486,9 +5490,9 @@
           "shortDescription": "Разметка 3 графиков",
           "learningObjective": "Разметить три графика и объяснить зоны.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l018.podderzhka-i-soprotivlenie"
           ],
@@ -5636,9 +5640,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Stochastic» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l020.kontrolnaya-tochka-200"
           ],
@@ -5900,9 +5904,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Bollinger Bands» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l021.stochastic"
           ],
@@ -6164,9 +6168,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Объединение сигналов» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l022.bollinger-bands"
           ],
@@ -6428,9 +6432,9 @@
           "shortDescription": "Разбор сценариев и red flags",
           "learningObjective": "Разобрать сценарии и найти главный red flag.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l023.obedinenie-signalov"
           ],
@@ -6578,9 +6582,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Экономический календарь» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l025.kontrolnaya-tochka-300"
           ],
@@ -6842,9 +6846,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Реакция цены на новости» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l026.ekonomicheskiy-kalendar"
           ],
@@ -7106,9 +7110,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Когда не стоит торговать» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l027.reakciya-ceny-na-novosti"
           ],
@@ -7370,9 +7374,9 @@
           "shortDescription": "План вокруг новостей",
           "learningObjective": "Пользователь составляет план, mentor проверяет.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l028.kogda-ne-stoit-torgovat"
           ],
@@ -7520,9 +7524,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Страх потери» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l030.kontrolnaya-tochka-400"
           ],
@@ -7784,9 +7788,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Revenge trading» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l031.strah-poteri"
           ],
@@ -8048,9 +8052,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «FOMO» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l032.revenge-trading"
           ],
@@ -8312,9 +8316,9 @@
           "shortDescription": "Триггеры, длительность, возврат",
           "learningObjective": "Пользователь задаёт триггеры, длительность и правила возвращения.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l033.fomo"
           ],
@@ -8462,9 +8466,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Почему память обманывает» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l035.kontrolnaya-tochka-500"
           ],
@@ -8726,9 +8730,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Запись до сделки» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l036.pochemu-pamyat-obmanyvaet"
           ],
@@ -8990,9 +8994,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Запись после сделки» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l037.zapis-do-sdelki"
           ],
@@ -9254,9 +9258,9 @@
           "shortDescription": "Weekly review",
           "learningObjective": "Пользователь делает weekly review.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l038.zapis-posle-sdelki"
           ],
@@ -9404,9 +9408,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Что такое setup» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l040.kontrolnaya-tochka-750"
           ],
@@ -9668,9 +9672,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Чёткие правила входа» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l041.chto-takoe-setup"
           ],
@@ -9932,9 +9936,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Таймфрейм и экспирация» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l042.chetkie-pravila-vhoda"
           ],
@@ -10196,9 +10200,9 @@
           "shortDescription": "Strategy Card",
           "learningObjective": "Пользователь создаёт Strategy Card, mentor проверяет.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l043.taymfreym-i-ekspiraciya"
           ],
@@ -10346,9 +10350,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Просадка» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l045.kontrolnaya-tochka-1000"
           ],
@@ -10610,9 +10614,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Восстановление после просадки» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l046.prosadka"
           ],
@@ -10874,9 +10878,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Распределение капитала» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l047.vosstanovlenie-posle-prosadki"
           ],
@@ -11138,9 +11142,9 @@
           "shortDescription": "Уровни предупреждения, паузы и восстановления",
           "learningObjective": "Создать уровни предупреждения, паузы и восстановления.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l048.raspredelenie-kapitala"
           ],
@@ -11288,9 +11292,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Несколько таймфреймов» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l050.kontrolnaya-tochka-1500"
           ],
@@ -11552,9 +11556,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Тренд и боковик» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l051.neskolko-taymfreymov"
           ],
@@ -11816,9 +11820,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Волатильность» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l052.trend-i-bokovik"
           ],
@@ -12080,9 +12084,9 @@
           "shortDescription": "Сценарии выбора и отказа",
           "learningObjective": "Сценарии выбора стратегии или отказа.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l053.volatilnost"
           ],
@@ -12218,9 +12222,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Подготовка к сессии» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l055.kontrolnaya-tochka-2000"
           ],
@@ -12482,9 +12486,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Качество входа» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l056.podgotovka-k-sessii"
           ],
@@ -12746,9 +12750,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Overtrading» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l057.kachestvo-vhoda"
           ],
@@ -13010,9 +13014,9 @@
           "shortDescription": "Сравнение плана и действий",
           "learningObjective": "Сравнить план и фактические действия, mentor проверяет.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l058.overtrading"
           ],
@@ -13148,9 +13152,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Win rate» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l060.kontrolnaya-tochka-2500"
           ],
@@ -13412,9 +13416,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Математическое ожидание» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l061.win-rate"
           ],
@@ -13676,9 +13680,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Размер выборки» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l062.matematicheskoe-ozhidanie"
           ],
@@ -13940,9 +13944,9 @@
           "shortDescription": "Разбивка по setup, времени, активу и режиму",
           "learningObjective": "Разделить результаты по setup, времени, активу и режиму.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l063.razmer-vyborki"
           ],
@@ -14078,9 +14082,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Специализация» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l065.kontrolnaya-tochka-3000"
           ],
@@ -14342,9 +14346,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Корреляция» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l066.specializaciya"
           ],
@@ -14606,9 +14610,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Ограничение внимания» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l067.korrelyaciya"
           ],
@@ -14870,9 +14874,9 @@
           "shortDescription": "Watchlist с причинами",
           "learningObjective": "Выбрать активы и причины их присутствия.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l068.ogranichenie-vnimaniya"
           ],
@@ -15008,9 +15012,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Tilt» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l070.kontrolnaya-tochka-4000"
           ],
@@ -15272,9 +15276,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Усталость» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l071.tilt"
           ],
@@ -15536,9 +15540,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Уверенность против данных» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l072.ustalost"
           ],
@@ -15800,9 +15804,9 @@
           "shortDescription": "Триггеры и правила",
           "learningObjective": "Пользователь описывает триггеры и правила, mentor проверяет.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l073.uverennost-protiv-dannyh"
           ],
@@ -15938,9 +15942,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Устойчивый режим» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l075.kontrolnaya-tochka-5000"
           ],
@@ -16202,9 +16206,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Дневной и недельный ритуал» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l076.ustoychivyy-rezhim"
           ],
@@ -16466,9 +16470,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Возвращение после перерыва» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l077.dnevnoy-i-nedelnyy-ritual"
           ],
@@ -16730,9 +16734,9 @@
           "shortDescription": "Персональный график",
           "learningObjective": "Пользователь создаёт персональный график.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l078.vozvraschenie-posle-pereryva"
           ],
@@ -16868,9 +16872,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Полный торговый кейс» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l080.kontrolnaya-tochka-6000"
           ],
@@ -17132,9 +17136,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Неполная информация» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l081.polnyy-torgovyy-keys"
           ],
@@ -17396,9 +17400,9 @@
           "shortDescription": "5 карточек ошибок",
           "learningObjective": "Создать пять карточек собственных ошибок.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l082.nepolnaya-informaciya"
           ],
@@ -17485,9 +17489,9 @@
           "shortDescription": "Защита кейса",
           "learningObjective": "Защита кейса перед mentor.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l083.biblioteka-oshibok"
           ],
@@ -17635,9 +17639,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Equity curve» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l085.kontrolnaya-tochka-7000"
           ],
@@ -17899,9 +17903,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Серии и variance» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l086.equity-curve"
           ],
@@ -18163,9 +18167,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Устойчивость стратегии» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l087.serii-i-variance"
           ],
@@ -18427,9 +18431,9 @@
           "shortDescription": "Одна проблема / одно изменение",
           "learningObjective": "Выбрать одну проблему, одно изменение и период проверки.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l088.ustoychivost-strategii"
           ],
@@ -18565,9 +18569,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Структура Playbook» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l090.kontrolnaya-tochka-8000"
           ],
@@ -18829,9 +18833,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Правила входа и отказа» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l091.struktura-playbook"
           ],
@@ -19093,9 +19097,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Личные Red Flags» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l092.pravila-vhoda-i-otkaza"
           ],
@@ -19357,9 +19361,9 @@
           "shortDescription": "Playbook на проверку",
           "learningObjective": "Mentor проверяет измеримость и отсутствие противоречий.",
           "completionMethod": "mentor_review",
-          "xpReward": 0,
+          "xpReward": 250,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l093.lichnye-red-flags"
           ],
@@ -19495,9 +19499,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «Teach-back» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l095.kontrolnaya-tochka-9000"
           ],
@@ -19759,9 +19763,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «План на 90 дней» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l096.teach-back"
           ],
@@ -20023,9 +20027,9 @@
           "shortDescription": "",
           "learningObjective": "После просмотра ученик должен уметь объяснить тему «План действий при просадке» через четыре проверяемых правила и применить их в простом сценарии без торгового обещания.",
           "completionMethod": "assessment_pass",
-          "xpReward": 0,
+          "xpReward": 100,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l097.plan-na-90-dney"
           ],
@@ -20287,9 +20291,9 @@
           "shortDescription": "Финальный экзамен",
           "learningObjective": "Риск, графики, индикаторы, новости, психология, статистика, кейсы, playbook.",
           "completionMethod": "manual",
-          "xpReward": 0,
+          "xpReward": 150,
           "requiredXp": 0,
-          "xpRewardStatus": "unresolved",
+          "xpRewardStatus": "approved",
           "prerequisiteLevelCodes": [
             "v2.l098.plan-deystviy-pri-prosadke"
           ],

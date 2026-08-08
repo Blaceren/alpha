@@ -69,18 +69,45 @@ Their preprod QA capability is the Phase-A staging-attestation domain and lives
 nowhere near curriculum content. The package contains no staging, attestation or
 environment vocabulary at all, and a regression test asserts that.
 
-## 4. XP
+## 4. XP — DECIDED IN PHASE F
 
-`xpReward` is 0 on every level of the canonical draft — the same as the only
-approved precedent (all four approved levels award 0). **No XP schedule was
-invented.** Deciding one is a product act; the validators that will police it are
-already in place:
+Phase C shipped this section saying *"no XP schedule was invented"*, which was
+true then and is no longer true. The ATA XP schedule is now an approved product
+decision, owned by `src/lib/curriculum/product-xp-policy.ts`:
 
-* gate pairs must be exactly 0 (`LEVEL_GATE_REWARD_UNSUPPORTED`, derived from the
-  completion owner, plus `ATA100_GATE_XP_NONZERO` stated as a product fact);
-* `xpReward` is a bounded non-negative integer in the package schema;
+| completion pair | XP | levels | subtotal |
+| --- | --- | --- | --- |
+| `lesson : assessment_pass` | 100 | 58 | 5 800 |
+| `lesson : manual` | 150 | 13 | 1 950 |
+| `mentor_review : mentor_review` | 250 | 7 | 1 750 |
+| `report : report_approval` | 500 | 1 | 500 |
+| `financial_checkpoint : balance_check` | 0 | 20 | 0 |
+| `external_event : pocket_postback` | 0 | 1 | 0 |
+| **total** | | **100** | **10 000** |
+
+The policy is keyed on the canonical **completion pair** and on nothing else —
+not the level number, not the module, not the rank, not the unlock level, not a
+fixture. A level is worth what its kind of work is worth.
+
+`xpRewardStatus` is `approved` on all 100 levels of the canonical draft; there
+are no `unresolved` rewards left. The validators that police it:
+
+* every level's reward must equal the policy's (`ATA100_XP_REWARD_MISMATCH`);
+* every level's status must equal the policy's (`ATA100_XP_REWARD_STATUS_MISMATCH`);
+* each pair's level count and subtotal must match (`ATA100_XP_SCHEDULE_BUCKET_MISMATCH`);
+* the package must sum to exactly 10 000 (`ATA100_XP_TOTAL_MISMATCH`);
+* gate pairs must still be exactly 0 (`LEVEL_GATE_REWARD_UNSUPPORTED` derived
+  from the completion owner, plus `ATA100_GATE_XP_NONZERO` as a product fact);
+* `xpReward` remains a bounded non-negative integer in the package schema;
 * XP is awarded only from the immutable `LevelDefinition.xpReward` by the one
-  completion engine — Phase C creates no second XP source.
+  completion engine. Phase F creates no second XP source.
+
+**The historical first-slice packages are unchanged.** They still declare
+`xpReward: 0` with no `xpRewardStatus`, and their fingerprints still recompute to
+the values they shipped with. The canonical ATA-100 builder applies the schedule
+as an *overlay* when it carries L1–L4 across, because XP is runtime product
+policy rather than editorial content — the Blueprint did not author it, and
+nothing rewrites the record to suggest it did.
 
 ## 5. Generic engine vs ATA product profile
 

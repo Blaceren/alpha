@@ -72,6 +72,13 @@ import {
   RANK_TRANSITIONS,
 } from "@/lib/curriculum/product-vocabulary";
 import {
+  ATA_TOTAL_XP,
+  ataXpRewardForLevel,
+  ataXpRewardStatusForLevel,
+  ataXpScheduleBuckets,
+  ataXpScheduleTotal,
+} from "@/lib/curriculum/product-xp-policy";
+import {
   PRODUCTION_PROVENANCE,
   type CurriculumPackage,
   type PackageLevel,
@@ -188,6 +195,10 @@ export type AtaLifecycleMatrix = {
   /** Non-gate levels whose XP reward is still a placeholder. */
   xpUnresolvedLevels: number;
   xpApprovedLevels: number;
+  /** PHASE-F — the package's own reward sum. The approved product total is 10 000. */
+  xpTotalReward: number;
+  /** PHASE-F — does the package's schedule match the approved ATA policy exactly? */
+  xpScheduleMatchesPolicy: boolean;
 };
 
 export type AtaProfileResult = {
@@ -489,6 +500,38 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
         `level ${source.levelNumber} is a gate: its zero reward is an approved product decision, not an unresolved one`,
       );
     }
+    /*
+     * PHASE-F — THE APPROVED SCHEDULE, LEVEL BY LEVEL.
+     *
+     * Reported as an ISSUE rather than a gap, and therefore blocking for a draft
+     * too. An unresolved schedule was editorial incompleteness — nobody had
+     * decided. A schedule that DISAGREES with the decision is a different thing:
+     * the package would ship a curriculum whose levels pay something the product
+     * did not approve, and no amount of authoring fixes that.
+     *
+     * The expected value comes from the policy, which is keyed on the completion
+     * pair. Note what is NOT compared: the level number, the module, the rank or
+     * the unlock level. A package cannot satisfy this check by accident.
+     */
+    const expectedReward = ataXpRewardForLevel(source);
+    if (level.xpReward !== expectedReward) {
+      issue(
+        issues,
+        "ATA100_XP_REWARD_MISMATCH",
+        `${path}.xpReward`,
+        `level ${source.levelNumber} (${source.kind}) must award ${expectedReward} XP under the approved ATA schedule, found ${level.xpReward}`,
+      );
+    }
+    const expectedStatus = ataXpRewardStatusForLevel(source);
+    if (resolveXpRewardStatus(level, source.kind) !== expectedStatus) {
+      issue(
+        issues,
+        "ATA100_XP_REWARD_STATUS_MISMATCH",
+        `${path}.xpRewardStatus`,
+        `level ${source.levelNumber} must declare xpRewardStatus ${expectedStatus}`,
+      );
+    }
+
     if (!isGate && resolveXpRewardStatus(level, source.kind) === "unresolved") {
       // Collected separately, then merged into `gaps` after the per-level tally.
       // An unresolved XP schedule is a PRODUCT decision, not editorial work: a
@@ -669,6 +712,9 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
   let conflictingBanks = 0;
   let xpUnresolved = 0;
   let xpApproved = 0;
+  let xpTotalReward = 0;
+  /** PHASE-F — how many levels of each completion pair the PACKAGE actually pays. */
+  const xpPaidByPair = new Map<string, { levels: number; subtotal: number }>();
 
   for (const source of ATA_LEVELS) {
     const found = byNumber.get(source.levelNumber);
@@ -677,6 +723,12 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
 
     if (resolveXpRewardStatus(level, source.kind) === "unresolved") xpUnresolved += 1;
     else xpApproved += 1;
+    xpTotalReward += level.xpReward;
+    const pair = `${level.type}:${level.completionMethod}`;
+    const bucket = xpPaidByPair.get(pair) ?? { levels: 0, subtotal: 0 };
+    bucket.levels += 1;
+    bucket.subtotal += level.xpReward;
+    xpPaidByPair.set(pair, bucket);
 
     if (source.kind !== "video_test") continue;
     if (level.assessment) {
@@ -708,6 +760,68 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
     if (state === "CONFLICTING") conflictingBanks += 1;
   }
 
+  /*
+   * PHASE-F — THE SCHEDULE AS A WHOLE.
+   *
+   * The per-level check above already refuses a wrong reward, so these are not
+   * strictly redundant only in the sense that a checksum is not redundant: they
+   * state the product decision in the shape the decision was WRITTEN in — «58
+   * assessment levels × 100», «total exactly 10 000» — so a change that happened
+   * to satisfy every level individually while altering the distribution or the
+   * total still fails, and fails with the number a product owner recognises.
+   *
+   * The expected buckets are derived from the canonical structure by the policy;
+   * `ATA_TOTAL_XP` is the one number stated by hand, and the policy's own derived
+   * total is checked against it so the structure and the decision cannot drift
+   * apart silently.
+   */
+  const scheduleBuckets = ataXpScheduleBuckets();
+  const policyTotal = ataXpScheduleTotal();
+  if (policyTotal !== ATA_TOTAL_XP) {
+    issue(
+      issues,
+      "ATA100_XP_POLICY_TOTAL_INVALID",
+      "vocabulary.xp",
+      `the ATA XP policy sums to ${policyTotal} over the canonical structure, not the approved ${ATA_TOTAL_XP}`,
+    );
+  }
+  for (const bucket of scheduleBuckets) {
+    const paid = xpPaidByPair.get(bucket.pair) ?? { levels: 0, subtotal: 0 };
+    if (paid.levels !== bucket.levels || paid.subtotal !== bucket.subtotal) {
+      issue(
+        issues,
+        "ATA100_XP_SCHEDULE_BUCKET_MISMATCH",
+        `modules[].levels.${bucket.pair}`,
+        `${bucket.pair} must be ${bucket.levels} levels × ${bucket.xpReward} XP = ${bucket.subtotal}, found ${paid.levels} levels totalling ${paid.subtotal}`,
+      );
+    }
+  }
+  for (const pair of xpPaidByPair.keys()) {
+    if (!scheduleBuckets.some((bucket) => bucket.pair === pair)) {
+      issue(
+        issues,
+        "ATA100_XP_SCHEDULE_PAIR_UNPRICED",
+        `modules[].levels.${pair}`,
+        `${pair} is not priced by the approved ATA XP schedule`,
+      );
+    }
+  }
+  if (xpTotalReward !== ATA_TOTAL_XP) {
+    issue(
+      issues,
+      "ATA100_XP_TOTAL_MISMATCH",
+      "modules[].levels.xpReward",
+      `the ATA product curriculum must award exactly ${ATA_TOTAL_XP} XP in total, found ${xpTotalReward}`,
+    );
+  }
+  const xpScheduleMatchesPolicy =
+    xpTotalReward === ATA_TOTAL_XP &&
+    policyTotal === ATA_TOTAL_XP &&
+    scheduleBuckets.every((bucket) => {
+      const paid = xpPaidByPair.get(bucket.pair);
+      return paid?.levels === bucket.levels && paid?.subtotal === bucket.subtotal;
+    });
+
   const lifecycle: AtaLifecycleMatrix = {
     structureReady: structural.size === ATA_LEVEL_COUNT && pkg.modules.length === ATA_MODULE_COUNT,
     videoLessons: videoLevels.length,
@@ -726,6 +840,8 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
     productionReadyLevels: productionReady.size,
     xpUnresolvedLevels: xpUnresolved,
     xpApprovedLevels: xpApproved,
+    xpTotalReward,
+    xpScheduleMatchesPolicy,
   };
 
   const report: AtaCompletenessReport = {
@@ -766,4 +882,6 @@ export const ATA_PRODUCT_EXPECTATIONS = {
   communityUnlocks: ATA_COMMUNITY_UNLOCK_COUNT,
   practicals: ATA_PRACTICAL_COUNT,
   mentorReviews: ATA_MENTOR_REVIEW_COUNT,
+  /** PHASE-F — the approved product total. */
+  totalXp: ATA_TOTAL_XP,
 } as const;

@@ -319,16 +319,39 @@ check("20 every generated content body uses the v2 block format", () => {
   assert.equal("format" in l2.content.localizations[0].body, false);
 });
 
-check("21 levels 1–4 are carried over from the approved slice unchanged", () => {
+check("21 levels 1–4 are carried over from the approved slice, XP overlay aside", () => {
   const approved = JSON.parse(readFileSync(FIRST_SLICE_PATH, "utf8")) as {
-    modules: Array<{ levels: unknown[] }>;
+    modules: Array<{ levels: Array<Record<string, unknown>> }>;
   };
   const canonicalRaw = JSON.parse(readFileSync(CANONICAL_PATH, "utf8")) as {
-    modules: Array<{ levels: unknown[] }>;
+    modules: Array<{ levels: Array<Record<string, unknown>> }>;
   };
+  /*
+   * PHASE-F. The approved slice predates the XP decision: it declares zero on
+   * every level and carries no `xpRewardStatus`. The canonical 100 applies the
+   * approved product schedule as an OVERLAY, so those two fields — and ONLY
+   * those two — legitimately differ. Everything editorial is still carried
+   * across character for character, which is what this check is for.
+   */
+  const OVERLAID = new Set(["xpReward", "xpRewardStatus"]);
   for (let index = 0; index < 4; index += 1) {
-    assert.deepEqual(canonicalRaw.modules[0].levels[index], approved.modules[0].levels[index]);
+    const carried = canonicalRaw.modules[0].levels[index];
+    const source = approved.modules[0].levels[index];
+    const strippedCarried = Object.fromEntries(
+      Object.entries(carried).filter(([key]) => !OVERLAID.has(key)),
+    );
+    const strippedSource = Object.fromEntries(
+      Object.entries(source).filter(([key]) => !OVERLAID.has(key)),
+    );
+    assert.deepEqual(strippedCarried, strippedSource);
+    // The historical artifact itself is untouched.
+    assert.equal(source.xpReward, 0);
+    assert.equal(source.xpRewardStatus, undefined);
+    // …and the overlay is the approved schedule, not a copy of the placeholder.
+    assert.equal(carried.xpRewardStatus, "approved");
   }
+  const overlaid = canonicalRaw.modules[0].levels.slice(0, 4).map((level) => level.xpReward);
+  assert.deepEqual(overlaid, [0, 100, 500, 0], "L1 gate, L2 lesson, L3 report, L4 gate");
 });
 
 /* ------------------------------------------------------------------ *
@@ -443,23 +466,43 @@ check("32 unwritten lesson content is an editorial GAP in a draft, never an issu
   );
 });
 
-check("32a the XP schedule is an explicit gap, and it gates approval", () => {
+check("32a the XP schedule is APPROVED, complete, and sums to 10 000", () => {
   const draft = validateAtaProduct100Package(CANONICAL);
-  const xpGaps = draft.gaps.filter((gap) => gap.code === "ATA100_XP_SCHEDULE_UNRESOLVED");
-  assert.equal(xpGaps.length, 79, "every non-gate level's reward is an undeclared placeholder");
-  assert.ok(draft.ok, "a DRAFT may carry an unresolved XP schedule openly");
+  /*
+   * PHASE-F replaces the Phase-C expectation, which was that all 79 non-gate
+   * rewards were undeclared placeholders. The product decision now exists, so
+   * the honest assertion is the opposite one: no level is unresolved, and the
+   * schedule is exactly the approved one.
+   */
+  assert.deepEqual(
+    draft.gaps.filter((gap) => gap.code === "ATA100_XP_SCHEDULE_UNRESOLVED"),
+    [],
+    "no ATA level carries a placeholder reward any more",
+  );
+  assert.deepEqual(
+    draft.issues.filter((item) => item.code.startsWith("ATA100_XP")),
+    [],
+  );
+  assert.equal(draft.report.lifecycle.xpTotalReward, 10_000);
+  assert.equal(draft.report.lifecycle.xpScheduleMatchesPolicy, true);
 
-  const approved = clone(CANONICAL);
-  approved.status = "approved";
-  const result = validateAtaProduct100Package(approved);
-  assert.equal(result.ok, false, "an APPROVED ATA-100 package may not ship an unresolved XP schedule");
-  assert.ok(result.gaps.some((gap) => gap.code === "ATA100_XP_SCHEDULE_UNRESOLVED"));
+  // …and the release gate still exists: an APPROVED package that claimed a
+  // different schedule is refused outright.
+  const tampered = clone(CANONICAL);
+  const lesson = tampered.modules
+    .flatMap((m: { levels: Array<Record<string, unknown>> }) => m.levels)
+    .find((l: Record<string, unknown>) => l.type === "lesson" && l.completionMethod === "assessment_pass");
+  assert.ok(lesson);
+  lesson.xpReward = 10;
+  const result = validateAtaProduct100Package(tampered);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((item) => item.code === "ATA100_XP_REWARD_MISMATCH"));
 });
 
-check("32b gates keep an APPROVED zero reward; a gate may not claim unresolved", () => {
+check("32b every level's reward status is approved; a gate may not claim unresolved", () => {
   const { report } = validateAtaProduct100Package(CANONICAL);
-  assert.equal(report.lifecycle.xpApprovedLevels, 21, "1 registration + 20 checkpoints");
-  assert.equal(report.lifecycle.xpUnresolvedLevels, 79);
+  assert.equal(report.lifecycle.xpApprovedLevels, 100);
+  assert.equal(report.lifecycle.xpUnresolvedLevels, 0);
 
   const pkg = clone(CANONICAL);
   const checkpoint = pkg.modules.flatMap((m) => m.levels).find((l) => l.levelNumber === 10);

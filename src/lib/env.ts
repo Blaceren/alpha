@@ -75,6 +75,7 @@ const OPTIONAL_ENV = [
   "CURRICULUM_V2_ADMIN_ENABLED",
   "CURRICULUM_V2_READ_ENABLED",
   "CURRICULUM_V2_ENROLLMENT_ENABLED",
+  "CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED",
   "CURRICULUM_V2_XP_ENABLED",
   "CURRICULUM_V2_CONTENT_ENABLED",
   "CURRICULUM_V2_ASSESSMENT_ENABLED",
@@ -147,6 +148,7 @@ const envSchema = z.object({
   CURRICULUM_V2_ADMIN_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_READ_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ENROLLMENT_ENABLED: z.enum(["true", "false"]).optional(),
+  CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_XP_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_CONTENT_ENABLED: z.enum(["true", "false"]).optional(),
   CURRICULUM_V2_ASSESSMENT_ENABLED: z.enum(["true", "false"]).optional(),
@@ -499,6 +501,38 @@ export function isCurriculumV2ReadEnabled(env: NodeJS.ProcessEnv = process.env) 
 // Mutation gate for the controlled enrollment command; absent env stays disabled.
 export function isCurriculumV2EnrollmentEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.CURRICULUM_V2_ENROLLMENT_ENABLED === "true";
+}
+
+/**
+ * PHASE-F — REGISTRATION AUTO-ENROLLMENT. Absent env is the safe OFF default.
+ *
+ * WHY THIS IS ITS OWN FLAG AND NOT `CURRICULUM_V2_ENROLLMENT_ENABLED`
+ * They answer different questions, and an operator has a real reason to want one
+ * without the other:
+ *
+ *   CURRICULUM_V2_ENROLLMENT_ENABLED
+ *     may the platform enroll ANYONE at all? It gates the admin command, which
+ *     is how a pilot cohort is enrolled deliberately, one learner at a time.
+ *
+ *   CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED
+ *     does EVERY NEW REGISTRATION become an enrollment automatically?
+ *
+ * Overloading the first would mean that turning on the operator command — the
+ * safe, reversible, one-learner-at-a-time thing — silently opts every future
+ * signup into the curriculum as a side effect. That is precisely the kind of
+ * coupling a launch gate must not have, so this is a separate switch.
+ *
+ * It is a NARROWING flag, never a widening one: auto-enrollment additionally
+ * requires READ and ENROLLMENT to be on, because it calls the same primitive the
+ * admin command calls and that primitive refuses without them. So the activation
+ * condition is the conjunction, and this flag alone grants nothing.
+ *
+ * `NODE_ENV` is deliberately not consulted anywhere in this decision.
+ */
+export function isCurriculumV2RegistrationAutoEnrollEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return env.CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED === "true";
 }
 
 // Read at call time. Absent env is the safe disabled default.

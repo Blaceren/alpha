@@ -7,6 +7,11 @@ import type {
 import type { CheckpointReadModel } from "./checkpoint";
 import { resolveCheckpointVerification, isFinancialCheckpointType } from "./checkpoint";
 import type { UserCurriculumLevelStatesResult } from "./level-state";
+import {
+  resolveCompletedCurriculumToolAccess,
+  resolveCurriculumToolAccess,
+  summarizeToolAccess,
+} from "./tool-access";
 import type { ResolveEnrollmentXpResult } from "./xp";
 import type {
   ResolvedProgress,
@@ -233,6 +238,16 @@ export function mapEnrolledCurriculumRead(
     enrollment: mapEnrollment(levelStates.enrollment),
     modules: mapEnrolledModules(levelStates),
     xp,
+    /*
+     * PHASE-F — the full 19-tool access set (§18/§20).
+     *
+     * Emitted on the FULL read only. It is resolved from the same `levels`
+     * snapshot this response is already serialising, so it cannot observe a
+     * different moment than the level states beside it, and it costs no extra
+     * query. The Home summary carries the slim projection instead — see
+     * `mapEnrolledCurriculumSummary`.
+     */
+    toolAccess: resolveCurriculumToolAccess(levelStates.levels),
   };
 }
 
@@ -251,6 +266,9 @@ export function mapCompletedCurriculumRead(
     enrollment: mapEnrollment(context.enrollment),
     modules: mapCompletedModules(context),
     ...(mappedXp ? { xp: mappedXp } : {}),
+    // PHASE-F. Same rule as the enrolled read, resolved from the durable
+    // progress rows a completed enrollment carries instead of level states.
+    toolAccess: resolveCompletedCurriculumToolAccess(context.levels, context.progress),
   };
 }
 
@@ -355,6 +373,18 @@ export function mapEnrolledCurriculumSummary(levelStates: ResolvedLevelStates) {
         }
       : null,
     xp,
+    /*
+     * PHASE-F — the SLIM tool projection (§20).
+     *
+     * Counts plus the open codes: bounded at nineteen short strings, which is
+     * what Home needs to say «3 из 19 инструментов открыто» and to decide
+     * whether a tool card belongs on the screen at all. The full per-tool
+     * context (unlock level, gate title, reason) stays on the full read.
+     *
+     * Derived from the SAME resolution the full read emits, so the two can never
+     * disagree about which tools are open.
+     */
+    toolAccess: summarizeToolAccess(resolveCurriculumToolAccess(levelStates.levels)),
   };
 }
 
@@ -384,6 +414,11 @@ export function mapCompletedCurriculumSummary(
     currentLevel: null,
     nextLevel: null,
     ...(mappedXp ? { xp: mappedXp } : {}),
+    // PHASE-F. A finished enrollment still has tools, and Home still has to say
+    // how many. Same durable rule; no level-state resolution to project from.
+    toolAccess: summarizeToolAccess(
+      resolveCompletedCurriculumToolAccess(context.levels, context.progress),
+    ),
   };
 }
 

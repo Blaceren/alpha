@@ -2,7 +2,7 @@
  * PHASE-C — the canonical ATA-100 package builder.
  *
  * ============================== WHAT IT DOES ==============================
- * Assembles `curriculum/packages/ata-v2-canonical-100.draft.json` from three
+ * Assembles `curriculum/packages/ata-v2-canonical-100.draft.json` from four
  * Backend-owned inputs and nothing else:
  *
  *   1. `src/lib/curriculum/product-ata-100.ts`
@@ -12,6 +12,12 @@
  *   3. `curriculum/packages/ata-v2-first-slice.rev3.approved.json`
  *        the approved first slice, so L1–L4 keep their APPROVED content
  *        verbatim instead of being regenerated at draft quality.
+ *   4. `src/lib/curriculum/product-xp-policy.ts`  (PHASE-F)
+ *        the approved XP schedule. It prices a level by its canonical
+ *        COMPLETION PAIR, so the reward follows the kind of work rather than
+ *        the level number — and the editorial source stays out of it entirely.
+ *        XP is runtime product policy; the Blueprint did not author it and this
+ *        builder does not pretend it did.
  *
  * It reads NO other repository, opens no database, makes no network call and
  * uses no clock or randomness. Same inputs → byte-identical output → identical
@@ -45,6 +51,10 @@ import {
   pad3,
   type AtaLevelSource,
 } from "@/lib/curriculum/product-ata-100";
+import {
+  ataXpRewardForLevel,
+  ataXpRewardStatusForLevel,
+} from "@/lib/curriculum/product-xp-policy";
 import { findObsoleteBrand } from "@/lib/curriculum/product-vocabulary";
 import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
 import { validateCurriculumPackage } from "@/lib/curriculum/package/validate";
@@ -434,7 +444,7 @@ function buildPackage(): Json {
       "Канонические 100 уровней и 20 модулей Alfa Trade Academy: структура, прогрессия, контрольные точки и разблокировки.",
     locale: LOCALE,
     createdFrom:
-      "scripts/curriculum/buildCanonical100.ts — структура из src/lib/curriculum/product-ata-100.ts, черновой материал из curriculum/canonical/ata-100-editorial-source.json, уровни 1–4 перенесены без изменений из ata-v2-first-slice.rev3.approved.json",
+      "scripts/curriculum/buildCanonical100.ts — структура из src/lib/curriculum/product-ata-100.ts, черновой материал из curriculum/canonical/ata-100-editorial-source.json, уровни 1–4 перенесены без изменений из ata-v2-first-slice.rev3.approved.json, награды XP из утверждённой продуктовой политики src/lib/curriculum/product-xp-policy.ts",
     approval: { approvedBy: null, approvedAt: null, note: null },
     pendingApprovals: pendingApprovals.sort((a, b) =>
       a.levelCode < b.levelCode ? -1 : a.levelCode > b.levelCode ? 1 : a.element < b.element ? -1 : 1,
@@ -459,12 +469,32 @@ function buildLevel(
   // Levels 1–4 are already approved. Carrying them over verbatim keeps approved
   // editorial work approved instead of regenerating it at draft quality, and
   // makes the completeness numbers honest rather than flattering.
+  //
+  // PHASE-F — the ONE thing that is not carried over verbatim is the reward.
+  //
+  // The approved first slice predates the XP decision: it declares `xpReward: 0`
+  // on every level, including its `lesson:assessment_pass` and
+  // `report:report_approval` levels, and carries no `xpRewardStatus` at all.
+  // Those zeros were placeholders, and shipping them inside the ATA-100 product
+  // package would mean levels 2 and 3 silently paid nothing while their 57 and 0
+  // structural twins paid 100 and 500.
+  //
+  // So the product XP policy is applied here as an OVERLAY. The historical
+  // package file on disk is not touched — it remains byte-identical, and the
+  // first-slice fingerprint regressions keep passing — while the NEW canonical
+  // 100 draft co-produces the approved schedule for the same four levels. XP is
+  // runtime product policy, not editorial content, so overlaying it changes
+  // nothing about whose editorial work this is.
   if (source.levelNumber <= APPROVED_SLICE_LEVELS) {
     const approved = approvedByCode.get(levelCode);
     if (!approved) {
       throw new Error(`approved slice is missing ${levelCode}; canonical structure and approved package disagree`);
     }
-    return approved;
+    return {
+      ...(approved as Record<string, unknown>),
+      xpReward: ataXpRewardForLevel(source),
+      xpRewardStatus: ataXpRewardStatusForLevel(source),
+    } as Json;
   }
 
   const editorial = editorialByLevel.get(source.levelNumber);
@@ -473,7 +503,6 @@ function buildLevel(
   const completion = completionContractFor(source);
   const integrationCode = gateIntegrationCode(source);
   const videoContract = contractsByLevel.get(source.levelNumber) ?? null;
-  const isGate = source.kind === "registration" || source.kind === "checkpoint";
 
   const level: Json = {
     levelCode,
@@ -483,19 +512,22 @@ function buildLevel(
     shortDescription: source.artifact ?? "",
     learningObjective: videoContract?.learningObjective ?? buildLearningObjective(source, editorial),
     completionMethod: completion.completionMethod,
-    xpReward: 0,
-    requiredXp: 0,
     /*
-     * CORRECTIONS §14 — zero means two different things, so it says which.
+     * PHASE-F §14 — the schedule is DECIDED, and the package now carries it.
      *
-     * A gate awards no XP BY DESIGN and the generic validator enforces it, so
-     * that zero is an APPROVED product decision. Every other level's zero is a
-     * compatibility placeholder for a schedule no accepted source has ever
-     * defined — the audit checked Academy's fixture, `CURRICULUM_AND_UNLOCKS.md`
-     * and `les-prog.txt` and found none. This phase does not invent one; it
-     * refuses to let the placeholder pass as a decision.
+     * Phase C emitted `0` here with `xpRewardStatus: "unresolved"` for every
+     * non-gate level, because no accepted source defined an ATA XP schedule and
+     * a converter must not invent one. The approved product decision now exists
+     * (`src/lib/curriculum/product-xp-policy.ts`), so the reward comes from the
+     * policy — keyed on the canonical completion pair, never on the level
+     * number, the module, the rank or the unlock level — and the status is what
+     * the policy says it is. A gate's zero was already an approved decision and
+     * still is; it now reaches the package through the same one source as every
+     * other reward instead of through a local `isGate` branch.
      */
-    xpRewardStatus: isGate ? "approved" : "unresolved",
+    xpReward: ataXpRewardForLevel(source),
+    requiredXp: 0,
+    xpRewardStatus: ataXpRewardStatusForLevel(source),
     prerequisiteLevelCodes: [canonicalLevelCode(ATA_LEVELS[source.levelNumber - 2] as AtaLevelSource)],
     checkpointLevelCode: null,
     estimatedDurationSeconds: null,

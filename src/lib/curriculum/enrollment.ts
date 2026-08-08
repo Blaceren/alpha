@@ -409,6 +409,25 @@ export async function enrollActiveCurriculumForNewUser({
   db = prisma,
   provenance = "system_registration",
 }: EnrollActiveCurriculumForNewUserInput): Promise<EnrollUserInPublishedCurriculumResult> {
+  return enrollActiveCurriculumForNewUserOwningTransaction({
+    userId,
+    asOf,
+    db,
+    provenance,
+  });
+}
+
+async function enrollActiveCurriculumForNewUserOwningTransaction({
+  userId,
+  asOf,
+  db,
+  provenance,
+}: {
+  userId: number;
+  asOf: Date;
+  db: EnrollmentCommandDb;
+  provenance: SystemEnrollmentProvenance;
+}): Promise<EnrollUserInPublishedCurriculumResult> {
   const result = await enrollInPublishedCurriculum({
     userId,
     actor: { kind: "system", provenance },
@@ -427,4 +446,63 @@ export async function enrollActiveCurriculumForNewUser({
   }
 
   return result;
+}
+
+/**
+ * PHASE-F — the SAME system enrollment, inside a transaction the CALLER owns.
+ *
+ * =========================== WHY THIS EXISTS ===========================
+ * Registration auto-enrollment has to be part of the registration transaction,
+ * not a second operation after it. The alternative — register, commit, then
+ * enroll — has a failure mode with no good answer: the learner exists, the
+ * enrollment does not, and the platform has already told them they are signed
+ * up. `enrollActiveCurriculumForNewUser` cannot be reused for that, because it
+ * OPENS a transaction and Prisma has no nested one; calling it from inside the
+ * registration transaction would either deadlock on SQLite or commit
+ * independently, which is the very split this is meant to avoid.
+ *
+ * So the shared body is exposed here with the caller's `tx`. Everything the
+ * standalone command does is unchanged: same flags, same history validation,
+ * same active-curriculum resolution, same pinning, same audit with the same
+ * `system_registration` provenance, and the same absence of any actor parameter.
+ *
+ * ========================= WHAT THE CALLER INHERITS =========================
+ * ATOMICITY, and therefore FAIL-CLOSED BEHAVIOUR. A throw from here aborts the
+ * caller's transaction, so a broken curriculum configuration produces NO USER
+ * rather than a user with no enrollment. That is the intended direction: a
+ * registration that cannot deliver the product it promises should not appear to
+ * have succeeded.
+ *
+ * ==================== WHAT IS DELIBERATELY NOT HERE ====================
+ *   - The P2002 recovery path. It re-reads in a NEW transaction, which is
+ *     meaningless inside an aborted one. It is also unreachable for this caller:
+ *     the learner was created moments ago in this same transaction, so no
+ *     concurrent enrollment for that id can exist. A unique conflict here is a
+ *     real fault and must surface as one.
+ *   - The Pocket reconciliation. It settles a registration that happened BEFORE
+ *     enrollment, and a user created in this transaction has no Pocket identity
+ *     to settle. Running it would also be a post-commit action inside a
+ *     pre-commit scope.
+ */
+export async function enrollActiveCurriculumForNewUserInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { userId: number; asOf?: Date; provenance?: SystemEnrollmentProvenance },
+): Promise<EnrollUserInPublishedCurriculumResult> {
+  if (!isCurriculumV2EnrollmentEnabled()) {
+    throw new EnrollmentDomainError(
+      "ENROLLMENT_DISABLED",
+      "controlled curriculum enrollment is disabled",
+    );
+  }
+  if (!isCurriculumV2ReadEnabled()) {
+    throw new EnrollmentDomainError(
+      "CURRICULUM_READ_DISABLED",
+      "curriculum read resolver is disabled",
+    );
+  }
+  return runEnrollmentTransaction(tx, {
+    userId: input.userId,
+    actor: { kind: "system", provenance: input.provenance ?? "system_registration" },
+    asOf: input.asOf ?? new Date(),
+  });
 }
