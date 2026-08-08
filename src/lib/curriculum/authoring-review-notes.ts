@@ -225,12 +225,37 @@ async function readTargetRevision(
  */
 export async function resolveReviewNote(input: {
   noteId: number;
+  /**
+   * PHASE-G0 CORRECTION — the aggregate the caller believes this note belongs
+   * to. REQUIRED. Without it, `noteId` alone was sufficient to resolve any note
+   * in the database, so a caller authorized for one lesson could close a
+   * reviewer's concern on another simply by counting upwards. Ids are not
+   * capabilities, and the note's own target is the only thing that can say which
+   * aggregate a caller must have been authorized for.
+   */
+  target: ReviewNoteTarget;
   actorId: number;
 }): Promise<EditorialReviewNote> {
+  assertValidTarget(input.target);
   return prisma.$transaction(async (tx) => {
     const existing = await tx.editorialReviewNote.findUnique({ where: { id: input.noteId } });
     if (!existing) {
       throw new AuthoringDomainError("AUTHORING_NOTE_NOT_FOUND", "review note does not exist");
+    }
+    // The note must actually live on the named target. A mismatch is reported as
+    // NOT_FOUND rather than as a distinct code on purpose: telling a caller
+    // "that note exists, but not here" would confirm the existence of notes on
+    // aggregates they were never authorized to see.
+    const expected = targetColumns(input.target);
+    if (
+      existing.contentVersionId !== expected.contentVersionId ||
+      existing.assessmentVersionId !== expected.assessmentVersionId ||
+      existing.videoProductionVersionId !== expected.videoProductionVersionId
+    ) {
+      throw new AuthoringDomainError(
+        "AUTHORING_NOTE_NOT_FOUND",
+        "review note does not belong to the named target",
+      );
     }
     if (existing.resolvedAt !== null) {
       throw new AuthoringDomainError(

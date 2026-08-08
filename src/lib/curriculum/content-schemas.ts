@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { contentBodySchema } from "@/lib/curriculum/content-body";
+import { expectedRevisionSchema } from "@/lib/curriculum/authoring-mutation-guard";
 import {
   byteLength,
   describeUnsafeText,
@@ -44,6 +45,18 @@ const entityId = z.number().int().positive().max(MAX_INT);
 const positiveDuration = z.number().int().positive().max(MAX_INT);
 const changeNotes = z.string().trim().max(4_000).nullable();
 
+
+/**
+ * PHASE-G0 CORRECTION — the mandatory aggregate revision.
+ *
+ * Present on every SUBSTANTIVE mutation command beneath a ContentVersion. It is
+ * required, never defaulted: a command that omits it is refused by this schema
+ * before any transaction opens, which is what stops a caller from falling back
+ * to last-write-wins. Version CREATE is deliberately exempt — there is no
+ * aggregate to be stale against until the row exists.
+ */
+const expectedRevision = expectedRevisionSchema;
+
 const contentVersionPatch = z
   .strictObject({
     videoDurationSeconds: positiveDuration.nullable().optional(),
@@ -63,12 +76,14 @@ export const createContentVersionSchema = z.strictObject({
 export const updateContentVersionSchema = z.strictObject({
   actorId,
   contentVersionId: entityId,
+  expectedRevision,
   patch: contentVersionPatch,
 });
 
 export const deleteContentVersionSchema = z.strictObject({
   actorId,
   contentVersionId: entityId,
+  expectedRevision,
 });
 
 const localizationFields = {
@@ -94,12 +109,14 @@ export const contentLocalizationPayloadSchema = z.strictObject(localizationField
 export const createContentLocalizationSchema = z.strictObject({
   actorId,
   contentVersionId: entityId,
+  expectedRevision,
   ...localizationFields,
 });
 
 export const updateContentLocalizationSchema = z.strictObject({
   actorId,
   contentLocalizationId: entityId,
+  expectedRevision,
   patch: z
     .strictObject({
       locale: localizationFields.locale.optional(),
@@ -118,6 +135,7 @@ export const updateContentLocalizationSchema = z.strictObject({
 export const deleteContentLocalizationSchema = z.strictObject({
   actorId,
   contentLocalizationId: entityId,
+  expectedRevision,
 });
 
 const assetFields = {
@@ -154,12 +172,14 @@ export const contentAssetPayloadSchema = z.strictObject(assetFields);
 export const createContentAssetSchema = z.strictObject({
   actorId,
   contentVersionId: entityId,
+  expectedRevision,
   ...assetFields,
 });
 
 export const updateContentAssetSchema = z.strictObject({
   actorId,
   contentAssetId: entityId,
+  expectedRevision,
   patch: z
     .strictObject({
       kind: assetFields.kind.optional(),
@@ -180,6 +200,7 @@ export const updateContentAssetSchema = z.strictObject({
 export const deleteContentAssetSchema = z.strictObject({
   actorId,
   contentAssetId: entityId,
+  expectedRevision,
 });
 
 export const publishContentVersionSchema = z.strictObject({

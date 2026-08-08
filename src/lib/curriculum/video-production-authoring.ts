@@ -43,6 +43,11 @@ import {
   type VideoProductionContract,
   type VideoProductionContractsFile,
 } from "@/lib/curriculum/video-production-contract";
+import {
+  linkVideoProductionAssessment,
+  resolveCanonicalAssessmentVersion,
+} from "@/lib/curriculum/video-production-coherence";
+import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { prisma } from "@/lib/prisma";
 
 type DbClient = Prisma.TransactionClient;
@@ -250,6 +255,14 @@ export type BootstrapSummary = {
   proposedCanon: number;
   /** Always 0. The bootstrap cannot approve anything — see below. */
   approved: number;
+  /** PHASE-G0 CORRECTION — contracts bound to a durable AssessmentVersion. */
+  assessmentLinked: number;
+  /**
+   * Contracts left UNLINKED because the level's bank was absent, ambiguous, or
+   * not projectable. Reported rather than guessed: a wrong link would silently
+   * claim a coherence check that never happened.
+   */
+  assessmentUnlinked: number;
 };
 
 /**
@@ -288,6 +301,8 @@ export async function bootstrapVideoProductionVersions(input: {
     sourceBacked: 0,
     proposedCanon: 0,
     approved: 0,
+    assessmentLinked: 0,
+    assessmentUnlinked: 0,
   };
 
   for (const contract of contracts) {
@@ -311,12 +326,31 @@ export async function bootstrapVideoProductionVersions(input: {
       continue;
     }
 
-    await createVideoProductionVersion({
+    const created = await createVideoProductionVersion({
       levelDefinitionId: level.id,
       curriculumVersionId: input.curriculumVersionId,
       payload: contract,
       actorId: input.actorId,
     });
+
+    // PHASE-G0 CORRECTION -- bind the contract to the level's REAL bank so the
+    // future Studio can see production evidence go stale when the questions
+    // change. A level with no bank, an ambiguous bank, or a bank that does not
+    // project into the accepted fingerprint shape is left UNLINKED and counted:
+    // guessing here would claim a coherence check nobody performed. Linking
+    // approves nothing and moves no editorial state.
+    try {
+      const assessmentVersionId = await resolveCanonicalAssessmentVersion(prisma, level.id);
+      await linkVideoProductionAssessment(prisma, {
+        videoProductionVersionId: created.id,
+        assessmentVersionId,
+        actorId: input.actorId,
+      });
+      summary.assessmentLinked += 1;
+    } catch (error) {
+      if (!isAuthoringDomainError(error)) throw error;
+      summary.assessmentUnlinked += 1;
+    }
 
     summary.created += 1;
     summary.takes += contract.takes.length;

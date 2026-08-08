@@ -131,4 +131,13 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   authoringVideoProductionCreated: "AUTHORING_VIDEO_PRODUCTION_CREATED",
   authoringVideoProductionUpdated: "AUTHORING_VIDEO_PRODUCTION_UPDATED",
   authoringVideoProductionBootstrapped: "AUTHORING_VIDEO_PRODUCTION_BOOTSTRAPPED",
+
+  // PHASE-G0 CORRECTION.
+  authoringPreviewSnapshotCreated: "AUTHORING_PREVIEW_SNAPSHOT_CREATED",
+  // A four-eyes refusal. Recorded because "who tried to approve their own work"
+  // is an operational question, and a refusal that leaves no trace can only be
+  // answered by guessing. It carries actor, target and reason and NO draft
+  // content -- see authoring-lifecycle.ts for why it is written in its own
+  // transaction rather than inside the refused one.
+  authoringSelfApprovalRefused: "AUTHORING_SELF_APPROVAL_REFUSED",
 } as const;

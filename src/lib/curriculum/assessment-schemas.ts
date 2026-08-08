@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { expectedRevisionSchema } from "@/lib/curriculum/authoring-mutation-guard";
 
 const MAX_INT = 2_147_483_647;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
@@ -29,6 +30,17 @@ export const assessmentLocaleSchema = z
   .max(35)
   .regex(NORMALIZED_LOCALE, "locale must be a normalized language tag");
 
+
+/**
+ * PHASE-G0 CORRECTION — the mandatory aggregate revision, identical in meaning
+ * and transport to the content side. Required on every substantive mutation
+ * beneath an AssessmentVersion: prompts, option labels, option sets, correct
+ * answers, explanations, the take mapping, and question creation/deletion are
+ * all substantive, because approving question 3 while question 1's answer key
+ * moved underneath is exactly the failure the aggregate guard exists to stop.
+ */
+const expectedRevision = expectedRevisionSchema;
+
 const versionPatch = z
   .strictObject({
     passPercent: passPercent.optional(),
@@ -52,12 +64,14 @@ export const createAssessmentVersionSchema = z.strictObject({
 export const updateAssessmentVersionSchema = z.strictObject({
   actorId,
   assessmentVersionId: entityId,
+  expectedRevision,
   patch: versionPatch,
 });
 
 export const deleteAssessmentVersionSchema = z.strictObject({
   actorId,
   assessmentVersionId: entityId,
+  expectedRevision,
 });
 
 const questionFields = {
@@ -71,12 +85,14 @@ const questionFields = {
 
 export const createAssessmentQuestionSchema = z.strictObject({
   actorId,
+  expectedRevision,
   assessmentVersionId: entityId,
   ...questionFields,
 });
 
 export const updateAssessmentQuestionSchema = z.strictObject({
   actorId,
+  expectedRevision,
   questionDefinitionId: entityId,
   patch: z
     .strictObject({
@@ -94,6 +110,7 @@ export const updateAssessmentQuestionSchema = z.strictObject({
 
 export const deleteAssessmentQuestionSchema = z.strictObject({
   actorId,
+  expectedRevision,
   questionDefinitionId: entityId,
 });
 
@@ -103,6 +120,7 @@ const optionLabels = z.record(z.string(), z.string().trim().min(1).max(1_000)).n
 
 export const createQuestionLocalizationSchema = z.strictObject({
   actorId,
+  expectedRevision,
   questionDefinitionId: entityId,
   locale: assessmentLocaleSchema,
   prompt,
@@ -112,6 +130,7 @@ export const createQuestionLocalizationSchema = z.strictObject({
 
 export const updateQuestionLocalizationSchema = z.strictObject({
   actorId,
+  expectedRevision,
   questionLocalizationId: entityId,
   patch: z
     .strictObject({
@@ -127,6 +146,7 @@ export const updateQuestionLocalizationSchema = z.strictObject({
 
 export const deleteQuestionLocalizationSchema = z.strictObject({
   actorId,
+  expectedRevision,
   questionLocalizationId: entityId,
 });
 

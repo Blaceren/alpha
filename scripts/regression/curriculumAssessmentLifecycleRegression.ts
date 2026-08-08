@@ -55,6 +55,42 @@ async function main() {
   const { prisma } = await import("../../src/lib/prisma");
   const assessment = await import("../../src/lib/curriculum/assessment");
 
+  /**
+   * PHASE-G0 CORRECTION — the assessment domain now REQUIRES the aggregate
+   * revision on every substantive mutation. Same rationale as the content
+   * suite: this file tests the accepted assessment rules, and the stale-write
+   * refusal is proven where it belongs — in the authoring foundation and the
+   * mutation-boundary suites, which pass deliberately stale values.
+   */
+  async function assessmentRev(target: {
+    assessmentVersionId?: number;
+    questionDefinitionId?: number;
+    questionLocalizationId?: number;
+  }): Promise<number> {
+    let id = target.assessmentVersionId;
+    let questionId = target.questionDefinitionId;
+    if (id === undefined && questionId === undefined && target.questionLocalizationId !== undefined) {
+      const loc = await prisma.questionLocalization.findUnique({
+        where: { id: target.questionLocalizationId },
+        select: { questionId: true },
+      });
+      questionId = loc?.questionId;
+    }
+    if (id === undefined && questionId !== undefined) {
+      const q = await prisma.questionDefinition.findUnique({
+        where: { id: questionId },
+        select: { assessmentVersionId: true },
+      });
+      id = q?.assessmentVersionId;
+    }
+    if (id === undefined) return 1;
+    const version = await prisma.assessmentVersion.findUnique({
+      where: { id },
+      select: { revision: true },
+    });
+    return version?.revision ?? 1;
+  }
+
   const admin = await prisma.user.create({ data: { email: "assessment-admin@example.com", name: "Admin", role: "admin" } });
   const regular = await prisma.user.create({ data: { email: "assessment-user@example.com", name: "User" } });
   const blocked = await prisma.user.create({ data: { email: "assessment-blocked@example.com", name: "Blocked", role: "admin", status: "blocked" } });
@@ -101,7 +137,7 @@ async function main() {
     type: "single_choice" | "multiple_choice" | "true_false" | "ordered_steps" | "scenario_choice" | "numeric" | "chart_choice" = "single_choice",
     locale = "en",
   ) {
-    const question = await assessment.createAssessmentQuestion({
+    const question = await assessment.createAssessmentQuestion({ expectedRevision: await assessmentRev({ assessmentVersionId: assessmentVersionId }),
       actorId: admin.id,
       assessmentVersionId,
       questionNumber,
@@ -112,7 +148,7 @@ async function main() {
       correctAnswer,
     });
     const labels = type === "numeric" ? null : Object.fromEntries((options as Array<{ code: string }>).map((item) => [item.code, item.code.toUpperCase()]));
-    await assessment.createQuestionLocalization({
+    await assessment.createQuestionLocalization({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }),
       actorId: admin.id,
       questionDefinitionId: question.id,
       locale,
@@ -146,7 +182,7 @@ async function main() {
       const draft = await createDraft(levels[0].id);
       assert.equal(draft.status, "draft");
       assert.equal(draft.createdById, admin.id);
-      await assessment.deleteAssessmentVersion({ actorId: admin.id, assessmentVersionId: draft.id });
+      await assessment.deleteAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: draft.id }), actorId: admin.id, assessmentVersionId: draft.id });
     });
     await check("4. missing actor is rejected", () => expectError(
       () => assessment.createAssessmentVersion({ actorId: 2_000_000_000, levelDefinitionId: levels[0].id, passPercent: 80 }),
@@ -172,17 +208,17 @@ async function main() {
       assert.equal(next.versionNumber, 2);
     });
     await check("9. draft assessment metadata updates", async () => {
-      const updated = await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: empty.id, patch: { maxAttempts: 3, showExplanation: true } });
+      const updated = await assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: empty.id }), actorId: admin.id, assessmentVersionId: empty.id, patch: { maxAttempts: 3, showExplanation: true } });
       assert.equal(updated.maxAttempts, 3);
       assert.equal(updated.showExplanation, true);
     });
     await check("10. no-change assessment update is rejected without audit", async () => {
       const before = await prisma.auditLog.count();
-      await expectError(() => assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: empty.id, patch: { maxAttempts: 3 } }), "ASSESSMENT_NO_CHANGES");
+      await expectError(async () => assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: empty.id }), actorId: admin.id, assessmentVersionId: empty.id, patch: { maxAttempts: 3 } }), "ASSESSMENT_NO_CHANGES");
       assert.equal(await prisma.auditLog.count(), before);
     });
     await check("11. empty unbound draft deletes", async () => {
-      const deleted = await assessment.deleteAssessmentVersion({ actorId: admin.id, assessmentVersionId: next.id });
+      const deleted = await assessment.deleteAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: next.id }), actorId: admin.id, assessmentVersionId: next.id });
       assert.equal(deleted.id, next.id);
     });
 
@@ -217,41 +253,41 @@ async function main() {
       assert.throws(() => canonicalizeQuestion("single_choice", choiceOptions, { code: "alpha", constructor: {} }));
     });
 
-    const question = await assessment.createAssessmentQuestion({
+    const question = await assessment.createAssessmentQuestion({ expectedRevision: await assessmentRev({ assessmentVersionId: empty.id }),
       actorId: admin.id, assessmentVersionId: empty.id, questionNumber: 1, stableKey: "first-question", type: "single_choice", skillTag: null, options: choiceOptions, correctAnswer: { code: "beta" },
     });
     await check("20. correct answer is stored canonical and never accepted in localization", async () => {
       assert.deepEqual(question.correctAnswer, { code: "beta" });
-      await expectError(() => assessment.createQuestionLocalization({ actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: choiceLabels, explanation: null, correctAnswer: { code: "beta" } }), "ASSESSMENT_INPUT_INVALID");
+      await expectError(async () => assessment.createQuestionLocalization({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: choiceLabels, explanation: null, correctAnswer: { code: "beta" } }), "ASSESSMENT_INPUT_INVALID");
     });
     await check("21. localization requires exact option-label keys", async () => {
-      await expectError(() => assessment.createQuestionLocalization({ actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: { alpha: "A", beta: "B" }, explanation: null }), "ASSESSMENT_INPUT_INVALID");
+      await expectError(async () => assessment.createQuestionLocalization({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: { alpha: "A", beta: "B" }, explanation: null }), "ASSESSMENT_INPUT_INVALID");
     });
-    const localization = await assessment.createQuestionLocalization({ actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: choiceLabels, explanation: null });
+    const localization = await assessment.createQuestionLocalization({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id, locale: "en", prompt: "Prompt", optionLabels: choiceLabels, explanation: null });
     await check("22. locale is normalized and unique", async () => {
       assert.equal(localization.locale, "en");
-      await expectError(() => assessment.createQuestionLocalization({ actorId: admin.id, questionDefinitionId: question.id, locale: "EN", prompt: "Other", optionLabels: choiceLabels, explanation: null }), "ASSESSMENT_LOCALIZATION_CONFLICT");
+      await expectError(async () => assessment.createQuestionLocalization({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id, locale: "EN", prompt: "Other", optionLabels: choiceLabels, explanation: null }), "ASSESSMENT_LOCALIZATION_CONFLICT");
     });
     await check("23. question cannot delete before its localizations", () => expectError(
-      () => assessment.deleteAssessmentQuestion({ actorId: admin.id, questionDefinitionId: question.id }),
+      async () => assessment.deleteAssessmentQuestion({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id }),
       "ASSESSMENT_QUESTION_CONFLICT",
     ).then(() => undefined));
     await check("24. localization and question draft CRUD is audited", async () => {
-      const updated = await assessment.updateQuestionLocalization({ actorId: admin.id, questionLocalizationId: localization.id, patch: { prompt: "Updated prompt" } });
+      const updated = await assessment.updateQuestionLocalization({ expectedRevision: await assessmentRev({ questionLocalizationId: localization.id }), actorId: admin.id, questionLocalizationId: localization.id, patch: { prompt: "Updated prompt" } });
       assert.equal(updated.prompt, "Updated prompt");
-      await assessment.deleteQuestionLocalization({ actorId: admin.id, questionLocalizationId: localization.id });
-      await assessment.deleteAssessmentQuestion({ actorId: admin.id, questionDefinitionId: question.id });
+      await assessment.deleteQuestionLocalization({ expectedRevision: await assessmentRev({ questionLocalizationId: localization.id }), actorId: admin.id, questionLocalizationId: localization.id });
+      await assessment.deleteAssessmentQuestion({ expectedRevision: await assessmentRev({ questionDefinitionId: question.id }), actorId: admin.id, questionDefinitionId: question.id });
       const actions = await prisma.auditLog.findMany({ where: { entityId: { in: [String(question.id), String(localization.id)] } }, select: { action: true } });
       assert(actions.some((item) => item.action === "ASSESSMENT_QUESTION_DELETED"));
       assert(actions.some((item) => item.action === "ASSESSMENT_LOCALIZATION_UPDATED"));
     });
     await check("25. assessment with questions cannot delete", async () => {
       await addQuestion(empty.id, 1);
-      await expectError(() => assessment.deleteAssessmentVersion({ actorId: admin.id, assessmentVersionId: empty.id }), "ASSESSMENT_NOT_EMPTY");
+      await expectError(async () => assessment.deleteAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: empty.id }), actorId: admin.id, assessmentVersionId: empty.id }), "ASSESSMENT_NOT_EMPTY");
     });
 
     const badPass = await fillChoiceDraft(levels[1].id);
-    await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: badPass.id, patch: { passPercent: 70 } });
+    await assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: badPass.id }), actorId: admin.id, assessmentVersionId: badPass.id, patch: { passPercent: 70 } });
     /*
      * AC-1: passPercent is now a bounded integer contract (1..100) instead of the
      * single value 80, so 70 is legitimately publishable and can no longer stand
@@ -274,7 +310,7 @@ async function main() {
     });
     await check("26b. bounded non-standard pass percent (70) is publishable", async () => {
       const bounded = await fillChoiceDraft(levels[1].id);
-      await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: bounded.id, patch: { passPercent: 70 } });
+      await assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: bounded.id }), actorId: admin.id, assessmentVersionId: bounded.id, patch: { passPercent: 70 } });
       const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: bounded.id });
       assert.equal(result.published.status, "published");
       assert.equal(result.published.passPercent, 70);
@@ -313,9 +349,9 @@ async function main() {
     });
     await check("31. published assessment, question and localization are service-immutable", async () => {
       const publishedQuestion = await prisma.questionDefinition.findFirstOrThrow({ where: { assessmentVersionId: first.id }, include: { localizations: true } });
-      await expectError(() => assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: first.id, patch: { changeNotes: "no" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
-      await expectError(() => assessment.updateAssessmentQuestion({ actorId: admin.id, questionDefinitionId: publishedQuestion.id, patch: { stableKey: "changed" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
-      await expectError(() => assessment.updateQuestionLocalization({ actorId: admin.id, questionLocalizationId: publishedQuestion.localizations[0].id, patch: { prompt: "changed" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
+      await expectError(async () => assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: first.id }), actorId: admin.id, assessmentVersionId: first.id, patch: { changeNotes: "no" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
+      await expectError(async () => assessment.updateAssessmentQuestion({ expectedRevision: await assessmentRev({ questionDefinitionId: publishedQuestion.id }), actorId: admin.id, questionDefinitionId: publishedQuestion.id, patch: { stableKey: "changed" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
+      await expectError(async () => assessment.updateQuestionLocalization({ expectedRevision: await assessmentRev({ questionLocalizationId: publishedQuestion.localizations[0].id }), actorId: admin.id, questionLocalizationId: publishedQuestion.localizations[0].id, patch: { prompt: "changed" } }), "ASSESSMENT_PUBLISHED_IMMUTABLE");
     });
     await check("32. exact binding rejects cross-level ownership", () => expectError(
       () => assessment.setLevelAssessmentBinding({ actorId: admin.id, levelDefinitionId: foreignLevel.id, assessmentVersionId: first.id }),
@@ -394,7 +430,7 @@ async function main() {
     });
     const firstThree = await prisma.questionDefinition.findMany({ where: { assessmentVersionId: finalExam.id }, orderBy: { questionNumber: "asc" }, take: 3 });
     for (const item of firstThree) {
-      await assessment.updateAssessmentQuestion({ actorId: admin.id, questionDefinitionId: item.id, patch: { type: "scenario_choice" } });
+      await assessment.updateAssessmentQuestion({ expectedRevision: await assessmentRev({ questionDefinitionId: item.id }), actorId: admin.id, questionDefinitionId: item.id, patch: { type: "scenario_choice" } });
     }
     await check("43. complete final exam publishes with approved deterministic types", async () => {
       const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: finalExam.id });
@@ -416,7 +452,7 @@ async function main() {
     await check("45. audit failure rolls back assessment update", async () => {
       await prisma.$executeRawUnsafe("CREATE TRIGGER fail_assessment_update_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'ASSESSMENT_VERSION_UPDATED' BEGIN SELECT RAISE(ABORT, 'forced-audit-failure'); END");
       try {
-        await expectError(() => assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: rollbackDraft.id, patch: { changeNotes: "must rollback" } }), "ASSESSMENT_INTERNAL_ERROR");
+        await expectError(async () => assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: rollbackDraft.id }), actorId: admin.id, assessmentVersionId: rollbackDraft.id, patch: { changeNotes: "must rollback" } }), "ASSESSMENT_INTERNAL_ERROR");
       } finally {
         await prisma.$executeRawUnsafe("DROP TRIGGER fail_assessment_update_audit");
       }
@@ -425,14 +461,14 @@ async function main() {
     await check("46. audit failure rolls back assessment delete", async () => {
       await prisma.$executeRawUnsafe("CREATE TRIGGER fail_assessment_delete_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'ASSESSMENT_VERSION_DELETED' BEGIN SELECT RAISE(ABORT, 'forced-audit-failure'); END");
       try {
-        await expectError(() => assessment.deleteAssessmentVersion({ actorId: admin.id, assessmentVersionId: rollbackDraft.id }), "ASSESSMENT_INTERNAL_ERROR");
+        await expectError(async () => assessment.deleteAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: rollbackDraft.id }), actorId: admin.id, assessmentVersionId: rollbackDraft.id }), "ASSESSMENT_INTERNAL_ERROR");
       } finally {
         await prisma.$executeRawUnsafe("DROP TRIGGER fail_assessment_delete_audit");
       }
       assert(await prisma.assessmentVersion.findUnique({ where: { id: rollbackDraft.id } }));
     });
 
-    await assessment.updateAssessmentVersion({ actorId: admin.id, assessmentVersionId: badPass.id, patch: { passPercent: 80 } });
+    await assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: badPass.id }), actorId: admin.id, assessmentVersionId: badPass.id, patch: { passPercent: 80 } });
     await check("47. audit failure rolls back assessment publication", async () => {
       await prisma.$executeRawUnsafe("CREATE TRIGGER fail_assessment_publish_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'ASSESSMENT_VERSION_PUBLISHED' BEGIN SELECT RAISE(ABORT, 'forced-audit-failure'); END");
       try {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiAuthErrorResponse, rateLimitedResponse, requireAdmin, requireUser } from "@/lib/apiAuth";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { AssessmentDomainError } from "./assessment-errors";
+import { authoringErrorStatus, isAuthoringDomainError } from "./authoring-errors";
 import { AssessmentRuntimeError } from "./assessment-runtime";
 import { ContentDomainError } from "./content-errors";
 import { CurriculumDomainError } from "./errors";
@@ -212,6 +213,26 @@ const MANUAL_COMPLETION_STATUS: Record<ManualCompletionErrorCode, number> = {
 
 export function phase4Exception(error: unknown, label = "phase4 api") {
   if (error instanceof Phase4HttpError) return phase4Error(error.code, error.status, error.issues);
+  // PHASE-G0 CORRECTION — the aggregate authoring boundary now refuses writes on
+  // these accepted routes, so its vocabulary has to reach the client with the
+  // right status instead of falling through to a 500. `authoringErrorStatus` is
+  // the SAME mapping the authoring domain already declares: 409 for a genuine
+  // concurrency loss or an immutable state, 403 for self-approval, 422 for a
+  // validation refusal. `actualRevision` travels with a conflict so an editor
+  // can reload and re-apply rather than guess.
+  if (isAuthoringDomainError(error)) {
+    const status = authoringErrorStatus(error.code);
+    const issues = error.issues.length > 0 ? error.issues : undefined;
+    if (error.actualRevision !== null) {
+      return NextResponse.json(
+        issues
+          ? { error: error.code, actualRevision: error.actualRevision, issues }
+          : { error: error.code, actualRevision: error.actualRevision },
+        { status, headers: PHASE4_NO_STORE },
+      );
+    }
+    return phase4Error(error.code, status, issues);
+  }
   if (isManualCompletionError(error)) {
     const status = MANUAL_COMPLETION_STATUS[error.code] ?? 500;
     if (status === 500) {

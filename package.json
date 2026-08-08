@@ -147,7 +147,10 @@
     "test:regression:curriculum-phase-f": "tsx scripts/regression/curriculumPhaseFRegression.ts",
     "test:regression:curriculum-phase-f-registration": "tsx scripts/regression/curriculumPhaseFRegistrationE2E.ts",
     "test:regression:authoring-foundation": "tsx scripts/regression/curriculumAuthoringFoundationRegression.ts",
-    "test:regression:authoring-migration": "tsx scripts/regression/curriculumAuthoringMigrationRegression.ts"
+    "test:regression:authoring-migration": "tsx scripts/regression/curriculumAuthoringMigrationRegression.ts",
+    "test:regression:authoring-mutation-boundary": "tsx scripts/regression/curriculumAuthoringMutationBoundaryRegression.ts",
+    "test:regression:authoring-surface-guard": "tsx scripts/regression/curriculumAuthoringSurfaceGuardRegression.ts",
+    "test:regression:authoring-corrections": "tsx scripts/regression/curriculumAuthoringCorrectionsRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

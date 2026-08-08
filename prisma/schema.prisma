@@ -181,6 +181,7 @@ model User {
   editorialReviewNotesAuthored    EditorialReviewNote[]        @relation("EditorialReviewNoteAuthor")
   editorialReviewNotesResolved    EditorialReviewNote[]        @relation("EditorialReviewNoteResolver")
   authoringPreviewSnapshotsCreated AuthoringPreviewSnapshot[]  @relation("AuthoringPreviewSnapshotCreator")
+  videoProductionAssessmentLinks VideoProductionAssessmentLink[] @relation("VideoProductionAssessmentLinker")
 
   assessmentAttempts              AssessmentAttempt[]          @relation("AssessmentAttemptUser")
   lessonProgress                  UserLessonProgress[]         @relation("UserLessonProgressUser")
@@ -1877,6 +1878,8 @@ model AssessmentVersion {
   attempts            AssessmentAttempt[]
   reviewNotes         EditorialReviewNote[]  @relation("EditorialReviewNoteAssessment")
   previewSnapshots    AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotAssessment")
+  /// PHASE-G0 CORRECTION — video contracts whose evidence is bound to this bank.
+  videoProductionLinks VideoProductionAssessmentLink[]
 
   @@unique([id, levelDefinitionId])
   @@unique([levelDefinitionId, versionNumber])
@@ -2017,6 +2020,9 @@ model VideoProductionVersion {
   changesRequestedBy    User?           @relation("VideoProductionVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   approvedBy            User?           @relation("VideoProductionVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reviewNotes           EditorialReviewNote[] @relation("EditorialReviewNoteVideoProduction")
+  /// PHASE-G0 CORRECTION — the durable bridge to the real question bank.
+  assessmentLink        VideoProductionAssessmentLink?
+  previewSnapshots      AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotVideoProduction")
 
   @@unique([levelDefinitionId, versionNumber])
   @@index([curriculumVersionId, editorialState])
@@ -2126,6 +2132,11 @@ model AuthoringPreviewSnapshot {
   contentRevision     Int?
   assessmentVersionId Int?
   assessmentRevision  Int?
+  /// PHASE-G0 CORRECTION — the third pinnable authoring target. Paired with its
+  /// revision exactly like the two above: a version id without a revision cannot
+  /// prove what was rendered, and a revision without its version names nothing.
+  videoProductionVersionId Int?
+  videoProductionRevision  Int?
 
   /// Frozen learner-facing render input. No internal metadata, no answer keys.
   payload             Json
@@ -2137,11 +2148,58 @@ model AuthoringPreviewSnapshot {
   levelDefinition     LevelDefinition    @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   contentVersion      ContentVersion?    @relation("AuthoringPreviewSnapshotContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   assessmentVersion   AssessmentVersion? @relation("AuthoringPreviewSnapshotAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  videoProductionVersion VideoProductionVersion? @relation("AuthoringPreviewSnapshotVideoProduction", fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy           User               @relation("AuthoringPreviewSnapshotCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  @@index([videoProductionVersionId])
   @@index([levelDefinitionId, createdAt])
   @@index([createdById])
   @@index([expiresAt])
+}
+
+/**
+ * PHASE-G0 CORRECTION — the durable bridge between a video production contract
+ * and the REAL question bank it was reviewed against.
+ *
+ * WHY IT IS A TABLE AND NOT THREE NULLABLE COLUMNS. The link is meaningful only
+ * as a whole: an AssessmentVersion without the revision it was fingerprinted at,
+ * or a fingerprint without the bank it describes, is not a weaker link — it is a
+ * FALSE one. SQLite refuses a CHECK on `ALTER TABLE ADD COLUMN`, so nullable
+ * columns on VideoProductionVersion could not have carried a real all-or-nothing
+ * constraint and the pairing would have lived only in the domain. A new table
+ * CAN declare its constraints inline, so "linked" is a row that exists with
+ * every column NOT NULL and "unlinked" is the absence of a row. There is no
+ * half-linked state for a reader to reason about.
+ *
+ * ONE BANK PER CONTRACT. `videoProductionVersionId` is unique: a production
+ * contract is coherent with exactly one bank, and a level whose candidate bank
+ * is ambiguous gets NO row rather than a guess.
+ *
+ * `assessmentBankFingerprint` IS SERVER-COMPUTED, ALWAYS. It is
+ * `calculateAssessmentFingerprint` — the accepted Phase-C function — applied to
+ * `projectAssessmentBank`, which reads QuestionDefinition and its canonical
+ * QuestionLocalization. It is never accepted from a caller, and staleness is
+ * DERIVED by recomputing it rather than by trusting a stored boolean.
+ */
+model VideoProductionAssessmentLink {
+  id                        Int      @id @default(autoincrement())
+  /// One bank per production contract. Unique, so a link can never fork.
+  videoProductionVersionId  Int      @unique
+  assessmentVersionId       Int
+  /// The bank's aggregate revision at the moment the fingerprint was computed.
+  assessmentRevision        Int
+  /// Server-computed over the DURABLE bank. Never caller-supplied.
+  assessmentBankFingerprint String
+  linkedById                Int?
+  linkedAt                  DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  videoProductionVersion VideoProductionVersion @relation(fields: [videoProductionVersionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assessmentVersion      AssessmentVersion      @relation(fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  linkedBy               User?                  @relation("VideoProductionAssessmentLinker", fields: [linkedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([assessmentVersionId])
+  @@index([linkedById])
 }
 
 model AssessmentAttempt {

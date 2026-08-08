@@ -28,6 +28,7 @@ const dbPath = path.join(os.tmpdir(), `ata-authoring-migration-${process.pid}.db
 const ROOT = process.cwd();
 const MIGRATIONS = path.join(ROOT, "prisma", "migrations");
 const G0 = "20260808000000_authoring_foundation";
+const CORRECTION = "20260808120000_authoring_foundation_corrections";
 const OUT = process.env.REGRESSION_SUMMARY_PATH ?? null;
 
 let passed = 0;
@@ -102,7 +103,17 @@ function main() {
 
   const g0Index = all.indexOf(G0);
   assert.ok(g0Index >= 0, "the authoring-foundation migration must exist");
-  assert.equal(g0Index, all.length - 1, "it must be the LAST migration in the chain");
+  // PHASE-G0 CORRECTION — G0 is no longer the last link. It is now followed by
+  // exactly the correction migration, and this suite still proves the G0 UPGRADE
+  // in isolation: everything before G0, then G0 alone, against populated tables.
+  // The correction's own upgrade is proven by the corrections suite, and the
+  // combined chain is proven by both.
+  const after = all.slice(g0Index + 1);
+  assert.deepEqual(
+    after,
+    [CORRECTION],
+    "G0 must be followed by exactly the authoring-foundation correction",
+  );
 
   const before = all.slice(0, g0Index);
 
@@ -331,14 +342,17 @@ function main() {
       assert.equal(localization.title, "Живой урок");
     });
 
-    check("10 the migration is the last link and the chain is contiguous", () => {
+    check("10 the G0 upgrade is contiguous up to and including G0", () => {
       const applied = db
         .prepare('SELECT "migration_name" FROM "_prisma_migrations" ORDER BY "migration_name"')
         .all() as Array<{ migration_name: string }>;
+      // PHASE-G0 CORRECTION — this suite deliberately stops AT G0, which is what
+      // makes it a real upgrade test of G0 alone against populated tables. The
+      // links after it are applied and proven by the corrections suite.
       assert.deepEqual(
         applied.map((row) => row.migration_name),
-        all,
-        "every migration in the directory must be applied exactly once, in order",
+        all.slice(0, g0Index + 1),
+        "every migration up to and including G0 must be applied exactly once, in order",
       );
     });
   } finally {

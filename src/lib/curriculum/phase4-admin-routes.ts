@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { expectedRevisionSchema } from "@/lib/curriculum/authoring-mutation-guard";
 import {
   archiveContentVersion, clearLevelContentBinding, createContentAsset, createContentLocalization,
   createContentVersion, deleteContentAsset, deleteContentLocalization, deleteContentVersion,
@@ -39,6 +40,18 @@ type Params = Record<string, string>;
 type Context = { params: Promise<Params> };
 const empty = z.strictObject({});
 
+/**
+ * PHASE-G0 CORRECTION — the revision transport at the HTTP edge.
+ *
+ * Every substantive mutation body now carries `expectedRevision`. The route
+ * schemas below are still derived from the accepted command schemas by omitting
+ * only the SERVER-derived identity (`actorId` and the path ids), so the field
+ * arrives as a required, bounded integer through the existing `strictBody`
+ * validation rather than through a second parser. A DELETE that previously took
+ * an empty body now takes exactly this one field and nothing else.
+ */
+const revisionOnly = z.strictObject({ expectedRevision: expectedRevisionSchema });
+
 function ids(params: Params) {
   return {
     curriculumVersionId: positivePathId(params.id, "id"),
@@ -58,11 +71,11 @@ async function admin(request: Request, profile: "content" | "assessment", write:
 }
 
 const contentCreate = createContentVersionSchema.omit({ actorId: true, levelDefinitionId: true });
-const contentPatch = updateContentVersionSchema.shape.patch;
+const contentPatch = updateContentVersionSchema.omit({ actorId: true, contentVersionId: true });
 const localizationCreate = createContentLocalizationSchema.omit({ actorId: true, contentVersionId: true });
-const localizationPatch = updateContentLocalizationSchema.shape.patch;
+const localizationPatch = updateContentLocalizationSchema.omit({ actorId: true, contentLocalizationId: true });
 const assetCreate = createContentAssetSchema.omit({ actorId: true, contentVersionId: true });
-const assetPatch = updateContentAssetSchema.shape.patch;
+const assetPatch = updateContentAssetSchema.omit({ actorId: true, contentAssetId: true });
 const contentPublish = publishContentVersionSchema.omit({ actorId: true, contentVersionId: true });
 const contentBind = setContentBindingSchema.omit({ actorId: true, levelDefinitionId: true });
 
@@ -93,12 +106,12 @@ export function contentVersionItemRoutes() {
     },
     PATCH: async (request: Request, context: Context) => {
       const gate = await admin(request, "content", true); if (!gate.ok) return gate.response;
-      try { const p = await context.params; const scope = ids(p); const id = positivePathId(p.contentVersionId, "contentVersionId"); await assertAdminContentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); const patch = strictBody(contentPatch, await jsonBody(request)); return phase4Data(safeContentVersion(await updateContentVersion({ actorId: gate.actorId, contentVersionId: id, patch }))); }
+      try { const p = await context.params; const scope = ids(p); const id = positivePathId(p.contentVersionId, "contentVersionId"); await assertAdminContentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); const body = strictBody(contentPatch, await jsonBody(request)); return phase4Data(safeContentVersion(await updateContentVersion({ actorId: gate.actorId, contentVersionId: id, ...body }))); }
       catch (error) { return phase4Exception(error, "content version PATCH"); }
     },
     DELETE: async (request: Request, context: Context) => {
       const gate = await admin(request, "content", true); if (!gate.ok) return gate.response;
-      try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const id = positivePathId(p.contentVersionId, "contentVersionId"); await assertAdminContentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); return phase4Data(safeContentVersion(await deleteContentVersion({ actorId: gate.actorId, contentVersionId: id }))); }
+      try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const id = positivePathId(p.contentVersionId, "contentVersionId"); await assertAdminContentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); return phase4Data(safeContentVersion(await deleteContentVersion({ actorId: gate.actorId, contentVersionId: id, ...body }))); }
       catch (error) { return phase4Exception(error, "content version DELETE"); }
     },
   };
@@ -130,8 +143,8 @@ export function contentLocalizationCollectionRoute() {
 
 export function contentLocalizationItemRoutes() {
   return {
-    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.localizationId, "localizationId"); await assertAdminContentLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); const patch = strictBody(localizationPatch, await jsonBody(request)); return phase4Data(safeContentLocalization(await updateContentLocalization({ actorId: gate.actorId, contentLocalizationId: id, patch }))); } catch (error) { return phase4Exception(error, "content localization PATCH"); } },
-    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.localizationId, "localizationId"); await assertAdminContentLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); return phase4Data(safeContentLocalization(await deleteContentLocalization({ actorId: gate.actorId, contentLocalizationId: id }))); } catch (error) { return phase4Exception(error, "content localization DELETE"); } },
+    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.localizationId, "localizationId"); await assertAdminContentLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); const body = strictBody(localizationPatch, await jsonBody(request)); return phase4Data(safeContentLocalization(await updateContentLocalization({ actorId: gate.actorId, contentLocalizationId: id, ...body }))); } catch (error) { return phase4Exception(error, "content localization PATCH"); } },
+    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.localizationId, "localizationId"); await assertAdminContentLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); return phase4Data(safeContentLocalization(await deleteContentLocalization({ actorId: gate.actorId, contentLocalizationId: id, ...body }))); } catch (error) { return phase4Exception(error, "content localization DELETE"); } },
   };
 }
 
@@ -141,8 +154,8 @@ export function contentAssetCollectionRoute() {
 
 export function contentAssetItemRoutes() {
   return {
-    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.assetId, "assetId"); await assertAdminContentAssetScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); const patch = strictBody(assetPatch, await jsonBody(request)); return phase4Data(safeContentAsset(await updateContentAsset({ actorId: gate.actorId, contentAssetId: id, patch }))); } catch (error) { return phase4Exception(error, "content asset PATCH"); } },
-    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.assetId, "assetId"); await assertAdminContentAssetScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); return phase4Data(safeContentAsset(await deleteContentAsset({ actorId: gate.actorId, contentAssetId: id }))); } catch (error) { return phase4Exception(error, "content asset DELETE"); } },
+    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.assetId, "assetId"); await assertAdminContentAssetScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); const body = strictBody(assetPatch, await jsonBody(request)); return phase4Data(safeContentAsset(await updateContentAsset({ actorId: gate.actorId, contentAssetId: id, ...body }))); } catch (error) { return phase4Exception(error, "content asset PATCH"); } },
+    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "content", true); if (!gate.ok) return gate.response; try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const contentId = positivePathId(p.contentVersionId); const id = positivePathId(p.assetId, "assetId"); await assertAdminContentAssetScope(scope.curriculumVersionId, scope.levelDefinitionId, contentId, id); return phase4Data(safeContentAsset(await deleteContentAsset({ actorId: gate.actorId, contentAssetId: id, ...body }))); } catch (error) { return phase4Exception(error, "content asset DELETE"); } },
   };
 }
 
@@ -154,13 +167,13 @@ export function contentBindingRoutes() {
 }
 
 const assessmentCreate = createAssessmentVersionSchema.omit({ actorId: true, levelDefinitionId: true });
-const assessmentPatch = updateAssessmentVersionSchema.shape.patch;
+const assessmentPatch = updateAssessmentVersionSchema.omit({ actorId: true, assessmentVersionId: true });
 const assessmentPublish = publishAssessmentVersionSchema.omit({ actorId: true, assessmentVersionId: true });
 const assessmentBind = setAssessmentBindingSchema.omit({ actorId: true, levelDefinitionId: true });
 const questionCreate = createAssessmentQuestionSchema.omit({ actorId: true, assessmentVersionId: true });
-const questionPatch = updateAssessmentQuestionSchema.shape.patch;
+const questionPatch = updateAssessmentQuestionSchema.omit({ actorId: true, questionDefinitionId: true });
 const qlocCreate = createQuestionLocalizationSchema.omit({ actorId: true, questionDefinitionId: true });
-const qlocPatch = updateQuestionLocalizationSchema.shape.patch;
+const qlocPatch = updateQuestionLocalizationSchema.omit({ actorId: true, questionLocalizationId: true });
 
 export function assessmentVersionsCollectionRoutes() {
   return {
@@ -172,8 +185,8 @@ export function assessmentVersionsCollectionRoutes() {
 export function assessmentVersionItemRoutes() {
   return {
     GET: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", false); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); return phase4Data(await getAdminAssessmentVersion(scope.curriculumVersionId, scope.levelDefinitionId, positivePathId(p.assessmentVersionId))); } catch (error) { return phase4Exception(error, "assessment version GET"); } },
-    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const id = positivePathId(p.assessmentVersionId); await assertAdminAssessmentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); const patch = strictBody(assessmentPatch, await jsonBody(request)); return phase4Data(safeAssessmentVersion(await updateAssessmentVersion({ actorId: gate.actorId, assessmentVersionId: id, patch }))); } catch (error) { return phase4Exception(error, "assessment version PATCH"); } },
-    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const id = positivePathId(p.assessmentVersionId); await assertAdminAssessmentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); return phase4Data(safeAssessmentVersion(await deleteAssessmentVersion({ actorId: gate.actorId, assessmentVersionId: id }))); } catch (error) { return phase4Exception(error, "assessment version DELETE"); } },
+    PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const id = positivePathId(p.assessmentVersionId); await assertAdminAssessmentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); const body = strictBody(assessmentPatch, await jsonBody(request)); return phase4Data(safeAssessmentVersion(await updateAssessmentVersion({ actorId: gate.actorId, assessmentVersionId: id, ...body }))); } catch (error) { return phase4Exception(error, "assessment version PATCH"); } },
+    DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const id = positivePathId(p.assessmentVersionId); await assertAdminAssessmentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, id); return phase4Data(safeAssessmentVersion(await deleteAssessmentVersion({ actorId: gate.actorId, assessmentVersionId: id, ...body }))); } catch (error) { return phase4Exception(error, "assessment version DELETE"); } },
   };
 }
 
@@ -182,14 +195,14 @@ export function assessmentArchiveRoute() { return async (request: Request, conte
 
 export function questionCollectionRoute() { return async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); await assertAdminAssessmentVersionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId); const body = strictBody(questionCreate, await jsonBody(request)); return phase4Data(safeQuestion(await createAssessmentQuestion({ actorId: gate.actorId, assessmentVersionId: assessmentId, ...body })), 201); } catch (error) { return phase4Exception(error, "question POST"); } }; }
 export function questionItemRoutes() { return {
-  PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const id = positivePathId(p.questionId); await assertAdminQuestionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, id); const patch = strictBody(questionPatch, await jsonBody(request)); return phase4Data(safeQuestion(await updateAssessmentQuestion({ actorId: gate.actorId, questionDefinitionId: id, patch }))); } catch (error) { return phase4Exception(error, "question PATCH"); } },
-  DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const id = positivePathId(p.questionId); await assertAdminQuestionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, id); return phase4Data(safeQuestion(await deleteAssessmentQuestion({ actorId: gate.actorId, questionDefinitionId: id }))); } catch (error) { return phase4Exception(error, "question DELETE"); } },
+  PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const id = positivePathId(p.questionId); await assertAdminQuestionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, id); const body = strictBody(questionPatch, await jsonBody(request)); return phase4Data(safeQuestion(await updateAssessmentQuestion({ actorId: gate.actorId, questionDefinitionId: id, ...body }))); } catch (error) { return phase4Exception(error, "question PATCH"); } },
+  DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const id = positivePathId(p.questionId); await assertAdminQuestionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, id); return phase4Data(safeQuestion(await deleteAssessmentQuestion({ actorId: gate.actorId, questionDefinitionId: id, ...body }))); } catch (error) { return phase4Exception(error, "question DELETE"); } },
 }; }
 
 export function questionLocalizationCollectionRoute() { return async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const questionId = positivePathId(p.questionId); await assertAdminQuestionScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, questionId); const body = strictBody(qlocCreate, await jsonBody(request)); return phase4Data(safeQuestionLocalization(await createQuestionLocalization({ actorId: gate.actorId, questionDefinitionId: questionId, ...body })), 201); } catch (error) { return phase4Exception(error, "question localization POST"); } }; }
 export function questionLocalizationItemRoutes() { return {
-  PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const questionId = positivePathId(p.questionId); const id = positivePathId(p.localizationId); await assertAdminQuestionLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, questionId, id); const patch = strictBody(qlocPatch, await jsonBody(request)); return phase4Data(safeQuestionLocalization(await updateQuestionLocalization({ actorId: gate.actorId, questionLocalizationId: id, patch }))); } catch (error) { return phase4Exception(error, "question localization PATCH"); } },
-  DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { strictBody(empty, await jsonBody(request)); const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const questionId = positivePathId(p.questionId); const id = positivePathId(p.localizationId); await assertAdminQuestionLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, questionId, id); return phase4Data(safeQuestionLocalization(await deleteQuestionLocalization({ actorId: gate.actorId, questionLocalizationId: id }))); } catch (error) { return phase4Exception(error, "question localization DELETE"); } },
+  PATCH: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const questionId = positivePathId(p.questionId); const id = positivePathId(p.localizationId); await assertAdminQuestionLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, questionId, id); const body = strictBody(qlocPatch, await jsonBody(request)); return phase4Data(safeQuestionLocalization(await updateQuestionLocalization({ actorId: gate.actorId, questionLocalizationId: id, ...body }))); } catch (error) { return phase4Exception(error, "question localization PATCH"); } },
+  DELETE: async (request: Request, context: Context) => { const gate = await admin(request, "assessment", true); if (!gate.ok) return gate.response; try { const body = strictBody(revisionOnly, await jsonBody(request)); const p = await context.params; const scope = ids(p); const assessmentId = positivePathId(p.assessmentVersionId); const questionId = positivePathId(p.questionId); const id = positivePathId(p.localizationId); await assertAdminQuestionLocalizationScope(scope.curriculumVersionId, scope.levelDefinitionId, assessmentId, questionId, id); return phase4Data(safeQuestionLocalization(await deleteQuestionLocalization({ actorId: gate.actorId, questionLocalizationId: id, ...body }))); } catch (error) { return phase4Exception(error, "question localization DELETE"); } },
 }; }
 
 export function assessmentBindingRoutes() { return {

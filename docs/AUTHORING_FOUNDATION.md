@@ -504,3 +504,169 @@ The foundation is done; **none of the studio is**.
 | **Package handoff** | Deterministic projection of approved authoring content into the canonical package, with validation before anything may claim approved. |
 | **Activation** | `CURRICULUM_V2_ADMIN_ENABLED` is now *permitted* on dev/preprod; turning it on is a separate explicit phase, as is `CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED`. |
 | **Editorial closeout** | The 154 gaps (77 `ATA100_CONTENT_NOT_AUTHORED` + 77 `ATA100_CONTENT_NOT_PUBLISHED`), the 57 proposals, L18's approval and the L2 conflict are all **untouched** and remain the G2 work queue. |
+
+---
+
+# PHASE-G0 FOUNDATION CORRECTIONS
+
+The independent audit `ATA-PRODUCT-PHASE-G0-FINAL-TARGETED-AUDIT-1` found one
+BLOCKER and two MEDIUM gaps in the foundation above. This section records what
+changed, and — as importantly — what deliberately did not.
+
+## The BLOCKER: a whole mutation surface obeyed none of the new rules
+
+G0 built the editorial lifecycle, the aggregate revision and the four-eyes rule,
+and wired them to **nothing**. The 30 accepted `/api/admin/curriculum/**`
+mutation endpoints kept writing `ContentLocalization`, `ContentAsset`,
+`QuestionDefinition` and `QuestionLocalization` with no `expectedRevision`, no
+`editorialState` read and no author attribution — and `gatePhase4Admin` and
+`gateCurriculumAuthoring` are governed by the **same**
+`CURRICULUM_V2_ADMIN_ENABLED` flag, so activating the Studio activated the
+unguarded surface with it.
+
+Because approval deliberately does not publish, an APPROVED version stays runtime
+`draft`, and `assertDraftContent` only ever inspected runtime `status`. The
+approved state was therefore the *most* exposed, not the least.
+
+### One boundary, not a second API
+
+`authoring-mutation-guard.ts` is the single entry point. It is a thin, named
+wrapper over the G0 primitives — `bumpAggregate` still does the work — and it is
+called from the **domain commands**, not from the routes. A route-level check
+would have left `updateContentLocalization()` unsafe for scripts, the importer
+and the future Studio. There is deliberately no `legacySafeUpdate` beside a
+`studioSafeUpdate`: G1 will call the very functions the legacy routes call.
+
+The accepted routes keep their exact paths and methods.
+
+### The revision transport contract
+
+`expectedRevision` is a **required body field** on every substantive mutation: a
+positive integer, `1 .. 2147483646`, validated by the accepted `strictBody` path
+because every Phase-4 route already parses a strict JSON body. It rides the
+command schemas, so omitting it is a schema rejection before any transaction
+opens.
+
+There is **no defaulting**. A `expectedRevision ?? current.revision` anywhere
+would restore last-write-wins, so the surface guard suite fails the build if such
+a pattern ever appears.
+
+DELETE routes that previously accepted an empty body now accept exactly this one
+field.
+
+### What is guarded, and what is not
+
+| Operation | Class | Guarded |
+|---|---|---|
+| content/assessment version PATCH, DELETE | authoring (aggregate root) | **yes** |
+| localization POST/PATCH/DELETE | authoring (learner text) | **yes** |
+| asset POST/PATCH/DELETE | authoring (learner media) | **yes** |
+| question POST/PATCH/DELETE | authoring (assessment semantics) | **yes** |
+| question localization POST/PATCH/DELETE | authoring (prompt, options) | **yes** |
+| version POST (create) | aggregate creation | no — there is no revision to be stale against until the row exists |
+| publish, archive | runtime lifecycle | no |
+| content-binding, assessment-binding | structural resource binding | no |
+
+Deleting an aggregate uses `guardAggregateSelfMutation`: it cannot bump a
+revision it is about to destroy, but the editorial state and the expected
+revision are still both checked, so an approved version cannot be erased outright.
+
+### A refusal is a product answer, not an internal fault
+
+`runSanitized` in both domains deliberately masks unrecognised errors as
+`*_INTERNAL_ERROR`. It now re-throws `AuthoringDomainError` unchanged. Masking it
+would have turned "the lesson moved under you" into an opaque 500 and discarded
+the `actualRevision` an editor needs in order to reload. `phase4Exception` maps
+the vocabulary through the domain's own `authoringErrorStatus`: 409 for a
+conflict or an immutable state, 403 for self-approval, 422 for a validation
+refusal.
+
+## PUBLISH DOES NOT REQUIRE EDITORIAL APPROVAL — reported, not changed
+
+`publishContentVersion` and `publishAssessmentVersion` consult runtime `status`
+and the accepted publication validation. Neither reads `editorialState`. **A
+version that no human has editorially approved can still be published**, which
+means the new review workflow can be bypassed at the publication step by anyone
+holding the existing publish authority.
+
+This is left **exactly as it is**. The correction was asked to enforce reachable
+authoring mutations, not to invent publication policy, and coupling publication
+to `editorialState` would change what the platform is allowed to serve — a
+product decision with its own migration and rollout questions. It is recorded
+here as the open decision it is: *should runtime publication require
+`editorialState = approved`?*
+
+## MEDIUM: video evidence could not go stale
+
+G0 stored an `assessmentFingerprint` computed from the video contract's own
+embedded questions, so both sides of every comparison came from the same JSON
+document and editing the real bank changed nothing.
+
+`VideoProductionAssessmentLink` is a new table, not three nullable columns,
+because SQLite refuses a CHECK on `ALTER TABLE ADD COLUMN` and a half-set link is
+a **false** link rather than a partial one. Every column is NOT NULL, so "linked"
+is a row that exists. `videoProductionVersionId` is UNIQUE: one bank per
+contract, and an ambiguous level gets no row at all.
+
+`authoring-assessment-projection.ts` reads `QuestionDefinition` and its canonical
+`ru` `QuestionLocalization` and returns the accepted fingerprint input.
+**It hashes nothing** — `calculateAssessmentFingerprint` does, unchanged.
+
+Take **identities** (`T{level}.1..4`) are included; take **text** is not. Take
+text is a video artifact already covered by `contractFingerprint`, and including
+it would have meant rewording a shot marked the *question bank* as changed —
+false, and exactly the kind of warning reviewers learn to ignore.
+
+Staleness is **derived on read**, never written. Writing a flag during assessment
+mutation would take a lock on an unrelated aggregate inside someone else's
+transaction and create a second copy of a fact that is already derivable. The
+bank is the only authority for what the bank says; the stored fingerprint is
+evidence of what was *reviewed*.
+
+`readVideoProductionCoherence` reports a closed vocabulary: `UNLINKED`,
+`COHERENT`, `ASSESSMENT_BANK_CHANGED`, `ASSESSMENT_REVISION_MOVED`,
+`ASSESSMENT_UNPROJECTABLE`. An unlinked contract reads **stale**, never fresh —
+absence of evidence is not evidence of freshness.
+
+### L2, L18 and the 57 proposals are untouched
+
+`resolveCanonicalAssessmentVersion` prefers the `LevelResourceBinding`, which is
+what the runtime actually serves. That is what keeps L2 honest: its existing
+bound bank stays the durable identity and the Blueprint's PROPOSED_CANON
+questions remain a proposal inside `contractPayload`. L18 stays SOURCE_BACKED and
+unapproved. The bootstrap links where it can and **counts** what it could not
+link rather than guessing.
+
+## MEDIUM: the preview snapshot could not pin video production
+
+Two nullable columns plus a real FOREIGN KEY (which `ALTER TABLE` does accept).
+The pairing rule is domain-enforced in `authoring-preview-snapshot.ts` and proven
+by regression, for the same SQLite reason G0 documented for `editorialState`.
+
+Every revision is **read server-side** inside the transaction, never accepted, so
+a caller cannot claim a snapshot was taken at a revision that never existed. The
+existing `has_target` CHECK is left alone: a preview is a learner frame, and a
+video production contract is production metadata attached to a lesson, never a
+lesson on its own.
+
+Learner frame and internal metadata stay separable: `payload` holds the
+learner-facing render input, and the internal side is reachable only through the
+pinned **ids** by a separately authorized staff-side reader. `snapshotCode`
+remains an identifier — nothing in the domain or the authorization layer treats
+possession of it as permission.
+
+## LOW: a note could be resolved by knowing its id
+
+`resolveReviewNote` now requires the aggregate target and verifies the note
+belongs to it. A mismatch is reported as `AUTHORING_NOTE_NOT_FOUND` rather than a
+distinct code, because "that note exists, but not here" would confirm the
+existence of notes on aggregates the caller was never authorized to see.
+
+## LOW: a four-eyes refusal left no trace
+
+It is now recorded — **outside** the refused transaction, because a row written
+inside it would roll back with the refusal. The write runs only on the throw
+path, so it can never manufacture a record for an approval that succeeded; the
+original error is rethrown unconditionally; and if the audit write itself fails
+the outcome is a refusal with no record, which is exactly the previous behaviour.
+It carries actor, target, action, reason and time, and **no draft content**.

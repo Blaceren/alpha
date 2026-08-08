@@ -691,13 +691,13 @@ async function main() {
       });
       assert.equal(open, 1);
 
-      const resolved = await notes.resolveReviewNote({ noteId: note.id, actorId: editor.id });
+      const resolved = await notes.resolveReviewNote({ noteId: note.id, target: { kind: "content", contentVersionId: version.id }, actorId: editor.id });
       assert.equal(resolved.resolvedById, editor.id);
       assert.ok(resolved.resolvedAt);
 
       // Resolving twice is an error, never a silent no-op.
       await assert.rejects(
-        notes.resolveReviewNote({ noteId: note.id, actorId: editor.id }),
+        notes.resolveReviewNote({ noteId: note.id, target: { kind: "content", contentVersionId: version.id }, actorId: editor.id }),
         (error: unknown) => error instanceof Error && error.message.includes("already resolved"),
       );
     });

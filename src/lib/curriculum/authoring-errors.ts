@@ -28,6 +28,17 @@ export type AuthoringErrorCode =
   | "AUTHORING_VALIDATION_FAILED"
   | "AUTHORING_TARGET_NOT_FOUND"
   | "AUTHORING_INPUT_INVALID"
+  /**
+   * PHASE-G0 CORRECTION — a durable assessment bank could not be projected into
+   * the accepted fingerprint shape. Raised rather than fingerprinting partial
+   * data, because a hash over an incomplete read would claim a coherence check
+   * that never happened.
+   */
+  | "AUTHORING_ASSESSMENT_PROJECTION_INVALID"
+  /** The video contract is not linked to a durable AssessmentVersion. */
+  | "AUTHORING_ASSESSMENT_LINK_MISSING"
+  /** More than one candidate bank; the link refuses to guess. */
+  | "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS"
   /** A review note named zero targets, or more than one. */
   | "AUTHORING_NOTE_TARGET_INVALID"
   | "AUTHORING_NOTE_NOT_FOUND"
@@ -88,7 +99,11 @@ export function authoringErrorStatus(code: AuthoringErrorCode): number {
     case "AUTHORING_VALIDATION_FAILED":
     case "AUTHORING_INPUT_INVALID":
     case "AUTHORING_NOTE_TARGET_INVALID":
+    case "AUTHORING_ASSESSMENT_PROJECTION_INVALID":
+    case "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS":
       return 422;
+    case "AUTHORING_ASSESSMENT_LINK_MISSING":
+      return 409;
     default:
       return 500;
   }

@@ -7,6 +7,11 @@ import type {
 import { Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
+import {
+  guardAggregateChildMutation,
+  guardAggregateSelfMutation,
+} from "@/lib/curriculum/authoring-mutation-guard";
+import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { ContentDomainError, isContentDomainError } from "@/lib/curriculum/content-errors";
 import type { ContentDomainErrorCode } from "@/lib/curriculum/content-errors";
 import {
@@ -192,6 +197,14 @@ async function runSanitized<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (isContentDomainError(error)) throw error;
+    // PHASE-G0 CORRECTION — an authoring refusal is a PRODUCT ANSWER, not an
+    // internal fault, and must reach the caller intact. Masking it here would
+    // turn "the lesson moved under you" and "this version is approved" into an
+    // opaque 500, discard the `actualRevision` an editor needs to reload, and
+    // leave a reviewer unable to tell a refusal from a broken server. The
+    // sanitizer still swallows everything it does not recognise, which is the
+    // property it exists for.
+    if (isAuthoringDomainError(error)) throw error;
     throw new ContentDomainError("CONTENT_INTERNAL_ERROR", "content operation failed");
   }
 }
@@ -267,6 +280,17 @@ export async function updateContentVersion(input: unknown): Promise<ContentVersi
       await assertContentAdmin(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       const patch = stripUndefined(data.patch);
       if (!patchHasChanges(content as unknown as Record<string, unknown>, patch)) {
         throw new ContentDomainError("CONTENT_NO_CHANGES", "content update has no changes");
@@ -302,6 +326,15 @@ export async function deleteContentVersion(input: unknown): Promise<ContentVersi
       await assertContentAdmin(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — deleting the aggregate cannot bump its own
+      // revision, but it is still substantive: the editorial state and the
+      // expected revision are both checked so an approved version can never
+      // be erased outright.
+      await guardAggregateSelfMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+      });
       const [localizations, assets, bindings, progress] = await Promise.all([
         tx.contentLocalization.count({ where: { contentVersionId: content.id } }),
         tx.contentAsset.count({ where: { contentVersionId: content.id } }),
@@ -342,6 +375,17 @@ export async function createContentLocalization(input: unknown): Promise<Content
       await assertContentAdmin(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       let created: ContentLocalization;
       try {
         created = await tx.contentLocalization.create({
@@ -390,6 +434,17 @@ export async function updateContentLocalization(input: unknown): Promise<Content
       }
       const content = await loadContent(localization.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       const patch = stripUndefined(data.patch);
       if (!patchHasChanges(localization as unknown as Record<string, unknown>, patch)) {
         throw new ContentDomainError("CONTENT_NO_CHANGES", "localization update has no changes");
@@ -434,6 +489,17 @@ export async function deleteContentLocalization(input: unknown): Promise<Content
       }
       const content = await loadContent(localization.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       let deleted: ContentLocalization;
       try {
         deleted = await tx.contentLocalization.delete({ where: { id: localization.id } });
@@ -465,6 +531,17 @@ export async function createContentAsset(input: unknown): Promise<ContentAsset> 
       await assertContentAdmin(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       let created: ContentAsset;
       try {
         created = await tx.contentAsset.create({
@@ -515,6 +592,17 @@ export async function updateContentAsset(input: unknown): Promise<ContentAsset> 
       }
       const content = await loadContent(asset.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       const patch = stripUndefined(data.patch);
       if (!patchHasChanges(asset as unknown as Record<string, unknown>, patch)) {
         throw new ContentDomainError("CONTENT_NO_CHANGES", "asset update has no changes");
@@ -556,6 +644,17 @@ export async function deleteContentAsset(input: unknown): Promise<ContentAsset> 
       }
       const content = await loadContent(asset.contentVersionId, tx);
       assertDraftContent(content);
+      // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
+      // submitted or approved version, refuses a stale writer, moves the
+      // revision and records THIS server-resolved actor as the substantive
+      // author, all inside the caller's transaction so the child write below
+      // rolls back with it.
+      await guardAggregateChildMutation(tx, {
+        kind: "content",
+        aggregateId: content.id,
+        expectedRevision: data.expectedRevision,
+        actorId: data.actorId,
+      });
       let deleted: ContentAsset;
       try {
         deleted = await tx.contentAsset.delete({ where: { id: asset.id } });

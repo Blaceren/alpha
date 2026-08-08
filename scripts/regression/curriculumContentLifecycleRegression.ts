@@ -65,6 +65,42 @@ async function main() {
   const { prisma } = await import("../../src/lib/prisma");
   const content = await import("../../src/lib/curriculum/content");
 
+  /**
+   * PHASE-G0 CORRECTION — the content domain now REQUIRES the aggregate
+   * revision on every substantive mutation, so this suite supplies it
+   * explicitly. It reads the CURRENT revision immediately before each call
+   * because this suite is testing the accepted content rules, not concurrency;
+   * the conflict behaviour itself is proven in the authoring foundation and the
+   * mutation-boundary suites, which pass deliberately stale values.
+   */
+  async function contentRev(target: {
+    contentVersionId?: number;
+    contentLocalizationId?: number;
+    contentAssetId?: number;
+  }): Promise<number> {
+    let id = target.contentVersionId;
+    if (id === undefined && target.contentLocalizationId !== undefined) {
+      const row = await prisma.contentLocalization.findUnique({
+        where: { id: target.contentLocalizationId },
+        select: { contentVersionId: true },
+      });
+      id = row?.contentVersionId;
+    }
+    if (id === undefined && target.contentAssetId !== undefined) {
+      const row = await prisma.contentAsset.findUnique({
+        where: { id: target.contentAssetId },
+        select: { contentVersionId: true },
+      });
+      id = row?.contentVersionId;
+    }
+    if (id === undefined) return 1;
+    const version = await prisma.contentVersion.findUnique({
+      where: { id },
+      select: { revision: true },
+    });
+    return version?.revision ?? 1;
+  }
+
   const admin = await prisma.user.create({
     data: { email: "content-admin@example.com", name: "Content Admin", role: "admin" },
   });
@@ -165,7 +201,7 @@ async function main() {
       });
       assert.equal(created.versionNumber, 1);
       assert.equal(created.status, "draft");
-      await content.deleteContentVersion({ actorId: admin.id, contentVersionId: created.id });
+      await content.deleteContentVersion({ expectedRevision: await contentRev({ contentVersionId: created.id }), actorId: admin.id, contentVersionId: created.id });
     });
 
     await check("4. missing actor is rejected", () =>
@@ -217,7 +253,7 @@ async function main() {
     });
 
     await check("9. draft ContentVersion metadata updates", async () => {
-      const updated = await content.updateContentVersion({
+      const updated = await content.updateContentVersion({ expectedRevision: await contentRev({ contentVersionId: first.id }),
         actorId: admin.id,
         contentVersionId: first.id,
         patch: { changeNotes: "ready" },
@@ -227,7 +263,7 @@ async function main() {
     await check("10. no-change update has no audit", async () => {
       const before = await prisma.auditLog.count();
       await expectError(
-        () => content.updateContentVersion({
+        async () => content.updateContentVersion({ expectedRevision: await contentRev({ contentVersionId: first.id }),
           actorId: admin.id,
           contentVersionId: first.id,
           patch: { changeNotes: "ready" },
@@ -240,7 +276,7 @@ async function main() {
     await check("11. invalid locale and unsafe body are rejected before writes", async () => {
       const before = await prisma.contentLocalization.count();
       await expectError(
-        () => content.createContentLocalization({
+        async () => content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: first.id }),
           actorId: admin.id,
           contentVersionId: first.id,
           locale: "RU_bad",
@@ -256,7 +292,7 @@ async function main() {
       assert.equal(await prisma.contentLocalization.count(), before);
     });
 
-    const localization = await content.createContentLocalization({
+    const localization = await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: first.id }),
       actorId: admin.id,
       contentVersionId: first.id,
       locale: "EN-us",
@@ -273,7 +309,7 @@ async function main() {
     });
     await check("13. duplicate normalized locale is a typed conflict", () =>
       expectError(
-        () => content.createContentLocalization({
+        async () => content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: first.id }),
           actorId: admin.id,
           contentVersionId: first.id,
           locale: "en-US",
@@ -289,7 +325,7 @@ async function main() {
     );
     await check("14. answer authority cannot be smuggled into body", () =>
       expectError(
-        () => content.updateContentLocalization({
+        async () => content.updateContentLocalization({ expectedRevision: await contentRev({ contentLocalizationId: localization.id }),
           actorId: admin.id,
           contentLocalizationId: localization.id,
           patch: { body: { ...body("answer"), correctAnswer: "secret" } },
@@ -298,7 +334,7 @@ async function main() {
       ).then(() => undefined),
     );
     await check("15. localization update is draft-only and audited", async () => {
-      const updated = await content.updateContentLocalization({
+      const updated = await content.updateContentLocalization({ expectedRevision: await contentRev({ contentLocalizationId: localization.id }),
         actorId: admin.id,
         contentLocalizationId: localization.id,
         patch: { summary: "Updated summary" },
@@ -309,7 +345,7 @@ async function main() {
 
     await check("16. invalid asset URL is rejected", () =>
       expectError(
-        () => content.createContentAsset({
+        async () => content.createContentAsset({ expectedRevision: await contentRev({ contentVersionId: first.id }),
           actorId: admin.id,
           contentVersionId: first.id,
           kind: "image",
@@ -325,7 +361,7 @@ async function main() {
         "CONTENT_INPUT_INVALID",
       ).then(() => undefined),
     );
-    const asset = await content.createContentAsset({
+    const asset = await content.createContentAsset({ expectedRevision: await contentRev({ contentVersionId: first.id }),
       actorId: admin.id,
       contentVersionId: first.id,
       kind: "image",
@@ -344,7 +380,7 @@ async function main() {
     });
     await check("18. duplicate asset code/order is typed conflict", () =>
       expectError(
-        () => content.createContentAsset({
+        async () => content.createContentAsset({ expectedRevision: await contentRev({ contentVersionId: first.id }),
           actorId: admin.id,
           contentVersionId: first.id,
           kind: "chart",
@@ -361,7 +397,7 @@ async function main() {
       ).then(() => undefined),
     );
     await check("19. asset update is audited without URL payload", async () => {
-      const updated = await content.updateContentAsset({
+      const updated = await content.updateContentAsset({ expectedRevision: await contentRev({ contentAssetId: asset.id }),
         actorId: admin.id,
         contentAssetId: asset.id,
         patch: { sortOrder: 2 },
@@ -393,15 +429,15 @@ async function main() {
     });
     await check("22. published content/localization/asset are immutable", async () => {
       await expectError(
-        () => content.updateContentVersion({ actorId: admin.id, contentVersionId: first.id, patch: { changeNotes: "x" } }),
+        async () => content.updateContentVersion({ expectedRevision: await contentRev({ contentVersionId: first.id }), actorId: admin.id, contentVersionId: first.id, patch: { changeNotes: "x" } }),
         "CONTENT_PUBLISHED_IMMUTABLE",
       );
       await expectError(
-        () => content.deleteContentLocalization({ actorId: admin.id, contentLocalizationId: localization.id }),
+        async () => content.deleteContentLocalization({ expectedRevision: await contentRev({ contentLocalizationId: localization.id }), actorId: admin.id, contentLocalizationId: localization.id }),
         "CONTENT_PUBLISHED_IMMUTABLE",
       );
       await expectError(
-        () => content.updateContentAsset({ actorId: admin.id, contentAssetId: asset.id, patch: { sortOrder: 3 } }),
+        async () => content.updateContentAsset({ expectedRevision: await contentRev({ contentAssetId: asset.id }), actorId: admin.id, contentAssetId: asset.id, patch: { sortOrder: 3 } }),
         "CONTENT_PUBLISHED_IMMUTABLE",
       );
     });
@@ -464,7 +500,7 @@ async function main() {
       ).then(() => undefined),
     );
 
-    await content.createContentLocalization({
+    await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: secondDraft.id }),
       actorId: admin.id,
       contentVersionId: secondDraft.id,
       locale: "en",
@@ -536,7 +572,7 @@ async function main() {
     });
 
     const third = await content.createContentVersion({ actorId: admin.id, levelDefinitionId: levels[2].id });
-    await content.createContentLocalization({
+    await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: third.id }),
       actorId: admin.id,
       contentVersionId: third.id,
       locale: "pl",
@@ -563,7 +599,7 @@ async function main() {
     });
 
     const nonEmpty = await content.createContentVersion({ actorId: admin.id, levelDefinitionId: levels[3].id });
-    const disposableLocalization = await content.createContentLocalization({
+    const disposableLocalization = await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: nonEmpty.id }),
       actorId: admin.id,
       contentVersionId: nonEmpty.id,
       locale: "de",
@@ -576,16 +612,16 @@ async function main() {
     });
     await check("34. non-empty draft cannot be deleted", () =>
       expectError(
-        () => content.deleteContentVersion({ actorId: admin.id, contentVersionId: nonEmpty.id }),
+        async () => content.deleteContentVersion({ expectedRevision: await contentRev({ contentVersionId: nonEmpty.id }), actorId: admin.id, contentVersionId: nonEmpty.id }),
         "CONTENT_NOT_EMPTY",
       ).then(() => undefined),
     );
     await check("35. localization delete then empty draft delete succeeds", async () => {
-      await content.deleteContentLocalization({
+      await content.deleteContentLocalization({ expectedRevision: await contentRev({ contentLocalizationId: disposableLocalization.id }),
         actorId: admin.id,
         contentLocalizationId: disposableLocalization.id,
       });
-      await content.deleteContentVersion({ actorId: admin.id, contentVersionId: nonEmpty.id });
+      await content.deleteContentVersion({ expectedRevision: await contentRev({ contentVersionId: nonEmpty.id }), actorId: admin.id, contentVersionId: nonEmpty.id });
       assert.equal(await prisma.contentVersion.findUnique({ where: { id: nonEmpty.id } }), null);
     });
 
@@ -628,7 +664,7 @@ async function main() {
       );
       try {
         await expectError(
-          () => content.updateContentVersion({ actorId: admin.id, contentVersionId: rollbackUpdate.id, patch: { changeNotes: "must rollback" } }),
+          async () => content.updateContentVersion({ expectedRevision: await contentRev({ contentVersionId: rollbackUpdate.id }), actorId: admin.id, contentVersionId: rollbackUpdate.id, patch: { changeNotes: "must rollback" } }),
           "CONTENT_INTERNAL_ERROR",
         );
       } finally {
@@ -637,7 +673,7 @@ async function main() {
       assert.equal((await prisma.contentVersion.findUniqueOrThrow({ where: { id: rollbackUpdate.id } })).changeNotes, null);
     });
 
-    await content.createContentLocalization({
+    await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: rollbackUpdate.id }),
       actorId: admin.id,
       contentVersionId: rollbackUpdate.id,
       locale: "es",
@@ -686,7 +722,7 @@ async function main() {
       );
       try {
         await expectError(
-          () => content.deleteContentVersion({ actorId: admin.id, contentVersionId: rollbackDelete.id }),
+          async () => content.deleteContentVersion({ expectedRevision: await contentRev({ contentVersionId: rollbackDelete.id }), actorId: admin.id, contentVersionId: rollbackDelete.id }),
           "CONTENT_INTERNAL_ERROR",
         );
       } finally {
@@ -696,7 +732,7 @@ async function main() {
     });
 
     const raceDraft = await content.createContentVersion({ actorId: admin.id, levelDefinitionId: foreignLevel.id });
-    await content.createContentLocalization({
+    await content.createContentLocalization({ expectedRevision: await contentRev({ contentVersionId: raceDraft.id }),
       actorId: admin.id,
       contentVersionId: raceDraft.id,
       locale: "fr",
@@ -787,7 +823,7 @@ async function main() {
     await check("47. feature flag can be disabled again without stale capture", async () => {
       process.env.CURRICULUM_V2_CONTENT_ENABLED = "false";
       await expectError(
-        () => content.deleteContentVersion({ actorId: admin.id, contentVersionId: rollbackDelete.id }),
+        async () => content.deleteContentVersion({ expectedRevision: await contentRev({ contentVersionId: rollbackDelete.id }), actorId: admin.id, contentVersionId: rollbackDelete.id }),
         "CONTENT_DISABLED",
       );
       process.env.CURRICULUM_V2_CONTENT_ENABLED = "true";

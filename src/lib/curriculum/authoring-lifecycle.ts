@@ -29,7 +29,7 @@
 import { Prisma } from "@prisma/client";
 import type { EditorialState } from "@prisma/client";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
-import { AuthoringDomainError } from "@/lib/curriculum/authoring-errors";
+import { AuthoringDomainError, isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { prisma } from "@/lib/prisma";
 
 type DbClient = Prisma.TransactionClient;
@@ -361,6 +361,68 @@ export function violatesSelfApproval(
  * `archivedAt` or `LevelResourceBinding`.
  */
 export async function approveVersion(input: {
+  kind: AuthoringTargetKind;
+  id: number;
+  expectedRevision: number;
+  actorId: number;
+  validationPassed: boolean;
+}): Promise<LifecycleResult> {
+  try {
+    return await approveVersionInTransaction(input);
+  } catch (error) {
+    // PHASE-G0 CORRECTION — a four-eyes refusal is now observable.
+    //
+    // WHY THE WRITE IS OUTSIDE THE REFUSED TRANSACTION. Recording it INSIDE
+    // would have been useless: the refusal throws, the transaction rolls back,
+    // and the audit row rolls back with it. So the row is written here, after
+    // the refusal is already final and irreversible.
+    //
+    // WHY THIS IS SAFE RATHER THAN THE "dangerous out-of-transaction write" the
+    // correction warns about. This path runs ONLY on the throw, so it can never
+    // manufacture an audit row for an approval that succeeded; it cannot affect
+    // the outcome, because the original error is rethrown unconditionally; and
+    // if the audit write itself fails, the result is a refusal with no record —
+    // exactly today's behaviour, never a refusal turned into a success. It is
+    // strictly additive observability, not a second audit subsystem.
+    //
+    // WHAT IT CARRIES: actor, target, action, reason, time. NO draft content and
+    // no note prose, because an operator answering "who tried to approve their
+    // own work" needs identities, not a copy of the lesson.
+    if (isAuthoringDomainError(error, "AUTHORING_SELF_APPROVAL_FORBIDDEN")) {
+      await recordSelfApprovalRefusal(input).catch(() => {
+        // Deliberately swallowed. The refusal is the product outcome and must
+        // surface unchanged even if the observability write cannot be made.
+      });
+    }
+    throw error;
+  }
+}
+
+async function recordSelfApprovalRefusal(input: {
+  kind: AuthoringTargetKind;
+  id: number;
+  expectedRevision: number;
+  actorId: number;
+}): Promise<void> {
+  const current = await prisma.$transaction((tx) => loadAggregate(tx, input.kind, input.id));
+  await prisma.auditLog.create({
+    data: {
+      userId: input.actorId,
+      action: CURRICULUM_AUDIT_ACTIONS.authoringSelfApprovalRefused,
+      entityType: ENTITY_TYPE[input.kind],
+      entityId: String(input.id),
+      metadata: {
+        kind: input.kind,
+        revision: input.expectedRevision,
+        reason: "AUTHORING_SELF_APPROVAL_FORBIDDEN",
+        authoredBy: current.lastAuthoredById,
+        submittedBy: current.submittedById,
+      },
+    },
+  });
+}
+
+async function approveVersionInTransaction(input: {
   kind: AuthoringTargetKind;
   id: number;
   expectedRevision: number;

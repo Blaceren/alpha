@@ -30,6 +30,11 @@ import {
   validateAssessmentPublication,
 } from "@/lib/curriculum/assessment-validation";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
+import {
+  guardAggregateChildMutation,
+  guardAggregateSelfMutation,
+} from "@/lib/curriculum/authoring-mutation-guard";
+import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { isCurriculumV2AssessmentEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
@@ -205,6 +210,9 @@ async function runSanitized<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (isAssessmentDomainError(error)) throw error;
+    // PHASE-G0 CORRECTION — see the identical note in content.ts. An authoring
+    // refusal is a product answer and must not be flattened into a 500.
+    if (isAuthoringDomainError(error)) throw error;
     throw new AssessmentDomainError("ASSESSMENT_INTERNAL_ERROR", "assessment operation failed");
   }
 }
@@ -280,6 +288,16 @@ export async function updateAssessmentVersion(input: unknown): Promise<Assessmen
     await assertAssessmentAdmin(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     const patch = stripUndefined(data.patch);
     if (!patchHasChanges(assessment as unknown as Record<string, unknown>, patch)) {
       throw new AssessmentDomainError("ASSESSMENT_NO_CHANGES", "assessment update has no changes");
@@ -313,6 +331,14 @@ export async function deleteAssessmentVersion(input: unknown): Promise<Assessmen
     await assertAssessmentAdmin(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
+    // PHASE-G0 CORRECTION — deleting the aggregate cannot bump its own
+    // revision, but the editorial state and expected revision are still
+    // checked so an approved bank can never be erased outright.
+    await guardAggregateSelfMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+    });
     const [questions, bindings, attempts] = await Promise.all([
       tx.questionDefinition.count({ where: { assessmentVersionId: assessment.id } }),
       tx.levelResourceBinding.count({ where: { assessmentVersionId: assessment.id } }),
@@ -351,6 +377,16 @@ export async function createAssessmentQuestion(input: unknown): Promise<Question
     await assertAssessmentAdmin(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     let created: QuestionDefinition;
     try {
       created = await tx.questionDefinition.create({
@@ -389,7 +425,17 @@ export async function updateAssessmentQuestion(input: unknown): Promise<Question
   const data = parseAssessmentCommand(updateAssessmentQuestionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
     await assertAssessmentAdmin(data.actorId, tx);
-    const { question } = await loadQuestion(data.questionDefinitionId, tx);
+    const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     const type = data.patch.type ?? question.type;
     const canonical = canonicalizeQuestion(
       type,
@@ -438,7 +484,17 @@ export async function deleteAssessmentQuestion(input: unknown): Promise<Question
   const data = parseAssessmentCommand(deleteAssessmentQuestionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
     await assertAssessmentAdmin(data.actorId, tx);
-    const { question } = await loadQuestion(data.questionDefinitionId, tx);
+    const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     if (await tx.questionLocalization.count({ where: { questionId: question.id } })) {
       throw new AssessmentDomainError(
         "ASSESSMENT_QUESTION_CONFLICT",
@@ -473,7 +529,17 @@ export async function createQuestionLocalization(input: unknown): Promise<Questi
   const data = parseAssessmentCommand(createQuestionLocalizationSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
     await assertAssessmentAdmin(data.actorId, tx);
-    const { question } = await loadQuestion(data.questionDefinitionId, tx);
+    const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     assertLocalizationComplete(question, data);
     let created: QuestionLocalization;
     try {
@@ -516,7 +582,17 @@ export async function updateQuestionLocalization(input: unknown): Promise<Questi
     if (!localization) {
       throw new AssessmentDomainError("ASSESSMENT_LOCALIZATION_NOT_FOUND", "localization does not exist");
     }
-    const { question } = await loadQuestion(localization.questionId, tx);
+    const { question, assessment } = await loadQuestion(localization.questionId, tx);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     const merged = {
       prompt: data.patch.prompt ?? localization.prompt,
       optionLabels: data.patch.optionLabels === undefined ? localization.optionLabels : data.patch.optionLabels,
@@ -564,7 +640,17 @@ export async function deleteQuestionLocalization(input: unknown): Promise<Questi
     if (!localization) {
       throw new AssessmentDomainError("ASSESSMENT_LOCALIZATION_NOT_FOUND", "localization does not exist");
     }
-    const { question } = await loadQuestion(localization.questionId, tx);
+    const { question, assessment } = await loadQuestion(localization.questionId, tx);
+    // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
+    // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
+    // refuses a stale writer, moves the revision and records the
+    // server-resolved actor as the substantive author, in this transaction.
+    await guardAggregateChildMutation(tx, {
+      kind: "assessment",
+      aggregateId: assessment.id,
+      expectedRevision: data.expectedRevision,
+      actorId: data.actorId,
+    });
     let deleted: QuestionLocalization;
     try {
       deleted = await tx.questionLocalization.delete({ where: { id: localization.id } });

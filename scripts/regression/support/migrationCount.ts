@@ -19,6 +19,11 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * PHASE-G0 CORRECTION: 43 -> 44. One additive migration,
+ * `20260808120000_authoring_foundation_corrections`, which adds the durable
+ * video/assessment link table and the preview snapshot's video pin. The G0
+ * migration file itself is untouched.
+ *
  * PHASE-G0: 41 -> 43. TWO migrations, not one. The authoring foundation adds
  * `20260808000000_authoring_foundation`, and the constant was ALREADY one behind
  * before this phase started — `20260807000000_staging_attestation` landed
@@ -27,7 +32,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 43;
+export const EXPECTED_MIGRATION_COUNT = 44;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;
