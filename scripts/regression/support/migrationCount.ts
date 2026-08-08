@@ -18,8 +18,16 @@
  * migration — one nobody intended to add — fails the gate.
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
+ *
+ * PHASE-G0: 41 -> 43. TWO migrations, not one. The authoring foundation adds
+ * `20260808000000_authoring_foundation`, and the constant was ALREADY one behind
+ * before this phase started — `20260807000000_staging_attestation` landed
+ * without bumping it, so the five assertions that read this value had been
+ * failing on the accepted Phase-F base and were guarding nothing, exactly the
+ * decay this file was created to stop. Correcting the drift here is what makes
+ * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 41;
+export const EXPECTED_MIGRATION_COUNT = 43;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

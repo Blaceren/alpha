@@ -1516,17 +1516,21 @@ async function main() {
   /* K. Migration and schema                                             */
   /* ------------------------------------------------------------------ */
 
-  await check("K1 the canonical migration count is 41 and matches the directory", () => {
+  await check("K1 the canonical migration count matches the directory", () => {
     const entries = fs
       .readdirSync(path.join(projectRoot, "prisma", "migrations"), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
-    assert.equal(EXPECTED_MIGRATION_COUNT, 41);
+    // PHASE-G0: the literal was pinned to 41 while the repository had already
+    // reached 42, so this assertion had been failing on the accepted base and
+    // guarded nothing. The count now lives ONLY in the shared constant, which
+    // is the arrangement scripts/regression/support/migrationCount.ts exists to
+    // enforce -- a second hand-written copy here is what let it drift.
     assert.equal(entries.length, EXPECTED_MIGRATION_COUNT);
     assert.ok(entries.includes(MIGRATION_NAME));
   });
 
-  await check("K2 the applied database reports 41 migrations", async () => {
+  await check("K2 the applied database reports the canonical migration count", async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
       'SELECT COUNT(*) AS c FROM "_prisma_migrations" WHERE "rolled_back_at" IS NULL',
     );
@@ -1705,9 +1709,14 @@ async function main() {
         `${permission} must NOT be in the live permission matrix`,
       );
     }
-    // The accepted eleven are untouched, in their canonical order.
-    assert.equal(roles.CRM_PERMISSIONS.length, 11);
+    // The accepted eleven are untouched, in their canonical order. PHASE-G0
+    // appended three curriculum permissions AFTER them, so position 10 still
+    // means what it meant and no Agent Core permission has appeared.
     assert.equal(roles.CRM_PERMISSIONS[10], "view_affiliate_analytics");
+    assert.deepEqual(roles.CRM_PERMISSIONS.slice(11), [
+      "curriculum_read", "curriculum_author", "curriculum_approve",
+    ]);
+    assert.equal(roles.CRM_PERMISSIONS.length, 14);
   });
 
   await check("K12 no Agent Core column name matches a forbidden fragment", async () => {

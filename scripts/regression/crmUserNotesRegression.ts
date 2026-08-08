@@ -1104,15 +1104,17 @@ async function main() {
 
     /* --------------------------------------------- 86-88 permission contract */
 
-    await check("86. the canonical permission list has exactly eleven entries", () => {
-      // AFD-5A appended view_affiliate_analytics. What Notes v1 needs to stay
-      // true is that ITS two permissions keep their positions, which the slice
-      // below pins independently of the total.
-      assert.equal(CRM_PERMISSIONS.length, 11);
+    await check("86. the canonical permission list has exactly fourteen entries", () => {
+      // AFD-5A appended view_affiliate_analytics. PHASE-G0 appended the three
+      // curriculum-authoring permissions. What Notes v1 needs to stay true is
+      // that ITS two permissions keep their positions, which the slice below
+      // pins independently of the total.
+      assert.equal(CRM_PERMISSIONS.length, 14);
       assert.deepEqual([...CRM_PERMISSIONS], [
         "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
         "export", "view_audit", "manage_settings", "edit_user_notes",
         "view_user_notes", "create_user_notes", "view_affiliate_analytics",
+        "curriculum_read", "curriculum_author", "curriculum_approve",
       ]);
       assert.deepEqual(CRM_PERMISSIONS.slice(8, 10), ["view_user_notes", "create_user_notes"]);
     });

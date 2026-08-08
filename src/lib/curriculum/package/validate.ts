@@ -186,7 +186,18 @@ function issue(list: PackageIssue[], code: string, path: string, message: string
   list.push({ code, path, message });
 }
 
-function containsPlaceholder(value: string): string | null {
+/**
+ * The ONE placeholder matcher in this codebase.
+ *
+ * PHASE-G0 exported it — the body and the marker table are unchanged. The
+ * authoring validator (`authoring-validation.ts`) needs exactly this check on a
+ * draft that has never been near a package, and the alternative was a second
+ * regex in the authoring path. That is precisely how the Unicode bug documented
+ * at the top of this file happened: two matchers drift, one of them loses its
+ * Russian markers, and «Скоро будет доступно» ships to a learner. There is one
+ * matcher, and every caller uses it.
+ */
+export function containsPlaceholder(value: string): string | null {
   return PLACEHOLDER_MARKERS.find((entry) => entry.pattern.test(value))?.marker ?? null;
 }
 

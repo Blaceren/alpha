@@ -117,4 +117,18 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportAttachmentAvailable: "CURRICULUM_REPORT_ATTACHMENT_AVAILABLE",
   reportAttachmentDeleted: "CURRICULUM_REPORT_ATTACHMENT_DELETED",
   reportAttachmentRejected: "CURRICULUM_REPORT_ATTACHMENT_REJECTED",
+
+  // PHASE-G0 — the EDITORIAL axis. These are deliberately distinct from the
+  // CONTENT_VERSION_PUBLISHED / ASSESSMENT_VERSION_PUBLISHED actions above:
+  // those record a RUNTIME activation, these record a HUMAN editorial decision,
+  // and an operator reading the trail must never have to guess which happened.
+  // `AUTHORING_APPROVED` in particular never implies publication.
+  authoringSubmittedForReview: "AUTHORING_SUBMITTED_FOR_REVIEW",
+  authoringChangesRequested: "AUTHORING_CHANGES_REQUESTED",
+  authoringApproved: "AUTHORING_APPROVED",
+  authoringReviewNoteAdded: "AUTHORING_REVIEW_NOTE_ADDED",
+  authoringReviewNoteResolved: "AUTHORING_REVIEW_NOTE_RESOLVED",
+  authoringVideoProductionCreated: "AUTHORING_VIDEO_PRODUCTION_CREATED",
+  authoringVideoProductionUpdated: "AUTHORING_VIDEO_PRODUCTION_UPDATED",
+  authoringVideoProductionBootstrapped: "AUTHORING_VIDEO_PRODUCTION_BOOTSTRAPPED",
 } as const;

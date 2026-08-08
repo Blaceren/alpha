@@ -53,11 +53,17 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "manage_settings", "edit_user_notes",
     "view_user_notes", "create_user_notes", "view_affiliate_analytics",
+    // PHASE-G0: the only role holding `manage_settings`, this matrix's marker
+    // for "owns configuration", and therefore the only approving role.
+    "curriculum_read", "curriculum_author", "curriculum_approve",
   ],
   crm_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
     "export", "view_audit", "edit_user_notes",
     "view_user_notes", "create_user_notes", "view_affiliate_analytics",
+    // PHASE-G0: read only. It holds `view_audit` (broad supervisory read) but
+    // NOT `manage_settings`, so it may inspect authoring and never decide it.
+    "curriculum_read",
   ],
   retention_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
@@ -69,8 +75,10 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
   moderator: [],
   // AFD-5A: analyst's first and only permission. Read-only by construction.
   analyst: ["view_affiliate_analytics"],
-  content_manager: [],
-  read_only: [],
+  // PHASE-G0: content_manager's first permissions. Authors, never approves.
+  content_manager: ["curriculum_read", "curriculum_author"],
+  // PHASE-G0: read_only's first permission, and the only kind it may hold.
+  read_only: ["curriculum_read"],
 };
 
 async function main() {
@@ -104,17 +112,19 @@ async function main() {
     assert.equal(new Set(CRM_STAFF_ROLES).size, 9);
   });
 
-  await check("4. CrmPermission has exactly eleven unique canonical values", () => {
+  await check("4. CrmPermission has exactly fourteen unique canonical values", () => {
     // Notes v1 appended view_user_notes and create_user_notes. AFD-5A appended
-    // view_affiliate_analytics. The accepted first eight keep their exact
-    // previous relative order, and so do the two Notes v1 entries — every
+    // view_affiliate_analytics. PHASE-G0 appended the three curriculum-authoring
+    // permissions. The accepted first eight keep their exact previous relative
+    // order, and so do the two Notes v1 entries and the AFD-5A entry — every
     // addition APPENDS, so no existing position ever changes meaning.
-    assert.equal(CRM_PERMISSIONS.length, 11);
-    assert.equal(new Set(CRM_PERMISSIONS).size, 11);
+    assert.equal(CRM_PERMISSIONS.length, 14);
+    assert.equal(new Set(CRM_PERMISSIONS).size, 14);
     assert.deepEqual([...CRM_PERMISSIONS], [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
       "view_user_notes", "create_user_notes", "view_affiliate_analytics",
+      "curriculum_read", "curriculum_author", "curriculum_approve",
     ]);
     assert.deepEqual(CRM_PERMISSIONS.slice(0, 8), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
@@ -124,6 +134,11 @@ async function main() {
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
       "view_user_notes", "create_user_notes",
+    ]);
+    assert.deepEqual(CRM_PERMISSIONS.slice(0, 11), [
+      "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
+      "export", "view_audit", "manage_settings", "edit_user_notes",
+      "view_user_notes", "create_user_notes", "view_affiliate_analytics",
     ]);
   });
 
@@ -140,11 +155,13 @@ async function main() {
   await check("7. effectivePermissions are returned in stable canonical order", () => {
     // crm_admin lists every permission; the resolver must echo canonical order.
     assert.deepEqual(resolveEffectivePermissions("crm_admin"), [...CRM_PERMISSIONS]);
-    // crm_manager keeps canonical order even though manage_settings is skipped.
+    // crm_manager keeps canonical order even though manage_settings is skipped,
+    // and PHASE-G0's curriculum_read lands after it in canonical order rather
+    // than beside the other permissions the role happens to hold.
     assert.deepEqual(resolveEffectivePermissions("crm_manager"), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "edit_user_notes", "view_user_notes", "create_user_notes",
-      "view_affiliate_analytics",
+      "view_affiliate_analytics", "curriculum_read",
     ]);
     // analyst holds exactly the AFD-5A read permission and nothing else — in
     // particular NOT manage_settings, which is what makes it read-only.
@@ -158,8 +175,8 @@ async function main() {
     }
   });
 
-  await check("9. crm_admin receives all eleven permissions", () => {
-    assert.equal(resolveEffectivePermissions("crm_admin").length, 11);
+  await check("9. crm_admin receives all fourteen permissions", () => {
+    assert.equal(resolveEffectivePermissions("crm_admin").length, 14);
   });
 
   await check("10. crm_manager does not receive manage_settings", () => {
@@ -168,7 +185,12 @@ async function main() {
     // AFD-5A added view_affiliate_analytics: crm_manager is the only non-admin
     // role holding view_audit, this matrix's marker for broad supervisory read.
     assert.ok(perms.includes("view_affiliate_analytics"));
-    assert.equal(perms.length, 10);
+    // PHASE-G0 added curriculum_read, and deliberately NOT curriculum_approve:
+    // approval follows manage_settings, which crm_manager does not hold.
+    assert.ok(perms.includes("curriculum_read"));
+    assert.ok(!perms.includes("curriculum_author"));
+    assert.ok(!perms.includes("curriculum_approve"));
+    assert.equal(perms.length, 11);
   });
 
   await check("11. retention_manager receives neither view_audit nor manage_settings", () => {
@@ -185,13 +207,42 @@ async function main() {
     ]);
   });
 
-  await check("13. mentor, moderator, content_manager, read_only receive no permissions", () => {
-    // AFD-5A removed `analyst` from this list — it is now the designated
-    // analytics role and holds exactly one permission (asserted separately in
-    // 13b). Every other previously-empty role must STAY empty: the new read
-    // permission was a deliberate single grant, not a general loosening.
-    for (const role of ["mentor", "moderator", "content_manager", "read_only"]) {
+  await check("13. mentor and moderator still receive no permissions at all", () => {
+    // AFD-5A removed `analyst` from this list. PHASE-G0 removed
+    // `content_manager` and `read_only`, which now hold curriculum permissions
+    // (asserted in 13c). `mentor` and `moderator` must STAY empty: every grant
+    // so far has been a deliberate single decision, never a general loosening,
+    // and a mentor reviews LEARNERS rather than the curriculum.
+    for (const role of ["mentor", "moderator"]) {
       assert.deepEqual(resolveEffectivePermissions(role), [], `role ${role}`);
+    }
+  });
+
+  await check("13c. PHASE-G0 curriculum grants are exactly the decided ones", () => {
+    // content_manager authors and may NEVER approve — the four-eyes split.
+    assert.deepEqual(resolveEffectivePermissions("content_manager"), [
+      "curriculum_read", "curriculum_author",
+    ]);
+    // read_only holds a read permission and nothing that can mutate.
+    assert.deepEqual(resolveEffectivePermissions("read_only"), ["curriculum_read"]);
+
+    // Exactly ONE role may approve, and it is the one holding manage_settings.
+    const approvers = CRM_STAFF_ROLES.filter((role) =>
+      resolveEffectivePermissions(role).includes("curriculum_approve"),
+    );
+    assert.deepEqual(approvers, ["crm_admin"]);
+    for (const role of approvers) {
+      assert.ok(
+        resolveEffectivePermissions(role).includes("manage_settings"),
+        "approval must follow the matrix's own authority marker",
+      );
+    }
+
+    // Nobody learner-facing may author or approve.
+    for (const role of ["mentor", "support", "moderator", "analyst", "retention_manager"]) {
+      const perms = resolveEffectivePermissions(role);
+      assert.ok(!perms.includes("curriculum_author"), `${role} must not author`);
+      assert.ok(!perms.includes("curriculum_approve"), `${role} must not approve`);
     }
   });
 

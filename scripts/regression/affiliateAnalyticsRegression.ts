@@ -562,12 +562,17 @@ async function main() {
   // the number is typed by hand rather than counted from the directory. The
   // migration it now expects is the additive Agent Core foundation, which adds
   // nine tables and changes nothing this suite measures.
-  await check("G1 the canonical migration count is 41 and matches the directory", () => {
+  await check("G1 the canonical migration count matches the directory", () => {
     const entries = fs
       .readdirSync(path.join(projectRoot, "prisma", "migrations"), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
-    assert.equal(EXPECTED_MIGRATION_COUNT, 41);
+    // PHASE-G0: the hand-written literal is gone. It was pinned to 41 while the
+    // repository had already reached 42, so this assertion had been failing on
+    // the accepted base and guarded nothing. The count lives ONLY in the shared
+    // constant now, which is exactly the arrangement
+    // scripts/regression/support/migrationCount.ts exists to enforce -- a second
+    // copy beside it is what let it drift in the first place.
     assert.equal(entries.length, EXPECTED_MIGRATION_COUNT);
     assert.ok(entries.includes("20260801000000_analytics_event_date_indexes"));
     assert.ok(entries.includes("20260804000000_agent_core_foundation"));

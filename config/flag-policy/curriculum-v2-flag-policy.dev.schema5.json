@@ -1,6 +1,6 @@
 {
-  "schema": "ata.curriculum-v2.flag-policy/5",
-  "description": "PRODUCT-RC-1 ACTIVE DEV profile (schema/5). Identical in effect to the accepted DEVACT-1 schema/4 profile, plus DECLARATIONS for AFD-4's two first-deposit keys so that writing them down is legal. POCKET_FIRST_DEPOSIT_ENABLED is a capability this profile FORBIDS (real Pocket goal=dep is not activated here); absence and an explicit false are BOTH accepted, because this file must validate the current DEV environment unchanged. POCKET_DEPOSIT_CURRENCY is enumerated and is a violation unless the capability above is enabled, so a currency can never be the thing that appears to switch deposit processing on. See the preprod profile for the stricter variant that additionally requires the denial to be on the record.",
+  "schema": "ata.curriculum-v2.flag-policy/6",
+  "description": "PRODUCT-RC-1 ACTIVE DEV profile (schema/5). Identical in effect to the accepted DEVACT-1 schema/4 profile, plus DECLARATIONS for AFD-4's two first-deposit keys so that writing them down is legal. POCKET_FIRST_DEPOSIT_ENABLED is a capability this profile FORBIDS (real Pocket goal=dep is not activated here); absence and an explicit false are BOTH accepted, because this file must validate the current DEV environment unchanged. POCKET_DEPOSIT_CURRENCY is enumerated and is a violation unless the capability above is enabled, so a currency can never be the thing that appears to switch deposit processing on. See the preprod profile for the stricter variant that additionally requires the denial to be on the record. -- PHASE-G0 declares CURRICULUM_V2_ADMIN_ENABLED optional-explicit rather than required-false. It is the flag that reaches the 87 accepted curriculum admin endpoints the staff Authoring Studio is built on, so the policy has to be able to AUTHORISE its activation instead of forbidding it -- otherwise turning the studio on would always mean editing the policy in the same breath, and the policy would never be the thing that permitted the change. Optional-explicit keeps every safety property that mattered: the key stays KNOWN so the fail-closed unknown-CURRICULUM_V2_ rule is untouched, it must still be exactly true or false when written, and ABSENCE remains legal and remains OFF because isCurriculumV2AdminEnabled() requires the literal string true. Phase G0 sets it nowhere. Live preprod has no such key and stays that way. PHASE-G0 REGISTERS CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED WITHOUT ENABLING IT. Phase F introduced the key in src/lib/env.ts but no policy declared it, so under forbid_unknown_prefix any environment that wrote it -- even the honest false -- failed unknown-flag, exactly the hole schema/5 closed on the Pocket side. Declaring it required_false_or_absent fixes the gap and changes no live value: preprod does not carry the key, absence is legal here, and it stays off. Activation remains a separate, later, explicit phase.",
   "enabled_value": "true",
   "valid_boolean_values": [
     "false",
@@ -15,9 +15,12 @@
     "CURRICULUM_V2_REPORT_ENABLED"
   ],
   "required_false_or_absent": [
-    "CURRICULUM_V2_ADMIN_ENABLED",
+    "CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED",
     "CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED",
     "CURRICULUM_V2_XP_ENABLED"
+  ],
+  "optional_explicit_boolean": [
+    "CURRICULUM_V2_ADMIN_ENABLED"
   ],
   "forbid_unknown_prefix": "CURRICULUM_V2_",
   "pocket_flag": "POCKET_POSTBACK_ENABLED",

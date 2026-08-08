@@ -157,10 +157,23 @@ async function main() {
       const contentColumns = (await prisma!.$queryRawUnsafe<Array<{ name: string }>>(
         'PRAGMA table_info("ContentVersion")',
       )).map((column) => column.name);
-      assert.deepEqual(contentColumns, [
+      // The TWELVE Phase-4 columns, in their exact accepted order and
+      // positions. PHASE-G0's authoring foundation is purely ADDITIVE, so what
+      // this check must keep proving is that none of them moved, was renamed or
+      // was dropped — a prefix comparison says that more precisely than an
+      // equality that has to be rewritten for every future additive phase.
+      const phase4ContentColumns = [
         "id", "levelDefinitionId", "curriculumVersionId", "versionNumber", "status",
         "videoDurationSeconds", "createdById", "createdAt", "updatedAt", "publishedAt",
         "archivedAt", "changeNotes",
+      ];
+      assert.deepEqual(contentColumns.slice(0, phase4ContentColumns.length), phase4ContentColumns);
+      // PHASE-G0 — the editorial axis, appended after them. `status` above is
+      // the RUNTIME axis and is deliberately untouched by any of these.
+      assert.deepEqual(contentColumns.slice(phase4ContentColumns.length), [
+        "revision", "editorialState", "lastAuthoredById", "lastAuthoredAt",
+        "submittedById", "submittedAt", "changesRequestedById", "changesRequestedAt",
+        "approvedById", "approvedAt",
       ]);
       const schema = fs.readFileSync(path.join(process.cwd(), "prisma", "schema.prisma"), "utf8");
       for (const value of ["single_choice", "multiple_choice", "true_false", "ordered_steps", "scenario_choice", "numeric", "chart_choice"]) {

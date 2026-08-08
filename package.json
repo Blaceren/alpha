@@ -145,7 +145,9 @@
     "test:regression:atlas-matrix": "tsx scripts/regression/atlasMatrixIntegrityRegression.ts",
     "test:regression:atlas-security": "tsx scripts/regression/atlasSecurityAdversarialRegression.ts",
     "test:regression:curriculum-phase-f": "tsx scripts/regression/curriculumPhaseFRegression.ts",
-    "test:regression:curriculum-phase-f-registration": "tsx scripts/regression/curriculumPhaseFRegistrationE2E.ts"
+    "test:regression:curriculum-phase-f-registration": "tsx scripts/regression/curriculumPhaseFRegistrationE2E.ts",
+    "test:regression:authoring-foundation": "tsx scripts/regression/curriculumAuthoringFoundationRegression.ts",
+    "test:regression:authoring-migration": "tsx scripts/regression/curriculumAuthoringMigrationRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

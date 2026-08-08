@@ -66,6 +66,33 @@
  *      configuration an operator will read as "deposits are configured", and an
  *      unrecognised currency must never reach money-recording code at all.
  *
+ * PHASE-G0 — SCHEMA/6 ADDS ONE OPTIONAL FIELD: `optional_explicit_boolean`.
+ *
+ * WHY IT WAS NEEDED. Before it, a CURRICULUM_V2_ key had exactly two possible
+ * declarations: `required_true` or `required_false_or_absent`. There was no way
+ * to say "this environment MAY turn this on, deliberately, and must say so
+ * explicitly either way" — which is precisely the state
+ * CURRICULUM_V2_ADMIN_ENABLED needs for the staff Authoring Studio. Leaving it
+ * in `required_false_or_absent` meant activating the studio required editing the
+ * policy at the same moment as the environment, so the policy could never be the
+ * thing that authorised the change.
+ *
+ * WHAT IT DOES AND DOES NOT RELAX. A key listed here is KNOWN (so the
+ * fail-closed `unknown-flag` rule is fully preserved for every other
+ * CURRICULUM_V2_ key) and must still be exactly `true` or `false` when present
+ * (so a typo is still a violation). What it drops is only the POLARITY
+ * requirement. Absence remains legal and remains the default posture: a
+ * deployment that says nothing has the studio off, because
+ * `isCurriculumV2AdminEnabled()` requires the literal string "true".
+ *
+ * IT GRANTS NOTHING BY ITSELF. Listing a key here does not set it. Live preprod
+ * remains absent, and the authoring API stays 404 until an operator explicitly
+ * writes `true` in a later, separate activation phase.
+ *
+ * Backward compatible in both directions, like every schema addition before it:
+ * absent from a schema/5 policy it defaults to the empty list, and this
+ * evaluator scores a schema/4 or schema/5 policy byte-identically to before.
+ *
  * L4ID-1 — WHY THE POCKET SIDE IS NOW PREFIX-POLICED
  * Before this change exactly one Pocket key (POCKET_POSTBACK_ENABLED) was
  * known, and CURRICULUM_V2_ was the only prefix whose unknown members failed.
@@ -86,7 +113,10 @@ const ENABLED = policy.enabled_value;                 // "true"
 const VALID = new Set(policy.valid_boolean_values);   // {"false","true"}
 const REQ_TRUE = policy.required_true;
 const REQ_FALSE = policy.required_false_or_absent;
-const KNOWN = new Set([...REQ_TRUE, ...REQ_FALSE]);
+// PHASE-G0 — schema/6, optional and defaulting to the schema/5 behaviour.
+// Known, boolean-checked, but with NO polarity requirement.
+const OPTIONAL_EXPLICIT = policy.optional_explicit_boolean || [];
+const KNOWN = new Set([...REQ_TRUE, ...REQ_FALSE, ...OPTIONAL_EXPLICIT]);
 const PREFIX = policy.forbid_unknown_prefix;          // "CURRICULUM_V2_"
 
 // Backward compatible: a schema/1 policy declaring only `pocket_flag` still
@@ -120,6 +150,17 @@ function inScope(key) {
     if (CP_PREFIX && key.startsWith(CP_PREFIX)) return true;
   }
   return false;
+}
+
+// PHASE-G0 — a key may not carry two contradictory declarations. Without this,
+// listing a key in both `required_false_or_absent` and `optional_explicit_boolean`
+// would silently keep the stricter rule, and an operator reading the policy
+// would believe the key was theirs to set.
+for (const key of OPTIONAL_EXPLICIT) {
+  if (REQ_TRUE.includes(key) || REQ_FALSE.includes(key)) {
+    console.error(`FAIL — configuration: ${key} is declared both as optional_explicit_boolean and with a required polarity`);
+    process.exit(1);
+  }
 }
 
 const input = fs.readFileSync(0, "utf8");

@@ -234,13 +234,30 @@ async function main() {
       assert.equal(reply.status, 401);
     });
 
-    await check("16. axis separation: UserRole admin + StaffRole read_only -> read_only, no permissions", async () => {
+    await check("16. axis separation: UserRole admin + StaffRole read_only -> read_only matrix", async () => {
       const client = new Client();
       await client.login("crm-axis@example.com");
       const reply = await client.request("GET", "/api/crm/v1/session");
       assert.equal(reply.status, 200);
       assert.equal(reply.body.role, "read_only");
-      assert.deepEqual(reply.body.effectivePermissions, []);
+      // THE PROPERTY UNDER TEST is axis separation: `UserRole=admin` must not
+      // leak CRM authority into the StaffRole axis. PHASE-G0 gave read_only its
+      // first permission, so "no permissions" is no longer the way to say that
+      // — the assertion is now that the session carries exactly the read_only
+      // matrix and nothing an admin would have.
+      assert.deepEqual(reply.body.effectivePermissions, resolveEffectivePermissions("read_only"));
+      assert.deepEqual(reply.body.effectivePermissions, ["curriculum_read"]);
+      for (const forbidden of [
+        "manage_settings",
+        "reveal_pii",
+        "curriculum_author",
+        "curriculum_approve",
+      ] as const) {
+        assert.ok(
+          !reply.body.effectivePermissions.includes(forbidden),
+          `UserRole=admin must not leak ${forbidden} into a read_only staff session`,
+        );
+      }
     });
 
     await check("17. StaffProfile is the CRM source of truth: UserRole support + StaffRole crm_manager -> crm_manager matrix", async () => {

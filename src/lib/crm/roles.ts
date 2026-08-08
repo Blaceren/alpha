@@ -34,6 +34,22 @@ export type CrmStaffRole = (typeof CRM_STAFF_ROLES)[number];
 // positions changes meaning. It grants nothing beyond reading: every affiliate
 // mutation continues to require `manage_settings`, which is deliberately NOT
 // broadened here.
+// PHASE-G0 appends the three curriculum-authoring permissions, again APPENDED
+// rather than inserted so the existing canonical order is untouched and no
+// client that pinned the first eleven positions changes meaning.
+//
+// THEY ARE THREE, NOT ONE, BECAUSE FOUR-EYES REVIEW NEEDS THEM SEPARATE.
+// `curriculum_read` is "may look at authoring surfaces", `curriculum_author` is
+// "may write a draft and submit it", `curriculum_approve` is "may accept work as
+// editorial truth". Collapsing author and approve into a single
+// `manage_curriculum` would make every editor their own reviewer, which is the
+// exact failure the self-approval rule exists to prevent -- and a rule enforced
+// in the domain but contradicted by the permission model is a rule waiting to be
+// argued away.
+//
+// NONE OF THEM IMPLIES ANOTHER. An approver who may not read would be a broken
+// contract, so the grant matrix below gives `curriculum_read` to every role that
+// holds either of the other two, explicitly, rather than by derivation.
 export const CRM_PERMISSIONS = [
   "view_exact_financials",
   "view_identity_full_email",
@@ -46,6 +62,9 @@ export const CRM_PERMISSIONS = [
   "view_user_notes",
   "create_user_notes",
   "view_affiliate_analytics",
+  "curriculum_read",
+  "curriculum_author",
+  "curriculum_approve",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -81,6 +100,42 @@ void _staffRoleParity;
 // Every other role is untouched. `mentor`, `support`, `moderator`,
 // `content_manager` and `read_only` receive nothing, and no role gains
 // `manage_settings`.
+// PHASE-G0 GRANT RULE FOR THE THREE CURRICULUM PERMISSIONS. Every grant below is
+// derivable from a marker the matrix ALREADY carries, never from intuition about
+// what a role name sounds like.
+//
+//   • `curriculum_approve` -> `crm_admin` ONLY.
+//     The matrix's own marker for "owns configuration rather than merely reads
+//     it" is `manage_settings`, and `crm_admin` is the ONLY role that holds it.
+//     Editorial approval is exactly that kind of authority: it decides what the
+//     product will teach. `crm_manager` was considered and DELIBERATELY
+//     EXCLUDED — it holds `view_audit`, which AFD-5A established as the marker
+//     for broad supervisory READ, not for authority, and it does not hold
+//     `manage_settings`. Granting approval on a read marker would be the first
+//     time this matrix widened an authority on a read discriminator.
+//
+//   • `curriculum_author` -> `content_manager` and `crm_admin`.
+//     `content_manager` is the accepted product decision for this phase and this
+//     is its FIRST permission, so the authoring gate demonstrably cannot be
+//     satisfied by any pre-existing grant. `crm_admin` receives it because an
+//     administrator who cannot fix a typo would route every correction through
+//     someone else — and the self-approval rule (see below) means this grant
+//     REMOVES rather than adds power in the case that matters: an admin who
+//     authors a revision can no longer approve that revision.
+//
+//   • `curriculum_read` -> the two roles above, plus `crm_manager` (holds
+//     `view_audit`, the established broad-supervisory-read marker) and
+//     `read_only`, whose entire product meaning is "may look, may not touch".
+//     `read_only` gaining its first permission is the point: a read-only role
+//     receiving a read permission cannot widen anything, and the regression
+//     proves it still cannot mutate.
+//
+// EXPLICITLY NOT GRANTED ANYTHING: `mentor`, `support`, `moderator`,
+// `retention_manager` and `analyst`. Mentors and support hold learner-facing
+// duties and must never gain authority over what the curriculum says. `analyst`
+// is the analytics role — `view_affiliate_analytics` is about affiliate traffic,
+// not about teaching material, so it implies nothing here. No role gains
+// `manage_settings`, and no existing grant is modified.
 export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials",
@@ -94,6 +149,9 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "view_user_notes",
     "create_user_notes",
     "view_affiliate_analytics",
+    "curriculum_read",
+    "curriculum_author",
+    "curriculum_approve",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -106,6 +164,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "view_user_notes",
     "create_user_notes",
     "view_affiliate_analytics",
+    "curriculum_read",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -119,7 +178,8 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
   ],
   // mentor holds nothing: an accepted product decision for Notes v1. Mentors
   // have no CRM permission today, so granting note access here would be a new
-  // expansion rather than a port of an existing grant.
+  // expansion rather than a port of an existing grant. PHASE-G0 keeps it that
+  // way — a mentor reviews LEARNERS, never the curriculum.
   mentor: [],
   support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
   moderator: [],
@@ -127,8 +187,10 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
   // Deliberately NOT `manage_settings`: an analyst may inspect configuration and
   // must not be able to change it.
   analyst: ["view_affiliate_analytics"],
-  content_manager: [],
-  read_only: [],
+  // PHASE-G0 — the content role's first permissions. Author, never approve.
+  content_manager: ["curriculum_read", "curriculum_author"],
+  // PHASE-G0 — read_only's first permission, and the only kind it may ever hold.
+  read_only: ["curriculum_read"],
 };
 
 // Server-side resolver — the only place effectivePermissions are computed.
@@ -230,4 +292,32 @@ export function canRevealLeadPii(permissions: readonly CrmPermission[]): boolean
 // read the history. This reuses the existing permission and broadens no role.
 export function canViewOwnerHistory(permissions: readonly CrmPermission[]): boolean {
   return permissions.includes("view_audit");
+}
+
+/* ------------------------------------------- Curriculum authoring PHASE-G0 */
+
+// The three curriculum-authoring gates. Each requires EXACTLY its own
+// permission, with no fallback and no implication chain.
+//
+// `manage_settings` is deliberately NOT an alternative for any of them, unlike
+// `canViewAffiliates` above. There the owner of a configuration surface plainly
+// had to be able to read it. Here, letting the general administration
+// permission stand in for `curriculum_approve` would silently reintroduce the
+// single-permission model these three were split to avoid, and would make the
+// four-eyes rule depend on which permission a caller happened to hold.
+//
+// Authorization is purely permission-based. No StaffRole name, no email, no
+// User.role and no client-supplied permission list is consulted here or by any
+// caller — the permission set always comes from `resolveEffectivePermissions`
+// applied to the STORED staff role.
+export function canReadCurriculumAuthoring(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("curriculum_read");
+}
+
+export function canAuthorCurriculum(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("curriculum_author");
+}
+
+export function canApproveCurriculum(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("curriculum_approve");
 }

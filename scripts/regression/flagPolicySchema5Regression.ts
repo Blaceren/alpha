@@ -281,9 +281,14 @@ check("14 an undeclared POCKET_ key still fails under schema/5", () => {
   assert.match(result.out, /unknown-pocket-flag POCKET_PARTNER_API_TOKEN/);
 });
 
-check("15 the CURRICULUM_V2_ contract is untouched", () => {
+check("15 the CURRICULUM_V2_ write-flag contract is untouched", () => {
+  // PHASE-G0 — CURRICULUM_V2_ADMIN_ENABLED moved OUT of this assertion and into
+  // check 22, because schema/6 deliberately makes it settable. Every OTHER
+  // property this check ever proved is unchanged and is still proved here: a
+  // required-false write flag may not be enabled, an undeclared CURRICULUM_V2_
+  // key still fails closed, and an honest false is still accepted.
   assert.equal(evaluate(withLines("CURRICULUM_V2_XP_ENABLED=true")).code, 1);
-  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=true")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED=true")).code, 1);
   assert.equal(evaluate(withLines("CURRICULUM_V2_NEW_THING=true")).code, 1);
   assert.equal(evaluate(withLines("CURRICULUM_V2_XP_ENABLED=false")).code, 0);
 });
@@ -330,8 +335,14 @@ check("19 the declared profiles are well-formed and say what they claim", () => 
   const dev = JSON.parse(fs.readFileSync(DEV_POLICY, "utf8")) as Record<string, unknown>;
   const pre = JSON.parse(fs.readFileSync(PREPROD_POLICY, "utf8")) as Record<string, unknown>;
 
-  assert.equal(dev.schema, "ata.curriculum-v2.flag-policy/5");
-  assert.equal(pre.schema, "ata.curriculum-v2.flag-policy/5");
+  // PHASE-G0 — the profiles are schema/6. The FILENAMES deliberately keep their
+  // `.schema5` suffix and this suite deliberately keeps its name: four accepted
+  // acceptance manifests (product-rc1, atlas-closure-afd5d2a, atlas-closure-afd5d3,
+  // agent-foundation-af1) record `test:regression:flag-policy-schema5` as a suite
+  // they ran, and renaming it would rewrite the history of phases that are already
+  // accepted. The suite tracks the CURRENT policy schema, whatever its number.
+  assert.equal(dev.schema, "ata.curriculum-v2.flag-policy/6");
+  assert.equal(pre.schema, "ata.curriculum-v2.flag-policy/6");
 
   for (const policy of [dev, pre]) {
     assert.ok((policy.pocket_flags as string[]).includes("POCKET_FIRST_DEPOSIT_ENABLED"));
@@ -385,6 +396,66 @@ check("21 the live policy file on disk is still schema/4 and untouched", () => {
   // modified the live control plane, which it is forbidden to do.
   const live = JSON.parse(fs.readFileSync(LIVE_POLICY, "utf8")) as { schema: string };
   assert.equal(live.schema, "ata.curriculum-v2.flag-policy/4");
+});
+
+/* ------------------------------------------- PHASE-G0 — schema/6 additions */
+
+check("22 optional-explicit is settable BOTH ways and still fails closed on junk", () => {
+  // The point of the schema/6 addition: an operator may deliberately activate
+  // the staff Authoring Studio, and may deliberately record that it is off.
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=true")).code, 0);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=false")).code, 0);
+
+  // Everything that made the old declaration safe is preserved. A typo is still
+  // a violation rather than being read as either polarity.
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=TRUE")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=1")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED=yes")).code, 1);
+});
+
+check("23 absence is still legal and still means OFF", () => {
+  // The default posture is unchanged: a deployment that says nothing has the
+  // authoring API disabled, because isCurriculumV2AdminEnabled() requires the
+  // literal string "true". Listing the key as optional grants nothing by itself.
+  assert.equal(evaluate(withLines()).code, 0);
+  const dev = JSON.parse(fs.readFileSync(DEV_POLICY, "utf8")) as Record<string, string[]>;
+  const pre = JSON.parse(fs.readFileSync(PREPROD_POLICY, "utf8")) as Record<string, string[]>;
+  for (const policy of [dev, pre]) {
+    assert.deepEqual(policy.optional_explicit_boolean, ["CURRICULUM_V2_ADMIN_ENABLED"]);
+    // A key may never carry two contradictory declarations.
+    assert.ok(!policy.required_true.includes("CURRICULUM_V2_ADMIN_ENABLED"));
+    assert.ok(!policy.required_false_or_absent.includes("CURRICULUM_V2_ADMIN_ENABLED"));
+  }
+});
+
+check("24 the Phase-F auto-enroll flag is REGISTERED but not enabled", () => {
+  const dev = JSON.parse(fs.readFileSync(DEV_POLICY, "utf8")) as Record<string, string[]>;
+  const pre = JSON.parse(fs.readFileSync(PREPROD_POLICY, "utf8")) as Record<string, string[]>;
+  for (const policy of [dev, pre]) {
+    assert.ok(
+      policy.required_false_or_absent.includes("CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED"),
+      "the key must be declared so an honest false stops failing unknown-flag",
+    );
+    assert.ok(
+      !policy.optional_explicit_boolean.includes("CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED"),
+      "registering it must NOT make it settable — activation is a separate phase",
+    );
+  }
+  // Registered means an honest denial is now expressible. It does NOT mean it
+  // may be turned on.
+  assert.equal(evaluate(withLines("CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED=false")).code, 0);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED=true")).code, 1);
+  // Absence stays legal, which is what keeps live preprod valid unchanged.
+  assert.equal(evaluate(withLines()).code, 0);
+});
+
+check("25 an unknown CURRICULUM_V2_ key still fails closed under schema/6", () => {
+  // The fail-closed inventory rule is the property the optional list must not
+  // have weakened. Adding one key to KNOWN must not admit any other.
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLE=true")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_AUTHORING_ENABLED=true")).code, 1);
+  assert.equal(evaluate(withLines("CURRICULUM_V2_ADMIN_ENABLED_EXTRA=false")).code, 1);
 });
 
 /* ------------------------------------------------------------- summary */

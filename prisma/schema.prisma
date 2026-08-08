@@ -161,6 +161,27 @@ model User {
   contentVersionsCreated          ContentVersion[]             @relation("ContentVersionCreator")
   assessmentVersionsCreated       AssessmentVersion[]          @relation("AssessmentVersionCreator")
   levelResourceBindingsCreated    LevelResourceBinding[]       @relation("LevelResourceBindingCreator")
+
+  // PHASE-G0 — the authoring-foundation attribution axes. Back-references only:
+  // User gains no column. Every one of these names a STAFF actor acting on
+  // curriculum authoring, never a learner acting on their own progress.
+  contentVersionsLastAuthored     ContentVersion[]             @relation("ContentVersionLastAuthor")
+  contentVersionsSubmitted        ContentVersion[]             @relation("ContentVersionSubmitter")
+  contentVersionsChangeRequested  ContentVersion[]             @relation("ContentVersionChangeRequester")
+  contentVersionsApproved         ContentVersion[]             @relation("ContentVersionApprover")
+  assessmentVersionsLastAuthored  AssessmentVersion[]          @relation("AssessmentVersionLastAuthor")
+  assessmentVersionsSubmitted     AssessmentVersion[]          @relation("AssessmentVersionSubmitter")
+  assessmentVersionsChangeRequested AssessmentVersion[]        @relation("AssessmentVersionChangeRequester")
+  assessmentVersionsApproved      AssessmentVersion[]          @relation("AssessmentVersionApprover")
+  videoProductionVersionsCreated  VideoProductionVersion[]     @relation("VideoProductionVersionCreator")
+  videoProductionVersionsLastAuthored VideoProductionVersion[] @relation("VideoProductionVersionLastAuthor")
+  videoProductionVersionsSubmitted VideoProductionVersion[]    @relation("VideoProductionVersionSubmitter")
+  videoProductionVersionsChangeRequested VideoProductionVersion[] @relation("VideoProductionVersionChangeRequester")
+  videoProductionVersionsApproved VideoProductionVersion[]     @relation("VideoProductionVersionApprover")
+  editorialReviewNotesAuthored    EditorialReviewNote[]        @relation("EditorialReviewNoteAuthor")
+  editorialReviewNotesResolved    EditorialReviewNote[]        @relation("EditorialReviewNoteResolver")
+  authoringPreviewSnapshotsCreated AuthoringPreviewSnapshot[]  @relation("AuthoringPreviewSnapshotCreator")
+
   assessmentAttempts              AssessmentAttempt[]          @relation("AssessmentAttemptUser")
   lessonProgress                  UserLessonProgress[]         @relation("UserLessonProgressUser")
   reportAssignmentsCreated        ReportAssignmentVersion[]    @relation("ReportAssignmentCreator")
@@ -878,6 +899,33 @@ enum ContentResourceStatus {
   archived
 }
 
+/**
+ * PHASE-G0 — the EDITORIAL axis, which is not the runtime axis.
+ *
+ * `ContentResourceStatus` above answers "is this version the one the runtime
+ * serves?". This enum answers "has a human editorial process accepted it?".
+ * They are deliberately independent, and `published` is deliberately NOT
+ * reinterpreted as editorial approval: a version can be approved and not yet
+ * bound to learners (the normal case, because approval must not publish), and a
+ * historical version can be published without anyone ever having reviewed it
+ * (every row that existed before this migration).
+ *
+ * WHAT THE MIGRATION DOES WITH HISTORY. Every pre-existing row — published or
+ * not — is defaulted to `draft`. That is the only honest option available:
+ * there is no reviewer, no submission and no approval timestamp anywhere in the
+ * database for those rows, so calling them `approved` would fabricate an
+ * approval that never happened, and the ATA-100 package's own 154 editorial
+ * gaps would silently read as closed. `draft` states the truth — "this content
+ * exists and no editorial decision is recorded for it" — and costs nothing at
+ * runtime, because the runtime reads `status`, never `editorialState`.
+ */
+enum EditorialState {
+  draft
+  submitted_for_review
+  changes_requested
+  approved
+}
+
 enum ContentAssetKind {
   video
   subtitles
@@ -1035,6 +1083,9 @@ model LevelDefinition {
   checkpointRequirement   LevelCheckpointRequirement?
   checkpointAttempts      CheckpointVerificationAttempt[]
   stagingAttestations     StagingAttestation[]
+  // PHASE-G0 — authoring foundation. Back-references only.
+  videoProductionVersions VideoProductionVersion[]
+  previewSnapshots        AuthoringPreviewSnapshot[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -1694,17 +1745,55 @@ model ContentVersion {
   publishedAt          DateTime?
   archivedAt           DateTime?
   changeNotes          String?
+
+  // ---------------------------------------------------------------- PHASE-G0
+  //
+  // AGGREGATE AUTHORING REVISION. `revision` covers this version AND every
+  // learner-content child under it — localizations and assets. A per-row
+  // revision would not have stopped the lost update it is here to stop: two
+  // editors working on the same lesson usually touch DIFFERENT children (one
+  // rewrites a block, one swaps an image), so per-row guards both succeed and
+  // the lesson still ends up in a state neither editor reviewed. Guarding the
+  // aggregate makes "the lesson changed under me" the observable event.
+  //
+  // `lastAuthoredById` is the four-eyes evidence, and it is the LATEST
+  // SUBSTANTIVE AUTHOR rather than the creator: it is rewritten by every
+  // mutation that bumps `revision`, so it always names the actor whose work is
+  // being approved. `createdById` above cannot serve this purpose — it is fixed
+  // at creation and says nothing about who wrote the text under review.
+  revision             Int                    @default(1)
+  editorialState       EditorialState         @default(draft)
+  lastAuthoredById     Int?
+  lastAuthoredAt       DateTime?
+  submittedById        Int?
+  submittedAt          DateTime?
+  changesRequestedById Int?
+  changesRequestedAt   DateTime?
+  approvedById         Int?
+  approvedAt           DateTime?
+
   levelDefinition      LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   createdBy            User?                  @relation("ContentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy       User?                  @relation("ContentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy          User?                  @relation("ContentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy   User?                  @relation("ContentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy           User?                  @relation("ContentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   localizations        ContentLocalization[]
   assets               ContentAsset[]
   resourceBindings     LevelResourceBinding[]
   lessonProgress       UserLessonProgress[]
+  reviewNotes          EditorialReviewNote[]  @relation("EditorialReviewNoteContent")
+  previewSnapshots     AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotContent")
 
   @@unique([id, levelDefinitionId])
   @@unique([levelDefinitionId, versionNumber])
   @@index([curriculumVersionId, status])
   @@index([createdById])
+  @@index([curriculumVersionId, editorialState])
+  @@index([lastAuthoredById])
+  @@index([submittedById])
+  @@index([changesRequestedById])
+  @@index([approvedById])
 }
 
 model ContentLocalization {
@@ -1760,16 +1849,44 @@ model AssessmentVersion {
   publishedAt         DateTime?
   archivedAt          DateTime?
   changeNotes         String?
+
+  // PHASE-G0 — the same aggregate revision and four-eyes evidence as
+  // ContentVersion. The aggregate here covers the questions, their
+  // localizations, the option set and the answer key, because a bank is only
+  // meaningful as a whole: approving question 3 while question 1's answer key
+  // moved underneath is exactly the failure this guards.
+  revision             Int                   @default(1)
+  editorialState       EditorialState        @default(draft)
+  lastAuthoredById     Int?
+  lastAuthoredAt       DateTime?
+  submittedById        Int?
+  submittedAt          DateTime?
+  changesRequestedById Int?
+  changesRequestedAt   DateTime?
+  approvedById         Int?
+  approvedAt           DateTime?
+
   levelDefinition     LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   createdBy           User?                  @relation("AssessmentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy      User?                  @relation("AssessmentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy         User?                  @relation("AssessmentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy  User?                  @relation("AssessmentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy          User?                  @relation("AssessmentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   questions           QuestionDefinition[]
   resourceBindings    LevelResourceBinding[]
   attempts            AssessmentAttempt[]
+  reviewNotes         EditorialReviewNote[]  @relation("EditorialReviewNoteAssessment")
+  previewSnapshots    AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotAssessment")
 
   @@unique([id, levelDefinitionId])
   @@unique([levelDefinitionId, versionNumber])
   @@index([curriculumVersionId, status])
   @@index([createdById])
+  @@index([curriculumVersionId, editorialState])
+  @@index([lastAuthoredById])
+  @@index([submittedById])
+  @@index([changesRequestedById])
+  @@index([approvedById])
 }
 
 model QuestionDefinition {
@@ -1824,6 +1941,207 @@ model LevelResourceBinding {
   @@index([assessmentVersionId])
   @@index([curriculumVersionId])
   @@index([createdById])
+}
+
+/**
+ * PHASE-G0 — the durable, editable video-production contract.
+ *
+ * WHY IT EXISTS. Until now the 58 ATA video contracts lived only in
+ * `curriculum/canonical/ata-video-production-contracts.v1.json`. A source file
+ * is the right home for provenance and for the bootstrap, and the wrong home
+ * for an authoring workflow: moving a lesson from SCRIPT_PENDING to
+ * SCRIPT_READY would have meant an engineering commit per editorial action.
+ *
+ * ONE WRITABLE FIELD. `contractPayload` holds the EXACT accepted contract shape
+ * — the same object `videoProductionContractSchema` parses out of the canonical
+ * file, no field invented, none dropped. Everything else on this row is either
+ * identity, lifecycle, or a SERVER-DERIVED projection of that payload. There is
+ * deliberately no second place to write a take, a question or a QA verdict, so
+ * the payload and the columns cannot disagree.
+ *
+ * THE DERIVED COLUMNS. `contractFingerprint`, `assessmentFingerprint` and
+ * `productionEvidenceStale` are computed on every write by
+ * `calculateContractFingerprint`, `calculateAssessmentFingerprint` and
+ * `isProductionEvidenceStale` — the EXISTING Phase-C functions, never a second
+ * implementation. `scriptState`, `videoState`, `qaState`, `sourceProvenance`,
+ * `levelNumber` and `contractVersion` are likewise copied out of the payload in
+ * the same transaction, purely so the readiness view can filter without
+ * deserialising 58 JSON documents. A caller may never supply any of them.
+ *
+ * WHAT IT DOES NOT DECIDE. `sourceProvenance` (SOURCE_BACKED / PROPOSED_CANON)
+ * is provenance and `editorialState` is approval. L18 is SOURCE_BACKED and NOT
+ * approved, and this row keeps those two facts in two columns precisely so they
+ * can never be conflated.
+ */
+model VideoProductionVersion {
+  id                    Int             @id @default(autoincrement())
+  levelDefinitionId     Int
+  curriculumVersionId   Int
+  versionNumber         Int
+  revision              Int             @default(1)
+  editorialState        EditorialState  @default(draft)
+
+  /// Denormalised from the payload for querying. Server-written, never accepted.
+  levelNumber           Int
+  contractVersion       Int
+  sourceProvenance      String
+  scriptState           String
+  videoState            String
+  qaState               String
+
+  /// The exact accepted contract object. The ONLY writable authoring surface here.
+  contractPayload       Json
+
+  /// Server-computed. `calculateContractFingerprint` / `calculateAssessmentFingerprint`.
+  contractFingerprint   String
+  assessmentFingerprint String
+  /// Server-computed. `isProductionEvidenceStale` at write time.
+  productionEvidenceStale Boolean       @default(false)
+
+  createdById           Int?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  lastAuthoredById      Int?
+  lastAuthoredAt        DateTime?
+  submittedById         Int?
+  submittedAt           DateTime?
+  changesRequestedById  Int?
+  changesRequestedAt    DateTime?
+  approvedById          Int?
+  approvedAt            DateTime?
+
+  levelDefinition       LevelDefinition @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy             User?           @relation("VideoProductionVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy        User?           @relation("VideoProductionVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy           User?           @relation("VideoProductionVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy    User?           @relation("VideoProductionVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy            User?           @relation("VideoProductionVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reviewNotes           EditorialReviewNote[] @relation("EditorialReviewNoteVideoProduction")
+
+  @@unique([levelDefinitionId, versionNumber])
+  @@index([curriculumVersionId, editorialState])
+  @@index([curriculumVersionId, levelNumber])
+  @@index([createdById])
+  @@index([lastAuthoredById])
+  @@index([submittedById])
+  @@index([changesRequestedById])
+  @@index([approvedById])
+}
+
+/**
+ * PHASE-G0 — append-only editorial review commentary.
+ *
+ * NOT `ReportReview`. That model reviews a LEARNER's submitted report, is keyed
+ * to a `ReportSubmission`, carries rubric scores and rejection reasons, and its
+ * rows are learner-visible evidence. This one reviews STAFF authoring work, is
+ * keyed to an authoring version, and is never shown to a learner. Reusing the
+ * learner model would have put staff commentary one join away from a learner
+ * surface, which is exactly the leak this domain must not have.
+ *
+ * THREE NULLABLE TARGETS, EXACTLY ONE SET. Prisma cannot express a tagged union
+ * across three foreign keys, so the constraint is enforced in the DATABASE by a
+ * CHECK in the migration and re-asserted by the domain before every insert. The
+ * alternative — one untyped integer plus a discriminator string — was rejected:
+ * it has no referential integrity at all, so a note could outlive its target or
+ * point at a row of the wrong kind and nothing would notice.
+ *
+ * `targetRevision` records the aggregate revision the note was written against,
+ * so a reviewer's "fix the third block" is still readable after the author
+ * bumped the aggregate, and the UI can mark it as possibly stale rather than
+ * silently reattributing it to new text.
+ *
+ * NO HARD DELETE IN THE NORMAL WORKFLOW. There is no `deletedAt` and the domain
+ * exposes no delete operation. A note is closed by `resolvedAt`/`resolvedById`,
+ * which preserves what was asked and who accepted it.
+ *
+ * NO LEARNER PII. There is no learner relation, no email, no name column. The
+ * body is bounded staff prose about a lesson.
+ */
+model EditorialReviewNote {
+  id                       Int       @id @default(autoincrement())
+
+  /// Exactly one of the three is non-null. Enforced by a CHECK constraint.
+  contentVersionId         Int?
+  assessmentVersionId      Int?
+  videoProductionVersionId Int?
+
+  /// Aggregate revision of the target at the moment the note was written.
+  targetRevision           Int
+  /// Optional bounded field/block path, e.g. `sections[2].blocks[0].alt`.
+  path                     String?
+  body                     String
+  /// The staff actor, as a canonical User id. Derived server-side, never accepted.
+  authorId                 Int
+  createdAt                DateTime  @default(now())
+  resolvedAt               DateTime?
+  resolvedById             Int?
+
+  contentVersion           ContentVersion?         @relation("EditorialReviewNoteContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion        AssessmentVersion?      @relation("EditorialReviewNoteAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  videoProductionVersion   VideoProductionVersion? @relation("EditorialReviewNoteVideoProduction", fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author                   User                    @relation("EditorialReviewNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  resolvedBy               User?                   @relation("EditorialReviewNoteResolver", fields: [resolvedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([contentVersionId, resolvedAt])
+  @@index([assessmentVersionId, resolvedAt])
+  @@index([videoProductionVersionId, resolvedAt])
+  @@index([authorId])
+  @@index([resolvedById])
+}
+
+/**
+ * PHASE-G0 — the immutable staff preview snapshot.
+ *
+ * WHY THE EXISTING VERSION IDS ARE NOT ENOUGH. A preview must render an EXACT
+ * draft state. Draft rows are mutable by design — that is what `revision` is
+ * for — and the previous state is not retained anywhere. So "preview
+ * ContentVersion 42" names a moving target: by the time the renderer reads it,
+ * revision N may already be N+1, and staff would review text that no longer
+ * exists while believing they reviewed what they clicked. Freezing the render
+ * payload is the only way to make the preview exact, so the table is required.
+ *
+ * `snapshotCode` IS AN IDENTIFIER, NOT A CREDENTIAL. It is opaque and unique so
+ * it can appear in a URL path, and it grants nothing: the preview route must
+ * still resolve the caller's session and re-check curriculum_read exactly as
+ * every other authoring surface does. No bearer secret is ever placed in a
+ * preview URL, and this column must never be treated as one.
+ *
+ * WHAT IS FROZEN. `payload` holds the already-normalised learner-facing render
+ * input, plus the asset table it references. It carries no internal production
+ * metadata, no correct answers and no learner data — a snapshot is what a
+ * learner would see, which is the whole point of previewing it.
+ *
+ * G0 SCOPE. The table and its integrity land here so the migration is done
+ * once. The creation domain and the Academy render route are G1.
+ */
+model AuthoringPreviewSnapshot {
+  id                  Int       @id @default(autoincrement())
+  /// Opaque, unique, URL-safe. NOT a credential — authorization is checked separately.
+  snapshotCode        String    @unique
+  levelDefinitionId   Int
+  curriculumVersionId Int
+
+  contentVersionId    Int?
+  /// Aggregate revision frozen into `payload`. Proves what was rendered.
+  contentRevision     Int?
+  assessmentVersionId Int?
+  assessmentRevision  Int?
+
+  /// Frozen learner-facing render input. No internal metadata, no answer keys.
+  payload             Json
+
+  createdById         Int
+  createdAt           DateTime  @default(now())
+  expiresAt           DateTime?
+
+  levelDefinition     LevelDefinition    @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion      ContentVersion?    @relation("AuthoringPreviewSnapshotContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion   AssessmentVersion? @relation("AuthoringPreviewSnapshotAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User               @relation("AuthoringPreviewSnapshotCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([levelDefinitionId, createdAt])
+  @@index([createdById])
+  @@index([expiresAt])
 }
 
 model AssessmentAttempt {
