@@ -291,6 +291,32 @@ const levelSchema = z.strictObject({
   completionMethod: z.string().trim().min(1).max(64),
   xpReward: z.number().int().min(0).max(100_000),
   requiredXp: z.number().int().min(0).max(1_000_000),
+  /**
+   * CORRECTIONS §14 — is `xpReward` a PRODUCT DECISION or a placeholder?
+   *
+   * The independent audit established that no authoritative non-zero XP
+   * schedule exists in any accepted source: Academy's fixture says in its own
+   * header that it carries "no XP logic", `CURRICULUM_AND_UNLOCKS.md` never
+   * mentions XP, and `les-prog.txt` mentions it only as a concept. Zero is
+   * therefore honest — but `xpReward: 0` on a lesson cannot be allowed to mean
+   * "the product decided this lesson is worth nothing", because no such decision
+   * was ever taken.
+   *
+   * This field carries that distinction rather than inventing a schedule:
+   *
+   *   "approved"   — the zero is a real product decision. Gates are the only
+   *                  case today: an `external_event` or `financial_checkpoint`
+   *                  level awards no XP BY DESIGN, and the generic validator
+   *                  already refuses a gate that awards any.
+   *   "unresolved" — the number is a compatibility placeholder and the product
+   *                  decision is still outstanding.
+   *
+   * Optional with an "approved" default so every already-shipped package keeps
+   * validating byte-identically and no existing fingerprint moves. The ATA-100
+   * profile is where "unresolved" becomes a release gate: a DRAFT may carry it
+   * freely, an APPROVED full-product package may not.
+   */
+  xpRewardStatus: z.enum(["approved", "unresolved"]).optional(),
   /** Canonical level codes this level depends on. */
   prerequisiteLevelCodes: z.array(z.string().trim().min(1).max(128)).max(20),
   checkpointLevelCode: z.string().trim().min(1).max(128).nullable(),
@@ -354,7 +380,24 @@ export const curriculumPackageSchema = z.strictObject({
           "report_rubric",
           "gate_copy",
         ]),
-        classification: z.enum(["MISSING", "CONFLICTING"]),
+        /**
+         * CORRECTIONS §5 — «proposed» is not «missing».
+         *
+         * The audit blocked the previous candidate partly on this enum: 57
+         * video lessons whose question banks EXIST as a production-ready
+         * editorial proposal were recorded as `MISSING`, which asserts they do
+         * not exist. `PROPOSED` is the state the product actually has, and it is
+         * distinct from both neighbours in a way that matters:
+         *
+         *   MISSING     nobody has written it — production work is outstanding
+         *   PROPOSED    it exists and is awaiting approval — REVIEW is outstanding
+         *   CONFLICTING two accepted sources disagree — a DECISION is outstanding
+         *
+         * All three still set `blocksReadiness`, so nothing becomes shippable by
+         * being relabelled; what changes is that a content plan can now tell the
+         * difference between "write 232 questions" and "review 232 questions".
+         */
+        classification: z.enum(["MISSING", "PROPOSED", "CONFLICTING"]),
         detail: text(1_000),
         blocksReadiness: z.boolean(),
       }),

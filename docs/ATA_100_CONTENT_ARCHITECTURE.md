@@ -40,7 +40,7 @@ Module 1 is levels 1–4 and module 2 is 5–10; modules 3–20 are five levels 
 | Kind | Count | Package pair | Content contract |
 |---|---:|---|---|
 | `registration` (L1) | 1 | `external_event : pocket_postback` | gate copy; xpReward 0 |
-| `video_test` | 58 | `lesson : assessment_pass` | content + assessment (4–7 questions) |
+| `video_test` | 58 | `lesson : assessment_pass` | content + assessment; the ATA video profile requires exactly 4 takes and 4 questions — see [VIDEO_PRODUCTION_CONTRACT.md](VIDEO_PRODUCTION_CONTRACT.md) |
 | `report` (L3) | 1 | `report : report_approval` | report assignment + instructions |
 | `practical`, mentor-reviewed | 7 | `mentor_review : mentor_review` | practical instructions |
 | `practical`, remaining | 13 | `lesson : manual` | practical instructions |

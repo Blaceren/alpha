@@ -143,6 +143,51 @@ export type AtaCompletenessReport = {
   /** Levels whose stored content body already uses the v2 block model. */
   blocksV2ContentLevels: number;
   byKind: Record<string, { total: number; structural: number; editorial: number; productionReady: number }>;
+  /**
+   * CORRECTIONS §13 — the lifecycle matrix.
+   *
+   * The old report answered one question ("how much is written?") with numbers
+   * that could not distinguish a bank nobody has written from a bank nobody has
+   * reviewed. These count the states the product actually moves through, so
+   * PROPOSED is never silently added to APPROVED and a schema shell is never
+   * counted as editorial content.
+   */
+  lifecycle: AtaLifecycleMatrix;
+};
+
+export type AtaLifecycleMatrix = {
+  /** Structure: 100 levels, 20 modules, unlocks — the Phase-C achievement. */
+  structureReady: boolean;
+  /** Canonical video_test levels in the curriculum. */
+  videoLessons: number;
+  /** Levels carrying a question bank of any approval state. */
+  testBanksPresent: number;
+  /** Questions actually present across those banks. */
+  questionsPresent: number;
+  /** Questions whose answer key is resolved. */
+  correctAnswersPresent: number;
+  /** Questions bound to exactly one take id. */
+  takeMappingsPresent: number;
+  /** Banks that exist and await review. NOT approved, NOT missing. */
+  proposedTestBanks: number;
+  /** Banks reproduced from an already-authored upstream source. */
+  sourceBackedTestBanks: number;
+  /** Banks a human approved as platform truth. */
+  platformApprovedTestBanks: number;
+  /** Banks nobody has written. */
+  missingTestBanks: number;
+  /** Banks where two accepted sources disagree. */
+  conflictingTestBanks: number;
+  /** Source cannot observe runtime import state; see the type. */
+  platformImported: "UNKNOWN";
+  /** Non-video levels (practical/report) whose editorial work is done. */
+  nonVideoEditorialComplete: number;
+  nonVideoEditorialRequired: number;
+  /** Levels that would pass approval today. */
+  productionReadyLevels: number;
+  /** Non-gate levels whose XP reward is still a placeholder. */
+  xpUnresolvedLevels: number;
+  xpApprovedLevels: number;
 };
 
 export type AtaProfileResult = {
@@ -160,6 +205,23 @@ function issue(list: PackageIssue[], code: string, path: string, message: string
 
 function isProductionProvenance(record: ProvenanceRecord): boolean {
   return PRODUCTION_PROVENANCE.has(record.classification) && !record.approvalRequired;
+}
+
+/**
+ * The XP status of a level, defaulting in the SAFE direction.
+ *
+ * `xpRewardStatus` is optional so that every already-shipped package keeps
+ * validating byte-identically. Absence therefore has to mean something, and it
+ * means "nobody declared" — which is `unresolved` for a normal level and
+ * `approved` for a gate, whose zero the generic validator has always enforced
+ * independently. Defaulting the other way would let silence pass as a decision.
+ */
+export function resolveXpRewardStatus(
+  level: Pick<PackageLevel, "xpRewardStatus">,
+  kind: string,
+): "approved" | "unresolved" {
+  if (level.xpRewardStatus) return level.xpRewardStatus;
+  return kind === "registration" || kind === "checkpoint" ? "approved" : "unresolved";
 }
 
 /**
@@ -249,6 +311,8 @@ function editorialContentSufficient(body: ContentBody): boolean {
 export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfileResult {
   const issues: PackageIssue[] = [];
   const gaps: PackageIssue[] = [];
+  /** Product-decision gaps, kept out of the editorial tally. Merged below. */
+  const xpGaps: PackageIssue[] = [];
 
   issues.push(...validateAtaUnlockVocabulary());
 
@@ -327,7 +391,18 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
   const structural = new Set<number>();
   const editorial = new Set<number>();
   const productionReady = new Set<number>();
-  const pendingByLevelCode = new Set(pkg.pendingApprovals.map((pending) => pending.levelCode));
+  /*
+   * Only a BLOCKING pending entry removes production readiness.
+   *
+   * A non-blocking entry is a recorded editorial decision — level 2 carries one,
+   * because the Blueprint proposes a different bank for an assessment Backend has
+   * already approved. Treating that note as though the approved content were
+   * unusable would be as dishonest as hiding it: the work is done, a choice about
+   * a proposal is outstanding, and `blocksReadiness` is the field that says which.
+   */
+  const pendingByLevelCode = new Set(
+    pkg.pendingApprovals.filter((pending) => pending.blocksReadiness).map((pending) => pending.levelCode),
+  );
   let blocksV2ContentLevels = 0;
 
   for (const source of ATA_LEVELS) {
@@ -390,8 +465,43 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
     // Zero-reward gates. The generic validator derives this from the completion
     // owner; the profile states it as a product fact so the two can never quietly
     // agree on the wrong answer.
-    if ((source.kind === "registration" || source.kind === "checkpoint") && level.xpReward !== 0) {
+    const isGate = source.kind === "registration" || source.kind === "checkpoint";
+    if (isGate && level.xpReward !== 0) {
       issue(issues, "ATA100_GATE_XP_NONZERO", `${path}.xpReward`, `level ${source.levelNumber} is a gate and must award 0 XP`);
+    }
+
+    /*
+     * CORRECTIONS §14 — the XP schedule is UNRESOLVED, and that is a fact the
+     * package must carry rather than a silence it can be read through.
+     *
+     * A gate's zero is a real product decision, so a gate that declared
+     * "unresolved" would be wrong in the other direction and is refused. For
+     * every other level, an ABSENT declaration is read as unresolved, never as
+     * approved: not deciding is not the same as deciding zero, and the shipped
+     * approved slice — which predates this field — must not be retroactively
+     * treated as having settled a schedule nobody ever wrote down.
+     */
+    if (isGate && resolveXpRewardStatus(level, source.kind) !== "approved") {
+      issue(
+        issues,
+        "ATA100_GATE_XP_STATUS_INVALID",
+        `${path}.xpRewardStatus`,
+        `level ${source.levelNumber} is a gate: its zero reward is an approved product decision, not an unresolved one`,
+      );
+    }
+    if (!isGate && resolveXpRewardStatus(level, source.kind) === "unresolved") {
+      // Collected separately, then merged into `gaps` after the per-level tally.
+      // An unresolved XP schedule is a PRODUCT decision, not editorial work: a
+      // fully written lesson is fully written whether or not anyone has decided
+      // what it is worth. Counting it as an editorial gap would have made every
+      // authored level read as unauthored, which is the kind of metric the audit
+      // told us to stop producing.
+      issue(
+        xpGaps,
+        "ATA100_XP_SCHEDULE_UNRESOLVED",
+        `${path}.xpRewardStatus`,
+        `level ${source.levelNumber} carries a placeholder XP reward: no accepted source defines an ATA XP schedule yet`,
+      );
     }
 
     // Progression: strictly the previous level, and only that. §2's
@@ -526,6 +636,98 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
   const percent = (value: number, of: number) =>
     of === 0 ? 0 : Math.round((value / of) * 1000) / 10;
 
+  /* ---------------------- lifecycle matrix — §13 ---------------------- */
+  const pendingByLevelAndElement = new Map<string, Set<string>>();
+  for (const pending of pkg.pendingApprovals) {
+    const key = `${pending.levelCode}|${pending.element}`;
+    const set = pendingByLevelAndElement.get(key) ?? new Set<string>();
+    set.add(pending.classification);
+    pendingByLevelAndElement.set(key, set);
+  }
+  const assessmentState = (levelCode: string): "PROPOSED" | "CONFLICTING" | "MISSING" | "APPROVED" => {
+    const classifications = pendingByLevelAndElement.get(`${levelCode}|assessment`);
+    if (!classifications) return "APPROVED";
+    if (classifications.has("MISSING")) return "MISSING";
+    if (classifications.has("PROPOSED")) return "PROPOSED";
+    if (classifications.has("CONFLICTING")) return "CONFLICTING";
+    return "APPROVED";
+  };
+
+  const videoLevels = ATA_LEVELS.filter((level) => level.kind === "video_test");
+  const nonVideoEditorial = ATA_LEVELS.filter(
+    (level) => EDITORIAL_REQUIRED_KINDS.has(level.kind) && level.kind !== "video_test",
+  );
+
+  let testBanksPresent = 0;
+  let questionsPresent = 0;
+  let correctAnswersPresent = 0;
+  let takeMappingsPresent = 0;
+  let proposed = 0;
+  let sourceBacked = 0;
+  let platformApproved = 0;
+  let missingBanks = 0;
+  let conflictingBanks = 0;
+  let xpUnresolved = 0;
+  let xpApproved = 0;
+
+  for (const source of ATA_LEVELS) {
+    const found = byNumber.get(source.levelNumber);
+    if (!found) continue;
+    const { level } = found;
+
+    if (resolveXpRewardStatus(level, source.kind) === "unresolved") xpUnresolved += 1;
+    else xpApproved += 1;
+
+    if (source.kind !== "video_test") continue;
+    if (level.assessment) {
+      testBanksPresent += 1;
+      questionsPresent += level.assessment.questions.length;
+      correctAnswersPresent += level.assessment.questions.filter(
+        (question) => question.correctOptionCodes.length > 0 || question.correctNumericValue !== null,
+      ).length;
+      takeMappingsPresent += level.assessment.questions.filter(
+        (question) => (question.lessonTakeawayRef ?? "").length > 0,
+      ).length;
+      // Provenance answers "where did it come from"; the pending entry answers
+      // "what is outstanding". Neither alone is the state, so both are read.
+      if (level.assessment.provenance.confidence === "high" && level.assessment.provenance.approvalRequired) {
+        sourceBacked += 1;
+      }
+      // APPROVED is a property of the bank itself, not of the absence of a note.
+      if (isProductionProvenance(level.assessment.provenance) && level.assessment.status === "published") {
+        platformApproved += 1;
+      }
+    }
+    // A conflict is an OVERLAY, not a rung on the ladder: level 2's bank is both
+    // platform-approved AND in disagreement with a proposal. Counting it only as
+    // "conflicting" would erase the approval; counting it only as "approved"
+    // would hide the open decision. It is counted in both.
+    const state = assessmentState(level.levelCode);
+    if (state === "PROPOSED") proposed += 1;
+    else if (state === "MISSING") missingBanks += 1;
+    if (state === "CONFLICTING") conflictingBanks += 1;
+  }
+
+  const lifecycle: AtaLifecycleMatrix = {
+    structureReady: structural.size === ATA_LEVEL_COUNT && pkg.modules.length === ATA_MODULE_COUNT,
+    videoLessons: videoLevels.length,
+    testBanksPresent,
+    questionsPresent,
+    correctAnswersPresent,
+    takeMappingsPresent,
+    proposedTestBanks: proposed,
+    sourceBackedTestBanks: sourceBacked,
+    platformApprovedTestBanks: platformApproved,
+    missingTestBanks: missingBanks,
+    conflictingTestBanks: conflictingBanks,
+    platformImported: "UNKNOWN",
+    nonVideoEditorialComplete: nonVideoEditorial.filter((level) => editorial.has(level.levelNumber)).length,
+    nonVideoEditorialRequired: nonVideoEditorial.length,
+    productionReadyLevels: productionReady.size,
+    xpUnresolvedLevels: xpUnresolved,
+    xpApprovedLevels: xpApproved,
+  };
+
   const report: AtaCompletenessReport = {
     totalLevels: packageLevels.length,
     structurallyCompleteLevels: structural.size,
@@ -537,10 +739,20 @@ export function validateAtaProduct100Package(pkg: CurriculumPackage): AtaProfile
     productionReadyLevels: productionReady.size,
     blocksV2ContentLevels,
     byKind,
+    lifecycle,
   };
+
+  // The XP gaps join `gaps` only now — after the per-level editorial tally has
+  // been taken — so they gate approval without distorting "how much is written".
+  gaps.push(...xpGaps);
 
   // An `approved` ATA-100 package must have neither. A `draft` may carry gaps —
   // that is what a draft IS — but never structural issues.
+  //
+  // Because the XP gaps are in `gaps`, §14's release gate follows for free: an
+  // APPROVED full-ATA package cannot ship while the XP schedule is an undeclared
+  // placeholder, while a DRAFT carries the unresolved state openly and stays
+  // valid. The rule is a gate, not a comment.
   const ok = issues.length === 0 && (pkg.status !== "approved" || gaps.length === 0);
   return { ok, issues, gaps, report };
 }

@@ -49,31 +49,69 @@ export type PackageValidationResult =
   | { ok: false; issues: PackageIssue[] };
 
 /**
- * PHASE-C §16 — markers that must never survive into an APPROVED package.
+ * PHASE-C §16 / CORRECTIONS §15 — markers that must never survive into an
+ * APPROVED package.
  *
- * Matched with word boundaries against the UPPER-CASED string, so «Заглушка» in
- * a real sentence is caught while ordinary prose is not. The boundary matters:
- * a naive `includes("TBD")` fires on any word containing those letters, and a
- * naive `includes("СКОРО")` fires on «скоро» inside a legitimate sentence such
- * as «рынок скоро вернётся к диапазону» — which is exactly the ridiculous false
- * positive §16 warns about. Each marker below is therefore either a standalone
- * authoring token or a phrase that has no innocent reading in lesson prose.
+ * ===================== THE BUG THIS REPLACES =====================
+ * The previous revision expressed every marker with `\b`. JavaScript's `\b` is
+ * defined against `[A-Za-z0-9_]`, so a Cyrillic letter is NOT a word character
+ * and no boundary can ever exist beside one:
+ *
+ *     /\bуточняется\b/.test("Значение уточняется")   // → false
+ *
+ * Every Russian marker was therefore unmatchable. Two of them (УТОЧНЯЕТСЯ,
+ * ЗАГЛУШКА) had worked in the previous phase, where matching was a naive
+ * upper-cased `includes`, so adding word boundaries to fix a «скоро» false
+ * positive silently killed the true positives — and an approved package could
+ * ship «Скоро будет доступно» to a learner. The suite did not catch it because
+ * its only positive case used the Latin `TODO`.
+ *
+ * ===================== THE FIX =====================
+ * `BOUNDARY_BEFORE`/`BOUNDARY_AFTER` are Unicode property escapes: a boundary is
+ * the absence of an adjacent LETTER OR DIGIT IN ANY SCRIPT, which is what `\b`
+ * always meant and only ever delivered for ASCII. The false-positive protection
+ * Phase C intended is fully preserved — «рынок СКОРО вернётся», «ГОТОВНОСТЬ
+ * плана», «ПОДГОТОВКА», «РАЗРАБОТКА стратегии» and `METODOLOGIYA` all still pass,
+ * because the markers stay anchored to whole words and the multi-word Russian
+ * markers stay anchored to their authoring idiom.
+ *
+ * Every marker is regression-tested in BOTH directions — see the placeholder
+ * cases in `curriculumContentBlocksRegression.ts`.
  */
+const BOUNDARY_BEFORE = "(?<![\\p{L}\\p{N}_])";
+const BOUNDARY_AFTER = "(?![\\p{L}\\p{N}_])";
+
+/** A whole-word marker, boundary-safe in every script. */
+function markerPattern(body: string, flags = "iu"): RegExp {
+  return new RegExp(`${BOUNDARY_BEFORE}(?:${body})${BOUNDARY_AFTER}`, flags);
+}
+
 const PLACEHOLDER_MARKERS: ReadonlyArray<{ marker: string; pattern: RegExp }> = [
-  { marker: "TODO", pattern: /\bTODO\b/i },
-  { marker: "TBD", pattern: /\bTBD\b/i },
-  { marker: "FIXME", pattern: /\bFIXME\b/i },
-  { marker: "PLACEHOLDER", pattern: /\bplaceholders?\b/i },
-  { marker: "LOREM IPSUM", pattern: /\blorem\s+ipsum\b/i },
-  { marker: "COMING SOON", pattern: /\bcoming\s+soon\b/i },
-  { marker: "XXX", pattern: /\bXXX+\b/ },
-  { marker: "УТОЧНЯЕТСЯ", pattern: /\bуточняется\b/i },
-  { marker: "ЗАГЛУШКА", pattern: /\bзаглушк[аиуеой]\b/i },
-  { marker: "ГОТОВИТСЯ", pattern: /\b(?:готовится|готовятся)\b/i },
-  // «скоро» alone is ordinary Russian. Only the authoring idioms are refused.
-  { marker: "СКОРО", pattern: /\b(?:скоро\s+(?:будет|появится|здесь)|уже\s+скоро)\b/i },
-  { marker: "В РАЗРАБОТКЕ", pattern: /\bв\s+разработке\b/i },
-  { marker: "ЧЕРНОВИК", pattern: /\bчерновик\b/i },
+  { marker: "TODO", pattern: markerPattern("TODO") },
+  { marker: "TBD", pattern: markerPattern("TBD") },
+  { marker: "FIXME", pattern: markerPattern("FIXME") },
+  { marker: "PLACEHOLDER", pattern: markerPattern("placeholders?") },
+  { marker: "LOREM IPSUM", pattern: markerPattern("lorem\\s+ipsum") },
+  { marker: "COMING SOON", pattern: markerPattern("coming\\s+soon") },
+  { marker: "XXX", pattern: markerPattern("XXX+", "u") },
+  { marker: "УТОЧНЯЕТСЯ", pattern: markerPattern("уточня(?:ется|ются)") },
+  { marker: "ЗАГЛУШКА", pattern: markerPattern("заглушк[аиуеойы]") },
+  { marker: "ГОТОВИТСЯ", pattern: markerPattern("готов(?:ится|ятся)") },
+  // «скоро» alone is ordinary Russian and stays legal. Only the authoring
+  // idioms — the ones that can only mean "content is not here yet" — are refused.
+  { marker: "СКОРО", pattern: markerPattern("скоро\\s+(?:будет|будут|появится|появятся|здесь)|уже\\s+скоро") },
+  { marker: "В РАЗРАБОТКЕ", pattern: markerPattern("в\\s+разработке") },
+  // «черновик» ALONE is legitimate, operator-approved ATA product vocabulary: it
+  // is the learner's own draft artifact (journal entry, report, strategy card),
+  // and the approved first slice says so in its L2 lesson body, its glossary and
+  // one of its answer options. Only the AUTHORING idioms — the ones that can
+  // only mean "this lesson text is not finished" — are refused.
+  {
+    marker: "ЧЕРНОВИК",
+    pattern: markerPattern(
+      "черновик\\s+(?:урока|текста|сценария|материала)|(?:это|пока)\\s+черновик|чернов(?:ой\\s+текст|ая\\s+версия)",
+    ),
+  },
 ];
 
 /**

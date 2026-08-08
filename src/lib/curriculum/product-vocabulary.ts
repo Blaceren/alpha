@@ -30,15 +30,40 @@
  * published; nothing about the contract has to change.
  *
  * ACADEMY IS NOT MODIFIED IN THIS PHASE. Until Phase D consumes this vocabulary,
- * Academy's fixture stays where it is. The regression suite pins the two lists
- * to be identical BY VALUE (transferred below with provenance), so a divergence
- * is a test failure rather than a production surprise.
+ * Academy's fixture stays where it is.
  *
- * PROVENANCE OF EVERY VALUE BELOW
+ * ===================== HOW DRIFT IS ACTUALLY DETECTED =====================
+ * An earlier revision of this header claimed «the regression suite pins the two
+ * lists to be identical BY VALUE … so a divergence is a test failure». That was
+ * FALSE and an independent audit caught it: the suite only ever checked this file
+ * against `product-ata-100.ts`, and both are Backend-owned, so the two could
+ * drift away from Academy together without a single test failing. Documenting a
+ * guarantee that does not exist is worse than having no guarantee, because it
+ * stops anyone from looking for one.
+ *
+ * What exists now is real and mechanical:
+ *
+ *   scripts/curriculum/verifyAcademyTransfer.ts --academy <path>
+ *
+ * It re-parses Academy's own `fixture.ts` and re-derives all 100 levels, 20
+ * modules, 20 checkpoints, 19 tool unlocks, 5 community unlocks and 20 rank
+ * transitions, then compares them to the values below. It takes an EXPLICIT
+ * checkout path, is dev/audit only, and nothing in `src/` reaches it — a Backend
+ * gate must never depend on someone else's checkout being present.
+ *
+ * PROVENANCE OF EVERY VALUE BELOW — full digests, so the transfer is re-provable
  *   repo   /srv/ata/repos/academy @ 4c4ced398d2b2a73cdf8d95652b9171b425fdf06
- *   files  docs/CURRICULUM_AND_UNLOCKS.md §3–§5 (sha256 51cf7d5b…)
- *          src/data/curriculum/fixture.ts CHECKPOINT_ROWS (sha256 52dfedf4…)
- * Transferred by hand, once, and never read again. Nothing here is invented.
+ *   files  docs/CURRICULUM_AND_UNLOCKS.md §3–§5
+ *            sha256 51cf7d5b15891819a4af32aa8fb3c194693e278ce7cb1aaa307d89a79486c9f2
+ *          src/data/curriculum/fixture.ts CHECKPOINT_ROWS
+ *            sha256 52dfedf4755bd89019d6b7017d7d39a7d8f43c2c4e8ac8b15c1d1092c01a6232
+ * Transferred by hand, once, and never read at build or run time. Nothing here
+ * is invented.
+ *
+ * DIRECTION OF TRAVEL. This is a one-time transfer, not a synchronisation. The
+ * target state is Backend authority with Academy consuming it through the Phase-D
+ * DTO contract; the verifier exists to keep the two honest DURING the transfer,
+ * and is expected to be retired once Academy stops holding its own copy.
  *
  * DOMAIN PROGRESSION vs DISPLAY METADATA (§12)
  * `unlockLevel` is DOMAIN: it is a fact about which checkpoint level releases

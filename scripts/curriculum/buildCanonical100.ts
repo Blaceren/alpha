@@ -53,9 +53,18 @@ import {
   validateAtaProduct100Package,
 } from "@/lib/curriculum/package/ata-profile";
 import type { ContentBodyV2 } from "@/lib/curriculum/content-blocks";
+import {
+  VIDEO_LESSON_SECTION_TITLES,
+  parseVideoProductionContracts,
+  type VideoLessonSectionCode,
+  type VideoProductionContract,
+  type VideoProductionContractsFile,
+} from "@/lib/curriculum/video-production-contract";
+import { validateAtaVideoContracts } from "@/lib/curriculum/package/ata-video-profile";
 
 const REPO_ROOT = process.cwd();
 const EDITORIAL_SOURCE = path.join(REPO_ROOT, "curriculum/canonical/ata-100-editorial-source.json");
+const VIDEO_CONTRACTS = path.join(REPO_ROOT, "curriculum/canonical/ata-video-production-contracts.v1.json");
 const APPROVED_SLICE = path.join(REPO_ROOT, "curriculum/packages/ata-v2-first-slice.rev3.approved.json");
 const OUTPUT = path.join(REPO_ROOT, "curriculum/packages/ata-v2-canonical-100.draft.json");
 
@@ -141,6 +150,37 @@ const CHECKPOINT_BLOCKED_EXPLANATION =
   "Контрольная точка подтверждается по балансу счёта. Отметить её вручную в академии нельзя.";
 
 /* ------------------------------------------------------------------ *
+ * Inputs
+ * ------------------------------------------------------------------ */
+
+/**
+ * Load the normalized video-production contracts and refuse to build on a bad
+ * one.
+ *
+ * The 58 contracts are now a BUILD INPUT of equal standing to the structural
+ * source, so a malformed or drifted artifact must stop the build rather than
+ * quietly produce a package with fewer questions than the product has. The ATA
+ * video profile is applied here, at the only place that turns contracts into a
+ * package.
+ */
+function loadVideoContracts(): VideoProductionContractsFile {
+  const parsed = parseVideoProductionContracts(JSON.parse(readFileSync(VIDEO_CONTRACTS, "utf8")));
+  if (!parsed.ok) {
+    throw new Error(
+      `${VIDEO_CONTRACTS} is not a valid contracts artifact:\n  ${parsed.issues.slice(0, 8).join("\n  ")}`,
+    );
+  }
+  const issues = validateAtaVideoContracts(parsed.file);
+  if (issues.length > 0) {
+    throw new Error(
+      `${VIDEO_CONTRACTS} fails the ATA video profile:\n  ` +
+        issues.slice(0, 8).map((issue) => `[${issue.code}] ${issue.path} ${issue.message}`).join("\n  "),
+    );
+  }
+  return parsed.file;
+}
+
+/* ------------------------------------------------------------------ *
  * Body construction
  * ------------------------------------------------------------------ */
 
@@ -152,56 +192,81 @@ const CHECKPOINT_BLOCKED_EXPLANATION =
  * and the profile validator reports it as a gap rather than the builder papering
  * over it.
  */
-function buildDraftBody(level: AtaLevelSource, editorial: EditorialLevel): ContentBodyV2 | null {
+function buildDraftBody(
+  level: AtaLevelSource,
+  editorial: EditorialLevel,
+  contract: VideoProductionContract | null,
+): ContentBodyV2 | null {
   const sections: ContentBodyV2["sections"] = [];
   const { hook, tell, mainIdea, after, action, covers } = editorial.slots;
 
-  if (hook) {
-    sections.push({
-      code: "hook",
-      title: "С чего начинается урок",
-      blocks: [{ type: "callout", variant: "key_idea", title: "", body: asSentence(unquote(hook)) }],
-    });
+  /*
+   * CORRECTIONS §22 — STABLE SECTION IDENTITY.
+   *
+   * Section codes are durable learner state (`UserLessonProgress.
+   * completedSections`). The previous revision derived them from whichever brief
+   * slot happened to be populated, so a real script replacing a draft body would
+   * have renamed the anchors under any learner who had already read it. Every
+   * code below now comes from the CLOSED vocabulary in
+   * `video-production-contract.ts`, which is the recording structure the final
+   * script will follow — so a draft anchor survives authoring instead of being
+   * replaced by it. No package has been imported yet, so this costs nothing now
+   * and would have cost a migration later.
+   */
+  const push = (code: VideoLessonSectionCode, blocks: ContentBodyV2["sections"][number]["blocks"]) => {
+    sections.push({ code, title: VIDEO_LESSON_SECTION_TITLES[code], blocks });
+  };
+
+  // Prefer the production contract's own hook: for a video lesson it IS the
+  // opening line, and it is the version editorial production works from.
+  const openingHook = contract?.hook ?? (hook ? unquote(hook) : null);
+  if (openingHook) {
+    push("hook", [{ type: "callout", variant: "key_idea", title: "", body: asSentence(openingHook) }]);
   }
 
-  const coverage = tell ?? covers;
+  const coverage = contract?.requiredTopicsText ?? tell ?? covers;
   if (coverage) {
-    sections.push({
-      code: "soderzhanie",
-      title: "Что разбирает урок",
-      blocks: [
-        {
-          type: "rich_text",
-          text: asSentence(`Урок разбирает: ${coverage.replace(/\.$/, "")}`),
-        },
-      ],
-    });
+    push("opredelenie", [
+      { type: "rich_text", text: asSentence(`Урок разбирает: ${coverage.replace(/\.$/, "")}`) },
+    ]);
   }
 
-  if (mainIdea) {
-    sections.push({
-      code: "glavnaya-mysl",
-      title: "Главная мысль",
-      blocks: [{ type: "callout", variant: "key_idea", title: "", body: asSentence(mainIdea) }],
-    });
+  /*
+   * THE TAKES ARE DELIBERATELY NOT PROJECTED HERE.
+   *
+   * They belong in the production contract, and an earlier revision of this
+   * function listed them in the body as an ordered list. The regression suite
+   * caught what that actually produced: in this Blueprint the correct option of
+   * question N restates take N almost verbatim, so a mechanically generated body
+   * containing the four takes in order is a 1:1 answer crib for its own test,
+   * published through the learner content route.
+   *
+   * That is not an argument against a FINAL lesson teaching this material — the
+   * Blueprint requires the video to say all four takes aloud, and an authored
+   * lesson will teach them properly. It is an argument against a CONVERTER
+   * emitting the answer key as a substitute for teaching prose. The `teyki`
+   * section code stays in the stable vocabulary for the author who writes that
+   * section; the converter simply has nothing honest to put in it.
+   */
+
+  const closing = contract?.mainIdea ?? mainIdea ?? null;
+  if (closing) {
+    push("itog", [{ type: "callout", variant: "key_idea", title: "", body: asSentence(closing) }]);
   }
 
+  // Practical/report levels keep their exercise, now under a stable code.
   const task = level.artifact ?? after ?? action ?? null;
-  if (task) {
-    sections.push({
-      code: "zadanie",
-      title: "Задание уровня",
-      blocks: [
-        {
-          type: "exercise",
-          code: `l${pad3(level.levelNumber)}-zadanie`,
-          title: "Задание уровня",
-          instructions: asSentence(level.artifact ?? task),
-          expectedAction: asSentence(after ?? action ?? level.artifact ?? task),
-          estimatedMinutes: null,
-        },
-      ],
-    });
+  if (!contract && task) {
+    push("stsenarii", [
+      {
+        type: "exercise",
+        code: `l${pad3(level.levelNumber)}-zadanie`,
+        title: "Задание уровня",
+        instructions: asSentence(level.artifact ?? task),
+        expectedAction: asSentence(after ?? action ?? level.artifact ?? task),
+        estimatedMinutes: null,
+      },
+    ]);
   }
 
   return sections.length > 0 ? { format: "ata.lesson.blocks", version: 2, sections } : null;
@@ -214,10 +279,77 @@ function buildDraftBody(level: AtaLevelSource, editorial: EditorialLevel): Conte
 type PendingApproval = {
   levelCode: string;
   element: string;
-  classification: "MISSING" | "CONFLICTING";
+  classification: "MISSING" | "PROPOSED" | "CONFLICTING";
   detail: string;
   blocksReadiness: boolean;
 };
+
+/* ------------------------------------------------------------------ *
+ * Video+test assessment banks — CORRECTIONS §9 / §11
+ * ------------------------------------------------------------------ */
+
+/**
+ * Turn one video production contract into a PROPOSED assessment record.
+ *
+ * WHAT IS AND IS NOT CARRIED. Prompts, options and correct answers are copied
+ * verbatim from the normalized Blueprint artifact. `explanation` is `null`,
+ * because the Blueprint does not write per-question explanations and inventing
+ * one would be authoring content in a converter. `lessonTakeawayRef` is the
+ * contract's own take id, which is what finally gives `T{level}.N` a referent.
+ *
+ * WHY `status: "draft"` AND `approvalRequired: true`. The bank exists — that is
+ * what `PROPOSED` records — but existing is not being approved. Publishing it
+ * here would let a converter grant platform truth to 228 questions no human has
+ * signed, which is the exact failure the correction brief forbids.
+ */
+function buildProposedAssessment(source: AtaLevelSource, contract: VideoProductionContract): Json {
+  const provenance = {
+    classification: "EXISTING_ACADEMY_SOURCE",
+    sourcePath: "curriculum/canonical/ata-video-production-contracts.v1.json",
+    sourceRef: `ATA_VIDEO_LESSONS_PRODUCTION_BLUEPRINT_V1.docx · ${contract.sourceStatusLabel}`,
+    revision: `contract-v${contract.contractVersion}`,
+    confidence: contract.sourceProvenance === "SOURCE_BACKED" ? "high" : "medium",
+    conflicts: [],
+    approvalRequired: true,
+    note:
+      contract.sourceProvenance === "SOURCE_BACKED"
+        ? "Вопросы воспроизведены из авторского источника Academy (lesson-fixtures.ts L18) без изменений. Источник подтверждён; утверждение платформенного банка — отдельное решение."
+        : "PROPOSED CANON из production-блюпринта: банк существует и готов к рассмотрению, но ещё не утверждён как платформенная истина.",
+  };
+
+  return {
+    assessmentCode: `ata-v2.l${pad3(source.levelNumber)}.assessment`,
+    versionNumber: 1,
+    status: "draft",
+    // Carried from the ONE approved precedent (level 2), not invented here, and
+    // flagged as its own pending approval so the reuse is visible.
+    passPercent: 100,
+    maxAttempts: null,
+    showExplanation: true,
+    questions: contract.questions.map((question) => ({
+      questionCode: `ata-v2.l${pad3(source.levelNumber)}.q${question.ordinal}`,
+      questionNumber: question.ordinal,
+      type: "single_choice",
+      skillTag: null,
+      optionCodes: question.options.map((option) => option.optionCode),
+      correctOptionCodes: [question.correctOptionCode],
+      correctNumericValue: null,
+      localizations: [
+        {
+          locale: LOCALE,
+          prompt: question.prompt,
+          optionLabels: question.options.map((option) => option.text),
+          // The Blueprint writes no explanations. A converter that invented one
+          // would be authoring lesson copy.
+          explanation: null,
+        },
+      ],
+      lessonTakeawayRef: question.takeId,
+      provenance,
+    })),
+    provenance,
+  };
+}
 
 function buildPackage(): Json {
   const editorialDocument = JSON.parse(readFileSync(EDITORIAL_SOURCE, "utf8")) as {
@@ -232,11 +364,46 @@ function buildPackage(): Json {
     approvedSlice.modules.flatMap((moduleDefinition) => moduleDefinition.levels).map((level) => [level.levelCode as string, level]),
   );
 
+  const contractsFile = loadVideoContracts();
+  const contractsByLevel = new Map(
+    contractsFile.contracts.map((contract) => [contract.levelNumber, contract]),
+  );
+
   const pendingApprovals: PendingApproval[] = [];
+
+  /*
+   * CORRECTIONS §6 / §24 — the L2 reconciliation, surfaced in the package.
+   *
+   * Level 2 carries an assessment Backend APPROVED, and the Blueprint proposes a
+   * different bank for the same four takes. Neither is rewritten and neither
+   * silently wins: the package keeps the approved bank as platform truth, and
+   * the disagreement is recorded here so whoever approves the Blueprint sees it.
+   *
+   * `blocksReadiness: false` is deliberate. The approved content is usable
+   * today; what is outstanding is an editorial DECISION about a proposal, not
+   * missing work, and marking approved content unready would be as dishonest in
+   * the other direction.
+   */
+  for (const conflictLevel of new Set(contractsFile.sourceConflicts.map((c) => c.levelNumber))) {
+    const source = ATA_LEVELS.find((level) => level.levelNumber === conflictLevel);
+    if (!source) continue;
+    const fields = contractsFile.sourceConflicts.filter((c) => c.levelNumber === conflictLevel).length;
+    pendingApprovals.push({
+      levelCode: canonicalLevelCode(source),
+      element: "assessment",
+      classification: "CONFLICTING",
+      detail:
+        `Уровень ${conflictLevel}: утверждённый банк вопросов и предложение из production-блюпринта расходятся ` +
+        `в ${fields} семантических полях. Оба покрывают одни и те же тейки. Действующей истиной остаётся ` +
+        `утверждённый банк; выбор между ними — отдельное редакционное решение. Расхождения перечислены в ` +
+        `curriculum/canonical/ata-video-production-contracts.v1.json → sourceConflicts.`,
+      blocksReadiness: false,
+    });
+  }
 
   const modules = ATA_MODULES.map((moduleSource) => {
     const levels = ATA_LEVELS.filter((level) => level.moduleNumber === moduleSource.moduleNumber).map(
-      (level) => buildLevel(level, editorialByLevel, approvedByCode, pendingApprovals),
+      (level) => buildLevel(level, editorialByLevel, approvedByCode, contractsByLevel, pendingApprovals),
     );
     const checkpoint = ATA_LEVELS.find(
       (level) => level.kind === "checkpoint" && level.levelNumber === moduleSource.endLevel,
@@ -284,6 +451,7 @@ function buildLevel(
   source: AtaLevelSource,
   editorialByLevel: Map<number, EditorialLevel>,
   approvedByCode: Map<string, Json>,
+  contractsByLevel: Map<number, VideoProductionContract>,
   pendingApprovals: PendingApproval[],
 ): Json {
   const levelCode = canonicalLevelCode(source);
@@ -302,19 +470,32 @@ function buildLevel(
   const editorial = editorialByLevel.get(source.levelNumber);
   if (!editorial) throw new Error(`editorial source is missing level ${source.levelNumber}`);
 
-  const contract = completionContractFor(source);
+  const completion = completionContractFor(source);
   const integrationCode = gateIntegrationCode(source);
+  const videoContract = contractsByLevel.get(source.levelNumber) ?? null;
+  const isGate = source.kind === "registration" || source.kind === "checkpoint";
 
   const level: Json = {
     levelCode,
     levelNumber: source.levelNumber,
-    type: contract.type,
+    type: completion.type,
     title: source.title,
     shortDescription: source.artifact ?? "",
-    learningObjective: buildLearningObjective(source, editorial),
-    completionMethod: contract.completionMethod,
+    learningObjective: videoContract?.learningObjective ?? buildLearningObjective(source, editorial),
+    completionMethod: completion.completionMethod,
     xpReward: 0,
     requiredXp: 0,
+    /*
+     * CORRECTIONS §14 — zero means two different things, so it says which.
+     *
+     * A gate awards no XP BY DESIGN and the generic validator enforces it, so
+     * that zero is an APPROVED product decision. Every other level's zero is a
+     * compatibility placeholder for a schedule no accepted source has ever
+     * defined — the audit checked Academy's fixture, `CURRICULUM_AND_UNLOCKS.md`
+     * and `les-prog.txt` and found none. This phase does not invent one; it
+     * refuses to let the placeholder pass as a decision.
+     */
+    xpRewardStatus: isGate ? "approved" : "unresolved",
     prerequisiteLevelCodes: [canonicalLevelCode(ATA_LEVELS[source.levelNumber - 2] as AtaLevelSource)],
     checkpointLevelCode: null,
     estimatedDurationSeconds: null,
@@ -343,7 +524,7 @@ function buildLevel(
     return level;
   }
 
-  const body = buildDraftBody(source, editorial);
+  const body = buildDraftBody(source, editorial, videoContract);
   if (body) {
     level.content = {
       contentCode: `ata-v2.l${pad3(source.levelNumber)}.content`,
@@ -374,13 +555,34 @@ function buildLevel(
   }
 
   if (source.kind === "video_test") {
-    pendingApprovals.push({
-      levelCode,
-      element: "assessment",
-      classification: "MISSING",
-      detail: `Уровень ${source.levelNumber} завершается через assessment_pass, но утверждённых вопросов нет.`,
-      blocksReadiness: true,
-    });
+    if (!videoContract) {
+      // Only reachable if the contracts artifact and the structural source
+      // disagree, which the ATA video profile refuses outright.
+      pendingApprovals.push({
+        levelCode,
+        element: "assessment",
+        classification: "MISSING",
+        detail: `Уровень ${source.levelNumber} завершается через assessment_pass, но контракта видео+тест нет.`,
+        blocksReadiness: true,
+      });
+    } else {
+      level.assessment = buildProposedAssessment(source, videoContract);
+      // PROPOSED, not MISSING. The bank exists, in full, with correct answers and
+      // take coverage; what is outstanding is REVIEW, not authoring. Recording it
+      // as MISSING is what the independent audit blocked the previous candidate
+      // for, because it asserts 228 questions do not exist.
+      pendingApprovals.push({
+        levelCode,
+        element: "assessment",
+        classification: "PROPOSED",
+        detail:
+          (videoContract.sourceProvenance === "SOURCE_BACKED"
+            ? `Уровень ${source.levelNumber}: банк воспроизведён из авторского источника Academy без изменений (${videoContract.questions.length} вопроса, тейки ${videoContract.takes.map((t) => t.takeId).join(", ")}). Источник подтверждён; платформенное утверждение — отдельное решение.`
+            : `Уровень ${source.levelNumber}: предложенный банк из production-блюпринта (${videoContract.questions.length} вопроса, тейки ${videoContract.takes.map((t) => t.takeId).join(", ")}). Готов к рассмотрению, не утверждён.`) +
+          " passPercent перенесён с единственного утверждённого прецедента (уровень 2) и утверждается вместе с банком.",
+        blocksReadiness: true,
+      });
+    }
   }
 
   if (source.kind === "report") {

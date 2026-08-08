@@ -126,4 +126,17 @@ npm run test:regression:curriculum-package            # validation, fingerprint,
 npm run test:regression:curriculum-package-roundtrip  # real /current -> /content against an isolated Backend
 npm run test:regression:curriculum-content-blocks     # body format, block catalog, sanitizer, assets, tools
 npm run test:regression:curriculum-ata100             # ATA-100 profile, unlock vocabulary, converter determinism
+npm run test:regression:curriculum-video-blueprint    # 58 video contracts, 232 takes/questions, fingerprint coherence
 ```
+
+## Video+test production contracts
+
+The 58 `video_test` levels carry a production contract that binds each video to
+its test: four testable takes `T{level}.1–4`, four single-choice questions, and a
+one-to-one take↔question mapping. It is a separate domain from learner content —
+source, approval and production state are three independent axes, and
+`PROPOSED` is never recorded as `MISSING`.
+
+See **[VIDEO_PRODUCTION_CONTRACT.md](VIDEO_PRODUCTION_CONTRACT.md)** for the
+source chain, the workflow, the fingerprint invalidation rules and the Phase-G
+editor contract.

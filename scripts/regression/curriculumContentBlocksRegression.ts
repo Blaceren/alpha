@@ -572,6 +572,90 @@ check("38 the placeholder scan does not fire on legitimate lesson prose", () => 
   }
 });
 
+/**
+ * CORRECTIONS §15 — the Cyrillic placeholder markers were unmatchable.
+ *
+ * JavaScript's `\b` is defined against `[A-Za-z0-9_]`, so no word boundary can
+ * exist beside a Cyrillic letter and every Russian marker silently matched
+ * nothing. An approved package could ship «Скоро будет доступно» to a learner.
+ * The previous suite could not see it: its only positive case was the Latin
+ * `TODO`, and its only Cyrillic cases tested the false-positive direction.
+ *
+ * Both directions are now covered, marker by marker.
+ */
+check("38a every Cyrillic placeholder marker is actually rejected in an approved package", () => {
+  const mustReject: Array<[string, string]> = [
+    ["УТОЧНЯЕТСЯ", "Значение уточняется позже."],
+    ["УТОЧНЯЮТСЯ", "Детали уточняются редакцией."],
+    ["ЗАГЛУШКА", "Здесь заглушка вместо материала."],
+    ["ЗАГЛУШКИ", "Ниже заглушки для примеров."],
+    ["ГОТОВИТСЯ", "Материал готовится редакцией."],
+    ["ГОТОВЯТСЯ", "Примеры готовятся редакцией."],
+    ["СКОРО БУДЕТ", "Скоро будет доступно."],
+    ["СКОРО ПОЯВИТСЯ", "Скоро появится полный разбор."],
+    ["УЖЕ СКОРО", "Уже скоро."],
+    ["В РАЗРАБОТКЕ", "Раздел в разработке."],
+    ["ЧЕРНОВИК УРОКА", "Это черновик урока."],
+    ["ЧЕРНОВАЯ ВЕРСИЯ", "Черновая версия материала."],
+  ];
+  for (const [marker, text] of mustReject) {
+    const pkg = sliceWithLessonBody(
+      bodyV2([{ type: "rich_text", text: `${text} ${"а".repeat(500)}` }, HAPPY_BLOCKS.callout]),
+    );
+    assert.ok(
+      codesOf(validateCurriculumPackage(pkg)).includes("PLACEHOLDER_IN_APPROVED_PACKAGE"),
+      `${marker} was NOT rejected: «${text}»`,
+    );
+  }
+});
+
+check("38b legitimate Russian prose is still accepted, marker by marker", () => {
+  const mustAccept = [
+    "Рынок скоро вернётся к диапазону, но угадывать момент нельзя.",
+    "Проверь готовность плана перед сессией.",
+    "Подготовка к сессии занимает пятнадцать минут.",
+    "Разработка стратегии — это итеративный процесс.",
+    "Уровни поддержки — это области реакции, а не гарантированные точки.",
+    // «черновик» ALONE is ATA product vocabulary: the learner's own draft.
+    "Инструменты и черновики помогают сохранять работу между сессиями.",
+    "Сохрани черновик отчёта и вернись к нему позже.",
+  ];
+  for (const text of mustAccept) {
+    const pkg = sliceWithLessonBody(
+      bodyV2([{ type: "rich_text", text: `${text} ${"а".repeat(500)}` }, HAPPY_BLOCKS.callout]),
+    );
+    const result = validateCurriculumPackage(pkg);
+    assert.ok(result.ok, `false positive on «${text}»: ${JSON.stringify(codesOf(result))}`);
+  }
+});
+
+check("38c the shipped APPROVED packages are the false-positive corpus", () => {
+  // This is how the «черновик» false positive was found: a marker that looked
+  // harmless in isolation rejected operator-approved content that had shipped.
+  // Real approved prose is a better adversary than invented examples.
+  for (const file of [
+    "curriculum/packages/ata-v2-first-slice.approved.json",
+    "curriculum/packages/ata-v2-first-slice.rev3.approved.json",
+  ]) {
+    const result = validateCurriculumPackage(JSON.parse(readFileSync(file, "utf8")));
+    assert.ok(result.ok, `${file} must keep validating: ${JSON.stringify(result.ok ? [] : result.issues.slice(0, 4))}`);
+  }
+});
+
+check("38d a DRAFT still tolerates placeholders in every script", () => {
+  for (const text of ["TODO дописать", "Скоро будет доступно", "Значение уточняется"]) {
+    const pkg = sliceWithLessonBody(
+      bodyV2([{ type: "rich_text", text: `${text} ${"а".repeat(500)}` }, HAPPY_BLOCKS.callout]),
+    );
+    pkg.status = "draft";
+    assert.equal(
+      codesOf(validateCurriculumPackage(pkg)).includes("PLACEHOLDER_IN_APPROVED_PACKAGE"),
+      false,
+      `a draft must tolerate «${text}»`,
+    );
+  }
+});
+
 check("39 an approved package refuses the obsolete product brand", () => {
   const pkg = sliceWithLessonBody(
     bodyV2([{ type: "rich_text", text: `TradeQuest — маршрут обучения. ${"а".repeat(500)}` }, HAPPY_BLOCKS.callout]),

@@ -271,19 +271,43 @@ check("18 the artifact carries no obsolete product brand", () => {
   assert.equal(/tradequest/i.test(raw), false);
 });
 
-check("19 the reported completeness matches the baseline and is not inflated", () => {
+check("19 the reported completeness is neither inflated nor deflated", () => {
   const { report } = validateAtaProduct100Package(CANONICAL);
   assert.equal(report.totalLevels, 100);
   assert.equal(report.structurallyCompleteLevels, 100);
   assert.equal(report.structuralCompletenessPercent, 100);
-  // The audit baseline was 4 production levels and 1 content-rich lesson. This
-  // package must not claim more than the editorial work that actually exists.
+  // This package must not claim more AUTHORED lessons than exist: a question
+  // bank is not a written lesson, and importing 232 questions must not make the
+  // editorial number jump.
   assert.equal(report.productionReadyLevels, 4);
   assert.equal(report.editorialRequiredLevels, 79);
   assert.equal(report.editoriallyCompleteRequiredLevels, 2);
   assert.ok(report.editorialCompletenessPercent < 5);
   assert.equal(report.byKind.video_test.productionReady, 1);
   assert.equal(report.byKind.practical.productionReady, 0);
+});
+
+check("19a the lifecycle matrix pins PRODUCT TRUTH, not today's poverty", () => {
+  // These are the assertions the previous suite lacked: it pinned "57 banks are
+  // missing", so dropping the Blueprint would pass and importing it would fail.
+  // Pinning the product contract instead makes silent data loss a test failure.
+  const { report } = validateAtaProduct100Package(CANONICAL);
+  const lifecycle = report.lifecycle;
+  assert.equal(lifecycle.structureReady, true);
+  assert.equal(lifecycle.videoLessons, 58);
+  assert.equal(lifecycle.testBanksPresent, 58);
+  assert.equal(lifecycle.questionsPresent, 232);
+  assert.equal(lifecycle.correctAnswersPresent, 232);
+  assert.equal(lifecycle.takeMappingsPresent, 232);
+  assert.equal(lifecycle.missingTestBanks, 0);
+  // Proposal and approval stay separate in both directions.
+  assert.equal(lifecycle.proposedTestBanks, 57);
+  assert.equal(lifecycle.sourceBackedTestBanks, 1);
+  assert.equal(lifecycle.platformApprovedTestBanks, 1);
+  assert.notEqual(lifecycle.platformApprovedTestBanks, 58);
+  // Production reality is zero and import is unknowable from source.
+  assert.equal(lifecycle.platformImported, "UNKNOWN");
+  assert.equal(lifecycle.productionReadyLevels, 4);
 });
 
 check("20 every generated content body uses the v2 block format", () => {
@@ -400,13 +424,48 @@ check("31 a title that drifts from the canonical source is refused", () => {
  * 6. Editorial gaps are gaps, not structural failures
  * ------------------------------------------------------------------ */
 
-check("32 missing lesson content is an editorial GAP in a draft, never an issue", () => {
+check("32 unwritten lesson content is an editorial GAP in a draft, never an issue", () => {
   const result = validateAtaProduct100Package(CANONICAL);
   assert.equal(result.issues.length, 0);
   assert.ok(result.gaps.length > 0);
-  assert.ok(result.gaps.some((gap) => gap.code === "ATA100_ASSESSMENT_MISSING"));
   assert.ok(result.gaps.some((gap) => gap.code === "ATA100_CONTENT_NOT_AUTHORED"));
   assert.ok(result.ok, "a draft with editorial gaps and no structural issues is OK");
+
+  // The assessment banks are NO LONGER a gap of this kind, and this assertion is
+  // the tripwire that keeps them from silently becoming one again. The previous
+  // revision of this suite asserted `ATA100_ASSESSMENT_MISSING` was present,
+  // which pinned the artifact's poverty as the expectation: dropping all 232
+  // Blueprint questions would have kept it green.
+  assert.equal(
+    result.gaps.some((gap) => gap.code === "ATA100_ASSESSMENT_MISSING"),
+    false,
+    "every video lesson now carries its question bank; a MISSING gap would mean the Blueprint import regressed",
+  );
+});
+
+check("32a the XP schedule is an explicit gap, and it gates approval", () => {
+  const draft = validateAtaProduct100Package(CANONICAL);
+  const xpGaps = draft.gaps.filter((gap) => gap.code === "ATA100_XP_SCHEDULE_UNRESOLVED");
+  assert.equal(xpGaps.length, 79, "every non-gate level's reward is an undeclared placeholder");
+  assert.ok(draft.ok, "a DRAFT may carry an unresolved XP schedule openly");
+
+  const approved = clone(CANONICAL);
+  approved.status = "approved";
+  const result = validateAtaProduct100Package(approved);
+  assert.equal(result.ok, false, "an APPROVED ATA-100 package may not ship an unresolved XP schedule");
+  assert.ok(result.gaps.some((gap) => gap.code === "ATA100_XP_SCHEDULE_UNRESOLVED"));
+});
+
+check("32b gates keep an APPROVED zero reward; a gate may not claim unresolved", () => {
+  const { report } = validateAtaProduct100Package(CANONICAL);
+  assert.equal(report.lifecycle.xpApprovedLevels, 21, "1 registration + 20 checkpoints");
+  assert.equal(report.lifecycle.xpUnresolvedLevels, 79);
+
+  const pkg = clone(CANONICAL);
+  const checkpoint = pkg.modules.flatMap((m) => m.levels).find((l) => l.levelNumber === 10);
+  assert.ok(checkpoint);
+  checkpoint.xpRewardStatus = "unresolved";
+  assert.ok(profileCodes(pkg).includes("ATA100_GATE_XP_STATUS_INVALID"));
 });
 
 check("33 the same package would NOT be OK if it claimed to be approved", () => {
@@ -470,25 +529,45 @@ check("38 the converter reads no other repository", () => {
   assert.equal(/from ["'].*\/academy/.test(source), false);
 });
 
-check("39 nothing in src/ or scripts/ IMPORTS or READS the Academy repository", () => {
+const ACADEMY_REACH = String.raw`(from\s*['"][^'"]*academy|require\(\s*['"][^'"]*academy|import\(\s*['"][^'"]*academy|read[A-Za-z]*\([^)]*academy)`;
+
+check("39 NOTHING in src/ can import or read the Academy repository", () => {
   // Naming Academy in a provenance comment is REQUIRED — that is how a
-  // transferred value stays auditable. What must never exist is a code path
-  // that imports, resolves or opens a file inside the other repository, which
-  // would turn a Backend gate into a dependency on someone else's checkout.
+  // transferred value stays auditable. What must never exist is a code path that
+  // imports, resolves or opens a file inside the other repository, which would
+  // turn a Backend runtime or validation gate into a dependency on someone
+  // else's checkout. For `src/` the rule is absolute and has no exceptions.
+  const grep = spawnSync("grep", ["-rnE", ACADEMY_REACH, "src"], { encoding: "utf8" });
+  assert.equal(grep.stdout.trim(), "", `Academy is reachable from src/:\n${grep.stdout}`);
+  assert.equal(grep.status, 1, "grep should have found no matches");
+});
+
+check("39a the ONLY script that may reach Academy is the dev/audit transfer verifier", () => {
+  // CORRECTIONS §17/§18 added a verifier that re-derives Academy's structure to
+  // prove the one-time transfer is still exact. It is allowed to read Academy —
+  // that is its entire purpose — and it is constrained instead: dev/audit only,
+  // an EXPLICIT `--academy` path with no default and no fallback, and unreachable
+  // from `src/`. This test pins that the exception stays exactly one file wide.
   const grep = spawnSync(
     "grep",
-    [
-      "-rnE",
-      "--exclude=curriculumAta100Regression.ts",
-      String.raw`(from\s*['"][^'"]*academy|require\(\s*['"][^'"]*academy|import\(\s*['"][^'"]*academy|read[A-Za-z]*\([^)]*academy)`,
-      "src",
-      "scripts",
-    ],
+    ["-rlE", "--exclude=curriculumAta100Regression.ts", ACADEMY_REACH, "scripts"],
     { encoding: "utf8" },
   );
-  // grep exits 1 with empty output when nothing matched; that is the pass.
-  assert.equal(grep.stdout.trim(), "", `Academy is reachable from Backend code:\n${grep.stdout}`);
-  assert.equal(grep.status, 1, "grep should have found no matches");
+  const files = grep.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+  assert.deepEqual(files, ["scripts/curriculum/verifyAcademyTransfer.ts"], `unexpected Academy readers:\n${files.join("\n")}`);
+
+  const verifier = readFileSync("scripts/curriculum/verifyAcademyTransfer.ts", "utf8");
+  assert.ok(verifier.includes('args.indexOf("--academy")'), "the path must come from an explicit argument");
+  assert.equal(
+    /process\.env\.[A-Z_]*ACADEMY/.test(verifier),
+    false,
+    "no environment-variable fallback may reintroduce an implicit dependency",
+  );
+  assert.equal(
+    /["'`]\/srv\/ata\/repos\/academy["'`]/.test(verifier.replace(/^\s*\*.*$/gm, "")),
+    false,
+    "no hard-coded Academy path outside documentation",
+  );
 });
 
 console.log(`\nATA-100 profile and converter regression: ${passed} passed, ${failed} failed`);
