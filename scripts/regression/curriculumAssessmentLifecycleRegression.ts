@@ -54,6 +54,7 @@ async function main() {
   delete process.env.CURRICULUM_V2_ASSESSMENT_ENABLED;
   const { prisma } = await import("../../src/lib/prisma");
   const assessment = await import("../../src/lib/curriculum/assessment");
+  const lifecycleForPublish = await import("../../src/lib/curriculum/authoring-lifecycle");
 
   /**
    * PHASE-G0 CORRECTION — the assessment domain now REQUIRES the aggregate
@@ -91,9 +92,52 @@ async function main() {
     return version?.revision ?? 1;
   }
 
+  /**
+   * PHASE-G0 PUBLISH GATE — see the identical note in the content suite. A bank
+   * must be editorially approved before it may enter the runtime, so fixtures
+   * that test the PUBLICATION rules are driven through the real lifecycle by
+   * three distinct actors first.
+   */
+  async function approveForPublish(assessmentVersionId: number) {
+    const current = await lifecycleForPublish.readAggregate("assessment", assessmentVersionId);
+    if (current.editorialState === "approved") return;
+    const revision = await lifecycleForPublish.bumpAggregate(prisma as never, {
+      kind: "assessment",
+      id: assessmentVersionId,
+      expectedRevision: current.revision,
+      actorId: admin.id,
+    });
+    await lifecycleForPublish.submitForReview({
+      kind: "assessment",
+      id: assessmentVersionId,
+      expectedRevision: revision,
+      actorId: regular.id,
+    });
+    await lifecycleForPublish.approveVersion({
+      kind: "assessment",
+      id: assessmentVersionId,
+      expectedRevision: revision,
+      actorId: reviewer.id,
+      validationPassed: true,
+    });
+  }
+
+  /** Approve, then publish through the accepted command. */
+  async function publishApprovedAssessment(args: {
+    actorId: number;
+    assessmentVersionId: number;
+    expectedPublishedAssessmentVersionId?: number | null;
+  }) {
+    await approveForPublish(args.assessmentVersionId);
+    return assessment.publishAssessmentVersion(args);
+  }
+
   const admin = await prisma.user.create({ data: { email: "assessment-admin@example.com", name: "Admin", role: "admin" } });
   const regular = await prisma.user.create({ data: { email: "assessment-user@example.com", name: "User" } });
   const blocked = await prisma.user.create({ data: { email: "assessment-blocked@example.com", name: "Blocked", role: "admin", status: "blocked" } });
+  const reviewer = await prisma.user.create({
+    data: { email: "assessment-reviewer@example.com", name: "Reviewer", role: "admin" },
+  });
   const curriculum = await prisma.curriculumVersion.create({ data: { code: "assessment-life", name: "Assessment", versionNumber: 1 } });
   const curriculumModule = await prisma.moduleDefinition.create({
     data: { curriculumVersionId: curriculum.id, moduleNumber: 1, code: "assessment-module", title: "Assessment", firstLevel: 1, lastLevel: 8 },
@@ -311,7 +355,7 @@ async function main() {
     await check("26b. bounded non-standard pass percent (70) is publishable", async () => {
       const bounded = await fillChoiceDraft(levels[1].id);
       await assessment.updateAssessmentVersion({ expectedRevision: await assessmentRev({ assessmentVersionId: bounded.id }), actorId: admin.id, assessmentVersionId: bounded.id, patch: { passPercent: 70 } });
-      const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: bounded.id });
+      const result = await publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: bounded.id });
       assert.equal(result.published.status, "published");
       assert.equal(result.published.passPercent, 70);
       await prisma.assessmentVersion.update({ where: { id: bounded.id }, data: { status: "archived", archivedAt: new Date() } });
@@ -342,7 +386,7 @@ async function main() {
 
     const first = await fillChoiceDraft(levels[5].id);
     await check("30. valid lesson assessment publishes without auto-binding", async () => {
-      const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: first.id, expectedPublishedAssessmentVersionId: null });
+      const result = await publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: first.id, expectedPublishedAssessmentVersionId: null });
       assert.equal(result.published.status, "published");
       assert.equal(result.replaced, null);
       assert.equal(await prisma.levelResourceBinding.findUnique({ where: { levelDefinitionId: levels[5].id } }), null);
@@ -369,11 +413,11 @@ async function main() {
     await prisma.levelResourceBinding.update({ where: { levelDefinitionId: levels[5].id }, data: { contentVersionId: content.id } });
     const replacement = await fillChoiceDraft(levels[5].id);
     await check("34. replacement requires exact current published ID", async () => {
-      await expectError(() => assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: replacement.id }), "ASSESSMENT_REPLACEMENT_REQUIRED");
-      await expectError(() => assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: replacement.id, expectedPublishedAssessmentVersionId: badPass.id }), "ASSESSMENT_REPLACEMENT_MISMATCH");
+      await expectError(() => publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: replacement.id }), "ASSESSMENT_REPLACEMENT_REQUIRED");
+      await expectError(() => publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: replacement.id, expectedPublishedAssessmentVersionId: badPass.id }), "ASSESSMENT_REPLACEMENT_MISMATCH");
     });
     await check("35. exact replacement archives old and moves only its assessment pin", async () => {
-      const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: replacement.id, expectedPublishedAssessmentVersionId: first.id });
+      const result = await publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: replacement.id, expectedPublishedAssessmentVersionId: first.id });
       assert.equal(result.replaced?.status, "archived");
       assert.equal(result.bindingMoved, true);
       const binding = await prisma.levelResourceBinding.findUniqueOrThrow({ where: { levelDefinitionId: levels[5].id } });
@@ -393,7 +437,7 @@ async function main() {
     });
 
     const onlyAssessment = await fillChoiceDraft(levels[6].id);
-    await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: onlyAssessment.id });
+    await publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: onlyAssessment.id });
     await assessment.setLevelAssessmentBinding({ actorId: admin.id, levelDefinitionId: levels[6].id, assessmentVersionId: onlyAssessment.id });
     await check("38. clearing assessment-only binding deletes the empty row", async () => {
       const result = await assessment.clearLevelAssessmentBinding({ actorId: admin.id, levelDefinitionId: levels[6].id });
@@ -433,7 +477,7 @@ async function main() {
       await assessment.updateAssessmentQuestion({ expectedRevision: await assessmentRev({ questionDefinitionId: item.id }), actorId: admin.id, questionDefinitionId: item.id, patch: { type: "scenario_choice" } });
     }
     await check("43. complete final exam publishes with approved deterministic types", async () => {
-      const result = await assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: finalExam.id });
+      const result = await publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: finalExam.id });
       assert.equal(result.published.status, "published");
     });
 
@@ -472,7 +516,7 @@ async function main() {
     await check("47. audit failure rolls back assessment publication", async () => {
       await prisma.$executeRawUnsafe("CREATE TRIGGER fail_assessment_publish_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'ASSESSMENT_VERSION_PUBLISHED' BEGIN SELECT RAISE(ABORT, 'forced-audit-failure'); END");
       try {
-        await expectError(() => assessment.publishAssessmentVersion({ actorId: admin.id, assessmentVersionId: badPass.id }), "ASSESSMENT_INTERNAL_ERROR");
+        await expectError(() => publishApprovedAssessment({ actorId: admin.id, assessmentVersionId: badPass.id }), "ASSESSMENT_INTERNAL_ERROR");
       } finally {
         await prisma.$executeRawUnsafe("DROP TRIGGER fail_assessment_publish_audit");
       }

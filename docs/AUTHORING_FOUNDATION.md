@@ -670,3 +670,89 @@ path, so it can never manufacture a record for an approval that succeeded; the
 original error is rethrown unconditionally; and if the audit write itself fails
 the outcome is a refusal with no record, which is exactly the previous behaviour.
 It carries actor, target, action, reason and time, and **no draft content**.
+
+---
+
+# PHASE-G0 PUBLISH GATE
+
+The corrections above closed the reachable authoring mutations but left one
+question open and explicitly reported it: *runtime publication did not consult
+`editorialState`, so a version nobody approved could still be published.* That
+decision has now been taken.
+
+## The rule, and its deliberate asymmetry
+
+**Approval does not publish. Publication requires approval.**
+
+The two lifecycles remain independent — this is a precondition, not an
+equivalence:
+
+- `approveVersion` still touches no publication column and no binding. Deciding
+  content is correct and deciding learners should receive it are different
+  decisions, frequently made by different people, and the correction preserves
+  that: the approver and the publisher in the regression are deliberately
+  different actors.
+- `publishContentVersion` / `publishAssessmentVersion` now refuse unless
+  `editorialState = approved`. Nothing on the publish path writes
+  `editorialState`, `approvedById` or `approvedAt`, so publishing can never
+  manufacture the approval it demands.
+
+## One invariant, not a Studio-only check
+
+`assertEditoriallyApproved` lives in `authoring-lifecycle.ts` beside
+`assertEditable`, and each publish transaction calls it exactly once, from
+inside its own transaction, reading the snapshot it had already loaded. There is
+no second implementation and no per-caller variant — a `UserRole=admin` calling
+the legacy route directly is refused identically, and the regression asserts
+that no local `editorialState === "approved"` comparison exists anywhere else.
+
+Both publish command schemas are `strictObject` with no editorial field, so the
+gate cannot be satisfied from the wire: smuggling `editorialState`,
+`approvedById` or `approvedAt` into the body is a schema rejection.
+
+## It guards the transition, not the history
+
+Every row that predates the G0 migration is `published` with
+`editorialState = draft`. That combination stays **legal, readable and
+untouched**. The check runs on the way *into* `published` and nowhere else —
+asserting it over stored rows would have meant either unpublishing live lessons
+or backfilling approvals nobody granted, which is precisely the fabrication the
+G0 migration was written to avoid. Archive, a runtime *removal*, remains
+available on those rows, so the existing estate stays operable without inventing
+an approval for anything.
+
+## Content and assessment gate independently
+
+No atomic paired publication was invented — the product still allows a level to
+carry a published lesson and no published bank. What the regression proves is
+that approval does not travel: publishing an approved lesson does not carry its
+unapproved assessment into the runtime, and approving a bank does not license an
+unapproved lesson.
+
+## Error contract
+
+The gate runs **after** the accepted publication validation and **before** any
+write. Both are preconditions, so the safety is identical either way, and this
+order preserves every accepted diagnostic: an author whose lesson is missing a
+localization still receives `CONTENT_PUBLICATION_INVALID` with its issue codes
+and its audit row, rather than being told only "get it approved" and discovering
+the real problem after review. Governance is the last thing standing between a
+valid version and the runtime.
+
+One consequence worth stating plainly: an APPROVED version that then fails
+publication validation is immutable, because approved evidence may not be edited
+in place. The remedy is the documented one — create a new version. That is not a
+new rule; it is the approved-immutability rule meeting the publish gate.
+
+`AUTHORING_APPROVAL_REQUIRED`, mapped to **409** by the domain's own
+`authoringErrorStatus`. It is its own code rather than `AUTHORING_STATE_INVALID`
+because the remedy differs: the transition is legal and the caller may well hold
+publish authority — what is missing is the product precondition, and the answer
+is "get it reviewed". Both publish wrappers now re-throw `AuthoringDomainError`
+unchanged rather than flattening it into a 500, for the same reason the mutation
+boundary does. No database detail is exposed.
+
+## No migration
+
+This is a domain invariant over the existing G0 schema. `prisma/` is untouched
+and the migration count stays 44.

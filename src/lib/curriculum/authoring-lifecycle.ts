@@ -126,6 +126,45 @@ export function assertEditable(row: Pick<AggregateRow, "editorialState">, kind: 
 }
 
 /**
+ * PHASE-G0 PUBLISH GATE — THE ONE PUBLICATION INVARIANT.
+ *
+ * A version may enter the runtime `published` state only if a human editorial
+ * process accepted it. This is the single place that rule exists, and both
+ * `publishContentVersion` and `publishAssessmentVersion` call it from inside
+ * their own publishing transaction, so there is no Studio-only variant and no
+ * legacy escape hatch: every caller of the accepted domain command obeys it.
+ *
+ * THE TWO LIFECYCLES ARE STILL TWO. This does not merge them and it is not
+ * symmetric:
+ *
+ *   • approval STILL does not publish — `approveVersion` touches no publication
+ *     column and no binding, because deciding that content is correct and
+ *     deciding that learners should receive it are different decisions, often by
+ *     different people.
+ *   • publication now REQUIRES approval, which is a precondition, not an
+ *     equivalence. Nothing here writes `editorialState`, `approvedById` or
+ *     `approvedAt`, so publishing can never manufacture the approval it demands.
+ *
+ * IT GUARDS THE TRANSITION, NOT THE HISTORY. Every row that predates the G0
+ * migration is `published` with `editorialState = draft`, and that combination
+ * stays legal and untouched. Asserting the invariant over stored rows instead of
+ * over the transition would have meant either unpublishing live lessons or
+ * backfilling approvals nobody granted — the exact fabrication the G0 migration
+ * was written to avoid. So this function is called on the way IN to `published`
+ * and nowhere else.
+ */
+export function assertEditoriallyApproved(
+  row: Pick<AggregateRow, "editorialState">,
+  kind: AuthoringTargetKind,
+) {
+  if (row.editorialState === "approved") return;
+  throw new AuthoringDomainError(
+    "AUTHORING_APPROVAL_REQUIRED",
+    `${ENTITY_TYPE[kind]} is ${row.editorialState} — only an editorially approved version may be published`,
+  );
+}
+
+/**
  * THE CONCURRENCY PRIMITIVE.
  *
  * Verifies the editorial state permits a write, then atomically moves the

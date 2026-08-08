@@ -11,6 +11,7 @@ import {
   guardAggregateChildMutation,
   guardAggregateSelfMutation,
 } from "@/lib/curriculum/authoring-mutation-guard";
+import { assertEditoriallyApproved } from "@/lib/curriculum/authoring-lifecycle";
 import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { ContentDomainError, isContentDomainError } from "@/lib/curriculum/content-errors";
 import type { ContentDomainErrorCode } from "@/lib/curriculum/content-errors";
@@ -700,6 +701,18 @@ async function publishInTransaction(
       );
     }
 
+    // PHASE-G0 PUBLISH GATE — the governance precondition, checked from DURABLE
+    // state inside the publishing transaction and BEFORE anything is written.
+    //
+    // ORDER: after the accepted publication validation, deliberately. Both run
+    // before any write, so the safety is identical either way, and this order
+    // preserves every accepted diagnostic — an author whose lesson is missing a
+    // localization still gets CONTENT_PUBLICATION_INVALID with its issue codes
+    // and its audit row, instead of being told only "get it approved" and
+    // discovering the real problem after review. Governance is the LAST thing
+    // standing between a valid version and the runtime.
+    assertEditoriallyApproved(content, "content");
+
     const expected = data.expectedPublishedContentVersionId ?? null;
     const currentPublished = await tx.contentVersion.findFirst({
       where: { levelDefinitionId: content.levelDefinitionId, status: "published" },
@@ -866,6 +879,11 @@ export async function publishContentVersion(input: unknown): Promise<PublishCont
       throw error;
     }
     if (isContentDomainError(error)) throw error;
+    // PHASE-G0 PUBLISH GATE — the approval refusal is a PRODUCT answer and must
+    // reach the caller intact. It is not an internal fault, and flattening it
+    // into a 500 would tell an editor nothing about why their lesson did not go
+    // live. Same reasoning as the sanitizer pass-through above.
+    if (isAuthoringDomainError(error)) throw error;
     throw new ContentDomainError("CONTENT_INTERNAL_ERROR", "content operation failed");
   }
 }

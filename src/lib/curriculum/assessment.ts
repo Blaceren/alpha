@@ -34,6 +34,7 @@ import {
   guardAggregateChildMutation,
   guardAggregateSelfMutation,
 } from "@/lib/curriculum/authoring-mutation-guard";
+import { assertEditoriallyApproved } from "@/lib/curriculum/authoring-lifecycle";
 import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { isCurriculumV2AssessmentEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -690,6 +691,13 @@ async function publishInTransaction(
         issues,
       );
     }
+
+    // PHASE-G0 PUBLISH GATE — the same invariant, in the same position and for
+    // the same reason as the content path. A bank whose answer keys nobody
+    // reviewed must not become the thing a learner is graded against, and the
+    // two resources gate independently: an approved lesson does not carry its
+    // assessment into the runtime with it.
+    assertEditoriallyApproved(assessment, "assessment");
     const expected = data.expectedPublishedAssessmentVersionId ?? null;
     const current = await tx.assessmentVersion.findFirst({
       where: { levelDefinitionId: assessment.levelDefinitionId, status: "published" },
@@ -837,6 +845,11 @@ export async function publishAssessmentVersion(input: unknown): Promise<PublishA
       throw error;
     }
     if (isAssessmentDomainError(error)) throw error;
+    // PHASE-G0 PUBLISH GATE — the approval refusal is a PRODUCT answer and must
+    // reach the caller intact. It is not an internal fault, and flattening it
+    // into a 500 would tell an editor nothing about why their lesson did not go
+    // live. Same reasoning as the sanitizer pass-through above.
+    if (isAuthoringDomainError(error)) throw error;
     throw new AssessmentDomainError("ASSESSMENT_INTERNAL_ERROR", "assessment operation failed");
   }
 }

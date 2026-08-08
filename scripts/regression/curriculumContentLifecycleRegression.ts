@@ -64,6 +64,7 @@ async function main() {
   delete process.env.CURRICULUM_V2_CONTENT_ENABLED;
   const { prisma } = await import("../../src/lib/prisma");
   const content = await import("../../src/lib/curriculum/content");
+  const lifecycleForPublish = await import("../../src/lib/curriculum/authoring-lifecycle");
 
   /**
    * PHASE-G0 CORRECTION — the content domain now REQUIRES the aggregate
@@ -101,6 +102,50 @@ async function main() {
     return version?.revision ?? 1;
   }
 
+  /**
+   * PHASE-G0 PUBLISH GATE — publication now requires editorial approval, so a
+   * fixture that wants to reach the PUBLICATION rules has to be approved first.
+   *
+   * This walks the accepted lifecycle with three distinct actors rather than
+   * writing `editorialState` directly, so the fixture proves the real path is
+   * reachable instead of quietly bypassing the gate it is testing around. Each
+   * test below still asserts exactly what it asserted before; approval is a
+   * precondition, not the subject.
+   */
+  async function approveForPublish(contentVersionId: number) {
+    const current = await lifecycleForPublish.readAggregate("content", contentVersionId);
+    if (current.editorialState === "approved") return;
+    const revision = await lifecycleForPublish.bumpAggregate(prisma as never, {
+      kind: "content",
+      id: contentVersionId,
+      expectedRevision: current.revision,
+      actorId: admin.id,
+    });
+    await lifecycleForPublish.submitForReview({
+      kind: "content",
+      id: contentVersionId,
+      expectedRevision: revision,
+      actorId: regular.id,
+    });
+    await lifecycleForPublish.approveVersion({
+      kind: "content",
+      id: contentVersionId,
+      expectedRevision: revision,
+      actorId: reviewer.id,
+      validationPassed: true,
+    });
+  }
+
+  /** Approve, then publish through the accepted command. */
+  async function publishApprovedContent(args: {
+    actorId: number;
+    contentVersionId: number;
+    expectedPublishedContentVersionId?: number | null;
+  }) {
+    await approveForPublish(args.contentVersionId);
+    return content.publishContentVersion(args);
+  }
+
   const admin = await prisma.user.create({
     data: { email: "content-admin@example.com", name: "Content Admin", role: "admin" },
   });
@@ -109,6 +154,9 @@ async function main() {
   });
   const blocked = await prisma.user.create({
     data: { email: "content-blocked@example.com", name: "Blocked", role: "admin", status: "blocked" },
+  });
+  const reviewer = await prisma.user.create({
+    data: { email: "content-reviewer@example.com", name: "Content Reviewer", role: "admin" },
   });
   const curriculum = await prisma.curriculumVersion.create({
     data: { code: "content-life", name: "Content Life", versionNumber: 1 },
@@ -421,7 +469,7 @@ async function main() {
     });
 
     await check("21. valid first publication is atomic", async () => {
-      const result = await content.publishContentVersion({ actorId: admin.id, contentVersionId: first.id });
+      const result = await publishApprovedContent({ actorId: admin.id, contentVersionId: first.id });
       assert.equal(result.published.status, "published");
       assert.equal(result.replaced, null);
       assert.equal(result.bindingMoved, false);
@@ -513,13 +561,13 @@ async function main() {
     });
     await check("27. replacement requires explicit current published ID", () =>
       expectError(
-        () => content.publishContentVersion({ actorId: admin.id, contentVersionId: secondDraft.id }),
+        () => publishApprovedContent({ actorId: admin.id, contentVersionId: secondDraft.id }),
         "CONTENT_REPLACEMENT_REQUIRED",
       ).then(() => undefined),
     );
     await check("28. stale expected replacement ID is rejected", () =>
       expectError(
-        () => content.publishContentVersion({
+        () => publishApprovedContent({
           actorId: admin.id,
           contentVersionId: secondDraft.id,
           expectedPublishedContentVersionId: 2_000_000_000,
@@ -528,7 +576,7 @@ async function main() {
       ).then(() => undefined),
     );
     await check("29. replacement archives old, publishes new, and moves binding atomically", async () => {
-      const result = await content.publishContentVersion({
+      const result = await publishApprovedContent({
         actorId: admin.id,
         contentVersionId: secondDraft.id,
         expectedPublishedContentVersionId: first.id,
@@ -583,7 +631,7 @@ async function main() {
       transcript: null,
       body: body("third"),
     });
-    await content.publishContentVersion({ actorId: admin.id, contentVersionId: third.id });
+    await publishApprovedContent({ actorId: admin.id, contentVersionId: third.id });
     await content.setLevelContentBinding({
       actorId: admin.id,
       levelDefinitionId: levels[2].id,
@@ -690,7 +738,7 @@ async function main() {
       );
       try {
         await expectError(
-          () => content.publishContentVersion({ actorId: admin.id, contentVersionId: rollbackUpdate.id }),
+          () => publishApprovedContent({ actorId: admin.id, contentVersionId: rollbackUpdate.id }),
           "CONTENT_INTERNAL_ERROR",
         );
       } finally {
@@ -699,7 +747,7 @@ async function main() {
       assert.equal((await prisma.contentVersion.findUniqueOrThrow({ where: { id: rollbackUpdate.id } })).status, "draft");
     });
 
-    await content.publishContentVersion({ actorId: admin.id, contentVersionId: rollbackUpdate.id });
+    await publishApprovedContent({ actorId: admin.id, contentVersionId: rollbackUpdate.id });
     await check("40. audit failure rolls back binding", async () => {
       await prisma.$executeRawUnsafe(
         "CREATE TRIGGER fail_content_bind_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'CONTENT_BOUND' BEGIN SELECT RAISE(ABORT, 'forced-audit-failure'); END",
@@ -750,6 +798,10 @@ async function main() {
       meta: { target: "ContentVersion_levelDefinitionId_published" },
     });
     await check("42. P2002 recovery returns only durably verified publication", async () => {
+      // PHASE-G0 PUBLISH GATE — approve BEFORE `$transaction` is monkey-patched:
+      // the approval lifecycle uses transactions too, and the forced P2002 below
+      // is meant to hit the PUBLISH transaction, not the approval that precedes it.
+      await approveForPublish(raceDraft.id);
       Object.defineProperty(prisma, "$transaction", {
         configurable: true,
         value: async (...args: Parameters<typeof prisma.$transaction>) => {
@@ -776,12 +828,16 @@ async function main() {
       },
     });
     await check("43. unverified P2002 is mapped to replacement-required, never success", async () => {
+      // Approved outside the patched window, for the same reason as 42.
+      await approveForPublish(raceLoser.id);
       Object.defineProperty(prisma, "$transaction", {
         configurable: true,
         value: async () => { throw p2002(); },
       });
       try {
         await expectError(
+          // Already approved above, outside the patched window — the helper
+          // cannot run here because it needs the real `$transaction`.
           () => content.publishContentVersion({ actorId: admin.id, contentVersionId: raceLoser.id }),
           "CONTENT_REPLACEMENT_REQUIRED",
         );

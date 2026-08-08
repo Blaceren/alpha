@@ -39,6 +39,17 @@ export type AuthoringErrorCode =
   | "AUTHORING_ASSESSMENT_LINK_MISSING"
   /** More than one candidate bank; the link refuses to guess. */
   | "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS"
+  /**
+   * PHASE-G0 PUBLISH GATE — a runtime publication was attempted on a version no
+   * human has editorially approved.
+   *
+   * It is deliberately its own code rather than `AUTHORING_STATE_INVALID`: the
+   * remedy is completely different. A state-invalid transition means the caller
+   * asked for something the lifecycle does not offer; this means the lifecycle
+   * step is legal but the PRODUCT precondition is missing, and the answer is
+   * "get it reviewed", not "try a different call".
+   */
+  | "AUTHORING_APPROVAL_REQUIRED"
   /** A review note named zero targets, or more than one. */
   | "AUTHORING_NOTE_TARGET_INVALID"
   | "AUTHORING_NOTE_NOT_FOUND"
@@ -84,6 +95,9 @@ export function authoringErrorStatus(code: AuthoringErrorCode): number {
     case "AUTHORING_REVISION_CONFLICT":
       return 409;
     case "AUTHORING_STATE_INVALID":
+    // 409, not 403: the caller may well hold publish authority. What is wrong is
+    // the RESOURCE's state, and it becomes right the moment a reviewer approves.
+    case "AUTHORING_APPROVAL_REQUIRED":
     case "AUTHORING_APPROVED_IMMUTABLE":
     case "AUTHORING_SUBMITTED_IMMUTABLE":
     case "AUTHORING_NOTE_ALREADY_RESOLVED":
