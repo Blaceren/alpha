@@ -38,6 +38,7 @@ import {
 import type { AuthoringIssue } from "@/lib/curriculum/authoring-errors";
 import { containsPlaceholder } from "@/lib/curriculum/package/validate";
 import { isProductToolCode } from "@/lib/curriculum/product-vocabulary";
+import { expectedTakeIdFor } from "@/lib/curriculum/authoring-level-profile";
 import {
   ATA_VIDEO_OPTIONS_PER_QUESTION,
   ATA_VIDEO_QUESTIONS_PER_LESSON,
@@ -381,6 +382,15 @@ export function validateAuthoringAssessment(
       }
     }
 
+    // PHASE-G1 TAKE-SLOT CORRECTION — POSITIONAL identity, not set membership.
+    //
+    // This used to assert only that the four canonical takes appeared SOMEWHERE
+    // across the bank, which accepted any permutation. That was insufficient:
+    // the accepted assessment projection derives each question's take as
+    // `takeIdFor(level, questionNumber)`, so a permuted-but-complete bank made
+    // the durable key and the fingerprinted binding describe different things,
+    // and the handoff shipped the durable one. The rule is now the one the
+    // fingerprint has always used, asked of each question individually.
     const expected = Array.from({ length: ATA_VIDEO_TAKES_PER_LESSON }, (_, i) => takeIdFor(level, i + 1));
     const seen = new Map<string, number>();
     for (const [index, question] of input.questions.entries()) {
@@ -412,6 +422,19 @@ export function validateAuthoringAssessment(
         );
       }
       seen.set(takeId, index);
+
+      // The slot itself. Reported even when the value is a perfectly good take
+      // of this level, because "a real take, in the wrong slot" is exactly the
+      // permuted state that used to pass.
+      const slot = expectedTakeIdFor(level, question.questionNumber);
+      if (parsedTake && parsedTake.levelNumber === level && takeId !== slot) {
+        issue(
+          issues,
+          "ASSESSMENT_TAKE_SLOT_MISMATCH",
+          `questions[${index}].stableKey`,
+          `question ${question.questionNumber} carries ${takeId} but its take slot is ${slot} — ATA take slots are positional and cannot be reassigned`,
+        );
+      }
     }
     for (const takeId of expected) {
       if (!seen.has(takeId)) {

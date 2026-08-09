@@ -158,14 +158,74 @@ export function canonicalTakeIdsForLevel(levelNumber: number): string[] {
 }
 
 /**
- * The take identifier a question at `questionNumber` must carry.
+ * THE ATA TAKE-SLOT INVARIANT — the single authority for what a question's
+ * durable `stableKey` must be.
  *
- * DELIBERATELY THE SAME DERIVATION the accepted fingerprint projection already
- * uses (`authoring-assessment-projection` binds `takeIdFor(levelNumber,
- * questionNumber)`). Keeping the two identical is what makes it safe to store
- * the take id durably: the stored mapping and the fingerprinted mapping cannot
- * drift, and the assessment fingerprint of an existing bank does not move.
+ * ===================== WHY THIS IS POSITIONAL, NOT A MAPPING =====================
+ * `T{level}.1` … `T{level}.4` are not labels an editor attaches to whichever
+ * question they like. They are four STABLE SEMANTIC SLOTS, and the question at
+ * `questionNumber` N is the editable content of slot N. The accepted assessment
+ * projection has always said so — `authoring-assessment-projection` derives each
+ * question's `takeId` as `takeIdFor(levelNumber, ordinal)` where `ordinal` IS
+ * `questionNumber`, and the video production contract's `assessmentFingerprint`
+ * is computed over exactly that.
+ *
+ * The G1 closeout found that the stored key and that derivation could disagree:
+ * the validator accepted ANY complete permutation, so a bank could durably say
+ * "question 1 answers T5.2" while the fingerprint the video evidence was
+ * accepted against said "question 1 answers T5.1", and the handoff bundle
+ * serialised the former. Two shipped artifacts, contradictory facts, nothing
+ * detecting it.
+ *
+ * THE RESOLUTION IS TO ALIGN THE PRODUCT WITH THE FINGERPRINT, not to widen the
+ * fingerprint. `calculateAssessmentFingerprint` is untouched and no bank
+ * fingerprint moves. What changes is that a permutation is no longer a state the
+ * domain will accept, so the disagreement has no way to exist.
+ *
+ * This function is the ONLY place the slot rule is stated. Readiness, the
+ * validator, the assessment mutation commands and the importer all ask it.
  */
 export function expectedTakeIdFor(levelNumber: number, questionNumber: number): string {
   return takeIdFor(levelNumber, questionNumber);
+}
+
+/**
+ * Is this question sitting in its canonical take slot?
+ *
+ * The whole invariant in one predicate, so no caller re-derives it and no caller
+ * can accidentally check only half of it (the shape, or the level, but not the
+ * position).
+ */
+export function occupiesCanonicalTakeSlot(
+  stableKey: string,
+  levelNumber: number,
+  questionNumber: number,
+): boolean {
+  return stableKey === expectedTakeIdFor(levelNumber, questionNumber);
+}
+
+/**
+ * Why a proposed `stableKey` is not the slot this question must occupy, phrased
+ * for a person rather than for a log.
+ *
+ * `null` when the value is exactly right. The three cases are separated because
+ * the remedies differ: a foreign level means the bank is being pointed at
+ * another lesson, a wrong ordinal means somebody is trying to REASSIGN a slot
+ * (which ATA does not support), and anything else is not a take at all.
+ */
+export function takeSlotViolation(
+  stableKey: string,
+  levelNumber: number,
+  questionNumber: number,
+): string | null {
+  const expected = expectedTakeIdFor(levelNumber, questionNumber);
+  if (stableKey === expected) return null;
+  const parsed = parseTakeId(stableKey);
+  if (parsed === null) {
+    return `"${stableKey}" is not an ATA take identifier — question ${questionNumber} must carry ${expected}`;
+  }
+  if (parsed.levelNumber !== levelNumber) {
+    return `take ${stableKey} belongs to level ${parsed.levelNumber}, not ${levelNumber} — question ${questionNumber} must carry ${expected}`;
+  }
+  return `take ${stableKey} is the slot for question ${parsed.ordinal}, not ${questionNumber} — ATA take slots are fixed and cannot be reassigned; question ${questionNumber} must carry ${expected}`;
 }

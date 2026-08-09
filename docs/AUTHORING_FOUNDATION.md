@@ -831,3 +831,63 @@ Cross-repo, both candidates and a disposable database:
 node <backend>/node_modules/tsx/dist/cli.mjs \
   scripts/phaseG1CrossRepoIntegration.ts --backend <backend>   # in the Academy worktree
 ```
+
+## The ATA take-slot invariant (engineering)
+
+`T{level}.1` … `T{level}.4` are **positional slots**, not a reassignable
+mapping. For every ATA video-profile assessment:
+
+```
+QuestionDefinition.stableKey === takeIdFor(levelNumber, questionNumber)
+```
+
+stated once, in `authoring-level-profile.expectedTakeIdFor`, and asked by the
+validator, the readiness projection, both assessment mutation commands and the
+importer. `occupiesCanonicalTakeSlot` and `takeSlotViolation` are the only
+predicates over it.
+
+**Why positional.** `authoring-assessment-projection` has always derived a
+question's `takeId` as `takeIdFor(levelNumber, ordinal)` where `ordinal` is
+`questionNumber`, and `VideoProductionVersion.assessmentFingerprint` is computed
+over that projection. The G1 closeout measured what happened when the stored key
+and that derivation disagreed:
+
+| reader | binding after a Q1↔Q2 permutation |
+|---|---|
+| `validateAuthoringAssessment` (old rule: complete set) | accepted |
+| handoff bundle (`stableKey`) | Q1 → `T5.2` |
+| projection / video evidence fingerprint (positional) | Q1 → `T5.1` |
+
+Two durable artifacts, contradictory facts, nothing detecting it. The evidence
+*did* go stale — but only because the projection's `questionId` field carries
+`stableKey`; re-approving recomputed the fingerprint over the unchanged
+positional binding, so the staleness cleared while the contradiction remained.
+
+**The resolution aligns the product with the fingerprint, not the reverse.**
+`calculateAssessmentFingerprint` is untouched and no bank fingerprint moved. What
+changed is that a permutation is no longer a state the domain will accept:
+
+* the write schemas still permit the generic lowercase vocabulary, because
+  non-ATA banks depend on it — the slot rule is applied only where
+  `isAtaVideoProfileLevel` holds;
+* `updateAssessmentQuestion` and `createAssessmentQuestion` assert the pair that
+  results from the write, so the two halves cannot be moved apart one call at a
+  time;
+* `questionNumber` cannot be changed on an ATA bank at all, because it is half of
+  the take identity and renumbering would be reassignment under another name;
+* the validator reports `ASSESSMENT_TAKE_SLOT_MISMATCH` per question rather than
+  asserting set membership;
+* `mappedTakeCount` counts questions **in their own slot**, so readiness and the
+  handoff cannot drift from the validator.
+
+**A patch that touches neither field is left alone on purpose.** An imported or
+legacy bank that is already out of slot must stay editable enough to be
+repaired; validation, approval, readiness and the handoff all keep refusing it
+until it is.
+
+`@@unique([assessmentVersionId, stableKey])` makes a *duplicate* take
+unreachable even with raw table access, so the only adversarial shape that needs
+defending is the permutation — and
+`curriculumAuthoringTakeSlotGateRegression` forces one, plus a missing take, a
+generic key and a foreign-level take, and proves each closes validation,
+approval, readiness and both handoff scopes.

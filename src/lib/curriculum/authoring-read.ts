@@ -29,6 +29,7 @@ import {
   contentBodyTeachingCharacters,
   parseContentBody,
 } from "@/lib/curriculum/content-body";
+import { occupiesCanonicalTakeSlot } from "@/lib/curriculum/authoring-level-profile";
 import { completionPair } from "@/lib/curriculum/completion-pairs";
 import { countBlueprintConflicts } from "@/lib/curriculum/authoring-conflict";
 import {
@@ -361,7 +362,7 @@ export async function readAuthoringOverview(
         select: {
           ...RUNTIME_LIFECYCLE_SELECT,
           levelDefinitionId: true,
-          questions: { select: { stableKey: true } },
+          questions: { select: { stableKey: true, questionNumber: true } },
         },
       }),
       prisma.videoProductionVersion.findMany({
@@ -454,8 +455,15 @@ export async function readAuthoringOverview(
       ? {
           ...lifecycleSummary(assessmentRow, notes.assessment.get(assessmentRow.id) ?? 0),
           questionCount: assessmentRow.questions.length,
+          // PHASE-G1 TAKE-SLOT CORRECTION — questions sitting in their OWN slot.
+          //
+          // This used to accept any key merely SHAPED like one of this level's
+          // takes, so a permuted bank counted four and readiness let it through
+          // while the fingerprint bound the takes positionally. The rule is now
+          // asked of `authoring-level-profile`, the single authority, so
+          // readiness cannot drift from the validator.
           mappedTakeCount: assessmentRow.questions.filter((question) =>
-            new RegExp(`^T${level.levelNumber}\\.[1-4]$`).test(question.stableKey),
+            occupiesCanonicalTakeSlot(question.stableKey, level.levelNumber, question.questionNumber),
           ).length,
           provenance: resolveProvenance({
             editorialState: assessmentRow.editorialState,

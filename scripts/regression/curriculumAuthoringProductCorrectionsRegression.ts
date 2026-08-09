@@ -346,30 +346,62 @@ async function main() {
       include: { questions: { orderBy: { questionNumber: "asc" } } },
     });
 
-    await check("W1 an ordinary editor may RE-ASSIGN a take through the accepted command", async () => {
+    /*
+     * PHASE-G1 TAKE-SLOT CORRECTION — W1..W3 previously asserted the OPPOSITE.
+     *
+     * They proved an editor could park a question on a generic key and complete
+     * a swap, and that the resulting permutation still satisfied the validator.
+     * The independent closeout then showed why that was wrong: the accepted
+     * assessment projection derives each question's take POSITIONALLY, so a
+     * permuted bank made the durable key and the video evidence's fingerprint
+     * describe different lessons while the handoff shipped the durable one.
+     *
+     * The product decision is that `T{level}.1..4` are four fixed SLOTS, and
+     * these checks now assert the invariant rather than its violation.
+     */
+    await check("W1 a take REASSIGNMENT is refused — ATA slots are positional", async () => {
       const [first, second] = bank6.questions;
-      // Swap two takes: park one on a free slot, then complete the swap.
-      let revision = bank6.revision;
-      const move = async (id: number, stableKey: string) => {
-        await assessment.updateAssessmentQuestion({
-          actorId: authorUser.id,
-          questionDefinitionId: id,
-          expectedRevision: revision,
-          patch: { stableKey },
-        });
-        revision = (await prisma.assessmentVersion.findUniqueOrThrow({
-          where: { id: bank6.id }, select: { revision: true },
-        })).revision;
-      };
-      await move(first!.id, "temporary-take-slot");
-      await move(second!.id, "T6.1");
-      await move(first!.id, "T6.2");
+      void second;
+      const revision = (await prisma.assessmentVersion.findUniqueOrThrow({
+        where: { id: bank6.id }, select: { revision: true },
+      })).revision;
+
+      // The parking key that used to make a swap possible.
+      const parked = await refusedWith(
+        () =>
+          assessment.updateAssessmentQuestion({
+            actorId: authorUser.id,
+            questionDefinitionId: first!.id,
+            expectedRevision: revision,
+            patch: { stableKey: "temporary-take-slot" },
+          }),
+        "ASSESSMENT_INPUT_INVALID",
+      );
+      assert.match(JSON.stringify(parked.issues ?? []), /not an ATA take identifier/);
+
+      // And the swap itself, stated directly.
+      const swapped = await refusedWith(
+        () =>
+          assessment.updateAssessmentQuestion({
+            actorId: authorUser.id,
+            questionDefinitionId: first!.id,
+            expectedRevision: revision,
+            patch: { stableKey: "T6.2" },
+          }),
+        "ASSESSMENT_INPUT_INVALID",
+      );
+      assert.match(JSON.stringify(swapped.issues ?? []), /cannot be reassigned/);
+
       const after = await prisma.questionDefinition.findMany({
         where: { assessmentVersionId: bank6.id },
         orderBy: { questionNumber: "asc" },
         select: { stableKey: true },
       });
-      assert.deepEqual(after.map((row) => row.stableKey), ["T6.2", "T6.1", "T6.3", "T6.4"]);
+      assert.deepEqual(after.map((row) => row.stableKey), ["T6.1", "T6.2", "T6.3", "T6.4"]);
+      const now = (await prisma.assessmentVersion.findUniqueOrThrow({
+        where: { id: bank6.id }, select: { revision: true },
+      })).revision;
+      assert.equal(now, revision, "a refused write moves no revision");
     });
 
     await check("W2 a FOREIGN level's take is refused by the domain", async () => {
@@ -386,16 +418,33 @@ async function main() {
           }),
         "ASSESSMENT_INPUT_INVALID",
       );
-      assert.match(JSON.stringify(error.issues ?? []), /does not belong to level 6/);
+      assert.match(JSON.stringify(error.issues ?? []), /belongs to level 7, not 6/);
     });
 
-    await check("W3 a swapped-but-complete mapping still satisfies the ATA validator", async () => {
+    await check("W3 the CANONICAL positional mapping satisfies the ATA validator", async () => {
       const report = await validation.validateLevelAuthoring({
         curriculumVersionId: curriculum.id,
         levelDefinitionId: l6.id,
       });
       const takeIssues = (report?.issues ?? []).filter((issue) => issue.code.startsWith("ASSESSMENT_TAKE"));
-      assert.deepEqual(takeIssues, [], "all four takes are still covered exactly once");
+      assert.deepEqual(takeIssues, [], "every question sits in its own slot");
+    });
+
+    await check("W4 question CONTENT is still freely editable inside a fixed slot", async () => {
+      const revision = (await prisma.assessmentVersion.findUniqueOrThrow({
+        where: { id: bank6.id }, select: { revision: true },
+      })).revision;
+      await assessment.updateAssessmentQuestion({
+        actorId: authorUser.id,
+        questionDefinitionId: bank6.questions[0]!.id,
+        expectedRevision: revision,
+        patch: { correctAnswer: { code: "b" } },
+      });
+      const row = await prisma.questionDefinition.findUniqueOrThrow({
+        where: { id: bank6.questions[0]!.id },
+      });
+      assert.equal(row.stableKey, "T6.1", "the slot is untouched by a content edit");
+      assert.equal((row.correctAnswer as { code: string }).code, "b");
     });
 
     /* ============ H. video production stays cloneable ============ */

@@ -8,8 +8,10 @@ import { Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
 import { staffRoleGrantsCurriculumCapability } from "@/lib/curriculum/authoring-authorization";
 import {
+  isAtaVideoProfileLevel,
   isCanonicalTakeId,
   isTakeIdForLevel,
+  takeSlotViolation,
 } from "@/lib/curriculum/authoring-level-profile";
 import { AssessmentDomainError, isAssessmentDomainError } from "@/lib/curriculum/assessment-errors";
 import type { AssessmentDomainErrorCode } from "@/lib/curriculum/assessment-errors";
@@ -115,33 +117,87 @@ async function assertAssessmentAuthor(actorId: number, tx: DbClient) {
 }
 
 /**
- * PHASE-G1 CORRECTION — a take identifier must belong to THIS level.
+ * PHASE-G1 TAKE-SLOT CORRECTION — where a question's take identity is decided.
  *
- * The field schema knows the SHAPE of a take (`T{level}.{1-4}`) but cannot know
- * which level it is being written to, so the level-scoped half of the rule lives
- * here, where the bank's own `LevelDefinition` is already loaded. Writing L6's
- * take onto an L5 question is refused at the domain rather than discovered later
- * by the validator, because a foreign take silently breaks the 1:1 question/take
- * mapping the video contract depends on.
+ * TWO PROFILES, ONE FUNCTION. An ATA video lesson's bank is four FIXED SLOTS:
+ * the question at `questionNumber` N is the content of `T{level}.N` and nothing
+ * else, because the accepted assessment projection derives that binding
+ * positionally and the video contract's evidence is fingerprinted over it. A
+ * reassignment is therefore not a thing an editor can ask for — it would make
+ * the durable bank and the video evidence describe different lessons.
  *
- * A non-take `stableKey` is untouched: assessments outside the ATA video profile
- * keep the generic vocabulary, and this assertion says nothing about them.
+ * Everything OUTSIDE that profile keeps the generic vocabulary untouched: an
+ * ordinary assessment's `stableKey` is a free lowercase key, and the only rule
+ * that applies is the one that has always applied — a value SHAPED like a take
+ * may not name another level.
+ *
+ * The slot rule itself is stated once, in `authoring-level-profile`. This
+ * function decides only WHICH rule the bank is under.
  */
-function assertTakeIdBelongsToLevel(stableKey: string, levelNumber: number) {
-  if (!isCanonicalTakeId(stableKey)) return;
-  if (isTakeIdForLevel(stableKey, levelNumber)) return;
-  throw new AssessmentDomainError(
-    "ASSESSMENT_INPUT_INVALID",
-    "take identifier belongs to another level",
-    [
-      {
-        code: "ASSESSMENT_FIELD_INVALID",
-        entity: "assessment",
-        reference: "input.stableKey",
-        message: `take ${stableKey} does not belong to level ${levelNumber}`,
-      },
-    ],
-  );
+function assertTakeIdentity(
+  level: { levelNumber: number; stableCode: string; type: string },
+  stableKey: string,
+  questionNumber: number,
+) {
+  if (!isAtaVideoProfileLevel(level)) {
+    // Generic profile: shape is the schema's business, level ownership is ours.
+    if (!isCanonicalTakeId(stableKey)) return;
+    if (isTakeIdForLevel(stableKey, level.levelNumber)) return;
+    throw new AssessmentDomainError(
+      "ASSESSMENT_INPUT_INVALID",
+      "take identifier belongs to another level",
+      [
+        {
+          code: "ASSESSMENT_FIELD_INVALID",
+          entity: "assessment",
+          reference: "input.stableKey",
+          message: `take ${stableKey} does not belong to level ${level.levelNumber}`,
+        },
+      ],
+    );
+  }
+
+  const violation = takeSlotViolation(stableKey, level.levelNumber, questionNumber);
+  if (violation === null) return;
+  throw new AssessmentDomainError("ASSESSMENT_INPUT_INVALID", violation, [
+    {
+      code: "ASSESSMENT_TAKE_SLOT_INVALID",
+      entity: "assessment",
+      reference: "input.stableKey",
+      message: violation,
+    },
+  ]);
+}
+
+/**
+ * ATA question slots are not renumbered.
+ *
+ * `questionNumber` is half of the take identity, so allowing an editor to move a
+ * question from slot 2 to slot 1 would be Take reassignment wearing a different
+ * field name — the exact hidden path this correction exists to close. The four
+ * slots are fixed; what an editor changes is the content inside one.
+ */
+function assertNoAtaRenumber(
+  level: { levelNumber: number; stableCode: string; type: string },
+  currentQuestionNumber: number,
+  patchedQuestionNumber: number | undefined,
+) {
+  if (patchedQuestionNumber === undefined) return;
+  if (patchedQuestionNumber === currentQuestionNumber) return;
+  if (!isAtaVideoProfileLevel(level)) return;
+  const message =
+    `question ${currentQuestionNumber} cannot be renumbered to ${patchedQuestionNumber}: ` +
+    `an ATA lesson has four fixed take slots (${[1, 2, 3, 4]
+      .map((n) => `T${level.levelNumber}.${n}`)
+      .join(", ")}) and a question is the content of its slot`;
+  throw new AssessmentDomainError("ASSESSMENT_INPUT_INVALID", message, [
+    {
+      code: "ASSESSMENT_TAKE_SLOT_INVALID",
+      entity: "assessment",
+      reference: "input.questionNumber",
+      message,
+    },
+  ]);
 }
 
 function assertParentDraft(status: "draft" | "published" | "archived") {
@@ -443,7 +499,7 @@ export async function createAssessmentQuestion(input: unknown): Promise<Question
     await assertAssessmentAuthor(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
-    assertTakeIdBelongsToLevel(data.stableKey, assessment.levelDefinition.levelNumber);
+    assertTakeIdentity(assessment.levelDefinition, data.stableKey, data.questionNumber);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
     // refuses a stale writer, moves the revision and records the
@@ -493,8 +549,19 @@ export async function updateAssessmentQuestion(input: unknown): Promise<Question
   return runSanitized(() => prisma.$transaction(async (tx) => {
     await assertAssessmentAuthor(data.actorId, tx);
     const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
-    if (data.patch.stableKey !== undefined) {
-      assertTakeIdBelongsToLevel(data.patch.stableKey, assessment.levelDefinition.levelNumber);
+    assertNoAtaRenumber(assessment.levelDefinition, question.questionNumber, data.patch.questionNumber);
+    // The pair AFTER this write is what has to be legal. Checking only the
+    // patched half would let `questionNumber` and `stableKey` be moved apart one
+    // call at a time. A patch that touches NEITHER is left alone on purpose: an
+    // imported or legacy bank that is already out of slot must still be editable
+    // enough to be repaired, and the validator, readiness and the handoff all
+    // keep refusing it until it is.
+    if (data.patch.stableKey !== undefined || data.patch.questionNumber !== undefined) {
+      assertTakeIdentity(
+        assessment.levelDefinition,
+        data.patch.stableKey ?? question.stableKey,
+        data.patch.questionNumber ?? question.questionNumber,
+      );
     }
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
