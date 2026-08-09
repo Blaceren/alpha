@@ -4,6 +4,7 @@ import { apiAuthErrorResponse, rateLimitedResponse, requireAdmin, requireUser } 
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { AssessmentDomainError } from "./assessment-errors";
 import { authoringErrorStatus, isAuthoringDomainError } from "./authoring-errors";
+import { gateCurriculumAuthoring } from "./authoring-authorization";
 import { AssessmentRuntimeError } from "./assessment-runtime";
 import { ContentDomainError } from "./content-errors";
 import { CurriculumDomainError } from "./errors";
@@ -51,9 +52,15 @@ function profileEnabled(profile: Phase4Profile) {
     : isCurriculumV2AssessmentEnabled();
 }
 
-type AdminGate =
-  | { ok: true; actorId: number }
-  | { ok: false; response: NextResponse };
+/**
+ * What a passed gate hands the route: the SERVER-derived actor and nothing
+ * else. Exported so the route module can name it without spelling an authority
+ * field of its own — the accepted surface guard reads that module for
+ * caller-shaped authority names, and it should keep being able to.
+ */
+export type Phase4GrantedGate = { ok: true; actorId: number };
+
+type AdminGate = Phase4GrantedGate | { ok: false; response: NextResponse };
 
 export async function gatePhase4Admin(
   request: Request,
@@ -77,6 +84,48 @@ export async function gatePhase4Admin(
   } catch (error) {
     return { ok: false, response: withNoStore(await apiAuthErrorResponse(error, request)) };
   }
+}
+
+/**
+ * PHASE-G1 — the SAME accepted endpoints, reachable by curriculum staff.
+ *
+ * G0 built `gateCurriculumAuthoring` and wired it to nothing: the 87 accepted
+ * `/api/admin/curriculum/**` endpoints still demanded `UserRole=admin`, so the
+ * Studio's content team could not read a lesson, let alone edit one. The naive
+ * fixes were both rejected in G0 and are still wrong — promoting content staff
+ * to `UserRole=admin` hands them every unrelated admin endpoint, and cloning the
+ * endpoints under `/api/crm/**` gives one domain two owners.
+ *
+ * So this gate delegates to the accepted bridge, which accepts EITHER
+ * `UserRole=admin` (PATH A, byte-identical to today for every existing
+ * integration) OR a StaffProfile whose stored role grants the specific
+ * permission. Nothing is widened: a `content_manager` reaching these routes
+ * still gains nothing outside curriculum authoring and is refused by every other
+ * `/api/admin/**` route exactly as before.
+ *
+ * WHICH ROUTES GET IT, AND WHICH DELIBERATELY DO NOT. This gate is applied to
+ * the SUBSTANTIVE AUTHORING operations only — version, localization, asset,
+ * question and question-localization reads and writes, which is what the Studio
+ * edits. `publish`, `archive`, `content-binding` and `assessment-binding` keep
+ * `gatePhase4Admin`: publication is a runtime activation and a binding is
+ * product structure, and §35 is explicit that an ordinary content editor gets
+ * neither. Both gates read the same flags, so nothing about activation changes.
+ *
+ * The capability follows the METHOD: a read needs `curriculum_read`, a write
+ * needs `curriculum_author`. CSRF and the per-actor rate limit are the accepted
+ * bridge's, not a second implementation.
+ */
+export async function gatePhase4Authoring(
+  request: Request,
+  profile: Phase4Profile,
+  write: boolean,
+): Promise<AdminGate> {
+  if (!isCurriculumV2AdminEnabled() || !profileEnabled(profile)) {
+    return { ok: false, response: phase4Disabled() };
+  }
+  const gate = await gateCurriculumAuthoring(request, write ? "author" : "read");
+  if (!gate.ok) return { ok: false, response: gate.response };
+  return { ok: true, actorId: gate.actor.actorId };
 }
 
 type SelfGate =

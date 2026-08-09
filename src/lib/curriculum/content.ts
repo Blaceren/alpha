@@ -13,6 +13,7 @@ import {
 } from "@/lib/curriculum/authoring-mutation-guard";
 import { assertEditoriallyApproved } from "@/lib/curriculum/authoring-lifecycle";
 import { isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
+import { staffRoleGrantsCurriculumCapability } from "@/lib/curriculum/authoring-authorization";
 import { ContentDomainError, isContentDomainError } from "@/lib/curriculum/content-errors";
 import type { ContentDomainErrorCode } from "@/lib/curriculum/content-errors";
 import {
@@ -68,6 +69,13 @@ function assertContentEnabled() {
   }
 }
 
+/**
+ * RUNTIME / STRUCTURAL authority: `UserRole=admin`, exactly as accepted.
+ *
+ * Publication, archival and resource binding keep this and only this. A content
+ * editor must not be able to activate content for learners or rebind a level,
+ * and that refusal lives here in the domain rather than in a hidden button.
+ */
 async function assertContentAdmin(actorId: number, tx: DbClient) {
   const actor = await tx.user.findUnique({ where: { id: actorId } });
   if (!actor || actor.role !== "admin" || actor.status !== "active") {
@@ -77,6 +85,38 @@ async function assertContentAdmin(actorId: number, tx: DbClient) {
     );
   }
   return actor;
+}
+
+/**
+ * PHASE-G1 — SUBSTANTIVE AUTHORING authority.
+ *
+ * Two alternatives, never a merge, mirroring the accepted HTTP bridge:
+ *
+ *   PATH A — `UserRole=admin`, byte-identical to the accepted check above, so
+ *            every existing caller keeps working unchanged.
+ *   PATH B — an active user whose STORED StaffProfile role grants
+ *            `curriculum_author`.
+ *
+ * The `status === "active"` requirement is the accepted one and applies to both
+ * paths: a blocked staff member is refused exactly as a blocked admin is.
+ */
+async function assertContentAuthor(actorId: number, tx: DbClient) {
+  const actor = await tx.user.findUnique({
+    where: { id: actorId },
+    include: { staffProfile: { select: { staffRole: true } } },
+  });
+  if (!actor || actor.status !== "active") {
+    throw new ContentDomainError(
+      "CONTENT_ACTOR_FORBIDDEN",
+      "content mutation requires an active actor",
+    );
+  }
+  if (actor.role === "admin") return actor;
+  if (staffRoleGrantsCurriculumCapability(actor.staffProfile?.staffRole, "author")) return actor;
+  throw new ContentDomainError(
+    "CONTENT_ACTOR_FORBIDDEN",
+    "content mutation requires an admin or a curriculum-authoring staff actor",
+  );
 }
 
 function assertParentDraft(status: "draft" | "published" | "archived") {
@@ -233,7 +273,7 @@ export async function createContentVersion(input: unknown): Promise<ContentVersi
   const data = parseContentCommand(createContentVersionSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const level = await loadLevel(data.levelDefinitionId, tx);
       const maximum = await tx.contentVersion.aggregate({
         where: { levelDefinitionId: level.id },
@@ -278,7 +318,7 @@ export async function updateContentVersion(input: unknown): Promise<ContentVersi
   const data = parseContentCommand(updateContentVersionSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
       // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
@@ -324,7 +364,7 @@ export async function deleteContentVersion(input: unknown): Promise<ContentVersi
   const data = parseContentCommand(deleteContentVersionSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
       // PHASE-G0 CORRECTION — deleting the aggregate cannot bump its own
@@ -373,7 +413,7 @@ export async function createContentLocalization(input: unknown): Promise<Content
   const data = parseContentCommand(createContentLocalizationSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
       // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
@@ -426,7 +466,7 @@ export async function updateContentLocalization(input: unknown): Promise<Content
   const data = parseContentCommand(updateContentLocalizationSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const localization = await tx.contentLocalization.findUnique({
         where: { id: data.contentLocalizationId },
       });
@@ -481,7 +521,7 @@ export async function deleteContentLocalization(input: unknown): Promise<Content
   const data = parseContentCommand(deleteContentLocalizationSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const localization = await tx.contentLocalization.findUnique({
         where: { id: data.contentLocalizationId },
       });
@@ -529,7 +569,7 @@ export async function createContentAsset(input: unknown): Promise<ContentAsset> 
   const data = parseContentCommand(createContentAssetSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const content = await loadContent(data.contentVersionId, tx);
       assertDraftContent(content);
       // PHASE-G0 CORRECTION — the aggregate authoring boundary. Refuses a
@@ -586,7 +626,7 @@ export async function updateContentAsset(input: unknown): Promise<ContentAsset> 
   const data = parseContentCommand(updateContentAssetSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const asset = await tx.contentAsset.findUnique({ where: { id: data.contentAssetId } });
       if (!asset) {
         throw new ContentDomainError("CONTENT_ASSET_NOT_FOUND", "content asset does not exist");
@@ -638,7 +678,7 @@ export async function deleteContentAsset(input: unknown): Promise<ContentAsset> 
   const data = parseContentCommand(deleteContentAssetSchema, input);
   return runSanitized(() =>
     prisma.$transaction(async (tx) => {
-      await assertContentAdmin(data.actorId, tx);
+      await assertContentAuthor(data.actorId, tx);
       const asset = await tx.contentAsset.findUnique({ where: { id: data.contentAssetId } });
       if (!asset) {
         throw new ContentDomainError("CONTENT_ASSET_NOT_FOUND", "content asset does not exist");

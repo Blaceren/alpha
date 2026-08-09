@@ -6,6 +6,7 @@ import type {
 } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
+import { staffRoleGrantsCurriculumCapability } from "@/lib/curriculum/authoring-authorization";
 import { AssessmentDomainError, isAssessmentDomainError } from "@/lib/curriculum/assessment-errors";
 import type { AssessmentDomainErrorCode } from "@/lib/curriculum/assessment-errors";
 import {
@@ -69,6 +70,10 @@ function assertAssessmentEnabled() {
   }
 }
 
+/**
+ * RUNTIME / STRUCTURAL authority: `UserRole=admin`, exactly as accepted.
+ * Publication, archival and binding keep this and only this.
+ */
 async function assertAssessmentAdmin(actorId: number, tx: DbClient) {
   const actor = await tx.user.findUnique({ where: { id: actorId } });
   if (!actor || actor.role !== "admin" || actor.status !== "active") {
@@ -77,6 +82,32 @@ async function assertAssessmentAdmin(actorId: number, tx: DbClient) {
       "assessment mutation requires an active admin actor",
     );
   }
+}
+
+/**
+ * PHASE-G1 — SUBSTANTIVE AUTHORING authority: `UserRole=admin` OR a stored
+ * StaffProfile role granting `curriculum_author`. The same two alternatives the
+ * accepted HTTP bridge offers, resolved from the same accepted permission
+ * matrix, so a question prompt written in the Studio is not refused by the
+ * layer beneath it. Publication and binding are deliberately NOT widened.
+ */
+async function assertAssessmentAuthor(actorId: number, tx: DbClient) {
+  const actor = await tx.user.findUnique({
+    where: { id: actorId },
+    include: { staffProfile: { select: { staffRole: true } } },
+  });
+  if (!actor || actor.status !== "active") {
+    throw new AssessmentDomainError(
+      "ASSESSMENT_ACTOR_FORBIDDEN",
+      "assessment mutation requires an active actor",
+    );
+  }
+  if (actor.role === "admin") return;
+  if (staffRoleGrantsCurriculumCapability(actor.staffProfile?.staffRole, "author")) return;
+  throw new AssessmentDomainError(
+    "ASSESSMENT_ACTOR_FORBIDDEN",
+    "assessment mutation requires an admin or a curriculum-authoring staff actor",
+  );
 }
 
 function assertParentDraft(status: "draft" | "published" | "archived") {
@@ -242,7 +273,7 @@ export async function createAssessmentVersion(input: unknown): Promise<Assessmen
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(createAssessmentVersionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const level = await loadLevel(data.levelDefinitionId, tx);
     const maximum = await tx.assessmentVersion.aggregate({
       where: { levelDefinitionId: level.id },
@@ -286,7 +317,7 @@ export async function updateAssessmentVersion(input: unknown): Promise<Assessmen
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(updateAssessmentVersionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
@@ -329,7 +360,7 @@ export async function deleteAssessmentVersion(input: unknown): Promise<Assessmen
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(deleteAssessmentVersionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
     // PHASE-G0 CORRECTION — deleting the aggregate cannot bump its own
@@ -375,7 +406,7 @@ export async function createAssessmentQuestion(input: unknown): Promise<Question
   const data = parseAssessmentCommand(createAssessmentQuestionSchema, input);
   const canonical = canonicalizeQuestion(data.type, data.options, data.correctAnswer);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
@@ -425,7 +456,7 @@ export async function updateAssessmentQuestion(input: unknown): Promise<Question
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(updateAssessmentQuestionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
@@ -484,7 +515,7 @@ export async function deleteAssessmentQuestion(input: unknown): Promise<Question
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(deleteAssessmentQuestionSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
@@ -529,7 +560,7 @@ export async function createQuestionLocalization(input: unknown): Promise<Questi
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(createQuestionLocalizationSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
@@ -578,7 +609,7 @@ export async function updateQuestionLocalization(input: unknown): Promise<Questi
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(updateQuestionLocalizationSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const localization = await tx.questionLocalization.findUnique({ where: { id: data.questionLocalizationId } });
     if (!localization) {
       throw new AssessmentDomainError("ASSESSMENT_LOCALIZATION_NOT_FOUND", "localization does not exist");
@@ -636,7 +667,7 @@ export async function deleteQuestionLocalization(input: unknown): Promise<Questi
   assertAssessmentEnabled();
   const data = parseAssessmentCommand(deleteQuestionLocalizationSchema, input);
   return runSanitized(() => prisma.$transaction(async (tx) => {
-    await assertAssessmentAdmin(data.actorId, tx);
+    await assertAssessmentAuthor(data.actorId, tx);
     const localization = await tx.questionLocalization.findUnique({ where: { id: data.questionLocalizationId } });
     if (!localization) {
       throw new AssessmentDomainError("ASSESSMENT_LOCALIZATION_NOT_FOUND", "localization does not exist");

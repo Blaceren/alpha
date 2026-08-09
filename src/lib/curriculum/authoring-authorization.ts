@@ -258,3 +258,37 @@ export async function gateCurriculumAuthoring(
 export function permissionForCapability(capability: AuthoringCapability): CrmPermission {
   return CAPABILITY_PERMISSION[capability];
 }
+
+/**
+ * PHASE-G1 — does a STORED staff role grant a curriculum-authoring capability?
+ *
+ * WHY THE DOMAIN NEEDS THIS AT ALL. The content and assessment domains carry
+ * their own actor assertions (`CONTENT_ACTOR_FORBIDDEN`,
+ * `ASSESSMENT_ACTOR_FORBIDDEN`), and they are not decoration: they are what
+ * makes a domain command safe for a script, the importer and every future
+ * caller that never passes through an HTTP gate. Widening only the HTTP edge
+ * would have produced a studio in which every save was refused by the layer
+ * underneath — which is exactly what the first G1 test run showed.
+ *
+ * ONE DEFINITION, NOT TWO. The permission set is resolved from the STORED role
+ * through the same accepted `resolveEffectivePermissions` /
+ * `canAuthorCurriculum` pair the HTTP gate uses. Nothing here reads a request,
+ * a header or a caller-supplied role, and there is no second permission table.
+ *
+ * IT WIDENS AUTHORING ONLY. Callers that guard PUBLICATION, ARCHIVAL or
+ * RESOURCE BINDING keep the unchanged `UserRole=admin` assertion, so a content
+ * editor still cannot activate content for learners or rebind a level — at the
+ * domain, not merely in the UI.
+ */
+export function staffRoleGrantsCurriculumCapability(
+  staffRole: string | null | undefined,
+  capability: AuthoringCapability,
+): boolean {
+  if (!staffRole || !isCrmStaffRole(staffRole)) return false;
+  const permissions = resolveEffectivePermissions(staffRole);
+  return capability === "read"
+    ? canReadCurriculumAuthoring(permissions)
+    : capability === "author"
+      ? canAuthorCurriculum(permissions)
+      : canApproveCurriculum(permissions);
+}

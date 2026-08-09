@@ -55,6 +55,21 @@ export type AuthoringErrorCode =
   | "AUTHORING_NOTE_NOT_FOUND"
   | "AUTHORING_NOTE_ALREADY_RESOLVED"
   | "AUTHORING_ACTOR_FORBIDDEN"
+  /**
+   * PHASE-G1 — a preview payload carried something a learner frame may not.
+   *
+   * Its own code because it is not an input error the caller can fix by sending
+   * different values: it means the payload BUILDER produced a shape containing
+   * an answer key, which is a platform defect and must fail closed rather than
+   * be reported as a validation nit.
+   */
+  | "AUTHORING_PREVIEW_UNSAFE"
+  /** A level in a package-handoff request still carries handoff blockers. */
+  | "AUTHORING_HANDOFF_BLOCKED"
+  /** More than one APPROVED version of the same aggregate on one level. */
+  | "AUTHORING_HANDOFF_AMBIGUOUS"
+  /** An approved level no longer passes server-authoritative validation. */
+  | "AUTHORING_HANDOFF_INVALID"
   | "AUTHORING_DISABLED"
   | "AUTHORING_INTERNAL_ERROR";
 
@@ -118,6 +133,18 @@ export function authoringErrorStatus(code: AuthoringErrorCode): number {
       return 422;
     case "AUTHORING_ASSESSMENT_LINK_MISSING":
       return 409;
+    // A handoff refusal is 409, not 422: the request itself is well formed and
+    // the caller may hold every permission. What is wrong is the STATE of the
+    // curriculum, and it becomes right when the blocking work is approved.
+    case "AUTHORING_HANDOFF_BLOCKED":
+    case "AUTHORING_HANDOFF_AMBIGUOUS":
+      return 409;
+    case "AUTHORING_HANDOFF_INVALID":
+      return 422;
+    // 500. A learner frame that turned out to carry an answer key is a platform
+    // defect, and a 4xx would invite a client to retry its way around it.
+    case "AUTHORING_PREVIEW_UNSAFE":
+      return 500;
     default:
       return 500;
   }

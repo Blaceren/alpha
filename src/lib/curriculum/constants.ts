@@ -140,4 +140,19 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   // content -- see authoring-lifecycle.ts for why it is written in its own
   // transaction rather than inside the refused one.
   authoringSelfApprovalRefused: "AUTHORING_SELF_APPROVAL_REFUSED",
+
+  // PHASE-G1.
+  //
+  // A NEW DRAFT CLONED FROM AN EXISTING VERSION. Its own action rather than
+  // CONTENT_VERSION_CREATED, because the two answer different questions: a
+  // create says "an empty version now exists", a clone says "this text is a copy
+  // of approved version N and the approval did NOT travel with it". The metadata
+  // records the source id and its editorial state so the trail can prove the
+  // approved evidence was left untouched.
+  authoringVersionCloned: "AUTHORING_VERSION_CLONED",
+  // A deterministic package-handoff bundle was produced. It is NOT a
+  // publication and NOT an activation: the action name says handoff, and the
+  // metadata records the fingerprint so the artifact a reviewer holds can be
+  // matched to the moment it was generated.
+  authoringHandoffBundleGenerated: "AUTHORING_HANDOFF_BUNDLE_GENERATED",
 } as const;

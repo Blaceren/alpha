@@ -756,3 +756,78 @@ boundary does. No database detail is exposed.
 
 This is a domain invariant over the existing G0 schema. `prisma/` is untouched
 and the migration count stays 44.
+
+---
+
+# PHASE-G1 — THE STUDIO ON TOP OF THIS FOUNDATION
+
+G0 §15 listed what G1 still had to build. This records what it built, and the
+two things the foundation itself needed changing for.
+
+## The domain gate had to widen too, not only the HTTP edge
+
+G0's §9 bridge was written for the HTTP layer, and the correction wired it to
+nothing. Wiring it to the accepted `/api/admin/curriculum/**` routes was not
+sufficient: `content.ts` and `assessment.ts` carry their OWN actor assertions
+(`CONTENT_ACTOR_FORBIDDEN`, `ASSESSMENT_ACTOR_FORBIDDEN`), which is what makes
+those commands safe for a script, the importer and any future caller that never
+passes through a gate. The first G1 test run showed the consequence plainly:
+every studio save was refused by the layer beneath the one that had been opened.
+
+So `assertContentAuthor` / `assertAssessmentAuthor` accept the SAME two
+alternatives the bridge does — `UserRole=admin`, or a stored StaffProfile role
+granting `curriculum_author` — resolved through the same accepted
+`resolveEffectivePermissions` / `canAuthorCurriculum` pair. There is no second
+permission table.
+
+`assertContentAdmin` / `assertAssessmentAdmin` are UNCHANGED and still guard
+publication, archival and resource binding. A content editor cannot activate
+content for learners or rebind a level, and that refusal lives in the domain
+rather than in a hidden button.
+
+## The publish gate stands, and so does the historical carve-out
+
+Nothing in G1 publishes. `approveVersion` still touches no publication column,
+the approve route returns `published: false` explicitly, and the studio has no
+control named «Опубликовать» anywhere. Rows that are `published` with
+`editorialState = draft` remain legal; the studio labels them as historical and
+never offers them as a shortcut to approval.
+
+## No schema change
+
+`prisma/` is untouched. The migration count stays 44. Everything G1 needed —
+the lifecycle, the aggregate revision, review notes, the preview snapshot with
+its three pins, the production contract and its assessment link — was already in
+the G0 schema.
+
+## What G1 added
+
+| Area | What |
+|---|---|
+| Read projections | `authoring-read.ts` — the 100-level overview and one level's workspace, computed server-side and returned summary-shaped |
+| Readiness | `authoring-readiness.ts` — separate named counts, handoff blockers and the G2 work queue. No percentage anywhere, and no ATA backlog total is written in the file |
+| Blueprint comparison | `authoring-conflict.ts` — field-level differences between the durable contract's proposal and the bound bank, derived from server truth. READ-ONLY: there is no resolution command, and the response says so |
+| Validation service | `authoring-validation-service.ts` — loads the aggregates and runs the ACCEPTED validators. Adds no rule |
+| Preview | `authoring-preview.ts` — the learner-safe payload builder (whose Prisma select does not contain `correctAnswer`) and the two reads: the frozen learner frame, and the staff drift inspection |
+| Version clone | `authoring-version-clone.ts` — §36/§37. One transaction, `revision: 1`, `draft`, source byte-identical afterwards |
+| Handoff | `authoring-handoff.ts` + `scripts/curriculum/emitAuthoringHandoff.ts` — a deterministic, fingerprinted bundle. Refuses ambiguity and unresolved content; writes no curriculum row; never reaches git |
+| HTTP | 20 narrow routes under `/api/admin/curriculum/authoring/**`, plus the accepted Phase-4 surface widened to curriculum staff |
+
+## Test surface
+
+```
+npm run test:regression:authoring-studio        # 31 domain checks
+npm run test:regression:authoring-studio-http   # 47 checks against the real routes
+```
+
+The HTTP suite closes the G0 LOW-1 gap: check `PIN` pins a snapshot at content 4
+/ assessment 7 / video 3, moves all three aggregates to 5 / 8 / 4, and requires
+the real preview route to still answer 4 / 7 / 3 with the frozen body. A
+follow-latest implementation fails it.
+
+Cross-repo, both candidates and a disposable database:
+
+```
+node <backend>/node_modules/tsx/dist/cli.mjs \
+  scripts/phaseG1CrossRepoIntegration.ts --backend <backend>   # in the Academy worktree
+```

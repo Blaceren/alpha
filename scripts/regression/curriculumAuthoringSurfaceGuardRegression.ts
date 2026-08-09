@@ -76,6 +76,23 @@ const EXEMPT: Record<string, string> = {
   "src/lib/curriculum/authoring-lifecycle.ts":
     "the editorial lifecycle itself — it IS the authority the boundary delegates to",
   "src/lib/curriculum/authoring-mutation-guard.ts": "the boundary",
+  // PHASE-G1 — the version CLONE.
+  //
+  // It creates a NEW aggregate and its children in one transaction; it never
+  // mutates a child of a version that already had one. G0 states the rule this
+  // rests on explicitly: version CREATE is outside the boundary's scope because
+  // there is no revision to be stale against until the row exists. The clone is
+  // one editorial act, so it is one transaction landing at `revision: 1` — and
+  // running it through the child guard would both need a revision that does not
+  // exist yet and leave a five-asset copy at revision 6.
+  //
+  // What keeps it safe is asserted by `curriculumAuthoringStudioRegression`
+  // (N1–N3): the SOURCE version is byte-identical afterwards, the copy is
+  // `draft` with every approval column NULL, and a cloned production version is
+  // UNLINKED rather than inheriting reviewed evidence.
+  "src/lib/curriculum/authoring-version-clone.ts":
+    "creates a NEW aggregate plus its children atomically at revision 1 — a " +
+    "creation, which G0 places outside the boundary; it mutates no existing child",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

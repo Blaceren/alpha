@@ -151,7 +151,10 @@
     "test:regression:authoring-mutation-boundary": "tsx scripts/regression/curriculumAuthoringMutationBoundaryRegression.ts",
     "test:regression:authoring-surface-guard": "tsx scripts/regression/curriculumAuthoringSurfaceGuardRegression.ts",
     "test:regression:authoring-corrections": "tsx scripts/regression/curriculumAuthoringCorrectionsRegression.ts",
-    "test:regression:publish-gate": "tsx scripts/regression/curriculumPublishGateRegression.ts"
+    "test:regression:publish-gate": "tsx scripts/regression/curriculumPublishGateRegression.ts",
+    "test:regression:authoring-studio": "tsx scripts/regression/curriculumAuthoringStudioRegression.ts",
+    "test:regression:authoring-studio-http": "tsx scripts/regression/curriculumAuthoringStudioHttpRegression.ts",
+    "curriculum:authoring:handoff": "tsx scripts/curriculum/emitAuthoringHandoff.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
