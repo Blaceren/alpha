@@ -53,6 +53,7 @@ import {
   createLevelPreviewSnapshot,
   readInternalPreview,
   readLearnerPreview,
+  readStructuralPreview,
 } from "@/lib/curriculum/authoring-preview";
 import {
   cloneAssessmentVersion,
@@ -816,6 +817,29 @@ export function authoringLevelNotesRoute() {
       return authoringData({ levelDefinitionId, notes });
     } catch (error) {
       return authoringException(error, "authoring level notes GET");
+    }
+  };
+}
+
+/**
+ * PHASE-G1 CORRECTION — `GET .../levels/{levelId}/structural-preview`.
+ *
+ * The staff preview of a level that carries no authored learner material: the
+ * registration gate, the financial checkpoints, the report level. Read-only,
+ * `curriculum_read`, `no-store`, and it creates nothing — see
+ * `readStructuralPreview` for why a frozen snapshot is neither possible nor
+ * needed for a level whose structure the Studio cannot mutate.
+ */
+export function authoringStructuralPreviewRoute() {
+  return async (request: Request, context: Context) => {
+    const gate = await gateAuthoringRead(request);
+    if (!gate.ok) return gate.response;
+    try {
+      const params = await context.params;
+      const levelId = positiveId(params.levelId, "levelId");
+      return authoringData(await readStructuralPreview(levelId));
+    } catch (error) {
+      return authoringException(error, "authoring structural preview GET");
     }
   };
 }

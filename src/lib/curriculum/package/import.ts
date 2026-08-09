@@ -22,6 +22,10 @@
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { validateCurriculumPackage, type PackageIssue } from "@/lib/curriculum/package/validate";
+import {
+  expectedTakeIdFor,
+  isAtaVideoProfileLevel,
+} from "@/lib/curriculum/authoring-level-profile";
 import type { CurriculumPackage, PackageQuestion } from "@/lib/curriculum/package/schema";
 import { canonicalizeQuestion, localizationIsComplete } from "@/lib/curriculum/assessment-validation";
 import {
@@ -377,12 +381,40 @@ async function writePackage(
         });
         counts.assessmentVersions += 1;
 
+        /**
+         * PHASE-G1 CORRECTION — an ATA video lesson's bank is imported WITH its
+         * canonical take mapping.
+         *
+         * `QuestionDefinition.stableKey` is where the accepted validator and the
+         * deterministic handoff bundle read a question's take binding. Importing
+         * the package's own `questionCode` there left every one of the 58 ATA
+         * banks permanently `ASSESSMENT_TAKE_MAPPING_INCOMPLETE`: a durable state
+         * no editor and no HTTP call could repair, because the product had no
+         * path that could write a take id at all.
+         *
+         * The take is DERIVED, never invented: `expectedTakeIdFor` is the same
+         * `takeIdFor(levelNumber, questionNumber)` binding the accepted
+         * fingerprint projection already uses, so the imported mapping and the
+         * fingerprinted mapping are the same fact and no bank fingerprint moves.
+         *
+         * It applies ONLY to canonical ATA `video_test` levels — decided from the
+         * structural source by exact `stableCode`, not by level number — so a
+         * non-ATA package keeps its own `questionCode` vocabulary untouched.
+         */
+        const ataVideoBank = isAtaVideoProfileLevel({
+          levelNumber: level.levelNumber,
+          stableCode: level.levelCode,
+          type: level.type,
+        });
+
         for (const question of level.assessment.questions) {
           const questionRow = await tx.questionDefinition.create({
             data: {
               assessmentVersionId: assessmentVersion.id,
               questionNumber: question.questionNumber,
-              stableKey: question.questionCode,
+              stableKey: ataVideoBank
+                ? expectedTakeIdFor(level.levelNumber, question.questionNumber)
+                : question.questionCode,
               type: question.type,
               skillTag: question.skillTag,
               options: canonicalOptionsJson(question),

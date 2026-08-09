@@ -363,6 +363,37 @@ export async function buildHandoffBundle(input: BuildHandoffInput): Promise<Hand
   included.sort((a, b) => a.levelNumber - b.levelNumber);
   excluded.sort((a, b) => a.levelNumber - b.levelNumber);
 
+  /**
+   * PHASE-G1 CORRECTION — a WHOLE-CURRICULUM request is all-or-nothing.
+   *
+   * It previously excluded whatever was not ready and returned a bundle anyway.
+   * That is the "ready-only, silently skip the rest" mode: the artefact is named
+   * after the curriculum, carries a fingerprint, and quietly omits 78 of 100
+   * levels — and an engineer downstream has no way to tell a complete handoff
+   * from a partial one without re-deriving readiness themselves.
+   *
+   * "Give me the whole curriculum" is now answered honestly: on an incomplete
+   * backlog it is REFUSED, with every level and every blocker named, and the
+   * Studio shows those reasons instead of offering a button that throws. An
+   * editor who wants the part that IS finished asks for it by number, which is
+   * an explicit, auditable scope rather than a silent one.
+   */
+  if (scope === "all" && excluded.length > 0) {
+    throw new AuthoringDomainError(
+      "AUTHORING_HANDOFF_BLOCKED",
+      `${excluded.length} of ${requested.length} levels are not ready for package handoff`,
+      {
+        issues: excluded.flatMap((entry) =>
+          entry.blockers.map((code) => ({
+            code,
+            path: `levels[${entry.levelNumber}]`,
+            message: `level ${entry.levelNumber}: ${code}`,
+          })),
+        ),
+      },
+    );
+  }
+
   const draft: Omit<HandoffBundle, "fingerprint"> = {
     schema: HANDOFF_BUNDLE_SCHEMA,
     bundleFormatVersion: 1,

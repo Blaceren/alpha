@@ -1,10 +1,44 @@
 import { z } from "zod";
 import { expectedRevisionSchema } from "@/lib/curriculum/authoring-mutation-guard";
+import { TAKE_ID_PATTERN } from "@/lib/curriculum/video-production-contract";
 
 const MAX_INT = 2_147_483_647;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 const STABLE_KEY = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SKILL_TAG = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/**
+ * PHASE-G1 CORRECTION — `stableKey` may also carry an ATA Take identifier.
+ *
+ * THE DEFECT THIS CLOSES. The accepted G0 validator reads a question's take
+ * binding OUT of `stableKey` (`ASSESSMENT_TAKE_MAPPING_INVALID` and friends are
+ * reported at `questions[i].stableKey`) and the deterministic handoff bundle
+ * serialises that same field — but every write path refused the only vocabulary
+ * the reader accepts, because `STABLE_KEY` is lowercase-kebab and a canonical
+ * take is `T5.1`. The result was a rule no product path could satisfy: all 58
+ * ATA banks were permanently `ASSESSMENT_TAKE_MAPPING_INCOMPLETE`, could not be
+ * submitted, approved or handed off, and no HTTP call could fix it.
+ *
+ * WHAT IS ADDED IS EXACTLY ONE VOCABULARY, NOT A RELAXATION. This is a union of
+ * two closed shapes, not a widened character class: uppercase is still refused,
+ * dots are still refused, and `T5.5`, `T5.0`, `t5.1`, `T5-1` and `TAKE5.1` are
+ * all still rejected. The take shape is matched by the ACCEPTED
+ * `TAKE_ID_PATTERN` from the video-production contract, imported rather than
+ * restated, so there is one definition of what a take is.
+ *
+ * WHAT THIS SCHEMA DELIBERATELY DOES NOT DECIDE is whether a given take belongs
+ * to THIS level, whether all four exist, or whether they are unique. Those are
+ * bank-level facts a per-field schema cannot see; they stay with the accepted
+ * `validateAuthoringAssessment`, which the submit and approve routes already
+ * gate on, and with the level-scoped assertion in `assessment.ts`.
+ */
+const stableKeySchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => STABLE_KEY.test(value) || TAKE_ID_PATTERN.test(value),
+    "stableKey must be a lowercase stable key or an ATA take identifier (T{level}.{1-4})",
+  );
 
 const actorId = z.number().int().positive().max(MAX_INT);
 const entityId = z.number().int().positive().max(MAX_INT);
@@ -76,7 +110,7 @@ export const deleteAssessmentVersionSchema = z.strictObject({
 
 const questionFields = {
   questionNumber,
-  stableKey: z.string().trim().regex(STABLE_KEY),
+  stableKey: stableKeySchema,
   type: assessmentQuestionTypeSchema,
   skillTag: z.string().trim().regex(SKILL_TAG).nullable().optional(),
   options: z.unknown(),

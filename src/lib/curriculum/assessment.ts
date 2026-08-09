@@ -7,6 +7,10 @@ import type {
 import { Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
 import { staffRoleGrantsCurriculumCapability } from "@/lib/curriculum/authoring-authorization";
+import {
+  isCanonicalTakeId,
+  isTakeIdForLevel,
+} from "@/lib/curriculum/authoring-level-profile";
 import { AssessmentDomainError, isAssessmentDomainError } from "@/lib/curriculum/assessment-errors";
 import type { AssessmentDomainErrorCode } from "@/lib/curriculum/assessment-errors";
 import {
@@ -107,6 +111,36 @@ async function assertAssessmentAuthor(actorId: number, tx: DbClient) {
   throw new AssessmentDomainError(
     "ASSESSMENT_ACTOR_FORBIDDEN",
     "assessment mutation requires an admin or a curriculum-authoring staff actor",
+  );
+}
+
+/**
+ * PHASE-G1 CORRECTION — a take identifier must belong to THIS level.
+ *
+ * The field schema knows the SHAPE of a take (`T{level}.{1-4}`) but cannot know
+ * which level it is being written to, so the level-scoped half of the rule lives
+ * here, where the bank's own `LevelDefinition` is already loaded. Writing L6's
+ * take onto an L5 question is refused at the domain rather than discovered later
+ * by the validator, because a foreign take silently breaks the 1:1 question/take
+ * mapping the video contract depends on.
+ *
+ * A non-take `stableKey` is untouched: assessments outside the ATA video profile
+ * keep the generic vocabulary, and this assertion says nothing about them.
+ */
+function assertTakeIdBelongsToLevel(stableKey: string, levelNumber: number) {
+  if (!isCanonicalTakeId(stableKey)) return;
+  if (isTakeIdForLevel(stableKey, levelNumber)) return;
+  throw new AssessmentDomainError(
+    "ASSESSMENT_INPUT_INVALID",
+    "take identifier belongs to another level",
+    [
+      {
+        code: "ASSESSMENT_FIELD_INVALID",
+        entity: "assessment",
+        reference: "input.stableKey",
+        message: `take ${stableKey} does not belong to level ${levelNumber}`,
+      },
+    ],
   );
 }
 
@@ -409,6 +443,7 @@ export async function createAssessmentQuestion(input: unknown): Promise<Question
     await assertAssessmentAuthor(data.actorId, tx);
     const assessment = await loadAssessment(data.assessmentVersionId, tx);
     assertDraftAssessment(assessment);
+    assertTakeIdBelongsToLevel(data.stableKey, assessment.levelDefinition.levelNumber);
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
     // refuses a stale writer, moves the revision and records the
@@ -458,6 +493,9 @@ export async function updateAssessmentQuestion(input: unknown): Promise<Question
   return runSanitized(() => prisma.$transaction(async (tx) => {
     await assertAssessmentAuthor(data.actorId, tx);
     const { question, assessment } = await loadQuestion(data.questionDefinitionId, tx);
+    if (data.patch.stableKey !== undefined) {
+      assertTakeIdBelongsToLevel(data.patch.stableKey, assessment.levelDefinition.levelNumber);
+    }
     // PHASE-G0 CORRECTION — the aggregate authoring boundary. See
     // authoring-mutation-guard.ts. Refuses a submitted or approved bank,
     // refuses a stale writer, moves the revision and records the

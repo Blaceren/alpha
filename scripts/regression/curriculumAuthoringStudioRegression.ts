@@ -767,19 +767,30 @@ async function main() {
       assert.ok((refusal.issues ?? []).length > 0, "the refusal names the blockers");
     });
 
-    await check("H2 a whole-version bundle EXCLUDES blocked levels and reports every reason", async () => {
-      const bundle = await handoff.buildHandoffBundle({
-        curriculumVersionId: curriculum.id,
-        actorId: null,
-      });
-      assert.equal(bundle.scope, "all");
-      assert.ok(bundle.excluded.length > 0);
-      for (const exclusion of bundle.excluded) assert.ok(exclusion.blockers.length > 0);
-      assert.equal(
-        bundle.counts.included + bundle.counts.excluded,
-        bundle.counts.requested,
-        "nothing is silently dropped",
-      );
+    /**
+     * PHASE-G1 CORRECTION — a whole-curriculum request on an incomplete backlog
+     * is REFUSED, not quietly trimmed.
+     *
+     * The previous expectation was that the bundle excluded blocked levels and
+     * reported them. That produced an artefact named after the curriculum which
+     * silently omitted most of it — the "ready-only skip" mode the corrections
+     * phase forbids. The honest answer is a refusal that names every level and
+     * every blocker, which is also what lets the Studio disable the control and
+     * show the reasons instead of offering a button that throws.
+     */
+    await check("H2 a whole-version bundle is REFUSED while any level is blocked, naming every reason", async () => {
+      const error = await handoff
+        .buildHandoffBundle({ curriculumVersionId: curriculum.id, actorId: null })
+        .then(() => null)
+        .catch((thrown: unknown) => thrown);
+      assert.ok(error, "an incomplete curriculum must not produce a whole-version bundle");
+      const domain = error as { code?: string; issues?: Array<{ code: string; path: string }> };
+      assert.equal(domain.code, "AUTHORING_HANDOFF_BLOCKED");
+      assert.ok((domain.issues ?? []).length > 0, "the refusal names the blockers");
+      for (const issue of domain.issues ?? []) {
+        assert.match(issue.path, /^levels\[\d+\]$/);
+        assert.ok(issue.code.length > 0);
+      }
     });
 
     await check("H3 a fully approved level enters the bundle and the bundle is DETERMINISTIC", async () => {
@@ -876,13 +887,25 @@ async function main() {
       const before = await prisma.auditLog.count({
         where: { action: "AUTHORING_HANDOFF_BUNDLE_GENERATED" },
       });
-      await handoff.buildHandoffBundle({ curriculumVersionId: curriculum.id, actorId: null });
+      // Scoped to the one level that IS ready: a whole-curriculum request is now
+      // refused while anything is blocked, and this check is about the AUDIT
+      // TRAIL of a successful generation, not about scope.
+      const readyScope = [9];
+      await handoff.buildHandoffBundle({
+        curriculumVersionId: curriculum.id,
+        levelNumbers: readyScope,
+        actorId: null,
+      });
       assert.equal(
         await prisma.auditLog.count({ where: { action: "AUTHORING_HANDOFF_BUNDLE_GENERATED" } }),
         before,
         "a shell run has no HTTP actor and writes nothing",
       );
-      await handoff.buildHandoffBundle({ curriculumVersionId: curriculum.id, actorId: author.id });
+      await handoff.buildHandoffBundle({
+        curriculumVersionId: curriculum.id,
+        levelNumbers: readyScope,
+        actorId: author.id,
+      });
       const row = await prisma.auditLog.findFirstOrThrow({
         where: { action: "AUTHORING_HANDOFF_BUNDLE_GENERATED" },
         orderBy: { id: "desc" },

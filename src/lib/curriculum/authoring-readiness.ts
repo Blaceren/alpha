@@ -21,55 +21,41 @@
  * There is no query and no write, so the readiness view can never disagree with
  * the overview it is computed from.
  */
+import type { AtaLevelKind } from "@/lib/curriculum/product-ata-100";
 import {
-  ATA_LEVELS,
-  canonicalLevelCode,
-  type AtaLevelKind,
-} from "@/lib/curriculum/product-ata-100";
+  canonicalAtaKind,
+  requiresLearnerTeachingContent,
+} from "@/lib/curriculum/authoring-level-profile";
 import { MIN_EDITORIAL_TEACHING_CHARACTERS } from "@/lib/curriculum/package/ata-profile";
 import { STABLE_CODE_PATTERN } from "@/lib/curriculum/constants";
 import type { AuthoringLevelSummary } from "@/lib/curriculum/authoring-read";
 
 /**
- * The accepted "this level requires original editorial authoring" predicate.
+ * PHASE-G1 CORRECTION — both of these now DELEGATE.
  *
- * `video_test` and `practical`, exactly as `validateAtaProduct100Package`
- * decides it. `report` levels carry an assignment rather than a lesson body, and
- * the gate levels carry system copy — holding either to the teaching floor would
- * manufacture a gap that the package pipeline does not report.
- */
-const CONTENT_REQUIRED_KINDS: ReadonlySet<AtaLevelKind> = new Set<AtaLevelKind>([
-  "video_test",
-  "practical",
-]);
-
-const ATA_KIND_BY_LEVEL_NUMBER = new Map(
-  ATA_LEVELS.map((level) => [level.levelNumber, level] as const),
-);
-
-/**
- * The canonical kind of a level, but only when the database row really IS that
- * canonical level.
- *
- * The stableCode has to match `canonicalLevelCode` character for character. A
- * disposable fixture that happens to have a level 7 is not ATA level 7, and
- * silently applying ATA's editorial expectations to it would produce a readiness
- * report about a curriculum that does not exist. Falls back to the durable level
- * TYPE, which is always present.
+ * The predicate itself moved to `authoring-level-profile`, unchanged in
+ * behaviour, because `authoring-validation-service` was answering the same
+ * product question from the durable TYPE alone and reaching a different answer
+ * for `report` levels. Readiness said L3 owed nothing; validation demanded a
+ * teaching body of it; the handoff bundle asked both and threw. One rule, one
+ * implementation, four callers — readiness, validation, handoff and the work
+ * queue.
  */
 export function canonicalKindFor(level: AuthoringLevelSummary): AtaLevelKind | null {
-  const source = ATA_KIND_BY_LEVEL_NUMBER.get(level.levelNumber);
-  if (!source) return null;
-  return canonicalLevelCode(source) === level.stableCode ? source.kind : null;
+  return canonicalAtaKind({
+    levelNumber: level.levelNumber,
+    stableCode: level.stableCode,
+    type: level.levelType,
+  });
 }
 
 /** Does this level owe the product a written lesson? */
 export function requiresLearnerContent(level: AuthoringLevelSummary): boolean {
-  const kind = canonicalKindFor(level);
-  if (kind !== null) return CONTENT_REQUIRED_KINDS.has(kind);
-  // Not a canonical ATA level: fall back to the durable type. `lesson` and
-  // `practice` are the two that teach.
-  return level.levelType === "lesson" || level.levelType === "practice";
+  return requiresLearnerTeachingContent({
+    levelNumber: level.levelNumber,
+    stableCode: level.stableCode,
+    type: level.levelType,
+  });
 }
 
 /** Is this level one of the video+assessment lessons? Answered by the durable row. */
@@ -346,6 +332,19 @@ export const WORK_QUEUE_BUCKETS = [
   "NEEDS_VIDEO_QA",
   "CHANGES_REQUESTED",
   "APPROVED_READY_FOR_HANDOFF",
+  /**
+   * PHASE-G1 CORRECTION — the honest label for a level that owes the handoff no
+   * editorial material at all: the registration gate, the twenty financial
+   * checkpoints, the report level.
+   *
+   * These were previously counted as APPROVED_READY_FOR_HANDOFF with the reason
+   * "every editorial requirement for this level is approved" — vacuously true and
+   * actively misleading, because nothing about them was ever authored, reviewed
+   * or approved, and it inflated the approved count by 22 on a backlog whose real
+   * `contentApprovedLevels` was 0. A planner reading the queue must be able to
+   * tell "finished" from "not applicable".
+   */
+  "EDITORIAL_HANDOFF_NOT_REQUIRED",
   "NEEDS_PRODUCT_DECISION",
 ] as const;
 export type WorkQueueBucket = (typeof WORK_QUEUE_BUCKETS)[number];
@@ -488,12 +487,29 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
     }
 
     if (handoff.ready) {
-      push(
-        "APPROVED_READY_FOR_HANDOFF",
-        level,
-        "structure",
-        "every editorial requirement for this level is approved",
-      );
+      // APPROVED means a human approved durable editorial material. A level with
+      // no editorial requirement has nothing to approve and says so.
+      const approvedContent = requiresLearnerContent(level) && level.content?.editorialState === "approved";
+      const approvedAssessment = isVideoLesson(level) && level.assessment?.editorialState === "approved";
+      if (approvedContent || approvedAssessment) {
+        const approved = [
+          approvedContent ? "lesson" : null,
+          approvedAssessment ? "question bank" : null,
+        ].filter((part): part is string => part !== null);
+        push(
+          "APPROVED_READY_FOR_HANDOFF",
+          level,
+          "structure",
+          `approved ${approved.join(" and ")}; every required editorial dimension is satisfied`,
+        );
+      } else {
+        push(
+          "EDITORIAL_HANDOFF_NOT_REQUIRED",
+          level,
+          "structure",
+          "source-owned level: it carries no learner-authored material, so there is nothing to approve",
+        );
+      }
     }
   }
 

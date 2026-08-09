@@ -41,6 +41,7 @@ import {
   readPreviewSnapshotByCode,
 } from "@/lib/curriculum/authoring-preview-snapshot";
 import { AUTHORING_LOCALE } from "@/lib/curriculum/authoring-read";
+import { requiresLearnerTeachingContent } from "@/lib/curriculum/authoring-level-profile";
 import { CANONICAL_ASSESSMENT_LOCALE } from "@/lib/curriculum/authoring-assessment-projection";
 import { normalizeContentBody, parseContentBody } from "@/lib/curriculum/content-body";
 import { prisma } from "@/lib/prisma";
@@ -525,5 +526,108 @@ export async function readInternalPreview(
     pinned,
     current,
     outdated,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * PHASE-G1 CORRECTION — the STRUCTURAL preview of a source-owned level
+ * ------------------------------------------------------------------ */
+
+/**
+ * WHY THIS IS NOT A SNAPSHOT.
+ *
+ * G1 required the Studio to preview every level kind, including the report
+ * level, the external registration gate and the twenty financial checkpoints.
+ * Those levels legitimately carry no ContentVersion and no AssessmentVersion, so
+ * `createLevelPreviewSnapshot` refused them outright — and the refusal was not a
+ * bug in the guard: `AuthoringPreviewSnapshot_has_target` is a DATABASE CHECK
+ * requiring a content or assessment target, so no snapshot row for such a level
+ * can exist without a migration.
+ *
+ * A snapshot exists to FREEZE something that moves. Nothing here moves: a
+ * source-owned level's structure is `LevelDefinition` inside a published
+ * `CurriculumVersion`, and the Studio has no command that can mutate either —
+ * publication and binding stay `UserRole=admin`, and level definitions are
+ * source-controlled. Manufacturing a dummy ContentVersion so that an immutable
+ * row could point at it would fabricate authoring state that no editor owns, and
+ * adding a migration to relax the CHECK would buy immutability that the data
+ * already has.
+ *
+ * So this is a PROJECTION, pinned by identity rather than by revision: the
+ * curriculum version and the level definition are named in the response, and two
+ * reads of the same pair produce the same learner frame.
+ *
+ * IT IS THE SAME LEARNER-SAFE SHAPE. `buildLearnerPreviewPayload` builds it with
+ * both authoring targets null, so the Academy renders it through exactly the
+ * component it renders a snapshot with, and `assertLearnerSafe` runs over it
+ * unchanged. There is no second payload contract and no second renderer.
+ */
+export type StructuralPreviewRead = {
+  structural: true;
+  levelDefinitionId: number;
+  pinned: {
+    curriculumVersionId: number;
+    curriculumVersionCode: string;
+    curriculumVersionNumber: number;
+    levelDefinitionId: number;
+    stableCode: string;
+  };
+  payload: LearnerPreviewPayload;
+};
+
+export async function readStructuralPreview(
+  levelDefinitionId: number,
+): Promise<StructuralPreviewRead> {
+  const level = await prisma.levelDefinition.findUnique({
+    where: { id: levelDefinitionId },
+    select: {
+      id: true,
+      levelNumber: true,
+      stableCode: true,
+      type: true,
+      curriculumVersion: { select: { id: true, code: true, versionNumber: true } },
+    },
+  });
+  if (!level) {
+    throw new AuthoringDomainError(
+      "AUTHORING_TARGET_NOT_FOUND",
+      `LevelDefinition ${levelDefinitionId} does not exist`,
+    );
+  }
+
+  // A level that OWES the product a lesson must be previewed through the frozen
+  // snapshot, because its body is draft material that moves under the reviewer.
+  // Answering here would show an empty frame for a lesson that simply has not
+  // been written yet, which is a different and misleading statement.
+  if (
+    requiresLearnerTeachingContent({
+      levelNumber: level.levelNumber,
+      stableCode: level.stableCode,
+      type: level.type,
+    })
+  ) {
+    throw new AuthoringDomainError(
+      "AUTHORING_INPUT_INVALID",
+      "this level carries authored learner content — preview it through a snapshot",
+    );
+  }
+
+  const payload = await buildLearnerPreviewPayload({
+    levelDefinitionId: level.id,
+    contentVersionId: null,
+    assessmentVersionId: null,
+  });
+
+  return {
+    structural: true,
+    levelDefinitionId: level.id,
+    pinned: {
+      curriculumVersionId: level.curriculumVersion.id,
+      curriculumVersionCode: level.curriculumVersion.code,
+      curriculumVersionNumber: level.curriculumVersion.versionNumber,
+      levelDefinitionId: level.id,
+      stableCode: level.stableCode,
+    },
+    payload,
   };
 }

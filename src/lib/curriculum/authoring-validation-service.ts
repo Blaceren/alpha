@@ -33,6 +33,7 @@ import {
   type AuthoringValidationResult,
 } from "@/lib/curriculum/authoring-validation";
 import { AUTHORING_LOCALE } from "@/lib/curriculum/authoring-read";
+import { requiresLearnerTeachingContent } from "@/lib/curriculum/authoring-level-profile";
 import { readVideoProductionCoherence } from "@/lib/curriculum/video-production-coherence";
 import { CANONICAL_ASSESSMENT_LOCALE } from "@/lib/curriculum/authoring-assessment-projection";
 
@@ -46,10 +47,17 @@ import { CANONICAL_ASSESSMENT_LOCALE } from "@/lib/curriculum/authoring-assessme
  * correct. Expressed here over the durable `LevelDefinitionType` because that is
  * what the database stores.
  */
-const NON_TEACHING_LEVEL_TYPES: ReadonlySet<string> = new Set([
-  "external_event",
-  "financial_checkpoint",
-]);
+/**
+ * PHASE-G1 CORRECTION — removed, and replaced by the shared product profile.
+ *
+ * This set answered "does this level teach?" from the durable TYPE alone, which
+ * made every type that is not a gate a teaching level — including `report`.
+ * Readiness answered the same question from the canonical ATA kind and excluded
+ * `report`, so L3 was simultaneously "owes nothing" and "missing its ru body",
+ * and the whole-curriculum handoff bundle — which consults both — could never be
+ * produced on the real backlog. `requiresLearnerTeachingContent` is now the only
+ * implementation.
+ */
 
 export type AuthoringValidationSection = "content" | "assessment" | "video" | "cross";
 
@@ -110,7 +118,11 @@ export async function validateLevelAuthoring(input: {
   });
   if (!level) return null;
 
-  const requiresTeaching = !NON_TEACHING_LEVEL_TYPES.has(level.type);
+  const requiresTeaching = requiresLearnerTeachingContent({
+    levelNumber: level.levelNumber,
+    stableCode: level.stableCode,
+    type: level.type,
+  });
 
   const [binding, contentVersions, assessmentVersions, videoVersion] = await Promise.all([
     prisma.levelResourceBinding.findUnique({
