@@ -53,6 +53,8 @@ import { AuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { AUTHORING_LOCALE, readAuthoringOverview } from "@/lib/curriculum/authoring-read";
 import { levelHandoffStatus, type HandoffBlockerCode } from "@/lib/curriculum/authoring-readiness";
 import { validateLevelAuthoring } from "@/lib/curriculum/authoring-validation-service";
+import { readSourceAuthority } from "@/lib/curriculum/source-authority";
+import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
 import { prisma } from "@/lib/prisma";
 
 export const HANDOFF_BUNDLE_SCHEMA = "ata.authoring.handoff/1" as const;
@@ -92,6 +94,36 @@ export type HandoffLevel = {
     showExplanation: boolean;
     sourceProvenance: string | null;
     sourceApproval: string | null;
+    /**
+     * PHASE-G2 — the authority lineage (§19).
+     *
+     * A downstream reader must be able to prove that this bank HAD source
+     * conflicts, that each was explicitly adjudicated, which side won, on whose
+     * evidence and when — without holding the Backend database. Provenance
+     * alone cannot say it: `PROPOSED_CANON` describes where the material came
+     * from and stays true whichever side later won.
+     *
+     * DECISIONS ONLY, NEVER VALUES. The competing strings are not copied here.
+     * Both sides remain where they already live — the bank below and the
+     * contract payload — and the hashes are what tie a decision to them.
+     */
+    sourceAuthority: {
+      state: string;
+      rawConflictCount: number;
+      resolvedConflictCount: number;
+      blockingConflictCount: number;
+      resolutionFingerprint: string | null;
+      decisions: Array<{
+        path: string;
+        decision: string;
+        application: string;
+        decidedById: number;
+        decidedAt: string;
+        evidenceRef: string;
+        evidenceSha256: string;
+        blueprintSourceDocumentSha256: string;
+      }>;
+    } | null;
     questions: Array<{
       questionNumber: number;
       stableKey: string;
@@ -209,8 +241,31 @@ function projectLevel(level: HandoffLevel): Json {
           passPercent: level.assessment.passPercent,
           maxAttempts: level.assessment.maxAttempts,
           showExplanation: level.assessment.showExplanation,
-          sourceProvenance: level.assessment.sourceProvenance,
+              sourceProvenance: level.assessment.sourceProvenance,
           sourceApproval: level.assessment.sourceApproval,
+          // Bound into the bundle fingerprint on purpose: two bundles that
+          // differ only in which authority won are DIFFERENT handoffs.
+          sourceAuthority: level.assessment.sourceAuthority
+            ? {
+                state: level.assessment.sourceAuthority.state,
+                rawConflictCount: level.assessment.sourceAuthority.rawConflictCount,
+                resolvedConflictCount: level.assessment.sourceAuthority.resolvedConflictCount,
+                blockingConflictCount: level.assessment.sourceAuthority.blockingConflictCount,
+                resolutionFingerprint: level.assessment.sourceAuthority.resolutionFingerprint,
+                decisions: [...level.assessment.sourceAuthority.decisions]
+                  .sort((a, b) => a.path.localeCompare(b.path))
+                  .map((decision) => ({
+                    path: decision.path,
+                    decision: decision.decision,
+                    application: decision.application,
+                    decidedById: decision.decidedById,
+                    decidedAt: decision.decidedAt,
+                    evidenceRef: decision.evidenceRef,
+                    evidenceSha256: decision.evidenceSha256,
+                    blueprintSourceDocumentSha256: decision.blueprintSourceDocumentSha256,
+                  })),
+              }
+            : null,
           questions: level.assessment.questions.map((question) => ({
             questionNumber: question.questionNumber,
             stableKey: question.stableKey,
@@ -491,6 +546,7 @@ async function projectLevelFromDatabase(
       where: { levelDefinitionId, editorialState: "approved" },
       orderBy: { versionNumber: "asc" },
       select: {
+        id: true,
         versionNumber: true,
         revision: true,
         passPercent: true,
@@ -517,6 +573,7 @@ async function projectLevelFromDatabase(
       where: { levelDefinitionId, editorialState: "approved" },
       orderBy: { versionNumber: "asc" },
       select: {
+        id: true,
         versionNumber: true,
         revision: true,
         sourceProvenance: true,
@@ -539,6 +596,54 @@ async function projectLevelFromDatabase(
   const contentRow = one(contentVersions, "content");
   const assessmentRow = one(assessmentVersions, "assessment");
   const productionRow = one(productionVersions, "production");
+
+  // PHASE-G2 — the authority lineage for this bank, read from the durable
+  // adjudication record. Null when there is nothing to say: no bank, or a bank
+  // that never had a proposal to disagree with.
+  let sourceAuthority: NonNullable<HandoffLevel["assessment"]>["sourceAuthority"] = null;
+  if (assessmentRow) {
+    // THE CONTRACT COMES FROM THE DURABLE LINK, NOT FROM `productionRow`.
+    // `productionRow` is the APPROVED video production version, and a bank can
+    // be adjudicated and approved long before its video contract is. Reading the
+    // proposal from an approved-only row would find nothing for every level
+    // whose video is still a draft and report every decision as stale — which is
+    // exactly backwards, because the decision was made against the LINKED
+    // contract and that link is what pins the two sides together.
+    const link = await prisma.videoProductionAssessmentLink.findFirst({
+      where: { assessmentVersionId: assessmentRow.id },
+      select: { videoProductionVersion: { select: { id: true, contractPayload: true } } },
+    });
+    let contract = null;
+    try {
+      contract = link ? parseContractPayload(link.videoProductionVersion.contractPayload) : null;
+    } catch {
+      contract = null;
+    }
+    const projection = await readSourceAuthority(prisma, {
+      assessmentVersionId: assessmentRow.id,
+      videoProductionVersionId: link?.videoProductionVersion.id ?? null,
+      contract,
+    });
+    if (projection.decisions.length > 0 || projection.rawConflictCount > 0) {
+      sourceAuthority = {
+        state: projection.state,
+        rawConflictCount: projection.rawConflictCount,
+        resolvedConflictCount: projection.resolvedConflictCount,
+        blockingConflictCount: projection.blockingConflictCount,
+        resolutionFingerprint: projection.resolutionFingerprint,
+        decisions: projection.decisions.map((decision) => ({
+          path: decision.path,
+          decision: decision.decision,
+          application: decision.application,
+          decidedById: decision.decidedById,
+          decidedAt: decision.decidedAt,
+          evidenceRef: decision.evidenceRef,
+          evidenceSha256: decision.evidenceSha256,
+          blueprintSourceDocumentSha256: decision.blueprintSourceDocumentSha256,
+        })),
+      };
+    }
+  }
 
   const localization = contentRow?.localizations[0] ?? null;
   if (contentRow && !localization) {
@@ -578,6 +683,7 @@ async function projectLevelFromDatabase(
           // flattened into "approved".
           sourceProvenance: productionRow?.sourceProvenance ?? null,
           sourceApproval: readContractApproval(productionRow?.contractPayload),
+          sourceAuthority,
           questions: assessmentRow.questions.map((question) => ({
             questionNumber: question.questionNumber,
             stableKey: question.stableKey,

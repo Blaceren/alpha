@@ -104,10 +104,13 @@ function runMigrationChecks() {
   const correctionIndex = all.indexOf(CORRECTION);
   const g0Index = all.indexOf(G0);
 
-  check("M1 the correction descends from G0 and is the last link", () => {
+  check("M1 the correction descends from G0 and is its immediate successor", () => {
     assert.ok(g0Index >= 0 && correctionIndex >= 0);
-    assert.equal(correctionIndex, all.length - 1);
-    assert.ok(correctionIndex > g0Index, "the correction must come AFTER G0");
+    // PHASE-G2 appended a further migration, so the correction is no longer the
+    // LAST link. What this suite has always actually needed is that it comes
+    // directly after G0 — that is the descent it proves — so the assertion now
+    // says exactly that instead of a position that a later phase may extend.
+    assert.equal(correctionIndex, g0Index + 1, "the correction must come DIRECTLY after G0");
   });
 
   check("M2 the committed G0 migration file is BYTE-IDENTICAL to the accepted one", () => {

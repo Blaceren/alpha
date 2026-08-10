@@ -19,6 +19,11 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * PHASE-G2 FOUNDATION: 44 -> 45. One additive migration,
+ * `20260810000000_source_authority_resolution`, which adds the
+ * SourceAuthorityResolution table and its indexes. No existing migration file
+ * is edited and no existing row is rewritten.
+ *
  * PHASE-G0 CORRECTION: 43 -> 44. One additive migration,
  * `20260808120000_authoring_foundation_corrections`, which adds the durable
  * video/assessment link table and the preview snapshot's video pin. The G0
@@ -32,7 +37,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 44;
+export const EXPECTED_MIGRATION_COUNT = 45;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

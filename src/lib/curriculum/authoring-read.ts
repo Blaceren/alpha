@@ -33,6 +33,10 @@ import { occupiesCanonicalTakeSlot } from "@/lib/curriculum/authoring-level-prof
 import { completionPair } from "@/lib/curriculum/completion-pairs";
 import { countBlueprintConflicts } from "@/lib/curriculum/authoring-conflict";
 import {
+  readSourceAuthority,
+  type SourceAuthorityProjection,
+} from "@/lib/curriculum/source-authority";
+import {
   readVideoProductionCoherence,
   type VideoProductionCoherence,
 } from "@/lib/curriculum/video-production-coherence";
@@ -121,8 +125,28 @@ export type AssessmentAggregateSummary = AuthoringAggregateSummary & {
    */
   sourceApproval: "AWAITING_APPROVAL" | "APPROVED" | null;
   sourceProvenance: "SOURCE_BACKED" | "PROPOSED_CANON" | null;
-  /** Field-level disagreements between the Blueprint proposal and this bank. */
+  /**
+   * RAW field-level disagreements between the Blueprint proposal and this bank.
+   *
+   * PHASE-G2 — this keeps its exact original meaning and is deliberately NOT
+   * reduced by an adjudication. A conflict that a human decided still EXISTS;
+   * what changes is whether it still blocks. Overloading one number with both
+   * facts would destroy the evidence that a disagreement was ever there, which
+   * is the one thing a resolution must never do.
+   */
   conflictCount: number;
+  /**
+   * PHASE-G2 — raw conflicts NOT covered by an in-force adjudication. THIS is
+   * what readiness and the work queue act on.
+   */
+  blockingConflictCount: number;
+  /**
+   * PHASE-G2 — the authority axis, kept separate from `sourceProvenance`.
+   * Origin says where the material came from and never changes because of a
+   * review; this says which side a human chose, and whether that choice is
+   * currently in force.
+   */
+  authorityResolution: SourceAuthorityProjection | null;
 };
 
 export type VideoAggregateSummary = AuthoringAggregateSummary & {
@@ -434,6 +458,8 @@ export async function readAuthoringOverview(
     let sourceProvenance: "SOURCE_BACKED" | "PROPOSED_CANON" | null = null;
     let sourceApproval: "AWAITING_APPROVAL" | "APPROVED" | null = null;
     let conflictCount = 0;
+    let blockingConflictCount = 0;
+    let authorityResolution: SourceAuthorityProjection | null = null;
     if (videoRow) {
       sourceProvenance = videoRow.sourceProvenance as "SOURCE_BACKED" | "PROPOSED_CANON";
       try {
@@ -444,6 +470,16 @@ export async function readAuthoringOverview(
             contract,
             assessmentVersionId: assessmentRow.id,
           });
+          // PHASE-G2 — the authority axis. The RAW count above is left exactly
+          // as it was so a reader can still see the disagreement; this reads the
+          // adjudication record and reports which of those raw conflicts are
+          // still unsettled.
+          authorityResolution = await readSourceAuthority(prisma, {
+            assessmentVersionId: assessmentRow.id,
+            videoProductionVersionId: videoRow.id,
+            contract,
+          });
+          blockingConflictCount = authorityResolution.blockingConflictCount;
         }
       } catch {
         // A payload that no longer parses is reported by validation, not here.
@@ -469,10 +505,13 @@ export async function readAuthoringOverview(
             editorialState: assessmentRow.editorialState,
             sourceProvenance,
             conflictCount,
+            blockingConflictCount,
           }),
           sourceApproval,
           sourceProvenance,
           conflictCount,
+          blockingConflictCount,
+          authorityResolution,
         }
       : null;
 
@@ -531,8 +570,22 @@ export function resolveProvenance(input: {
   editorialState: EditorialState;
   sourceProvenance: "SOURCE_BACKED" | "PROPOSED_CANON" | null;
   conflictCount: number;
+  /**
+   * PHASE-G2 — raw conflicts with no in-force adjudication. Optional so every
+   * accepted caller that predates the authority axis keeps its exact behaviour:
+   * absent means "nothing has been adjudicated", which is what was true before
+   * the primitive existed.
+   */
+  blockingConflictCount?: number;
 }): AssessmentProvenanceState {
-  if (input.conflictCount > 0) return "CONFLICTING";
+  // PHASE-G2 — CONFLICTING now means "a disagreement nobody has settled", not
+  // "a disagreement exists". A bank whose seven conflicts were each explicitly
+  // adjudicated is no longer waiting on anybody, and reporting it as CONFLICTING
+  // would keep demanding a decision that was already made. The raw count stays
+  // visible on the summary either way, and the authority axis reports which side
+  // won — so nothing is hidden by this, only stopped from blocking.
+  const blocking = input.blockingConflictCount ?? input.conflictCount;
+  if (blocking > 0) return "CONFLICTING";
   if (input.editorialState === "approved") return "APPROVED_CURRENT";
   if (input.sourceProvenance === "SOURCE_BACKED") return "SOURCE_BACKED";
   if (input.sourceProvenance === "PROPOSED_CANON") return "PROPOSED_CANON";

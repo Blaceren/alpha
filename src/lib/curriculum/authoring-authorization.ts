@@ -48,6 +48,7 @@ import type { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, rateLimitedResponse } from "@/lib/apiAuth";
 import {
+  canAdjudicateCurriculumSourceAuthority,
   canApproveCurriculum,
   canAuthorCurriculum,
   canReadCurriculumAuthoring,
@@ -61,8 +62,16 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import { getSession } from "@/lib/session";
 
-/** The three things an authoring caller can be asking to do. */
-export type AuthoringCapability = "read" | "author" | "approve";
+/**
+ * The four things an authoring caller can be asking to do.
+ *
+ * PHASE-G2 adds `adjudicate` as a PEER of the other three, not as a synonym for
+ * `approve`. Approving accepts a draft as editorial truth; adjudicating decides
+ * which of two competing SOURCES a field should follow. A bank that has been
+ * adjudicated still owes the product a normal review by someone else, so the two
+ * must never be satisfiable by the same permission.
+ */
+export type AuthoringCapability = "read" | "author" | "approve" | "adjudicate";
 
 /**
  * How the actor was authorized. Recorded on every audit row, because "an admin
@@ -88,6 +97,7 @@ const CAPABILITY_PERMISSION: Record<AuthoringCapability, CrmPermission> = {
   read: "curriculum_read",
   author: "curriculum_author",
   approve: "curriculum_approve",
+  adjudicate: "curriculum_source_authority",
 };
 
 function withNoStore(response: NextResponse): NextResponse {
@@ -175,7 +185,9 @@ export function authorizeAuthoringIdentity(
       ? canReadCurriculumAuthoring(permissions)
       : capability === "author"
         ? canAuthorCurriculum(permissions)
-        : canApproveCurriculum(permissions);
+        : capability === "approve"
+          ? canApproveCurriculum(permissions)
+          : canAdjudicateCurriculumSourceAuthority(permissions);
 
   if (!granted) return { ok: false, status: 403 };
 
@@ -290,5 +302,7 @@ export function staffRoleGrantsCurriculumCapability(
     ? canReadCurriculumAuthoring(permissions)
     : capability === "author"
       ? canAuthorCurriculum(permissions)
-      : canApproveCurriculum(permissions);
+      : capability === "approve"
+        ? canApproveCurriculum(permissions)
+        : canAdjudicateCurriculumSourceAuthority(permissions);
 }

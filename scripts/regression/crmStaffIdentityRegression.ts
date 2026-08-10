@@ -56,6 +56,9 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
     // PHASE-G0: the only role holding `manage_settings`, this matrix's marker
     // for "owns configuration", and therefore the only approving role.
     "curriculum_read", "curriculum_author", "curriculum_approve",
+    // PHASE-G2: deciding which of two competing SOURCES is authority follows the
+    // same `manage_settings` marker, so it lands on this role and no other.
+    "curriculum_source_authority",
   ],
   crm_manager: [
     "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
@@ -112,19 +115,21 @@ async function main() {
     assert.equal(new Set(CRM_STAFF_ROLES).size, 9);
   });
 
-  await check("4. CrmPermission has exactly fourteen unique canonical values", () => {
+  await check("4. CrmPermission has exactly fifteen unique canonical values", () => {
     // Notes v1 appended view_user_notes and create_user_notes. AFD-5A appended
     // view_affiliate_analytics. PHASE-G0 appended the three curriculum-authoring
-    // permissions. The accepted first eight keep their exact previous relative
-    // order, and so do the two Notes v1 entries and the AFD-5A entry — every
-    // addition APPENDS, so no existing position ever changes meaning.
-    assert.equal(CRM_PERMISSIONS.length, 14);
-    assert.equal(new Set(CRM_PERMISSIONS).size, 14);
+    // permissions. PHASE-G2 appended curriculum_source_authority. The accepted
+    // first eight keep their exact previous relative order, and so do the two
+    // Notes v1 entries and the AFD-5A entry — every addition APPENDS, so no
+    // existing position ever changes meaning.
+    assert.equal(CRM_PERMISSIONS.length, 15);
+    assert.equal(new Set(CRM_PERMISSIONS).size, 15);
     assert.deepEqual([...CRM_PERMISSIONS], [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes",
       "view_user_notes", "create_user_notes", "view_affiliate_analytics",
       "curriculum_read", "curriculum_author", "curriculum_approve",
+      "curriculum_source_authority",
     ]);
     assert.deepEqual(CRM_PERMISSIONS.slice(0, 8), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
@@ -175,8 +180,13 @@ async function main() {
     }
   });
 
-  await check("9. crm_admin receives all fourteen permissions", () => {
-    assert.equal(resolveEffectivePermissions("crm_admin").length, 14);
+  await check("9. crm_admin receives all fifteen permissions", () => {
+    assert.equal(resolveEffectivePermissions("crm_admin").length, 15);
+    // PHASE-G2 — and it is the ONLY role that may adjudicate source authority.
+    for (const role of CRM_STAFF_ROLES) {
+      const holds = resolveEffectivePermissions(role).includes("curriculum_source_authority");
+      assert.equal(holds, role === "crm_admin", `role ${role} source-authority grant`);
+    }
   });
 
   await check("10. crm_manager does not receive manage_settings", () => {
@@ -190,6 +200,7 @@ async function main() {
     assert.ok(perms.includes("curriculum_read"));
     assert.ok(!perms.includes("curriculum_author"));
     assert.ok(!perms.includes("curriculum_approve"));
+    assert.ok(!perms.includes("curriculum_source_authority"));
     assert.equal(perms.length, 11);
   });
 

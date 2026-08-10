@@ -251,6 +251,50 @@ export const createVideoContractBodySchema = z.strictObject({
   payload: z.unknown(),
 });
 
+/* --------------------------------- PHASE-G2 source-authority adjudication */
+
+const sha256Schema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, "must be lowercase sha256 hex");
+
+/**
+ * One field-level decision.
+ *
+ * THE HASHES ARE REQUIRED, NOT OPTIONAL. They are the caller's statement of
+ * WHICH pair it believes it is deciding about, and the domain refuses the whole
+ * request if they no longer match the live values. Making them optional would
+ * turn "adjudicate the comparison I was shown" into "adjudicate whatever is
+ * there now", which is the one thing a source decision must never mean.
+ */
+export const sourceAuthorityDecisionSchema = z.strictObject({
+  questionIndex: z.number().int().min(0).max(63),
+  field: z.enum(["prompt", "correctAnswerText"]),
+  decision: z.enum(["CURRENT", "BLUEPRINT"]),
+  currentValueHash: sha256Schema,
+  blueprintValueHash: sha256Schema,
+});
+
+export const sourceAuthorityBodySchema = z.strictObject({
+  expectedAssessmentRevision: expectedRevisionSchema,
+  expectedVideoProductionRevision: expectedRevisionSchema,
+  /**
+   * What the caller claims to be settling. `assessment` means "every raw
+   * conflict this bank has"; `question` narrows it to one ordinal. Either way
+   * the domain enforces that the decision set covers the scope EXACTLY, so a
+   * caller cannot claim a question is adjudicated while half of it is open.
+   */
+  scope: z.union([
+    z.strictObject({ kind: z.literal("assessment") }),
+    z.strictObject({ kind: z.literal("question"), questionIndex: z.number().int().min(0).max(63) }),
+  ]),
+  decisions: z.array(sourceAuthorityDecisionSchema).min(1).max(64),
+  rationale: z.string().trim().min(1).max(2_000),
+  evidenceRef: z.string().trim().min(1).max(300),
+  evidenceSha256: sha256Schema,
+  /** Re-deciding a stale slot must be asked for, never inferred. */
+  supersedeStale: z.boolean().optional(),
+});
+
 /** `?curriculumVersionId=` — optional; the server resolves the active one. */
 export function readCurriculumVersionIdQuery(request: Request): number | null {
   const raw = new URL(request.url).searchParams.get("curriculumVersionId");

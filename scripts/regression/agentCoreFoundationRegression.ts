@@ -1715,8 +1715,9 @@ async function main() {
     assert.equal(roles.CRM_PERMISSIONS[10], "view_affiliate_analytics");
     assert.deepEqual(roles.CRM_PERMISSIONS.slice(11), [
       "curriculum_read", "curriculum_author", "curriculum_approve",
+      "curriculum_source_authority",
     ]);
-    assert.equal(roles.CRM_PERMISSIONS.length, 14);
+    assert.equal(roles.CRM_PERMISSIONS.length, 15);
   });
 
   await check("K12 no Agent Core column name matches a forbidden fragment", async () => {

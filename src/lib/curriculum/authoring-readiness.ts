@@ -120,7 +120,11 @@ export function levelHandoffStatus(level: AuthoringLevelSummary): LevelHandoffSt
     if (!level.assessment) {
       blockers.push("ASSESSMENT_MISSING");
     } else {
-      if (level.assessment.conflictCount > 0) blockers.push("ASSESSMENT_SOURCE_CONFLICT");
+      // PHASE-G2 — blocks on UNSETTLED disagreement, not on the mere existence
+      // of a historical one. A bank whose conflicts were each explicitly
+      // adjudicated has nothing outstanding for the handoff to wait on, and the
+      // raw count stays on the summary so the history is never hidden.
+      if (level.assessment.blockingConflictCount > 0) blockers.push("ASSESSMENT_SOURCE_CONFLICT");
       if (level.assessment.editorialState !== "approved") blockers.push("ASSESSMENT_NOT_APPROVED");
       if (level.assessment.mappedTakeCount !== 4) {
         blockers.push("ASSESSMENT_TAKE_MAPPING_INCOMPLETE");
@@ -168,8 +172,19 @@ export type AuthoringReadiness = {
   assessmentApprovedLevels: number;
   assessmentSubmittedLevels: number;
   assessmentChangesRequestedLevels: number;
-  /** Total field-level Blueprint disagreements across the curriculum. */
+  /** Total RAW field-level Blueprint disagreements across the curriculum. */
   assessmentConflictRecords: number;
+  /**
+   * PHASE-G2 — the subset still waiting on a decision. The raw total above is
+   * deliberately kept: a curriculum that adjudicated seven disagreements has
+   * seven of them in its history and zero in its backlog, and one number cannot
+   * say both.
+   */
+  assessmentBlockingConflictRecords: number;
+  /** Levels carrying at least one in-force source-authority decision. */
+  assessmentAdjudicatedLevels: number;
+  /** Levels whose recorded decision no longer matches the values it was made against. */
+  assessmentAdjudicationStaleLevels: number;
 
   videoContractLevels: number;
   videoScriptPendingLevels: number;
@@ -216,6 +231,9 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
     assessmentSubmittedLevels: 0,
     assessmentChangesRequestedLevels: 0,
     assessmentConflictRecords: 0,
+    assessmentBlockingConflictRecords: 0,
+    assessmentAdjudicatedLevels: 0,
+    assessmentAdjudicationStaleLevels: 0,
     videoContractLevels: 0,
     videoScriptPendingLevels: 0,
     videoNotRecordedLevels: 0,
@@ -270,6 +288,13 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
       readiness.assessmentPresentLevels += 1;
       readiness.openReviewNotes += level.assessment.openReviewNotes;
       readiness.assessmentConflictRecords += level.assessment.conflictCount;
+      readiness.assessmentBlockingConflictRecords += level.assessment.blockingConflictCount;
+      if ((level.assessment.authorityResolution?.decisions.length ?? 0) > 0) {
+        readiness.assessmentAdjudicatedLevels += 1;
+      }
+      if (level.assessment.authorityResolution?.state === "ADJUDICATION_STALE") {
+        readiness.assessmentAdjudicationStaleLevels += 1;
+      }
       switch (level.assessment.provenance) {
         case "PROPOSED_CANON":
           readiness.assessmentProposedLevels += 1;
@@ -420,14 +445,25 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
       push("CHANGES_REQUESTED", level, "assessment", "reviewer returned the bank for changes");
     } else if (level.assessment) {
       switch (level.assessment.provenance) {
-        case "CONFLICTING":
-          push(
-            "SOURCE_CONFLICT",
-            level,
-            "assessment",
-            `${level.assessment.conflictCount} field-level disagreements between the Blueprint proposal and the approved bank`,
-          );
+        case "CONFLICTING": {
+          // PHASE-G2 — say which of the raw disagreements are actually
+          // outstanding, and name the ones that were decided but whose selected
+          // authority the bank does not yet serve. A planner reading "7" when
+          // six were settled cannot tell what work is left.
+          const raw = level.assessment.conflictCount;
+          const blocking = level.assessment.blockingConflictCount;
+          const decided = level.assessment.authorityResolution?.decisions ?? [];
+          const notApplied = decided.filter((entry) => entry.application === "DECIDED_NOT_APPLIED").length;
+          const stale = decided.filter((entry) => entry.application === "STALE").length;
+          const detail =
+            decided.length === 0
+              ? `${blocking} of ${raw} field-level disagreements between the Blueprint proposal and the approved bank are unadjudicated`
+              : `${blocking} of ${raw} field-level disagreements still block` +
+                (notApplied > 0 ? `, ${notApplied} decided but not yet applied` : "") +
+                (stale > 0 ? `, ${stale} decided against values that have since changed` : "");
+          push("SOURCE_CONFLICT", level, "assessment", detail);
           break;
+        }
         case "SOURCE_BACKED":
           push(
             "SOURCE_BACKED_AWAITING_REVIEW",

@@ -155,4 +155,15 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   // metadata records the fingerprint so the artifact a reviewer holds can be
   // matched to the moment it was generated.
   authoringHandoffBundleGenerated: "AUTHORING_HANDOFF_BUNDLE_GENERATED",
+
+  // PHASE-G2 FOUNDATION.
+  //
+  // A HUMAN CHOSE BETWEEN TWO COMPETING SOURCES. Deliberately NOT
+  // AUTHORING_APPROVED: approval accepts work as editorial truth, adjudication
+  // decides which of two sources the work should follow, and a bank that has
+  // been adjudicated still owes the product a normal four-eyes review. The
+  // metadata carries the exact conflict paths, both value hashes, the evidence
+  // identity and the authority state before and after, so the trail proves what
+  // was settled without anyone re-deriving it from a later database state.
+  authoringSourceAuthorityResolved: "AUTHORING_SOURCE_AUTHORITY_RESOLVED",
 } as const;

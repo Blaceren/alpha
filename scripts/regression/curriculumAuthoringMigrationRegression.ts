@@ -29,6 +29,7 @@ const ROOT = process.cwd();
 const MIGRATIONS = path.join(ROOT, "prisma", "migrations");
 const G0 = "20260808000000_authoring_foundation";
 const CORRECTION = "20260808120000_authoring_foundation_corrections";
+const SOURCE_AUTHORITY = "20260810000000_source_authority_resolution";
 const OUT = process.env.REGRESSION_SUMMARY_PATH ?? null;
 
 let passed = 0;
@@ -108,11 +109,15 @@ function main() {
   // in isolation: everything before G0, then G0 alone, against populated tables.
   // The correction's own upgrade is proven by the corrections suite, and the
   // combined chain is proven by both.
+  // PHASE-G2 appended the source-authority resolution table. The list stays
+  // EXACT rather than becoming a prefix match: an unexpected migration landing
+  // after G0 is precisely what this assertion exists to catch, and loosening it
+  // to "starts with" would retire the check the first time it mattered.
   const after = all.slice(g0Index + 1);
   assert.deepEqual(
     after,
-    [CORRECTION],
-    "G0 must be followed by exactly the authoring-foundation correction",
+    [CORRECTION, SOURCE_AUTHORITY],
+    "G0 must be followed by exactly the authoring-foundation correction, then the source-authority table",
   );
 
   const before = all.slice(0, g0Index);

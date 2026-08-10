@@ -896,11 +896,18 @@ async function main() {
     });
 
     /* ================================================ §16 conflict surface */
-    await check("X1 the conflict surface compares fields and offers NO resolution", async () => {
+    await check("X1 the conflict surface compares fields and now offers adjudication", async () => {
       const reply = await c.request("GET", `${A}/levels/${lesson.id}/conflicts`);
       assert.equal(reply.status, 200, reply.text);
       const body = data(reply);
-      assert.equal(body.resolutionAvailable, false);
+      // PHASE-G2 — G1 asserted `false` here because no resolution domain
+      // existed and a UI must not render a control with nothing behind it. One
+      // now exists, and it records a DECISION rather than rewriting either side,
+      // so the conflicts below are still served in full.
+      assert.equal(body.resolutionAvailable, true);
+      const authority = body.sourceAuthority as { state: string; rawConflictCount: number };
+      assert.equal(authority.state, "UNRESOLVED_CONFLICT");
+      assert.ok(authority.rawConflictCount > 0);
       const conflicts = body.conflicts as Array<Record<string, string>>;
       assert.ok(conflicts.length > 0);
       for (const conflict of conflicts) {

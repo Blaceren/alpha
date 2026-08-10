@@ -67,6 +67,11 @@ import {
   updateVideoProductionContract,
 } from "@/lib/curriculum/video-production-authoring";
 import { readVideoProductionCoherence } from "@/lib/curriculum/video-production-coherence";
+import {
+  hashAuthorityValue,
+  readSourceAuthority,
+  resolveSourceAuthority,
+} from "@/lib/curriculum/source-authority";
 import { PRODUCT_TOOL_CODES } from "@/lib/curriculum/product-vocabulary";
 import {
   authoringData,
@@ -84,6 +89,7 @@ import {
   readCurriculumVersionIdQuery,
   readJsonBody,
   reviewNoteBodySchema,
+  sourceAuthorityBodySchema,
   videoContractBodySchema,
 } from "@/lib/curriculum/authoring-http";
 import { Phase4HttpError } from "@/lib/curriculum/phase4-http";
@@ -312,16 +318,125 @@ export function authoringLevelConflictsRoute() {
         assessmentVersionId: level.assessment.id,
         videoProductionVersionId: level.video.id,
       });
+      const contract = parseContractPayload(row?.contractPayload);
+      const authority = await readSourceAuthority(prisma, {
+        assessmentVersionId: level.assessment.id,
+        videoProductionVersionId: level.video.id,
+        contract,
+      });
       return authoringData({
         ...comparison,
-        // Stated in the payload, not merely in a doc, so the CRM cannot render a
-        // resolve control by accident: there is no accepted domain behind one.
-        resolutionAvailable: false,
+        // PHASE-G2 — each conflict now carries the identity a caller must echo
+        // back to adjudicate it. Serving the hashes with the comparison is what
+        // makes "decide exactly what I was shown" enforceable: a stale screen
+        // produces stale hashes and the command refuses.
+        conflicts: comparison.conflicts.map((conflict) => ({
+          ...conflict,
+          currentValueHash: hashAuthorityValue(conflict.currentApprovedValue),
+          blueprintValueHash: hashAuthorityValue(conflict.blueprintProposalValue),
+        })),
+        sourceAuthority: authority,
+        // PHASE-G2 replaced the G1 statement that no resolution domain exists.
+        // It exists now, and it records a DECISION rather than rewriting either
+        // side, so the raw conflicts above stay exactly as they were.
+        resolutionAvailable: true,
         resolutionNote:
-          "Backend has no accepted conflict-resolution command. Resolving a Blueprint disagreement is G2 editorial product work.",
+          "Adjudication records which source wins per field. It rewrites no learner content, does not approve the bank, and leaves every raw conflict inspectable.",
+        expectedAssessmentRevision: level.assessment.revision,
+        expectedVideoProductionRevision: level.video.revision,
       });
     } catch (error) {
       return authoringException(error, "authoring conflicts GET");
+    }
+  };
+}
+
+/**
+ * PHASE-G2 — record a source-authority adjudication (§6, §11).
+ *
+ * A MUTATION OF THE AUTHORITY AXIS ONLY. It writes decision rows and an audit
+ * trail. It does not touch the bank, the contract, any editorial state or any
+ * learner-facing string, which is why it is gated on `adjudicate` rather than on
+ * `author` or `approve`: those are different authorities over different things.
+ */
+export function authoringSourceAuthorityRoute() {
+  return async (request: Request, context: Context) => {
+    const gate = await gateAuthoringMutation(request, "adjudicate");
+    if (!gate.ok) return gate.response;
+    try {
+      const params = await context.params;
+      const assessmentVersionId = positiveId(params.id, "id");
+      const body = parseBody(sourceAuthorityBodySchema, await readJsonBody(request));
+      const result = await resolveSourceAuthority({
+        assessmentVersionId,
+        expectedAssessmentRevision: body.expectedAssessmentRevision,
+        expectedVideoProductionRevision: body.expectedVideoProductionRevision,
+        scope: body.scope,
+        decisions: body.decisions,
+        rationale: body.rationale,
+        evidenceRef: body.evidenceRef,
+        evidenceSha256: body.evidenceSha256,
+        supersedeStale: body.supersedeStale,
+        // Always the gate's actor. A caller cannot name who decided.
+        actorId: gate.actor.actorId,
+      });
+      return authoringData({
+        batchId: result.batchId,
+        created: result.created,
+        superseded: result.superseded,
+        unchanged: result.unchanged,
+        before: { state: result.before.state, blockingConflictCount: result.before.blockingConflictCount },
+        sourceAuthority: result.after,
+      });
+    } catch (error) {
+      return authoringException(error, "authoring source-authority POST");
+    }
+  };
+}
+
+/** The authority record on its own, for a reviewer who only needs the lineage. */
+export function authoringSourceAuthorityReadRoute() {
+  return async (request: Request, context: Context) => {
+    const gate = await gateAuthoringRead(request);
+    if (!gate.ok) return gate.response;
+    try {
+      const params = await context.params;
+      const assessmentVersionId = positiveId(params.id, "id");
+      const assessment = await prisma.assessmentVersion.findUnique({
+        where: { id: assessmentVersionId },
+        select: { id: true, revision: true, videoProductionLinks: { select: { videoProductionVersionId: true } } },
+      });
+      if (!assessment) {
+        return authoringException(
+          new AuthoringDomainError("AUTHORING_TARGET_NOT_FOUND", "assessment version not found"),
+          "authoring source-authority GET",
+        );
+      }
+      const link = assessment.videoProductionLinks[0] ?? null;
+      const videoRow = link
+        ? await prisma.videoProductionVersion.findUnique({
+            where: { id: link.videoProductionVersionId },
+            select: { id: true, revision: true, contractPayload: true },
+          })
+        : null;
+      let contract = null;
+      try {
+        contract = videoRow ? parseContractPayload(videoRow.contractPayload) : null;
+      } catch {
+        contract = null;
+      }
+      const authority = await readSourceAuthority(prisma, {
+        assessmentVersionId: assessment.id,
+        videoProductionVersionId: videoRow?.id ?? null,
+        contract,
+      });
+      return authoringData({
+        ...authority,
+        expectedAssessmentRevision: assessment.revision,
+        expectedVideoProductionRevision: videoRow?.revision ?? null,
+      });
+    } catch (error) {
+      return authoringException(error, "authoring source-authority GET");
     }
   };
 }

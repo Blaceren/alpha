@@ -65,6 +65,15 @@ export const CRM_PERMISSIONS = [
   "curriculum_read",
   "curriculum_author",
   "curriculum_approve",
+  // PHASE-G2 FOUNDATION — deciding which of two competing SOURCES is authority
+  // for a field. Deliberately its own permission rather than a reuse of
+  // `curriculum_author` or `curriculum_approve`: authoring writes a draft,
+  // approval accepts a draft as editorial truth, and neither of those is
+  // "the Blueprint and the approved package disagree and this is the one that
+  // wins". Folding it into either would let a role that may only write drafts
+  // decide what the product's source of truth IS, or would make adjudication
+  // count as the editorial approval that §13 requires stay separate.
+  "curriculum_source_authority",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -103,6 +112,17 @@ void _staffRoleParity;
 // PHASE-G0 GRANT RULE FOR THE THREE CURRICULUM PERMISSIONS. Every grant below is
 // derivable from a marker the matrix ALREADY carries, never from intuition about
 // what a role name sounds like.
+//
+//   • `curriculum_source_authority` -> `crm_admin` ONLY, and derived from the
+//     SAME marker `curriculum_approve` was: `manage_settings` is this matrix's
+//     established sign of "owns configuration rather than merely reads it", and
+//     `crm_admin` is the only role that holds it. Choosing between two competing
+//     SOURCES is at least that weighty — it decides what the product treats as
+//     its source of truth, not merely what one draft says. `content_manager` is
+//     DELIBERATELY EXCLUDED: it holds `curriculum_author`, which is the marker
+//     for "may write a draft and submit it", and an author who could also decide
+//     which source wins would be settling the question their own draft depends
+//     on. That exclusion is asserted by regression, not left to reading.
 //
 //   • `curriculum_approve` -> `crm_admin` ONLY.
 //     The matrix's own marker for "owns configuration rather than merely reads
@@ -152,6 +172,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "curriculum_read",
     "curriculum_author",
     "curriculum_approve",
+    "curriculum_source_authority",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -320,4 +341,21 @@ export function canAuthorCurriculum(permissions: readonly CrmPermission[]): bool
 
 export function canApproveCurriculum(permissions: readonly CrmPermission[]): boolean {
   return permissions.includes("curriculum_approve");
+}
+
+/* ------------------------------------ Source-authority adjudication PHASE-G2 */
+
+// Requires EXACTLY `curriculum_source_authority`, with no fallback and no
+// implication chain — the same rule the three gates above follow.
+//
+// `curriculum_approve` is deliberately NOT an alternative. The two answer
+// different questions and are held today by the same single role only by
+// coincidence of the grant matrix. If a future product decision widened
+// approval to a second role, an implication chain here would silently widen who
+// may decide which SOURCE is canon, which is not a decision anyone should
+// acquire as a side effect.
+export function canAdjudicateCurriculumSourceAuthority(
+  permissions: readonly CrmPermission[],
+): boolean {
+  return permissions.includes("curriculum_source_authority");
 }

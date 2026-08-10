@@ -182,6 +182,8 @@ model User {
   editorialReviewNotesResolved    EditorialReviewNote[]        @relation("EditorialReviewNoteResolver")
   authoringPreviewSnapshotsCreated AuthoringPreviewSnapshot[]  @relation("AuthoringPreviewSnapshotCreator")
   videoProductionAssessmentLinks VideoProductionAssessmentLink[] @relation("VideoProductionAssessmentLinker")
+  sourceAuthorityDecisions       SourceAuthorityResolution[]  @relation("SourceAuthorityResolutionDecider")
+  sourceAuthoritySupersessions   SourceAuthorityResolution[]  @relation("SourceAuthorityResolutionSuperseder")
 
   assessmentAttempts              AssessmentAttempt[]          @relation("AssessmentAttemptUser")
   lessonProgress                  UserLessonProgress[]         @relation("UserLessonProgressUser")
@@ -1087,6 +1089,8 @@ model LevelDefinition {
   // PHASE-G0 — authoring foundation. Back-references only.
   videoProductionVersions VideoProductionVersion[]
   previewSnapshots        AuthoringPreviewSnapshot[]
+  // PHASE-G2 FOUNDATION — back-reference only.
+  sourceAuthorityResolutions SourceAuthorityResolution[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -1880,6 +1884,8 @@ model AssessmentVersion {
   previewSnapshots    AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotAssessment")
   /// PHASE-G0 CORRECTION — video contracts whose evidence is bound to this bank.
   videoProductionLinks VideoProductionAssessmentLink[]
+  /// PHASE-G2 FOUNDATION — adjudicated source-authority decisions for this bank.
+  sourceAuthorityResolutions SourceAuthorityResolution[]
 
   @@unique([id, levelDefinitionId])
   @@unique([levelDefinitionId, versionNumber])
@@ -2023,6 +2029,8 @@ model VideoProductionVersion {
   /// PHASE-G0 CORRECTION — the durable bridge to the real question bank.
   assessmentLink        VideoProductionAssessmentLink?
   previewSnapshots      AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotVideoProduction")
+  /// PHASE-G2 FOUNDATION — adjudications whose Blueprint side came from this contract.
+  sourceAuthorityResolutions SourceAuthorityResolution[]
 
   @@unique([levelDefinitionId, versionNumber])
   @@index([curriculumVersionId, editorialState])
@@ -2200,6 +2208,73 @@ model VideoProductionAssessmentLink {
 
   @@index([assessmentVersionId])
   @@index([linkedById])
+}
+
+/// PHASE-G2 FOUNDATION — one adjudicated FIELD conflict between the Blueprint
+/// proposal and the durable bank.
+///
+/// It records a DECISION, never a value. Nothing here rewrites a prompt, an
+/// option or a correct answer, so the raw disagreement stays exactly where it
+/// always was — computed live from the two sides — and remains fully
+/// inspectable after adjudication. What changes is that the platform can now
+/// say which side a named human chose, on what evidence, and when.
+///
+/// A row is only meaningful for the two values it was decided against, which is
+/// why both sides are pinned by hash. If either side moves afterwards the
+/// projection reports the decision as stale and the conflict blocks again.
+model SourceAuthorityResolution {
+  id                            Int       @id @default(autoincrement())
+
+  assessmentVersionId           Int
+  videoProductionVersionId      Int
+  levelDefinitionId             Int
+  curriculumVersionId           Int
+  /// Zero-based question ordinal, matching the accepted `questions[N]` grammar.
+  questionIndex                 Int
+  /// `prompt` or `correctAnswerText` — the accepted conflict fields.
+  field                         String
+  /// The accepted path, verbatim, e.g. `questions[0].prompt`.
+  conflictPath                  String
+
+  /// `CURRENT` or `BLUEPRINT`.
+  decision                      String
+
+  /// The exact two values compared, by sha256. Server-computed.
+  currentValueHash              String
+  blueprintValueHash            String
+
+  blueprintSourceDocumentSha256 String
+  contractFingerprintAtDecision String
+  bankFingerprintAtDecision     String
+  assessmentRevisionAtDecision  Int
+
+  rationale                     String
+  /// Durable evidence identity, e.g. the adjudication artifact's filename.
+  evidenceRef                   String
+  evidenceSha256                String
+
+  /// Groups one atomic adjudication request.
+  batchId                       String
+
+  decidedById                   Int
+  decidedAt                     DateTime  @default(now())
+  createdAt                     DateTime  @default(now())
+
+  /// Supersession rather than deletion — history is never removed.
+  supersededAt                  DateTime?
+  supersededById                Int?
+
+  assessmentVersion      AssessmentVersion      @relation(fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  videoProductionVersion VideoProductionVersion @relation(fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition        LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  decidedBy              User                   @relation("SourceAuthorityResolutionDecider", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  supersededBy           User?                  @relation("SourceAuthorityResolutionSuperseder", fields: [supersededById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([assessmentVersionId, supersededAt])
+  @@index([curriculumVersionId, levelDefinitionId])
+  @@index([batchId])
+  @@index([decidedById])
+  @@index([supersededById])
 }
 
 model AssessmentAttempt {

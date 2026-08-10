@@ -528,7 +528,13 @@ async function main() {
       // EXPECTED_MIGRATION_COUNT so it cannot drift away from the canonical
       // total, but the offset itself is a second migration-count pin and moves
       // deliberately, in the same commit as the migration.
-      assert.equal(prior.length, expectedPriorMigrationCount(5));
+      //
+      // PHASE-G2 CORRECTION: it was left at 5 when the G0 CORRECTION migration
+      // landed, which made it 6 — so this assertion had been failing on the
+      // accepted G1 base and was guarding nothing, the exact decay
+      // support/migrationCount.ts exists to stop. PHASE-G2's source-authority
+      // migration makes it 7, and both steps are corrected here together.
+      assert.equal(prior.length, expectedPriorMigrationCount(7));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,
