@@ -495,6 +495,22 @@ export function authoringSourceAuthorityReadRoute() {
         expectedVideoProductionRevision: source.videoProductionRevision,
         /** Staff-only detail. The route may say MORE than the shared truth, never something different. */
         canonicalLink: source.link,
+        /**
+         * REVIEW-SURFACE CORRECTION — the accepted MEDIUM, closed.
+         *
+         * `resolveAuthoritySource` has always known WHERE the canonical source
+         * came from; this route just never said. A successor inherits its
+         * ancestor's link, so `canonicalLink` above names a production version
+         * this bank owns no row for, and a reviewer reading the surface could not
+         * tell an own link from an inherited one — the difference between "this
+         * bank was deliberately pinned to that proposal" and "its ancestor was".
+         *
+         * PROJECTION ONLY. Two fields already computed by the shared resolver,
+         * copied onto a staff response. No semantics move, and this is a staff
+         * route: no learner payload is reachable from here.
+         */
+        linkOrigin: source.linkOrigin,
+        linkLineageDepth: source.linkLineageDepth,
         sourceContractUnavailableReason: source.unavailableReason,
       });
     } catch (error) {

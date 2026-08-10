@@ -120,6 +120,20 @@ export type HandoffLevel = {
       authorityLineageFingerprint: string | null;
       /** How many of the decisions below came from an ancestor. */
       inheritedDecisionCount: number;
+      /**
+       * REVIEW-SURFACE CORRECTION — WHERE the canonical source came from.
+       *
+       * `"own"` — this bank carries the durable link. `"lineage"` — an ancestor
+       * does, and this bank is measured against the proposal its ancestor was
+       * pinned to; `linkLineageDepth` says how many hops away. `"none"` — no link
+       * at all, reporting only.
+       *
+       * Without it a bundle describing an inherited relationship read exactly
+       * like one describing an owned link, and a downstream reader could not tell
+       * which bank was deliberately pinned to the proposal it was judged against.
+       */
+      linkOrigin: "own" | "lineage" | "none";
+      linkLineageDepth: number;
       decisions: Array<{
         path: string;
         decision: string;
@@ -276,6 +290,18 @@ function projectLevel(level: HandoffLevel): Json {
                 authorityLineageFingerprint:
                   level.assessment.sourceAuthority.authorityLineageFingerprint,
                 inheritedDecisionCount: level.assessment.sourceAuthority.inheritedDecisionCount,
+                // REVIEW-SURFACE CORRECTION — `linkOrigin` and `linkLineageDepth`
+                // are DELIBERATELY ABSENT from this projection while being present
+                // on the emitted bundle.
+                //
+                // This function is the bundle FINGERPRINT, and adding a field to
+                // it moves the recorded fingerprint of every bundle ever produced.
+                // The two are descriptive of where the decisions above came from,
+                // and `authorityLineageFingerprint` already binds the origin
+                // version and depth of every decision — so the identity they would
+                // contribute is bound here twice over, and paying for it with a
+                // corpus-wide fingerprint change would be an unforced semantic
+                // break for an observability field.
                 decisions: [...level.assessment.sourceAuthority.decisions]
                   .sort((a, b) => a.path.localeCompare(b.path))
                   .map((decision) => ({
@@ -671,6 +697,8 @@ async function projectLevelFromDatabase(
         resolutionFingerprint: projection.resolutionFingerprint,
         authorityLineageFingerprint: projection.authorityLineageFingerprint,
         inheritedDecisionCount: projection.inheritedDecisionCount,
+        linkOrigin: source.linkOrigin,
+        linkLineageDepth: source.linkLineageDepth,
         decisions: projection.decisions.map((decision) => ({
           path: decision.path,
           decision: decision.decision,

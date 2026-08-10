@@ -160,7 +160,8 @@
     "test:regression:source-authority": "tsx scripts/regression/curriculumSourceAuthorityRegression.ts",
     "test:regression:source-authority-correction": "tsx scripts/regression/curriculumSourceAuthorityCorrectionRegression.ts",
     "test:regression:source-authority-correction-2": "tsx scripts/regression/curriculumSourceAuthorityCorrection2Regression.ts",
-    "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts"
+    "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts",
+    "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

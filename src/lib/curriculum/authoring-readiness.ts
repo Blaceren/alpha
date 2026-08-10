@@ -28,7 +28,11 @@ import {
 } from "@/lib/curriculum/authoring-level-profile";
 import { MIN_EDITORIAL_TEACHING_CHARACTERS } from "@/lib/curriculum/package/ata-profile";
 import { STABLE_CODE_PATTERN } from "@/lib/curriculum/constants";
-import type { AuthoringLevelSummary } from "@/lib/curriculum/authoring-read";
+import type {
+  AuthoringLevelSummary,
+  EditorialCandidateSummary,
+  EditorialContentCandidateSummary,
+} from "@/lib/curriculum/authoring-read";
 
 /**
  * PHASE-G1 CORRECTION — both of these now DELEGATE.
@@ -223,6 +227,44 @@ export type AuthoringReadiness = {
   handoffReadyLevels: number;
   handoffBlockedLevels: number;
   blockersByCode: Record<HandoffBlockerCode, number>;
+
+  /**
+   * REVIEW-SURFACE CORRECTION — THE EDITORIAL AXIS, reported separately.
+   *
+   * EVERY COUNTER ABOVE IS RUNTIME-ORIENTED and stays that way.
+   * `contentApprovedLevels`, `contentSubmittedLevels`, `handoffReadyLevels` and
+   * the rest describe the version the level SERVES, because that is what a
+   * package handoff ships and what every existing reader of this type already
+   * means by them. Redefining them onto the editorial candidate would silently
+   * change what "ready" asserts about a curriculum, which is the one thing a
+   * readiness view may never do.
+   *
+   * The block below answers the OTHER question — how much editorial work is
+   * outstanding, including on versions that are not serving anything. On a
+   * corpus with no successors the two agree; the moment a successor exists they
+   * must not be added together, and separate names are what stops that.
+   */
+  editorial: AuthoringEditorialReadiness;
+};
+
+export type AuthoringEditorialReadiness = {
+  /** Levels whose editorial candidate is a version the level does not serve. */
+  levelsWithSuccessorCandidate: number;
+  contentCandidateSubmittedLevels: number;
+  contentCandidateChangesRequestedLevels: number;
+  contentCandidateApprovedLevels: number;
+  assessmentCandidateSubmittedLevels: number;
+  assessmentCandidateChangesRequestedLevels: number;
+  assessmentCandidateApprovedLevels: number;
+  videoCandidateSubmittedLevels: number;
+  videoCandidateChangesRequestedLevels: number;
+  videoCandidateApprovedLevels: number;
+  /** Aggregates awaiting a reviewer right now, across all three axes. */
+  awaitingReviewerAggregates: number;
+  /** Approved successors waiting on the admin-gated publication. */
+  awaitingPublisherAggregates: number;
+  /** FAIL-CLOSED axes: two equally-active versions, so no candidate is offered. */
+  ambiguousCandidateAxes: number;
 };
 
 function zeroBlockers(): Record<HandoffBlockerCode, number> {
@@ -270,9 +312,51 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
     handoffReadyLevels: 0,
     handoffBlockedLevels: 0,
     blockersByCode: zeroBlockers(),
+    editorial: {
+      levelsWithSuccessorCandidate: 0,
+      contentCandidateSubmittedLevels: 0,
+      contentCandidateChangesRequestedLevels: 0,
+      contentCandidateApprovedLevels: 0,
+      assessmentCandidateSubmittedLevels: 0,
+      assessmentCandidateChangesRequestedLevels: 0,
+      assessmentCandidateApprovedLevels: 0,
+      videoCandidateSubmittedLevels: 0,
+      videoCandidateChangesRequestedLevels: 0,
+      videoCandidateApprovedLevels: 0,
+      awaitingReviewerAggregates: 0,
+      awaitingPublisherAggregates: 0,
+      ambiguousCandidateAxes: 0,
+    },
   };
 
   for (const level of levels) {
+    /* ---------------- REVIEW-SURFACE CORRECTION — editorial axis ---------- */
+    let hasSuccessorCandidate = false;
+    for (const [name, axis] of [
+      ["content", level.editorial.content],
+      ["assessment", level.editorial.assessment],
+      ["video", level.editorial.video],
+    ] as const) {
+      if (axis.ambiguous) {
+        readiness.editorial.ambiguousCandidateAxes += 1;
+        continue;
+      }
+      if (axis.versionId === null) continue;
+      if (!axis.isRuntimeVersion) hasSuccessorCandidate = true;
+      if (axis.editorialState === "submitted_for_review") {
+        readiness.editorial[`${name}CandidateSubmittedLevels`] += 1;
+        readiness.editorial.awaitingReviewerAggregates += 1;
+      } else if (axis.editorialState === "changes_requested") {
+        readiness.editorial[`${name}CandidateChangesRequestedLevels`] += 1;
+      } else if (axis.editorialState === "approved") {
+        readiness.editorial[`${name}CandidateApprovedLevels`] += 1;
+        // Approved and not the version being served: the remaining step is the
+        // admin-gated publication, which is not an editorial act.
+        if (!axis.isRuntimeVersion) readiness.editorial.awaitingPublisherAggregates += 1;
+      }
+    }
+    if (hasSuccessorCandidate) readiness.editorial.levelsWithSuccessorCandidate += 1;
+
     const match = STABLE_CODE_PATTERN.exec(level.stableCode);
     if (match && Number(match[1]) === level.levelNumber) readiness.structurallyValidLevels += 1;
 
@@ -380,6 +464,19 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
 export const WORK_QUEUE_BUCKETS = [
   "NEEDS_FULL_CONTENT",
   "READY_FOR_CONTENT_REVIEW",
+  /**
+   * REVIEW-SURFACE CORRECTION — the review bucket the content axis already had
+   * and the other two axes did not.
+   *
+   * A submitted bank used to fall through to the provenance switch and surface
+   * as `NEEDS_ASSESSMENT_APPROVAL` — "a Blueprint proposal nobody has approved"
+   * — the right desk with the wrong story: it could not distinguish a bank whose
+   * author has not submitted it from one a reviewer is already holding. A
+   * submitted production version produced no entry at all, so a reviewer holding
+   * a SCRIPT_READY production direction had no surface saying it was theirs.
+   */
+  "READY_FOR_ASSESSMENT_REVIEW",
+  "READY_FOR_VIDEO_REVIEW",
   "NEEDS_ASSESSMENT_APPROVAL",
   "SOURCE_BACKED_AWAITING_REVIEW",
   "SOURCE_CONFLICT",
@@ -415,12 +512,49 @@ export const WORK_QUEUE_BUCKETS = [
 ] as const;
 export type WorkQueueBucket = (typeof WORK_QUEUE_BUCKETS)[number];
 
+/**
+ * REVIEW-SURFACE CORRECTION — enough identity to OPEN the work, not just to name
+ * it.
+ *
+ * A queue entry used to carry a level number, a stable code and prose. A
+ * reviewer holding "level 2 · content · awaiting a reviewer" still had to
+ * discover WHICH content version, and on a level mid-succession the obvious
+ * guess — whatever the level summary shows — is the predecessor. In practice the
+ * id was recoverable only from a markdown handoff the author wrote by hand.
+ *
+ * DELIBERATELY NOT HERE: any source-authority evidence. Decisions, hashes,
+ * fingerprints and rationales live on the source-authority surface, which is a
+ * different question asked by a different person.
+ */
+export type WorkQueueCandidateRef = {
+  versionId: number;
+  versionNumber: number;
+  revision: number;
+  editorialState: string;
+  /** The runtime axis of THIS version, or null for video production. */
+  runtimeStatus: string | null;
+  /** Is this the version the level currently serves? */
+  isRuntimeVersion: boolean;
+  /** Is this version pinned by `LevelResourceBinding`? */
+  isRuntimeBound: boolean;
+  /** PHASE-G2 SUCCESSOR lineage, where the axis records one. */
+  predecessorVersionId: number | null;
+};
+
 export type WorkQueueEntry = {
   bucket: WorkQueueBucket;
+  /** REVIEW-SURFACE CORRECTION — so a client can address the level by id. */
+  levelDefinitionId: number;
   levelNumber: number;
   stableCode: string;
   aggregate: "content" | "assessment" | "video_production" | "structure";
   reason: string;
+  /**
+   * The exact version this entry is about. Null for `structure` entries, which
+   * are about the level rather than a version, and for an ambiguous axis, where
+   * withholding the id is the point.
+   */
+  candidate: WorkQueueCandidateRef | null;
 };
 
 /**
@@ -441,18 +575,66 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
     level: AuthoringLevelSummary,
     aggregate: WorkQueueEntry["aggregate"],
     reason: string,
+    candidate: WorkQueueCandidateRef | null = null,
   ) => {
     entries.push({
       bucket,
+      levelDefinitionId: level.levelDefinitionId,
       levelNumber: level.levelNumber,
       stableCode: level.stableCode,
       aggregate,
       reason,
+      candidate,
     });
   };
 
+  /** One axis' editorial candidate, in queue-entry shape. */
+  const ref = (
+    axis: EditorialCandidateSummary | EditorialContentCandidateSummary,
+  ): WorkQueueCandidateRef | null =>
+    axis.versionId === null || axis.versionNumber === null || axis.revision === null
+      ? null
+      : {
+          versionId: axis.versionId,
+          versionNumber: axis.versionNumber,
+          revision: axis.revision,
+          editorialState: axis.editorialState ?? "draft",
+          runtimeStatus: axis.runtimeStatus,
+          isRuntimeVersion: axis.isRuntimeVersion,
+          isRuntimeBound: axis.isRuntimeBound,
+          predecessorVersionId: axis.predecessorVersionId,
+        };
+
   for (const level of levels) {
     const handoff = levelHandoffStatus(level);
+    const editorialContent = level.editorial.content;
+    const editorialAssessment = level.editorial.assessment;
+    const editorialVideo = level.editorial.video;
+
+    /* ------------------------------------------------- ambiguity, first */
+    // FAIL CLOSED, and BEFORE anything else on that axis: with two equally
+    // active versions there is no truthful single work item, and picking one
+    // would send a reviewer to a version chosen by id order.
+    for (const [axis, aggregate] of [
+      [editorialContent, "content"],
+      [editorialAssessment, "assessment"],
+      [editorialVideo, "video_production"],
+    ] as const) {
+      if (axis.ambiguous) {
+        const desk =
+          axis.waitingOn === "reviewer"
+            ? "submitted for review"
+            : axis.waitingOn === "publisher"
+              ? "approved and unpublished"
+              : "returned for changes";
+        push(
+          "NEEDS_PRODUCT_DECISION",
+          level,
+          aggregate,
+          `versions ${axis.ambiguousVersionIds.join(", ")} are all ${desk} — which one is the successor is a human decision, so no candidate is offered`,
+        );
+      }
+    }
 
     if (handoff.blockers.includes("STRUCTURE_NOT_CANONICAL")) {
       push(
@@ -464,39 +646,111 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
     }
 
     /* ------------------------------------------------------------ content */
-    if (level.content?.editorialState === "changes_requested") {
-      push("CHANGES_REQUESTED", level, "content", "reviewer returned the lesson for changes");
-    } else if (level.content?.editorialState === "submitted_for_review") {
-      push("READY_FOR_CONTENT_REVIEW", level, "content", "lesson is awaiting a reviewer");
-    } else if (requiresLearnerContent(level)) {
-      if (!level.content || !level.content.hasLocalization) {
-        push("NEEDS_FULL_CONTENT", level, "content", "no learner lesson exists for this level");
-      } else if (level.content.teachingCharacters < MIN_EDITORIAL_TEACHING_CHARACTERS) {
+    // REVIEW-SURFACE CORRECTION — judged on the EDITORIAL CANDIDATE, not on the
+    // runtime version. Where a level has no successor the two are the same row
+    // and nothing changes; where it has one this is the difference between
+    // "review the replacement the author submitted" and the old answer, which
+    // was silence, because a runtime predecessor is not submitted and never
+    // will be.
+    if (!editorialContent.ambiguous) {
+      if (editorialContent.editorialState === "changes_requested") {
+        push("CHANGES_REQUESTED", level, "content", "reviewer returned the lesson for changes", ref(editorialContent));
+      } else if (editorialContent.editorialState === "submitted_for_review") {
         push(
-          "NEEDS_FULL_CONTENT",
+          "READY_FOR_CONTENT_REVIEW",
           level,
           "content",
-          `${level.content.teachingCharacters} teaching characters — below the ${MIN_EDITORIAL_TEACHING_CHARACTERS} ATA editorial floor`,
+          editorialContent.isRuntimeVersion
+            ? "lesson is awaiting a reviewer"
+            : "successor lesson is awaiting a reviewer — the level still serves its published predecessor",
+          ref(editorialContent),
         );
+      } else if (requiresLearnerContent(level)) {
+        if (editorialContent.versionId === null || !editorialContent.hasLocalization) {
+          push("NEEDS_FULL_CONTENT", level, "content", "no learner lesson exists for this level", ref(editorialContent));
+        } else if (editorialContent.teachingCharacters < MIN_EDITORIAL_TEACHING_CHARACTERS) {
+          push(
+            "NEEDS_FULL_CONTENT",
+            level,
+            "content",
+            `${editorialContent.teachingCharacters} teaching characters — below the ${MIN_EDITORIAL_TEACHING_CHARACTERS} ATA editorial floor`,
+            ref(editorialContent),
+          );
+        }
       }
     }
 
     /* --------------------------------------------------------- assessment */
-    if (level.assessment?.editorialState === "changes_requested") {
-      push("CHANGES_REQUESTED", level, "assessment", "reviewer returned the bank for changes");
-    } else if (level.assessment) {
+    // The PROVENANCE entries describe the bank the provenance was COMPUTED on —
+    // the runtime bank — so they name that version rather than the editorial
+    // candidate. The two coincide on every level in the corpus today, because no
+    // `LevelResourceBinding` pins an assessment; naming each entry after the row
+    // its reason came from keeps them honest if that ever changes.
+    const runtimeAssessmentRef: WorkQueueCandidateRef | null = level.assessment
+      ? {
+          versionId: level.assessment.id,
+          versionNumber: level.assessment.versionNumber,
+          revision: level.assessment.revision,
+          editorialState: level.assessment.editorialState,
+          runtimeStatus: level.assessment.runtimeStatus,
+          isRuntimeVersion: true,
+          isRuntimeBound:
+            editorialAssessment.versionId === level.assessment.id
+              ? editorialAssessment.isRuntimeBound
+              : false,
+          predecessorVersionId: null,
+        }
+      : null;
+
+    // REVIEW-SURFACE CORRECTION — SOURCE INTEGRITY IS NOT A LIFECYCLE STATE, so
+    // it is emitted unconditionally rather than as the `else` of one.
+    //
+    // The lifecycle branch used to shadow the whole provenance switch: a bank
+    // returned for changes reported only `CHANGES_REQUESTED`, and an unreadable
+    // Blueprint source or an unsettled conflict on that same bank disappeared
+    // from the queue until somebody resubmitted it. A conflict is owed to a
+    // reviewer whatever desk the bank is on, so the two now coexist. No level in
+    // the corpus is in both states today, which is why this costs nothing to fix
+    // and is exactly why it was never noticed.
+    if (level.assessment?.provenance === "SOURCE_UNAVAILABLE") {
+      push(
+        "SOURCE_UNAVAILABLE",
+        level,
+        "assessment",
+        level.assessment.sourceContractUnavailableReason === "SOURCE_LINK_INCOMPATIBLE"
+          ? "the bank is linked to a video production version from another level, so its Blueprint lineage is ambiguous — repair the link before this level can be assessed"
+          : "the Blueprint proposal for this bank could not be parsed, so whether it disagrees with the approved bank is unknown — repair the production contract",
+        runtimeAssessmentRef,
+      );
+    }
+
+    if (!editorialAssessment.ambiguous && editorialAssessment.editorialState === "changes_requested") {
+      push("CHANGES_REQUESTED", level, "assessment", "reviewer returned the bank for changes", ref(editorialAssessment));
+    } else if (!editorialAssessment.ambiguous && editorialAssessment.editorialState === "submitted_for_review") {
+      // REVIEW-SURFACE CORRECTION — a submitted bank used to fall straight
+      // through to the provenance switch and be reported as "a Blueprint
+      // proposal nobody has approved". True of its provenance, wrong about the
+      // work: it IS with a reviewer, and the entry now says so and names the id.
+      push(
+        "READY_FOR_ASSESSMENT_REVIEW",
+        level,
+        "assessment",
+        editorialAssessment.isRuntimeVersion
+          ? "question bank is awaiting a reviewer"
+          : "successor question bank is awaiting a reviewer — the level still serves its published predecessor",
+        ref(editorialAssessment),
+      );
+    }
+
+    const awaitingEditorialDecision =
+      !editorialAssessment.ambiguous &&
+      (editorialAssessment.editorialState === "changes_requested" ||
+        editorialAssessment.editorialState === "submitted_for_review");
+
+    if (level.assessment) {
       switch (level.assessment.provenance) {
-        // CORRECTION-2 — the source could not be read. Say that, and say what
-        // would fix it, rather than filing an unknown as a decision backlog.
+        // Emitted above, unconditionally, so a lifecycle state cannot hide it.
         case "SOURCE_UNAVAILABLE":
-          push(
-            "SOURCE_UNAVAILABLE",
-            level,
-            "assessment",
-            level.assessment.sourceContractUnavailableReason === "SOURCE_LINK_INCOMPATIBLE"
-              ? "the bank is linked to a video production version from another level, so its Blueprint lineage is ambiguous — repair the link before this level can be assessed"
-              : "the Blueprint proposal for this bank could not be parsed, so whether it disagrees with the approved bank is unknown — repair the production contract",
-          );
           break;
         case "CONFLICTING": {
           // PHASE-G2 — say which of the raw disagreements are actually
@@ -519,63 +773,96 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
               : `${blocking} of ${raw} field-level disagreements still block` +
                 (notApplied > 0 ? `, ${notApplied} decided but not yet applied` : "") +
                 (stale > 0 ? `, ${stale} decided against values that have since changed` : "");
-          push("SOURCE_CONFLICT", level, "assessment", detail);
+          push("SOURCE_CONFLICT", level, "assessment", detail, runtimeAssessmentRef);
           break;
         }
+        // REVIEW-SURFACE CORRECTION — these three say "nobody has approved this
+        // bank", which stays true while a reviewer is holding it and would
+        // duplicate the review entry above. They are suppressed exactly when a
+        // lifecycle entry already names the desk the bank is on.
         case "SOURCE_BACKED":
-          push(
-            "SOURCE_BACKED_AWAITING_REVIEW",
-            level,
-            "assessment",
-            level.assessment.sourceApproval === "AWAITING_APPROVAL"
-              ? "source-backed bank whose source records AWAITING_APPROVAL"
-              : "source-backed bank with no editorial approval recorded",
-          );
+          if (!awaitingEditorialDecision) {
+            push(
+              "SOURCE_BACKED_AWAITING_REVIEW",
+              level,
+              "assessment",
+              level.assessment.sourceApproval === "AWAITING_APPROVAL"
+                ? "source-backed bank whose source records AWAITING_APPROVAL"
+                : "source-backed bank with no editorial approval recorded",
+              runtimeAssessmentRef,
+            );
+          }
           break;
         case "PROPOSED_CANON":
-          push(
-            "NEEDS_ASSESSMENT_APPROVAL",
-            level,
-            "assessment",
-            "PROPOSED_CANON bank — a Blueprint proposal nobody has approved",
-          );
+          if (!awaitingEditorialDecision) {
+            push(
+              "NEEDS_ASSESSMENT_APPROVAL",
+              level,
+              "assessment",
+              "PROPOSED_CANON bank — a Blueprint proposal nobody has approved",
+              runtimeAssessmentRef,
+            );
+          }
           break;
         case "LOCAL_DRAFT":
-          push(
-            "NEEDS_ASSESSMENT_APPROVAL",
-            level,
-            "assessment",
-            "bank has no canonical provenance and no editorial approval",
-          );
+          if (!awaitingEditorialDecision) {
+            push(
+              "NEEDS_ASSESSMENT_APPROVAL",
+              level,
+              "assessment",
+              "bank has no canonical provenance and no editorial approval",
+              runtimeAssessmentRef,
+            );
+          }
           break;
         default:
           break;
       }
     } else if (isVideoLesson(level)) {
-      push(
-        "NEEDS_FULL_CONTENT",
-        level,
-        "assessment",
-        "video+assessment lesson with no question bank",
-      );
+      push("NEEDS_FULL_CONTENT", level, "assessment", "video+assessment lesson with no question bank", null);
     }
 
     /* -------------------------------------------------------------- video */
     if (level.video) {
+      const videoRef: WorkQueueCandidateRef | null = ref(editorialVideo) ?? {
+        versionId: level.video.id,
+        versionNumber: level.video.versionNumber,
+        revision: level.video.revision,
+        editorialState: level.video.editorialState,
+        runtimeStatus: null,
+        isRuntimeVersion: true,
+        isRuntimeBound: false,
+        predecessorVersionId: null,
+      };
+
+      // REVIEW-SURFACE CORRECTION — the production version's own editorial
+      // lifecycle. A submitted script produced no queue entry at all. The asset
+      // and QA entries below are separate PRODUCTION work and are unaffected: a
+      // script can be reviewable while the video is still unrecorded, and both
+      // facts stay visible.
+      if (!editorialVideo.ambiguous) {
+        if (editorialVideo.editorialState === "changes_requested") {
+          push("CHANGES_REQUESTED", level, "video_production", "reviewer returned the production direction for changes", videoRef);
+        } else if (editorialVideo.editorialState === "submitted_for_review") {
+          push("READY_FOR_VIDEO_REVIEW", level, "video_production", "production direction is awaiting a reviewer", videoRef);
+        }
+      }
+
       if (level.video.scriptState === "SCRIPT_PENDING") {
-        push("NEEDS_VIDEO_SCRIPT", level, "video_production", "script is SCRIPT_PENDING");
+        push("NEEDS_VIDEO_SCRIPT", level, "video_production", "script is SCRIPT_PENDING", videoRef);
       }
       if (level.video.videoState === "NOT_RECORDED") {
-        push("NEEDS_VIDEO_ASSET", level, "video_production", "video is NOT_RECORDED");
+        push("NEEDS_VIDEO_ASSET", level, "video_production", "video is NOT_RECORDED", videoRef);
       }
       if (level.video.qaState !== "QA_PASSED") {
-        push("NEEDS_VIDEO_QA", level, "video_production", `QA is ${level.video.qaState}`);
+        push("NEEDS_VIDEO_QA", level, "video_production", `QA is ${level.video.qaState}`, videoRef);
       } else if (level.video.assessmentEvidenceStale || level.video.contractEvidenceStale) {
         push(
           "NEEDS_VIDEO_QA",
           level,
           "video_production",
           `QA passed but the evidence is stale (${level.video.coherenceReason})`,
+          videoRef,
         );
       }
     }

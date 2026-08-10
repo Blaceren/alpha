@@ -205,6 +205,46 @@ export type VideoAggregateSummary = AuthoringAggregateSummary & {
   coherenceReason: VideoProductionCoherence["reason"];
 };
 
+/**
+ * REVIEW-SURFACE CORRECTION — the EDITORIAL candidate for one axis, reported
+ * BESIDE the runtime summary and never instead of it.
+ *
+ * Everything a reviewer needs to reach the exact version and nothing more: no
+ * adjudication evidence, no value hashes, no decision record. The queue is a
+ * list of work, not a source-authority surface.
+ */
+export type EditorialCandidateSummary = {
+  /** Null only when the axis is ambiguous — see `ambiguous`. */
+  versionId: number | null;
+  versionNumber: number | null;
+  revision: number | null;
+  editorialState: EditorialState | null;
+  /** The runtime axis, or null for video production which has none. */
+  runtimeStatus: string | null;
+  /** Is this the very version the runtime serves? */
+  isRuntimeVersion: boolean;
+  /** Is this version pinned by `LevelResourceBinding`? */
+  isRuntimeBound: boolean;
+  /** PHASE-G2 SUCCESSOR lineage, where the axis records one. */
+  predecessorVersionId: number | null;
+  /** Whose desk this is on. */
+  waitingOn: "reviewer" | "author" | "publisher" | "none" | null;
+  /** True when two equally-active versions make the choice a human decision. */
+  ambiguous: boolean;
+  ambiguousVersionIds: number[];
+};
+
+/**
+ * The content axis carries the two material facts the queue judges — "is there a
+ * lesson" and "is it long enough" — so they are read from the CANDIDATE. A queue
+ * that measured the predecessor would keep demanding a rewrite of a lesson an
+ * author has already replaced.
+ */
+export type EditorialContentCandidateSummary = EditorialCandidateSummary & {
+  hasLocalization: boolean;
+  teachingCharacters: number;
+};
+
 export type AuthoringLevelSummary = {
   levelDefinitionId: number;
   levelNumber: number;
@@ -223,9 +263,29 @@ export type AuthoringLevelSummary = {
   moduleCode: string;
   moduleTitle: string;
   /* ---------------------------- authoring state ---------------------------- */
+  /**
+   * THE RUNTIME AXIS. These three describe the version the level SERVES —
+   * `LevelResourceBinding` where there is one, otherwise the highest
+   * `versionNumber`. Unchanged by the review-surface correction, deliberately:
+   * every existing reader, every readiness counter and the handoff bundle mean
+   * exactly this by "the level's content".
+   */
   content: ContentAggregateSummary | null;
   assessment: AssessmentAggregateSummary | null;
   video: VideoAggregateSummary | null;
+  /**
+   * REVIEW-SURFACE CORRECTION — THE EDITORIAL AXIS, beside the runtime one.
+   *
+   * Which version is somebody supposed to be working on. On a level with no
+   * successor this names the same row as the runtime axis and says so
+   * (`isRuntimeVersion`). On a level mid-succession the two differ, which is the
+   * whole point: L2 serves Content v1 and owes a review of Content v79.
+   */
+  editorial: {
+    content: EditorialContentCandidateSummary;
+    assessment: EditorialCandidateSummary;
+    video: EditorialCandidateSummary;
+  };
 };
 
 /* ------------------------------------------------------------------ *
@@ -322,6 +382,52 @@ import {
   resolveCandidate,
   type AuthoringCandidateSelection,
 } from "@/lib/curriculum/authoring-candidate";
+import { pickEditorialCandidate } from "@/lib/curriculum/authoring-editorial-candidate";
+
+/**
+ * REVIEW-SURFACE CORRECTION — project one axis' editorial candidate.
+ *
+ * Pure, and fed from the rows the overview has already loaded, so exposing the
+ * editorial axis costs no additional query.
+ */
+function editorialSummary<
+  T extends {
+    id: number;
+    versionNumber: number;
+    revision: number;
+    editorialState: EditorialState;
+    status?: string;
+    predecessorVersionId?: number | null;
+  },
+>(
+  versions: readonly T[],
+  runtimeVersionId: number | null,
+  boundVersionId: number | null,
+): EditorialCandidateSummary {
+  const resolved = pickEditorialCandidate(
+    versions.map((row) => ({
+      id: row.id,
+      versionNumber: row.versionNumber,
+      editorialState: row.editorialState,
+      runtimeStatus: row.status ?? null,
+    })),
+    runtimeVersionId,
+  );
+  const row = resolved.candidate ? versions.find((v) => v.id === resolved.candidate!.id) ?? null : null;
+  return {
+    versionId: row?.id ?? null,
+    versionNumber: row?.versionNumber ?? null,
+    revision: row?.revision ?? null,
+    editorialState: row?.editorialState ?? null,
+    runtimeStatus: row?.status ?? null,
+    isRuntimeVersion: resolved.isRuntimeVersion,
+    isRuntimeBound: row !== null && boundVersionId !== null && row.id === boundVersionId,
+    predecessorVersionId: row?.predecessorVersionId ?? null,
+    waitingOn: resolved.waitingOn,
+    ambiguous: resolved.ambiguous,
+    ambiguousVersionIds: resolved.ambiguousVersionIds,
+  };
+}
 
 export function describeBody(body: unknown): {
   bodyFormat: ContentAggregateSummary["bodyFormat"];
@@ -427,6 +533,9 @@ export async function readAuthoringOverview(
         select: {
           ...RUNTIME_LIFECYCLE_SELECT,
           levelDefinitionId: true,
+          // REVIEW-SURFACE CORRECTION — so the editorial axis can name the
+          // ancestor a successor descends from without a second query.
+          predecessorVersionId: true,
           questions: { select: { stableKey: true, questionNumber: true } },
         },
       }),
@@ -659,6 +768,26 @@ export async function readAuthoringOverview(
       content,
       assessment,
       video,
+      editorial: {
+        content: (() => {
+          const rows = contentByLevel.get(level.id) ?? [];
+          const base = editorialSummary(rows, contentRow?.id ?? null, binding?.contentVersionId ?? null);
+          const row = rows.find((candidate) => candidate.id === base.versionId) ?? null;
+          const loc = row?.localizations[0] ?? null;
+          const body = loc
+            ? describeBody(loc.body)
+            : { bodyFormat: "none" as const, teachingCharacters: 0, sectionCount: 0, blockCount: 0 };
+          return { ...base, hasLocalization: loc !== null, teachingCharacters: body.teachingCharacters };
+        })(),
+        assessment: editorialSummary(
+          assessmentByLevel.get(level.id) ?? [],
+          assessmentRow?.id ?? null,
+          binding?.assessmentVersionId ?? null,
+        ),
+        // Video production has no runtime axis at all, so it has no binding
+        // either: every production version is editorial by construction.
+        video: editorialSummary(videoByLevel.get(level.id) ?? [], videoRow?.id ?? null, null),
+      },
     });
   }
 

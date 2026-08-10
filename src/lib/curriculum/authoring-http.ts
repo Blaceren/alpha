@@ -108,8 +108,28 @@ export async function gateAuthoringRead(request: Request): Promise<AuthoringGate
  * an unexpected parameter usually means a client believes in a filter the server
  * does not implement, and silently returning unfiltered data is how a reviewer
  * ends up looking at the wrong list.
+ *
+ * REVIEW-SURFACE CORRECTION — the three candidate axes belong here.
+ *
+ * PHASE-G2 SUCCESSOR taught `candidateFromQuery` to read `contentVersionId`,
+ * `assessmentVersionId` and `videoProductionVersionId`, and documented both
+ * candidate-aware GETs as accepting them — but never added them to this set. The
+ * gate runs BEFORE the route body, so every documented candidate-aware read was
+ * answered `400 INVALID_QUERY` and the reachable HTTP surface could only ever
+ * open the runtime version. A real authoring session found it the hard way: the
+ * successor it had just submitted could not be opened through any staff route.
+ *
+ * The list stays CLOSED. Three names were added, nothing was opened up, and the
+ * ids themselves are still verified against the level's own versions by
+ * `resolveCandidate` before they select anything.
  */
-const ALLOWED_QUERY: ReadonlySet<string> = new Set(["curriculumVersionId", "levelNumbers"]);
+const ALLOWED_QUERY: ReadonlySet<string> = new Set([
+  "curriculumVersionId",
+  "levelNumbers",
+  "contentVersionId",
+  "assessmentVersionId",
+  "videoProductionVersionId",
+]);
 
 /**
  * A write. `capability` decides the permission; `csrf` is always enforced.
@@ -307,15 +327,42 @@ export function readCurriculumVersionIdQuery(request: Request): number | null {
  * beside it. The candidate axes need exactly this parse, and a second
  * hand-written copy is how two readers of one shape come to disagree about
  * whether `"0"`, `"1.5"` or `""` is acceptable.
+ *
+ * REVIEW-SURFACE CORRECTION — two ways this reader could be talked into
+ * accepting something that is not the id the caller typed.
+ *
+ * 1. `searchParams.get` returns the FIRST value and discards the rest, so
+ *    `?contentVersionId=79&contentVersionId=1` silently selected 79 while a
+ *    caller — or a proxy that appended a default — believed it had said 1. An
+ *    ambiguous selection must be refused, never resolved by position.
+ *
+ * 2. `Number()` accepts far more than a decimal id: `"0x4f"`, `"7e1"`, `"+79"`
+ *    and `" 79 "` all become 79, and each is a different string arriving from a
+ *    different bug. A candidate id decides WHICH VERSION a reviewer approves, so
+ *    the spelling is checked before the value is.
+ *
+ * Both rules apply to `curriculumVersionId` as well, deliberately: the comment
+ * above exists because two parse rules for one shape is how they drift apart,
+ * and this change only ever narrows what was accepted.
  */
+const DECIMAL_ID = /^[0-9]+$/;
+
 export function readPositiveIdQuery(request: Request, param: string): number | null {
-  const raw = new URL(request.url).searchParams.get(param);
-  if (raw === null) return null;
+  const all = new URL(request.url).searchParams.getAll(param);
+  if (all.length === 0) return null;
+  const invalid = (message: string): never => {
+    throw new Phase4HttpError("AUTHORING_INPUT_INVALID", 400, [
+      { code: "INPUT_INVALID", path: param, message },
+    ]);
+  };
+  if (all.length > 1) {
+    invalid("must be supplied at most once — an ambiguous selection is refused, not resolved");
+  }
+  const raw = all[0];
+  if (!DECIMAL_ID.test(raw)) invalid("must be a positive integer in plain decimal notation");
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Phase4HttpError("AUTHORING_INPUT_INVALID", 400, [
-      { code: "INPUT_INVALID", path: param, message: "must be a positive integer" },
-    ]);
+    invalid("must be a positive integer");
   }
   return value;
 }
