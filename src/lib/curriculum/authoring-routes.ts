@@ -50,6 +50,10 @@ import {
 } from "@/lib/curriculum/authoring-validation-service";
 import { compareBlueprintProposal } from "@/lib/curriculum/authoring-conflict";
 import {
+  candidateForAxis,
+  type AuthoringCandidateSelection,
+} from "@/lib/curriculum/authoring-candidate";
+import {
   createLevelPreviewSnapshot,
   readInternalPreview,
   readLearnerPreview,
@@ -88,6 +92,7 @@ import {
   positiveId,
   readCurriculumVersionIdQuery,
   readJsonBody,
+  readPositiveIdQuery,
   reviewNoteBodySchema,
   sourceAuthorityBodySchema,
   videoContractBodySchema,
@@ -114,6 +119,21 @@ async function resolveVersionId(request: Request): Promise<number> {
     );
   }
   return resolved;
+}
+
+/**
+ * PHASE-G2 SUCCESSOR — the candidate axes, read from the query string.
+ *
+ * Every id is verified against the level's own versions by `resolveCandidate`
+ * before it selects anything, so a hostile or mistaken value cannot reach a
+ * foreign level's rows — this function only parses shape.
+ */
+function candidateFromQuery(request: Request): AuthoringCandidateSelection {
+  return {
+    contentVersionId: readPositiveIdQuery(request, "contentVersionId"),
+    assessmentVersionId: readPositiveIdQuery(request, "assessmentVersionId"),
+    videoProductionVersionId: readPositiveIdQuery(request, "videoProductionVersionId"),
+  };
 }
 
 /** Which level does this aggregate belong to? Read server-side, never supplied. */
@@ -241,7 +261,13 @@ export function authoringLevelRoute() {
       const params = await context.params;
       const levelDefinitionId = positiveId(params.levelId, "levelId");
       const curriculumVersionId = await resolveVersionId(request);
-      const workspace = await readLevelAuthoringWorkspace({ curriculumVersionId, levelDefinitionId });
+      // PHASE-G2 SUCCESSOR — optional candidate axes, so the Studio can open a
+      // draft successor. Omitted, this is byte-identical to the accepted route.
+      const workspace = await readLevelAuthoringWorkspace({
+        curriculumVersionId,
+        levelDefinitionId,
+        candidate: candidateFromQuery(request),
+      });
       if (!workspace) return authoringException(
         new AuthoringDomainError("AUTHORING_TARGET_NOT_FOUND", "level not found in this curriculum version"),
         "authoring level GET",
@@ -264,7 +290,17 @@ export function authoringLevelValidateRoute() {
       const params = await context.params;
       const levelDefinitionId = positiveId(params.levelId, "levelId");
       const curriculumVersionId = await resolveVersionId(request);
-      const report = await validateLevelAuthoring({ curriculumVersionId, levelDefinitionId });
+      // PHASE-G2 SUCCESSOR — the Studio's "would this pass?" button, aimed.
+      //
+      // Optional query candidates, because an author validating a successor needs
+      // the answer for the DRAFT, and the level-scoped answer is about the version
+      // learners are on. Omitting them keeps the accepted level-wide behaviour, so
+      // this is additive for every existing caller.
+      const report = await validateLevelAuthoring({
+        curriculumVersionId,
+        levelDefinitionId,
+        candidate: candidateFromQuery(request),
+      });
       if (!report) {
         return authoringException(
           new AuthoringDomainError("AUTHORING_TARGET_NOT_FOUND", "level not found in this curriculum version"),
@@ -482,9 +518,20 @@ export function authoringSubmitRoute() {
       const body = parseBody(lifecycleBodySchema, await readJsonBody(request));
 
       const target = await resolveAggregateLevel(kind, id);
+      // PHASE-G2 SUCCESSOR — VALIDATE THE VERSION BEING SUBMITTED.
+      //
+      // `id` used to reach this line and go no further: it resolved the level and
+      // was then dropped, so the validator re-derived a target through the runtime
+      // binding and judged whatever the level currently serves. On any level with
+      // a published predecessor that is a DIFFERENT ROW than the one being
+      // submitted, which the independent audit measured in both directions — a
+      // repaired successor refused because its bound predecessor was defective,
+      // and, worse, a defective successor that a clean predecessor would have
+      // waved through.
       const report = await validateLevelAuthoring({
         curriculumVersionId: target.curriculumVersionId,
         levelDefinitionId: target.levelDefinitionId,
+        candidate: candidateForAxis(kind, id),
       });
       const scoped = scopeValidation(report, kind);
       if (!scoped.ok) {
@@ -559,9 +606,16 @@ export function authoringApproveRoute() {
       const body = parseBody(lifecycleBodySchema, await readJsonBody(request));
 
       const target = await resolveAggregateLevel(kind, id);
+      // PHASE-G2 SUCCESSOR — APPROVE WHAT WAS VALIDATED.
+      //
+      // The same candidate-discard defect as submit, and materially worse here:
+      // approval is the four-eyes gate, so validating the runtime predecessor and
+      // then approving a different draft means the reviewer's `validationPassed`
+      // describes a version nobody looked at.
       const report = await validateLevelAuthoring({
         curriculumVersionId: target.curriculumVersionId,
         levelDefinitionId: target.levelDefinitionId,
+        candidate: candidateForAxis(kind, id),
       });
       const scoped = scopeValidation(report, kind);
 

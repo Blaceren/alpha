@@ -30,6 +30,7 @@ const MIGRATIONS = path.join(ROOT, "prisma", "migrations");
 const G0 = "20260808000000_authoring_foundation";
 const CORRECTION = "20260808120000_authoring_foundation_corrections";
 const SOURCE_AUTHORITY = "20260810000000_source_authority_resolution";
+const SUCCESSOR_LINEAGE = "20260811000000_assessment_successor_lineage";
 const OUT = process.env.REGRESSION_SUMMARY_PATH ?? null;
 
 let passed = 0;
@@ -109,15 +110,17 @@ function main() {
   // in isolation: everything before G0, then G0 alone, against populated tables.
   // The correction's own upgrade is proven by the corrections suite, and the
   // combined chain is proven by both.
-  // PHASE-G2 appended the source-authority resolution table. The list stays
-  // EXACT rather than becoming a prefix match: an unexpected migration landing
-  // after G0 is precisely what this assertion exists to catch, and loosening it
-  // to "starts with" would retire the check the first time it mattered.
+  // PHASE-G2 appended the source-authority resolution table, and PHASE-G2
+  // SUCCESSOR appended the assessment lineage column. The list stays EXACT
+  // rather than becoming a prefix match: an unexpected migration landing after
+  // G0 is precisely what this assertion exists to catch, and loosening it to
+  // "starts with" would retire the check the first time it mattered. Declaring
+  // each new migration here by name is the intended cost of that strictness.
   const after = all.slice(g0Index + 1);
   assert.deepEqual(
     after,
-    [CORRECTION, SOURCE_AUTHORITY],
-    "G0 must be followed by exactly the authoring-foundation correction, then the source-authority table",
+    [CORRECTION, SOURCE_AUTHORITY, SUCCESSOR_LINEAGE],
+    "G0 must be followed by exactly the authoring-foundation correction, the source-authority table, then the successor lineage column",
   );
 
   const before = all.slice(0, g0Index);

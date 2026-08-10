@@ -409,6 +409,34 @@ external evidence artifact, so **that artifact must be preserved for as long as 
 decision matters** — for L2, `l2-conflict-evidence.json` and
 `l2-conflict-decision.md`.
 
+## Successor banks (PHASE-G2 SUCCESSOR)
+
+A decision is stored against one `assessmentVersionId`, which is **storage, not
+semantics**: what it is *about* is a pair of values at a named slot. A cloned bank
+therefore used to report every adjudicated conflict as unresolved again — not
+because the adjudication had stopped being true, but because nothing recorded
+which bank the clone descended from.
+
+`AssessmentVersion.predecessorVersionId` records that descent, and
+`readSourceAuthority` walks it to find a candidate ancestor decision for any slot
+the successor has not decided itself. The ancestor's decision is then
+**re-evaluated against the successor's own live values** by the unchanged
+`evaluateApplication`, plus source-lineage guards. Descent is permission to look,
+never permission to apply.
+
+Nothing is copied: the successor owns no resolution row, the predecessor's rows
+are untouched, and every inherited decision carries the original adjudicator,
+time, rationale and evidence while being explicitly marked `inherited`. A local
+decision always overrides an inherited one for its slot.
+
+`bankFingerprintAtDecision` and `assessmentRevisionAtDecision` stay historical
+evidence and are **not** inheritance guards — both move for legitimate
+non-authority authoring. `contractFingerprintAtDecision` and
+`blueprintSourceDocumentSha256` are, because they describe the source side, which
+bank authoring cannot move.
+
+Full design: [SUCCESSOR_VERSION_AUTHORING.md](SUCCESSOR_VERSION_AUTHORING.md).
+
 ## What this is not
 
 It is not a source-**amendment** mechanism. It decides which of two existing

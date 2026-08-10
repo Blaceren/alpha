@@ -534,7 +534,11 @@ async function main() {
       // accepted G1 base and was guarding nothing, the exact decay
       // support/migrationCount.ts exists to stop. PHASE-G2's source-authority
       // migration makes it 7, and both steps are corrected here together.
-      assert.equal(prior.length, expectedPriorMigrationCount(7));
+      //
+      // PHASE-G2 SUCCESSOR: the assessment lineage migration makes it 8. Nothing
+      // about Pocket changed — this suite pins the migration chain twice, by
+      // total and by offset, and both pins move when a migration is added.
+      assert.equal(prior.length, expectedPriorMigrationCount(8));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

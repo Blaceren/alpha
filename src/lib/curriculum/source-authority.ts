@@ -288,6 +288,28 @@ export function evaluateApplication(
  * The projection
  * ------------------------------------------------------------------ */
 
+/**
+ * PHASE-G2 SUCCESSOR — WHY an inherited decision was refused.
+ *
+ * Each value names a guard that failed, because "not inherited" is not one fact.
+ * A moved prompt and a switched source contract need different work from a
+ * reviewer, and collapsing them into a bare STALE would send someone looking for
+ * an edit that never happened.
+ */
+export const AUTHORITY_INHERITANCE_REFUSALS = [
+  /** The successor no longer serves the value that was adjudicated. */
+  "VALUE_MOVED",
+  /** The canonical source contract is not the one the decision was made against. */
+  "SOURCE_CONTRACT_CHANGED",
+  /** The canonical Blueprint source document has been replaced. */
+  "SOURCE_DOCUMENT_CHANGED",
+  /** The question occupying this ordinal is not the one that was adjudicated. */
+  "SLOT_IDENTITY_CHANGED",
+  /** The ancestor's bank cannot be projected, so nothing can be verified against it. */
+  "ANCESTOR_UNPROJECTABLE",
+] as const;
+export type AuthorityInheritanceRefusal = (typeof AUTHORITY_INHERITANCE_REFUSALS)[number];
+
 export type SourceAuthorityDecisionView = {
   questionIndex: number;
   field: BlueprintConflictField;
@@ -303,6 +325,28 @@ export type SourceAuthorityDecisionView = {
   evidenceSha256: string;
   blueprintSourceDocumentSha256: string;
   batchId: string;
+  /**
+   * PHASE-G2 SUCCESSOR — was this decision made ON this bank, or inherited from
+   * an ancestor?
+   *
+   * THE FIELD EXISTS SO NOTHING HAS TO INFER IT. An inherited decision is a real
+   * decision by a real named human about two exact values — but it was made about
+   * a DIFFERENT AssessmentVersion, and every surface that shows it must be able
+   * to say so. Without this a successor would display seven adjudications that
+   * look as though somebody sat down and made them here, which is precisely the
+   * fabricated evidence the whole source-authority design refuses to produce.
+   *
+   * `decidedById`, `decidedAt`, `rationale`, `evidenceRef`, `evidenceSha256` and
+   * `batchId` above are the ORIGINAL values, unmodified. Inheritance carries the
+   * effect of a decision, never authorship of it.
+   */
+  inherited: boolean;
+  /** The AssessmentVersion the decision row actually lives on. */
+  originAssessmentVersionId: number;
+  /** 0 for a local decision, 1 for the immediate predecessor, and so on. */
+  inheritanceDepth: number;
+  /** Set only when an inherited decision was refused. Null otherwise. */
+  inheritanceRefusal: AuthorityInheritanceRefusal | null;
 };
 
 export type SourceAuthorityProjection = {
@@ -334,8 +378,40 @@ export type SourceAuthorityProjection = {
    * Identity of the adjudication lineage, or null when there is none.
    * DELIBERATELY NOT the assessment fingerprint — see §18 and
    * `calculateAuthorityResolutionFingerprint`.
+   *
+   * PHASE-G2 SUCCESSOR — UNCHANGED IN MEANING AND IN FORMULA. It identifies the
+   * ADJUDICATION, so a successor that inherits its predecessor's decisions has
+   * the SAME value — which is the truthful answer, because it is the same
+   * adjudication by the same human on the same evidence. Anything that
+   * distinguishes "reached locally" from "reached by inheritance" belongs to
+   * `authorityLineageFingerprint` below, and keeping the two apart is what lets
+   * the accepted value for an existing bank stay byte-identical.
    */
   resolutionFingerprint: string | null;
+  /**
+   * PHASE-G2 SUCCESSOR — how many of the decisions above came from an ancestor.
+   * Zero for every bank with no lineage, which is every pre-migration bank.
+   */
+  inheritedDecisionCount: number;
+  /** How many ancestors the walk actually traversed. Zero when there is none. */
+  lineageDepth: number;
+  /**
+   * PHASE-G2 SUCCESSOR (§23) — identity of HOW this bank's authority was reached.
+   *
+   * Distinct from `resolutionFingerprint`, which identifies WHAT was decided.
+   * Two banks can share an adjudication and differ in how they came by it: v1
+   * decided it, v2 inherited it. That difference is real, a reviewer must be able
+   * to see it, and folding it into the existing hash would have changed the
+   * recorded fingerprint of every already-adjudicated bank in the corpus.
+   *
+   * Binds, per decision in a fixed sorted order: the slot, the decision, the
+   * origin AssessmentVersion, the inheritance depth, and the application state.
+   * So it moves when a decision is re-made locally, when the chain changes shape,
+   * or when a decision stops applying — and does NOT move when a distractor, an
+   * option order or an explanation changes, because none of those is an
+   * adjudication.
+   */
+  authorityLineageFingerprint: string | null;
 };
 
 /**
@@ -385,6 +461,238 @@ export function calculateAuthorityResolutionFingerprint(
   return createHash("sha256").update(JSON.stringify(projection), "utf8").digest("hex");
 }
 
+/* ------------------------------------------------------------------ *
+ * PHASE-G2 SUCCESSOR — the lineage walk
+ * ------------------------------------------------------------------ */
+
+/**
+ * How far the walk will go before it stops.
+ *
+ * A level accumulates versions one editorial round at a time, so a real chain is
+ * a handful deep. The bound exists so a corrupt chain costs a bounded number of
+ * queries rather than a hung request, and it is a REFUSAL rather than a
+ * truncation: stopping quietly at the limit would silently drop decisions that
+ * do exist, which is a different answer wearing the same shape.
+ */
+const MAX_LINEAGE_DEPTH = 32;
+
+type LineageCandidate = {
+  row: StoredResolution;
+  originAssessmentVersionId: number;
+  depth: number;
+  /** The ancestor's own slot keys, for the slot-identity guard. Null at depth 0. */
+  ancestorSlotKeys: ReadonlyMap<number, string> | null;
+};
+
+type LineageIdentity = {
+  id: number;
+  levelDefinitionId: number;
+  curriculumVersionId: number;
+  predecessorVersionId: number | null;
+};
+
+/**
+ * Every decision that could apply to this bank — its own first, then the nearest
+ * ancestor's for each slot still uncovered.
+ *
+ * NEAREST WINS, AND LOCAL BEATS EVERYTHING. A slot decided on this bank is never
+ * overridden by an ancestor's decision about the same slot: re-adjudicating a
+ * single field is exactly how an author legitimately changes one prompt, and an
+ * older decision reasserting itself over the newer one would undo that silently.
+ * Between two ancestors the closer one wins for the same reason.
+ *
+ * THE WALK IS OVER THE EXPLICIT RELATION AND NOTHING ELSE. Not `versionNumber`
+ * arithmetic, not timestamps, not an AuditLog row. A bank with no
+ * `predecessorVersionId` has no ancestors, full stop — which is every bank that
+ * predates the lineage migration.
+ *
+ * FAIL CLOSED AT EVERY EDGE. A missing ancestor row, an ancestor on another
+ * level or curriculum version, a cycle, or a chain past the depth bound all STOP
+ * the walk. Stopping yields fewer inherited decisions, so the failure direction
+ * is always "this slot still blocks" and never "this slot is quietly settled".
+ */
+async function collectLineageCandidates(
+  tx: DbClient,
+  assessmentVersionId: number,
+): Promise<{ candidates: LineageCandidate[]; lineageDepth: number }> {
+  const local = (await tx.sourceAuthorityResolution.findMany({
+    where: { assessmentVersionId, supersededAt: null },
+    orderBy: [{ questionIndex: "asc" }, { field: "asc" }],
+  })) as unknown as StoredResolution[];
+
+  const candidates: LineageCandidate[] = local.map((row) => ({
+    row,
+    originAssessmentVersionId: assessmentVersionId,
+    depth: 0,
+    ancestorSlotKeys: null,
+  }));
+  const covered = new Set(local.map((row) => slotKey(row.questionIndex, row.field)));
+
+  const self = (await tx.assessmentVersion.findUnique({
+    where: { id: assessmentVersionId },
+    select: { id: true, levelDefinitionId: true, curriculumVersionId: true, predecessorVersionId: true },
+  })) as LineageIdentity | null;
+  if (!self) return { candidates, lineageDepth: 0 };
+
+  const seen = new Set<number>([assessmentVersionId]);
+  let cursor: LineageIdentity = self;
+  let depth = 0;
+
+  while (cursor.predecessorVersionId !== null && depth < MAX_LINEAGE_DEPTH) {
+    const ancestorId = cursor.predecessorVersionId;
+    // A cycle is corruption, not a chain. Stop rather than loop, and stop rather
+    // than pretend the remainder was inspected.
+    if (seen.has(ancestorId)) break;
+    seen.add(ancestorId);
+
+    const ancestor = (await tx.assessmentVersion.findUnique({
+      where: { id: ancestorId },
+      select: { id: true, levelDefinitionId: true, curriculumVersionId: true, predecessorVersionId: true },
+    })) as LineageIdentity | null;
+    // The relation names a bank that is not there. RESTRICT should make this
+    // impossible, so reaching it means the record disagrees with itself.
+    if (!ancestor) break;
+    // Lineage may never cross a level or a curriculum version. `LevelDefinition`
+    // is keyed by the composite, so both halves are checked.
+    if (
+      ancestor.levelDefinitionId !== self.levelDefinitionId ||
+      ancestor.curriculumVersionId !== self.curriculumVersionId
+    ) {
+      break;
+    }
+
+    depth += 1;
+    const ancestorRows = (await tx.sourceAuthorityResolution.findMany({
+      where: { assessmentVersionId: ancestorId, supersededAt: null },
+      orderBy: [{ questionIndex: "asc" }, { field: "asc" }],
+    })) as unknown as StoredResolution[];
+
+    const uncovered = ancestorRows.filter((row) => !covered.has(slotKey(row.questionIndex, row.field)));
+    if (uncovered.length > 0) {
+      // Projected ONCE per contributing ancestor, so the slot-identity guard can
+      // compare the ordinal-to-stableKey mapping the decision was made under
+      // against the one this bank serves now.
+      let ancestorSlotKeys: ReadonlyMap<number, string> | null = null;
+      try {
+        const ancestorBank = await projectAssessmentBank(tx, ancestorId);
+        ancestorSlotKeys = new Map(
+          ancestorBank.questions.map((question, index) => [index, question.questionId]),
+        );
+      } catch (error) {
+        if (!isAuthoringDomainError(error)) throw error;
+        ancestorSlotKeys = null;
+      }
+      for (const row of uncovered) {
+        candidates.push({ row, originAssessmentVersionId: ancestorId, depth, ancestorSlotKeys });
+        covered.add(slotKey(row.questionIndex, row.field));
+      }
+    }
+
+    cursor = ancestor;
+  }
+
+  return { candidates, lineageDepth: depth };
+}
+
+/**
+ * THE INHERITANCE GUARDS — everything that must still be true for an ancestor's
+ * decision to describe THIS bank.
+ *
+ * Applied ONLY to inherited candidates. A local decision is already about the
+ * bank it lives on, and subjecting it to these would change accepted behaviour
+ * for every bank in the corpus.
+ *
+ * WHY THESE AND NOT THE BANK FINGERPRINT. `bankFingerprintAtDecision` moves
+ * whenever a distractor, an option order or an explanation changes — all of which
+ * are exactly what a successor is FOR. Using it as a guard would refuse
+ * inheritance for every legitimate successor and force a human to re-decide
+ * authority truth that never moved, which is the fabricated adjudication §13
+ * forbids. `contractFingerprintAtDecision` is the opposite: it is computed over
+ * the SOURCE contract, which no amount of bank authoring can move, so it answers
+ * "is this still the same proposal?" precisely.
+ */
+function inheritanceRefusal(input: {
+  row: StoredResolution;
+  ancestorSlotKeys: ReadonlyMap<number, string> | null;
+  successorSlotKeys: ReadonlyMap<number, string>;
+  liveContractFingerprint: string | null;
+  liveSourceDocumentSha: string | null;
+}): AuthorityInheritanceRefusal | null {
+  const { row } = input;
+
+  // The ancestor bank could not be read, so its slot mapping is unknown and the
+  // guard below cannot be evaluated. Unknown is refused, never assumed equal.
+  if (input.ancestorSlotKeys === null) return "ANCESTOR_UNPROJECTABLE";
+
+  // SLOT IDENTITY. A decision is about `questions[N]`, and N is only meaningful
+  // while the same question occupies it. The ATA profile already forbids
+  // renumbering, so for those levels this can never fire — it is here for the
+  // generic profile, where `stableKey` is a free key and IS editable.
+  const ancestorKey = input.ancestorSlotKeys.get(row.questionIndex);
+  const successorKey = input.successorSlotKeys.get(row.questionIndex);
+  if (ancestorKey === undefined || successorKey === undefined || ancestorKey !== successorKey) {
+    return "SLOT_IDENTITY_CHANGED";
+  }
+
+  // SOURCE CONTRACT LINEAGE. Unknown is refused for the same reason as above.
+  if (input.liveContractFingerprint === null) return "SOURCE_CONTRACT_CHANGED";
+  if (input.liveContractFingerprint !== row.contractFingerprintAtDecision) {
+    return "SOURCE_CONTRACT_CHANGED";
+  }
+
+  // SOURCE DOCUMENT. A replaced canonical Blueprint artifact is a new proposal
+  // even when a fingerprint happens to survive it.
+  if (input.liveSourceDocumentSha === null) return "SOURCE_DOCUMENT_CHANGED";
+  if (input.liveSourceDocumentSha !== row.blueprintSourceDocumentSha256) {
+    return "SOURCE_DOCUMENT_CHANGED";
+  }
+
+  return null;
+}
+
+/** The current canonical source document sha, or null when it cannot be read. */
+function liveSourceDocumentShaOrNull(): string | null {
+  try {
+    return resolveBlueprintSourceSha();
+  } catch {
+    // A READ must not throw because an artifact is missing. Null refuses every
+    // inheritance, which is the fail-closed direction.
+    return null;
+  }
+}
+
+/**
+ * The AUTHORITY-LINEAGE fingerprint (§23) — identity of HOW authority was reached.
+ *
+ * Projected key-by-key in a fixed order over the decisions sorted by slot, so two
+ * reads of an unchanged database produce the identical hash. Deliberately carries
+ * NO value hash, NO evidence and NO actor: those identify the adjudication and
+ * already live in `calculateAuthorityResolutionFingerprint`. This one answers a
+ * question that hash cannot — "did this bank decide it, or inherit it, and from
+ * where?"
+ */
+export function calculateAuthorityLineageFingerprint(
+  decisions: ReadonlyArray<
+    Pick<
+      SourceAuthorityDecisionView,
+      "questionIndex" | "field" | "decision" | "application" | "originAssessmentVersionId" | "inheritanceDepth"
+    >
+  >,
+): string | null {
+  if (decisions.length === 0) return null;
+  const projection = [...decisions]
+    .sort((a, b) => a.questionIndex - b.questionIndex || a.field.localeCompare(b.field))
+    .map((decision) => ({
+      questionIndex: decision.questionIndex,
+      field: decision.field,
+      decision: decision.decision,
+      application: decision.application,
+      originAssessmentVersionId: decision.originAssessmentVersionId,
+      inheritanceDepth: decision.inheritanceDepth,
+    }));
+  return createHash("sha256").update(JSON.stringify(projection), "utf8").digest("hex");
+}
+
 function deriveState(input: {
   rawConflictCount: number;
   blockingConflictCount: number;
@@ -416,10 +724,11 @@ export async function readSourceAuthority(
     sourceLinked?: boolean;
   },
 ): Promise<SourceAuthorityProjection> {
-  const activeRows = (await tx.sourceAuthorityResolution.findMany({
-    where: { assessmentVersionId: input.assessmentVersionId, supersededAt: null },
-    orderBy: [{ questionIndex: "asc" }, { field: "asc" }],
-  })) as unknown as StoredResolution[];
+  // PHASE-G2 SUCCESSOR — local decisions, then the nearest ancestor's for slots
+  // this bank has not decided itself. A bank with no `predecessorVersionId` gets
+  // exactly the local set, byte-identically to the accepted behaviour.
+  const { candidates, lineageDepth } = await collectLineageCandidates(tx, input.assessmentVersionId);
+  const activeRows = candidates.map((candidate) => candidate.row);
 
   const base = {
     assessmentVersionId: input.assessmentVersionId,
@@ -434,7 +743,7 @@ export async function readSourceAuthority(
   // the first is exactly the fail-open the re-audit found, so the state says so
   // and every readiness surface treats it as blocking.
   if (unavailableReason !== null) {
-    const decisions = activeRows.map((row) => toView(row, "STALE", false));
+    const decisions = candidates.map((candidate) => toView(candidate, "STALE", false, null));
     return {
       ...base,
       comparable: false,
@@ -445,13 +754,16 @@ export async function readSourceAuthority(
       blockingConflictCount: 0,
       decisions,
       resolutionFingerprint: calculateAuthorityResolutionFingerprint(activeRows),
+      inheritedDecisionCount: decisions.filter((decision) => decision.inherited).length,
+      lineageDepth,
+      authorityLineageFingerprint: calculateAuthorityLineageFingerprint(decisions),
     };
   }
 
   // No contract means no proposal, so there is nothing to disagree with. Any
   // stored decision is reported as stale rather than silently dropped.
   if (!input.contract || input.videoProductionVersionId === null) {
-    const decisions = activeRows.map((row) => toView(row, "STALE", false));
+    const decisions = candidates.map((candidate) => toView(candidate, "STALE", false, null));
     return {
       ...base,
       comparable: false,
@@ -462,6 +774,9 @@ export async function readSourceAuthority(
       blockingConflictCount: 0,
       decisions,
       resolutionFingerprint: calculateAuthorityResolutionFingerprint(activeRows),
+      inheritedDecisionCount: decisions.filter((decision) => decision.inherited).length,
+      lineageDepth,
+      authorityLineageFingerprint: calculateAuthorityLineageFingerprint(decisions),
     };
   }
 
@@ -470,7 +785,7 @@ export async function readSourceAuthority(
     bank = await projectAssessmentBank(tx, input.assessmentVersionId);
   } catch (error) {
     if (!isAuthoringDomainError(error)) throw error;
-    const decisions = activeRows.map((row) => toView(row, "STALE", false));
+    const decisions = candidates.map((candidate) => toView(candidate, "STALE", false, null));
     return {
       ...base,
       comparable: false,
@@ -481,6 +796,9 @@ export async function readSourceAuthority(
       state: decisions.length === 0 ? "NO_CONFLICT" : "ADJUDICATION_STALE",
       decisions,
       resolutionFingerprint: calculateAuthorityResolutionFingerprint(activeRows),
+      inheritedDecisionCount: decisions.filter((decision) => decision.inherited).length,
+      lineageDepth,
+      authorityLineageFingerprint: calculateAuthorityLineageFingerprint(decisions),
     };
   }
 
@@ -496,16 +814,53 @@ export async function readSourceAuthority(
     if (value.currentValue !== value.blueprintValue) rawConflictSlots.add(slotKey(value.questionIndex, value.field));
   }
 
-  const decisions: SourceAuthorityDecisionView[] = activeRows.map((row) => {
+  // PHASE-G2 SUCCESSOR — this bank's own ordinal-to-slot mapping, and the two
+  // source identities, read ONCE for every inherited candidate to check against.
+  const successorSlotKeys = new Map<number, string>(
+    bank.questions.map((question, index) => [index, question.questionId]),
+  );
+  const liveContractFingerprint = calculateContractFingerprint(input.contract);
+  const liveSourceDocumentSha = liveSourceDocumentShaOrNull();
+
+  const decisions: SourceAuthorityDecisionView[] = candidates.map((candidate) => {
+    const { row } = candidate;
     const key = slotKey(row.questionIndex, row.field);
     const live = liveValues.get(key) ?? null;
-    return toView(row, evaluateApplication(row, live), rawConflictSlots.has(key));
+
+    // THE VALUE TEST IS THE SAME ONE, FOR LOCAL AND INHERITED ALIKE. A decision
+    // is in force exactly when the side it chose is the side this bank serves,
+    // and `evaluateApplication` is not weakened, widened or bypassed for an
+    // inherited row — it is asked the same question about a different bank.
+    const application = evaluateApplication(row, live);
+
+    if (candidate.depth === 0) {
+      return toView(candidate, application, rawConflictSlots.has(key), null);
+    }
+
+    // INHERITED. The value test above must pass AND every lineage guard must
+    // hold. A guard failure yields STALE rather than silent omission: a reviewer
+    // needs to know an ancestor decided this slot and that the decision no longer
+    // reaches it, which is different information from "nobody ever decided".
+    if (application !== "APPLIED") {
+      return toView(candidate, application, rawConflictSlots.has(key), application === "STALE" ? "VALUE_MOVED" : null);
+    }
+    const refusal = inheritanceRefusal({
+      row,
+      ancestorSlotKeys: candidate.ancestorSlotKeys,
+      successorSlotKeys,
+      liveContractFingerprint,
+      liveSourceDocumentSha,
+    });
+    if (refusal !== null) {
+      return toView(candidate, "STALE", rawConflictSlots.has(key), refusal);
+    }
+    return toView(candidate, "APPLIED", rawConflictSlots.has(key), null);
   });
 
   const inForce = new Set(
-    activeRows
-      .filter((row, index) => decisions[index].application === "APPLIED")
-      .map((row) => slotKey(row.questionIndex, row.field)),
+    candidates
+      .filter((_, index) => decisions[index].application === "APPLIED")
+      .map((candidate) => slotKey(candidate.row.questionIndex, candidate.row.field)),
   );
   const blocking = [...rawConflictSlots].filter((key) => !inForce.has(key));
 
@@ -523,14 +878,19 @@ export async function readSourceAuthority(
     }),
     decisions,
     resolutionFingerprint: calculateAuthorityResolutionFingerprint(activeRows),
+    inheritedDecisionCount: decisions.filter((decision) => decision.inherited).length,
+    lineageDepth,
+    authorityLineageFingerprint: calculateAuthorityLineageFingerprint(decisions),
   };
 }
 
 function toView(
-  row: StoredResolution,
+  candidate: LineageCandidate,
   application: SourceAuthorityApplication,
   rawConflictPresent: boolean,
+  inheritanceRefusalReason: AuthorityInheritanceRefusal | null,
 ): SourceAuthorityDecisionView {
+  const { row } = candidate;
   return {
     questionIndex: row.questionIndex,
     field: row.field as BlueprintConflictField,
@@ -538,6 +898,9 @@ function toView(
     decision: row.decision as SourceAuthorityDecision,
     application,
     rawConflictPresent,
+    // THE ORIGINAL ADJUDICATION, CARRIED VERBATIM. Not re-attributed, not
+    // re-timestamped, not re-evidenced. An inherited decision names the human
+    // who actually made it, on the bank they actually made it about.
     decidedById: row.decidedById,
     decidedAt: row.decidedAt.toISOString(),
     rationale: row.rationale,
@@ -545,6 +908,10 @@ function toView(
     evidenceSha256: row.evidenceSha256,
     blueprintSourceDocumentSha256: row.blueprintSourceDocumentSha256,
     batchId: row.batchId,
+    inherited: candidate.depth > 0,
+    originAssessmentVersionId: candidate.originAssessmentVersionId,
+    inheritanceDepth: candidate.depth,
+    inheritanceRefusal: inheritanceRefusalReason,
   };
 }
 
@@ -797,6 +1164,21 @@ export async function resolveCanonicalAuthorityLink(
 export type CanonicalAuthoritySource = {
   /** The canonical link, or null when the bank carries none. */
   link: CanonicalAuthorityLink | null;
+  /**
+   * PHASE-G2 SUCCESSOR — how the link above was reached.
+   *
+   * `own`      the bank carries the durable link itself.
+   * `lineage`  the bank has no link and an ANCESTOR does, so the ancestor's pin
+   *            is this bank's proposal. Truthful because a clone is a copy of
+   *            that ancestor's questions: the proposal it must be measured
+   *            against is the one its predecessor was measured against.
+   * `none`     no link anywhere in the lineage. The level's working production
+   *            version is used for REPORTING only, and nothing may be
+   *            adjudicated against it.
+   */
+  linkOrigin: "own" | "lineage" | "none";
+  /** How many ancestors were crossed to find the link. 0 for `own` and `none`. */
+  linkLineageDepth: number;
   /** The production version this bank's authority axis is measured against. */
   videoProductionVersionId: number | null;
   /** Its revision, so every surface quotes the SAME expected revision. */
@@ -806,6 +1188,65 @@ export type CanonicalAuthoritySource = {
   /** Non-null means FAIL CLOSED. */
   unavailableReason: AuthoritySourceUnavailableReason | null;
 };
+
+/**
+ * PHASE-G2 SUCCESSOR — the nearest ANCESTOR's canonical link.
+ *
+ * Walks the same explicit `predecessorVersionId` relation the decision walk uses,
+ * under the same bounds and the same refusals: a missing ancestor, a cycle, a
+ * cross-level or cross-curriculum ancestor, or the depth limit all STOP the walk
+ * and yield no link, which leaves the caller on the accepted unpinned fallback.
+ *
+ * An INCOMPATIBLE link on an ancestor is escalated rather than skipped, exactly
+ * as it is for the bank's own link: corruption in the lineage is itself the
+ * finding, and stepping over it would derive a proposal from a record that
+ * disagrees with itself.
+ */
+async function resolveLineageAuthorityLink(
+  tx: DbClient,
+  assessmentVersionId: number,
+): Promise<{ link: CanonicalAuthorityLink | null; depth: number; unavailable: boolean }> {
+  const self = await tx.assessmentVersion.findUnique({
+    where: { id: assessmentVersionId },
+    select: { levelDefinitionId: true, curriculumVersionId: true, predecessorVersionId: true },
+  });
+  if (!self) return { link: null, depth: 0, unavailable: false };
+
+  const seen = new Set<number>([assessmentVersionId]);
+  let cursor = self;
+  let depth = 0;
+
+  while (cursor.predecessorVersionId !== null && depth < MAX_LINEAGE_DEPTH) {
+    const ancestorId: number = cursor.predecessorVersionId;
+    if (seen.has(ancestorId)) break;
+    seen.add(ancestorId);
+
+    const ancestor = await tx.assessmentVersion.findUnique({
+      where: { id: ancestorId },
+      select: { levelDefinitionId: true, curriculumVersionId: true, predecessorVersionId: true },
+    });
+    if (!ancestor) break;
+    if (
+      ancestor.levelDefinitionId !== self.levelDefinitionId ||
+      ancestor.curriculumVersionId !== self.curriculumVersionId
+    ) {
+      break;
+    }
+    depth += 1;
+
+    try {
+      const link = await resolveCanonicalAuthorityLink(tx, ancestorId);
+      if (link) return { link, depth, unavailable: false };
+    } catch (error) {
+      if (isAuthoringDomainError(error) && error.code === "AUTHORING_ASSESSMENT_LINK_INVALID") {
+        return { link: null, depth, unavailable: true };
+      }
+      throw error;
+    }
+    cursor = ancestor;
+  }
+  return { link: null, depth: 0, unavailable: false };
+}
 
 /**
  * WHICH contract is this bank's Blueprint proposal, and can it be read?
@@ -843,16 +1284,52 @@ export async function resolveAuthoritySource(
     videoProductionVersionId: null,
     videoProductionRevision: null,
     contract: null,
+    linkOrigin: "none" as const,
+    linkLineageDepth: 0,
   };
 
   let link: CanonicalAuthorityLink | null;
+  let linkOrigin: "own" | "lineage" | "none" = "none";
+  let linkLineageDepth = 0;
   try {
     link = await resolveCanonicalAuthorityLink(tx, assessmentVersionId);
+    if (link) linkOrigin = "own";
   } catch (error) {
     if (isAuthoringDomainError(error) && error.code === "AUTHORING_ASSESSMENT_LINK_INVALID") {
       return { ...empty, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
     }
     throw error;
+  }
+
+  // PHASE-G2 SUCCESSOR — THE SOURCE FOLLOWS THE LINEAGE BEFORE IT FOLLOWS THE
+  // LEVEL.
+  //
+  // `VideoProductionAssessmentLink.videoProductionVersionId` is unique, so one
+  // production version pins exactly one bank and a clone cannot share its
+  // predecessor's link row. Without this walk a cloned bank fell through to the
+  // level's WORKING production version — the highest versionNumber — which is a
+  // guess that gets worse the moment the level grows a newer contract: the
+  // successor would silently be compared against a proposal its predecessor was
+  // never measured against, and the regression proved it (eight raw conflicts
+  // where the ancestor had seven).
+  //
+  // A clone is a copy of its ancestor's questions, so the proposal it must be
+  // measured against is the one its ancestor is pinned to. That is a statement
+  // about descent, which is exactly what the lineage relation records, and it is
+  // narrower than the old fallback rather than wider: it can only ever select a
+  // contract some ancestor was DELIBERATELY linked to.
+  //
+  // The level-working fallback below survives untouched for a bank with no link
+  // and no lineage — every bank that predates this phase — and still reports
+  // `sourceLinked: false`, so an unpinned proposal remains unadjudicable.
+  if (!link) {
+    const inherited = await resolveLineageAuthorityLink(tx, assessmentVersionId);
+    if (inherited.unavailable) return { ...empty, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
+    if (inherited.link) {
+      link = inherited.link;
+      linkOrigin = "lineage";
+      linkLineageDepth = inherited.depth;
+    }
   }
 
   let videoRow: { id: number; revision: number; contractPayload: unknown } | null = null;
@@ -888,7 +1365,7 @@ export async function resolveAuthoritySource(
 
   // A link whose target row has vanished is the same ambiguity as an
   // incompatible one: the record names a source that is not there.
-  if (link && !videoRow) return { ...empty, link, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
+  if (link && !videoRow) return { ...empty, link, linkOrigin, linkLineageDepth, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
   // No production version at all is NOT a failure — there is genuinely no
   // proposal for this bank to disagree with, which is what §14 protects.
   if (!videoRow) return { ...empty, link: null, unavailableReason: null };
@@ -899,6 +1376,8 @@ export async function resolveAuthoritySource(
   } catch {
     return {
       link,
+      linkOrigin,
+      linkLineageDepth,
       videoProductionVersionId: videoRow.id,
       videoProductionRevision: videoRow.revision,
       contract: null,
@@ -908,6 +1387,8 @@ export async function resolveAuthoritySource(
 
   return {
     link,
+    linkOrigin,
+    linkLineageDepth,
     videoProductionVersionId: videoRow.id,
     videoProductionRevision: videoRow.revision,
     contract,
@@ -1001,10 +1482,35 @@ export async function resolveSourceAuthority(
       );
     }
 
-    // CORRECTION-1 — the SAME canonical link the handoff reads, never "the first
-    // row". With no link there is no proposal, and the command refuses rather
-    // than adjudicating against an arbitrary contract.
-    const link = await resolveCanonicalAuthorityLink(tx, assessment.id);
+    // CORRECTION-1 — the SAME canonical link every other reader uses, never "the
+    // first row". With no link there is no proposal, and the command refuses
+    // rather than adjudicating against an arbitrary contract.
+    //
+    // PHASE-G2 SUCCESSOR — the accepted resolution runs FIRST and unchanged, so
+    // every accepted refusal keeps its exact code: an incompatible link still
+    // raises AUTHORING_ASSESSMENT_LINK_INVALID from here, and an unreadable
+    // payload still reaches the parse below and raises
+    // AUTHORING_SOURCE_CONTRACT_UNREADABLE.
+    //
+    // Lineage is consulted ONLY when the bank carries no link of its own. That
+    // admits one new case and no others: a clone, which cannot carry its
+    // predecessor's link row because `videoProductionVersionId` is unique.
+    // Refusing it would leave a successor able to INHERIT authority but never to
+    // correct it — inheriting a decision while being permanently unable to
+    // re-decide a slot the author legitimately changed, which is the worse of
+    // the two failures. A bank with no link anywhere in its lineage is refused
+    // exactly as before.
+    let link = await resolveCanonicalAuthorityLink(tx, assessment.id);
+    if (!link) {
+      const inherited = await resolveLineageAuthorityLink(tx, assessment.id);
+      if (inherited.unavailable) {
+        throw new AuthoringDomainError(
+          "AUTHORING_ASSESSMENT_LINK_INVALID",
+          "an ancestor of this bank is linked to a video production version from another level or curriculum version, so its Blueprint lineage is ambiguous and cannot be used",
+        );
+      }
+      link = inherited.link;
+    }
     if (!link) {
       throw new AuthoringDomainError(
         "AUTHORING_ASSESSMENT_LINK_MISSING",

@@ -112,6 +112,14 @@ export type HandoffLevel = {
       resolvedConflictCount: number;
       blockingConflictCount: number;
       resolutionFingerprint: string | null;
+      /**
+       * PHASE-G2 SUCCESSOR — identity of HOW this bank's authority was reached,
+       * beside the identity of WHAT was decided. A successor that inherits its
+       * predecessor's decisions shares `resolutionFingerprint` and differs here.
+       */
+      authorityLineageFingerprint: string | null;
+      /** How many of the decisions below came from an ancestor. */
+      inheritedDecisionCount: number;
       decisions: Array<{
         path: string;
         decision: string;
@@ -121,6 +129,16 @@ export type HandoffLevel = {
         evidenceRef: string;
         evidenceSha256: string;
         blueprintSourceDocumentSha256: string;
+        /**
+         * PHASE-G2 SUCCESSOR — a downstream reader must be able to tell a
+         * decision made ON this bank from one inherited by descent. Serialising
+         * an inherited decision without saying so would let a handoff bundle
+         * read as though a human adjudicated this exact bank, which is the one
+         * claim inheritance must never make.
+         */
+        inherited: boolean;
+        originAssessmentVersionId: number;
+        inheritanceDepth: number;
       }>;
     } | null;
     questions: Array<{
@@ -251,6 +269,13 @@ function projectLevel(level: HandoffLevel): Json {
                 resolvedConflictCount: level.assessment.sourceAuthority.resolvedConflictCount,
                 blockingConflictCount: level.assessment.sourceAuthority.blockingConflictCount,
                 resolutionFingerprint: level.assessment.sourceAuthority.resolutionFingerprint,
+                // PHASE-G2 SUCCESSOR — bound into the bundle fingerprint for the
+                // same reason the line above says: two bundles whose authority
+                // was REACHED differently are different handoffs, even when the
+                // decision that was reached is identical.
+                authorityLineageFingerprint:
+                  level.assessment.sourceAuthority.authorityLineageFingerprint,
+                inheritedDecisionCount: level.assessment.sourceAuthority.inheritedDecisionCount,
                 decisions: [...level.assessment.sourceAuthority.decisions]
                   .sort((a, b) => a.path.localeCompare(b.path))
                   .map((decision) => ({
@@ -262,6 +287,9 @@ function projectLevel(level: HandoffLevel): Json {
                     evidenceRef: decision.evidenceRef,
                     evidenceSha256: decision.evidenceSha256,
                     blueprintSourceDocumentSha256: decision.blueprintSourceDocumentSha256,
+                    inherited: decision.inherited,
+                    originAssessmentVersionId: decision.originAssessmentVersionId,
+                    inheritanceDepth: decision.inheritanceDepth,
                   })),
               }
             : null,
@@ -641,6 +669,8 @@ async function projectLevelFromDatabase(
         resolvedConflictCount: projection.resolvedConflictCount,
         blockingConflictCount: projection.blockingConflictCount,
         resolutionFingerprint: projection.resolutionFingerprint,
+        authorityLineageFingerprint: projection.authorityLineageFingerprint,
+        inheritedDecisionCount: projection.inheritedDecisionCount,
         decisions: projection.decisions.map((decision) => ({
           path: decision.path,
           decision: decision.decision,
@@ -650,6 +680,9 @@ async function projectLevelFromDatabase(
           evidenceRef: decision.evidenceRef,
           evidenceSha256: decision.evidenceSha256,
           blueprintSourceDocumentSha256: decision.blueprintSourceDocumentSha256,
+          inherited: decision.inherited,
+          originAssessmentVersionId: decision.originAssessmentVersionId,
+          inheritanceDepth: decision.inheritanceDepth,
         })),
       };
     }

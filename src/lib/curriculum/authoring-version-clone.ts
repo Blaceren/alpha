@@ -208,6 +208,14 @@ export async function cloneAssessmentVersion(input: {
         status: "draft",
         editorialState: "draft",
         revision: 1,
+        // PHASE-G2 SUCCESSOR — THE LINEAGE FACT, recorded where it is true.
+        //
+        // Set from `source.id`, which this transaction just loaded, and never
+        // from anything the caller sent: `cloneAssessmentVersion` takes one id
+        // and that id IS the predecessor, so there is no input a caller could
+        // use to claim descent from a bank it did not copy. This is the only
+        // write to this column in the platform.
+        predecessorVersionId: source.id,
         passPercent: source.passPercent,
         maxAttempts: source.maxAttempts,
         showExplanation: source.showExplanation,
@@ -259,6 +267,9 @@ export async function cloneAssessmentVersion(input: {
       createdId: created.id,
       source,
       copiedChildren,
+      // Recorded so the trail shows the lineage relation was established, and by
+      // whom. The AuditLog remains a trail: the DOMAIN reads the column.
+      predecessorVersionId: source.id,
     });
 
     return {
@@ -361,6 +372,8 @@ async function writeCloneAudit(
     createdId: number;
     source: { id: number; versionNumber: number; editorialState: string };
     copiedChildren: number;
+    /** PHASE-G2 SUCCESSOR — present only where a durable lineage row was written. */
+    predecessorVersionId?: number;
   },
 ) {
   await tx.auditLog.create({
@@ -377,6 +390,7 @@ async function writeCloneAudit(
         sourceEditorialState: input.source.editorialState,
         createdEditorialState: "draft",
         copiedChildren: input.copiedChildren,
+        predecessorVersionId: input.predecessorVersionId ?? null,
       },
     },
   });

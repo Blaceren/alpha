@@ -27,6 +27,17 @@ export type AuthoringErrorCode =
   /** Server-authoritative validation refused the version. */
   | "AUTHORING_VALIDATION_FAILED"
   | "AUTHORING_TARGET_NOT_FOUND"
+  /**
+   * PHASE-G2 SUCCESSOR — a named candidate version does not belong to the level
+   * it was named for.
+   *
+   * ITS OWN CODE, not `AUTHORING_TARGET_NOT_FOUND`. The row usually EXISTS; what
+   * is wrong is that it belongs to another level, and the two need different
+   * reactions — a missing id is a typo, a foreign id is an attempt (however
+   * accidental) to validate or approve one level's work as another's. Reporting
+   * the second as the first would hide a cross-level mix-up behind a 404.
+   */
+  | "AUTHORING_CANDIDATE_INVALID"
   | "AUTHORING_INPUT_INVALID"
   /**
    * PHASE-G0 CORRECTION — a durable assessment bank could not be projected into
@@ -146,6 +157,10 @@ export function authoringErrorStatus(code: AuthoringErrorCode): number {
       return 404;
     case "AUTHORING_VALIDATION_FAILED":
     case "AUTHORING_INPUT_INVALID":
+    // 422 rather than 404: the request is well formed and the row may well
+    // exist — it simply is not a version of the level the caller named, which
+    // makes it an unprocessable request about a real object.
+    case "AUTHORING_CANDIDATE_INVALID":
     case "AUTHORING_NOTE_TARGET_INVALID":
     case "AUTHORING_ASSESSMENT_PROJECTION_INVALID":
     case "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS":

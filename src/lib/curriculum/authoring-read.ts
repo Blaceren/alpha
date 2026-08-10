@@ -302,27 +302,26 @@ function lifecycleSummary(row: LifecycleRow, openReviewNotes: number): Authoring
 }
 
 /**
- * Which version of an aggregate does the Studio author?
+ * PHASE-G2 SUCCESSOR — the level's RUNTIME version selector, now defined once in
+ * `authoring-candidate` and re-exported here.
  *
- * THE BINDING WINS, exactly as `resolveCanonicalAssessmentVersion` decides for
- * coherence: `LevelResourceBinding` is what the runtime serves, so it is the
- * level's current truth. With no binding the HIGHEST `versionNumber` is the
- * working version — the one a `createXVersion` just produced. Picking the lowest
- * would hand an editor the version they replaced.
+ * IT WAS CALLED `pickWorkingVersion`, and that name is what let four callers
+ * reuse a RUNTIME answer for an AUTHORING question. `LevelResourceBinding` is
+ * what a learner follows, so a bound version always wins — correct for "what is
+ * served", exactly wrong for "what is being edited". A level with a published,
+ * bound v1 and a draft successor v2 has two truthful versions at once, and this
+ * function only ever returns the first.
+ *
+ * Behaviour is unchanged to the byte. What changed is that a caller wanting the
+ * authoring candidate must now say so explicitly, and that there is no longer a
+ * second private copy of this rule in the validation service.
  */
-function pickWorkingVersion<T extends { id: number; versionNumber: number }>(
-  candidates: readonly T[],
-  boundId: number | null,
-): T | null {
-  if (candidates.length === 0) return null;
-  if (boundId !== null) {
-    const bound = candidates.find((candidate) => candidate.id === boundId);
-    if (bound) return bound;
-  }
-  return candidates.reduce((best, candidate) =>
-    candidate.versionNumber > best.versionNumber ? candidate : best,
-  );
-}
+export { pickRuntimeVersion } from "@/lib/curriculum/authoring-candidate";
+import {
+  pickRuntimeVersion,
+  resolveCandidate,
+  type AuthoringCandidateSelection,
+} from "@/lib/curriculum/authoring-candidate";
 
 export function describeBody(body: unknown): {
   bodyFormat: ContentAggregateSummary["bodyFormat"];
@@ -472,15 +471,15 @@ export async function readAuthoringOverview(
   for (const level of levels) {
     const binding = bindingByLevel.get(level.id) ?? null;
 
-    const contentRow = pickWorkingVersion(
+    const contentRow = pickRuntimeVersion(
       contentByLevel.get(level.id) ?? [],
       binding?.contentVersionId ?? null,
     );
-    const assessmentRow = pickWorkingVersion(
+    const assessmentRow = pickRuntimeVersion(
       assessmentByLevel.get(level.id) ?? [],
       binding?.assessmentVersionId ?? null,
     );
-    const videoRow = pickWorkingVersion(videoByLevel.get(level.id) ?? [], null);
+    const videoRow = pickRuntimeVersion(videoByLevel.get(level.id) ?? [], null);
 
     const localization = contentRow?.localizations[0] ?? null;
     const described = localization
@@ -793,20 +792,137 @@ export type AuthoringLevelWorkspace = {
     coherence: VideoProductionCoherence;
   } | null;
   notes: AuthoringReviewNoteDetail[];
+  /**
+   * PHASE-G2 SUCCESSOR — every version of this level, so the Studio can offer a
+   * successor picker rather than infer one.
+   *
+   * The audit's brief was explicit that nothing may guess a predecessor from
+   * `versionNumber - 1`, an audit row or a timestamp. The same discipline applies
+   * to the UI: it selects from ids the server listed, and the server verifies the
+   * id it is handed back.
+   */
+  versions: AuthoringLevelVersionIndex;
+  /** Which version each panel is actually showing. */
+  opened: {
+    contentVersionId: number | null;
+    assessmentVersionId: number | null;
+    videoProductionVersionId: number | null;
+  };
 };
+
+/** One selectable version, with the two axes a picker has to distinguish. */
+export type AuthoringVersionRef = {
+  id: number;
+  versionNumber: number;
+  /** Null for video production, which has no runtime axis. */
+  runtimeStatus: string | null;
+  editorialState: EditorialState;
+  /** PHASE-G2 SUCCESSOR — the explicit lineage relation, never inferred. */
+  predecessorVersionId?: number | null;
+};
+
+export type AuthoringLevelVersionIndex = {
+  content: AuthoringVersionRef[];
+  assessment: AuthoringVersionRef[];
+  video: AuthoringVersionRef[];
+};
+
+/**
+ * Every version of one level, newest first.
+ *
+ * Deliberately a separate, cheap read rather than an addition to the overview:
+ * the overview is summary-shaped by construction (§47) and returns one row per
+ * level for ~78 levels, so hanging a full version list off it would multiply the
+ * payload for a picker only the opened level needs.
+ */
+export async function readLevelVersionIndex(
+  levelDefinitionId: number,
+): Promise<AuthoringLevelVersionIndex> {
+  const [content, assessment, video] = await Promise.all([
+    prisma.contentVersion.findMany({
+      where: { levelDefinitionId },
+      orderBy: { versionNumber: "desc" },
+      select: { id: true, versionNumber: true, status: true, editorialState: true },
+    }),
+    prisma.assessmentVersion.findMany({
+      where: { levelDefinitionId },
+      orderBy: { versionNumber: "desc" },
+      select: {
+        id: true,
+        versionNumber: true,
+        status: true,
+        editorialState: true,
+        predecessorVersionId: true,
+      },
+    }),
+    prisma.videoProductionVersion.findMany({
+      where: { levelDefinitionId },
+      orderBy: { versionNumber: "desc" },
+      select: { id: true, versionNumber: true, editorialState: true },
+    }),
+  ]);
+  return {
+    content: content.map((row) => ({
+      id: row.id,
+      versionNumber: row.versionNumber,
+      runtimeStatus: row.status,
+      editorialState: row.editorialState,
+    })),
+    assessment: assessment.map((row) => ({
+      id: row.id,
+      versionNumber: row.versionNumber,
+      runtimeStatus: row.status,
+      editorialState: row.editorialState,
+      predecessorVersionId: row.predecessorVersionId,
+    })),
+    video: video.map((row) => ({
+      id: row.id,
+      versionNumber: row.versionNumber,
+      runtimeStatus: null,
+      editorialState: row.editorialState,
+    })),
+  };
+}
 
 export async function readLevelAuthoringWorkspace(input: {
   curriculumVersionId: number;
   levelDefinitionId: number;
+  /**
+   * PHASE-G2 SUCCESSOR — WHICH version to open, when the author knows.
+   *
+   * Without this the Studio could only ever open the level's runtime version, so
+   * an author who had just cloned a published lesson had nowhere to type: the
+   * clone existed, was writable by the domain, and was invisible on every screen.
+   *
+   * Omitted axes keep the accepted behaviour exactly, and the level SUMMARY above
+   * always describes the runtime version regardless — opening a draft must not
+   * silently redefine what the overview says the level is serving.
+   */
+  candidate?: AuthoringCandidateSelection;
 }): Promise<AuthoringLevelWorkspace | null> {
   const overview = await readAuthoringOverview(input.curriculumVersionId);
   const level = overview.find((row) => row.levelDefinitionId === input.levelDefinitionId);
   if (!level) return null;
 
+  // Every version of this level, so the Studio can offer a picker instead of
+  // guessing which ids exist — and so `resolveCandidate` has a level-scoped list
+  // to verify a requested id against.
+  const versions = await readLevelVersionIndex(input.levelDefinitionId);
+
+  const openContent = resolveCandidate(
+    versions.content, input.candidate?.contentVersionId, level.content?.id ?? null, "content", level.levelDefinitionId,
+  );
+  const openAssessment = resolveCandidate(
+    versions.assessment, input.candidate?.assessmentVersionId, level.assessment?.id ?? null, "assessment", level.levelDefinitionId,
+  );
+  const openVideo = resolveCandidate(
+    versions.video, input.candidate?.videoProductionVersionId, level.video?.id ?? null, "video_production", level.levelDefinitionId,
+  );
+
   const [contentDetail, assessmentDetail, videoRow] = await Promise.all([
-    level.content
+    openContent
       ? prisma.contentVersion.findUnique({
-          where: { id: level.content.id },
+          where: { id: openContent.id },
           select: {
             localizations: {
               orderBy: [{ locale: "asc" }],
@@ -839,9 +955,9 @@ export async function readLevelAuthoringWorkspace(input: {
           },
         })
       : Promise.resolve(null),
-    level.assessment
+    openAssessment
       ? prisma.assessmentVersion.findUnique({
-          where: { id: level.assessment.id },
+          where: { id: openAssessment.id },
           select: {
             questions: {
               orderBy: [{ questionNumber: "asc" }],
@@ -868,22 +984,31 @@ export async function readLevelAuthoringWorkspace(input: {
           },
         })
       : Promise.resolve(null),
-    level.video
+    openVideo
       ? prisma.videoProductionVersion.findUnique({
-          where: { id: level.video.id },
+          where: { id: openVideo.id },
           select: { id: true, contractPayload: true },
         })
       : Promise.resolve(null),
   ]);
 
+  // Notes follow the OPENED versions, not the runtime ones: a reviewer reading
+  // v2 must see v2's notes, and showing the predecessor's would attach a previous
+  // round's refusals to text nobody has reviewed yet.
   const notes = await readNotesForLevel({
-    contentVersionId: level.content?.id ?? null,
-    assessmentVersionId: level.assessment?.id ?? null,
-    videoProductionVersionId: level.video?.id ?? null,
+    contentVersionId: openContent?.id ?? null,
+    assessmentVersionId: openAssessment?.id ?? null,
+    videoProductionVersionId: openVideo?.id ?? null,
   });
 
   return {
     level,
+    versions,
+    opened: {
+      contentVersionId: openContent?.id ?? null,
+      assessmentVersionId: openAssessment?.id ?? null,
+      videoProductionVersionId: openVideo?.id ?? null,
+    },
     contentDetail: contentDetail
       ? { localizations: contentDetail.localizations, assets: contentDetail.assets }
       : null,

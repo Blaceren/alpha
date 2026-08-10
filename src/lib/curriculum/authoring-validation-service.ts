@@ -33,6 +33,11 @@ import {
   type AuthoringValidationResult,
 } from "@/lib/curriculum/authoring-validation";
 import { AUTHORING_LOCALE } from "@/lib/curriculum/authoring-read";
+import {
+  resolveCandidate,
+  type AuthoringCandidateSelection,
+} from "@/lib/curriculum/authoring-candidate";
+import { resolveAuthoritySource } from "@/lib/curriculum/source-authority";
 import { requiresLearnerTeachingContent } from "@/lib/curriculum/authoring-level-profile";
 import { readVideoProductionCoherence } from "@/lib/curriculum/video-production-coherence";
 import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
@@ -112,6 +117,22 @@ function emptySummary(): AuthoringValidationReport["summary"] {
 export async function validateLevelAuthoring(input: {
   curriculumVersionId: number;
   levelDefinitionId: number;
+  /**
+   * PHASE-G2 SUCCESSOR — WHICH versions to judge, when the caller knows.
+   *
+   * OPTIONAL PER AXIS, and omission is not a lesser answer: an omitted axis falls
+   * back to `pickRuntimeVersion`, byte-identically to the accepted behaviour, so
+   * every existing caller is unchanged. What it adds is the ability to say "judge
+   * THIS draft", which is the question submit and approve were always really
+   * asking and could not express.
+   *
+   * A SUPPLIED ID IS VERIFIED, NEVER TRUSTED. The candidate lists below are
+   * already scoped to this level and curriculum version, so an id from another
+   * level is simply absent from them and the resolver refuses. That is the whole
+   * of the cross-level guard: it is a property of the query, not a check someone
+   * has to remember to write.
+   */
+  candidate?: AuthoringCandidateSelection;
 }): Promise<AuthoringValidationReport | null> {
   const level = await prisma.levelDefinition.findFirst({
     where: { id: input.levelDefinitionId, curriculumVersionId: input.curriculumVersionId },
@@ -125,7 +146,7 @@ export async function validateLevelAuthoring(input: {
     type: level.type,
   });
 
-  const [binding, contentVersions, assessmentVersions, videoVersion] = await Promise.all([
+  const [binding, contentVersions, assessmentVersions, videoVersions] = await Promise.all([
     prisma.levelResourceBinding.findUnique({
       where: { levelDefinitionId: level.id },
       select: { contentVersionId: true, assessmentVersionId: true },
@@ -164,29 +185,34 @@ export async function validateLevelAuthoring(input: {
         },
       },
     }),
-    prisma.videoProductionVersion.findFirst({
+    prisma.videoProductionVersion.findMany({
       where: { levelDefinitionId: level.id },
       orderBy: { versionNumber: "desc" },
       // CORRECTION-2 — the payload, so this service can answer the one question
       // it was previously assumed to answer and did not.
-      select: { id: true, contractPayload: true },
+      // PHASE-G2 SUCCESSOR — findMany, not findFirst: a candidate video version
+      // has to be selectable, and a one-row query cannot offer a choice.
+      select: { id: true, versionNumber: true, contractPayload: true },
     }),
   ]);
 
-  const pick = <T extends { id: number; versionNumber: number }>(
-    rows: readonly T[],
-    boundId: number | null | undefined,
-  ): T | null => {
-    if (rows.length === 0) return null;
-    if (boundId) {
-      const bound = rows.find((row) => row.id === boundId);
-      if (bound) return bound;
-    }
-    return rows[0];
-  };
-
-  const contentRow = pick(contentVersions, binding?.contentVersionId);
-  const assessmentRow = pick(assessmentVersions, binding?.assessmentVersionId);
+  // PHASE-G2 SUCCESSOR — the local `pick` that used to live here is GONE.
+  //
+  // It was a second implementation of `pickRuntimeVersion`, and the two agreeing
+  // was a coincidence maintained by hand. The independent audit found Content
+  // resolving to its bound v1 while Assessment resolved to its newest version on
+  // the SAME level, and traced it to one selector reading a half-populated
+  // binding row — a divergence that a single shared function makes impossible to
+  // reintroduce silently.
+  const contentRow = resolveCandidate(
+    contentVersions, input.candidate?.contentVersionId, binding?.contentVersionId, "content", level.id,
+  );
+  const assessmentRow = resolveCandidate(
+    assessmentVersions, input.candidate?.assessmentVersionId, binding?.assessmentVersionId, "assessment", level.id,
+  );
+  const videoVersion = resolveCandidate(
+    videoVersions, input.candidate?.videoProductionVersionId, null, "video_production", level.id,
+  );
 
   const issues: AuthoringValidationIssueDetail[] = [];
   const warnings: AuthoringValidationIssueDetail[] = [];
@@ -326,6 +352,43 @@ export async function validateLevelAuthoring(input: {
         path: "production",
         message:
           "Видео QA устарело после изменения контракта — production evidence was reviewed against a different contract fingerprint",
+      });
+    }
+  }
+
+  /* ------------------------------------------ candidate / source coherence */
+  //
+  // PHASE-G2 SUCCESSOR (§36) — THE DIVERGENCE THAT USED TO BE INVISIBLE.
+  //
+  // This service judges the level's video version. Source authority judges the
+  // bank against ITS canonical source, resolved by `resolveAuthoritySource` from
+  // the bank's own durable `VideoProductionAssessmentLink`. Those two are the
+  // same row in the ordinary case and NOT the same row the moment a level grows a
+  // second production version — the link pins the bank to the contract it was
+  // adjudicated against, while this service takes the newest.
+  //
+  // Nothing previously noticed. Validation would report coherence against v2's
+  // contract while every conflict and authority number on the same screen came
+  // from v1's, and both looked authoritative. This does not pick a winner — the
+  // two questions are genuinely different and each selector is right about its
+  // own — it makes the divergence VISIBLE, as a warning, so a reviewer is never
+  // shown two numbers derived from different sources with nothing saying so.
+  if (assessmentRow && videoVersion) {
+    let authoritySourceId: number | null = null;
+    try {
+      authoritySourceId = (await resolveAuthoritySource(prisma, assessmentRow.id)).videoProductionVersionId;
+    } catch {
+      // An unresolvable source is already reported by the authority projection
+      // itself, with a reason. Re-reporting it here would double-count one fact.
+      authoritySourceId = null;
+    }
+    if (authoritySourceId !== null && authoritySourceId !== videoVersion.id) {
+      push(warnings, "video", "warning", {
+        code: "VIDEO_AUTHORITY_SOURCE_DIVERGED",
+        path: "production",
+        message:
+          `валидация проверяет VideoProductionVersion ${videoVersion.id}, а источник авторитета банка — ${authoritySourceId} / ` +
+          `validation is judging VideoProductionVersion ${videoVersion.id} while this bank's canonical source-authority contract is VideoProductionVersion ${authoritySourceId}; the conflict and authority counts are derived from the latter`,
       });
     }
   }

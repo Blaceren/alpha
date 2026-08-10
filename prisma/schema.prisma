@@ -1871,7 +1871,27 @@ model AssessmentVersion {
   approvedById         Int?
   approvedAt           DateTime?
 
+  /// PHASE-G2 SUCCESSOR — WHICH bank this bank was cloned from. The ONE
+  /// load-bearing statement of descent.
+  ///
+  /// Written by `cloneAssessmentVersion` and by nothing else: it is not part of
+  /// any create or update command schema, so no caller can assert a predecessor
+  /// it did not actually copy from. NULL means "no recorded predecessor", which
+  /// is every bank that existed before this migration.
+  ///
+  /// It carries no authority by itself. `readSourceAuthority` uses it to find a
+  /// candidate ancestor decision and then RE-EVALUATES that decision against
+  /// this bank's own live values through the unchanged `evaluateApplication`,
+  /// with the source-lineage guards on top. Descent is permission to look, never
+  /// permission to apply.
+  ///
+  /// Restrict, not SetNull: silently erasing lineage would turn a bank whose
+  /// authority is inherited into one that appears to have none.
+  predecessorVersionId Int?
+
   levelDefinition     LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  predecessorVersion  AssessmentVersion?     @relation("AssessmentVersionLineage", fields: [predecessorVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  successorVersions   AssessmentVersion[]    @relation("AssessmentVersionLineage")
   createdBy           User?                  @relation("AssessmentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   lastAuthoredBy      User?                  @relation("AssessmentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   submittedBy         User?                  @relation("AssessmentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -1896,6 +1916,7 @@ model AssessmentVersion {
   @@index([submittedById])
   @@index([changesRequestedById])
   @@index([approvedById])
+  @@index([predecessorVersionId])
 }
 
 model QuestionDefinition {

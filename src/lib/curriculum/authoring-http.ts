@@ -297,12 +297,24 @@ export const sourceAuthorityBodySchema = z.strictObject({
 
 /** `?curriculumVersionId=` — optional; the server resolves the active one. */
 export function readCurriculumVersionIdQuery(request: Request): number | null {
-  const raw = new URL(request.url).searchParams.get("curriculumVersionId");
+  return readPositiveIdQuery(request, "curriculumVersionId");
+}
+
+/**
+ * PHASE-G2 SUCCESSOR — one positive-integer query reader, for every id.
+ *
+ * Extracted from `readCurriculumVersionIdQuery` unchanged rather than copied
+ * beside it. The candidate axes need exactly this parse, and a second
+ * hand-written copy is how two readers of one shape come to disagree about
+ * whether `"0"`, `"1.5"` or `""` is acceptable.
+ */
+export function readPositiveIdQuery(request: Request, param: string): number | null {
+  const raw = new URL(request.url).searchParams.get(param);
   if (raw === null) return null;
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Phase4HttpError("AUTHORING_INPUT_INVALID", 400, [
-      { code: "INPUT_INVALID", path: "curriculumVersionId", message: "must be a positive integer" },
+      { code: "INPUT_INVALID", path: param, message: "must be a positive integer" },
     ]);
   }
   return value;

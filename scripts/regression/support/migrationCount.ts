@@ -19,6 +19,14 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * PHASE-G2 SUCCESSOR: 45 -> 46. One additive migration,
+ * `20260811000000_assessment_successor_lineage`, which adds the nullable
+ * `AssessmentVersion.predecessorVersionId` self-relation and its index. No
+ * existing migration file is edited, no existing row is rewritten, and every
+ * pre-existing AssessmentVersion keeps a NULL predecessor. This is the ONLY
+ * change this phase makes to a Pocket- or agent-facing fixture: those suites
+ * assert the canonical count, and the count legitimately moved.
+ *
  * PHASE-G2 FOUNDATION: 44 -> 45. One additive migration,
  * `20260810000000_source_authority_resolution`, which adds the
  * SourceAuthorityResolution table and its indexes. No existing migration file
@@ -37,7 +45,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 45;
+export const EXPECTED_MIGRATION_COUNT = 46;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;
