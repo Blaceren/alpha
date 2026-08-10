@@ -455,8 +455,13 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
           const decided = level.assessment.authorityResolution?.decisions ?? [];
           const notApplied = decided.filter((entry) => entry.application === "DECIDED_NOT_APPLIED").length;
           const stale = decided.filter((entry) => entry.application === "STALE").length;
-          const detail =
-            decided.length === 0
+          // CORRECTION-1 — a planner must not be told these conflicts are
+          // "unadjudicated" when the truth is that the adjudication record could
+          // not be read. The two need completely different work: one needs a
+          // reviewer, the other needs an operator.
+          const detail = level.assessment.authorityReadUnavailable
+            ? `${raw} field-level disagreements are blocking because the source-authority record could not be read — any decisions already made cannot be confirmed`
+            : decided.length === 0
               ? `${blocking} of ${raw} field-level disagreements between the Blueprint proposal and the approved bank are unadjudicated`
               : `${blocking} of ${raw} field-level disagreements still block` +
                 (notApplied > 0 ? `, ${notApplied} decided but not yet applied` : "") +

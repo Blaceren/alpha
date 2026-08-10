@@ -53,7 +53,7 @@ import { AuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { AUTHORING_LOCALE, readAuthoringOverview } from "@/lib/curriculum/authoring-read";
 import { levelHandoffStatus, type HandoffBlockerCode } from "@/lib/curriculum/authoring-readiness";
 import { validateLevelAuthoring } from "@/lib/curriculum/authoring-validation-service";
-import { readSourceAuthority } from "@/lib/curriculum/source-authority";
+import { readSourceAuthority, resolveCanonicalAuthorityLink } from "@/lib/curriculum/source-authority";
 import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
 import { prisma } from "@/lib/prisma";
 
@@ -241,7 +241,7 @@ function projectLevel(level: HandoffLevel): Json {
           passPercent: level.assessment.passPercent,
           maxAttempts: level.assessment.maxAttempts,
           showExplanation: level.assessment.showExplanation,
-              sourceProvenance: level.assessment.sourceProvenance,
+          sourceProvenance: level.assessment.sourceProvenance,
           sourceApproval: level.assessment.sourceApproval,
           // Bound into the bundle fingerprint on purpose: two bundles that
           // differ only in which authority won are DIFFERENT handoffs.
@@ -609,19 +609,27 @@ async function projectLevelFromDatabase(
     // whose video is still a draft and report every decision as stale — which is
     // exactly backwards, because the decision was made against the LINKED
     // contract and that link is what pins the two sides together.
-    const link = await prisma.videoProductionAssessmentLink.findFirst({
-      where: { assessmentVersionId: assessmentRow.id },
-      select: { videoProductionVersion: { select: { id: true, contractPayload: true } } },
-    });
+    //
+    // CORRECTION-1 (audit MEDIUM-2) — through the SHARED canonical resolver, not
+    // through `findFirst`. A bank may carry several links, and the bundle must
+    // describe the same proposal the adjudication command bound its decisions to.
+    // One function, two callers, so the two can no longer drift apart.
+    const link = await resolveCanonicalAuthorityLink(prisma, assessmentRow.id);
+    const linkedVideo = link
+      ? await prisma.videoProductionVersion.findUnique({
+          where: { id: link.videoProductionVersionId },
+          select: { id: true, contractPayload: true },
+        })
+      : null;
     let contract = null;
     try {
-      contract = link ? parseContractPayload(link.videoProductionVersion.contractPayload) : null;
+      contract = linkedVideo ? parseContractPayload(linkedVideo.contractPayload) : null;
     } catch {
       contract = null;
     }
     const projection = await readSourceAuthority(prisma, {
       assessmentVersionId: assessmentRow.id,
-      videoProductionVersionId: link?.videoProductionVersion.id ?? null,
+      videoProductionVersionId: linkedVideo?.id ?? null,
       contract,
     });
     if (projection.decisions.length > 0 || projection.rawConflictCount > 0) {

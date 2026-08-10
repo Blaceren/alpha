@@ -41,6 +41,7 @@ import {
   type VideoProductionCoherence,
 } from "@/lib/curriculum/video-production-coherence";
 import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
+import type { VideoProductionContract } from "@/lib/curriculum/video-production-contract";
 import { prisma } from "@/lib/prisma";
 
 /** The locale the ATA product authors and publishes. */
@@ -145,8 +146,22 @@ export type AssessmentAggregateSummary = AuthoringAggregateSummary & {
    * Origin says where the material came from and never changes because of a
    * review; this says which side a human chose, and whether that choice is
    * currently in force.
+   *
+   * Null either because nothing has been adjudicated OR because the adjudication
+   * record could not be read — `authorityReadUnavailable` is what distinguishes
+   * the two, and callers must not read a null projection as "settled".
    */
   authorityResolution: SourceAuthorityProjection | null;
+  /**
+   * CORRECTION-1 — the adjudication record could not be loaded for this bank.
+   *
+   * When true, `blockingConflictCount` is the FULL raw count by construction: no
+   * conflict can be shown to be settled, so none of them is treated as settled.
+   * Surfaced rather than swallowed so an operator can tell a genuine backlog from
+   * a storage problem — the previous silence is exactly what let an unreadable
+   * record read as an empty one.
+   */
+  authorityReadUnavailable: boolean;
 };
 
 export type VideoAggregateSummary = AuthoringAggregateSummary & {
@@ -460,16 +475,44 @@ export async function readAuthoringOverview(
     let conflictCount = 0;
     let blockingConflictCount = 0;
     let authorityResolution: SourceAuthorityProjection | null = null;
+    let authorityReadUnavailable = false;
     if (videoRow) {
       sourceProvenance = videoRow.sourceProvenance as "SOURCE_BACKED" | "PROPOSED_CANON";
+      let contract: VideoProductionContract | null = null;
       try {
-        const contract = parseContractPayload(videoRow.contractPayload);
+        contract = parseContractPayload(videoRow.contractPayload);
         sourceApproval = contract.approval;
-        if (assessmentRow) {
-          conflictCount = await countBlueprintConflicts(prisma, {
-            contract,
-            assessmentVersionId: assessmentRow.id,
-          });
+      } catch {
+        // A payload that no longer parses is reported by validation, not here.
+        // With no parseable proposal there is no comparison to make, so the raw
+        // conflict count stays 0 and there is nothing for authority to settle.
+        sourceApproval = null;
+        contract = null;
+      }
+      if (contract && assessmentRow) {
+        // DELIBERATELY OUTSIDE THE CATCH ABOVE. `compareBlueprintProposal`
+        // already turns every expected domain condition into `comparable: false`,
+        // so anything that throws here is a genuine failure to read the bank. A
+        // swallowed one used to report 0 raw conflicts — an overview that quietly
+        // understates the disagreement is worse than one that refuses to render.
+        conflictCount = await countBlueprintConflicts(prisma, {
+          contract,
+          assessmentVersionId: assessmentRow.id,
+        });
+
+        // CORRECTION-1 (audit BLOCKER-1) — FAIL CLOSED, AND FAIL CLOSED FIRST.
+        //
+        // The blocking count starts at the FULL raw count and is only ever
+        // lowered by a resolution that was actually read and actually applies.
+        // The previous shape started it at 0 and raised it from the adjudication
+        // record, so any failure of that one query — a client/schema skew, a
+        // transient database error — left the optimistic zero standing: a bank
+        // with real unadjudicated conflicts reported 0 blocking, provenance
+        // APPROVED_CURRENT, and went HANDOFF-READY, silently. An unreadable
+        // adjudication record means "nothing is proven settled", never "nothing
+        // is outstanding", and the initialiser is now what says so.
+        blockingConflictCount = conflictCount;
+        try {
           // PHASE-G2 — the authority axis. The RAW count above is left exactly
           // as it was so a reader can still see the disagreement; this reads the
           // adjudication record and reports which of those raw conflicts are
@@ -480,10 +523,16 @@ export async function readAuthoringOverview(
             contract,
           });
           blockingConflictCount = authorityResolution.blockingConflictCount;
+        } catch {
+          // The evidence that would clear these conflicts could not be read, so
+          // none of them is cleared. Reported rather than swallowed: a caller
+          // that sees `authorityReadUnavailable` knows the difference between
+          // "seven conflicts nobody has decided" and "seven conflicts whose
+          // decisions we could not load", which a bare count cannot express.
+          authorityReadUnavailable = true;
+          authorityResolution = null;
+          blockingConflictCount = conflictCount;
         }
-      } catch {
-        // A payload that no longer parses is reported by validation, not here.
-        sourceApproval = null;
       }
     }
 
@@ -512,6 +561,7 @@ export async function readAuthoringOverview(
           conflictCount,
           blockingConflictCount,
           authorityResolution,
+          authorityReadUnavailable,
         }
       : null;
 

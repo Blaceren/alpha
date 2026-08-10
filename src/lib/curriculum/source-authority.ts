@@ -50,6 +50,7 @@ import {
   calculateBankFingerprint,
   type AssessmentBankProjection,
 } from "@/lib/curriculum/authoring-assessment-projection";
+import { staffRoleGrantsCurriculumCapability } from "@/lib/curriculum/authoring-authorization";
 import { AuthoringDomainError, isAuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
 import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
@@ -120,6 +121,30 @@ export function hashAuthorityValue(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+/**
+ * CORRECTION-1 (audit LOW-3) — the ONE key a conflict slot is looked up by.
+ *
+ * A row carries its identity twice: as `(questionIndex, field)`, which the
+ * partial unique index enforces, and as the human-readable `conflictPath`. The
+ * projection used to join on the PATH while the database guaranteed uniqueness on
+ * the PAIR, so two representations of one identity had to agree with nothing
+ * making them. Every lookup now uses the pair the index itself uses, and
+ * `conflictPath` goes back to being what it was always documented as — a stored,
+ * readable rendering of that pair, never the join key.
+ *
+ * The ordinal is a non-negative integer and the field comes from the closed
+ * `BLUEPRINT_CONFLICT_FIELDS` vocabulary, so `<ordinal>:<field>` is unambiguous
+ * and two distinct slots can never render to the same key.
+ */
+function slotKey(questionIndex: number, field: string): string {
+  return `${questionIndex}:${field}`;
+}
+
+/** The accepted path grammar, rendered from the identity — never parsed back. */
+export function conflictPathFor(questionIndex: number, field: string): string {
+  return `questions[${questionIndex}].${field}`;
+}
+
 /* ------------------------------------------------------------------ *
  * The live value of every adjudicable field
  * ------------------------------------------------------------------ */
@@ -162,7 +187,7 @@ export function readAuthorityFieldValues(
       values.push({
         questionIndex,
         field,
-        path: `questions[${questionIndex}].${field}`,
+        path: conflictPathFor(questionIndex, field),
         currentValue: field === "prompt" ? current.prompt : correctOptionText(current),
         blueprintValue: field === "prompt" ? proposal.prompt : correctOptionText(proposal),
       });
@@ -386,35 +411,40 @@ export async function readSourceAuthority(
     };
   }
 
+  // CORRECTION-1 — keyed by (questionIndex, field), the same identity the unique
+  // index enforces, so a stored `conflictPath` can never steer a lookup.
   const liveValues = new Map<string, AuthorityFieldValues>();
   for (const value of readAuthorityFieldValues(bank, input.contract)) {
-    liveValues.set(value.path, value);
+    liveValues.set(slotKey(value.questionIndex, value.field), value);
   }
 
-  const rawConflictPaths = new Set<string>();
+  const rawConflictSlots = new Set<string>();
   for (const value of liveValues.values()) {
-    if (value.currentValue !== value.blueprintValue) rawConflictPaths.add(value.path);
+    if (value.currentValue !== value.blueprintValue) rawConflictSlots.add(slotKey(value.questionIndex, value.field));
   }
 
   const decisions: SourceAuthorityDecisionView[] = activeRows.map((row) => {
-    const live = liveValues.get(row.conflictPath) ?? null;
-    return toView(row, evaluateApplication(row, live), rawConflictPaths.has(row.conflictPath));
+    const key = slotKey(row.questionIndex, row.field);
+    const live = liveValues.get(key) ?? null;
+    return toView(row, evaluateApplication(row, live), rawConflictSlots.has(key));
   });
 
   const inForce = new Set(
-    decisions.filter((decision) => decision.application === "APPLIED").map((decision) => decision.path),
+    activeRows
+      .filter((row, index) => decisions[index].application === "APPLIED")
+      .map((row) => slotKey(row.questionIndex, row.field)),
   );
-  const blocking = [...rawConflictPaths].filter((path) => !inForce.has(path));
+  const blocking = [...rawConflictSlots].filter((key) => !inForce.has(key));
 
   return {
     ...base,
     comparable: true,
     unprojectableReason: null,
-    rawConflictCount: rawConflictPaths.size,
-    resolvedConflictCount: rawConflictPaths.size - blocking.length,
+    rawConflictCount: rawConflictSlots.size,
+    resolvedConflictCount: rawConflictSlots.size - blocking.length,
     blockingConflictCount: blocking.length,
     state: deriveState({
-      rawConflictCount: rawConflictPaths.size,
+      rawConflictCount: rawConflictSlots.size,
       blockingConflictCount: blocking.length,
       decisions,
     }),
@@ -519,6 +549,127 @@ function invalid(message: string, path = "input"): never {
   });
 }
 
+/* ------------------------------------------------------------------ *
+ * CORRECTION-1 (audit MEDIUM-1) — the DOMAIN decides who may adjudicate
+ * ------------------------------------------------------------------ */
+
+/**
+ * The adjudicating actor, verified against stored truth, inside the transaction.
+ *
+ * WHY THE HTTP GATE IS NOT ENOUGH. `gateCurriculumAuthoring` is the only caller
+ * today, but this command persists `decidedById` as durable provenance — the row
+ * says a NAMED HUMAN chose a source of truth. A command that took that name on
+ * trust would let any future internal caller (a script, an importer, a batch job)
+ * attribute a source-authority decision to anyone at all, including a blocked
+ * account or someone with no curriculum permission whatsoever. The independent
+ * audit recorded exactly that gap, and the content and assessment domains already
+ * carry their own actor assertions for the same reason.
+ *
+ * IT IS THE SAME RULE THE GATE APPLIES, NOT A SECOND ONE. `UserRole=admin` is the
+ * accepted compatibility authority that `authorizeAuthoringIdentity` PATH A
+ * recognises, and the staff path resolves the permission set from the STORED role
+ * through the same accepted `staffRoleGrantsCurriculumCapability`. Asserting a
+ * STRICTER rule here than the gate applies would produce a studio whose every
+ * adjudication is refused by the layer underneath it — the exact failure G1
+ * documented when it widened only the HTTP edge.
+ *
+ * IT RUNS BEFORE ANY WRITE. Called as the first statement of the transaction, so
+ * an unauthorised caller produces no resolution row, no supersession and no audit
+ * event — the refusal is total.
+ */
+async function assertSourceAuthorityActor(tx: DbClient, actorId: number): Promise<void> {
+  if (!Number.isInteger(actorId) || actorId <= 0) {
+    throw new AuthoringDomainError(
+      "AUTHORING_ACTOR_FORBIDDEN",
+      "source-authority adjudication requires an identified actor",
+    );
+  }
+  const actor = await tx.user.findUnique({
+    where: { id: actorId },
+    select: { id: true, role: true, status: true, staffProfile: { select: { staffRole: true } } },
+  });
+  // A missing account and a blocked one are refused identically: an adjudication
+  // may only ever be attributed to a real, currently-active human.
+  if (!actor || actor.status !== "active") {
+    throw new AuthoringDomainError(
+      "AUTHORING_ACTOR_FORBIDDEN",
+      "source-authority adjudication requires an active actor",
+    );
+  }
+  if (actor.role === "admin") return;
+  if (staffRoleGrantsCurriculumCapability(actor.staffProfile?.staffRole, "adjudicate")) return;
+  throw new AuthoringDomainError(
+    "AUTHORING_ACTOR_FORBIDDEN",
+    "source-authority adjudication requires curriculum_source_authority — authoring or approving a bank does not confer it",
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-1 (audit MEDIUM-2) — ONE canonical link, for every reader
+ * ------------------------------------------------------------------ */
+
+export type CanonicalAuthorityLink = {
+  videoProductionVersionId: number;
+  videoProductionVersionNumber: number;
+  /** Every link this bank carries, newest first — for reporting, never for choosing. */
+  candidateCount: number;
+};
+
+/**
+ * WHICH production contract is THE Blueprint proposal for this bank.
+ *
+ * THE PROBLEM THIS CLOSES. `VideoProductionAssessmentLink` is unique on
+ * `videoProductionVersionId` but NOT on `assessmentVersionId`, so one bank may
+ * legitimately be linked from several production versions — a level's v1 and its
+ * v2 clone both bound to the same approved bank. Reading "the first link" left
+ * the answer to insertion order and the query plan, and the command and the
+ * handoff could in principle have disagreed about which contract a decision was
+ * even about.
+ *
+ * THE RULE IS THE ACCEPTED ONE, NOT A NEW ONE. `authoring-read`'s
+ * `pickWorkingVersion` already defines the level's working production version as
+ * the HIGHEST `versionNumber` (there is no `LevelResourceBinding` column for
+ * video, so the binding branch cannot apply). This applies that same rule to the
+ * linked set: among the production versions actually bound to THIS bank, the
+ * newest is the proposal in force. Anything older is a superseded proposal, and
+ * adjudicating against it would settle a disagreement nobody is looking at.
+ *
+ * DETERMINISTIC BY CONSTRUCTION. `versionNumber` is unique per level, so the
+ * reduction below has no ties to break and cannot depend on row order. The `id`
+ * tie-break exists only so a corrupt duplicate could never make the answer vary
+ * between two reads of the same database.
+ *
+ * NULL, NEVER A GUESS. With no link there is no canonical proposal, and every
+ * caller is required to treat that as "cannot adjudicate" rather than picking a
+ * candidate. §13 of the correction brief: fail closed, do not invent lineage.
+ */
+export async function resolveCanonicalAuthorityLink(
+  tx: DbClient,
+  assessmentVersionId: number,
+): Promise<CanonicalAuthorityLink | null> {
+  const links = await tx.videoProductionAssessmentLink.findMany({
+    where: { assessmentVersionId },
+    select: {
+      videoProductionVersionId: true,
+      videoProductionVersion: { select: { id: true, versionNumber: true } },
+    },
+  });
+  if (links.length === 0) return null;
+  const best = links.reduce((winner, candidate) => {
+    if (candidate.videoProductionVersion.versionNumber !== winner.videoProductionVersion.versionNumber) {
+      return candidate.videoProductionVersion.versionNumber > winner.videoProductionVersion.versionNumber
+        ? candidate
+        : winner;
+    }
+    return candidate.videoProductionVersion.id > winner.videoProductionVersion.id ? candidate : winner;
+  });
+  return {
+    videoProductionVersionId: best.videoProductionVersion.id,
+    videoProductionVersionNumber: best.videoProductionVersion.versionNumber,
+    candidateCount: links.length,
+  };
+}
+
 /**
  * Record an adjudication for a coherent set of conflicts, atomically.
  *
@@ -572,12 +723,16 @@ export async function resolveSourceAuthority(
     if (!SHA256_PATTERN.test(decision.currentValueHash) || !SHA256_PATTERN.test(decision.blueprintValueHash)) {
       invalid("both value hashes must be lowercase sha256 hex", "decisions");
     }
-    const key = `questions[${decision.questionIndex}].${decision.field}`;
+    const key = conflictPathFor(decision.questionIndex, decision.field);
     if (seen.has(key)) invalid(`duplicate decision for ${key}`, "decisions");
     seen.add(key);
   }
 
   return prisma.$transaction(async (tx) => {
+    // CORRECTION-1 — WHO, before anything else. Nothing below this line may run
+    // for a caller the domain has not itself authorised.
+    await assertSourceAuthorityActor(tx, input.actorId);
+
     const assessment = await tx.assessmentVersion.findUnique({
       where: { id: input.assessmentVersionId },
       select: {
@@ -585,7 +740,6 @@ export async function resolveSourceAuthority(
         revision: true,
         levelDefinitionId: true,
         curriculumVersionId: true,
-        videoProductionLinks: { select: { videoProductionVersionId: true } },
       },
     });
     if (!assessment) {
@@ -602,7 +756,10 @@ export async function resolveSourceAuthority(
       );
     }
 
-    const link = assessment.videoProductionLinks[0];
+    // CORRECTION-1 — the SAME canonical link the handoff reads, never "the first
+    // row". With no link there is no proposal, and the command refuses rather
+    // than adjudicating against an arbitrary contract.
+    const link = await resolveCanonicalAuthorityLink(tx, assessment.id);
     if (!link) {
       throw new AuthoringDomainError(
         "AUTHORING_ASSESSMENT_LINK_MISSING",
@@ -640,7 +797,9 @@ export async function resolveSourceAuthority(
 
     const bank = await projectAssessmentBank(tx, assessment.id);
     const liveValues = new Map<string, AuthorityFieldValues>();
-    for (const value of readAuthorityFieldValues(bank, contract)) liveValues.set(value.path, value);
+    for (const value of readAuthorityFieldValues(bank, contract)) {
+      liveValues.set(slotKey(value.questionIndex, value.field), value);
+    }
 
     const rawConflicts = await compareBlueprintProposal(tx, {
       contract,
@@ -654,7 +813,7 @@ export async function resolveSourceAuthority(
     const required = rawConflicts.conflicts.filter(inScope);
     const requiredPaths = new Set(required.map((conflict) => conflict.path));
     const submittedPaths = new Set(
-      input.decisions.map((decision) => `questions[${decision.questionIndex}].${decision.field}`),
+      input.decisions.map((decision) => conflictPathFor(decision.questionIndex, decision.field)),
     );
 
     const missing = [...requiredPaths].filter((path) => !submittedPaths.has(path)).sort();
@@ -686,7 +845,7 @@ export async function resolveSourceAuthority(
     const conflictByPath = new Map(required.map((conflict) => [conflict.path, conflict]));
     const mismatches: Array<{ code: string; path: string; message: string }> = [];
     for (const decision of input.decisions) {
-      const path = `questions[${decision.questionIndex}].${decision.field}`;
+      const path = conflictPathFor(decision.questionIndex, decision.field);
       const conflict = conflictByPath.get(path)!;
       if (hashAuthorityValue(conflict.currentApprovedValue) !== decision.currentValueHash) {
         mismatches.push({
@@ -715,7 +874,11 @@ export async function resolveSourceAuthority(
     const existing = (await tx.sourceAuthorityResolution.findMany({
       where: { assessmentVersionId: assessment.id, supersededAt: null },
     })) as unknown as StoredResolution[];
-    const existingByPath = new Map(existing.map((row) => [row.conflictPath, row]));
+    // CORRECTION-1 (audit LOW-3) — joined on the identity the unique index
+    // enforces, not on the stored path string. This is the one place a STORED
+    // value used to steer a lookup, and it is the only place the two
+    // representations could ever have disagreed.
+    const existingBySlot = new Map(existing.map((row) => [slotKey(row.questionIndex, row.field), row]));
 
     const contractFingerprint = calculateContractFingerprint(contract);
     const bankFingerprint = await calculateBankFingerprint(tx, assessment.id);
@@ -729,7 +892,7 @@ export async function resolveSourceAuthority(
           evidenceSha256: input.evidenceSha256,
           decisions: [...input.decisions]
             .map((decision) => ({
-              path: `questions[${decision.questionIndex}].${decision.field}`,
+              path: conflictPathFor(decision.questionIndex, decision.field),
               decision: decision.decision,
               currentValueHash: decision.currentValueHash,
               blueprintValueHash: decision.blueprintValueHash,
@@ -746,8 +909,8 @@ export async function resolveSourceAuthority(
     let unchanged = 0;
 
     for (const decision of input.decisions) {
-      const path = `questions[${decision.questionIndex}].${decision.field}`;
-      const prior = existingByPath.get(path);
+      const path = conflictPathFor(decision.questionIndex, decision.field);
+      const prior = existingBySlot.get(slotKey(decision.questionIndex, decision.field));
 
       if (prior) {
         const identical =
@@ -763,7 +926,10 @@ export async function resolveSourceAuthority(
           unchanged += 1;
           continue;
         }
-        const priorApplication = evaluateApplication(prior, liveValues.get(path) ?? null);
+        const priorApplication = evaluateApplication(
+          prior,
+          liveValues.get(slotKey(decision.questionIndex, decision.field)) ?? null,
+        );
         if (priorApplication !== "STALE" || input.supersedeStale !== true) {
           throw new AuthoringDomainError(
             "AUTHORING_STATE_INVALID",
@@ -839,7 +1005,7 @@ export async function resolveSourceAuthority(
           // settled without anyone re-deriving it from a later database state.
           rawConflictPaths: rawConflicts.conflicts.map((conflict) => conflict.path),
           decisions: input.decisions.map((decision) => ({
-            path: `questions[${decision.questionIndex}].${decision.field}`,
+            path: conflictPathFor(decision.questionIndex, decision.field),
             decision: decision.decision,
             currentValueHash: decision.currentValueHash,
             blueprintValueHash: decision.blueprintValueHash,
