@@ -40,6 +40,25 @@ export type AuthoringErrorCode =
   /** More than one candidate bank; the link refuses to guess. */
   | "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS"
   /**
+   * PHASE-G2 CORRECTION-2 — a durable link names a video production version
+   * that belongs to a DIFFERENT level or curriculum version.
+   *
+   * Its own code rather than `AUTHORING_ASSESSMENT_LINK_AMBIGUOUS`, because the
+   * remedy differs: ambiguous means "several plausible candidates, choose one";
+   * this means the stored record is wrong and must be repaired before anything
+   * may be derived from it. Nothing is chosen while it stands.
+   */
+  | "AUTHORING_ASSESSMENT_LINK_INVALID"
+  /**
+   * PHASE-G2 CORRECTION-2 — the canonical Blueprint source contract for a bank
+   * exists but cannot be read, so no comparison is possible.
+   *
+   * Deliberately NOT reported as zero conflicts. "We could not find out whether
+   * the two sides agree" is not "the two sides agree", and treating it as such
+   * is what let an unparseable payload carry a conflicting bank to handoff.
+   */
+  | "AUTHORING_SOURCE_CONTRACT_UNREADABLE"
+  /**
    * PHASE-G0 PUBLISH GATE — a runtime publication was attempted on a version no
    * human has editorially approved.
    *
@@ -132,6 +151,14 @@ export function authoringErrorStatus(code: AuthoringErrorCode): number {
     case "AUTHORING_ASSESSMENT_LINK_AMBIGUOUS":
       return 422;
     case "AUTHORING_ASSESSMENT_LINK_MISSING":
+      return 409;
+    // CORRECTION-2. Both are 409 for the same reason the handoff refusals are:
+    // the request is well formed and the caller may hold every permission — what
+    // is wrong is the durable STATE, and it becomes right when the linkage or the
+    // stored contract is repaired. Neither is a client input error, and neither
+    // may be retried around.
+    case "AUTHORING_ASSESSMENT_LINK_INVALID":
+    case "AUTHORING_SOURCE_CONTRACT_UNREADABLE":
       return 409;
     // A handoff refusal is 409, not 422: the request itself is well formed and
     // the caller may hold every permission. What is wrong is the STATE of the

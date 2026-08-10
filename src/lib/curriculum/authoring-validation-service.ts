@@ -35,6 +35,7 @@ import {
 import { AUTHORING_LOCALE } from "@/lib/curriculum/authoring-read";
 import { requiresLearnerTeachingContent } from "@/lib/curriculum/authoring-level-profile";
 import { readVideoProductionCoherence } from "@/lib/curriculum/video-production-coherence";
+import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
 import { CANONICAL_ASSESSMENT_LOCALE } from "@/lib/curriculum/authoring-assessment-projection";
 
 /**
@@ -166,7 +167,9 @@ export async function validateLevelAuthoring(input: {
     prisma.videoProductionVersion.findFirst({
       where: { levelDefinitionId: level.id },
       orderBy: { versionNumber: "desc" },
-      select: { id: true },
+      // CORRECTION-2 — the payload, so this service can answer the one question
+      // it was previously assumed to answer and did not.
+      select: { id: true, contractPayload: true },
     }),
   ]);
 
@@ -286,6 +289,26 @@ export async function validateLevelAuthoring(input: {
 
   /* --------------------------------------------------------------- video */
   if (videoVersion) {
+    // CORRECTION-2 — a BLOCKER, and the correction of a false claim.
+    //
+    // `authoring-read` swallowed a contract parse failure with the comment "a
+    // payload that no longer parses is reported by validation, not here". It was
+    // not: nothing in this service ever parsed the payload, so an unparseable
+    // contract produced ok=true, zero issues, zero conflicts and a successful
+    // handoff for a bank with real unadjudicated disagreements. It is a blocker
+    // rather than a warning because every downstream reading of that level —
+    // conflicts, authority, coherence — is derived from this payload, and none
+    // of them can be trusted while it cannot be read.
+    try {
+      parseContractPayload(videoVersion.contractPayload);
+    } catch {
+      push(issues, "video", "blocker", {
+        code: "VIDEO_CONTRACT_UNPARSEABLE",
+        path: "contractPayload",
+        message:
+          "Контракт видеопроизводства не читается — сравнение с банком вопросов невозможно / the stored production contract cannot be parsed, so no Blueprint comparison can be made",
+      });
+    }
     const coherence = await readVideoProductionCoherence(videoVersion.id, prisma);
     if (coherence.assessmentEvidenceStale) {
       push(warnings, "video", "warning", {

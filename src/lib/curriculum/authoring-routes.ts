@@ -63,13 +63,13 @@ import {
 import { buildHandoffBundle } from "@/lib/curriculum/authoring-handoff";
 import {
   createVideoProductionVersion,
-  parseContractPayload,
   updateVideoProductionContract,
 } from "@/lib/curriculum/video-production-authoring";
 import { readVideoProductionCoherence } from "@/lib/curriculum/video-production-coherence";
 import {
   hashAuthorityValue,
   readSourceAuthority,
+  resolveAuthoritySource,
   resolveSourceAuthority,
 } from "@/lib/curriculum/source-authority";
 import { PRODUCT_TOOL_CODES } from "@/lib/curriculum/product-vocabulary";
@@ -309,20 +309,33 @@ export function authoringLevelConflictsRoute() {
           resolutionAvailable: false,
         });
       }
-      const row = await prisma.videoProductionVersion.findUnique({
-        where: { id: level.video.id },
-        select: { contractPayload: true },
-      });
+      // CORRECTION-2 — the comparison surface reads the SAME canonical source as
+      // the command it feeds. It used to read the level's working production
+      // version directly, which is the linked one in the ordinary case but not
+      // when a bank is bound to an older proposal — and a screen that shows one
+      // contract's hashes while the command verifies another's can only produce
+      // refusals a reviewer cannot explain.
+      const source = await resolveAuthoritySource(prisma, level.assessment.id);
+      if (source.unavailableReason !== null || source.contract === null) {
+        return authoringData({
+          levelNumber: level.levelNumber,
+          comparable: false,
+          reason: source.unavailableReason ?? "NO_PRODUCTION_CONTRACT",
+          conflicts: [],
+          resolutionAvailable: false,
+        });
+      }
+      const contract = source.contract;
       const comparison = await compareBlueprintProposal(prisma, {
-        contract: parseContractPayload(row?.contractPayload),
+        contract,
         assessmentVersionId: level.assessment.id,
-        videoProductionVersionId: level.video.id,
+        videoProductionVersionId: source.videoProductionVersionId!,
       });
-      const contract = parseContractPayload(row?.contractPayload);
       const authority = await readSourceAuthority(prisma, {
         assessmentVersionId: level.assessment.id,
-        videoProductionVersionId: level.video.id,
+        videoProductionVersionId: source.videoProductionVersionId,
         contract,
+        sourceLinked: source.link !== null,
       });
       return authoringData({
         ...comparison,
@@ -339,11 +352,19 @@ export function authoringLevelConflictsRoute() {
         // PHASE-G2 replaced the G1 statement that no resolution domain exists.
         // It exists now, and it records a DECISION rather than rewriting either
         // side, so the raw conflicts above stay exactly as they were.
-        resolutionAvailable: true,
+        // CORRECTION-2 — only a LINKED source is adjudicable. An unlinked bank
+        // is compared honestly against the level's working proposal, but the
+        // command refuses it, so the screen must not offer a button that cannot
+        // work.
+        resolutionAvailable: source.link !== null,
         resolutionNote:
-          "Adjudication records which source wins per field. It rewrites no learner content, does not approve the bank, and leaves every raw conflict inspectable.",
+          source.link !== null
+            ? "Adjudication records which source wins per field. It rewrites no learner content, does not approve the bank, and leaves every raw conflict inspectable."
+            : "This bank carries no durable link to a production contract, so there is no pinned Blueprint proposal to adjudicate against. Link the contract first.",
         expectedAssessmentRevision: level.assessment.revision,
-        expectedVideoProductionRevision: level.video.revision,
+        // CORRECTION-2 — the canonical source's revision, matching the contract
+        // whose hashes are served above.
+        expectedVideoProductionRevision: source.videoProductionRevision,
       });
     } catch (error) {
       return authoringException(error, "authoring conflicts GET");
@@ -404,7 +425,7 @@ export function authoringSourceAuthorityReadRoute() {
       const assessmentVersionId = positiveId(params.id, "id");
       const assessment = await prisma.assessmentVersion.findUnique({
         where: { id: assessmentVersionId },
-        select: { id: true, revision: true, videoProductionLinks: { select: { videoProductionVersionId: true } } },
+        select: { id: true, revision: true },
       });
       if (!assessment) {
         return authoringException(
@@ -412,28 +433,33 @@ export function authoringSourceAuthorityReadRoute() {
           "authoring source-authority GET",
         );
       }
-      const link = assessment.videoProductionLinks[0] ?? null;
-      const videoRow = link
-        ? await prisma.videoProductionVersion.findUnique({
-            where: { id: link.videoProductionVersionId },
-            select: { id: true, revision: true, contractPayload: true },
-          })
-        : null;
-      let contract = null;
-      try {
-        contract = videoRow ? parseContractPayload(videoRow.contractPayload) : null;
-      } catch {
-        contract = null;
-      }
+      // CORRECTION-2 (re-audit HIGH-1) — through the SHARED resolver.
+      //
+      // This route used to take `videoProductionLinks[0]`, which is insertion
+      // order. On a bank carrying more than one link it read an older proposal
+      // than the command and the handoff, and an independent audit reproduced it
+      // reporting state NO_CONFLICT, 0 raw and 0 blocking for a bank that owed
+      // eight decisions — while readiness on the very same row said CONFLICTING
+      // and refused the handoff. A lineage surface that can disagree with the
+      // command about WHICH source it is describing is worse than no surface.
+      const source = await resolveAuthoritySource(prisma, assessment.id);
       const authority = await readSourceAuthority(prisma, {
         assessmentVersionId: assessment.id,
-        videoProductionVersionId: videoRow?.id ?? null,
-        contract,
+        videoProductionVersionId: source.videoProductionVersionId,
+        contract: source.contract,
+        sourceUnavailableReason: source.unavailableReason,
+        sourceLinked: source.link !== null,
       });
       return authoringData({
         ...authority,
         expectedAssessmentRevision: assessment.revision,
-        expectedVideoProductionRevision: videoRow?.revision ?? null,
+        // The revision of the SAME version the projection describes, so a client
+        // cannot prepare an adjudication against one contract and echo back
+        // another one's revision.
+        expectedVideoProductionRevision: source.videoProductionRevision,
+        /** Staff-only detail. The route may say MORE than the shared truth, never something different. */
+        canonicalLink: source.link,
+        sourceContractUnavailableReason: source.unavailableReason,
       });
     } catch (error) {
       return authoringException(error, "authoring source-authority GET");

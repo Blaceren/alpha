@@ -66,6 +66,11 @@ If the adjudication record cannot be read:
 settled one: it distinguishes "seven conflicts nobody has decided" from "seven
 conflicts whose decisions we could not load". The two need different people.
 
+It is about the adjudication **record**. Its sibling
+`sourceContractUnavailable` is about the other side of the comparison — the
+**proposal** — and is described under "`NO_CONFLICT` is not `SOURCE_UNAVAILABLE`"
+below. Both fail closed; neither is ever a learner-visible field.
+
 **Deliberate exception — no raw conflict.** When `conflictCount` is `0`, an
 unreadable authority record changes nothing: authority resolution answers "which
 of two disagreeing sources wins", and with no disagreement there is nothing for it
@@ -238,29 +243,131 @@ a bank adjudicated before its video is approved is not falsely reported stale.
 Learner payloads are untouched, and a regression asserts the preview frame
 contains none of it.
 
-## The canonical link (CORRECTION-1)
+## The canonical source (CORRECTION-1, completed by CORRECTION-2)
 
 `VideoProductionAssessmentLink` is unique on `videoProductionVersionId` but **not**
 on `assessmentVersionId`, so one bank may legitimately be linked from several
 production versions — a level's v1 and its v2 clone both bound to the same
 approved bank.
 
-`resolveCanonicalAuthorityLink` is the single answer to "which contract is THE
-Blueprint proposal for this bank", and both the adjudication command and the
-handoff call it. Previously each picked "the first link" independently, leaving
-the answer to insertion order and the query plan.
+### One resolver, and the list of everyone who uses it
 
-The rule is the accepted one, not a new one: `authoring-read`'s
-`pickWorkingVersion` already defines a level's working production version as the
-**highest `versionNumber`** (there is no `LevelResourceBinding` column for video,
-so its binding branch cannot apply). The canonical link applies that same rule to
-the linked set — among the production versions actually bound to this bank, the
-newest is the proposal in force. `versionNumber` is unique per level, so the
-choice has no ties to break and cannot depend on row order.
+`resolveAuthoritySource` is the single answer to "which contract is THE Blueprint
+proposal for this bank, and can it be read". **Every** authority reader calls it,
+and the list is exhaustive on purpose:
 
-**With no link there is no canonical proposal.** The command refuses with
-`AUTHORING_ASSESSMENT_LINK_MISSING` rather than picking a candidate, and the
-handoff reports no authority rather than inventing lineage.
+| caller | what it does with the answer |
+|---|---|
+| `readAuthoringOverview` | the assessment summary's conflict counts, provenance and authority projection |
+| `authoringLevelConflictsRoute` (`GET …/conflicts`) | the compared values, their hashes and the expected revisions |
+| `authoringSourceAuthorityReadRoute` (`GET …/source-authority`) | the lineage projection and the expected video revision |
+| `projectLevelFromDatabase` (handoff bundle) | the bundled `sourceAuthority` |
+| `resolveSourceAuthority` (the command) | via `resolveCanonicalAuthorityLink`, which requires a real link |
+
+CORRECTION-1 fixed the command and the handoff. The dedicated staff GET was
+**missed**, and an independent re-audit reproduced it reading
+`videoProductionLinks[0]` — insertion order — and reporting state `NO_CONFLICT`,
+`0` raw and `0` blocking for a bank that owed eight decisions, while readiness on
+the same row said `CONFLICTING` and refused the handoff. A lineage surface that
+can disagree with the command about *which source it is describing* is worse than
+no surface. A source guard in the Correction-2 regression now fails the build if
+any `src/**` file indexes the link relation again.
+
+### The rule
+
+The accepted one, not a new one: `authoring-read`'s `pickWorkingVersion` defines a
+level's working production version as the **highest `versionNumber`** (there is no
+`LevelResourceBinding` column for video, so its binding branch cannot apply). The
+canonical link applies that same rule to the linked set — among the production
+versions actually bound to this bank, the newest is the proposal in force.
+`versionNumber` is unique per level, so the choice has no ties to break and cannot
+depend on row order.
+
+### Compatibility is checked (CORRECTION-2)
+
+`versionNumber` is unique **per level**, not globally. A link naming a production
+version from another level or another curriculum version would therefore let a
+foreign `v99` outrank this level's `v2` and become the canonical proposal — the
+re-audit demonstrated exactly that. Compatibility is now read off the accepted
+schema: `LevelDefinition` is keyed `(id, curriculumVersionId)` and every authoring
+aggregate is scoped by that composite, so a production version must share **both
+halves** with the bank.
+
+An incompatible link is **refused, not filtered**:
+`AUTHORING_ASSESSMENT_LINK_INVALID` (409), and `resolveAuthoritySource` reports
+`SOURCE_LINK_INCOMPATIBLE` with **no** version selected. Quietly picking one of the
+remaining rows would adjudicate against a source while hiding that the durable
+record disagrees with itself — the presence of the corruption *is* the lineage
+ambiguity.
+
+### With no link at all
+
+There is no canonical proposal, so the command refuses with
+`AUTHORING_ASSESSMENT_LINK_MISSING` rather than picking a candidate.
+
+The **read** surfaces still report against the level's working production version,
+which is the rule `readAuthoringOverview` has always applied and the reason an
+unlinked-but-conflicting bank still blocks today. It is a reporting fallback only:
+the projection carries `sourceLinked: false`, `GET …/conflicts` answers
+`resolutionAvailable: false`, and the command still refuses. Making an unlinked
+bank unreadable instead would have turned the accepted, counted `UNLINKED` state
+(`videoUnlinkedLevels`, a G0 *warning*) into a hard blocker for every level that
+was never linked — a change the correction deliberately does not make.
+
+## `NO_CONFLICT` is not `SOURCE_UNAVAILABLE` (CORRECTION-2)
+
+The two are different facts and the platform used to report the second as the
+first.
+
+| | meaning |
+|---|---|
+| `NO_CONFLICT` | the canonical contract parsed, the comparison ran, and the two sides agree |
+| `SOURCE_UNAVAILABLE` | the comparison could not be made at all |
+
+An independent re-audit found that an unparseable `contractPayload` produced
+`conflictCount` `0`, `blockingConflictCount` `0`, provenance `APPROVED_CURRENT`,
+`ready: true`, **and a successful handoff bundle** — for a bank with eight real
+unadjudicated disagreements. The defect predates this phase: the swallowing
+`catch` in `authoring-read` came from the accepted G1 base, and its comment —
+"a payload that no longer parses is reported by validation, not here" — was simply
+untrue. `validateLevelAuthoring` never parsed the payload and returned `ok: true`
+with zero issues.
+
+When the canonical source cannot be established:
+
+| | |
+|---|---|
+| `conflictCount` / `blockingConflictCount` | `0`, because **nothing was computed** — never because the sides agree |
+| `sourceContractUnavailable` | `true` |
+| `sourceContractUnavailableReason` | `SOURCE_CONTRACT_UNPARSEABLE` or `SOURCE_LINK_INCOMPATIBLE` |
+| provenance | `SOURCE_UNAVAILABLE` — computed **before** any count is consulted |
+| `SourceAuthorityProjection.state` | `SOURCE_UNAVAILABLE`, `comparable: false` |
+| readiness | `ASSESSMENT_SOURCE_CONTRACT_UNREADABLE`, never handoff-ready |
+| work queue | its own `SOURCE_UNAVAILABLE` bucket — an operator repairs a contract, a reviewer decides a conflict |
+| validation | `VIDEO_CONTRACT_UNPARSEABLE`, a **blocker** |
+| the command | `AUTHORING_SOURCE_CONTRACT_UNREADABLE` (409) |
+| the handoff | refuses; it never falls back to an older linked contract |
+
+No count is invented and no count is trusted: the level is blocked by the **flag**,
+because a number cannot express "we did not get to count". The blocker is its own
+code rather than `ASSESSMENT_SOURCE_CONFLICT` for the same reason the work-queue
+bucket is separate.
+
+**Provenance is `SOURCE_UNAVAILABLE`, not `CONFLICTING`.** Claiming a disagreement
+nobody observed would be the same class of error in the other direction.
+
+**Scope.** This is strictly the failure path. A bank whose contract parses and
+whose sides agree is still `NO_CONFLICT`, `APPROVED_CURRENT` and handoff-ready,
+and a level with no production version at all is unaffected — no proposal is not
+an unreadable proposal.
+
+### Error contract
+
+Both new refusals are `409`, for the same reason the handoff refusals are: the
+request is well formed and the caller may hold every permission — what is wrong is
+the durable **state**, and it becomes right when the linkage or the stored
+contract is repaired. `authoringException` serialises the code and nothing else;
+no message, stack trace or Prisma internal ever reaches a client.
 
 ## Known limitations, deliberately retained
 

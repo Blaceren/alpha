@@ -34,6 +34,8 @@ import { completionPair } from "@/lib/curriculum/completion-pairs";
 import { countBlueprintConflicts } from "@/lib/curriculum/authoring-conflict";
 import {
   readSourceAuthority,
+  resolveAuthoritySource,
+  type AuthoritySourceUnavailableReason,
   type SourceAuthorityProjection,
 } from "@/lib/curriculum/source-authority";
 import {
@@ -111,6 +113,16 @@ export const ASSESSMENT_PROVENANCE_STATES = [
   "APPROVED_CURRENT",
   "CONFLICTING",
   "LOCAL_DRAFT",
+  /**
+   * PHASE-G2 CORRECTION-2 — the bank's canonical Blueprint source cannot be
+   * established, so NO provenance claim can honestly be made about it.
+   *
+   * It is not `CONFLICTING` (no disagreement was observed) and emphatically not
+   * `APPROVED_CURRENT` (nothing was compared). It is computed FIRST, before any
+   * conflict count, because the counts are zero for want of a comparison rather
+   * than for want of a disagreement.
+   */
+  "SOURCE_UNAVAILABLE",
 ] as const;
 export type AssessmentProvenanceState = (typeof ASSESSMENT_PROVENANCE_STATES)[number];
 
@@ -162,6 +174,21 @@ export type AssessmentAggregateSummary = AuthoringAggregateSummary & {
    * record read as an empty one.
    */
   authorityReadUnavailable: boolean;
+  /**
+   * CORRECTION-2 — the canonical Blueprint SOURCE for this bank could not be
+   * established, so no comparison was possible.
+   *
+   * DIFFERENT FROM `authorityReadUnavailable`, which is about the adjudication
+   * RECORD. This one is about the other side of the comparison: the proposal
+   * itself. When it is true, `conflictCount` and `blockingConflictCount` are
+   * both 0 because nothing was computed — NOT because the two sides agree — and
+   * the level is blocked by `ASSESSMENT_SOURCE_CONTRACT_UNREADABLE` rather than
+   * by a count. Reading a zero here as agreement is precisely the fail-open the
+   * re-audit found.
+   */
+  sourceContractUnavailable: boolean;
+  /** Why, for staff. Null whenever the source was established. */
+  sourceContractUnavailableReason: AuthoritySourceUnavailableReason | null;
 };
 
 export type VideoAggregateSummary = AuthoringAggregateSummary & {
@@ -476,25 +503,49 @@ export async function readAuthoringOverview(
     let blockingConflictCount = 0;
     let authorityResolution: SourceAuthorityProjection | null = null;
     let authorityReadUnavailable = false;
+    let sourceContractUnavailable = false;
+    let sourceContractUnavailableReason: AuthoritySourceUnavailableReason | null = null;
     if (videoRow) {
       sourceProvenance = videoRow.sourceProvenance as "SOURCE_BACKED" | "PROPOSED_CANON";
-      let contract: VideoProductionContract | null = null;
+      // `sourceApproval` describes the LEVEL'S WORKING production version, which
+      // is what the video column of the studio shows. It is deliberately read
+      // from `videoRow` and not from the authority source: the two are the same
+      // row in every ordinary case, and where they differ the approval badge
+      // belongs to the aggregate being authored.
       try {
-        contract = parseContractPayload(videoRow.contractPayload);
-        sourceApproval = contract.approval;
+        sourceApproval = parseContractPayload(videoRow.contractPayload).approval;
       } catch {
-        // A payload that no longer parses is reported by validation, not here.
-        // With no parseable proposal there is no comparison to make, so the raw
-        // conflict count stays 0 and there is nothing for authority to settle.
         sourceApproval = null;
-        contract = null;
+      }
+
+      // CORRECTION-2 — the AUTHORITY axis now comes from the one shared
+      // resolver, so this projection, the staff GET, the handoff and the command
+      // cannot describe different proposals for the same bank. It also reports
+      // the difference between "no proposal" and "a proposal we cannot read",
+      // which is what the `catch` here used to erase.
+      let contract: VideoProductionContract | null = null;
+      let authoritySourceVideoId: number | null = null;
+      let authoritySourceLinked = false;
+      if (assessmentRow) {
+        const source = await resolveAuthoritySource(prisma, assessmentRow.id);
+        contract = source.contract;
+        authoritySourceVideoId = source.videoProductionVersionId;
+        authoritySourceLinked = source.link !== null;
+        if (source.unavailableReason !== null) {
+          // FAIL CLOSED. No comparison was made, so no count may be presented as
+          // one, and the level is blocked by the flag rather than by a number
+          // this branch is in no position to compute. The previous shape reported
+          // 0 raw / 0 blocking / APPROVED_CURRENT and went handoff-ready.
+          sourceContractUnavailable = true;
+          sourceContractUnavailableReason = source.unavailableReason;
+        }
       }
       if (contract && assessmentRow) {
-        // DELIBERATELY OUTSIDE THE CATCH ABOVE. `compareBlueprintProposal`
-        // already turns every expected domain condition into `comparable: false`,
-        // so anything that throws here is a genuine failure to read the bank. A
-        // swallowed one used to report 0 raw conflicts — an overview that quietly
-        // understates the disagreement is worse than one that refuses to render.
+        // NOT INSIDE ANY CATCH. `compareBlueprintProposal` already turns every
+        // expected domain condition into `comparable: false`, so anything that
+        // throws here is a genuine failure to read the bank. A swallowed one used
+        // to report 0 raw conflicts — an overview that quietly understates the
+        // disagreement is worse than one that refuses to render.
         conflictCount = await countBlueprintConflicts(prisma, {
           contract,
           assessmentVersionId: assessmentRow.id,
@@ -519,8 +570,13 @@ export async function readAuthoringOverview(
           // still unsettled.
           authorityResolution = await readSourceAuthority(prisma, {
             assessmentVersionId: assessmentRow.id,
-            videoProductionVersionId: videoRow.id,
+            // CORRECTION-2 — the CANONICAL source, not the level's working video
+            // row. Where a bank is linked to an older production version than the
+            // one currently being authored, the two differ, and the adjudication
+            // record belongs to the linked one.
+            videoProductionVersionId: authoritySourceVideoId,
             contract,
+            sourceLinked: authoritySourceLinked,
           });
           blockingConflictCount = authorityResolution.blockingConflictCount;
         } catch {
@@ -555,6 +611,7 @@ export async function readAuthoringOverview(
             sourceProvenance,
             conflictCount,
             blockingConflictCount,
+            sourceContractUnavailable,
           }),
           sourceApproval,
           sourceProvenance,
@@ -562,6 +619,8 @@ export async function readAuthoringOverview(
           blockingConflictCount,
           authorityResolution,
           authorityReadUnavailable,
+          sourceContractUnavailable,
+          sourceContractUnavailableReason,
         }
       : null;
 
@@ -627,7 +686,24 @@ export function resolveProvenance(input: {
    * the primitive existed.
    */
   blockingConflictCount?: number;
+  /**
+   * PHASE-G2 CORRECTION-2 — the canonical source could not be established, so
+   * no comparison happened. Optional, so every accepted caller that predates the
+   * flag keeps its exact behaviour.
+   */
+  sourceContractUnavailable?: boolean;
 }): AssessmentProvenanceState {
+  // CORRECTION-2 — FIRST, and before any count is consulted. With no readable
+  // proposal there is no evidence of agreement, and the counts below are zero
+  // only because nothing was computed. Falling through to the approval branch is
+  // what produced APPROVED_CURRENT for a bank with eight real disagreements.
+  //
+  // WHY `SOURCE_UNAVAILABLE` RATHER THAN `CONFLICTING`. Claiming a conflict we
+  // did not observe would be the same class of error in the other direction, and
+  // §9 asks for the two to stay distinguishable. This state says exactly what is
+  // known: the source is unknown, and nothing may be concluded from that.
+  if (input.sourceContractUnavailable === true) return "SOURCE_UNAVAILABLE";
+
   // PHASE-G2 — CONFLICTING now means "a disagreement nobody has settled", not
   // "a disagreement exists". A bank whose seven conflicts were each explicitly
   // adjudicated is no longer waiting on anybody, and reporting it as CONFLICTING

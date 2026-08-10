@@ -74,6 +74,17 @@ export const HANDOFF_BLOCKER_CODES = [
   "ASSESSMENT_MISSING",
   "ASSESSMENT_NOT_APPROVED",
   "ASSESSMENT_SOURCE_CONFLICT",
+  /**
+   * PHASE-G2 CORRECTION-2 — the bank's canonical Blueprint source cannot be
+   * established, so whether it disagrees is UNKNOWN.
+   *
+   * Its own code, not folded into `ASSESSMENT_SOURCE_CONFLICT`, because the work
+   * is different: a conflict needs a reviewer to decide, an unreadable source
+   * needs an operator to repair the contract or the linkage. It exists at all
+   * because a count cannot express "we did not get to count" — the previous
+   * shape reported zero conflicts and let the level hand off.
+   */
+  "ASSESSMENT_SOURCE_CONTRACT_UNREADABLE",
   "ASSESSMENT_TAKE_MAPPING_INCOMPLETE",
   "STRUCTURE_NOT_CANONICAL",
 ] as const;
@@ -124,6 +135,12 @@ export function levelHandoffStatus(level: AuthoringLevelSummary): LevelHandoffSt
       // of a historical one. A bank whose conflicts were each explicitly
       // adjudicated has nothing outstanding for the handoff to wait on, and the
       // raw count stays on the summary so the history is never hidden.
+      // CORRECTION-2 — FIRST, because the counts below are only meaningful once
+      // a comparison actually happened. An unreadable source produces zeroes,
+      // and a zero that means "not computed" must never read as "nothing owed".
+      if (level.assessment.sourceContractUnavailable) {
+        blockers.push("ASSESSMENT_SOURCE_CONTRACT_UNREADABLE");
+      }
       if (level.assessment.blockingConflictCount > 0) blockers.push("ASSESSMENT_SOURCE_CONFLICT");
       if (level.assessment.editorialState !== "approved") blockers.push("ASSESSMENT_NOT_APPROVED");
       if (level.assessment.mappedTakeCount !== 4) {
@@ -185,6 +202,12 @@ export type AuthoringReadiness = {
   assessmentAdjudicatedLevels: number;
   /** Levels whose recorded decision no longer matches the values it was made against. */
   assessmentAdjudicationStaleLevels: number;
+  /**
+   * PHASE-G2 CORRECTION-2 — levels whose canonical Blueprint source could not be
+   * established at all. Counted separately from conflicts: an unknown source is
+   * not a disagreement, and it is not agreement either.
+   */
+  assessmentSourceUnavailableLevels: number;
 
   videoContractLevels: number;
   videoScriptPendingLevels: number;
@@ -234,6 +257,7 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
     assessmentBlockingConflictRecords: 0,
     assessmentAdjudicatedLevels: 0,
     assessmentAdjudicationStaleLevels: 0,
+    assessmentSourceUnavailableLevels: 0,
     videoContractLevels: 0,
     videoScriptPendingLevels: 0,
     videoNotRecordedLevels: 0,
@@ -295,6 +319,13 @@ export function summarizeReadiness(levels: readonly AuthoringLevelSummary[]): Au
       if (level.assessment.authorityResolution?.state === "ADJUDICATION_STALE") {
         readiness.assessmentAdjudicationStaleLevels += 1;
       }
+      // CORRECTION-2 — banks whose source could not be read are their own
+      // backlog. They are deliberately NOT added to the conflict records above:
+      // no conflict was observed, and inventing a number would be the same lie
+      // in the other direction.
+      if (level.assessment.sourceContractUnavailable) {
+        readiness.assessmentSourceUnavailableLevels += 1;
+      }
       switch (level.assessment.provenance) {
         case "PROPOSED_CANON":
           readiness.assessmentProposedLevels += 1;
@@ -352,6 +383,16 @@ export const WORK_QUEUE_BUCKETS = [
   "NEEDS_ASSESSMENT_APPROVAL",
   "SOURCE_BACKED_AWAITING_REVIEW",
   "SOURCE_CONFLICT",
+  /**
+   * PHASE-G2 CORRECTION-2 — the bank's Blueprint source cannot be read, so
+   * nobody can say whether it conflicts.
+   *
+   * A separate bucket because it is a different job for a different person: an
+   * operator repairs a contract payload or a broken link, a reviewer decides a
+   * conflict. Filing it under `SOURCE_CONFLICT` would send a reviewer looking
+   * for a disagreement nobody has observed.
+   */
+  "SOURCE_UNAVAILABLE",
   "NEEDS_VIDEO_SCRIPT",
   "NEEDS_VIDEO_ASSET",
   "NEEDS_VIDEO_QA",
@@ -445,6 +486,18 @@ export function classifyWorkQueue(levels: readonly AuthoringLevelSummary[]): Wor
       push("CHANGES_REQUESTED", level, "assessment", "reviewer returned the bank for changes");
     } else if (level.assessment) {
       switch (level.assessment.provenance) {
+        // CORRECTION-2 — the source could not be read. Say that, and say what
+        // would fix it, rather than filing an unknown as a decision backlog.
+        case "SOURCE_UNAVAILABLE":
+          push(
+            "SOURCE_UNAVAILABLE",
+            level,
+            "assessment",
+            level.assessment.sourceContractUnavailableReason === "SOURCE_LINK_INCOMPATIBLE"
+              ? "the bank is linked to a video production version from another level, so its Blueprint lineage is ambiguous — repair the link before this level can be assessed"
+              : "the Blueprint proposal for this bank could not be parsed, so whether it disagrees with the approved bank is unknown — repair the production contract",
+          );
+          break;
         case "CONFLICTING": {
           // PHASE-G2 — say which of the raw disagreements are actually
           // outstanding, and name the ones that were decided but whose selected

@@ -53,8 +53,7 @@ import { AuthoringDomainError } from "@/lib/curriculum/authoring-errors";
 import { AUTHORING_LOCALE, readAuthoringOverview } from "@/lib/curriculum/authoring-read";
 import { levelHandoffStatus, type HandoffBlockerCode } from "@/lib/curriculum/authoring-readiness";
 import { validateLevelAuthoring } from "@/lib/curriculum/authoring-validation-service";
-import { readSourceAuthority, resolveCanonicalAuthorityLink } from "@/lib/curriculum/source-authority";
-import { parseContractPayload } from "@/lib/curriculum/video-production-authoring";
+import { readSourceAuthority, resolveAuthoritySource } from "@/lib/curriculum/source-authority";
 import { prisma } from "@/lib/prisma";
 
 export const HANDOFF_BUNDLE_SCHEMA = "ata.authoring.handoff/1" as const;
@@ -610,27 +609,30 @@ async function projectLevelFromDatabase(
     // exactly backwards, because the decision was made against the LINKED
     // contract and that link is what pins the two sides together.
     //
-    // CORRECTION-1 (audit MEDIUM-2) — through the SHARED canonical resolver, not
-    // through `findFirst`. A bank may carry several links, and the bundle must
-    // describe the same proposal the adjudication command bound its decisions to.
-    // One function, two callers, so the two can no longer drift apart.
-    const link = await resolveCanonicalAuthorityLink(prisma, assessmentRow.id);
-    const linkedVideo = link
-      ? await prisma.videoProductionVersion.findUnique({
-          where: { id: link.videoProductionVersionId },
-          select: { id: true, contractPayload: true },
-        })
-      : null;
-    let contract = null;
-    try {
-      contract = linkedVideo ? parseContractPayload(linkedVideo.contractPayload) : null;
-    } catch {
-      contract = null;
+    // CORRECTION-1 (audit MEDIUM-2) / CORRECTION-2 (re-audit HIGH-1) — through
+    // the ONE shared source resolver every authority reader uses, not through
+    // `findFirst` and not through a private copy of the rule. A bank may carry
+    // several links, and the bundle must describe the same proposal the
+    // adjudication command bound its decisions to.
+    const source = await resolveAuthoritySource(prisma, assessmentRow.id);
+    if (source.unavailableReason !== null) {
+      // CORRECTION-2 — a bundle is a claim that the lineage was checked. With no
+      // readable source there is nothing to check, so the handoff refuses rather
+      // than emitting a level whose `sourceAuthority` is silently absent.
+      // Readiness already blocks this level; this is the second door.
+      throw new AuthoringDomainError(
+        source.unavailableReason === "SOURCE_LINK_INCOMPATIBLE"
+          ? "AUTHORING_ASSESSMENT_LINK_INVALID"
+          : "AUTHORING_SOURCE_CONTRACT_UNREADABLE",
+        `level ${levelNumber}: the canonical Blueprint source for this bank cannot be established (${source.unavailableReason}), so its authority lineage cannot be proven`,
+      );
     }
+    const contract = source.contract;
     const projection = await readSourceAuthority(prisma, {
       assessmentVersionId: assessmentRow.id,
-      videoProductionVersionId: linkedVideo?.id ?? null,
+      videoProductionVersionId: source.videoProductionVersionId,
       contract,
+      sourceLinked: source.link !== null,
     });
     if (projection.decisions.length > 0 || projection.rawConflictCount > 0) {
       sourceAuthority = {

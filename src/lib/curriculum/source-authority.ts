@@ -98,8 +98,36 @@ export const SOURCE_AUTHORITY_STATES = [
   "ADJUDICATED_CURRENT",
   "ADJUDICATED_BLUEPRINT",
   "ADJUDICATED_MIXED",
+  /**
+   * CORRECTION-2 — the comparison could not be made at all.
+   *
+   * SEPARATE FROM `NO_CONFLICT`, and the whole reason this state exists. "The
+   * two sides agree" and "we could not find out whether they agree" are
+   * different facts, and the second used to be reported as the first: a bank
+   * whose canonical source contract no longer parsed projected `NO_CONFLICT`,
+   * zero raw conflicts, provenance `APPROVED_CURRENT`, and went handoff-ready.
+   * An unknown source is never evidence of agreement.
+   */
+  "SOURCE_UNAVAILABLE",
 ] as const;
 export type SourceAuthorityState = (typeof SOURCE_AUTHORITY_STATES)[number];
+
+/**
+ * CORRECTION-2 — WHY the canonical Blueprint source could not be established.
+ *
+ * `SOURCE_CONTRACT_UNPARSEABLE` the bank's canonical production version exists
+ *                               but its `contractPayload` no longer parses, so
+ *                               there is no proposal to compare against.
+ * `SOURCE_LINK_INCOMPATIBLE`    the bank carries a durable link to a production
+ *                               version belonging to a DIFFERENT level or
+ *                               curriculum version. The lineage is ambiguous, so
+ *                               it is refused rather than silently stepped over.
+ */
+export const AUTHORITY_SOURCE_UNAVAILABLE_REASONS = [
+  "SOURCE_CONTRACT_UNPARSEABLE",
+  "SOURCE_LINK_INCOMPATIBLE",
+] as const;
+export type AuthoritySourceUnavailableReason = (typeof AUTHORITY_SOURCE_UNAVAILABLE_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
  * Value identity
@@ -284,6 +312,17 @@ export type SourceAuthorityProjection = {
   comparable: boolean;
   unprojectableReason: string | null;
   state: SourceAuthorityState;
+  /**
+   * CORRECTION-2 — is the contract this projection describes bound to the bank
+   * by a durable `VideoProductionAssessmentLink`?
+   *
+   * False means the projection is REPORTING against the level's working
+   * production version because the bank carries no link. That is a truthful
+   * comparison but not an adjudicable one: `resolveSourceAuthority` requires a
+   * real link, so a caller must never treat an unlinked projection as something
+   * it can decide.
+   */
+  sourceLinked: boolean;
   /** Every field-level disagreement that exists RIGHT NOW. Never reduced by a decision. */
   rawConflictCount: number;
   /** Raw conflicts covered by a decision that is in force. */
@@ -363,7 +402,19 @@ function deriveState(input: {
 
 export async function readSourceAuthority(
   tx: DbClient,
-  input: { assessmentVersionId: number; videoProductionVersionId: number | null; contract: VideoProductionContract | null },
+  input: {
+    assessmentVersionId: number;
+    videoProductionVersionId: number | null;
+    contract: VideoProductionContract | null;
+    /**
+     * CORRECTION-2 — set when the canonical source could not be ESTABLISHED, as
+     * opposed to not existing. Never conflated with "no proposal": see
+     * `SOURCE_UNAVAILABLE`.
+     */
+    sourceUnavailableReason?: AuthoritySourceUnavailableReason | null;
+    /** CORRECTION-2 — is the contract bound by a durable link? Defaults to false. */
+    sourceLinked?: boolean;
+  },
 ): Promise<SourceAuthorityProjection> {
   const activeRows = (await tx.sourceAuthorityResolution.findMany({
     where: { assessmentVersionId: input.assessmentVersionId, supersededAt: null },
@@ -373,7 +424,29 @@ export async function readSourceAuthority(
   const base = {
     assessmentVersionId: input.assessmentVersionId,
     videoProductionVersionId: input.videoProductionVersionId,
+    sourceLinked: input.sourceLinked === true,
   };
+  const unavailableReason = input.sourceUnavailableReason ?? null;
+
+  // CORRECTION-2 — the source could not be established. This is NOT the branch
+  // below: there, no proposal exists and there is genuinely nothing to disagree
+  // with; here a proposal exists and we cannot read it. Reporting the second as
+  // the first is exactly the fail-open the re-audit found, so the state says so
+  // and every readiness surface treats it as blocking.
+  if (unavailableReason !== null) {
+    const decisions = activeRows.map((row) => toView(row, "STALE", false));
+    return {
+      ...base,
+      comparable: false,
+      unprojectableReason: unavailableReason,
+      state: "SOURCE_UNAVAILABLE",
+      rawConflictCount: 0,
+      resolvedConflictCount: 0,
+      blockingConflictCount: 0,
+      decisions,
+      resolutionFingerprint: calculateAuthorityResolutionFingerprint(activeRows),
+    };
+  }
 
   // No contract means no proposal, so there is nothing to disagree with. Any
   // stored decision is reported as stale rather than silently dropped.
@@ -647,14 +720,61 @@ export async function resolveCanonicalAuthorityLink(
   tx: DbClient,
   assessmentVersionId: number,
 ): Promise<CanonicalAuthorityLink | null> {
+  // CORRECTION-2 (re-audit MUTANT Y) — the bank's own level identity, because
+  // "newest version" is only meaningful among versions that belong to the SAME
+  // level. `versionNumber` is unique per level, not globally, so without this
+  // the reduction below could compare v99 of a foreign level against v2 of this
+  // one and hand back an unrelated source contract as the canonical proposal.
+  const assessment = await tx.assessmentVersion.findUnique({
+    where: { id: assessmentVersionId },
+    select: { id: true, levelDefinitionId: true, curriculumVersionId: true },
+  });
+  if (!assessment) {
+    throw new AuthoringDomainError(
+      "AUTHORING_TARGET_NOT_FOUND",
+      `AssessmentVersion ${assessmentVersionId} does not exist`,
+    );
+  }
+
   const links = await tx.videoProductionAssessmentLink.findMany({
     where: { assessmentVersionId },
     select: {
       videoProductionVersionId: true,
-      videoProductionVersion: { select: { id: true, versionNumber: true } },
+      videoProductionVersion: {
+        select: { id: true, versionNumber: true, levelDefinitionId: true, curriculumVersionId: true },
+      },
     },
   });
   if (links.length === 0) return null;
+
+  // WHAT "COMPATIBLE" MEANS, read off the accepted schema rather than invented.
+  // `LevelDefinition` is keyed `(id, curriculumVersionId)` and every authoring
+  // aggregate — content, assessment, video production, and this table's own
+  // level foreign key — is scoped by that composite. A production version that
+  // does not share BOTH halves with the bank is not a proposal about this bank.
+  const incompatible = links.filter(
+    (link) =>
+      link.videoProductionVersion.levelDefinitionId !== assessment.levelDefinitionId ||
+      link.videoProductionVersion.curriculumVersionId !== assessment.curriculumVersionId,
+  );
+  if (incompatible.length > 0) {
+    // REFUSED, NOT FILTERED. An incompatible durable link is corruption, and the
+    // presence of corruption in the lineage is itself the finding: quietly
+    // picking one of the remaining rows would adjudicate against a source while
+    // hiding that the record disagrees with itself. §17 — fail closed.
+    throw new AuthoringDomainError(
+      "AUTHORING_ASSESSMENT_LINK_INVALID",
+      "this bank is linked to a video production version from another level or curriculum version, so its Blueprint lineage is ambiguous and cannot be used",
+      {
+        issues: incompatible.map((link) => ({
+          code: "AUTHORING_SOURCE_AUTHORITY_LINK_INCOMPATIBLE",
+          path: `videoProductionVersion[${link.videoProductionVersion.id}]`,
+          message: `VideoProductionVersion ${link.videoProductionVersion.id} belongs to level ${link.videoProductionVersion.levelDefinitionId} / curriculum version ${link.videoProductionVersion.curriculumVersionId}, but this bank belongs to level ${assessment.levelDefinitionId} / curriculum version ${assessment.curriculumVersionId}`,
+        })),
+      },
+    );
+  }
+
   const best = links.reduce((winner, candidate) => {
     if (candidate.videoProductionVersion.versionNumber !== winner.videoProductionVersion.versionNumber) {
       return candidate.videoProductionVersion.versionNumber > winner.videoProductionVersion.versionNumber
@@ -667,6 +787,131 @@ export async function resolveCanonicalAuthorityLink(
     videoProductionVersionId: best.videoProductionVersion.id,
     videoProductionVersionNumber: best.videoProductionVersion.versionNumber,
     candidateCount: links.length,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-2 — ONE source-authority truth, for EVERY reader
+ * ------------------------------------------------------------------ */
+
+export type CanonicalAuthoritySource = {
+  /** The canonical link, or null when the bank carries none. */
+  link: CanonicalAuthorityLink | null;
+  /** The production version this bank's authority axis is measured against. */
+  videoProductionVersionId: number | null;
+  /** Its revision, so every surface quotes the SAME expected revision. */
+  videoProductionRevision: number | null;
+  /** Null whenever the source could not be established — never "no conflict". */
+  contract: VideoProductionContract | null;
+  /** Non-null means FAIL CLOSED. */
+  unavailableReason: AuthoritySourceUnavailableReason | null;
+};
+
+/**
+ * WHICH contract is this bank's Blueprint proposal, and can it be read?
+ *
+ * THE SINGLE ANSWER, FOR ALL FOUR READERS. The independent re-audit found the
+ * dedicated staff GET still resolving its own source through
+ * `videoProductionLinks[0]`, and reporting `NO_CONFLICT` for a bank that owed
+ * eight decisions purely because an older link happened to sit first. The fix is
+ * not a second correct implementation — it is one function that
+ * `readAuthoringOverview`, the handoff projection and the staff GET all call, so
+ * a future reader cannot quietly grow a third rule.
+ *
+ * PRECEDENCE, IN ORDER:
+ *
+ *   1. An incompatible durable link anywhere on this bank → UNAVAILABLE. The
+ *      lineage disagrees with itself and nothing may be derived from it.
+ *   2. A compatible durable link → the canonical one (highest `versionNumber`
+ *      among the linked set, `id` only as an impossible-tie guard).
+ *   3. NO link at all → the level's working production version, which is the
+ *      rule `readAuthoringOverview` has always applied and the reason an
+ *      unlinked-but-conflicting bank still blocks today. It is a REPORTING
+ *      fallback only: `sourceLinked` is false and `resolveSourceAuthority`
+ *      still refuses, because an unpinned proposal is not adjudicable.
+ *   4. The chosen payload does not parse → UNAVAILABLE.
+ *
+ * NEVER A SILENT ZERO. Every failure above yields `unavailableReason`, and every
+ * caller is required to treat that as blocking rather than as agreement.
+ */
+export async function resolveAuthoritySource(
+  tx: DbClient,
+  assessmentVersionId: number,
+): Promise<CanonicalAuthoritySource> {
+  const empty = {
+    link: null,
+    videoProductionVersionId: null,
+    videoProductionRevision: null,
+    contract: null,
+  };
+
+  let link: CanonicalAuthorityLink | null;
+  try {
+    link = await resolveCanonicalAuthorityLink(tx, assessmentVersionId);
+  } catch (error) {
+    if (isAuthoringDomainError(error) && error.code === "AUTHORING_ASSESSMENT_LINK_INVALID") {
+      return { ...empty, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
+    }
+    throw error;
+  }
+
+  let videoRow: { id: number; revision: number; contractPayload: unknown } | null = null;
+  if (link) {
+    videoRow = await tx.videoProductionVersion.findUnique({
+      where: { id: link.videoProductionVersionId },
+      select: { id: true, revision: true, contractPayload: true },
+    });
+  } else {
+    // The unlinked reporting fallback — the accepted `pickWorkingVersion` rule
+    // (highest `versionNumber`; video has no `LevelResourceBinding` column), read
+    // here so the staff GET cannot disagree with the overview about a bank that
+    // was never linked.
+    const assessment = await tx.assessmentVersion.findUnique({
+      where: { id: assessmentVersionId },
+      select: { levelDefinitionId: true, curriculumVersionId: true },
+    });
+    if (!assessment) {
+      throw new AuthoringDomainError(
+        "AUTHORING_TARGET_NOT_FOUND",
+        `AssessmentVersion ${assessmentVersionId} does not exist`,
+      );
+    }
+    videoRow = await tx.videoProductionVersion.findFirst({
+      where: {
+        levelDefinitionId: assessment.levelDefinitionId,
+        curriculumVersionId: assessment.curriculumVersionId,
+      },
+      orderBy: [{ versionNumber: "desc" }, { id: "desc" }],
+      select: { id: true, revision: true, contractPayload: true },
+    });
+  }
+
+  // A link whose target row has vanished is the same ambiguity as an
+  // incompatible one: the record names a source that is not there.
+  if (link && !videoRow) return { ...empty, link, unavailableReason: "SOURCE_LINK_INCOMPATIBLE" };
+  // No production version at all is NOT a failure — there is genuinely no
+  // proposal for this bank to disagree with, which is what §14 protects.
+  if (!videoRow) return { ...empty, link: null, unavailableReason: null };
+
+  let contract: VideoProductionContract;
+  try {
+    contract = parseContractPayload(videoRow.contractPayload);
+  } catch {
+    return {
+      link,
+      videoProductionVersionId: videoRow.id,
+      videoProductionRevision: videoRow.revision,
+      contract: null,
+      unavailableReason: "SOURCE_CONTRACT_UNPARSEABLE",
+    };
+  }
+
+  return {
+    link,
+    videoProductionVersionId: videoRow.id,
+    videoProductionRevision: videoRow.revision,
+    contract,
+    unavailableReason: null,
   };
 }
 
@@ -782,11 +1027,23 @@ export async function resolveSourceAuthority(
       );
     }
 
-    const contract = parseContractPayload(videoRow.contractPayload);
+    // CORRECTION-2 — an unreadable proposal is refused as its own condition
+    // rather than escaping as a raw parse error. A caller must be told that the
+    // SOURCE cannot be read, not handed a 500.
+    let contract: VideoProductionContract;
+    try {
+      contract = parseContractPayload(videoRow.contractPayload);
+    } catch {
+      throw new AuthoringDomainError(
+        "AUTHORING_SOURCE_CONTRACT_UNREADABLE",
+        "the linked video production contract cannot be parsed, so there is no Blueprint proposal to adjudicate against",
+      );
+    }
     const before = await readSourceAuthority(tx, {
       assessmentVersionId: assessment.id,
       videoProductionVersionId: videoRow.id,
       contract,
+      sourceLinked: true,
     });
     if (!before.comparable) {
       throw new AuthoringDomainError(
@@ -985,6 +1242,7 @@ export async function resolveSourceAuthority(
       assessmentVersionId: assessment.id,
       videoProductionVersionId: videoRow.id,
       contract,
+      sourceLinked: true,
     });
 
     await tx.auditLog.create({
