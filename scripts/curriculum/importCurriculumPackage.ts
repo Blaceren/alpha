@@ -11,12 +11,12 @@
  * published, activated or enrolled by this command.
  */
 import fs from "node:fs";
-import path from "node:path";
 import { validateCurriculumPackage } from "../../src/lib/curriculum/package/validate";
 import { importCurriculumPackage, type ImportSummary } from "../../src/lib/curriculum/package/import";
-
-/** Paths CV-1 refuses to write to under any circumstance. */
-const FORBIDDEN_DB_SUBSTRINGS = ["/runtime/ata-dev", "/runtime/ata-suite", "ata-dev.sqlite", "ata-prod"];
+import {
+  assertSafeDatabaseTarget,
+  assertTargetIdentityUnchanged,
+} from "../../src/lib/curriculum/protected-database";
 
 type Args = {
   packagePath: string;
@@ -47,34 +47,16 @@ function parseArgs(argv: string[]): Args {
 
 /**
  * Refuse anything that is not an explicit local SQLite file, and anything that
- * resolves (including through a symlink) into the live runtime.
+ * IS — or aliases — a protected runtime database.
+ *
+ * The decision now lives in `src/lib/curriculum/protected-database.ts`, where it
+ * is shared with the editorial-overlay importer so both tools refuse the same
+ * set for the same reasons. This wrapper is kept because it is the name the
+ * accepted regression suite calls, and because a void-returning assertion reads
+ * correctly at its two call sites.
  */
 export function assertSafeDatabaseUrl(url: string): void {
-  if (!url.startsWith("file:")) {
-    throw new Error("refusing non-file database URL: only local synthetic SQLite targets are allowed");
-  }
-  const raw = url.slice("file:".length);
-  if (!path.isAbsolute(raw)) {
-    throw new Error("refusing relative database path: pass an absolute path");
-  }
-  const candidates = new Set([path.resolve(raw)]);
-  try {
-    // Resolve symlinks/aliases; also resolve the parent for not-yet-created files.
-    candidates.add(fs.realpathSync(raw));
-  } catch {
-    try {
-      candidates.add(path.join(fs.realpathSync(path.dirname(raw)), path.basename(raw)));
-    } catch {
-      /* target directory does not exist yet — the resolved path above is enough */
-    }
-  }
-  for (const candidate of candidates) {
-    for (const forbidden of FORBIDDEN_DB_SUBSTRINGS) {
-      if (candidate.includes(forbidden)) {
-        throw new Error(`refusing to operate on a protected database path (${forbidden})`);
-      }
-    }
-  }
+  assertSafeDatabaseTarget(url);
 }
 
 async function main(): Promise<void> {
@@ -93,11 +75,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  assertSafeDatabaseUrl(args.database);
-  process.env.DATABASE_URL = args.database;
+  // Open the path the guard actually inspected, never the raw argument, and
+  // re-verify identity immediately before connecting.
+  const target = assertSafeDatabaseTarget(args.database);
+  assertTargetIdentityUnchanged(target);
+  process.env.DATABASE_URL = target.url;
 
   const { PrismaClient } = await import("@prisma/client");
-  const db = new PrismaClient({ datasources: { db: { url: args.database } } });
+  const db = new PrismaClient({ datasources: { db: { url: target.url } } });
   try {
     const result = await importCurriculumPackage(raw, { db, dryRun: args.dryRun });
     if (!result.ok) {

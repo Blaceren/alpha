@@ -93,6 +93,28 @@ const EXEMPT: Record<string, string> = {
   "src/lib/curriculum/authoring-version-clone.ts":
     "creates a NEW aggregate plus its children atomically at revision 1 — a " +
     "creation, which G0 places outside the boundary; it mutates no existing child",
+  // PHASE-G2 — the editorial overlay importer.
+  //
+  // The boundary exists to make a LIVE editorial mutation safe: it bumps the
+  // aggregate's revision and records the actor as the latest substantive author.
+  // Both of those are exactly wrong here. This module transports evidence that
+  // was produced elsewhere, so it writes the revision the source recorded and
+  // preserves the source's authors and timestamps verbatim; running it through
+  // `bumpAggregate` would increment a revision nobody edited and stamp the
+  // importing operator over the historical author — manufacturing the very
+  // provenance the four-eyes model exists to protect.
+  //
+  // What keeps it safe instead, asserted by `curriculumEditorialOverlay`:
+  //   • it only moves rows at the structural baseline (draft, no author, no
+  //     submission, no approval); anything already carrying DIFFERENT editorial
+  //     truth is a refusal, not an overwrite (F2–F4);
+  //   • the whole apply is one transaction that rolls back completely (G1);
+  //   • it publishes nothing and binds nothing (E6, J1);
+  //   • it is a CLI/bootstrap path reachable from no HTTP route (asserted below).
+  "src/lib/curriculum/editorial-overlay/import.ts":
+    "the editorial overlay importer — transports historical evidence verbatim, " +
+    "so it must NOT bump revisions or restamp authors the way the boundary does; " +
+    "reachable from no HTTP route (asserted below)",
 };
 
 function walk(dir: string, out: string[] = []): string[] {
