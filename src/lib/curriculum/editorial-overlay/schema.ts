@@ -1,53 +1,85 @@
 /**
- * PHASE-G2 TRANSPORT — the Editorial Overlay v1 format.
+ * PHASE-G2 TRANSPORT — the Editorial Overlay v2 format.
  *
- * WHAT PROBLEM THIS SOLVES. The accepted CurriculumPackage transports STRUCTURE:
- * modules, levels, content bodies, assessment banks, questions and the binding
- * baseline. It has no representation for the EDITORIAL layer that a review phase
- * produces — who authored a version, who approved it and when, which video
- * contracts were signed off, which competing sources a human adjudicated, and
- * which review notes are still open. Importing the package therefore reproduces
- * the pre-review baseline exactly and leaves every candidate `editorialState =
- * 'draft'`, which `publishContentVersion` refuses.
+ * WHAT PROBLEM THIS SOLVES. The accepted CurriculumPackage transports the
+ * PRE-EDITORIAL baseline: modules, levels, the content bodies and banks as they
+ * stood when the structural file was cut. It has no representation for what a
+ * review phase then produces — neither the EDITS the reviewer made nor the
+ * EVIDENCE that they made them.
  *
- * An overlay carries that missing layer and nothing else. It is applied AFTER a
- * structural import, onto the curriculum that import created.
+ * WHY v2 AND NOT v1. Overlay v1 carried only the evidence. It assumed the target's
+ * structural rows were already the bytes the reviewer approved, and for the
+ * accepted corpus that assumption is false: the review phase rewrote 77 of 79
+ * content bodies and changed 164 of 236 correct answers after the baseline was
+ * cut. A v1 overlay applied to a correctly-imported target therefore produced
+ * content marked `approved`, signed by the reviewer, at the reviewer's timestamp —
+ * over the pre-review skeleton. `publishContentVersion` then accepted it.
  *
- * WHY A SEPARATE FORMAT AND NOT MORE PACKAGE FIELDS. The package's
- * `contentFingerprint` is the anchor proving a target's structure came from a
- * specific reviewed file. Extending the package schema changes that fingerprint
- * and invalidates every artifact, validator and roundtrip test that depends on
- * it. Two formats, each with one job, keeps the proven half untouched.
+ * That is not a bug that can be fixed inside v1's shape: v1 has nowhere to put the
+ * reviewed bytes. So the discriminator moves. `ata.editorial-overlay/1` is refused
+ * outright by this build rather than reinterpreted, because silently reading an
+ * old artifact under new rules would mean treating "no payload" as "payload
+ * unchanged" — the precise mistake being corrected.
  *
- * EVERY IDENTITY IN HERE IS SEMANTIC. Not one database id is portable between
- * the editorial checkpoint and a live target: their id spaces overlap
- * everywhere, including `User`, where checkpoint id 2 is the reviewer and live id
- * 2 is an unrelated support account. Reusing raw ids would attribute a human's
- * approvals to a stranger. So versions are addressed by
+ * THREE-WAY, NOT TWO-WAY. Every entry that the structural package also carries
+ * declares BOTH hashes:
+ *
+ *   expectedStructuralHash — what the target must hold if it has had the
+ *                            structural import and nothing else;
+ *   acceptedReviewedHash   — what the reviewer approved, and what the target must
+ *                            hold when the import is finished.
+ *
+ * The importer then has exactly three answers and no fourth:
+ *
+ *   target == expectedStructuralHash  → write the reviewed payload;
+ *   target == acceptedReviewedHash    → already imported, unchanged;
+ *   anything else                     → CONTRADICTION, refuse before any write.
+ *
+ * There is no "overwrite whatever is there". A target holding a third state is a
+ * fact this import has no authority to erase.
+ *
+ * EVERY IDENTITY IN HERE IS SEMANTIC. Not one database id is portable between the
+ * editorial checkpoint and a live target: their id spaces overlap everywhere,
+ * including `User`, where checkpoint id 2 is the reviewer and live id 2 is an
+ * unrelated support account. Versions are addressed by
  * `(level stableCode, versionNumber)`, questions by `stableKey`, principals by
- * canonical address, and authority decisions by
- * `(assessment, questionIndex, field)` — every one of which is backed by an
- * existing unique index rather than by convention.
+ * canonical address, authority decisions by `(assessment, questionIndex, field)` —
+ * every one backed by an existing unique index rather than by convention.
+ *
+ * LEVELS CARRY THEIR STRUCTURAL IDENTITY. A stableCode is only a name. `levels`
+ * binds each code to the levelNumber, module and type the package gives it, so a
+ * target where two levels have swapped codes — same set, wrong rows — fails
+ * preflight instead of receiving one level's approval on another's content.
  *
  * STRICTNESS IS DELIBERATE. `z.strictObject` throughout: an unknown field in an
  * artifact that carries approval evidence is a hard error, never a silent drop.
  *
- * NO SECRETS. No password hash, no token, no credential of any kind travels in
- * an overlay. Principals are described by address and role; authentication
+ * NO SECRETS. No password hash, no token, no credential of any kind travels in an
+ * overlay. Principals are described by address, role and KIND; authentication
  * material is never read from the source and never written to the artifact.
  *
- * `updatedAt` IS DELIBERATELY ABSENT. Every transported model declares it
- * `@updatedAt`, which means the ORM owns it: it records when a row was last
- * written IN THIS DATABASE. After an import that genuinely is now, and carrying
- * the source's value would assert that a row nobody has touched here was last
- * written elsewhere. `createdAt` and the editorial instants — `lastAuthoredAt`,
- * `submittedAt`, `approvedAt`, `decidedAt`, note `createdAt` — are history and
- * ARE carried; `updatedAt` is storage bookkeeping and is not.
+ * `updatedAt` IS DELIBERATELY ABSENT — Prisma's `@updatedAt` owns it and it records
+ * when a row was last written IN THIS DATABASE. So are `status`/`publishedAt`/
+ * `archivedAt` for versions the package already carries: PUBLICATION is the
+ * target's own lifecycle and this transport never touches it.
+ *
+ * Everything that is HISTORY is carried, including the version's own `createdAt`.
+ * A structural import stamps the instant it ran, so an imported version would
+ * otherwise read as created today and submitted for review a week earlier — a
+ * chronology that is not untidy but false. See `editorial-overlay/payload.ts` for
+ * the full statement of what the reviewed hash covers and why `createdAt` sits
+ * outside it: it is history, but it is not reviewed CONTENT.
  */
 import { z } from "zod";
 
-export const EDITORIAL_OVERLAY_SCHEMA_VERSION = "ata.editorial-overlay/1" as const;
-export const EDITORIAL_OVERLAY_IMPORTER_VERSION = 1 as const;
+export const EDITORIAL_OVERLAY_SCHEMA_VERSION = "ata.editorial-overlay/2" as const;
+export const EDITORIAL_OVERLAY_IMPORTER_VERSION = 2 as const;
+
+/**
+ * Refused by name, so the failure says why rather than reading as a shape error.
+ * v1 is not a subset of v2: it asserts approval without asserting content.
+ */
+export const REJECTED_OVERLAY_SCHEMA_VERSIONS: readonly string[] = ["ata.editorial-overlay/1"];
 
 const sha256 = z
   .string()
@@ -118,13 +150,51 @@ const versionRefSchema = z.strictObject({
 export type OverlayVersionRef = z.infer<typeof versionRefSchema>;
 
 /**
- * `update` targets a row the structural import already created.
+ * `update` targets a row the structural import already created — so it declares
+ * the baseline that row must be in.
  * `create` is for a version the package does not carry — an editorial successor
- * authored after the structural baseline was cut. The distinction is declared
- * rather than inferred so an importer never invents a row because a lookup
- * happened to miss.
+ * authored after the structural baseline was cut — so there is no baseline to
+ * expect and the row's creation facts travel with it.
  */
 const applyMode = z.enum(["update", "create"]);
+
+/**
+ * PUBLICATION facts, carried only when the overlay itself creates the row.
+ *
+ * They are absent for `update` on purpose: publication is the target's own
+ * lifecycle, this transport never touches it, and an operator publishes content
+ * AFTER the import. Carrying them would either fight that or make a replay fail
+ * the moment it happened.
+ */
+const creationSchema = z.strictObject({
+  status: z.enum(["draft", "published", "archived"]),
+  publishedAt: isoTimestamp.nullable(),
+  archivedAt: isoTimestamp.nullable(),
+});
+
+/* ------------------------------------------------------------------ *
+ * level structural identity
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the package says a level IS, not merely what it is called.
+ *
+ * Checked against the target before anything is written. A target whose level
+ * codes are individually present but attached to the wrong rows — the swap that
+ * the previous format accepted — fails here.
+ */
+const levelIdentitySchema = z.strictObject({
+  level: stableCode,
+  levelNumber: z.number().int().min(1),
+  moduleCode: z.string().trim().min(1).max(120),
+  moduleNumber: z.number().int().min(1),
+  type: z.string().trim().min(1).max(40),
+});
+export type OverlayLevelIdentity = z.infer<typeof levelIdentitySchema>;
+
+/* ------------------------------------------------------------------ *
+ * content
+ * ------------------------------------------------------------------ */
 
 const contentLocalizationSchema = z.strictObject({
   locale: z.string().trim().min(2).max(35),
@@ -136,29 +206,48 @@ const contentLocalizationSchema = z.strictObject({
   body: z.unknown(),
 });
 
+/** The reviewed learner payload. Always present — this is the correction. */
+const contentPayloadSchema = z.strictObject({
+  videoDurationSeconds: z.number().int().positive().nullable(),
+  changeNotes: z.string().nullable(),
+  localizations: z.array(contentLocalizationSchema).min(1),
+});
+
 const contentEntrySchema = z
   .strictObject({
     level: stableCode,
     versionNumber,
     mode: applyMode,
     editorial: editorialEvidenceSchema,
-    /** Only for `create`: the payload the structural package never carried. */
-    payload: z
-      .strictObject({
-        status: z.enum(["draft", "published", "archived"]),
-        videoDurationSeconds: z.number().int().positive().nullable(),
-        changeNotes: z.string().nullable(),
-        createdAt: isoTimestamp,
-        publishedAt: isoTimestamp.nullable(),
-        archivedAt: isoTimestamp.nullable(),
-        localizations: z.array(contentLocalizationSchema).min(1),
-      })
-      .nullable(),
+    /** Null only for `create`: there is no package row to have a baseline. */
+    expectedStructuralHash: sha256.nullable(),
+    /** What the target must hash to when this import is done. */
+    acceptedReviewedHash: sha256,
+    /**
+     * When this VERSION came into being, in the editorial history.
+     *
+     * Carried for `update` as well as `create`. A structural import stamps the
+     * instant it ran, so without this a transported version reads as created
+     * today and submitted for review a week ago — a chronology that is not merely
+     * untidy but false. It is history, exactly like `submittedAt`, and it is not
+     * part of the reviewed payload hash because it is not reviewed content.
+     */
+    createdAt: isoTimestamp,
+    payload: contentPayloadSchema,
+    creation: creationSchema.nullable(),
   })
-  .refine((entry) => (entry.mode === "create") === (entry.payload !== null), {
-    message: "mode=create requires a payload and mode=update forbids one",
-    path: ["payload"],
+  .refine((entry) => (entry.mode === "create") === (entry.creation !== null), {
+    message: "mode=create requires creation facts and mode=update forbids them",
+    path: ["creation"],
+  })
+  .refine((entry) => (entry.mode === "update") === (entry.expectedStructuralHash !== null), {
+    message: "mode=update requires an expectedStructuralHash and mode=create forbids one",
+    path: ["expectedStructuralHash"],
   });
+
+/* ------------------------------------------------------------------ *
+ * assessment
+ * ------------------------------------------------------------------ */
 
 const questionLocalizationSchema = z.strictObject({
   locale: z.string().trim().min(2).max(35),
@@ -175,8 +264,18 @@ const questionSchema = z.strictObject({
   status: z.enum(["active", "disabled"]),
   options: z.unknown().nullable(),
   correctAnswer: z.unknown(),
+  /** Row bookkeeping, used only when the overlay creates the question. */
   createdAt: isoTimestamp,
   localizations: z.array(questionLocalizationSchema),
+});
+
+/** The reviewed bank. Always present — this is the correction. */
+const assessmentPayloadSchema = z.strictObject({
+  passPercent: z.number().int().min(1).max(100),
+  maxAttempts: z.number().int().positive().nullable(),
+  showExplanation: z.boolean(),
+  changeNotes: z.string().nullable(),
+  questions: z.array(questionSchema).min(1),
 });
 
 const assessmentEntrySchema = z
@@ -195,23 +294,20 @@ const assessmentEntrySchema = z
      * ancestor; the importer resolves what it is told.
      */
     predecessor: versionRefSchema.nullable(),
-    payload: z
-      .strictObject({
-        status: z.enum(["draft", "published", "archived"]),
-        passPercent: z.number().int().min(1).max(100),
-        maxAttempts: z.number().int().positive().nullable(),
-        showExplanation: z.boolean(),
-        changeNotes: z.string().nullable(),
-        createdAt: isoTimestamp,
-        publishedAt: isoTimestamp.nullable(),
-        archivedAt: isoTimestamp.nullable(),
-        questions: z.array(questionSchema).min(1),
-      })
-      .nullable(),
+    expectedStructuralHash: sha256.nullable(),
+    acceptedReviewedHash: sha256,
+    /** See the content entry: version creation is history, not bookkeeping. */
+    createdAt: isoTimestamp,
+    payload: assessmentPayloadSchema,
+    creation: creationSchema.nullable(),
   })
-  .refine((entry) => (entry.mode === "create") === (entry.payload !== null), {
-    message: "mode=create requires a payload and mode=update forbids one",
-    path: ["payload"],
+  .refine((entry) => (entry.mode === "create") === (entry.creation !== null), {
+    message: "mode=create requires creation facts and mode=update forbids them",
+    path: ["creation"],
+  })
+  .refine((entry) => (entry.mode === "update") === (entry.expectedStructuralHash !== null), {
+    message: "mode=update requires an expectedStructuralHash and mode=create forbids one",
+    path: ["expectedStructuralHash"],
   })
   .refine(
     (entry) => entry.predecessor === null || entry.predecessor.level === entry.level,
@@ -220,6 +316,10 @@ const assessmentEntrySchema = z
       path: ["predecessor"],
     },
   );
+
+/* ------------------------------------------------------------------ *
+ * video production
+ * ------------------------------------------------------------------ */
 
 /**
  * A video production contract as the reviewer approved it.
@@ -267,6 +367,10 @@ const videoAssessmentLinkSchema = z.strictObject({
   linkedAt: isoTimestamp,
 });
 
+/* ------------------------------------------------------------------ *
+ * source authority
+ * ------------------------------------------------------------------ */
+
 /**
  * One historical adjudication.
  *
@@ -307,16 +411,27 @@ const sourceAuthoritySchema = z.strictObject({
   supersededBy: principalRef.nullable(),
 });
 
+/* ------------------------------------------------------------------ *
+ * review notes
+ * ------------------------------------------------------------------ */
+
 /**
  * A review note.
  *
  * `EditorialReviewNote` has no unique index, so replay cannot be made idempotent
- * by natural key. `noteKey` is the overlay's own deterministic identity — a hash
- * over target, revision, author, timestamp and body — and it is what lets a
- * second apply recognise a note it already wrote instead of duplicating it.
+ * by natural key. v1 hashed the note's own BODY into its key, which made a
+ * target note with the same identity but a different body look like a different
+ * note — so a replay silently wrote a second one instead of reporting a
+ * contradiction.
+ *
+ * v2 splits the two questions. `noteIdentity` is WHICH note: target, revision,
+ * path, author, instant, and an ordinal that only moves when a single author
+ * really did write two notes at the same millisecond on the same target. The
+ * body is then COMPARED against the note carrying that identity — equal is
+ * `unchanged`, different is a contradiction, and neither creates a duplicate.
  */
 const reviewNoteSchema = z.strictObject({
-  noteKey: sha256,
+  noteIdentity: sha256,
   target: z.strictObject({
     kind: z.enum(["content", "assessment", "video"]),
     level: stableCode,
@@ -324,6 +439,8 @@ const reviewNoteSchema = z.strictObject({
   }),
   targetRevision: revision,
   path: z.string().nullable(),
+  /** Disambiguates notes identical on every other identity axis. */
+  ordinal: z.number().int().min(0),
   body: z.string().trim().min(1).max(4000),
   author: principalRef,
   createdAt: isoTimestamp,
@@ -331,22 +448,38 @@ const reviewNoteSchema = z.strictObject({
   resolvedBy: principalRef.nullable(),
 });
 
+/* ------------------------------------------------------------------ *
+ * principals
+ * ------------------------------------------------------------------ */
+
 /**
  * A principal the overlay's evidence refers to.
  *
- * `provisionIfMissing` is how an overlay declares that an identity may be
- * created in the target when it is absent. It is scoped to the addresses named
- * here and to nothing else: an importer may never invent a principal an overlay
- * did not declare, and may never substitute a different account — not the
- * operator, not an admin, not a live user whose integer id happens to collide.
+ * `kind` is DECLARED, not inferred. A historical `process` identity is a named
+ * role in a review that must never be able to act: matching one against an
+ * existing account requires that account to be non-loginable, and provisioning
+ * one creates it blocked. Inferring that from an address suffix would mean the
+ * safety property depended on a naming convention an artifact could simply not
+ * follow.
+ *
+ * `provisionIfMissing` is how an overlay declares that an identity may be created
+ * in the target when it is absent. It is scoped to the addresses named here and to
+ * nothing else: an importer may never invent a principal an overlay did not
+ * declare, and may never substitute a different account — not the operator, not an
+ * admin, not a live user whose integer id happens to collide.
  */
 const principalSchema = z.strictObject({
   ref: principalRef,
   displayName: z.string().trim().min(1).max(200),
+  kind: z.enum(["process", "human"]),
   role: z.enum(["user", "mentor", "support", "admin"]),
   staffRole: z.string().trim().min(1).max(64).nullable(),
   provisionIfMissing: z.boolean(),
 });
+
+/* ------------------------------------------------------------------ *
+ * binding
+ * ------------------------------------------------------------------ */
 
 /**
  * What this overlay may be applied to.
@@ -355,6 +488,10 @@ const principalSchema = z.strictObject({
  * VALID overlay pointed at the WRONG database fails just as loudly as a
  * malformed one: identity of the file and identity of the contents are separate
  * questions and both get asked.
+ *
+ * `acceptedReviewedRootHash` is the v2 addition: one digest over every
+ * per-entity accepted hash, so the root of the artifact commits to the reviewed
+ * bytes and not merely to the paperwork about them.
  */
 const bindingSchema = z.strictObject({
   curriculumCode: z.string().trim().min(1).max(80),
@@ -366,6 +503,7 @@ const bindingSchema = z.strictObject({
   sourceBackendCommit: gitObjectId,
   sourceBackendTree: gitObjectId,
   blueprintSourceDocumentSha256: sha256,
+  acceptedReviewedRootHash: sha256,
 });
 
 export const editorialOverlaySchema = z.strictObject({
@@ -376,6 +514,7 @@ export const editorialOverlaySchema = z.strictObject({
   /** Evidence only. Never part of identity, matching or idempotency. */
   generatedAt: isoTimestamp,
   binding: bindingSchema,
+  levels: z.array(levelIdentitySchema).min(1),
   principals: z.array(principalSchema).min(1),
   content: z.array(contentEntrySchema),
   assessments: z.array(assessmentEntrySchema),
@@ -388,6 +527,7 @@ export const editorialOverlaySchema = z.strictObject({
 export type EditorialOverlay = z.infer<typeof editorialOverlaySchema>;
 export type OverlayContentEntry = z.infer<typeof contentEntrySchema>;
 export type OverlayAssessmentEntry = z.infer<typeof assessmentEntrySchema>;
+export type OverlayQuestion = z.infer<typeof questionSchema>;
 export type OverlayVideoProduction = z.infer<typeof videoProductionSchema>;
 export type OverlayVideoAssessmentLink = z.infer<typeof videoAssessmentLinkSchema>;
 export type OverlaySourceAuthority = z.infer<typeof sourceAuthoritySchema>;

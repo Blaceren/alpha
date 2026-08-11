@@ -51,6 +51,7 @@ export type ProtectedDatabaseErrorCode =
   | "TARGET_IS_SYMLINK"
   | "TARGET_PARENT_UNRESOLVABLE"
   | "TARGET_PROTECTED"
+  | "PROTECTED_IDENTITY_UNRESOLVED"
   | "TARGET_IDENTITY_CHANGED";
 
 export class ProtectedDatabaseError extends Error {
@@ -113,10 +114,27 @@ export type ProtectedDatabase = {
   declaredPath: string;
   /** realpath when it could be resolved, else the normalised absolute path. */
   resolvedPath: string;
-  /** Present only when the file exists. Absent protected files are still guarded lexically. */
+  /** Present only when the file exists AND could be identified. */
   identity: { dev: number; ino: number } | null;
   /** Where this entry came from, for diagnostics. */
   source: "default" | "DATABASE_URL" | "ATA_PROTECTED_DATABASES" | "runtime-config";
+  /**
+   * Was this entry EXPLICITLY configured for this deployment, as opposed to the
+   * conventional floor?
+   *
+   * The distinction only matters when identity cannot be established. A
+   * conventional path that simply is not mounted on this host is nothing to worry
+   * about. A path the operator or the deployment named, which exists but cannot
+   * be identified, is: the guard then cannot tell an alias of it from an ordinary
+   * file, and that is precisely the gap a hardlink walks through.
+   */
+  authoritative: boolean;
+  /**
+   * Identity could not be established, and NOT because the file is absent.
+   * Permission denied, a broken link, an I/O error — anything that leaves the
+   * question open rather than answered "no such file".
+   */
+  unresolved: boolean;
 };
 
 function fileUrlToPath(value: string): string | null {
@@ -125,12 +143,26 @@ function fileUrlToPath(value: string): string | null {
   return raw.length > 0 ? raw : null;
 }
 
-function identityOf(target: string): { dev: number; ino: number } | null {
+/**
+ * Identity, and — when there is none — WHY there is none.
+ *
+ * CORRECTION-1. The previous version swallowed every error into `null`, which
+ * made "this file does not exist" and "I am not allowed to look at this file"
+ * the same answer. They are not: the second means an alias of a protected
+ * database can be handed to the guard and compared against nothing. `ENOENT` is
+ * an answer; everything else is an open question, and an open question about a
+ * database the deployment explicitly named is refused rather than assumed benign.
+ */
+function resolveIdentity(target: string): {
+  identity: { dev: number; ino: number } | null;
+  unresolved: boolean;
+} {
   try {
     const stat = fs.statSync(target);
-    return { dev: stat.dev, ino: stat.ino };
-  } catch {
-    return null;
+    return { identity: { dev: stat.dev, ino: stat.ino }, unresolved: false };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return { identity: null, unresolved: code !== "ENOENT" };
   }
 }
 
@@ -153,11 +185,14 @@ function pushProtected(
   // A default entry that is re-discovered from the environment keeps the more
   // specific source label, so diagnostics say where protection actually came from.
   if (existing && existing.source !== "default") return;
+  const resolved = resolveIdentity(declaredPath);
   into.set(resolvedPath, {
     declaredPath,
     resolvedPath,
-    identity: identityOf(declaredPath),
+    identity: resolved.identity,
     source,
+    authoritative: source !== "default",
+    unresolved: resolved.unresolved,
   });
 }
 
@@ -364,9 +399,33 @@ export function assertSafeDatabaseTarget(
   }
   const absolutePath = path.join(resolvedParent, path.basename(normalised));
 
+  // ---- 0. FAIL CLOSED where protection could not be established.
+  //
+  // CORRECTION-1. An EXPLICITLY configured protected database whose identity
+  // cannot be resolved — it exists, or may exist, but cannot be stat'ed — leaves
+  // the inode comparison below with nothing to compare against. Every alias of
+  // that database then reads as an ordinary file: a hardlink under an innocent
+  // name passes, which is exactly the mutant the audit demonstrated.
+  //
+  // The refusal is scoped to AUTHORITATIVE entries on purpose. The conventional
+  // floor names runtime databases that legitimately do not exist on most hosts,
+  // and refusing every import because a DEV path is absent would brick ordinary
+  // work while protecting nothing — an absent file has no alias. What is refused
+  // is the case where the deployment named a database and the answer came back
+  // "cannot tell".
+  const unresolvedProtected = protectedSet.filter((candidate) => candidate.authoritative && candidate.unresolved);
+  if (unresolvedProtected.length > 0) {
+    const named = unresolvedProtected.map((candidate) => candidate.declaredPath).join(", ");
+    throw new ProtectedDatabaseError(
+      "PROTECTED_IDENTITY_UNRESOLVED",
+      `refusing to operate while a configured protected database cannot be identified (${named}): its aliases cannot be recognised, so no target can be proven safe`,
+      { protectedPath: unresolvedProtected[0].declaredPath, rule: "protected-identity-unresolved" },
+    );
+  }
+
   // ---- 1. identity. Catches symlink-through-ancestor, hardlink, bind mount,
   //         `../` traversal, a second mount point and any alternate name.
-  const identity = existed ? identityOf(absolutePath) : null;
+  const identity = existed ? resolveIdentity(absolutePath).identity : null;
   if (identity) {
     for (const candidate of protectedSet) {
       if (

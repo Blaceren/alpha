@@ -252,6 +252,50 @@ check("6 the sealed package importer is reachable from NO HTTP route", () => {
   assert.deepEqual(offenders.map(relative), [], "the importer must stay a CLI/bootstrap path");
 });
 
+/*
+ * PHASE-G2 CORRECTION-1. The overlay importer's EXEMPT entry says it is reachable
+ * from no HTTP route; before this check that was a claim in a comment rather than
+ * a fact anyone verified, and the exemption is what lets that one module write
+ * approval evidence without bumping a revision or restamping an author. It now
+ * matters more, not less: since the correction the same module also writes learner
+ * payload. So the claim is asserted — from the route tree, and from the whole
+ * `src` tree, because a server module that re-exported it would put the exempt
+ * primitive one import away from a route.
+ */
+check("6b the EXEMPT editorial-overlay importer is reachable from NO HTTP route", () => {
+  const OVERLAY_IMPORT = "curriculum/editorial-overlay/import";
+  const routeOffenders = walk(path.join(ROOT, "src/app")).filter((file) =>
+    fs.readFileSync(file, "utf8").includes(OVERLAY_IMPORT),
+  );
+  assert.deepEqual(
+    routeOffenders.map(relative),
+    [],
+    "the editorial overlay importer must stay a CLI/bootstrap path",
+  );
+
+  const reExporters = sourceFiles
+    .filter((file) => relative(file) !== "src/lib/curriculum/editorial-overlay/import.ts")
+    .filter((file) => fs.readFileSync(file, "utf8").includes(OVERLAY_IMPORT));
+  assert.deepEqual(
+    reExporters.map(relative),
+    [],
+    "nothing under src/ may re-export the exempt historical-import primitive",
+  );
+
+  // And the exemption itself must stay one named file, never a directory or a
+  // prefix that a future module could quietly fall under.
+  assert.ok(
+    "src/lib/curriculum/editorial-overlay/import.ts" in EXEMPT,
+    "the overlay importer must be exempt by exact path",
+  );
+  const overlayExemptions = Object.keys(EXEMPT).filter((key) => key.includes("editorial-overlay"));
+  assert.deepEqual(
+    overlayExemptions,
+    ["src/lib/curriculum/editorial-overlay/import.ts"],
+    "exactly one editorial-overlay module may be exempt",
+  );
+});
+
 check("7 no authoring route accepts a server-authority field from the caller", () => {
   const forbidden = [
     "actorId", "approvedBy", "approvedAt", "submittedBy", "publishedAt",

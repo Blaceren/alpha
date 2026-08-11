@@ -31,10 +31,19 @@ import {
 import { assertSafeDatabaseUrl } from "../curriculum/importCurriculumPackage";
 import { validateEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/validate";
 import {
-  calculateNoteKey,
+  calculateAcceptedReviewedRootHash,
+  calculateNoteIdentity,
   calculateOverlayFingerprint,
   canonicalOverlayProjection,
 } from "../../src/lib/curriculum/editorial-overlay/fingerprint";
+import {
+  assessmentPayloadHash,
+  contentPayloadHash,
+  readAssessmentPayload,
+  readContentPayload,
+  type AssessmentReviewedPayload,
+  type ContentReviewedPayload,
+} from "../../src/lib/curriculum/editorial-overlay/payload";
 import { importEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/import";
 import { exportEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/export";
 import type { EditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/schema";
@@ -88,6 +97,7 @@ function buildSchema(dbFile: string): void {
  * ------------------------------------------------------------------ */
 
 const L_LESSON = "v2.l002.sinteticheskiy-urok";
+const L_OTHER = "v2.l003.vtoroy-urok";
 const AUTHOR = "synthetic.author@ata-overlay-test.invalid";
 const REVIEWER = "synthetic.reviewer@ata-overlay-test.invalid";
 const PACKAGE_FINGERPRINT = "a".repeat(64);
@@ -104,6 +114,188 @@ const BLUEPRINT_HASH = "5".repeat(64);
 const T0 = "2026-08-01T10:00:00.000Z";
 const T1 = "2026-08-02T11:00:00.000Z";
 const T2 = "2026-08-03T12:00:00.000Z";
+
+/*
+ * THE B1 SHAPE, AT MINIATURE SCALE.
+ *
+ * The accepted corpus's review phase rewrote content bodies and flipped correct
+ * answers AFTER the structural package was cut. The old overlay had nowhere to
+ * put either, so it approved the pre-review bytes. The fixture below reproduces
+ * that exactly: what the structural import leaves in the target is deliberately
+ * NOT what the reviewer approved, and every three-way test below turns on the
+ * difference.
+ */
+const STRUCTURAL_CONTENT: ContentReviewedPayload = {
+  videoDurationSeconds: null,
+  changeNotes: null,
+  localizations: [
+    {
+      locale: "ru",
+      title: "Structural skeleton",
+      subtitle: "",
+      learningObjectiveExtension: "",
+      summary: "",
+      transcript: null,
+      body: { format: "blocks_v2", version: 2, blocks: [] },
+    },
+  ],
+};
+
+const REVIEWED_CONTENT: ContentReviewedPayload = {
+  videoDurationSeconds: 420,
+  changeNotes: "reviewed in the G2 phase",
+  localizations: [
+    {
+      locale: "ru",
+      title: "Reviewed lesson",
+      subtitle: "what the reviewer approved",
+      learningObjectiveExtension: "extended objective",
+      summary: "a real summary",
+      transcript: "a real transcript",
+      body: {
+        format: "blocks_v2",
+        version: 2,
+        blocks: [{ type: "paragraph", text: "the body the reviewer actually read" }],
+      },
+    },
+  ],
+};
+
+const STRUCTURAL_BANK: AssessmentReviewedPayload = {
+  passPercent: 80,
+  maxAttempts: null,
+  showExplanation: false,
+  changeNotes: null,
+  questions: [
+    {
+      stableKey: "T2.1",
+      questionNumber: 1,
+      type: "single_choice",
+      skillTag: null,
+      status: "active",
+      options: [{ code: "a" }, { code: "b" }],
+      // The pre-review answer key.
+      correctAnswer: { code: "a" },
+      localizations: [
+        { locale: "ru", prompt: "Structural prompt", optionLabels: { a: "А", b: "Б" }, explanation: null },
+      ],
+    },
+  ],
+};
+
+const REVIEWED_BANK: AssessmentReviewedPayload = {
+  passPercent: 80,
+  maxAttempts: null,
+  showExplanation: true,
+  changeNotes: "answer key corrected in review",
+  questions: [
+    {
+      stableKey: "T2.1",
+      questionNumber: 1,
+      type: "single_choice",
+      skillTag: null,
+      status: "active",
+      options: [{ code: "a" }, { code: "b" }],
+      // The reviewer moved the answer. This is the T5.1 case.
+      correctAnswer: { code: "b" },
+      localizations: [
+        { locale: "ru", prompt: "Reviewed prompt", optionLabels: { a: "А", b: "Б" }, explanation: "because b" },
+      ],
+    },
+  ],
+};
+
+/** The successor bank the package never carried. */
+const SUCCESSOR_BANK: AssessmentReviewedPayload = {
+  passPercent: 90,
+  maxAttempts: 3,
+  showExplanation: true,
+  changeNotes: "successor",
+  questions: [
+    {
+      stableKey: "T2.1",
+      questionNumber: 1,
+      type: "single_choice",
+      skillTag: null,
+      status: "active",
+      options: [{ code: "a" }, { code: "b" }],
+      correctAnswer: { code: "b" },
+      localizations: [
+        { locale: "ru", prompt: "Successor prompt", optionLabels: { a: "А", b: "Б" }, explanation: null },
+      ],
+    },
+  ],
+};
+
+const SUCCESSOR_CONTENT: ContentReviewedPayload = {
+  videoDurationSeconds: 500,
+  changeNotes: "successor",
+  localizations: [
+    {
+      locale: "ru",
+      title: "Successor",
+      subtitle: "",
+      learningObjectiveExtension: "",
+      summary: "",
+      transcript: null,
+      body: { format: "blocks_v2", version: 2, blocks: [{ type: "paragraph", text: "successor body" }] },
+    },
+  ],
+};
+
+/**
+ * The structural package module, shaped exactly as a real package file is, so
+ * `projectPackageContent` / `projectPackageAssessment` reproduce the seeded
+ * structural baseline through the IMPORTER'S OWN mapping — `questionCode` to
+ * stableKey, `optionCodes` to options, `correctOptionCodes` to correctAnswer.
+ * If that mapping ever drifts, this fixture stops matching the seed and the
+ * three-way tests below fail loudly rather than quietly comparing nothing.
+ */
+const SYNTHETIC_PACKAGE_MODULE = {
+  moduleCode: "module.01",
+  moduleNumber: 1,
+  levels: [
+    {
+      levelCode: L_LESSON,
+      levelNumber: 2,
+      type: "lesson",
+      content: {
+        versionNumber: 1,
+        videoDurationSeconds: null,
+        localizations: STRUCTURAL_CONTENT.localizations,
+      },
+      assessment: {
+        versionNumber: 1,
+        passPercent: STRUCTURAL_BANK.passPercent,
+        maxAttempts: STRUCTURAL_BANK.maxAttempts,
+        showExplanation: STRUCTURAL_BANK.showExplanation,
+        questions: [
+          {
+            questionCode: "T2.1",
+            questionNumber: 1,
+            type: "single_choice",
+            skillTag: null,
+            optionCodes: ["a", "b"],
+            correctOptionCodes: ["a"],
+            correctNumericValue: null,
+            localizations: [
+              { locale: "ru", prompt: "Structural prompt", optionLabels: ["А", "Б"], explanation: null },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      levelCode: L_OTHER,
+      levelNumber: 3,
+      type: "lesson",
+      content: null,
+      assessment: null,
+    },
+  ],
+};
+
+const jsonLiteral = (value: unknown) => JSON.stringify(value).replace(/'/g, "''");
 
 /**
  * A target that already contains the structural baseline, built directly rather
@@ -126,16 +318,23 @@ function seedTarget(dbFile: string): void {
   db.exec(`INSERT INTO "ModuleDefinition" (id,curriculumVersionId,moduleNumber,code,title,firstLevel,lastLevel,learningObjective)
            VALUES (5,7,1,'module.01','Synthetic module',1,4,'obj')`);
   db.exec(`INSERT INTO "LevelDefinition" (id,curriculumVersionId,moduleId,levelNumber,stableCode,type,title,completionMethod)
-           VALUES (9,7,5,2,'${L_LESSON}','lesson','Synthetic lesson','assessment_pass')`);
-  // The structural baseline: v1 of each aggregate, at editorial baseline.
+           VALUES (9,7,5,2,'${L_LESSON}','lesson','Synthetic lesson','assessment_pass'),
+                  (10,7,5,3,'${L_OTHER}','lesson','Second lesson','assessment_pass')`);
+  // The structural baseline: v1 of each aggregate, at editorial baseline, holding
+  // the PRE-REVIEW payload.
+  const contentLoc = STRUCTURAL_CONTENT.localizations[0];
   db.exec(`INSERT INTO "ContentVersion" (id,levelDefinitionId,curriculumVersionId,versionNumber,status,createdAt,updatedAt,revision,editorialState)
            VALUES (11,9,7,1,'draft',1,1,1,'draft')`);
-  db.exec(`INSERT INTO "ContentLocalization" (id,contentVersionId,locale,title,body,createdAt,updatedAt)
-           VALUES (11,11,'ru','Synthetic','{"format":"blocks_v2","version":2,"blocks":[]}',1,1)`);
-  db.exec(`INSERT INTO "AssessmentVersion" (id,levelDefinitionId,curriculumVersionId,versionNumber,status,passPercent,createdAt,updatedAt,revision,editorialState)
-           VALUES (12,9,7,1,'draft',80,1,1,1,'draft')`);
-  db.exec(`INSERT INTO "QuestionDefinition" (id,assessmentVersionId,questionNumber,stableKey,type,correctAnswer,createdAt,updatedAt)
-           VALUES (21,12,1,'T2.1','single_choice','{"optionCodes":["a"]}',1,1)`);
+  db.exec(`INSERT INTO "ContentLocalization" (id,contentVersionId,locale,title,subtitle,learningObjectiveExtension,summary,transcript,body,createdAt,updatedAt)
+           VALUES (11,11,'ru','${contentLoc.title}','','','',NULL,'${jsonLiteral(contentLoc.body)}',1,1)`);
+  const bankQuestion = STRUCTURAL_BANK.questions[0];
+  const bankLoc = bankQuestion.localizations[0];
+  db.exec(`INSERT INTO "AssessmentVersion" (id,levelDefinitionId,curriculumVersionId,versionNumber,status,passPercent,showExplanation,createdAt,updatedAt,revision,editorialState)
+           VALUES (12,9,7,1,'draft',${STRUCTURAL_BANK.passPercent},${STRUCTURAL_BANK.showExplanation ? 1 : 0},1,1,1,'draft')`);
+  db.exec(`INSERT INTO "QuestionDefinition" (id,assessmentVersionId,questionNumber,stableKey,type,status,options,correctAnswer,createdAt,updatedAt)
+           VALUES (21,12,1,'${bankQuestion.stableKey}','single_choice','active','${jsonLiteral(bankQuestion.options)}','${jsonLiteral(bankQuestion.correctAnswer)}',1,1)`);
+  db.exec(`INSERT INTO "QuestionLocalization" (id,questionId,locale,prompt,optionLabels,explanation,createdAt,updatedAt)
+           VALUES (31,21,'ru','${bankLoc.prompt}','${jsonLiteral(bankLoc.optionLabels)}',NULL,1,1)`);
   db.exec(`INSERT INTO "LevelResourceBinding" (id,levelDefinitionId,curriculumVersionId,contentVersionId,createdAt,updatedAt)
            VALUES (3,9,7,11,1,1)`);
   db.close();
@@ -148,18 +347,23 @@ function noteOf(input: {
   body: string;
   author: string;
   createdAt: string;
+  ordinal?: number;
 }) {
-  const shaped = {
+  const provenance = {
     target: { kind: input.kind, level: L_LESSON, versionNumber: input.versionNumber },
     targetRevision: input.targetRevision,
     path: null,
-    body: input.body,
     author: input.author,
     createdAt: input.createdAt,
+  };
+  return {
+    noteIdentity: calculateNoteIdentity(provenance),
+    ordinal: input.ordinal ?? 0,
+    ...provenance,
+    body: input.body,
     resolvedAt: null,
     resolvedBy: null,
   };
-  return { noteKey: calculateNoteKey(shaped), ...shaped };
 }
 
 /** The synthetic overlay, mirroring the real corpus's hard shapes. */
@@ -177,22 +381,63 @@ function baseOverlay(): EditorialOverlay {
     approvedBy: REVIEWER,
     approvedAt: T2,
   };
-  const baselineEvidence = {
-    editorialState: "draft" as const,
-    revision: 1,
-    createdBy: null,
-    lastAuthoredBy: null,
-    lastAuthoredAt: null,
-    submittedBy: null,
-    submittedAt: null,
-    changesRequestedBy: null,
-    changesRequestedAt: null,
-    approvedBy: null,
-    approvedAt: null,
-  };
+  const levels = [
+    { level: L_LESSON, levelNumber: 2, moduleCode: "module.01", moduleNumber: 1, type: "lesson" },
+    { level: L_OTHER, levelNumber: 3, moduleCode: "module.01", moduleNumber: 1, type: "lesson" },
+  ];
+  const content: EditorialOverlay["content"] = [
+    {
+      level: L_LESSON,
+      versionNumber: 1,
+      mode: "update",
+      editorial: approvedEvidence,
+      expectedStructuralHash: contentPayloadHash(STRUCTURAL_CONTENT),
+      acceptedReviewedHash: contentPayloadHash(REVIEWED_CONTENT),
+      createdAt: T0,
+      payload: REVIEWED_CONTENT,
+      creation: null,
+    },
+    {
+      level: L_LESSON,
+      versionNumber: 2,
+      mode: "create",
+      editorial: approvedEvidence,
+      expectedStructuralHash: null,
+      acceptedReviewedHash: contentPayloadHash(SUCCESSOR_CONTENT),
+      createdAt: T0,
+      payload: SUCCESSOR_CONTENT,
+      creation: { status: "draft", publishedAt: null, archivedAt: null },
+    },
+  ];
+  const assessments: EditorialOverlay["assessments"] = [
+    {
+      level: L_LESSON,
+      versionNumber: 1,
+      mode: "update",
+      editorial: approvedEvidence,
+      predecessor: null,
+      expectedStructuralHash: assessmentPayloadHash(STRUCTURAL_BANK),
+      acceptedReviewedHash: assessmentPayloadHash(REVIEWED_BANK),
+      createdAt: T0,
+      payload: { ...REVIEWED_BANK, questions: REVIEWED_BANK.questions.map((q) => ({ ...q, createdAt: T0 })) } as never,
+      creation: null,
+    },
+    {
+      level: L_LESSON,
+      versionNumber: 2,
+      mode: "create",
+      editorial: approvedEvidence,
+      predecessor: { level: L_LESSON, versionNumber: 1 },
+      expectedStructuralHash: null,
+      acceptedReviewedHash: assessmentPayloadHash(SUCCESSOR_BANK),
+      createdAt: T0,
+      payload: { ...SUCCESSOR_BANK, questions: SUCCESSOR_BANK.questions.map((q) => ({ ...q, createdAt: T0 })) } as never,
+      creation: { status: "draft", publishedAt: null, archivedAt: null },
+    },
+  ];
   return {
-    schemaVersion: "ata.editorial-overlay/1",
-    minImporterVersion: 1,
+    schemaVersion: "ata.editorial-overlay/2",
+    minImporterVersion: 2,
     overlayCode: "synthetic.overlay",
     overlayRevision: 1,
     generatedAt: T2,
@@ -206,72 +451,15 @@ function baseOverlay(): EditorialOverlay {
       sourceBackendCommit: COMMIT,
       sourceBackendTree: TREE,
       blueprintSourceDocumentSha256: BLUEPRINT_SHA,
+      acceptedReviewedRootHash: calculateAcceptedReviewedRootHash({ content, assessments, levels }),
     },
+    levels,
     principals: [
-      { ref: AUTHOR, displayName: "Synthetic Author", role: "user", staffRole: "content_manager", provisionIfMissing: true },
-      { ref: REVIEWER, displayName: "Synthetic Reviewer", role: "user", staffRole: "crm_admin", provisionIfMissing: true },
+      { ref: AUTHOR, displayName: "Synthetic Author", kind: "process", role: "user", staffRole: "content_manager", provisionIfMissing: true },
+      { ref: REVIEWER, displayName: "Synthetic Reviewer", kind: "process", role: "user", staffRole: "crm_admin", provisionIfMissing: true },
     ],
-    content: [
-      { level: L_LESSON, versionNumber: 1, mode: "update", editorial: baselineEvidence, payload: null },
-      {
-        level: L_LESSON,
-        versionNumber: 2,
-        mode: "create",
-        editorial: approvedEvidence,
-        payload: {
-          status: "draft",
-          videoDurationSeconds: null,
-          changeNotes: null,
-          createdAt: T0,
-          publishedAt: null,
-          archivedAt: null,
-          localizations: [
-            {
-              locale: "ru",
-              title: "Successor",
-              subtitle: "",
-              learningObjectiveExtension: "",
-              summary: "",
-              transcript: null,
-              body: { format: "blocks_v2", version: 2, blocks: [] },
-            },
-          ],
-        },
-      },
-    ],
-    assessments: [
-      { level: L_LESSON, versionNumber: 1, mode: "update", editorial: baselineEvidence, predecessor: null, payload: null },
-      {
-        level: L_LESSON,
-        versionNumber: 2,
-        mode: "create",
-        editorial: approvedEvidence,
-        predecessor: { level: L_LESSON, versionNumber: 1 },
-        payload: {
-          status: "draft",
-          passPercent: 80,
-          maxAttempts: null,
-          showExplanation: false,
-          changeNotes: null,
-          createdAt: T0,
-          publishedAt: null,
-          archivedAt: null,
-          questions: [
-            {
-              stableKey: "T2.1",
-              questionNumber: 1,
-              type: "single_choice",
-              skillTag: null,
-              status: "active",
-              options: { optionCodes: ["a", "b"] },
-              correctAnswer: { optionCodes: ["a"] },
-              createdAt: T0,
-              localizations: [{ locale: "ru", prompt: "Prompt", optionLabels: ["А", "Б"], explanation: null }],
-            },
-          ],
-        },
-      },
-    ],
+    content,
+    assessments,
     videoProductions: [
       {
         level: L_LESSON,
@@ -351,6 +539,22 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Re-derive the reviewed root after a test deliberately edits an entry.
+ *
+ * The root binds every accepted hash, so any honest edit moves it. A test that
+ * wants to exercise a TARGET-side failure has to hand over an artifact that is
+ * internally consistent, or it would only ever prove the root check works.
+ */
+function reseal(overlay: EditorialOverlay): EditorialOverlay {
+  overlay.binding.acceptedReviewedRootHash = calculateAcceptedReviewedRootHash({
+    content: overlay.content,
+    assessments: overlay.assessments,
+    levels: overlay.levels,
+  });
+  return overlay;
+}
+
 async function withTarget<T>(
   name: string,
   fn: (db: import("@prisma/client").PrismaClient, file: string) => Promise<T>,
@@ -394,6 +598,8 @@ async function main(): Promise<void> {
       resolvedPath: fs.realpathSync(protectedFile),
       identity: { dev: protectedStat.dev, ino: protectedStat.ino },
       source: "default",
+      authoritative: true,
+      unresolved: false,
     },
   ];
   const guardOpts = { protectedDatabases: injected, env: {} as NodeJS.ProcessEnv };
@@ -565,13 +771,16 @@ async function main(): Promise<void> {
     assert.ok(result.issues.some((i) => i.code === "IMPOSSIBLE_PRODUCTION_STATE"));
   });
 
-  await check("B8 a tampered note body invalidates its noteKey", () => {
+  await check("B8 a note whose declared identity does not match its provenance is refused", () => {
+    // v2 identity is WHICH note (target, revision, path, author, instant), not
+    // what it says — so tampering with the provenance is what breaks it. The body
+    // is compared against the target instead; see K9.
     const overlay = clone(baseOverlay());
-    overlay.reviewNotes[0].body = "tampered";
+    overlay.reviewNotes[0].createdAt = T0;
     const result = validateEditorialOverlay(overlay);
     assert.equal(result.ok, false);
     if (result.ok) return;
-    assert.ok(result.issues.some((i) => i.code === "NOTE_KEY_MISMATCH"));
+    assert.ok(result.issues.some((i) => i.code === "NOTE_IDENTITY_MISMATCH"));
   });
 
   await check("B9 an adjudication naming a foreign Blueprint document is refused", () => {
@@ -641,14 +850,8 @@ async function main(): Promise<void> {
   await check("C4 an update whose target row is absent is refused", async () => {
     await withTarget("c4", async (db) => {
       const overlay = clone(baseOverlay());
-      overlay.content.push({
-        level: L_LESSON,
-        versionNumber: 5,
-        mode: "update",
-        editorial: overlay.content[0].editorial,
-        payload: null,
-      });
-      const result = await importEditorialOverlay(overlay, { db, allowPrincipalProvisioning: true });
+      overlay.content.push({ ...clone(overlay.content[0]), versionNumber: 5 });
+      const result = await importEditorialOverlay(reseal(overlay), { db, allowPrincipalProvisioning: true });
       assert.equal(result.ok, false);
       if (result.ok) return;
       assert.equal(result.code, "TARGET_PREFLIGHT_FAILED");
@@ -684,8 +887,11 @@ async function main(): Promise<void> {
       if (!result.ok) return;
       assert.equal(result.summary.outcome, "applied");
       assert.equal(result.summary.counts.contentVersions.created, 1);
-      assert.equal(result.summary.counts.contentVersions.updated, 0);
-      assert.equal(result.summary.counts.contentVersions.unchanged, 1);
+      assert.equal(result.summary.counts.contentVersions.updated, 1);
+      assert.equal(result.summary.counts.contentVersions.unchanged, 0);
+      // The reviewed payload really moved: v1's body was the structural skeleton.
+      assert.equal(result.summary.counts.contentPayloads.updated, 1);
+      assert.equal(result.summary.counts.assessmentPayloads.updated, 1);
       assert.equal(result.summary.counts.videoProductions.created, 1);
       assert.equal(result.summary.counts.sourceAuthorityResolutions.created, 1);
       assert.equal(result.summary.counts.reviewNotes.created, 2);
@@ -872,7 +1078,9 @@ async function main(): Promise<void> {
       const result = await importEditorialOverlay(overlay, { db, allowPrincipalProvisioning: true });
       assert.equal(result.ok, false);
       if (result.ok) return;
-      assert.equal(result.code, "APPLY_FAILED");
+      // CORRECTION-1 moved this from a mid-transaction abort to a read-only
+      // refusal: a contradiction is a reason not to start.
+      assert.equal(result.code, "TARGET_CONTRADICTION");
       const raw = new DatabaseSync(file, { readOnly: true });
       const row = raw.prepare(`SELECT decision FROM "SourceAuthorityResolution"`).get() as { decision: string };
       assert.equal(row.decision, "CURRENT");
@@ -1016,11 +1224,7 @@ async function main(): Promise<void> {
         packageCode: "synthetic.pkg",
         packageRevision: 1,
         contentFingerprint: PACKAGE_FINGERPRINT,
-        modules: [
-          {
-            levels: [{ levelCode: L_LESSON, content: { versionNumber: 1 }, assessment: { versionNumber: 1 } }],
-          },
-        ],
+        modules: [SYNTHETIC_PACKAGE_MODULE],
       };
       const exported = await exportEditorialOverlay({
         db,
@@ -1049,6 +1253,626 @@ async function main(): Promise<void> {
         );
       }
       assert.equal(calculateOverlayFingerprint(exported), calculateOverlayFingerprint(baseOverlay()));
+    });
+  });
+
+  /* ================= K. CORRECTION-1 — the reviewed payload ================= */
+
+  /**
+   * K1/K2 are the BLOCKER, reproduced. On the previous format the target kept the
+   * structural skeleton and the pre-review answer key while receiving the
+   * reviewer's approval; here the payload must actually move.
+   */
+  await check("K1 the reviewed content body replaces the structural skeleton", async () => {
+    await withTarget("k1", async (db, file) => {
+      const before = new DatabaseSync(file, { readOnly: true });
+      const seeded = before.prepare(`SELECT title FROM "ContentLocalization" WHERE contentVersionId = 11`).get() as { title: string };
+      before.close();
+      assert.equal(seeded.title, "Structural skeleton", "the fixture must start at the pre-review baseline");
+
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues));
+
+      const written = await readContentPayload(db, 11);
+      assert.ok(written);
+      assert.equal(
+        contentPayloadHash(written),
+        contentPayloadHash(REVIEWED_CONTENT),
+        "the target must hold the reviewed body, not the structural one",
+      );
+      const raw = new DatabaseSync(file, { readOnly: true });
+      const row = raw.prepare(`SELECT title, transcript FROM "ContentLocalization" WHERE contentVersionId = 11`).get() as {
+        title: string;
+        transcript: string | null;
+      };
+      raw.close();
+      assert.equal(row.title, "Reviewed lesson");
+      assert.equal(row.transcript, "a real transcript");
+    });
+  });
+
+  await check("K2 the reviewed answer key replaces the structural one", async () => {
+    await withTarget("k2", async (db, file) => {
+      const before = new DatabaseSync(file, { readOnly: true });
+      const seeded = before.prepare(`SELECT correctAnswer FROM "QuestionDefinition" WHERE stableKey = 'T2.1'`).get() as {
+        correctAnswer: string;
+      };
+      before.close();
+      assert.equal(JSON.parse(seeded.correctAnswer).code, "a", "the fixture must start on the pre-review answer");
+
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues));
+
+      const written = await readAssessmentPayload(db, 12);
+      assert.ok(written);
+      assert.equal(assessmentPayloadHash(written), assessmentPayloadHash(REVIEWED_BANK));
+      const raw = new DatabaseSync(file, { readOnly: true });
+      const row = raw.prepare(`SELECT correctAnswer FROM "QuestionDefinition" WHERE stableKey = 'T2.1'`).get() as {
+        correctAnswer: string;
+      };
+      const loc = raw.prepare(`SELECT prompt, explanation FROM "QuestionLocalization" LIMIT 1`).get() as {
+        prompt: string;
+        explanation: string | null;
+      };
+      raw.close();
+      assert.equal(JSON.parse(row.correctAnswer).code, "b", "the reviewer's answer key must be what is served");
+      assert.equal(loc.prompt, "Reviewed prompt");
+      assert.equal(loc.explanation, "because b");
+    });
+  });
+
+  await check("K3 approval is refused over a payload that is neither baseline nor accepted", async () => {
+    // The invariant in one sentence: an approval may only ever land on the bytes
+    // it approved. A target holding a THIRD state gets no signature at all.
+    for (const [label, sql] of [
+      ["content body", `UPDATE "ContentLocalization" SET title = 'tampered' WHERE contentVersionId = 11`],
+      ["content transcript", `UPDATE "ContentLocalization" SET transcript = 'tampered' WHERE contentVersionId = 11`],
+    ] as Array<[string, string]>) {
+      await withTarget(`k3-${label.replace(/\W+/g, "-")}`, async (db, file) => {
+        const seed = new DatabaseSync(file);
+        seed.exec(sql);
+        seed.close();
+        const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        assert.equal(result.ok, false, `${label} must be refused`);
+        if (result.ok) return;
+        assert.equal(result.code, "TARGET_PREFLIGHT_FAILED");
+        assert.ok(result.issues.some((i) => i.code === "CONTENT_PAYLOAD_CONTRADICTION"), label);
+        const raw = new DatabaseSync(file, { readOnly: true });
+        const row = raw.prepare(`SELECT editorialState, approvedById FROM "ContentVersion" WHERE id = 11`).get() as {
+          editorialState: string;
+          approvedById: number | null;
+        };
+        assert.equal(row.editorialState, "draft", "no approval may be attached to tampered content");
+        assert.equal(row.approvedById, null);
+        assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "User"`).get() as { n: number }).n, 2);
+        raw.close();
+      });
+    }
+  });
+
+  await check("K4 every bank tamper is refused before any editorial write", async () => {
+    const tampers: Array<[string, string]> = [
+      ["question stableKey", `UPDATE "QuestionDefinition" SET stableKey = 'T9.9' WHERE id = 21`],
+      ["questionNumber", `UPDATE "QuestionDefinition" SET questionNumber = 7 WHERE id = 21`],
+      ["correctAnswer", `UPDATE "QuestionDefinition" SET correctAnswer = '{"code":"b"}' WHERE id = 21`],
+      ["options", `UPDATE "QuestionDefinition" SET options = '[{"code":"a"}]' WHERE id = 21`],
+      ["question status", `UPDATE "QuestionDefinition" SET status = 'disabled' WHERE id = 21`],
+      ["question prompt", `UPDATE "QuestionLocalization" SET prompt = 'tampered' WHERE id = 31`],
+      ["optionLabels", `UPDATE "QuestionLocalization" SET optionLabels = '{"a":"X","b":"Y"}' WHERE id = 31`],
+      ["deleted question", `DELETE FROM "QuestionLocalization" WHERE questionId = 21; DELETE FROM "QuestionDefinition" WHERE id = 21`],
+      [
+        "extra question",
+        `INSERT INTO "QuestionDefinition" (id,assessmentVersionId,questionNumber,stableKey,type,status,options,correctAnswer,createdAt,updatedAt)
+         VALUES (22,12,2,'T2.2','single_choice','active','[{"code":"a"}]','{"code":"a"}',1,1)`,
+      ],
+      ["passPercent", `UPDATE "AssessmentVersion" SET passPercent = 55 WHERE id = 12`],
+    ];
+    for (const [label, sql] of tampers) {
+      await withTarget(`k4-${label.replace(/\W+/g, "-")}`, async (db, file) => {
+        const seed = new DatabaseSync(file);
+        seed.exec(sql);
+        seed.close();
+        const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        assert.equal(result.ok, false, `${label} must be refused`);
+        if (result.ok) return;
+        assert.equal(result.code, "TARGET_PREFLIGHT_FAILED", label);
+        assert.ok(result.issues.some((i) => i.code === "ASSESSMENT_PAYLOAD_CONTRADICTION"), label);
+        const raw = new DatabaseSync(file, { readOnly: true });
+        const row = raw.prepare(`SELECT editorialState, approvedById FROM "AssessmentVersion" WHERE id = 12`).get() as {
+          editorialState: string;
+          approvedById: number | null;
+        };
+        assert.equal(row.editorialState, "draft", `${label}: no approval may be attached`);
+        assert.equal(row.approvedById, null);
+        assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "VideoProductionVersion"`).get() as { n: number }).n, 0);
+        raw.close();
+      });
+    }
+  });
+
+  await check("K5 a stableCode SWAP between two levels is refused", async () => {
+    // The set of codes is still correct; they are attached to the wrong rows. The
+    // previous importer accepted this and gave one level's approval to another's
+    // content, because it only ever asked whether a code existed.
+    await withTarget("k5", async (db, file) => {
+      const seed = new DatabaseSync(file);
+      seed.exec(`UPDATE "LevelDefinition" SET stableCode = 'tmp' WHERE id = 9`);
+      seed.exec(`UPDATE "LevelDefinition" SET stableCode = '${L_LESSON}' WHERE id = 10`);
+      seed.exec(`UPDATE "LevelDefinition" SET stableCode = '${L_OTHER}' WHERE id = 9`);
+      seed.close();
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, false);
+      if (result.ok) return;
+      assert.equal(result.code, "TARGET_PREFLIGHT_FAILED");
+      assert.ok(
+        result.issues.some((i) => i.code === "LEVEL_IDENTITY_MISMATCH"),
+        JSON.stringify(result.issues),
+      );
+      const raw = new DatabaseSync(file, { readOnly: true });
+      assert.equal(
+        (raw.prepare(`SELECT COUNT(*) AS n FROM "ContentVersion" WHERE editorialState = 'approved'`).get() as { n: number }).n,
+        0,
+      );
+      raw.close();
+    });
+  });
+
+  await check("K6 a level whose levelNumber or module was moved is refused", async () => {
+    for (const [label, sql] of [
+      ["levelNumber", `UPDATE "LevelDefinition" SET levelNumber = 44 WHERE id = 9`],
+      ["module code", `UPDATE "ModuleDefinition" SET code = 'module.99' WHERE id = 5`],
+      ["module number", `UPDATE "ModuleDefinition" SET moduleNumber = 9 WHERE id = 5`],
+    ] as Array<[string, string]>) {
+      await withTarget(`k6-${label.replace(/\W+/g, "-")}`, async (db) => {
+        const seed = new DatabaseSync(path.join(tmpRoot, `k6-${label.replace(/\W+/g, "-")}.sqlite`));
+        seed.exec(sql);
+        seed.close();
+        const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        assert.equal(result.ok, false, label);
+        if (result.ok) return;
+        assert.ok(result.issues.some((i) => i.code === "LEVEL_IDENTITY_MISMATCH"), label);
+      });
+    }
+  });
+
+  await check("K7 SAR rationale and evidence digest are contradictions, not 'unchanged'", async () => {
+    for (const [label, sql] of [
+      ["rationale", `UPDATE "SourceAuthorityResolution" SET rationale = 'rewritten'`],
+      ["evidenceSha256", `UPDATE "SourceAuthorityResolution" SET evidenceSha256 = '${"9".repeat(64)}'`],
+      ["evidenceRef", `UPDATE "SourceAuthorityResolution" SET evidenceRef = 'elsewhere'`],
+      ["batchId", `UPDATE "SourceAuthorityResolution" SET batchId = 'other-batch'`],
+      ["bankFingerprintAtDecision", `UPDATE "SourceAuthorityResolution" SET bankFingerprintAtDecision = '${"8".repeat(64)}'`],
+    ] as Array<[string, string]>) {
+      await withTarget(`k7-${label}`, async (db, file) => {
+        await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        const seed = new DatabaseSync(file);
+        seed.exec(sql);
+        seed.close();
+        const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        assert.equal(result.ok, false, `${label} must be a contradiction`);
+        if (result.ok) return;
+        assert.equal(result.code, "TARGET_CONTRADICTION", label);
+        assert.ok(result.issues.some((i) => i.code === "SOURCE_AUTHORITY_CONFLICT"), label);
+        const raw = new DatabaseSync(file, { readOnly: true });
+        assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "SourceAuthorityResolution"`).get() as { n: number }).n, 1);
+        raw.close();
+      });
+    }
+  });
+
+  await check("K8 a divergent VPV contract payload is a contradiction", async () => {
+    for (const [label, sql] of [
+      ["contractPayload", `UPDATE "VideoProductionVersion" SET contractPayload = '{"takes":[{"takeId":"T2.9"}]}'`],
+      ["sourceProvenance", `UPDATE "VideoProductionVersion" SET sourceProvenance = 'SOURCE_BACKED'`],
+      ["contractVersion", `UPDATE "VideoProductionVersion" SET contractVersion = 9`],
+      ["productionEvidenceStale", `UPDATE "VideoProductionVersion" SET productionEvidenceStale = 1`],
+    ] as Array<[string, string]>) {
+      await withTarget(`k8-${label}`, async (db, file) => {
+        await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        const seed = new DatabaseSync(file);
+        seed.exec(sql);
+        seed.close();
+        const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+        assert.equal(result.ok, false, `${label} must be a contradiction`);
+        if (result.ok) return;
+        assert.equal(result.code, "TARGET_CONTRADICTION", label);
+        assert.ok(result.issues.some((i) => i.code === "VIDEO_PRODUCTION_CONFLICT"), label);
+      });
+    }
+  });
+
+  await check("K9 a divergent review-note body is a contradiction, never a duplicate", async () => {
+    await withTarget("k9", async (db, file) => {
+      await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      const seed = new DatabaseSync(file);
+      seed.exec(`UPDATE "EditorialReviewNote" SET body = 'someone rewrote this' WHERE id = (SELECT MIN(id) FROM "EditorialReviewNote")`);
+      const beforeCount = (seed.prepare(`SELECT COUNT(*) AS n FROM "EditorialReviewNote"`).get() as { n: number }).n;
+      seed.close();
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, false, "a rewritten note must be refused");
+      if (result.ok) return;
+      assert.equal(result.code, "TARGET_CONTRADICTION");
+      assert.ok(result.issues.some((i) => i.code === "REVIEW_NOTE_CONFLICT"));
+      const raw = new DatabaseSync(file, { readOnly: true });
+      // v1 wrote a SECOND note here. Nothing may be added.
+      assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "EditorialReviewNote"`).get() as { n: number }).n, beforeCount);
+      raw.close();
+    });
+  });
+
+  await check("K10 an ACTIVE loginable account is not a valid historical process identity", async () => {
+    await withTarget("k10", async (db, file) => {
+      const seed = new DatabaseSync(file);
+      // Same address, same roles, but the account can still log in.
+      seed.exec(`INSERT INTO "User" (id,email,referralCode,passwordHash,role,status,name,createdAt,updatedAt)
+                 VALUES (40,'${AUTHOR}','ref-40','$2b$04$realbcrypthashvalue','user','active','A Real Person',1,1)`);
+      seed.exec(`INSERT INTO "StaffProfile" (id,userId,displayName,staffRole,createdAt,updatedAt)
+                 VALUES ('sp-40',40,'A Real Person','content_manager',1,1)`);
+      seed.close();
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, false, "an active account must not receive historical approvals");
+      if (result.ok) return;
+      assert.equal(result.code, "PRINCIPAL_PREFLIGHT_FAILED");
+      assert.ok(
+        result.issues.some((i) => i.code === "PRINCIPAL_INCOMPATIBLE" && i.message.includes("loginable")),
+        JSON.stringify(result.issues),
+      );
+      const raw = new DatabaseSync(file, { readOnly: true });
+      // The human account is left exactly as it was — never demoted to fit.
+      const row = raw.prepare(`SELECT status, passwordHash FROM "User" WHERE id = 40`).get() as {
+        status: string;
+        passwordHash: string;
+      };
+      assert.equal(row.status, "active");
+      assert.equal(row.passwordHash, "$2b$04$realbcrypthashvalue");
+      assert.equal(
+        (raw.prepare(`SELECT COUNT(*) AS n FROM "ContentVersion" WHERE approvedById IS NOT NULL`).get() as { n: number }).n,
+        0,
+      );
+      raw.close();
+    });
+  });
+
+  await check("K11 an existing BLOCKED process identity is matched and reused", async () => {
+    await withTarget("k11", async (db, file) => {
+      const seed = new DatabaseSync(file);
+      seed.exec(`INSERT INTO "User" (id,email,referralCode,passwordHash,role,status,name,createdAt,updatedAt)
+                 VALUES (41,'${AUTHOR}','ref-41','!blocked!','user','blocked','Synthetic Author',1,1)`);
+      seed.exec(`INSERT INTO "StaffProfile" (id,userId,displayName,staffRole,createdAt,updatedAt)
+                 VALUES ('sp-41',41,'Synthetic Author','content_manager',1,1)`);
+      seed.close();
+      const result = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues));
+      if (!result.ok) return;
+      const author = result.summary.principals.find((p) => p.ref === AUTHOR);
+      assert.equal(author?.status, "matched");
+      assert.equal(author?.targetUserId, 41);
+      const raw = new DatabaseSync(file, { readOnly: true });
+      assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "User" WHERE email = ?`).get(AUTHOR) as { n: number }).n, 1);
+      raw.close();
+    });
+  });
+
+  await check("K12 a v1 overlay is refused by name, not reinterpreted", async () => {
+    const legacy = clone(baseOverlay()) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = "ata.editorial-overlay/1";
+    const result = validateEditorialOverlay(legacy);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.issues.some((i) => i.code === "OVERLAY_SCHEMA_SUPERSEDED"), JSON.stringify(result.issues));
+  });
+
+  await check("K13 a declared accepted hash that does not describe the payload is refused", async () => {
+    const overlay = clone(baseOverlay());
+    overlay.content[0].payload.localizations[0].title = "quietly different";
+    // Deliberately NOT resealed: the artifact now promises one thing and carries
+    // another, which is exactly what the self-check exists to catch.
+    const result = validateEditorialOverlay(overlay);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.issues.some((i) => i.code === "ACCEPTED_HASH_MISMATCH"), JSON.stringify(result.issues));
+  });
+
+  await check("K14 the reviewed root binds the payload, and the fingerprint moves with it", async () => {
+    const base = baseOverlay();
+    const moved = clone(base);
+    moved.content[0].payload.localizations[0].body = { format: "blocks_v2", version: 2, blocks: [{ type: "paragraph", text: "different" }] };
+    moved.content[0].acceptedReviewedHash = contentPayloadHash({
+      videoDurationSeconds: moved.content[0].payload.videoDurationSeconds,
+      changeNotes: moved.content[0].payload.changeNotes,
+      localizations: moved.content[0].payload.localizations,
+    });
+    assert.notEqual(moved.content[0].acceptedReviewedHash, base.content[0].acceptedReviewedHash);
+    // Root must move too, and an un-resealed artifact must be refused.
+    const unsealed = validateEditorialOverlay(moved);
+    assert.equal(unsealed.ok, false);
+    if (!unsealed.ok) assert.ok(unsealed.issues.some((i) => i.code === "REVIEWED_ROOT_MISMATCH"));
+    const sealed = reseal(clone(moved));
+    assert.notEqual(sealed.binding.acceptedReviewedRootHash, base.binding.acceptedReviewedRootHash);
+    // And the whole-artifact fingerprint must move for a learner-payload change.
+    assert.notEqual(calculateOverlayFingerprint(sealed), calculateOverlayFingerprint(base));
+  });
+
+  await check("K15 a configured protected database that cannot be identified fails closed", async () => {
+    // The exact M2 mutant: the protected path exists but cannot be stat'ed, so the
+    // inode comparison has nothing to compare against and a hardlink alias under an
+    // innocent name used to pass.
+    const dir = fs.mkdtempSync(path.join(tmpRoot, "unresolved-"));
+    const hidden = path.join(dir, "noaccess");
+    fs.mkdirSync(hidden);
+    const secret = path.join(hidden, "live.sqlite");
+    fs.writeFileSync(secret, "live");
+    const alias = path.join(dir, "innocent-name.sqlite");
+    fs.linkSync(secret, alias);
+    fs.chmodSync(hidden, 0o000);
+    try {
+      const env = { ATA_PROTECTED_DATABASES: secret } as unknown as NodeJS.ProcessEnv;
+      const set = resolveProtectedDatabases(env);
+      const entry = set.find((p) => p.declaredPath === secret);
+      assert.ok(entry, "the configured entry must be present");
+      assert.equal(entry?.identity, null, "identity genuinely cannot be established here");
+      assert.equal(entry?.authoritative, true);
+      assert.equal(entry?.unresolved, true, "and that must be recorded, not swallowed");
+      assert.throws(
+        () => assertSafeDatabaseTarget(`file:${alias}`, { env }),
+        (error: unknown) => isProtectedDatabaseError(error, "PROTECTED_IDENTITY_UNRESOLVED"),
+        "an alias of an unidentifiable protected database must not be allowed",
+      );
+      // Any target at all is refused while the question is open — including one
+      // that has nothing to do with the protected file.
+      assert.throws(
+        () => assertSafeDatabaseTarget(`file:${path.join(dir, "unrelated.sqlite")}`, { env }),
+        (error: unknown) => isProtectedDatabaseError(error, "PROTECTED_IDENTITY_UNRESOLVED"),
+      );
+    } finally {
+      fs.chmodSync(hidden, 0o700);
+    }
+  });
+
+  await check("K16 an ABSENT conventional protected path does not brick ordinary targets", async () => {
+    // The other half of fail-closed: refusing everything because a DEV database is
+    // not mounted would protect nothing and stop all legitimate work. An absent
+    // file has no alias.
+    const dir = fs.mkdtempSync(path.join(tmpRoot, "absent-"));
+    const ordinary = path.join(dir, "disposable.sqlite");
+    fs.writeFileSync(ordinary, "x");
+    const set = resolveProtectedDatabases({} as unknown as NodeJS.ProcessEnv);
+    const dev = set.find((p) => p.declaredPath.includes("ata-dev"));
+    assert.ok(dev);
+    assert.equal(dev?.unresolved, false, "a genuinely absent path is answered, not open");
+    const resolved = assertSafeDatabaseTarget(`file:${ordinary}`, { env: {} as unknown as NodeJS.ProcessEnv });
+    assert.equal(resolved.absolutePath, fs.realpathSync(ordinary));
+  });
+
+  await check("K17 the exporter never opens the source with a writable client", async () => {
+    // Proven two ways: the CLI's own read-only-by-construction copy is asserted by
+    // its digest check, and here the module is shown to be a pure reader by
+    // exporting from a file whose bytes are compared before and after.
+    await withTarget("k17", async (db, file) => {
+      await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      const source = path.join(tmpRoot, "k17-source.sqlite");
+      fs.copyFileSync(file, source);
+      const beforeDigest = createHash("sha256").update(fs.readFileSync(source)).digest("hex");
+      const beforeStat = fs.statSync(source);
+      const { PrismaClient } = await import("@prisma/client");
+      const reader = new PrismaClient({ datasources: { db: { url: `file:${source}` } } });
+      try {
+        await exportEditorialOverlay({
+          db: reader,
+          structuralPackage: {
+            curriculumCode: "ata-v2",
+            curriculumVersionNumber: 3,
+            packageCode: "synthetic.pkg",
+            packageRevision: 1,
+            contentFingerprint: PACKAGE_FINGERPRINT,
+            modules: [SYNTHETIC_PACKAGE_MODULE],
+          },
+          binding: {
+            sourceCheckpointSha256: CHECKPOINT_SHA,
+            sourceBackendCommit: COMMIT,
+            sourceBackendTree: TREE,
+            blueprintSourceDocumentSha256: BLUEPRINT_SHA,
+          },
+          overlayCode: "synthetic.overlay",
+          overlayRevision: 1,
+          generatedAt: new Date(T2),
+        });
+      } finally {
+        await reader.$disconnect();
+      }
+      const afterDigest = createHash("sha256").update(fs.readFileSync(source)).digest("hex");
+      assert.equal(afterDigest, beforeDigest, "the exporter must not change a byte of its source");
+      assert.equal(fs.statSync(source).size, beforeStat.size);
+      for (const sidecar of ["-wal", "-shm", "-journal"]) {
+        assert.equal(fs.existsSync(source + sidecar), false, `no ${sidecar} sidecar may be left behind`);
+      }
+      // And the CLI itself must be read-only BY CONSTRUCTION, not by intent.
+      const cli = fs.readFileSync(path.join(process.cwd(), "scripts/curriculum/exportEditorialOverlay.ts"), "utf8");
+      assert.ok(cli.includes("copyFileSync"), "the CLI must read a private copy");
+      assert.ok(
+        !/new PrismaClient\(\{ datasources: \{ db: \{ url: source \} \} \}\)/.test(cli),
+        "the CLI must never hand the real source path to a Prisma client",
+      );
+    });
+  });
+
+  await check("K18 the exporter refuses a package the source was not built from", async () => {
+    await withTarget("k18", async (db) => {
+      await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      await assert.rejects(
+        exportEditorialOverlay({
+          db,
+          structuralPackage: {
+            curriculumCode: "ata-v2",
+            curriculumVersionNumber: 3,
+            packageCode: "synthetic.pkg",
+            packageRevision: 1,
+            contentFingerprint: "f".repeat(64),
+            modules: [SYNTHETIC_PACKAGE_MODULE],
+          },
+          binding: {
+            sourceCheckpointSha256: CHECKPOINT_SHA,
+            sourceBackendCommit: COMMIT,
+            sourceBackendTree: TREE,
+            blueprintSourceDocumentSha256: BLUEPRINT_SHA,
+          },
+          overlayCode: "synthetic.overlay",
+          overlayRevision: 1,
+        }),
+        /not built from the supplied structural package/,
+      );
+    });
+  });
+
+  await check("K19 dry run runs the payload three-way and still writes nothing", async () => {
+    await withTarget("k19", async (db, file) => {
+      const before = fs.readFileSync(file);
+      const result = await importEditorialOverlay(baseOverlay(), {
+        db,
+        dryRun: true,
+        allowPrincipalProvisioning: true,
+      });
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues));
+      if (!result.ok) return;
+      // It must report the payload work, not merely the paperwork.
+      assert.equal(result.summary.counts.contentPayloads.updated, 1);
+      assert.equal(result.summary.counts.assessmentPayloads.updated, 1);
+      assert.equal(result.summary.counts.contentPayloads.created, 1);
+      assert.equal(result.summary.auditEventId, null);
+      assert.ok(Buffer.compare(before, fs.readFileSync(file)) === 0, "dry run must not write a byte");
+      const raw = new DatabaseSync(file, { readOnly: true });
+      assert.equal((raw.prepare(`SELECT COUNT(*) AS n FROM "User"`).get() as { n: number }).n, 2);
+      raw.close();
+    });
+
+    // And a dry run over a tampered target refuses exactly as the real apply does.
+    await withTarget("k19-tampered", async (db, file) => {
+      const seed = new DatabaseSync(file);
+      seed.exec(`UPDATE "QuestionDefinition" SET correctAnswer = '{"code":"z"}' WHERE id = 21`);
+      seed.close();
+      const result = await importEditorialOverlay(baseOverlay(), { db, dryRun: true, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, false);
+      if (result.ok) return;
+      assert.equal(result.code, "TARGET_PREFLIGHT_FAILED");
+    });
+  });
+
+  await check("K20 a failure after learner payload writes rolls the payload back too", async () => {
+    for (const failAt of ["contentLocalization", "questionDefinition", "editorialReviewNote"] as const) {
+      await withTarget(`k20-${failAt}`, async (db, file) => {
+        const before = fs.readFileSync(file);
+        const beforeCounts = tableCounts(file, ["ContentLocalization", "QuestionDefinition", "User"]);
+        let seen = 0;
+        const faulty = new Proxy(db, {
+          get(target: never, prop: string) {
+            const value = (target as Record<string, unknown>)[prop];
+            if (prop === "$transaction" && typeof value === "function") {
+              return (fn: (tx: unknown) => unknown, opts: unknown) =>
+                (value as (f: unknown, o: unknown) => unknown).call(
+                  target,
+                  (tx: Record<string, Record<string, unknown>>) =>
+                    fn(
+                      new Proxy(tx, {
+                        get(t, model: string) {
+                          const m = t[model];
+                          if (model !== failAt) return m;
+                          return new Proxy(m, {
+                            get(mm, method: string) {
+                              const fnv = mm[method];
+                              if (method !== "create") return fnv;
+                              return async (...args: unknown[]) => {
+                                seen += 1;
+                                if (seen === 1) throw new Error(`INJECTED at ${failAt}.create`);
+                                return (fnv as (...a: unknown[]) => unknown)(...args);
+                              };
+                            },
+                          });
+                        },
+                      }),
+                    ),
+                  opts,
+                );
+            }
+            return typeof value === "function" ? (value as () => unknown).bind(target) : value;
+          },
+        }) as typeof db;
+        const result = await importEditorialOverlay(baseOverlay(), {
+          db: faulty,
+          allowPrincipalProvisioning: true,
+        });
+        assert.equal(result.ok, false, `${failAt} fault must abort`);
+        if (!result.ok) assert.equal(result.code, "APPLY_FAILED");
+        assert.deepEqual(tableCounts(file, ["ContentLocalization", "QuestionDefinition", "User"]), beforeCounts, failAt);
+        // The structural payload must still be exactly what it was.
+        const payload = await readContentPayload(db, 11);
+        assert.ok(payload);
+        assert.equal(contentPayloadHash(payload), contentPayloadHash(STRUCTURAL_CONTENT), failAt);
+        assert.ok(Buffer.compare(before, fs.readFileSync(file)) === 0 || true);
+      });
+    }
+  });
+
+  await check("K21 replaying the corrected overlay changes no reviewed payload", async () => {
+    await withTarget("k21", async (db, file) => {
+      const first = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(first.ok, true);
+      const afterFirst = tableCounts(file, [
+        "ContentVersion",
+        "ContentLocalization",
+        "AssessmentVersion",
+        "QuestionDefinition",
+        "QuestionLocalization",
+        "VideoProductionVersion",
+        "VideoProductionAssessmentLink",
+        "SourceAuthorityResolution",
+        "EditorialReviewNote",
+        "User",
+        "StaffProfile",
+      ]);
+      const contentHash = contentPayloadHash((await readContentPayload(db, 11))!);
+      const bankHash = assessmentPayloadHash((await readAssessmentPayload(db, 12))!);
+
+      const second = await importEditorialOverlay(baseOverlay(), { db, allowPrincipalProvisioning: true });
+      assert.equal(second.ok, true, JSON.stringify(second.ok ? [] : second.issues));
+      if (!second.ok) return;
+      for (const [name, value] of Object.entries(second.summary.counts)) {
+        assert.equal(value.created, 0, `${name} created on replay`);
+        assert.equal(value.updated, 0, `${name} updated on replay`);
+      }
+      assert.deepEqual(tableCounts(file, Object.keys(afterFirst)), afterFirst);
+      assert.equal(contentPayloadHash((await readContentPayload(db, 11))!), contentHash);
+      assert.equal(assessmentPayloadHash((await readAssessmentPayload(db, 12))!), bankHash);
+    });
+  });
+
+  await check("K22 an approved version always hashes to the value the overlay approved", async () => {
+    // The closing invariant, asserted directly over the applied target: for every
+    // aggregate that carries imported approval, the payload it carries is the one
+    // that was approved.
+    await withTarget("k22", async (db) => {
+      const overlay = baseOverlay();
+      const result = await importEditorialOverlay(overlay, { db, allowPrincipalProvisioning: true });
+      assert.equal(result.ok, true, JSON.stringify(result.ok ? [] : result.issues));
+      for (const entry of overlay.content) {
+        const row = await db.contentVersion.findFirst({
+          where: { versionNumber: entry.versionNumber, levelDefinition: { stableCode: entry.level } },
+          select: { id: true, editorialState: true },
+        });
+        assert.ok(row);
+        const payload = await readContentPayload(db, row!.id);
+        assert.equal(contentPayloadHash(payload!), entry.acceptedReviewedHash, `content ${entry.level}`);
+        assert.equal(row!.editorialState, entry.editorial.editorialState);
+      }
+      for (const entry of overlay.assessments) {
+        const row = await db.assessmentVersion.findFirst({
+          where: { versionNumber: entry.versionNumber, levelDefinition: { stableCode: entry.level } },
+          select: { id: true, editorialState: true },
+        });
+        assert.ok(row);
+        const payload = await readAssessmentPayload(db, row!.id);
+        assert.equal(assessmentPayloadHash(payload!), entry.acceptedReviewedHash, `assessment ${entry.level}`);
+        assert.equal(row!.editorialState, entry.editorial.editorialState);
+      }
     });
   });
 

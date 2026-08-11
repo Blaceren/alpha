@@ -1,31 +1,48 @@
 /**
  * PHASE-G2 TRANSPORT — overlay validation, entirely offline.
  *
- * This runs BEFORE any database is opened. A malformed or internally
- * inconsistent overlay must be rejected without a connection, a transaction or a
- * single row read, so that "the artifact is wrong" and "the target is wrong" stay
- * two separately diagnosable failures.
+ * This runs BEFORE any database is opened. A malformed or internally inconsistent
+ * overlay must be rejected without a connection, a transaction or a single row
+ * read, so that "the artifact is wrong" and "the target is wrong" stay two
+ * separately diagnosable failures.
  *
  * WHAT IT CHECKS BEYOND THE ZOD SHAPE. Shape validation proves the fields exist
  * and have the right types. It cannot prove the overlay is COHERENT — that every
  * key is unique, every cross-reference resolves inside the artifact, every
  * approval carries the evidence its state requires, and no successor claims an
- * ancestor the overlay never describes. Those are the checks below, and they are
- * the ones that catch a mis-generated export.
+ * ancestor the overlay never describes.
  *
- * ISSUES, NOT EXCEPTIONS. Validation collects every problem it can see and
- * returns them together. An operator fixing an exporter wants the whole list,
- * not the first line of it.
+ * v2 adds the check that matters most: EVERY DECLARED HASH IS RECOMPUTED FROM THE
+ * PAYLOAD IT CLAIMS TO DESCRIBE. An `acceptedReviewedHash` that does not match the
+ * bytes sitting next to it in the same file would let an artifact promise one
+ * reviewed state and deliver another, and the importer's whole three-way rule is
+ * built on trusting that hash. So the artifact is made to prove it about itself
+ * before any target is consulted.
+ *
+ * ISSUES, NOT EXCEPTIONS. Validation collects every problem it can see and returns
+ * them together. An operator fixing an exporter wants the whole list, not the
+ * first line of it.
  */
 import {
   authorityKey,
   editorialOverlaySchema,
   questionKey,
+  REJECTED_OVERLAY_SCHEMA_VERSIONS,
   versionKey,
   type EditorialOverlay,
   type OverlayEditorialEvidence,
 } from "@/lib/curriculum/editorial-overlay/schema";
-import { calculateNoteKey, calculateOverlayFingerprint } from "@/lib/curriculum/editorial-overlay/fingerprint";
+import {
+  assessmentPayloadOf,
+  calculateAcceptedReviewedRootHash,
+  calculateNoteIdentity,
+  calculateOverlayFingerprint,
+  contentPayloadOf,
+} from "@/lib/curriculum/editorial-overlay/fingerprint";
+import {
+  assessmentPayloadHash,
+  contentPayloadHash,
+} from "@/lib/curriculum/editorial-overlay/payload";
 
 export type OverlayIssue = { code: string; path: string; message: string };
 
@@ -88,6 +105,27 @@ function checkEvidence(
 }
 
 export function validateEditorialOverlay(raw: unknown): OverlayValidationResult {
+  // An overlay from the superseded format is named and refused, rather than
+  // failing as an unrecognisable shape. v1 asserted approval without asserting
+  // content; reading one under v2's rules would mean assuming its silence about
+  // the payload meant "unchanged", which is the defect being corrected.
+  const declaredVersion =
+    typeof raw === "object" && raw !== null
+      ? (raw as { schemaVersion?: unknown }).schemaVersion
+      : undefined;
+  if (typeof declaredVersion === "string" && REJECTED_OVERLAY_SCHEMA_VERSIONS.includes(declaredVersion)) {
+    return {
+      ok: false,
+      issues: [
+        issue(
+          "OVERLAY_SCHEMA_SUPERSEDED",
+          "schemaVersion",
+          `${declaredVersion} carried approval evidence without the reviewed payload it approves and is refused; re-export as an editorial overlay v2`,
+        ),
+      ],
+    };
+  }
+
   const parsed = editorialOverlaySchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -101,15 +139,45 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
   const issues: OverlayIssue[] = [];
   const warnings: OverlayIssue[] = [];
 
-  if (overlay.minImporterVersion > 1) {
+  if (overlay.minImporterVersion > 2) {
     issues.push(
       issue(
         "IMPORTER_TOO_OLD",
         "minImporterVersion",
-        `overlay requires importer version ${overlay.minImporterVersion}; this build implements 1`,
+        `overlay requires importer version ${overlay.minImporterVersion}; this build implements 2`,
       ),
     );
   }
+
+  /* ---------------- levels ---------------- */
+  const levelIdentities = new Map<string, (typeof overlay.levels)[number]>();
+  const levelNumbers = new Map<number, string>();
+  for (const [index, level] of overlay.levels.entries()) {
+    if (levelIdentities.has(level.level)) {
+      issues.push(issue("DUPLICATE_LEVEL", `levels[${index}]`, `duplicate level ${level.level}`));
+    }
+    levelIdentities.set(level.level, level);
+    // Two codes claiming one levelNumber is the artifact-side form of the swap
+    // the target-side preflight exists to catch.
+    const already = levelNumbers.get(level.levelNumber);
+    if (already && already !== level.level) {
+      issues.push(
+        issue(
+          "DUPLICATE_LEVEL_NUMBER",
+          `levels[${index}]`,
+          `levelNumber ${level.levelNumber} is claimed by both ${already} and ${level.level}`,
+        ),
+      );
+    }
+    levelNumbers.set(level.levelNumber, level.level);
+  }
+  const requireLevel = (code: string, path: string): void => {
+    if (!levelIdentities.has(code)) {
+      issues.push(
+        issue("LEVEL_NOT_DECLARED", path, `level ${code} is referenced but not declared in levels[]`),
+      );
+    }
+  };
 
   /* ---------------- principals ---------------- */
   const principals = new Map<string, (typeof overlay.principals)[number]>();
@@ -118,6 +186,17 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
       issues.push(issue("DUPLICATE_PRINCIPAL", `principals[${index}]`, `duplicate principal ${principal.ref}`));
     }
     principals.set(principal.ref, principal);
+    // Only a process identity may be minted by an import. Creating a lookalike of
+    // a human being is never this tool's business.
+    if (principal.kind === "human" && principal.provisionIfMissing) {
+      issues.push(
+        issue(
+          "HUMAN_PRINCIPAL_PROVISIONABLE",
+          `principals[${index}]`,
+          `${principal.ref} is declared a human account and must not be marked provisionable`,
+        ),
+      );
+    }
   }
   const referenced = new Set<string>();
   const requirePrincipal = (ref: string | null, path: string): void => {
@@ -139,12 +218,43 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
       issues.push(issue("DUPLICATE_SEMANTIC_KEY", path, `duplicate content key ${key}`));
     }
     contentKeys.add(key);
+    requireLevel(entry.level, `${path}.level`);
     checkEvidence(entry.editorial, path, issues);
     requirePrincipal(entry.editorial.createdBy, `${path}.createdBy`);
     requirePrincipal(entry.editorial.lastAuthoredBy, `${path}.lastAuthoredBy`);
     requirePrincipal(entry.editorial.submittedBy, `${path}.submittedBy`);
     requirePrincipal(entry.editorial.changesRequestedBy, `${path}.changesRequestedBy`);
     requirePrincipal(entry.editorial.approvedBy, `${path}.approvedBy`);
+
+    // THE v2 CHECK: the declared accepted hash must describe the payload in this
+    // very file. Without it the importer would enforce a promise the artifact
+    // never actually made.
+    const actual = contentPayloadHash(contentPayloadOf(entry));
+    if (actual !== entry.acceptedReviewedHash) {
+      issues.push(
+        issue(
+          "ACCEPTED_HASH_MISMATCH",
+          `${path}.acceptedReviewedHash`,
+          `declared ${entry.acceptedReviewedHash} but the payload in this overlay hashes to ${actual}`,
+        ),
+      );
+    }
+    if (entry.expectedStructuralHash === entry.acceptedReviewedHash) {
+      warnings.push(
+        issue(
+          "NO_EDITORIAL_DELTA",
+          path,
+          "the reviewed payload is identical to the structural baseline for this version",
+        ),
+      );
+    }
+    const locales = new Set<string>();
+    for (const localization of entry.payload.localizations) {
+      if (locales.has(localization.locale)) {
+        issues.push(issue("DUPLICATE_LOCALE", `${path}.localizations`, `duplicate locale ${localization.locale}`));
+      }
+      locales.add(localization.locale);
+    }
   }
 
   /* ---------------- assessments ---------------- */
@@ -156,6 +266,7 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
       issues.push(issue("DUPLICATE_SEMANTIC_KEY", path, `duplicate assessment key ${key}`));
     }
     assessmentKeys.add(key);
+    requireLevel(entry.level, `${path}.level`);
     checkEvidence(entry.editorial, path, issues);
     requirePrincipal(entry.editorial.createdBy, `${path}.createdBy`);
     requirePrincipal(entry.editorial.lastAuthoredBy, `${path}.lastAuthoredBy`);
@@ -163,25 +274,48 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
     requirePrincipal(entry.editorial.changesRequestedBy, `${path}.changesRequestedBy`);
     requirePrincipal(entry.editorial.approvedBy, `${path}.approvedBy`);
 
-    if (entry.payload) {
-      const qKeys = new Set<string>();
-      const qNumbers = new Set<number>();
-      for (const question of entry.payload.questions) {
-        const qk = questionKey(entry, question.stableKey);
-        if (qKeys.has(qk)) {
-          issues.push(issue("DUPLICATE_SEMANTIC_KEY", `${path}.questions`, `duplicate question key ${qk}`));
-        }
-        qKeys.add(qk);
-        if (qNumbers.has(question.questionNumber)) {
+    const actual = assessmentPayloadHash(assessmentPayloadOf(entry));
+    if (actual !== entry.acceptedReviewedHash) {
+      issues.push(
+        issue(
+          "ACCEPTED_HASH_MISMATCH",
+          `${path}.acceptedReviewedHash`,
+          `declared ${entry.acceptedReviewedHash} but the bank in this overlay hashes to ${actual}`,
+        ),
+      );
+    }
+    if (entry.expectedStructuralHash === entry.acceptedReviewedHash) {
+      warnings.push(
+        issue("NO_EDITORIAL_DELTA", path, "the reviewed bank is identical to the structural baseline"),
+      );
+    }
+
+    const qKeys = new Set<string>();
+    const qNumbers = new Set<number>();
+    for (const question of entry.payload.questions) {
+      const qk = questionKey(entry, question.stableKey);
+      if (qKeys.has(qk)) {
+        issues.push(issue("DUPLICATE_SEMANTIC_KEY", `${path}.questions`, `duplicate question key ${qk}`));
+      }
+      qKeys.add(qk);
+      if (qNumbers.has(question.questionNumber)) {
+        issues.push(
+          issue(
+            "DUPLICATE_QUESTION_NUMBER",
+            `${path}.questions`,
+            `duplicate questionNumber ${question.questionNumber}`,
+          ),
+        );
+      }
+      qNumbers.add(question.questionNumber);
+      const locales = new Set<string>();
+      for (const localization of question.localizations) {
+        if (locales.has(localization.locale)) {
           issues.push(
-            issue(
-              "DUPLICATE_QUESTION_NUMBER",
-              `${path}.questions`,
-              `duplicate questionNumber ${question.questionNumber}`,
-            ),
+            issue("DUPLICATE_LOCALE", `${path}.questions ${question.stableKey}`, `duplicate locale ${localization.locale}`),
           );
         }
-        qNumbers.add(question.questionNumber);
+        locales.add(localization.locale);
       }
     }
   }
@@ -211,6 +345,22 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
     }
   }
 
+  /* ---------------- the reviewed root ---------------- */
+  const expectedRoot = calculateAcceptedReviewedRootHash({
+    content: overlay.content,
+    assessments: overlay.assessments,
+    levels: overlay.levels,
+  });
+  if (expectedRoot !== overlay.binding.acceptedReviewedRootHash) {
+    issues.push(
+      issue(
+        "REVIEWED_ROOT_MISMATCH",
+        "binding.acceptedReviewedRootHash",
+        `declared ${overlay.binding.acceptedReviewedRootHash} but this overlay's entries produce ${expectedRoot}`,
+      ),
+    );
+  }
+
   /* ---------------- video productions ---------------- */
   const videoKeys = new Set<string>();
   for (const [index, video] of overlay.videoProductions.entries()) {
@@ -220,6 +370,17 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
       issues.push(issue("DUPLICATE_SEMANTIC_KEY", path, `duplicate video key ${key}`));
     }
     videoKeys.add(key);
+    requireLevel(video.level, `${path}.level`);
+    const declared = levelIdentities.get(video.level);
+    if (declared && declared.levelNumber !== video.levelNumber) {
+      issues.push(
+        issue(
+          "VIDEO_LEVEL_NUMBER_MISMATCH",
+          `${path}.levelNumber`,
+          `video declares levelNumber ${video.levelNumber} but ${video.level} is level ${declared.levelNumber}`,
+        ),
+      );
+    }
     checkEvidence({ ...video.evidence, editorialState: video.editorialState }, path, issues);
     requirePrincipal(video.evidence.createdBy, `${path}.createdBy`);
     requirePrincipal(video.evidence.lastAuthoredBy, `${path}.lastAuthoredBy`);
@@ -313,17 +474,18 @@ export function validateEditorialOverlay(raw: unknown): OverlayValidationResult 
   }
 
   /* ---------------- review notes ---------------- */
-  const noteKeys = new Set<string>();
+  const noteSlots = new Set<string>();
   for (const [index, note] of overlay.reviewNotes.entries()) {
     const path = `reviewNotes[${index}]`;
-    if (noteKeys.has(note.noteKey)) {
-      issues.push(issue("DUPLICATE_NOTE_KEY", path, `duplicate noteKey ${note.noteKey}`));
+    const slot = `${note.noteIdentity}#${note.ordinal}`;
+    if (noteSlots.has(slot)) {
+      issues.push(issue("DUPLICATE_NOTE_IDENTITY", path, `duplicate note identity ${slot}`));
     }
-    noteKeys.add(note.noteKey);
-    const expected = calculateNoteKey(note);
-    if (expected !== note.noteKey) {
+    noteSlots.add(slot);
+    const expected = calculateNoteIdentity(note);
+    if (expected !== note.noteIdentity) {
       issues.push(
-        issue("NOTE_KEY_MISMATCH", `${path}.noteKey`, "noteKey does not match the note's own content"),
+        issue("NOTE_IDENTITY_MISMATCH", `${path}.noteIdentity`, "noteIdentity does not match the note's own provenance"),
       );
     }
     const target = versionKey(note.target);

@@ -129,12 +129,21 @@ function emptyCounts(): ImportSummary["counts"] {
  * label↔code mapping is therefore total, injective and deterministic:
  * `optionLabels[i] ↦ optionCodes[i]`. Nothing is guessed or repaired.
  */
-function canonicalOptionsJson(question: PackageQuestion): Prisma.InputJsonValue | undefined {
+/*
+ * PHASE-G2 CORRECTION-1 — these three are EXPORTED so the editorial overlay can
+ * derive a target's expected structural baseline through the same mapping that
+ * produced it. `questionCode` is not `stableKey`, `optionCodes` is not `options`
+ * and `correctOptionCodes` is not `correctAnswer`; a second copy of those rules
+ * living in the overlay could drift from this one without any test noticing, and
+ * a baseline hash computed from a drifted mapping would compare two different
+ * things while looking authoritative. One definition, two readers.
+ */
+export function canonicalOptionsJson(question: PackageQuestion): Prisma.InputJsonValue | undefined {
   if (question.optionCodes.length === 0) return undefined;
   return question.optionCodes.map((code) => ({ code }));
 }
 
-function canonicalOptionLabelsJson(
+export function canonicalOptionLabelsJson(
   question: PackageQuestion,
   optionLabels: readonly string[],
 ): Prisma.InputJsonValue | undefined {
@@ -151,7 +160,7 @@ function canonicalOptionLabelsJson(
  * exact per-type shape `canonicalizeQuestion` accepts. Multiple choice is a
  * sorted canonical set; ordered steps keep the approved permutation order.
  */
-function correctAnswerJson(question: PackageQuestion): Prisma.InputJsonValue {
+export function correctAnswerJson(question: PackageQuestion): Prisma.InputJsonValue {
   switch (question.type) {
     case "numeric":
       return { value: canonicalNumericString(question.correctNumericValue) };
