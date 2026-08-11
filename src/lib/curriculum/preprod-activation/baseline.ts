@@ -39,6 +39,7 @@ import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import { PreprodActivationError } from "./errors";
+import { resolvePrincipalRowSets } from "./semantic-state";
 
 export type CurriculumVersionIdentity = {
   code: string;
@@ -324,29 +325,46 @@ export function assertEditorialBaselineMatches(
 export function capturePrincipalPresence(
   absolutePath: string,
   emails: readonly string[],
-): { present: string[]; absent: string[] } {
-  if (emails.length === 0) return { present: [], absent: [] };
+): { present: string[]; absent: string[]; rowCountByIdentity: Record<string, number> } {
+  if (emails.length === 0) return { present: [], absent: [], rowCountByIdentity: {} };
   const db = open(absolutePath);
   try {
+    // CORRECTION-3: membership comes from `resolvePrincipalRowSets`, the same
+    // decision the fence and the principal projection use. This function used to
+    // ask SQL `lower("email") = lower(?)`, which is a THIRD equivalence rule —
+    // ASCII-only folding, where the artifact contract and the fingerprint both
+    // use the JavaScript rule. One rule, one place, no drift.
+    const sets = resolvePrincipalRowSets(db, emails);
     const present: string[] = [];
     const absent: string[] = [];
-    const statement = db.prepare('SELECT COUNT(*) AS n FROM "User" WHERE lower("email") = lower(?)');
-    for (const email of emails) {
-      const row = statement.get(email) as { n: number } | undefined;
-      if ((row?.n ?? 0) > 0) present.push(email);
-      else absent.push(email);
+    const rowCountByIdentity: Record<string, number> = {};
+    for (const identity of sets.identities) {
+      const count = (sets.userIdsByIdentity.get(identity) ?? []).length;
+      rowCountByIdentity[identity] = count;
+      if (count > 0) present.push(identity);
+      else absent.push(identity);
     }
-    return { present, absent };
+    return { present, absent, rowCountByIdentity };
   } finally {
     db.close();
   }
 }
 
-export function assertHistoricalPrincipalsAbsent(present: string[]): void {
+export function assertHistoricalPrincipalsAbsent(
+  present: string[],
+  rowCountByIdentity: Record<string, number> = {},
+): void {
   if (present.length === 0) return;
+  // CORRECTION-3: report the row COUNT per identity, not just presence. A
+  // canonical identity class can hold more than one row — `User.email` is unique
+  // case-sensitively — and "2 rows on this address" is the sentence an operator
+  // needs to see.
+  const detail = present
+    .map((identity) => `${identity} (${rowCountByIdentity[identity] ?? 1} row(s))`)
+    .join(", ");
   throw new PreprodActivationError(
     "UNEXPECTED_HISTORICAL_PRINCIPAL",
-    `the target already contains ${present.length} of the overlay's historical principal(s). A first activation imports into a target that has none; this database has been through a previous overlay run or has accounts on reserved addresses.`,
+    `the target already contains ${present.length} of the overlay's historical principal(s): ${detail}. A first activation imports into a target that has none; this database has been through a previous overlay run or has accounts on reserved addresses.`,
     { expected: "0 present", actual: `${present.length} present` },
   );
 }

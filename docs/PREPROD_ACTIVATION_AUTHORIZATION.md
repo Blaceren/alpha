@@ -239,7 +239,7 @@ byte digest could never match. Each state records
 | `schemaDigest` | normalised `sqlite_master` — a column added or a constraint dropped is caught |
 | `migrationLineage` | every applied migration by **name and checksum**, plus a zero-failure requirement |
 | `businessContinuityDigest` | every table the activation may not touch, allow-by-default |
-| `historicalPrincipalDigest` | the pinned editorial principals, per stage — absent, or present in their exact reviewed state |
+| `historicalPrincipals` | **every** row in each pinned editorial-principal identity class, with its cardinality, per stage |
 | `activationAuditDelta` | the audit rows a sanctioned stage is allowed to have written, projected and counted |
 | `curriculumDigest` | the curriculum surface, keyed by stable code and version, never by row id |
 | `editorialDigest` | the evidence the overlay transports, keyed the same way |
@@ -248,6 +248,18 @@ byte digest could never match. Each state records
 so a table added by a future migration is inside the fence automatically. A tampered user, an
 altered reward, a rewritten audit entry: each moves this digest, and nothing on a command line
 can move it back.
+
+**The expectation is per stage, not one value reused four times** (corrected by CORRECTION-3;
+an earlier comment in `semantic-state.ts` claimed the digest was identical at all four states,
+which it is not, and no code ever relied on it). Two separate things are true:
+
+- *unaffected business state is continuous* — no sanctioned stage writes a fenced row, so any
+  tamper moves this digest at whichever boundary it is measured;
+- *the set of fenced tables legitimately grows* — migrations 42-46 create tables
+  (`AuthoringPreviewSnapshot`, `StagingAttestation`, …) which, being new and not stage-owned,
+  enter the fence at POST_MIGRATION as empty tables. The digest is taken over the per-table map,
+  so gaining a key changes it. That is allow-by-default working as designed, and it is exactly
+  why each of the four states carries its own rehearsal-derived fingerprint.
 
 #### The two filtered surfaces, and why they are projections (CORRECTION-2)
 
@@ -269,15 +281,15 @@ Both are now measured rather than excluded. The filters on the raw table digests
 — that is what keeps a correct database matchable — and what they remove is covered by two
 components that normalise away exactly the non-reproducible columns:
 
-`historicalPrincipalDigest` emits one line per **pinned** address. Absence is a value, not a
-missing line, which is what makes the component stage-aware: at ENTRY, POST_MIGRATION and
-POST_STRUCTURAL every principal must read `absent`, and one that appears changes the digest and
-therefore the classification. Where a principal is present the line carries its role, `status`
-(the loginability gate — the overlay writes `blocked`, and the login route refuses `blocked`
-outright), name, referral code, e-mail-verification presence, the **shape** of its credential,
-and its staff profile's display name, staff role and permission version. The credential value
-is never digested; "is this still the non-bcrypt no-login placeholder" is, because swapping it
-for a real hash is precisely the escalation this exists to catch.
+`historicalPrincipals` represents **every row** in each pinned identity class, together with the
+class cardinality. Absence is a value, not a missing line, which is what makes the component
+stage-aware: at ENTRY, POST_MIGRATION and POST_STRUCTURAL every principal must read
+`users=0 absent`, and one that appears changes the digest and therefore the classification.
+Each represented row carries its **stored spelling**, role, `status` (the loginability gate —
+the overlay writes `blocked`, and the login route refuses `blocked` outright), name, referral
+code, e-mail-verification presence, its **credential class**, and — nested inside it — its staff
+profile's display name, staff role and permission version. The credential value is never
+digested, returned or logged; only its class is.
 
 `activationAuditDelta` projects the rows above the entry watermark and carries their **count**
 alongside the digest. It is `0` at ENTRY, POST_MIGRATION and POST_STRUCTURAL — neither the
@@ -285,14 +297,60 @@ migration nor the structural import writes audit history — and exactly `1` at 
 overlay's own import event. Each row is projected as its action, entity type, entity resolved
 to `code@vN` rather than a row id, the actor's e-mail rather than a user id, whether it carries
 an `ip` or a `userAgent` (the activation writes neither; an application request would), and its
-metadata canonicalised with autoincrement ids replaced. Lines are sorted and joined, so a
-duplicate of the expected event is a second identical line and is caught.
+metadata canonicalised by the **explicit normalisation registry** described below. Lines are
+sorted and joined, so a duplicate of the expected event is a second identical line and is
+caught.
 
 So the contract is: **entry state + explicit sanctioned stage delta = expected state for that
 stage**. Nothing is ignored. Both components are part of `compositeDigest`, both are named
 individually when they drift, and both are derived by one function — `captureStageFingerprint`
 — so the rehearsal, manifest preparation, authorization and resume classification cannot
 disagree about what a state is.
+
+#### Why coverage is now a partition, not two predicates (CORRECTION-3)
+
+The second independent audit proved the CORRECTION-2 fence was written as **two SQL predicates
+over the same table, and they did not select the same rows**:
+
+- **HIGH-1** — the raw digest removed rows with `lower("email") NOT IN (...)`, a *set* predicate,
+  so every case variant of a pinned address left the fence; the projection read them back with a
+  scalar `get()`, which returns *one* row. `User.email` is unique **case-sensitively**
+  (`CREATE UNIQUE INDEX "User_email_key" ON "User"("email")`), so a second row on
+  `Editor.One@…` beside a sanctioned `editor.one@…` belonged to no component at all. An
+  unreviewed `role = admin`, `status = active` account with a usable credential measured as
+  exactly the reviewed state — and at POST_MIGRATION that authorized the structural import. Both
+  rows are separately reachable, because the login route resolves accounts by exact
+  `findUnique({ where: { email } })`.
+- **MEDIUM-1** — the credential test was `substr(hash, 1, 30) = marker`, which accepts the
+  marker with a real bcrypt digest appended after it.
+- **MEDIUM-2** — metadata normalisation erased *any* numeric property whose name ended in `Id`.
+
+The fix is structural rather than a matching correction:
+
+1. **One canonical identity, one membership decision.** `canonicalPrincipalIdentity` is the rule
+   the artifact contract already applies to a `principalRef` (`z.string().trim()…toLowerCase()`),
+   and `resolvePrincipalRowSets` decides class membership **once**, in JavaScript. SQL is never
+   asked the question — `lower()` folds ASCII only while JavaScript `toLowerCase()` is
+   Unicode-aware, and using one in each half is one of the two ways HIGH-1 could open.
+   `capturePrincipalPresence` was moved onto the same rule, so no third rule exists.
+2. **Both halves are driven by row ids.** The raw fence is `WHERE "id" NOT IN (<principal ids>)`
+   and the projection is `WHERE "id" IN (<principal ids>)`, from the same set. They partition the
+   table **by construction**, so no row can fall between them however the identity rule later
+   changes. `captureSemanticCoverage` renders that partition as `total / fenced / specialised /
+   unowned / ambiguous`, and the regression suite asserts `fenced + specialised == total` and
+   `unowned == ambiguous == 0` on every fixture and every reviewed state.
+3. **Cardinality is semantic state.** The projection represents every row in a class and carries
+   the count, so `absent`, `exactly one` and `several` are three different values and a refusal
+   can say *"expected 2, found 3"*.
+4. **The credential test is closed.** `classifyCredential` checks the provisioner's *whole*
+   format — the marker followed by `Date.now().toString(36)` and nothing else, with the base-36
+   tail required to re-serialise to itself — and otherwise returns
+   `bcrypt-login-credential`, `absent` or `unrecognized`. Anchoring the end is the point.
+5. **Metadata normalisation is default-deny.** `AUDIT_METADATA_NORMALISATIONS` lists exact paths
+   per producing action, each with its reason; everything not listed is compared by value, so a
+   metadata field introduced by a future stage is protected the moment it appears. A registered
+   row id is replaced by the **canonical identity of the account it names**, not by a marker, so
+   a principal bound to a different account still moves the digest.
 
 `ContentAsset` stays stage-owned. The audit observed that no stage mutated it and asked whether
 it belongs there; `package/import.ts` creates a `ContentAsset` row for every asset a level's

@@ -321,7 +321,7 @@ export function assertPreprodActivationAuthorization(
     editorialBaselineChecked = true;
 
     const principals = capturePrincipalPresence(target.canonicalPath, manifest.historicalPrincipalRefs);
-    assertHistoricalPrincipalsAbsent(principals.present);
+    assertHistoricalPrincipalsAbsent(principals.present, principals.rowCountByIdentity);
     historicalPrincipalsAbsent = true;
   }
 

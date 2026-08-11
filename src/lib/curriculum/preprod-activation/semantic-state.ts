@@ -89,6 +89,47 @@
  * Nothing is ignored; what cannot be compared by value is compared by a normal
  * form documented here and derived by ONE function, so the rehearsal, the
  * manifest, authorization and resume classification cannot drift apart.
+ *
+ * CORRECTION-3 — WHAT THE SECOND INDEPENDENT AUDIT FOUND. The two halves above
+ * were written as two SQL predicates over the same table, and the audit proved
+ * they did not select the same rows.
+ *
+ *   HIGH-1   the raw fence removed rows with `lower("email") NOT IN (...)` — a
+ *            SET predicate, so every case variant of a pinned address left the
+ *            fence — while the projection read them back with a scalar `get()`,
+ *            which returns ONE row. `User.email` is unique case-SENSITIVELY
+ *            (`CREATE UNIQUE INDEX "User_email_key" ON "User"("email")`), so a
+ *            second row on `Editor.One@…` beside a sanctioned `editor.one@…`
+ *            belonged to NO component: an unreviewed `role = admin`,
+ *            `status = active` account with a usable credential measured as
+ *            exactly the reviewed state, and at POST_MIGRATION that authorized
+ *            the structural import.
+ *
+ *   MEDIUM-1 the credential test was `substr(hash, 1, 30) = marker`, so any
+ *            value carrying that prefix — including one with a bcrypt digest
+ *            appended after it — classified as the no-login placeholder.
+ *
+ *   MEDIUM-2 metadata normalisation erased ANY numeric property whose name
+ *            ended in `Id`, by naming convention rather than by decision.
+ *
+ * THE CORRECTION IS TO STOP WRITING THE FENCE AS TWO PREDICATES. Membership of
+ * a principal identity class is decided ONCE, in `resolvePrincipalRowSets`, and
+ * both halves are then driven by the resulting ROW IDS:
+ *
+ *   raw business continuity   `WHERE "id" NOT IN (<principal row ids>)`
+ *   principal projection      `WHERE "id"     IN (<principal row ids>)`
+ *
+ * Those two sets partition the table BY CONSTRUCTION, so no row can fall
+ * between them however the canonical identity rule is later changed — the bug
+ * class is closed structurally rather than by making two predicates agree.
+ * `captureSemanticCoverage` renders that partition as a value, and the
+ * regression suite asserts it.
+ *
+ * On top of the partition: the projection represents EVERY row in each class
+ * together with its cardinality, so multiplicity is itself semantic state; the
+ * credential test is a closed whole-format check derived from the provisioner;
+ * and metadata normalisation is an explicit path registry that preserves
+ * everything it does not name.
  */
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
@@ -96,12 +137,18 @@ import { DatabaseSync } from "node:sqlite";
 import { PreprodActivationError } from "./errors";
 
 /**
- * Bumped by CORRECTION-2: a fingerprint now carries two components that did not
- * exist before, so a manifest prepared by the previous build describes a
- * measurement this build does not take. The manifest schema compares this
- * literal, which turns that into a refusal rather than a silent mismatch.
+ * Bumped by CORRECTION-3: the principal component now represents every row in
+ * each identity class rather than one, and audit metadata is normalised by an
+ * explicit registry rather than by a naming rule, so the same database yields a
+ * different — and strictly more complete — value than build 2 produced. A
+ * manifest prepared by either previous build therefore describes a measurement
+ * this build does not take. The manifest schema compares this literal, which
+ * turns that into a diagnosable refusal rather than a silent mismatch.
+ *
+ * History: /1 pre-CORRECTION-2, /2 added `historicalPrincipalDigest` and
+ * `activationAuditDelta`, /3 made both of them total.
  */
-export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/2" as const;
+export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/3" as const;
 
 /**
  * The tables the two sanctioned importers write.
@@ -173,16 +220,114 @@ export const FILTERED_BUSINESS_TABLES: readonly string[] = ["User", "StaffProfil
  * of "nobody" — that is precisely the shape of the defect CORRECTION-2 closes.
  */
 export const FILTERED_TABLE_STAGE_OWNERS: Readonly<Record<string, string>> = {
-  User: "historicalPrincipalDigest",
-  StaffProfile: "historicalPrincipalDigest",
+  User: "historicalPrincipals",
+  StaffProfile: "historicalPrincipals",
   AuditLog: "activationAuditDelta",
 };
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-3 — one canonical identity, one membership decision
+ * ------------------------------------------------------------------ */
+
+/**
+ * The canonical form of a historical-principal address.
+ *
+ * WHY THIS EXACT RULE. It is the one the artifact itself already applies:
+ * `editorial-overlay/schema.ts` declares `principalRef` as
+ * `z.string().trim().min(3).max(320).toLowerCase()`, so a ref has been trimmed
+ * and lower-cased by the JavaScript rule before it ever reaches a manifest.
+ * Matching that here means the fence groups addresses exactly as the accepted
+ * artifact contract does, and nothing about application login semantics is
+ * changed by this module — the login route continues to resolve accounts by
+ * exact `findUnique({ where: { email } })`, which is precisely why two rows in
+ * one canonical class are two separately reachable identities and why both have
+ * to be measured.
+ *
+ * WHY NOT SQL. `lower()` in SQLite folds ASCII only, while JavaScript
+ * `toLowerCase()` is Unicode-aware, so the two disagree on inputs like `İ`. The
+ * previous build used the SQL rule in one half and the JavaScript rule in the
+ * other, which is one of the two ways HIGH-1 could open. Membership is now
+ * decided here, once, and SQL is never asked the question.
+ */
+export function canonicalPrincipalIdentity(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Every row belonging to a pinned principal identity class, resolved once.
+ *
+ * This is the single membership decision the whole module is built on. The raw
+ * business-continuity digest excludes exactly these row ids and the principal
+ * projection includes exactly these row ids, so the two sets partition each
+ * table and `captureSemanticCoverage` can prove it. A row cannot be lost
+ * between them, because there is no second predicate to disagree with.
+ */
+export type PrincipalRowSets = {
+  /** Canonical identities pinned by the manifest, deduplicated and sorted. */
+  readonly identities: readonly string[];
+  /** `User.id`s per canonical identity, ascending. Length is the cardinality. */
+  readonly userIdsByIdentity: ReadonlyMap<string, readonly number[]>;
+  /** Every `User.id` in any pinned class. */
+  readonly principalUserIds: ReadonlySet<number>;
+};
+
+export function resolvePrincipalRowSets(
+  db: DatabaseSync,
+  principalEmails: readonly string[],
+): PrincipalRowSets {
+  const identities = [
+    ...new Set(principalEmails.map(canonicalPrincipalIdentity).filter((email) => email.length > 0)),
+  ].sort();
+
+  const userIdsByIdentity = new Map<string, number[]>();
+  for (const identity of identities) userIdsByIdentity.set(identity, []);
+
+  if (identities.length > 0) {
+    // Every row is canonicalised by the SAME function, in this process. Reading
+    // the identity column for the whole table is what `captureBusinessContinuity`
+    // already does for every table it digests, so this costs nothing new.
+    const rows = db.prepare('SELECT "id" AS id, "email" AS email FROM "User"').all() as Array<{
+      id: number;
+      email: unknown;
+    }>;
+    for (const row of rows) {
+      if (typeof row.email !== "string") continue;
+      const bucket = userIdsByIdentity.get(canonicalPrincipalIdentity(row.email));
+      if (bucket) bucket.push(row.id);
+    }
+    for (const bucket of userIdsByIdentity.values()) bucket.sort((a, b) => a - b);
+  }
+
+  const principalUserIds = new Set<number>();
+  for (const bucket of userIdsByIdentity.values()) for (const id of bucket) principalUserIds.add(id);
+
+  return { identities, userIdsByIdentity, principalUserIds };
+}
+
+/**
+ * `IN (...)` list for a set of integer row ids.
+ *
+ * An empty set renders as `-1`, NOT as `NULL`. This matters: SQL `x NOT IN (NULL)`
+ * evaluates to NULL rather than true, so a `NULL` sentinel would make the raw
+ * fence match ZERO rows whenever no principal row exists — which is every state
+ * before the overlay. Row ids are positive autoincrement integers, so `-1` can
+ * never match: `id NOT IN (-1)` is true for every row and `id IN (-1)` is false
+ * for every row, which is exactly the empty-class behaviour both halves need.
+ */
+function idList(ids: Iterable<number>): string {
+  const rendered = [...ids].map((id) => String(Math.trunc(id))).join(", ");
+  return rendered.length > 0 ? rendered : "-1";
+}
 
 /** `_prisma_migrations` has its own lineage digest below. */
 const MIGRATION_TABLE = "_prisma_migrations";
 
 export type BusinessContinuityFilter = {
-  /** E-mails of the overlay's historical principals. Compared case-insensitively. */
+  /**
+   * The overlay's historical principals. Grouped into identity classes by
+   * `canonicalPrincipalIdentity`, which is the rule the artifact contract itself
+   * applies to a `principalRef`.
+   */
   readonly principalEmails: readonly string[];
   /** Highest `AuditLog.id` at entry; anything above it is the activation's own trail. */
   readonly entryMaxAuditLogId: number;
@@ -215,8 +360,11 @@ export type StageFingerprint = {
   schemaDigest: string;
   migrationLineage: MigrationLineage;
   businessContinuityDigest: string;
-  /** CORRECTION-2: the pinned principals, present or absent, in their exact state. */
-  historicalPrincipalDigest: string;
+  /**
+   * CORRECTION-2, made total by CORRECTION-3: every row in every pinned
+   * principal identity class, with its cardinality.
+   */
+  historicalPrincipals: HistoricalPrincipalState;
   /** CORRECTION-2: the audit rows a sanctioned stage is allowed to have written. */
   activationAuditDelta: ActivationAuditDelta;
   curriculumDigest: string;
@@ -350,22 +498,38 @@ export function captureMigrationLineage(db: DatabaseSync): MigrationLineage {
 /**
  * Everything the activation is NOT allowed to change, digested per table.
  *
- * This is the check that closes H1. The migration stage adds tables and columns
- * without touching a business row, and the structural and editorial stages touch
- * only the curriculum surface. So this value must be IDENTICAL at entry, after
- * the migration, after the structural import and after the overlay — and it is
- * compared against the rehearsal-derived expectation at every one of those
- * boundaries. A tampered user, an altered payout, an injected postback: each
- * moves this digest, and none of them can be blessed by restating the file's
- * current sha256, because no caller-supplied digest authorizes anything.
+ * WHAT THIS VALUE ACTUALLY IS, AND WHAT IT IS NOT (corrected by CORRECTION-3).
+ * The previous comment claimed this digest is identical at all four states. It
+ * is not, and no code ever depended on that claim: the expectation is
+ * STAGE-SPECIFIC, one rehearsal-derived fingerprint per state, and each
+ * boundary is compared against its own. Two things are true instead.
+ *
+ *   Unaffected business state is CONTINUOUS. No sanctioned stage writes a
+ *   fenced row, so a tampered user, an altered payout or an injected postback
+ *   moves this digest at whichever boundary it is measured — and none of them
+ *   can be blessed by restating the file's sha256, because no caller-supplied
+ *   digest authorizes anything. That is the property H1 needed.
+ *
+ *   The SET of fenced tables legitimately grows. Migrations 42-46 create tables
+ *   (`AuthoringPreviewSnapshot`, `StagingAttestation`, …) which, being new and
+ *   not stage-owned, enter the fence at POST_MIGRATION as empty tables. The
+ *   digest is over the per-table map, so gaining a key changes it. That is
+ *   allow-by-default working, not drift, and it is exactly why the expectation
+ *   is per state rather than one value reused four times.
+ *
+ * The three partially stage-owned tables keep every pre-existing row here and
+ * remove exactly the rows a sanctioned stage may add. Since CORRECTION-3 those
+ * removals are BY ROW ID, taken from the same `PrincipalRowSets` the principal
+ * projection is built from, so the two halves cannot select different rows.
  */
 export function captureBusinessContinuity(
   db: DatabaseSync,
   filter: BusinessContinuityFilter,
+  sets: PrincipalRowSets = resolvePrincipalRowSets(db, filter.principalEmails),
 ): { digest: string; perTable: Record<string, string> } {
   const mutable = new Set<string>([...STAGE_MUTABLE_TABLES, MIGRATION_TABLE]);
-  const principals = filter.principalEmails.map((email) => email.trim().toLowerCase()).filter(Boolean);
   const perTable: Record<string, string> = {};
+  const principalIds = idList(sets.principalUserIds);
 
   for (const table of tableNames(db)) {
     if (mutable.has(table)) continue;
@@ -376,16 +540,10 @@ export function captureBusinessContinuity(
     let sql = `SELECT ${projection} FROM "${table}"`;
     const params: Array<string | number> = [];
 
-    // The three append-only tables keep every pre-existing row in the fence and
-    // remove exactly the rows a sanctioned stage is allowed to add.
-    if (table === "User" && principals.length > 0) {
-      sql += ` WHERE lower("email") NOT IN (${principals.map(() => "?").join(", ")})`;
-      params.push(...principals);
-    } else if (table === "StaffProfile" && principals.length > 0) {
-      sql += ` WHERE "userId" NOT IN (SELECT "id" FROM "User" WHERE lower("email") IN (${principals
-        .map(() => "?")
-        .join(", ")}))`;
-      params.push(...principals);
+    if (table === "User") {
+      sql += ` WHERE "id" NOT IN (${principalIds})`;
+    } else if (table === "StaffProfile") {
+      sql += ` WHERE "userId" NOT IN (${principalIds})`;
     } else if (table === "AuditLog") {
       sql += ` WHERE "id" <= ?`;
       params.push(filter.entryMaxAuditLogId);
@@ -406,91 +564,272 @@ export function captureBusinessContinuity(
  * ------------------------------------------------------------------ */
 
 /**
- * The pinned principal addresses, each in exactly one of three states.
+ * The marker the overlay writes in front of its non-credential placeholder.
+ *
+ * Read off the provisioner rather than guessed: `editorial-overlay/import.ts`
+ * writes `` `!overlay-provisioned-no-login!${Date.now().toString(36)}` ``.
+ */
+export const OVERLAY_NO_LOGIN_MARKER = "!overlay-provisioned-no-login!";
+
+/**
+ * What a stored credential IS, as a closed set.
+ *
+ * `unrecognized` is deliberately a CLASS and not an error: a row carrying
+ * something this classifier cannot account for must move the fingerprint, not
+ * halt the measurement.
+ */
+export type CredentialClass =
+  | "overlay-no-login-placeholder"
+  | "bcrypt-login-credential"
+  | "absent"
+  | "unrecognized";
+
+/**
+ * A bcrypt modular-crypt digest: `$2a$`/`$2b$`/`$2y$`, a two-digit cost and 53
+ * characters of radix-64 salt+digest. This is what `bcrypt.hash` produces in
+ * `src/app/api/auth/register/route.ts` and the only shape `bcrypt.compare` can
+ * return true for in `src/app/api/auth/login/route.ts`.
+ */
+const BCRYPT_DIGEST = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+/**
+ * Which class a stored credential belongs to.
+ *
+ * WHY A WHOLE-FORMAT TEST AND NOT A PREFIX (CORRECTION-3, MEDIUM-1). The
+ * previous build asked `substr(hash, 1, 30) = marker`, which accepts
+ * `!overlay-provisioned-no-login!$2b$10$…` — the marker with a real digest
+ * appended. That is a different security object wearing the same label. The
+ * placeholder's contract is the marker followed by `Date.now()` in base 36 and
+ * NOTHING ELSE, so that is what is checked: the tail must be lowercase base-36,
+ * must re-serialise to itself (which rejects leading zeros, padding and mixed
+ * case), and must be a plausible epoch-millisecond value. Anchoring the END is
+ * the point — nothing may follow the timestamp.
+ *
+ * THE VALUE NEVER LEAVES THIS FUNCTION. Only the class name is returned, and no
+ * caller receives the string it was derived from, so no credential material can
+ * reach a digest, a manifest, a log line or a refusal message.
+ */
+export function classifyCredential(passwordHash: unknown): CredentialClass {
+  if (typeof passwordHash !== "string" || passwordHash.length === 0) return "absent";
+  if (passwordHash.startsWith(OVERLAY_NO_LOGIN_MARKER)) {
+    const tail = passwordHash.slice(OVERLAY_NO_LOGIN_MARKER.length);
+    // 36^7 ms lands in 1972 and 36^11 ms far beyond any plausible clock, so the
+    // bound is closed at both ends rather than open-ended; the `toString(36)`
+    // round trip then rejects anything that is not exactly how the provisioner
+    // renders a time.
+    if (/^[0-9a-z]{7,11}$/.test(tail)) {
+      const millis = Number.parseInt(tail, 36);
+      if (Number.isSafeInteger(millis) && millis > 0 && millis.toString(36) === tail) {
+        return "overlay-no-login-placeholder";
+      }
+    }
+    return "unrecognized";
+  }
+  if (BCRYPT_DIGEST.test(passwordHash)) return "bcrypt-login-credential";
+  return "unrecognized";
+}
+
+export type HistoricalPrincipalState = {
+  /** User rows across every pinned class. Cardinality is itself semantic state. */
+  userRowCount: number;
+  /** StaffProfile rows bound to those users. */
+  staffProfileRowCount: number;
+  digest: string;
+};
+
+/**
+ * EVERY row belonging to each pinned principal identity class.
  *
  * WHY A PROJECTION AND NOT THE RAW ROWS. The overlay provisions these accounts
  * itself, and two of the columns it writes cannot be reproduced: `passwordHash`
  * ends in `Date.now().toString(36)` and `StaffProfile.id` is a `cuid()`. A raw
  * digest would therefore differ between the rehearsal and the real run for a
- * database that is CORRECT, which is why the first implementation dropped the
- * rows instead — and dropping them is what let an `admin` account be smuggled in
- * on a pinned address without moving any digest.
+ * database that is CORRECT.
  *
- * WHAT IS COMPARED. Everything that decides whether this identity can act, plus
- * the identity itself:
+ * WHY EVERY ROW AND NOT ONE (CORRECTION-3, HIGH-1). `User.email` is unique
+ * case-SENSITIVELY, so one canonical identity class can legitimately hold more
+ * than one row, and each is separately reachable by the login route's exact
+ * `findUnique`. The previous build read the class with `get()` — one arbitrary
+ * row, with no ORDER BY — while the raw fence removed all of them, so rows 2..N
+ * were measured by nothing at all. The class is now read with `all()` over the
+ * ids resolved in `resolvePrincipalRowSets`, which is the SAME set the fence
+ * removed, and the cardinality is carried beside the digest so a refusal can say
+ * the useful number out loud.
  *
- *   presence          absent is a VALUE, not a missing line. This is the half
- *                     that closes HIGH-1: before the overlay these addresses
- *                     must not exist, and their appearance changes the digest at
- *                     ENTRY, POST_MIGRATION and POST_STRUCTURAL alike.
+ * WHAT IS COMPARED, PER ROW:
+ *
+ *   cardinality       absent, one and several are three different values. A
+ *                     second row in a class can never hide behind the first.
+ *   stored spelling   `Editor.One@…` and `editor.one@…` are one canonical
+ *                     identity but two login identities, so the exact stored
+ *                     form is part of the value.
  *   role, status      `status` is the loginability gate — the overlay writes
  *                     `blocked`, and the login route refuses `blocked` outright.
  *   name              what the evidence rows attribute authorship to.
  *   referralCode      derived from the ref and the overlay code, so reproducible.
- *   credential SHAPE  the placeholder is deliberately not a bcrypt digest. The
- *                     VALUE is never digested — a credential is not evidence —
- *                     but "is this still the no-login placeholder" is, because
- *                     replacing it with a real hash is exactly the privilege
- *                     escalation this component exists to catch.
+ *   credential class  the closed classification above, never the value.
+ *                     Replacing the placeholder with a usable digest is exactly
+ *                     the escalation this component exists to catch.
  *   emailVerifiedAt   presence only; the timestamp is not reproducible.
- *   staff profile     presence, display name, staff role and permission version.
+ *   staff profile     nested INSIDE its user's projection, so a profile that
+ *                     moves to a different represented user changes two rows
+ *                     rather than none. `StaffProfile.userId` is unique, so a
+ *                     user has at most one, and an extra profile in the class
+ *                     therefore shows up as a changed count.
  *
- * WHAT IS NOT COMPARED, AND WHY. `id`, `createdAt`, `updatedAt`, the `cuid()`
- * and the placeholder's random tail: all assigned at write time and different on
- * every run. Nothing else is left out.
+ * WHAT IS NOT COMPARED, AND WHY. `User.id`, `StaffProfile.id`, `createdAt`,
+ * `updatedAt` and the placeholder's timestamp tail: all assigned at write time
+ * and different on every run. Nothing else is left out.
+ *
+ * ORDERING. Rows are rendered first and then sorted BY THEIR RENDERED FORM, so
+ * the value depends on the set of rows and not on their ids or on the order they
+ * were inserted.
+ *
+ * BOTH PRINCIPAL PATHS ARE REPRESENTED, NEITHER IS SPECIAL-CASED. The importer
+ * supports provisioning an absent principal and matching one that already
+ * exists (`editorial-overlay/import.ts`, resolution status `provisioned` /
+ * `matched`). Because every row is rendered at every stage together with its
+ * cardinality, a matched principal present from ENTRY and a provisioned
+ * principal appearing only at POST_OVERLAY are simply different values of one
+ * measurement, and the reviewed value for each stage comes from the rehearsal.
  */
 export function captureHistoricalPrincipalState(
   db: DatabaseSync,
-  principalEmails: readonly string[],
-): string {
-  const emails = [...new Set(principalEmails.map((email) => email.trim().toLowerCase()).filter(Boolean))].sort();
-  if (emails.length === 0) return sha256("no-principals-pinned");
+  sets: PrincipalRowSets,
+): HistoricalPrincipalState {
+  if (sets.identities.length === 0) {
+    return { userRowCount: 0, staffProfileRowCount: 0, digest: sha256("no-principals-pinned") };
+  }
 
-  // The placeholder the overlay writes instead of a credential. Matching its
-  // PREFIX keeps the comparison reproducible while still proving that the row
-  // carries no authentication path.
-  const NO_LOGIN_PREFIX = "!overlay-provisioned-no-login!";
+  const userById = new Map<number, Record<string, unknown>>();
+  const profileByUserId = new Map<number, Record<string, unknown>>();
 
-  const user = db.prepare(
-    `SELECT "email"        AS email,
-            "role"         AS role,
-            "status"       AS status,
-            "name"         AS name,
-            "referralCode" AS referralCode,
-            CASE WHEN "emailVerifiedAt" IS NULL THEN 'no' ELSE 'yes' END AS emailVerified,
-            "leaderboardExcluded" AS leaderboardExcluded,
-            CASE
-              WHEN "passwordHash" = '' THEN 'empty'
-              WHEN substr("passwordHash", 1, ${NO_LOGIN_PREFIX.length}) = ? THEN 'overlay-no-login-placeholder'
-              ELSE 'other'
-            END AS credentialShape
-       FROM "User"
-      WHERE lower("email") = ?`,
-  );
-  const staff = db.prepare(
-    `SELECT s."displayName"       AS displayName,
-            s."staffRole"         AS staffRole,
-            s."permissionVersion" AS permissionVersion
-       FROM "StaffProfile" s
-       JOIN "User" u ON u."id" = s."userId"
-      WHERE lower(u."email") = ?`,
-  );
+  if (sets.principalUserIds.size > 0) {
+    const ids = idList(sets.principalUserIds);
+    for (const row of db
+      .prepare(
+        `SELECT "id" AS id, "email" AS email, "role" AS role, "status" AS status, "name" AS name,
+                "referralCode" AS referralCode, "passwordHash" AS passwordHash,
+                CASE WHEN "emailVerifiedAt" IS NULL THEN 'no' ELSE 'yes' END AS emailVerified,
+                "leaderboardExcluded" AS leaderboardExcluded
+           FROM "User" WHERE "id" IN (${ids})`,
+      )
+      .all() as Array<Record<string, unknown>>) {
+      userById.set(row.id as number, row);
+    }
+    for (const row of db
+      .prepare(
+        `SELECT "userId" AS userId, "displayName" AS displayName, "staffRole" AS staffRole,
+                "permissionVersion" AS permissionVersion
+           FROM "StaffProfile" WHERE "userId" IN (${ids})`,
+      )
+      .all() as Array<Record<string, unknown>>) {
+      profileByUserId.set(row.userId as number, row);
+    }
+  }
 
-  const lines = emails.map((email) => {
-    const row = user.get(NO_LOGIN_PREFIX, email) as Record<string, unknown> | undefined;
-    if (!row) return `${email} absent`;
-    const profile = staff.get(email) as Record<string, unknown> | undefined;
-    const account = ["role", "status", "name", "referralCode", "emailVerified", "leaderboardExcluded", "credentialShape"]
-      .map((column) => cell(row[column]))
-      .join("");
-    const staffPart = profile
-      ? `staff${["displayName", "staffRole", "permissionVersion"].map((column) => cell(profile[column])).join("")}`
-      : "staff absent";
-    return `${email} present${account} ${staffPart}`;
+  let staffProfileRowCount = 0;
+  const lines = sets.identities.map((identity) => {
+    const ids = sets.userIdsByIdentity.get(identity) ?? [];
+    if (ids.length === 0) return `${identity} users=0 absent`;
+
+    const rendered = ids.map((id) => {
+      const row = userById.get(id);
+      // Unreachable while the id set and the read come from the same snapshot;
+      // rendered as a value rather than thrown so a surprise cannot be silent.
+      if (!row) return "row-unreadable";
+      const account = [
+        cell(row.email),
+        cell(row.role),
+        cell(row.status),
+        cell(row.name),
+        cell(row.referralCode),
+        cell(row.emailVerified),
+        cell(row.leaderboardExcluded),
+        ` cred:${classifyCredential(row.passwordHash)}`,
+      ].join("");
+      const profile = profileByUserId.get(id);
+      if (profile) staffProfileRowCount += 1;
+      const staffPart = profile
+        ? `staff${[cell(profile.displayName), cell(profile.staffRole), cell(profile.permissionVersion)].join("")}`
+        : "staff absent";
+      return `${account} ${staffPart}`;
+    });
+    rendered.sort();
+    return `${identity} users=${ids.length} ${rendered.join("")}`;
   });
 
   lines.sort();
-  return sha256(lines.join(""));
+  return {
+    userRowCount: sets.principalUserIds.size,
+    staffProfileRowCount,
+    digest: sha256(lines.join("")),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-3 — the ownership partition, as a checkable value
+ * ------------------------------------------------------------------ */
+
+export type TableCoverage = {
+  total: number;
+  /** Rows inside the raw business-continuity digest. */
+  fenced: number;
+  /** Rows owned by the projection named in `FILTERED_TABLE_STAGE_OWNERS`. */
+  specialised: number;
+  /** Rows in neither set, and rows in both. Must always be 0. */
+  unowned: number;
+  ambiguous: number;
+};
+
+/**
+ * Proof that the two halves of each filtered table PARTITION it.
+ *
+ * This is the invariant HIGH-1 violated, rendered as numbers the regression
+ * suite asserts on every fixture it builds. `fenced` and `specialised` are
+ * counted with the same predicates the digests use, so if a future edit makes
+ * the two halves disagree, `unowned` or `ambiguous` becomes non-zero and a test
+ * fails — instead of a row quietly leaving the fingerprint.
+ */
+export function captureSemanticCoverage(
+  db: DatabaseSync,
+  filter: BusinessContinuityFilter,
+  sets: PrincipalRowSets = resolvePrincipalRowSets(db, filter.principalEmails),
+): Record<string, TableCoverage> {
+  const ids = idList(sets.principalUserIds);
+  const count = (sql: string, ...params: Array<string | number>): number =>
+    (db.prepare(sql).get(...params) as { n: number }).n;
+
+  const watermark = filter.entryMaxAuditLogId;
+  // `unowned` and `ambiguous` are derived, not queried: a row belongs to neither
+  // half when the two counts fall short of the total, and to both when they
+  // exceed it. Asking SQL for `fence AND specialised` would be tautologically
+  // zero and would prove nothing.
+  const partition = (total: number, fenced: number, specialised: number): TableCoverage => ({
+    total,
+    fenced,
+    specialised,
+    unowned: Math.max(0, total - (fenced + specialised)),
+    ambiguous: Math.max(0, fenced + specialised - total),
+  });
+
+  return {
+    User: partition(
+      count('SELECT COUNT(*) AS n FROM "User"'),
+      count(`SELECT COUNT(*) AS n FROM "User" WHERE "id" NOT IN (${ids})`),
+      count(`SELECT COUNT(*) AS n FROM "User" WHERE "id" IN (${ids})`),
+    ),
+    StaffProfile: partition(
+      count('SELECT COUNT(*) AS n FROM "StaffProfile"'),
+      count(`SELECT COUNT(*) AS n FROM "StaffProfile" WHERE "userId" NOT IN (${ids})`),
+      count(`SELECT COUNT(*) AS n FROM "StaffProfile" WHERE "userId" IN (${ids})`),
+    ),
+    AuditLog: partition(
+      count('SELECT COUNT(*) AS n FROM "AuditLog"'),
+      count('SELECT COUNT(*) AS n FROM "AuditLog" WHERE "id" <= ?', watermark),
+      count('SELECT COUNT(*) AS n FROM "AuditLog" WHERE "id" > ?', watermark),
+    ),
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -498,27 +837,92 @@ export function captureHistoricalPrincipalState(
  * ------------------------------------------------------------------ */
 
 /**
- * Canonical JSON, with autoincrement ids normalised out.
+ * THE METADATA NORMALISATION REGISTRY (CORRECTION-3, MEDIUM-2).
  *
- * The overlay's own audit metadata names the principals it provisioned by their
- * row id, and that id is only stable while the preceding state is. Any key whose
- * name ends in `Id` and whose value is a number is therefore replaced by a
- * marker; everything else — the overlay fingerprint, the checkpoint digest, the
- * source commit, the counts — is compared by value, which is the whole reason
- * this row is worth pinning.
+ * WHAT WAS WRONG. The previous build normalised by naming convention: any key
+ * matching `/Id$/` whose value was a number became `"<row-id>"`. That is a
+ * wildcard, and a wildcard decides the fate of fields nobody has looked at —
+ * including fields that do not exist yet. The audit demonstrated it erasing
+ * `targetUserId`, `importActorId`, `curriculumVersionId` and an invented
+ * `grantedRoleId` alike, purely because of how they are spelled.
  *
- * Keys are emitted in sorted order so two structurally equal objects that were
- * serialised in different orders still compare equal.
+ * THE RULE NOW IS DEFAULT-DENY. Exactly the paths listed here are normalised.
+ * Every other field — known or unknown, numeric or not, however it is named —
+ * is compared BY VALUE. A metadata field introduced by a future stage is
+ * therefore protected the moment it appears, which is the opposite of the
+ * previous behaviour.
+ *
+ * WHAT REPLACES AN ERASED VALUE. Not a marker: a STABLE SEMANTIC IDENTITY
+ * resolved from the database. A row id is meaningless across two databases, but
+ * the canonical identity of the account it points at is exactly the thing the
+ * activation pinned, so resolving it keeps the assertion checkable. Binding a
+ * principal to a different account changes the resolved identity and therefore
+ * the digest — the previous behaviour hid precisely that.
+ *
+ * WHEN A VALUE CANNOT BE RESOLVED it is preserved verbatim under an
+ * `unresolved:` tag rather than dropped. A legitimate rehearsal never produces
+ * one; a row that does is a row that must stay visible.
+ *
+ * Each entry records: the producing stage, the exact path, why the value is
+ * nondeterministic, and what stable value takes its place.
  */
-function canonicalAuditMetadata(value: unknown): string {
+type MetadataNormalisationRule = {
+  /** `AuditLog.action` this applies to. Nothing is normalised for other actions. */
+  readonly action: string;
+  /** Exact path from the metadata root. `[]` denotes every element of an array. */
+  readonly path: string;
+  /** Why the stored value cannot be compared between two runs. */
+  readonly reason: string;
+  /** What is compared instead. */
+  readonly replacement: "canonical-user-identity";
+};
+
+export const EDITORIAL_OVERLAY_AUDIT_ACTION_NAME = "curriculum.editorial-overlay.import";
+
+export const AUDIT_METADATA_NORMALISATIONS: readonly MetadataNormalisationRule[] = [
+  {
+    action: EDITORIAL_OVERLAY_AUDIT_ACTION_NAME,
+    path: "principals[].targetUserId",
+    reason:
+      "the User row a principal ref resolved to; an autoincrement id assigned when the overlay provisions the account, so it differs between the rehearsal copy and the real target",
+    replacement: "canonical-user-identity",
+  },
+  {
+    action: EDITORIAL_OVERLAY_AUDIT_ACTION_NAME,
+    path: "importActorId",
+    reason:
+      "the operator account the import was attributed to, recorded as a row id; the same identity can carry a different id in the rehearsal copy",
+    replacement: "canonical-user-identity",
+  },
+];
+
+/**
+ * Canonical JSON with exactly the registered paths replaced.
+ *
+ * Keys are emitted in sorted order, so two structurally equal objects that were
+ * serialised in different key orders produce the same value and no false state
+ * change arises from JSON key ordering.
+ */
+function canonicalAuditMetadata(
+  value: unknown,
+  path: string,
+  normalise: (path: string, value: unknown) => string | null,
+): string {
+  const replaced = normalise(path, value);
+  if (replaced !== null) return replaced;
   if (value === null || value === undefined) return "null";
-  if (Array.isArray(value)) return `[${value.map(canonicalAuditMetadata).join(",")}]`;
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalAuditMetadata(entry, `${path}[]`, normalise)).join(",")}]`;
+  }
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, v]) => v !== undefined)
+      .filter(([, entry]) => entry !== undefined)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     return `{${entries
-      .map(([key, v]) => `${JSON.stringify(key)}:${/Id$/.test(key) && typeof v === "number" ? '"<row-id>"' : canonicalAuditMetadata(v)}`)
+      .map(
+        ([key, entry]) =>
+          `${JSON.stringify(key)}:${canonicalAuditMetadata(entry, path.length > 0 ? `${path}.${key}` : key, normalise)}`,
+      )
       .join(",")}}`;
   }
   return JSON.stringify(value);
@@ -549,7 +953,9 @@ function canonicalAuditMetadata(value: unknown): string {
  *                                      neither; an application request that
  *                                      wrote audit history mid-activation would
  *                                      carry them, and that must be visible.
- *   metadata                           canonicalised as above.
+ *   metadata                           canonicalised by the registry above:
+ *                                      registered paths resolve to a stable
+ *                                      identity, EVERYTHING else by value.
  *
  * COUNT IS PART OF THE VALUE. Lines are sorted and joined, so a duplicate of the
  * expected row is a second identical line and changes the digest; `rowCount` is
@@ -580,6 +986,19 @@ export function captureActivationAuditDelta(
     )
     .all(entryMaxAuditLogId) as Array<Record<string, unknown>>;
 
+  // Resolves a row id to the canonical identity of the account it names. Used
+  // only for the registered paths below; a value that resolves to nothing keeps
+  // its original form so it cannot vanish.
+  const userIdentity = db.prepare('SELECT "email" AS email FROM "User" WHERE "id" = ?');
+  const resolveUserIdentity = (value: unknown): string => {
+    if (typeof value !== "number" || !Number.isInteger(value)) {
+      return `unresolved:${JSON.stringify(value ?? null)}`;
+    }
+    const row = userIdentity.get(value) as { email?: unknown } | undefined;
+    if (!row || typeof row.email !== "string") return `unresolved:${JSON.stringify(value)}`;
+    return `identity:${canonicalPrincipalIdentity(row.email)}`;
+  };
+
   const lines = rows.map((row) => {
     let metadata: unknown = null;
     if (typeof row.metadata === "string" && row.metadata.length > 0) {
@@ -593,6 +1012,17 @@ export function captureActivationAuditDelta(
     } else if (row.metadata !== null && row.metadata !== undefined) {
       metadata = row.metadata;
     }
+
+    const action = typeof row.action === "string" ? row.action : "";
+    const registered = new Map(
+      AUDIT_METADATA_NORMALISATIONS.filter((rule) => rule.action === action).map((rule) => [rule.path, rule]),
+    );
+    const normalise = (path: string, value: unknown): string | null => {
+      const rule = registered.get(path);
+      if (!rule) return null;
+      return JSON.stringify(resolveUserIdentity(value));
+    };
+
     return [
       cell(row.action),
       cell(row.entityType),
@@ -600,12 +1030,12 @@ export function captureActivationAuditDelta(
       cell(row.actor ?? null),
       cell(row.hasIp),
       cell(row.hasUserAgent),
-      ` meta:${canonicalAuditMetadata(metadata)}`,
+      ` meta:${canonicalAuditMetadata(metadata, "", normalise)}`,
     ].join("");
   });
 
   lines.sort();
-  return { rowCount: rows.length, digest: sha256(lines.join("")) };
+  return { rowCount: rows.length, digest: sha256(lines.join("")) };
 }
 
 /** Highest `AuditLog.id` right now — pinned at entry so later rows can be told apart. */
@@ -896,11 +1326,13 @@ export function captureStageFingerprint(
   try {
     const schemaDigest = captureSchemaDigest(db);
     const migrationLineage = captureMigrationLineage(db);
-    const business = captureBusinessContinuity(db, filter);
-    // CORRECTION-2: the two components that measure exactly what the raw table
-    // filters remove. Read from the same connection and the same instant, so a
+    // CORRECTION-3: membership of a principal identity class is decided ONCE and
+    // handed to both halves, so the raw fence and the projection cannot select
+    // different rows. Read from the same connection and the same instant, so a
     // fingerprint stays one observation rather than several.
-    const historicalPrincipalDigest = captureHistoricalPrincipalState(db, filter.principalEmails);
+    const sets = resolvePrincipalRowSets(db, filter.principalEmails);
+    const business = captureBusinessContinuity(db, filter, sets);
+    const historicalPrincipals = captureHistoricalPrincipalState(db, sets);
     const activationAuditDelta = captureActivationAuditDelta(db, filter.entryMaxAuditLogId);
     const curriculumDigest = captureCurriculumDigest(db);
     const editorialDigest = captureEditorialDigest(db);
@@ -912,7 +1344,9 @@ export function captureStageFingerprint(
         String(migrationLineage.appliedCount),
         String(migrationLineage.failedCount),
         business.digest,
-        historicalPrincipalDigest,
+        String(historicalPrincipals.userRowCount),
+        String(historicalPrincipals.staffProfileRowCount),
+        historicalPrincipals.digest,
         String(activationAuditDelta.rowCount),
         activationAuditDelta.digest,
         curriculumDigest,
@@ -924,7 +1358,7 @@ export function captureStageFingerprint(
       schemaDigest,
       migrationLineage,
       businessContinuityDigest: business.digest,
-      historicalPrincipalDigest,
+      historicalPrincipals,
       activationAuditDelta,
       curriculumDigest,
       editorialDigest,
@@ -974,6 +1408,42 @@ export function listAvailableProjections(absolutePath: string): {
   }
 }
 
+/**
+ * `captureSemanticCoverage` against a database path.
+ *
+ * The regression suite calls this on every fixture it builds, which is what turns
+ * the ownership partition from a claim in a comment into a checked property.
+ */
+export function readSemanticCoverage(
+  absolutePath: string,
+  filter: BusinessContinuityFilter,
+): Record<string, TableCoverage> {
+  const db = open(absolutePath);
+  try {
+    return captureSemanticCoverage(db, filter);
+  } finally {
+    db.close();
+  }
+}
+
+/** The principal row sets against a database path, for tests and diagnostics. */
+export function readPrincipalRowSets(
+  absolutePath: string,
+  principalEmails: readonly string[],
+): { identities: readonly string[]; rowCountByIdentity: Record<string, number> } {
+  const db = open(absolutePath);
+  try {
+    const sets = resolvePrincipalRowSets(db, principalEmails);
+    const rowCountByIdentity: Record<string, number> = {};
+    for (const identity of sets.identities) {
+      rowCountByIdentity[identity] = (sets.userIdsByIdentity.get(identity) ?? []).length;
+    }
+    return { identities: sets.identities, rowCountByIdentity };
+  } finally {
+    db.close();
+  }
+}
+
 /** Per-table business digests, so a refusal can name the exact table. */
 export function captureBusinessPerTable(
   absolutePath: string,
@@ -1016,8 +1486,22 @@ export function diffStageFingerprint(expected: StageFingerprint, actual: StageFi
   // says "a historical principal is not in its reviewed state" or "3 audit rows
   // were written where 1 was expected" tells an operator what to go and look at,
   // and the generic message does not.
-  if (expected.historicalPrincipalDigest !== actual.historicalPrincipalDigest) {
-    drift.push("historical editorial principals (presence, role, status, credential shape or staff profile)");
+  //
+  // CORRECTION-3 reports the CARDINALITY first. "2 rows exist on an address that
+  // should hold 1" is the sentence that names the defect the previous build could
+  // not see at all, and an operator can check it by hand.
+  if (expected.historicalPrincipals.userRowCount !== actual.historicalPrincipals.userRowCount) {
+    drift.push(
+      `historical editorial principal rows (expected ${expected.historicalPrincipals.userRowCount}, found ${actual.historicalPrincipals.userRowCount})`,
+    );
+  } else if (expected.historicalPrincipals.staffProfileRowCount !== actual.historicalPrincipals.staffProfileRowCount) {
+    drift.push(
+      `historical editorial principal staff profiles (expected ${expected.historicalPrincipals.staffProfileRowCount}, found ${actual.historicalPrincipals.staffProfileRowCount})`,
+    );
+  } else if (expected.historicalPrincipals.digest !== actual.historicalPrincipals.digest) {
+    drift.push(
+      "historical editorial principals (stored address, role, status, credential class or staff profile)",
+    );
   }
   if (expected.activationAuditDelta.rowCount !== actual.activationAuditDelta.rowCount) {
     drift.push(

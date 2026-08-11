@@ -67,9 +67,16 @@ import { hashManifestBytes } from "../../src/lib/curriculum/preprod-activation/m
 import { prepareActivationManifest } from "../../src/lib/curriculum/preprod-activation/prepare";
 import {
   captureStageFingerprint,
+  canonicalPrincipalIdentity,
+  classifyCredential,
+  diffStageFingerprint,
   listAvailableProjections,
+  readPrincipalRowSets,
+  readSemanticCoverage,
+  AUDIT_METADATA_NORMALISATIONS,
   FILTERED_BUSINESS_TABLES,
   FILTERED_TABLE_STAGE_OWNERS,
+  OVERLAY_NO_LOGIN_MARKER,
   SEMANTIC_STATE_VERSION,
   type StageFingerprint,
 } from "../../src/lib/curriculum/preprod-activation/semantic-state";
@@ -1380,14 +1387,16 @@ async function main(): Promise<void> {
       const owner = FILTERED_TABLE_STAGE_OWNERS[table];
       assert.ok(owner, `${table} is filtered out of the raw digest and nothing owns what it removes`);
       assert.ok(
-        ["historicalPrincipalDigest", "activationAuditDelta"].includes(owner),
+        ["historicalPrincipals", "activationAuditDelta"].includes(owner),
         `${table} names an owner that is not a fingerprint component: ${owner}`,
       );
     }
     // Both owners must actually be part of the composite, or naming them proves nothing.
     const fp = fingerprintOf(RUN_DB);
     assert.equal(fp.version, SEMANTIC_STATE_VERSION);
-    assert.equal(typeof fp.historicalPrincipalDigest, "string");
+    assert.equal(typeof fp.historicalPrincipals.digest, "string");
+    assert.equal(typeof fp.historicalPrincipals.userRowCount, "number");
+    assert.equal(typeof fp.historicalPrincipals.staffProfileRowCount, "number");
     assert.equal(typeof fp.activationAuditDelta.digest, "string");
     assert.equal(typeof fp.activationAuditDelta.rowCount, "number");
   });
@@ -1413,11 +1422,11 @@ async function main(): Promise<void> {
     await check(`PRINCIPALS 2: a principal present at ${stateLabel} is no longer that state`, () => {
       restore(RUN_DB, bytes());
       assert.equal(stateOf(RUN_DB), expectedState, "the fixture must start at the reviewed state");
-      const beforeDigest = fingerprintOf(RUN_DB).historicalPrincipalDigest;
+      const beforeDigest = fingerprintOf(RUN_DB).historicalPrincipals.digest;
       injectPrincipal(RUN_DB, principalRefs[0]);
       // The defect was that this row moved NOTHING. It must move the component
       // that owns it, and therefore the classification.
-      assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipalDigest, beforeDigest);
+      assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipals.digest, beforeDigest);
       assert.equal(stateOf(RUN_DB), "UNKNOWN");
       // Either refusal is correct: the state chain no longer recognises this
       // database, and where the stage also runs the named principal check that
@@ -1484,13 +1493,13 @@ async function main(): Promise<void> {
 
   await check("PRINCIPALS 6: changing an expected StaffProfile after the overlay is no longer POST_OVERLAY", () => {
     restore(RUN_DB, overlayBytes);
-    const before = fingerprintOf(RUN_DB).historicalPrincipalDigest;
+    const before = fingerprintOf(RUN_DB).historicalPrincipals.digest;
     exec(
       RUN_DB,
       `UPDATE "StaffProfile" SET "staffRole" = 'admin'
         WHERE "userId" = (SELECT "id" FROM "User" WHERE lower("email") = lower('${principalRefs[0]}'))`,
     );
-    assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipalDigest, before);
+    assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipals.digest, before);
     assert.equal(stateOf(RUN_DB), "UNKNOWN");
     refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
   });
@@ -1625,7 +1634,9 @@ async function main(): Promise<void> {
     assert.equal(observed.schemaDigest, rehearsed.schemaDigest);
     assert.equal(observed.migrationLineage.digest, rehearsed.migrationLineage.digest);
     assert.equal(observed.businessContinuityDigest, rehearsed.businessContinuityDigest);
-    assert.equal(observed.historicalPrincipalDigest, rehearsed.historicalPrincipalDigest);
+    assert.equal(observed.historicalPrincipals.digest, rehearsed.historicalPrincipals.digest);
+    assert.equal(observed.historicalPrincipals.userRowCount, rehearsed.historicalPrincipals.userRowCount);
+    assert.equal(observed.historicalPrincipals.staffProfileRowCount, rehearsed.historicalPrincipals.staffProfileRowCount);
     assert.equal(observed.activationAuditDelta.rowCount, rehearsed.activationAuditDelta.rowCount);
     assert.equal(observed.activationAuditDelta.digest, rehearsed.activationAuditDelta.digest);
     assert.equal(observed.curriculumDigest, rehearsed.curriculumDigest);
@@ -1651,7 +1662,8 @@ async function main(): Promise<void> {
       ["post-overlay", second.postOverlay, first.postOverlay],
     ] as const) {
       assert.equal(a.compositeDigest, b.compositeDigest, `${label} composite differs between two rehearsals`);
-      assert.equal(a.historicalPrincipalDigest, b.historicalPrincipalDigest, `${label} principals differ`);
+      assert.equal(a.historicalPrincipals.digest, b.historicalPrincipals.digest, `${label} principals differ`);
+      assert.equal(a.historicalPrincipals.userRowCount, b.historicalPrincipals.userRowCount, `${label} principal row count differs`);
       assert.equal(a.activationAuditDelta.digest, b.activationAuditDelta.digest, `${label} audit delta differs`);
       assert.equal(a.activationAuditDelta.rowCount, b.activationAuditDelta.rowCount, `${label} audit row count differs`);
     }
@@ -1659,6 +1671,398 @@ async function main(): Promise<void> {
     // The raw bytes are NOT expected to match: the whole reason these components
     // are projections is that `cuid()`, `Date.now()` and autoincrement ids differ.
     assert.notEqual(second.postOverlay.activationAuditDelta.rowCount, 0);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * CORRECTION-3 — semantic-state coverage is TOTAL
+   *
+   * The second independent audit proved the CORRECTION-2 fence was written as
+   * two SQL predicates that did not select the same rows: the raw digest removed
+   * every case variant of a pinned address (`lower(email) NOT IN (...)`) while
+   * the projection read back one row (`get()`). `User.email` is unique
+   * case-SENSITIVELY, so a second row on `Editor.One@…` beside a sanctioned
+   * `editor.one@…` belonged to no component at all — an unreviewed active admin
+   * with a usable credential measured as exactly the reviewed state, and at
+   * POST_MIGRATION that authorized the structural import.
+   *
+   * These checks are the permanent proof that the partition holds, that
+   * multiplicity is visible, that the credential test is closed, and that audit
+   * metadata is normalised by an explicit registry rather than by field name.
+   * ---------------------------------------------------------------- */
+
+  /** A canonical-equivalent spelling of a pinned address: same identity, different row. */
+  const caseVariantOf = (email: string): string => {
+    const [local, domain] = email.split("@");
+    const flipped = local.replace(/(^.)|(\.)(.)/g, (m, first: string, dot: string, after: string) =>
+      first ? first.toUpperCase() : `${dot}${after.toUpperCase()}`,
+    );
+    assert.notEqual(flipped, local, "the fixture address must have a letter to re-case");
+    assert.equal(canonicalPrincipalIdentity(`${flipped}@${domain}`), canonicalPrincipalIdentity(email));
+    return `${flipped}@${domain}`;
+  };
+
+  /** Insert a login-capable account on an arbitrary address. Synthetic digest only. */
+  const injectAccount = (
+    db: string,
+    email: string,
+    options: { role?: string; status?: string; passwordHash?: string; id?: number } = {},
+  ): void => {
+    const role = options.role ?? "admin";
+    const status = options.status ?? "active";
+    // A synthetic value with the SHAPE of a bcrypt digest. It is not a hash of
+    // anything and no password exists for it.
+    const hash = options.passwordHash ?? `$2b$10$${"S".repeat(53)}`;
+    exec(
+      db,
+      `INSERT INTO "User" ("email","name","passwordHash","role","status","referralCode","level","xp","createdAt","updatedAt")
+       VALUES ('${email}','Injected','${hash}','${role}','${status}','ref-${email.replace(/[^A-Za-z0-9]+/g, "-")}',1,0,1786000000000,1786000000000)`,
+    );
+  };
+
+  const coverageOf = (db: string): Record<string, { total: number; fenced: number; specialised: number; unowned: number; ambiguous: number }> =>
+    readSemanticCoverage(db, auditFilter());
+
+  const assertPartitionHolds = (db: string, label: string): void => {
+    const coverage = coverageOf(db);
+    for (const table of FILTERED_BUSINESS_TABLES) {
+      const c = coverage[table];
+      assert.ok(c, `${table} is filtered but reports no coverage`);
+      assert.equal(c.unowned, 0, `${label}: ${table} has ${c.unowned} row(s) owned by nothing`);
+      assert.equal(c.ambiguous, 0, `${label}: ${table} has ${c.ambiguous} ambiguously owned row(s)`);
+      assert.equal(
+        c.fenced + c.specialised,
+        c.total,
+        `${label}: ${table} fenced(${c.fenced}) + specialised(${c.specialised}) != total(${c.total})`,
+      );
+    }
+  };
+
+  await check("COVERAGE 1: the fence and the projection partition every filtered table, at every reviewed state", () => {
+    for (const [label, bytes] of [
+      ["entry", entryBytes],
+      ["post-migration", migratedBytes],
+      ["post-structural", structuralBytes],
+      ["post-overlay", overlayBytes],
+    ] as const) {
+      restore(RUN_DB, bytes);
+      assertPartitionHolds(RUN_DB, label);
+    }
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("COVERAGE 2: a case-variant row is owned — the partition holds where HIGH-1 lost a row", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = coverageOf(RUN_DB);
+    injectAccount(RUN_DB, caseVariantOf(principalRefs[0]));
+    const after = coverageOf(RUN_DB);
+    assert.equal(after.User.total, before.User.total + 1);
+    // The row joins the SPECIALISED side, because it belongs to a pinned identity
+    // class. Under the previous build it left the fence and joined nothing.
+    assert.equal(after.User.specialised, before.User.specialised + 1);
+    assert.equal(after.User.fenced, before.User.fenced);
+    assertPartitionHolds(RUN_DB, "post-overlay + case variant");
+  });
+
+  await check("PRINCIPALS C3-1: the reviewed POST_OVERLAY cardinality is exact and accepted", () => {
+    restore(RUN_DB, overlayBytes);
+    const fp = fingerprintOf(RUN_DB);
+    assert.equal(fp.historicalPrincipals.userRowCount, principalRefs.length, "one row per pinned address");
+    assert.equal(fp.historicalPrincipals.staffProfileRowCount, principalRefs.length, "one profile per principal");
+    const sets = readPrincipalRowSets(RUN_DB, principalRefs);
+    for (const ref of principalRefs) {
+      assert.equal(sets.rowCountByIdentity[canonicalPrincipalIdentity(ref)], 1);
+    }
+    assert.equal(stateOf(RUN_DB), "POST_OVERLAY");
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.disposition, "ALREADY_COMPLETE");
+    assert.equal(evidence.grant, null);
+  });
+
+  await check("PRINCIPALS C3-2: HIGH-1 — a canonical-equivalent row beside the sanctioned one moves the state", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipals;
+    const variant = caseVariantOf(principalRefs[0]);
+    injectAccount(RUN_DB, variant, { role: "admin", status: "active" });
+
+    // Two rows now share one canonical identity, and BOTH are separately
+    // reachable by the login route's exact `findUnique`.
+    assert.equal(
+      query(RUN_DB, 'SELECT COUNT(*) AS n FROM "User" WHERE "email" = ?', [variant]),
+      1,
+      "the injected row is addressable by its exact spelling",
+    );
+    const after = fingerprintOf(RUN_DB).historicalPrincipals;
+    assert.equal(after.userRowCount, before.userRowCount + 1, "cardinality is semantic state");
+    assert.notEqual(after.digest, before.digest);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    // And the refusal must name the cardinality rather than a bare digest.
+    const drift = diffStageFingerprint(chainOf().postOverlay, fingerprintOf(RUN_DB));
+    assert.ok(
+      drift.some((entry) => entry.includes("historical editorial principal rows")),
+      `the drift must name the row count, got: ${drift.join("; ")}`,
+    );
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+  });
+
+  for (const [label, options] of [
+    ["a privileged role", { role: "admin", status: "blocked" }],
+    ["an active, login-capable account", { role: "user", status: "active" }],
+  ] as const) {
+    await check(`PRINCIPALS C3-3: a canonical-equivalent row with ${label} matches no reviewed state`, () => {
+      for (const [stateLabel, bytes] of [
+        ["POST_MIGRATION", migratedBytes],
+        ["POST_STRUCTURAL", structuralBytes],
+        ["POST_OVERLAY", overlayBytes],
+      ] as const) {
+        restore(RUN_DB, bytes);
+        injectAccount(RUN_DB, caseVariantOf(principalRefs[0]), options);
+        assert.equal(stateOf(RUN_DB), "UNKNOWN", `${stateLabel} still matched with an injected variant`);
+        const chain = chainOf();
+        for (const key of ["entry", "postMigration", "postStructural", "postOverlay"] as const) {
+          assert.notEqual(
+            fingerprintOf(RUN_DB).compositeDigest,
+            chain[key].compositeDigest,
+            `matched ${key} with an injected canonical-equivalent row`,
+          );
+        }
+      }
+      restore(RUN_DB, overlayBytes);
+    });
+  }
+
+  await check("PRINCIPALS C3-4: several canonical-equivalent rows are all represented, and counted", () => {
+    restore(RUN_DB, overlayBytes);
+    const base = fingerprintOf(RUN_DB).historicalPrincipals.userRowCount;
+    const ref = principalRefs[0];
+    const [local, domain] = ref.split("@");
+    const variants = [`${local.toUpperCase()}@${domain}`, `${local}@${domain.toUpperCase()}`];
+    variants.forEach((email, index) => injectAccount(RUN_DB, email, { role: index === 0 ? "admin" : "support" }));
+    const fp = fingerprintOf(RUN_DB).historicalPrincipals;
+    assert.equal(fp.userRowCount, base + variants.length, "every row in the class is counted");
+    assert.equal(
+      readPrincipalRowSets(RUN_DB, principalRefs).rowCountByIdentity[canonicalPrincipalIdentity(ref)],
+      1 + variants.length,
+    );
+    assertPartitionHolds(RUN_DB, "post-overlay + two variants");
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+  });
+
+  await check("PRINCIPALS C3-5: insertion order does not change the fingerprint", () => {
+    const ref = principalRefs[0];
+    const [local, domain] = ref.split("@");
+    const a = `${local.toUpperCase()}@${domain}`;
+    const b = `${local}@${domain.toUpperCase()}`;
+
+    restore(RUN_DB, overlayBytes);
+    injectAccount(RUN_DB, a, { role: "admin" });
+    injectAccount(RUN_DB, b, { role: "support" });
+    const forward = fingerprintOf(RUN_DB);
+
+    restore(RUN_DB, overlayBytes);
+    injectAccount(RUN_DB, b, { role: "support" });
+    injectAccount(RUN_DB, a, { role: "admin" });
+    const reversed = fingerprintOf(RUN_DB);
+
+    // Different row ids, same set of rows: the projection sorts by rendered form,
+    // so the value is a function of the state and not of the write order.
+    assert.equal(forward.historicalPrincipals.digest, reversed.historicalPrincipals.digest);
+    assert.equal(forward.historicalPrincipals.userRowCount, reversed.historicalPrincipals.userRowCount);
+    assert.equal(forward.compositeDigest, reversed.compositeDigest);
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("PRINCIPALS C3-6: an extra StaffProfile inside the class matches no reviewed state", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipals;
+    const variant = caseVariantOf(principalRefs[0]);
+    injectAccount(RUN_DB, variant, { role: "admin" });
+    exec(
+      RUN_DB,
+      `INSERT INTO "StaffProfile" ("id","userId","displayName","staffRole","permissionVersion","createdAt","updatedAt")
+       VALUES ('injected-variant-profile',(SELECT "id" FROM "User" WHERE "email" = '${variant}'),
+               'Injected','superadmin',9,1786000000000,1786000000000)`,
+    );
+    const after = fingerprintOf(RUN_DB).historicalPrincipals;
+    assert.equal(after.staffProfileRowCount, before.staffProfileRowCount + 1);
+    assert.notEqual(after.digest, before.digest);
+    assertPartitionHolds(RUN_DB, "post-overlay + variant profile");
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("PRINCIPALS C3-7: moving a principal's profile onto a different user moves the state", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipals;
+    // `StaffProfile.userId` is unique, so re-pointing is how a profile changes
+    // owner. It must never be invisible in either direction.
+    exec(
+      RUN_DB,
+      `UPDATE "StaffProfile"
+          SET "userId" = (SELECT MIN("id") FROM "User" WHERE "id" NOT IN
+                           (SELECT "id" FROM "User" WHERE "email" IN ('${principalRefs.join("','")}'))
+                             AND "id" NOT IN (SELECT "userId" FROM "StaffProfile"))
+        WHERE "userId" = (SELECT "id" FROM "User" WHERE "email" = '${principalRefs[0]}')`,
+    );
+    const after = fingerprintOf(RUN_DB).historicalPrincipals;
+    assert.equal(after.staffProfileRowCount, before.staffProfileRowCount - 1, "it left the principal class");
+    assert.notEqual(after.digest, before.digest);
+    assertPartitionHolds(RUN_DB, "post-overlay + repointed profile");
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("PRINCIPALS C3-8: removing an expected principal row moves the cardinality", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipals;
+    exec(RUN_DB, `DELETE FROM "StaffProfile" WHERE "userId" = (SELECT "id" FROM "User" WHERE "email" = '${principalRefs[0]}')`);
+    exec(RUN_DB, `DELETE FROM "User" WHERE "email" = '${principalRefs[0]}'`);
+    const after = fingerprintOf(RUN_DB).historicalPrincipals;
+    assert.equal(after.userRowCount, before.userRowCount - 1);
+    assert.equal(after.staffProfileRowCount, before.staffProfileRowCount - 1);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("PRINCIPALS C3-9: non-principal User and StaffProfile rows stay in the raw fence", () => {
+    restore(RUN_DB, overlayBytes);
+    const coverage = coverageOf(RUN_DB);
+    assert.ok(coverage.User.fenced > 0, "ordinary accounts must still be digested whole");
+    // A tampered ordinary account is caught by business continuity, not by the
+    // principal projection — the specialised path was not widened.
+    const beforePrincipals = fingerprintOf(RUN_DB).historicalPrincipals.digest;
+    const beforeBusiness = fingerprintOf(RUN_DB).businessContinuityDigest;
+    exec(RUN_DB, `UPDATE "User" SET "role" = 'admin' WHERE "id" = (SELECT MIN("id") FROM "User")`);
+    assert.equal(fingerprintOf(RUN_DB).historicalPrincipals.digest, beforePrincipals, "not a principal change");
+    assert.notEqual(fingerprintOf(RUN_DB).businessContinuityDigest, beforeBusiness);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    restore(RUN_DB, overlayBytes);
+  });
+
+  /* ---- credential classification (MEDIUM-1) ---- */
+
+  await check("CREDENTIAL 1: the classifier is closed over the provisioner's actual format", () => {
+    // Exactly what `editorial-overlay/import.ts` writes, generated the same way.
+    const genuine = `${OVERLAY_NO_LOGIN_MARKER}${Date.now().toString(36)}`;
+    assert.equal(classifyCredential(genuine), "overlay-no-login-placeholder");
+    // Independently generated placeholders are the same class, which is what
+    // makes a rehearsal reproducible.
+    const other = `${OVERLAY_NO_LOGIN_MARKER}${(Date.now() + 987_654).toString(36)}`;
+    assert.equal(classifyCredential(other), "overlay-no-login-placeholder");
+    assert.notEqual(genuine, other);
+
+    // The MEDIUM-1 exploit: the marker with a usable digest appended. Synthetic.
+    assert.equal(classifyCredential(`${OVERLAY_NO_LOGIN_MARKER}$2b$10$${"S".repeat(53)}`), "unrecognized");
+    // Truncated, padded, re-cased and prefix-only look-alikes are all rejected.
+    assert.equal(classifyCredential(OVERLAY_NO_LOGIN_MARKER), "unrecognized");
+    assert.equal(classifyCredential(`${OVERLAY_NO_LOGIN_MARKER}0${Date.now().toString(36)}`), "unrecognized");
+    assert.equal(classifyCredential(`${OVERLAY_NO_LOGIN_MARKER}${Date.now().toString(36).toUpperCase()}`), "unrecognized");
+    assert.equal(classifyCredential(`${OVERLAY_NO_LOGIN_MARKER}${Date.now().toString(36)} `), "unrecognized");
+    assert.equal(classifyCredential(`${OVERLAY_NO_LOGIN_MARKER}${Date.now().toString(36)}x!`), "unrecognized");
+    // A recognised login credential is its own class; nothing else is.
+    assert.equal(classifyCredential(`$2b$10$${"S".repeat(53)}`), "bcrypt-login-credential");
+    assert.equal(classifyCredential(`$2a$12$${"S".repeat(53)}`), "bcrypt-login-credential");
+    assert.equal(classifyCredential(""), "absent");
+    assert.equal(classifyCredential(null), "absent");
+    assert.equal(classifyCredential("x"), "unrecognized");
+    assert.equal(classifyCredential(`$2b$10$${"S".repeat(52)}`), "unrecognized");
+  });
+
+  await check("CREDENTIAL 2: a prefix-preserving credential swap after the overlay moves the state", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipals.digest;
+    // The exact value the previous build accepted as equivalent. Synthetic digest.
+    exec(
+      RUN_DB,
+      `UPDATE "User" SET "passwordHash" = '${OVERLAY_NO_LOGIN_MARKER}$2b$10$${"S".repeat(53)}'
+        WHERE "email" = '${principalRefs[0]}'`,
+    );
+    assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipals.digest, before, "MEDIUM-1 regression");
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+    restore(RUN_DB, overlayBytes);
+  });
+
+  /* ---- AuditLog metadata normalisation (MEDIUM-2) ---- */
+
+  const overlayAuditWhere = `"id" > ${baseManifest.json.entryMaxAuditLogId as number}`;
+  const setMetadata = (db: string, patch: string): void =>
+    exec(db, `UPDATE "AuditLog" SET "metadata" = ${patch} WHERE ${overlayAuditWhere}`);
+
+  await check("METADATA 1: normalisation is an explicit registry, not a naming rule", () => {
+    // Every rule names a stage, an exact path and a reason. Nothing is a pattern.
+    assert.ok(AUDIT_METADATA_NORMALISATIONS.length > 0);
+    for (const rule of AUDIT_METADATA_NORMALISATIONS) {
+      assert.ok(rule.action.length > 0, "a rule must name the action that produces the field");
+      assert.ok(rule.reason.length > 20, "a rule must say why the value cannot be compared");
+      assert.ok(!/[*?]/.test(rule.path), `the path must be exact, not a pattern: ${rule.path}`);
+    }
+  });
+
+  await check("METADATA 2: MEDIUM-2 — an unregistered identifier-like numeric field stays visible", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).activationAuditDelta;
+    // Named exactly like the fields the old wildcard erased, and at top level.
+    setMetadata(RUN_DB, `json_set("metadata", '$.grantedRoleId', 1)`);
+    const withOne = fingerprintOf(RUN_DB).activationAuditDelta;
+    assert.equal(withOne.rowCount, before.rowCount, "no row was added");
+    assert.notEqual(withOne.digest, before.digest, "an unregistered *Id field must be compared by value");
+
+    // And its VALUE matters: 1 and 99 are different states.
+    setMetadata(RUN_DB, `json_set("metadata", '$.grantedRoleId', 99)`);
+    assert.notEqual(fingerprintOf(RUN_DB).activationAuditDelta.digest, withOne.digest);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("METADATA 3: an unregistered NESTED identifier-like field stays visible", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).activationAuditDelta.digest;
+    setMetadata(RUN_DB, `json_set("metadata", '$.principals[0].shadowUserId', 7)`);
+    const after = fingerprintOf(RUN_DB).activationAuditDelta.digest;
+    assert.notEqual(after, before, "a nested unregistered *Id field must be compared by value");
+    setMetadata(RUN_DB, `json_set("metadata", '$.principals[0].shadowUserId', 8)`);
+    assert.notEqual(fingerprintOf(RUN_DB).activationAuditDelta.digest, after);
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("METADATA 4: registered fields resolve to a stable identity, so a rebinding is visible", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).activationAuditDelta.digest;
+    // `principals[].targetUserId` is registered, so its raw id is replaced — but
+    // by the canonical identity of the account it names, not by a marker. Point it
+    // at a DIFFERENT account and the resolved identity, and the digest, must move.
+    setMetadata(
+      RUN_DB,
+      `json_set("metadata", '$.principals[0].targetUserId', (SELECT MIN("id") FROM "User" WHERE "email" NOT IN ('${principalRefs.join("','")}')))`,
+    );
+    assert.notEqual(
+      fingerprintOf(RUN_DB).activationAuditDelta.digest,
+      before,
+      "a principal bound to a different account must not normalise to the same value",
+    );
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("METADATA 5: re-serialising the same metadata with different key order is not a change", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).activationAuditDelta.digest;
+    // `json_patch` with an empty object rewrites the JSON text through SQLite's
+    // own serialiser: same content, different byte order of keys.
+    setMetadata(RUN_DB, `json_patch("metadata", '{}')`);
+    const rawChanged = query(
+      RUN_DB,
+      `SELECT COUNT(*) AS n FROM "AuditLog" WHERE ${overlayAuditWhere} AND "metadata" IS NOT NULL`,
+    );
+    assert.equal(rawChanged, 1, "the fixture still has exactly the one activation-owned row");
+    assert.equal(
+      fingerprintOf(RUN_DB).activationAuditDelta.digest,
+      before,
+      "key ordering must not create a false state change",
+    );
+    assert.equal(stateOf(RUN_DB), "POST_OVERLAY");
+    restore(RUN_DB, overlayBytes);
   });
 
   restore(RUN_DB, overlayBytes);

@@ -204,7 +204,17 @@ const stageFingerprintSchema = z.strictObject({
   // state, and the audit rows a sanctioned stage is allowed to have written.
   // `strictObject` means a manifest prepared before this correction — which has
   // neither field — is refused rather than read with the gaps still open.
-  historicalPrincipalDigest: sha256,
+  //
+  // CORRECTION-3 replaces the bare principal digest with the total measurement:
+  // the digest PLUS the row cardinalities it was taken over. A build-2 manifest
+  // carries `historicalPrincipalDigest` and no cardinality, so it fails both the
+  // unknown-key check and the missing-key check here, on top of the
+  // semantic-state version literal — three independent refusals, none silent.
+  historicalPrincipals: z.strictObject({
+    userRowCount: nonNegativeInt,
+    staffProfileRowCount: nonNegativeInt,
+    digest: sha256,
+  }),
   activationAuditDelta: z.strictObject({
     rowCount: nonNegativeInt,
     digest: sha256,
