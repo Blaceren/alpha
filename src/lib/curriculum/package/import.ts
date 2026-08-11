@@ -55,6 +55,7 @@ export type ImportSummary = {
     contentAssets: number;
     contentBindings: number;
     assessmentVersions: number;
+    assessmentBindings: number;
     questions: number;
     questionLocalizations: number;
     reportAssignments: number;
@@ -98,6 +99,7 @@ function emptyCounts(): ImportSummary["counts"] {
     contentAssets: 0,
     contentBindings: 0,
     assessmentVersions: 0,
+    assessmentBindings: 0,
     questions: 0,
     questionLocalizations: 0,
     reportAssignments: 0,
@@ -446,6 +448,50 @@ async function writePackage(
             counts.questionLocalizations += 1;
           }
         }
+
+        /*
+         * G2 ASSESSMENT BINDING SEQUENCE CORRECTION — the binding the assessment
+         * runtime resolves through, established here rather than left for later.
+         *
+         * WHAT WENT WRONG WITHOUT IT. The content branch above creates a
+         * `LevelResourceBinding` the moment it creates a `ContentVersion`, so a
+         * lesson is runtime-addressable from the instant it is imported. The
+         * assessment branch created the bank and its questions and stopped, so an
+         * `assessment_pass` level was imported with a bank nothing pointed at.
+         * Binding it afterwards is only possible while the parent curriculum is
+         * still a draft — `setLevelAssessmentBinding` loads the level through
+         * `assertParentDraft` — and nothing in the accepted activation sequence
+         * did it. Once the curriculum was published the window shut permanently:
+         * ata-v2@v3 reached `published` with 58 assessment_pass levels and zero
+         * assessment bindings, which no accepted operation can now repair.
+         *
+         * WHY IT IS AN UPSERT AND NOT A CREATE. `LevelResourceBinding` is unique
+         * per `levelDefinitionId`, and every one of the 58 canonical
+         * assessment_pass levels also carries content, so the content branch has
+         * already created the row. Creating a second one would violate the
+         * constraint; updating the existing one is the same shape the accepted
+         * `setLevelAssessmentBinding` uses when a binding is already present.
+         *
+         * WHY A DRAFT BANK MAY BE BOUND HERE. The canonical package ships its
+         * resources as drafts (57 of 58 assessments, 77 of 78 contents) and the
+         * reviewed activation plan publishes them IN PLACE afterwards — which is
+         * exactly why 77 of the 78 content rows were `PUBLISH_IN_PLACE`. The
+         * binding names the resource; publication makes it servable. The runtime
+         * still refuses an unpublished bank (`assessment-runtime` requires
+         * `status === "published"` and a `publishedAt`), so binding early grants
+         * no learner access — it only makes the level addressable so publication
+         * can find it.
+         */
+        await tx.levelResourceBinding.upsert({
+          where: { levelDefinitionId: levelRow.id },
+          update: { assessmentVersionId: assessmentVersion.id },
+          create: {
+            levelDefinitionId: levelRow.id,
+            curriculumVersionId: version.id,
+            assessmentVersionId: assessmentVersion.id,
+          },
+        });
+        counts.assessmentBindings += 1;
       }
 
       /* ----------------------------- report ----------------------------- */

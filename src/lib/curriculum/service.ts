@@ -2,6 +2,7 @@ import type { CurriculumVersion, Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
 import { CurriculumDomainError } from "@/lib/curriculum/errors";
+import { validateCurriculumResourceCompleteness } from "@/lib/curriculum/resource-completeness";
 import { validateCurriculumDraft } from "@/lib/curriculum/validation";
 import type {
   ArchiveCurriculumInput,
@@ -125,11 +126,19 @@ export async function publishCurriculumVersion(
       }
 
       const validation = validateCurriculumDraft(snapshot, { now });
-      if (!validation.valid) {
+      // The shape checks above and the resource checks below answer different
+      // questions, and a curriculum has to pass BOTH to reach the runtime: one
+      // proves the route is well formed, the other proves a learner standing on
+      // each level has something that can complete it. They are reported
+      // together so an operator sees every reason at once rather than fixing
+      // shape, republishing, and discovering the resource gap afterwards.
+      const resourceIssues = await validateCurriculumResourceCompleteness(tx, version.id);
+      const allIssues = [...validation.issues, ...resourceIssues];
+      if (allIssues.length > 0) {
         throw new CurriculumDomainError(
           "CURRICULUM_INVALID",
-          `CurriculumVersion ${version.id} failed publish validation with ${validation.issues.length} issue(s)`,
-          validation.issues,
+          `CurriculumVersion ${version.id} failed publish validation with ${allIssues.length} issue(s)`,
+          allIssues,
         );
       }
 
