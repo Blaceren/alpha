@@ -9,6 +9,22 @@
  * The database target is ALWAYS explicit — there is no default, and the live DEV
  * runtime database is refused outright (CV-1 must never touch it). Nothing is
  * published, activated or enrolled by this command.
+ *
+ * AUTHORIZED PREPROD ACTIVATION. A protected runtime database is still refused
+ * for every ordinary invocation. The single exception is a sanctioned PREPROD
+ * activation, requested by adding:
+ *
+ *   --activation-manifest <path>
+ *   --expect-activation-manifest-sha256 <64hex>
+ *   --activation-stage STRUCTURAL_IMPORT
+ *   --expect-target-sha256 <64hex>
+ *   [--completed-stages PREPARED,MIGRATION_41_TO_46]
+ *
+ * Every one of those is mandatory once the first appears, and all of them
+ * together still only authorize the exact reviewed target on the exact reviewed
+ * host at the exact reviewed stage. There is no `--force` and no environment
+ * variable that shortens the path. Publication, binding, deploy and flag changes
+ * remain outside what any manifest can authorize.
  */
 import fs from "node:fs";
 import { validateCurriculumPackage } from "../../src/lib/curriculum/package/validate";
@@ -17,6 +33,12 @@ import {
   assertSafeDatabaseTarget,
   assertTargetIdentityUnchanged,
 } from "../../src/lib/curriculum/protected-database";
+import {
+  describeAuthorization,
+  hasActivationArgs,
+  resolveActivationAuthorization,
+} from "../../src/lib/curriculum/preprod-activation/cli";
+import type { ActivationLock } from "../../src/lib/curriculum/preprod-activation/lock";
 
 type Args = {
   packagePath: string;
@@ -75,24 +97,49 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Open the path the guard actually inspected, never the raw argument, and
-  // re-verify identity immediately before connecting.
-  const target = assertSafeDatabaseTarget(args.database);
-  assertTargetIdentityUnchanged(target);
-  process.env.DATABASE_URL = target.url;
+  // A sanctioned PREPROD activation is the only way a protected runtime database
+  // becomes a legal target, and it is authorized BEFORE the guard runs — the
+  // guard's job is to check a grant, never to produce one.
+  let activation: { lock: ActivationLock; evidence: Record<string, unknown> } | null = null;
+  let guardOptions: Parameters<typeof assertSafeDatabaseTarget>[1] = {};
+  if (hasActivationArgs(process.argv)) {
+    const resolved = resolveActivationAuthorization({
+      argv: process.argv,
+      operation: "STRUCTURAL_IMPORT",
+      packagePath: args.packagePath,
+    });
+    activation = { lock: resolved.lock, evidence: describeAuthorization(resolved.evidence) };
+    guardOptions = { activationGrant: resolved.grant };
+  }
 
-  const { PrismaClient } = await import("@prisma/client");
-  const db = new PrismaClient({ datasources: { db: { url: target.url } } });
   try {
-    const result = await importCurriculumPackage(raw, { db, dryRun: args.dryRun });
-    if (!result.ok) {
-      console.error(args.json ? JSON.stringify(result, null, 2) : `${result.code}\n${formatIssues(result.issues)}`);
-      process.exitCode = 1;
-      return;
+    // Open the path the guard actually inspected, never the raw argument, and
+    // re-verify identity immediately before connecting.
+    const target = assertSafeDatabaseTarget(args.database, guardOptions);
+    assertTargetIdentityUnchanged(target, guardOptions);
+    process.env.DATABASE_URL = target.url;
+
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient({ datasources: { db: { url: target.url } } });
+    try {
+      const result = await importCurriculumPackage(raw, { db, dryRun: args.dryRun });
+      if (!result.ok) {
+        console.error(args.json ? JSON.stringify(result, null, 2) : `${result.code}\n${formatIssues(result.issues)}`);
+        process.exitCode = 1;
+        return;
+      }
+      const payload = activation
+        ? { ...result.summary, activationAuthorization: activation.evidence }
+        : result.summary;
+      console.log(args.json ? JSON.stringify(payload, null, 2) : formatSummary(result.summary));
+      if (activation && !args.json) {
+        console.log(`activation=${String(activation.evidence.activationId)} stage=${String(activation.evidence.stage)}`);
+      }
+    } finally {
+      await db.$disconnect();
     }
-    console.log(args.json ? JSON.stringify(result.summary, null, 2) : formatSummary(result.summary));
   } finally {
-    await db.$disconnect();
+    activation?.lock.release();
   }
 }
 

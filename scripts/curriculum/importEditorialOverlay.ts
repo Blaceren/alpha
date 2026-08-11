@@ -12,12 +12,30 @@
  *
  * The target passes through the shared protected-database guard, which refuses
  * any path that IS — or aliases — a runtime database by device/inode identity.
- * This CLI provides no bypass: a live import is a different, privileged
- * operation that must bring its own audited mechanism.
+ * This CLI provides no generic bypass: no `--force`, no `--allow-live`, no
+ * environment variable.
+ *
+ * AUTHORIZED PREPROD ACTIVATION. The one audited mechanism that permits a
+ * protected target is a sanctioned PREPROD activation, requested with:
+ *
+ *   --activation-manifest <path>
+ *   --expect-activation-manifest-sha256 <64hex>
+ *   --activation-stage EDITORIAL_OVERLAY
+ *   --expect-target-sha256 <64hex>
+ *   --package <the structural package this activation imported>
+ *   --completed-stages PREPARED,MIGRATION_41_TO_46,STRUCTURAL_IMPORT
+ *
+ * Beyond the manifest's own pins, the overlay stage additionally requires the
+ * freshly imported target to carry NOTHING the structural package did not put
+ * there — zero SourceAuthorityResolution rows, zero EditorialReviewNote rows,
+ * and none of the overlay's historical principals. That is the activation-side
+ * mitigation for accepted findings M-1 and M-2: this import must never absorb
+ * editorial state it did not create.
  *
  * NOTHING HERE PUBLISHES. The overlay carries editorial evidence; content
  * publication, curriculum publication and assessment binding are separate later
- * decisions, in that order, and none of them happen because an import ran.
+ * decisions, in that order, and none of them happen because an import ran — with
+ * or without an activation manifest.
  */
 import "dotenv/config";
 import fs from "node:fs";
@@ -27,6 +45,12 @@ import {
 } from "../../src/lib/curriculum/protected-database";
 import { importEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/import";
 import { validateEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/validate";
+import {
+  describeAuthorization,
+  hasActivationArgs,
+  resolveActivationAuthorization,
+} from "../../src/lib/curriculum/preprod-activation/cli";
+import type { ActivationLock } from "../../src/lib/curriculum/preprod-activation/lock";
 
 function arg(name: string): string | null {
   const index = process.argv.indexOf(`--${name}`);
@@ -66,44 +90,77 @@ async function main(): Promise<void> {
   const database = arg("database");
   if (!database) throw new Error("--database <url> is required (no default target exists)");
 
-  // Guard first, then open exactly what the guard inspected.
-  const target = assertSafeDatabaseTarget(database);
-  assertTargetIdentityUnchanged(target);
-
-  const { PrismaClient } = await import("@prisma/client");
-  const db = new PrismaClient({ datasources: { db: { url: target.url } } });
-  try {
-    const importActor = arg("import-actor");
-    const result = await importEditorialOverlay(raw, {
-      db,
-      dryRun: process.argv.includes("--dry-run"),
-      importActorId: importActor ? Number(importActor) : null,
-      allowPrincipalProvisioning: process.argv.includes("--allow-principal-provisioning"),
+  // The activation runs first: it is what produces the grant the guard checks.
+  let activation: { lock: ActivationLock; evidence: Record<string, unknown> } | null = null;
+  let guardOptions: Parameters<typeof assertSafeDatabaseTarget>[1] = {};
+  if (hasActivationArgs(process.argv)) {
+    const packagePath = arg("package");
+    if (!packagePath) {
+      throw new Error(
+        "--package <file.json> is required for an authorized activation: the overlay's declared structural-package fingerprint is compared against the package this activation actually imported",
+      );
+    }
+    const resolved = resolveActivationAuthorization({
+      argv: process.argv,
+      operation: "EDITORIAL_OVERLAY",
+      packagePath,
+      overlayPath,
     });
-    if (!result.ok) {
-      console.error(json ? JSON.stringify(result, null, 2) : `${result.code}\n${formatIssues(result.issues)}`);
-      process.exitCode = 1;
-      return;
+    activation = { lock: resolved.lock, evidence: describeAuthorization(resolved.evidence) };
+    guardOptions = { activationGrant: resolved.grant };
+  }
+
+  try {
+    // Guard first, then open exactly what the guard inspected.
+    const target = assertSafeDatabaseTarget(database, guardOptions);
+    assertTargetIdentityUnchanged(target, guardOptions);
+
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient({ datasources: { db: { url: target.url } } });
+    try {
+      const importActor = arg("import-actor");
+      const result = await importEditorialOverlay(raw, {
+        db,
+        dryRun: process.argv.includes("--dry-run"),
+        importActorId: importActor ? Number(importActor) : null,
+        allowPrincipalProvisioning: process.argv.includes("--allow-principal-provisioning"),
+      });
+      if (!result.ok) {
+        console.error(json ? JSON.stringify(result, null, 2) : `${result.code}\n${formatIssues(result.issues)}`);
+        process.exitCode = 1;
+        return;
+      }
+      if (json) {
+        console.log(
+          JSON.stringify(
+            activation ? { ...result.summary, activationAuthorization: activation.evidence } : result.summary,
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      const s = result.summary;
+      console.log(
+        [
+          `outcome=${s.outcome}  fingerprint=${s.overlayFingerprint}`,
+          `curriculum=${s.curriculum.code}@v${s.curriculum.versionNumber} (id=${s.curriculum.id}, status=${s.curriculum.status})`,
+          `principals: ${s.principals.map((p) => `${p.ref}->${p.targetUserId ?? "-"}(${p.status})`).join(" ")}`,
+          ...Object.entries(s.counts).map(
+            ([key, value]) => `${key}: created=${value.created} updated=${value.updated} unchanged=${value.unchanged}`,
+          ),
+          `auditEventId=${s.auditEventId ?? "-"}`,
+          ...s.notes.map((n) => `note: ${n}`),
+          ...(activation
+            ? [`activation=${String(activation.evidence.activationId)} stage=${String(activation.evidence.stage)}`]
+            : []),
+        ].join("\n"),
+      );
+    } finally {
+      await db.$disconnect();
     }
-    if (json) {
-      console.log(JSON.stringify(result.summary, null, 2));
-      return;
-    }
-    const s = result.summary;
-    console.log(
-      [
-        `outcome=${s.outcome}  fingerprint=${s.overlayFingerprint}`,
-        `curriculum=${s.curriculum.code}@v${s.curriculum.versionNumber} (id=${s.curriculum.id}, status=${s.curriculum.status})`,
-        `principals: ${s.principals.map((p) => `${p.ref}->${p.targetUserId ?? "-"}(${p.status})`).join(" ")}`,
-        ...Object.entries(s.counts).map(
-          ([key, value]) => `${key}: created=${value.created} updated=${value.updated} unchanged=${value.unchanged}`,
-        ),
-        `auditEventId=${s.auditEventId ?? "-"}`,
-        ...s.notes.map((n) => `note: ${n}`),
-      ].join("\n"),
-    );
   } finally {
-    await db.$disconnect();
+    activation?.lock.release();
   }
 }
 

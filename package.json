@@ -80,6 +80,8 @@
     "curriculum:overlay:export": "tsx scripts/curriculum/exportEditorialOverlay.ts",
     "curriculum:overlay:validate": "tsx scripts/curriculum/importEditorialOverlay.ts --validate-only",
     "curriculum:overlay:import": "tsx scripts/curriculum/importEditorialOverlay.ts",
+    "activation:manifest:prepare": "tsx scripts/curriculum/preparePreprodActivationManifest.ts",
+    "activation:manifest:validate": "tsx scripts/curriculum/validatePreprodActivationManifest.ts",
     "curriculum:canonical100:build": "tsx scripts/curriculum/buildCanonical100.ts",
     "curriculum:canonical100:check": "tsx scripts/curriculum/buildCanonical100.ts --check",
     "curriculum:blueprint:extract": "tsx scripts/curriculum/extractVideoBlueprint.ts",
@@ -164,6 +166,7 @@
     "test:regression:source-authority": "tsx scripts/regression/curriculumSourceAuthorityRegression.ts",
     "test:regression:source-authority-correction": "tsx scripts/regression/curriculumSourceAuthorityCorrectionRegression.ts",
     "test:regression:source-authority-correction-2": "tsx scripts/regression/curriculumSourceAuthorityCorrection2Regression.ts",
+    "test:regression:preprod-activation-authorization": "tsx scripts/regression/preprodActivationAuthorizationRegression.ts",
     "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts",
     "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts"
   },

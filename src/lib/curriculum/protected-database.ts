@@ -41,6 +41,26 @@
  * flag, environment variable or argument that permits one. A future privileged
  * activation path that intends to write a runtime database must introduce its
  * own explicitly-audited mechanism rather than weakening this one.
+ *
+ * THAT MECHANISM NOW EXISTS, AND IT IS NOT A WEAKENING OF THIS ONE.
+ * `src/lib/curriculum/preprod-activation` implements a PREPROD-only activation
+ * authorization: a reviewed manifest, pinned by a digest supplied separately
+ * from the file, binding the host, the exact target database, a verified local
+ * rollback backup, the migration lineage, the structural package, the editorial
+ * overlay, the deployed releases, the feature-flag baseline and the database's
+ * own starting contents. When every one of those holds it issues a GRANT, and
+ * `assertSafeDatabaseTarget` accepts a grant that names exactly the target in
+ * front of it.
+ *
+ * WHY THAT IS STILL FAIL-CLOSED. The grant is not a boolean and not a flag. It
+ * carries one absolute path, one `(device, inode)` pair, one operation and one
+ * stage, and every one of them is compared here against the target actually
+ * being opened. A grant issued for one database cannot admit another, an alias
+ * of the granted file is still refused because the path must match exactly, and
+ * `assertStillValid` is called at the last possible moment so a target that
+ * moved between authorization and open is refused rather than followed. No
+ * argument to this module, and no environment variable read by it, produces a
+ * grant: only the authorization module does, and only after all of the above.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -292,11 +312,59 @@ export type ResolvedDatabaseTarget = {
   existed: boolean;
 };
 
+/**
+ * A PREPROD activation grant, described structurally so that this module keeps
+ * no dependency on the authorization package (which depends on this one).
+ *
+ * Only `src/lib/curriculum/preprod-activation/authorize.ts` produces a value of
+ * this shape, and only after every precondition in that module holds. Nothing
+ * here validates the activation — it validates that the grant in hand names the
+ * file about to be opened, and then hands control back to the issuer's own
+ * re-verification.
+ */
+export type ProtectedDatabaseActivationGrant = {
+  readonly kind: "preprod-activation";
+  readonly activationId: string;
+  readonly operation: string;
+  readonly stage: string;
+  readonly verifiedTarget: {
+    readonly absolutePath: string;
+    readonly device: number;
+    readonly inode: number;
+  };
+  /** Re-reads live state; throws if anything moved since authorization. */
+  readonly assertStillValid: () => void;
+};
+
 export type AssertSafeDatabaseTargetOptions = {
   env?: NodeJS.ProcessEnv;
   /** Injectable for tests that need a set the host does not have. */
   protectedDatabases?: ProtectedDatabase[];
+  /**
+   * A grant for THIS target, when the caller is a sanctioned PREPROD activation.
+   *
+   * Absent — which is every ordinary call — leaves the refusal behaviour exactly
+   * as it was: a protected database is refused, with no way to ask twice.
+   */
+  activationGrant?: ProtectedDatabaseActivationGrant;
 };
+
+/**
+ * Does this grant name exactly this path?
+ *
+ * Path equality is required in addition to the identity comparison below,
+ * because a hardlink to the granted file has the same `(device, inode)` under a
+ * different name. An activation is authorized to write ONE path; an alias of it
+ * is a different label for the same bytes and is not what was reviewed.
+ */
+function grantNamesPath(
+  grant: ProtectedDatabaseActivationGrant | undefined,
+  candidatePath: string,
+): grant is ProtectedDatabaseActivationGrant {
+  if (!grant) return false;
+  if (grant.kind !== "preprod-activation") return false;
+  return path.resolve(grant.verifiedTarget.absolutePath) === candidatePath;
+}
 
 /**
  * Refuse anything that is not an explicit local SQLite file, and anything that
@@ -336,6 +404,11 @@ export function assertSafeDatabaseTarget(
   const normalised = path.resolve(raw);
   const protectedSet = options.protectedDatabases ?? resolveProtectedDatabases(env);
 
+  // Does the caller hold a grant for THIS path? Computed once, consulted at every
+  // refusal site below. A grant for some other path is worth nothing here — the
+  // comparison is by resolved path, so it cannot be widened by an alias.
+  const granted = grantNamesPath(options.activationGrant, normalised);
+
   // ---- the coarse lexical net runs FIRST, before anything that needs the file
   // to exist.
   //
@@ -345,13 +418,15 @@ export function assertSafeDatabaseTarget(
   // database is itself disqualifying, whatever the filesystem currently holds.
   // The cost is that a fixture may not borrow a protected name, which is a
   // constraint worth having.
-  for (const needle of PROTECTED_PATH_SUBSTRINGS) {
-    if (normalised.includes(needle)) {
-      throw new ProtectedDatabaseError(
-        "TARGET_PROTECTED",
-        `refusing a database path that names a protected runtime database (${needle})`,
-        { protectedPath: null, rule: "path-substring" },
-      );
+  if (!granted) {
+    for (const needle of PROTECTED_PATH_SUBSTRINGS) {
+      if (normalised.includes(needle)) {
+        throw new ProtectedDatabaseError(
+          "TARGET_PROTECTED",
+          `refusing a database path that names a protected runtime database (${needle})`,
+          { protectedPath: null, rule: "path-substring" },
+        );
+      }
     }
   }
 
@@ -426,6 +501,35 @@ export function assertSafeDatabaseTarget(
   // ---- 1. identity. Catches symlink-through-ancestor, hardlink, bind mount,
   //         `../` traversal, a second mount point and any alternate name.
   const identity = existed ? resolveIdentity(absolutePath).identity : null;
+
+  // ---- 1a. a grant admits ONE file, and only if the file is still that file.
+  //
+  // The grant was issued against a `(device, inode)` read during authorization.
+  // Comparing it again here — after this call has done its own resolution —
+  // means a target that was swapped in the interval is refused rather than
+  // written. Path equality alone was already required by `grantNamesPath`; this
+  // adds the identity half, so neither a renamed file nor a re-created one at
+  // the same path can inherit somebody else's authorization.
+  if (granted) {
+    const grant = options.activationGrant as ProtectedDatabaseActivationGrant;
+    if (
+      !identity ||
+      identity.dev !== grant.verifiedTarget.device ||
+      identity.ino !== grant.verifiedTarget.inode
+    ) {
+      throw new ProtectedDatabaseError(
+        "TARGET_IDENTITY_CHANGED",
+        `the activation grant for ${absolutePath} was issued against device ${grant.verifiedTarget.device}, inode ${grant.verifiedTarget.inode}; the file now at that path is ${identity ? `device ${identity.dev}, inode ${identity.ino}` : "absent"}. Refusing.`,
+        { rule: "activation-grant-identity" },
+      );
+    }
+    // Last word goes back to the issuer: it re-reads the live digest, the
+    // migration count and everything else it pinned. Anything that moved since
+    // authorization throws from here, immediately before the caller connects.
+    grant.assertStillValid();
+    return { url: `file:${absolutePath}`, absolutePath, identity, existed };
+  }
+
   if (identity) {
     for (const candidate of protectedSet) {
       if (
@@ -479,7 +583,10 @@ export function assertSafeDatabaseTarget(
  * client connecting. Any change of identity — a file replaced, a path that has
  * become a symlink, a target that vanished — is refused rather than followed.
  */
-export function assertTargetIdentityUnchanged(target: ResolvedDatabaseTarget): void {
+export function assertTargetIdentityUnchanged(
+  target: ResolvedDatabaseTarget,
+  options: AssertSafeDatabaseTargetOptions = {},
+): void {
   let current: fs.Stats;
   try {
     current = fs.lstatSync(target.absolutePath);
@@ -500,8 +607,10 @@ export function assertTargetIdentityUnchanged(target: ResolvedDatabaseTarget): v
   }
   if (!target.existed) {
     // It was going to be created and now exists. Re-run the full guard so a file
-    // that appeared in the window is identified rather than assumed benign.
-    assertSafeDatabaseTarget(`file:${target.absolutePath}`);
+    // that appeared in the window is identified rather than assumed benign. The
+    // caller's options travel with it: a grant that admitted this target a
+    // moment ago must still be the thing being evaluated, not silently dropped.
+    assertSafeDatabaseTarget(`file:${target.absolutePath}`, options);
     return;
   }
   if (
