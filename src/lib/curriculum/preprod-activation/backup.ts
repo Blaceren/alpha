@@ -190,20 +190,57 @@ export function verifyBackupArtifact(binding: BackupBinding): BackupVerification
 }
 
 /**
- * THE POST-BACKUP WRITE CHECK.
+ * THE POST-BACKUP WRITE CHECK, AND WHAT IT IS A CHECK ON.
  *
  * This is the reason an age-based rule ("the backup must be less than N minutes
  * old") was rejected. Age answers a question nobody has: what matters is not how
  * long ago the copy was taken but whether anything happened to the original
- * since. A five-second-old backup of a database that took a write in between is
- * useless as a rollback point; an hour-old backup of a genuinely quiescent
- * database is exact.
+ * since.
  *
- * So the check is equality, and it is applied at the boundary of the FIRST
- * mutation stage — the only moment at which the live database is still supposed
- * to hold precisely the bytes the backup was taken from. Later stages have
- * legitimately moved the database and are pinned by their own expected
- * pre-stage digest instead; see `stages.ts`.
+ * THE ARTIFACT COVERS THE ENTRY SNAPSHOT. That is the whole of its claim. Once a
+ * sanctioned stage has run, the live database has legitimately moved on and no
+ * longer matches it — comparing the two at that point would either refuse every
+ * activation after the first stage or force somebody to re-take the backup after
+ * a mutation, which would destroy the rollback point the backup exists to be.
+ *
+ * So the comparison is against the ENTRY state the manifest pins, and it is made
+ * at EVERY stage. What it proves is that the rollback artifact still corresponds
+ * to the state the activation started from, which is the state a rollback
+ * returns to. Whether the database is now in the right PLACE is a different
+ * question, answered by the rehearsal-derived state chain.
+ */
+export function assertBackupCoversEntryState(
+  binding: BackupBinding,
+  entry: { entrySha256: string; entryMigrationCount: number; entryLogicalDigest: string },
+): void {
+  if (binding.sourceDatabaseSha256 !== entry.entrySha256) {
+    throw new PreprodActivationError(
+      "BACKUP_SOURCE_DIGEST_MISMATCH",
+      "the rollback backup was not taken from the database state this manifest pins as its entry point, so it is not a rollback point for this activation. Quiesce the environment, take a fresh backup, and prepare a fresh activation manifest.",
+      { expected: entry.entrySha256, actual: binding.sourceDatabaseSha256 },
+    );
+  }
+  requireEqual(
+    "BACKUP_MIGRATION_MISMATCH",
+    "applied migration count the rollback backup was taken at",
+    entry.entryMigrationCount,
+    binding.sourceDatabaseAppliedMigrationCount,
+  );
+  requireEqual(
+    "BACKUP_SOURCE_DIGEST_MISMATCH",
+    "rollback backup logical content digest against the pinned entry state",
+    entry.entryLogicalDigest,
+    binding.logicalDigest,
+  );
+}
+
+/**
+ * The live-changed-after-backup check, used at PREPARATION time.
+ *
+ * At preparation the database is still supposed to hold precisely the bytes the
+ * backup was taken from, so equality is the right test and a mismatch means
+ * somebody wrote to it in between. After preparation the entry-state comparison
+ * above is what applies.
  */
 export function assertBackupCoversCurrentState(
   binding: BackupBinding,
@@ -222,9 +259,6 @@ export function assertBackupCoversCurrentState(
     binding.sourceDatabaseAppliedMigrationCount,
     current.appliedMigrationCount,
   );
-  // Belt and braces: the artifact and the live database must agree row-for-row.
-  // A file digest can match while the artifact was copied from somewhere else
-  // entirely, if the manifest was assembled carelessly.
   requireEqual(
     "BACKUP_SOURCE_DIGEST_MISMATCH",
     "rollback backup logical content digest against the live database",

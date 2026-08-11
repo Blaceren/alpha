@@ -25,6 +25,7 @@
 import path from "node:path";
 
 import { prepareActivationManifest, writeActivationManifest } from "../../src/lib/curriculum/preprod-activation/prepare";
+import { summarizeContentActivationPlan } from "../../src/lib/curriculum/preprod-activation/content-plan";
 
 function arg(name: string): string | null {
   const index = process.argv.indexOf(`--${name}`);
@@ -39,11 +40,11 @@ function required(name: string): string {
   return value;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const json = process.argv.includes("--json");
   const outPath = required("out");
 
-  const result = prepareActivationManifest({
+  const result = await prepareActivationManifest({
     activationId: required("activation-id"),
     liveDatabasePath: required("live-database"),
     backupArtifactPath: required("backup-artifact"),
@@ -79,10 +80,12 @@ function main(): void {
     backupArtifactSha256: result.manifest.backup.artifactSha256,
     structuralPackageFingerprint: result.manifest.structuralPackage.contentFingerprint,
     overlayFingerprint: result.manifest.editorialOverlay.fingerprint,
-    contentActivationPlan: {
-      rows: result.manifest.contentActivationPlan.rows.length,
-      publishInPlace: result.manifest.contentActivationPlan.publishInPlaceCount,
-      publishAndMoveBinding: result.manifest.contentActivationPlan.publishAndMoveBindingCount,
+    contentActivationPlan: summarizeContentActivationPlan(result.manifest.contentActivationPlan.rows),
+    stateChain: {
+      entry: result.manifest.stateChain.entry.compositeDigest,
+      postMigration: result.manifest.stateChain.postMigration.compositeDigest,
+      postStructural: result.manifest.stateChain.postStructural.compositeDigest,
+      postOverlay: result.manifest.stateChain.postOverlay.compositeDigest,
     },
     assessmentRuntimePolicy: result.manifest.assessmentRuntimePolicy,
     videoRuntimePolicy: result.manifest.videoRuntimePolicy,
@@ -106,17 +109,21 @@ function main(): void {
       `backup sha256   : ${summary.backupArtifactSha256}`,
       `package         : ${summary.structuralPackageFingerprint}`,
       `overlay         : ${summary.overlayFingerprint}`,
-      `content plan    : ${summary.contentActivationPlan.rows} row(s) — ${summary.contentActivationPlan.publishInPlace} in place, ${summary.contentActivationPlan.publishAndMoveBinding} moving a binding`,
+      `content plan    : ${summary.contentActivationPlan.total} row(s) — ${summary.contentActivationPlan.publishInPlace} in place, ${summary.contentActivationPlan.publishAndMoveBinding} moving a binding`,
+      "",
+      "rehearsed state chain (what each stage must produce):",
+      `  entry           : ${summary.stateChain.entry}`,
+      `  post-migration  : ${summary.stateChain.postMigration}`,
+      `  post-structural : ${summary.stateChain.postStructural}`,
+      `  post-overlay    : ${summary.stateChain.postOverlay}`,
       `assessments     : ${summary.assessmentRuntimePolicy}   video: ${summary.videoRuntimePolicy}`,
     ].join("\n"),
   );
 }
 
 if (process.argv[1] && process.argv[1].endsWith("preparePreprodActivationManifest.ts")) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
-  }
+  });
 }

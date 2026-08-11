@@ -5,14 +5,19 @@
  *     --activation-manifest /secure/path/activation-manifest.json \
  *     --expect-activation-manifest-sha256 <64hex> \
  *     --activation-stage STRUCTURAL_IMPORT \
- *     --expect-target-sha256 <64hex> \
- *     [--completed-stages PREPARED,MIGRATION_41_TO_46] \
  *     [--json]
  *
  * This is the FIRST command of every activation stage. It runs the entire
  * authorization — manifest digest, host, target identity, rollback backup,
  * migration lineage, package, overlay, deployed releases, flag baseline, the
- * database's own starting contents — and then throws the grant away.
+ * database's own semantic state against the manifest's rehearsed chain — and then
+ * throws the capability away.
+ *
+ * IT ALSO REPORTS WHERE THE TARGET ACTUALLY IS. Because the stage a database is
+ * in is now read from the database rather than asserted on a command line, this
+ * command can answer "which state is it in" directly, including
+ * `ALREADY_COMPLETE` for a stage that has run and `UNKNOWN` for one that must
+ * not be retried.
  *
  * NOTHING IS MUTATED AND NOTHING IS LOCKED. A validation that passes tells the
  * operator the environment still matches what was reviewed; it does not reserve
@@ -56,8 +61,6 @@ function main(): void {
     expectedManifestSha256: args.manifestSha256,
     operation,
     stage: args.stage,
-    completedStages: args.completedStages,
-    expectedTargetSha256: args.expectedTargetSha256,
     structuralPackage: readStructuralPackageFacts(manifest.structuralPackage.path),
     overlay: args.stage === "EDITORIAL_OVERLAY" ? readOverlayFacts(manifest.editorialOverlay.path) : undefined,
   });
@@ -76,9 +79,10 @@ function main(): void {
       `target sha256   : ${evidence.target.sha256}  migrations=${evidence.target.appliedMigrationCount} (expected ${evidence.expectedMigrationCount})`,
       `backup          : ${evidence.backup.artifactPath}`,
       `backup sha256   : ${evidence.backup.artifactSha256}  mode=${evidence.backup.mode}  integrity=${evidence.backup.integrityCheck}  fk=${evidence.backup.foreignKeyViolations}`,
-      `backup covers current state: ${evidence.backupCoversCurrentState ? "yes" : "n/a at this stage"}`,
+      `backup covers   : ENTRY_SNAPSHOT (verified against the pinned entry state)`,
       `releases        : backend=${evidence.deployedReleases.backend} academy=${evidence.deployedReleases.academy} crm=${evidence.deployedReleases.crm}`,
-      `curriculum state: ${evidence.curriculumStartingStateFingerprint}`,
+      `observed state  : ${evidence.observedState}  ->  ${evidence.disposition}`,
+      `content plan    : ${evidence.contentActivationPlanChecked ? "recomputed and matched" : "n/a before the overlay stage"}`,
       `editorial baseline checked: ${evidence.editorialBaselineChecked}   historical principals absent: ${evidence.historicalPrincipalsAbsent}`,
       "",
       "NOTHING WAS MUTATED. This command validates only.",

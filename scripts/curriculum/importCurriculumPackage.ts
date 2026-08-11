@@ -17,8 +17,6 @@
  *   --activation-manifest <path>
  *   --expect-activation-manifest-sha256 <64hex>
  *   --activation-stage STRUCTURAL_IMPORT
- *   --expect-target-sha256 <64hex>
- *   [--completed-stages PREPARED,MIGRATION_41_TO_46]
  *
  * Every one of those is mandatory once the first appears, and all of them
  * together still only authorize the exact reviewed target on the exact reviewed
@@ -109,7 +107,16 @@ async function main(): Promise<void> {
       packagePath: args.packagePath,
     });
     activation = { lock: resolved.lock, evidence: describeAuthorization(resolved.evidence) };
-    guardOptions = { activationGrant: resolved.grant };
+    if (!resolved.grant) {
+      // The observed state is this stage's exact post-state: the mutation has
+      // already been applied. Re-running it is not authorized and not needed.
+      console.log(
+        `activation=${resolved.evidence.activationId} stage=${resolved.evidence.stage} ALREADY_COMPLETE (observed ${resolved.evidence.observedState}); nothing to do`,
+      );
+      resolved.lock.release();
+      return;
+    }
+    guardOptions = { activationGrant: resolved.grant, activationOperation: "STRUCTURAL_IMPORT" };
   }
 
   try {

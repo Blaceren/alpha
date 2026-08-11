@@ -52,11 +52,26 @@ export type PreprodActivationErrorCode =
   | "UNEXPECTED_REVIEW_NOTE"
   | "UNEXPECTED_EDITORIAL_STATE"
   | "UNEXPECTED_HISTORICAL_PRINCIPAL"
+  // ---- the reviewed publication sequence
+  | "CONTENT_PLAN_MISMATCH"
   // ---- sequencing
   | "OPERATION_NOT_AUTHORIZED"
   | "STAGE_NOT_AUTHORIZED"
   | "STAGE_OUT_OF_ORDER"
   | "STAGE_STATE_UNKNOWN"
+  | "STAGE_ALREADY_COMPLETE"
+  // ---- the capability itself
+  //
+  // `GRANT_NOT_AUTHENTIC` is what the protected-database guard raises when it is
+  // handed something grant-SHAPED that this process never issued. The
+  // independent audit demonstrated that an object literal with the right public
+  // fields was accepted as authority; there is now a runtime registry, and this
+  // is the refusal for anything that is not in it.
+  | "GRANT_NOT_AUTHENTIC"
+  | "GRANT_TARGET_MISMATCH"
+  | "GRANT_OPERATION_MISMATCH"
+  // ---- rehearsal
+  | "REHEARSAL_FAILED"
   // ---- concurrency
   | "ACTIVATION_LOCK_HELD"
   | "ACTIVATION_LOCK_UNWRITABLE";

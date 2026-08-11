@@ -21,9 +21,7 @@
  *   --activation-manifest <path>
  *   --expect-activation-manifest-sha256 <64hex>
  *   --activation-stage EDITORIAL_OVERLAY
- *   --expect-target-sha256 <64hex>
  *   --package <the structural package this activation imported>
- *   --completed-stages PREPARED,MIGRATION_41_TO_46,STRUCTURAL_IMPORT
  *
  * Beyond the manifest's own pins, the overlay stage additionally requires the
  * freshly imported target to carry NOTHING the structural package did not put
@@ -107,7 +105,16 @@ async function main(): Promise<void> {
       overlayPath,
     });
     activation = { lock: resolved.lock, evidence: describeAuthorization(resolved.evidence) };
-    guardOptions = { activationGrant: resolved.grant };
+    if (!resolved.grant) {
+      // The observed state is this stage's exact post-state: the mutation has
+      // already been applied. Re-running it is not authorized and not needed.
+      console.log(
+        `activation=${resolved.evidence.activationId} stage=${resolved.evidence.stage} ALREADY_COMPLETE (observed ${resolved.evidence.observedState}); nothing to do`,
+      );
+      resolved.lock.release();
+      return;
+    }
+    guardOptions = { activationGrant: resolved.grant, activationOperation: "EDITORIAL_OVERLAY" };
   }
 
   try {

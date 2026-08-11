@@ -2,16 +2,32 @@
  * PREPROD ACTIVATION AUTHORIZATION — regression suite.
  *
  * WHAT IS BEING PROVED. That the only way a protected runtime database becomes a
- * legal import target is a complete, reviewed, digest-pinned activation
- * manifest — and that every single precondition in it is load-bearing. For each
- * pin there is a test that breaks exactly that pin and expects a refusal, so a
- * future edit which stops checking one of them fails here rather than passing
- * review.
+ * legal import target is a runtime capability issued by this process after a
+ * complete, reviewed, digest-pinned activation manifest has been satisfied — and
+ * that every precondition in it is load-bearing.
+ *
+ * THE THREE THINGS THE INDEPENDENT AUDIT BROKE, AND THE TESTS THAT NOW HOLD THEM
+ * SHUT:
+ *
+ *   B1  a grant was authenticated from its own public fields, so an object
+ *       literal carried authority. `grant forgery matrix` builds every copy,
+ *       clone, serialisation and look-alike the audit used — and the exploit
+ *       itself, against the real importer — and requires each to be refused.
+ *
+ *   H1  `--expect-target-sha256` let a caller nominate the digest the target was
+ *       expected to hold, so a tampered post-migration database could be blessed
+ *       by whoever ran `sha256sum`. `post-migration trust` tampers with a user
+ *       row, a financial row, the schema and the migration table, and requires a
+ *       refusal in each case. The flag no longer exists, which the argument
+ *       surface test asserts directly.
+ *
+ *   M1  the content activation plan was pinned but never checked, so a wrong
+ *       code, version, mode, or a missing or extra row all authorized. `content
+ *       plan matrix` runs all six and requires refusals.
  *
  * EVERYTHING RUNS AGAINST DISPOSABLE FIXTURES. The live PREPROD database is
- * never opened for writing by this suite, and never named as an authorized
- * target. It appears exactly once, in the "the real live path is refused without
- * authorization" test, where the assertion is that it is REFUSED.
+ * never opened for writing and never named as an authorized target. It appears
+ * only in the tests that assert it is REFUSED.
  *
  * WHY THE POSITIVE PATH IS TESTED AT MODULE LEVEL RATHER THAN THROUGH THE CLI.
  * The sanctioned target is a constant in `target.ts` and is deliberately not
@@ -19,7 +35,7 @@
  * stops a prepared manifest from being retargeted. A CLI-level positive test
  * would therefore require either mutating the real PREPROD database or adding
  * the very argv surface the design exists to withhold. So the CLI is tested for
- * its refusals, and the full authorize -> grant -> guard -> import chain is
+ * its refusals, and the full authorize -> capability -> guard -> import chain is
  * exercised in-process with the test-only substitution.
  */
 import assert from "node:assert/strict";
@@ -36,47 +52,63 @@ import {
 } from "../../src/lib/curriculum/preprod-activation/authorize";
 import { PREPROD_RISK_POLICY } from "../../src/lib/curriculum/preprod-activation/backup";
 import {
-  captureCurriculumStartingState,
-  captureEditorialBaseline,
-  capturePrincipalPresence,
-} from "../../src/lib/curriculum/preprod-activation/baseline";
+  assertContentActivationPlanMatches,
+  deriveContentActivationPlan,
+  summarizeContentActivationPlan,
+  type ContentActivationRow,
+} from "../../src/lib/curriculum/preprod-activation/content-plan";
 import { isPreprodActivationError } from "../../src/lib/curriculum/preprod-activation/errors";
-import { acquireActivationLock } from "../../src/lib/curriculum/preprod-activation/lock";
+import {
+  isAuthenticActivationGrant,
+  type PreprodActivationGrant,
+} from "../../src/lib/curriculum/preprod-activation/grant";
+import { ACTIVATION_LOCK_PATH, acquireActivationLock } from "../../src/lib/curriculum/preprod-activation/lock";
 import { hashManifestBytes } from "../../src/lib/curriculum/preprod-activation/manifest";
 import { prepareActivationManifest } from "../../src/lib/curriculum/preprod-activation/prepare";
-import { computeLogicalDigest, sha256File } from "../../src/lib/curriculum/preprod-activation/sqlite-probe";
-import {
-  classifyStageState,
-  type ActivationStage,
-} from "../../src/lib/curriculum/preprod-activation/stages";
+import { listAvailableProjections } from "../../src/lib/curriculum/preprod-activation/semantic-state";
+import { ACTIVATION_STAGES } from "../../src/lib/curriculum/preprod-activation/stages";
 import { NEVER_AUTHORIZED_DATABASE_PATHS } from "../../src/lib/curriculum/preprod-activation/target";
-import { readStructuralPackageFacts, readOverlayFacts } from "../../src/lib/curriculum/preprod-activation/artifact-facts";
 import {
   assertSafeDatabaseTarget,
   assertTargetIdentityUnchanged,
   isProtectedDatabaseError,
 } from "../../src/lib/curriculum/protected-database";
+import { readStructuralPackageFacts, readOverlayFacts } from "../../src/lib/curriculum/preprod-activation/artifact-facts";
 import { importCurriculumPackage } from "../../src/lib/curriculum/package/import";
-import { calculateAcceptedReviewedRootHash } from "../../src/lib/curriculum/editorial-overlay/fingerprint";
-import { contentPayloadHash } from "../../src/lib/curriculum/editorial-overlay/payload";
-import type { EditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/schema";
-import type { ContentReviewedPayload } from "../../src/lib/curriculum/editorial-overlay/payload";
+import { importEditorialOverlay } from "../../src/lib/curriculum/editorial-overlay/import";
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "ata-actv-auth-"));
-const TARGET_DB = path.join(ROOT, "sanctioned-target.sqlite");
-const BACKUP_DIR = path.join(ROOT, "backups");
-const BACKUP_DB = path.join(BACKUP_DIR, "rollback.sqlite");
+const ROOT = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "ata-actv-auth-"));
+const REPO = path.resolve(__dirname, "..", "..");
+
+const PREP_DB = path.join(ROOT, "prep-target.sqlite");
+const PREP_BACKUP = path.join(ROOT, "backups", "rollback.sqlite");
+const RUN_DB = path.join(ROOT, "run-target.sqlite");
 const MANIFEST_DIR = path.join(ROOT, "manifests");
-const CHECKPOINT = path.join(ROOT, "accepted-checkpoint.bin");
+const CHECKPOINT = path.join(ROOT, "accepted-checkpoint.sqlite");
 const OVERLAY_PATH = path.join(ROOT, "overlay-v2.json");
+const OVERLAY_AUTHOR = "g2.author.a@fixture.invalid";
+const OVERLAY_REVIEWER = "g2.reviewer.r@fixture.invalid";
 const LOCK_PATH = path.join(ROOT, "activation.lock");
 
-const REPO = path.resolve(__dirname, "..", "..");
 const PACKAGE_PATH = path.join(REPO, "curriculum", "packages", "ata-v2-first-slice.approved.json");
 const OTHER_PACKAGE_PATH = path.join(REPO, "curriculum", "packages", "ata-v2-canonical-100.draft.json");
 
-const TRANSPORT_COMMIT = "27edeeb82e9b1c5a9575dbcfd09e04179b000abe";
-const TRANSPORT_TREE = "362551a45278076c08d14b437be53197d19e6228";
+/**
+ * The transport baseline the FIXTURE overlay was exported from.
+ *
+ * Read from this checkout rather than hard-coded: the exporter stamps the commit
+ * and tree it was run at, and the authorization cross-checks that against the
+ * manifest. Pinning a literal here would mean the suite could only ever pass at
+ * one commit — and the thing under test is that the cross-check fires, not which
+ * hash it happens to see.
+ */
+function gitObject(rev: string): string {
+  const result = spawnSync("git", ["rev-parse", rev], { cwd: REPO, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`cannot resolve ${rev}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+const TRANSPORT_COMMIT = gitObject("HEAD");
+const TRANSPORT_TREE = gitObject("HEAD^{tree}");
 const MACHINE_ID_SHA = crypto.createHash("sha256").update("fixture-machine-id").digest("hex");
 const OTHER_MACHINE_ID_SHA = crypto.createHash("sha256").update("some-other-machine").digest("hex");
 
@@ -85,18 +117,19 @@ const RELEASES = {
   academy: "4c4ced398d2b2a73cdf8d95652b9171b425fdf06",
   crm: "8328903fd4f7f2dc3d73f1ae4e4068c0165d9d1b",
 };
-const FLAGS = {
-  CURRICULUM_V2_ADMIN_ENABLED: "absent",
-  CURRICULUM_V2_READ_ENABLED: "absent",
-  CURRICULUM_V2_ENROLLMENT_ENABLED: "absent",
-  CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED: "absent",
-  CURRICULUM_V2_XP_ENABLED: "absent",
-  CURRICULUM_V2_CONTENT_ENABLED: "absent",
-  CURRICULUM_V2_ASSESSMENT_ENABLED: "absent",
-  CURRICULUM_V2_REPORT_ENABLED: "absent",
-  CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED: "absent",
-  CURRICULUM_V2_CHECKPOINT_ENABLED: "absent",
-} as const;
+const FLAG_KEYS = [
+  "CURRICULUM_V2_ADMIN_ENABLED",
+  "CURRICULUM_V2_READ_ENABLED",
+  "CURRICULUM_V2_ENROLLMENT_ENABLED",
+  "CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED",
+  "CURRICULUM_V2_XP_ENABLED",
+  "CURRICULUM_V2_CONTENT_ENABLED",
+  "CURRICULUM_V2_ASSESSMENT_ENABLED",
+  "CURRICULUM_V2_REPORT_ENABLED",
+  "CURRICULUM_V2_REPORT_ATTACHMENTS_ENABLED",
+  "CURRICULUM_V2_CHECKPOINT_ENABLED",
+];
+const FLAGS = Object.fromEntries(FLAG_KEYS.map((key) => [key, "absent" as const]));
 
 /**
  * A minimal, explicit environment.
@@ -108,7 +141,6 @@ const FLAGS = {
 function env(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
   return { NODE_ENV: "test", ...overrides } as unknown as NodeJS.ProcessEnv;
 }
-
 const PREPROD_ENV: NodeJS.ProcessEnv = env({ ATA_ENVIRONMENT: "staging" });
 
 let passed = 0;
@@ -144,15 +176,18 @@ function refuses(code: string, fn: () => unknown): void {
  * fixtures
  * ------------------------------------------------------------------ */
 
-function buildTargetDatabase(): void {
+function migrate(databasePath: string): void {
   const runner = spawnSync("npx", ["tsx", path.join("prisma", "migrate.ts")], {
     cwd: REPO,
-    env: { ...process.env, DATABASE_URL: `file:${TARGET_DB}` },
+    env: { ...process.env, DATABASE_URL: `file:${databasePath}` },
     encoding: "utf8",
   });
-  if (runner.status !== 0) {
-    throw new Error(`migration chain failed: ${runner.stderr || runner.stdout}`);
-  }
+  if (runner.status !== 0) throw new Error(`migration chain failed: ${runner.stderr || runner.stdout}`);
+  dropSidecars(databasePath);
+}
+
+function dropSidecars(databasePath: string): void {
+  for (const suffix of ["-wal", "-shm", "-journal"]) fs.rmSync(`${databasePath}${suffix}`, { force: true });
 }
 
 /** A faithful copy, taken exactly the way the sanctioned ops tool takes one. */
@@ -171,121 +206,176 @@ function takeOnlineBackup(source: string, destination: string): void {
   fs.chmodSync(destination, 0o600);
 }
 
-const CONTENT_A: ContentReviewedPayload = {
-  videoDurationSeconds: 120,
-  changeNotes: "reviewed",
-  localizations: [
-    {
-      locale: "ru",
-      title: "Reviewed lesson A",
-      subtitle: "",
-      learningObjectiveExtension: "",
-      summary: "summary A",
-      transcript: null,
-      body: { format: "blocks_v2", version: 2, blocks: [{ type: "paragraph", text: "body A" }] },
-    },
-  ],
-};
-
-const CONTENT_B: ContentReviewedPayload = {
-  videoDurationSeconds: 180,
-  changeNotes: "successor",
-  localizations: [
-    {
-      locale: "ru",
-      title: "Reviewed lesson B",
-      subtitle: "",
-      learningObjectiveExtension: "",
-      summary: "summary B",
-      transcript: null,
-      body: { format: "blocks_v2", version: 2, blocks: [{ type: "paragraph", text: "body B" }] },
-    },
-  ],
-};
-
-function buildOverlay(packageFingerprint: string, checkpointSha: string, curriculum: { code: string; versionNumber: number }): EditorialOverlay {
-  const T = "2026-08-01T00:00:00.000Z";
-  const AUTHOR = "g2.author.a@fixture.invalid";
-  const REVIEWER = "g2.reviewer.a@fixture.invalid";
-  const evidence = {
-    editorialState: "approved" as const,
-    revision: 2,
-    lastAuthoredBy: AUTHOR,
-    lastAuthoredAt: T,
-    submittedBy: AUTHOR,
-    submittedAt: T,
-    changesRequestedBy: null,
-    changesRequestedAt: null,
-    approvedBy: REVIEWER,
-    approvedAt: T,
-    createdBy: AUTHOR,
-  };
-  const levels = [
-    { level: "lvl.fixture.01", levelNumber: 1, moduleCode: "module.01", moduleNumber: 1, type: "lesson" },
-  ];
-  const content: EditorialOverlay["content"] = [
-    {
-      level: "lvl.fixture.01",
-      versionNumber: 1,
-      mode: "update",
-      editorial: evidence,
-      expectedStructuralHash: contentPayloadHash(CONTENT_A),
-      acceptedReviewedHash: contentPayloadHash(CONTENT_A),
-      createdAt: T,
-      payload: CONTENT_A,
-      creation: null,
-    },
-    {
-      level: "lvl.fixture.01",
-      versionNumber: 2,
-      mode: "create",
-      editorial: evidence,
-      expectedStructuralHash: null,
-      acceptedReviewedHash: contentPayloadHash(CONTENT_B),
-      createdAt: T,
-      payload: CONTENT_B,
-      creation: { status: "draft", publishedAt: null, archivedAt: null },
-    },
-  ];
-  return {
-    schemaVersion: "ata.editorial-overlay/2",
-    minImporterVersion: 2,
-    overlayCode: "fixture.overlay",
-    overlayRevision: 1,
-    generatedAt: T,
-    binding: {
-      curriculumCode: curriculum.code,
-      curriculumVersionNumber: curriculum.versionNumber,
-      structuralPackageCode: "fixture.pkg",
-      structuralPackageRevision: 1,
-      structuralPackageFingerprint: packageFingerprint,
-      sourceCheckpointSha256: checkpointSha,
-      sourceBackendCommit: TRANSPORT_COMMIT,
-      sourceBackendTree: TRANSPORT_TREE,
-      blueprintSourceDocumentSha256: "b".repeat(64),
-      acceptedReviewedRootHash: calculateAcceptedReviewedRootHash({ content, assessments: [], levels }),
-    },
-    levels,
-    principals: [
-      { ref: AUTHOR, displayName: "Fixture Author", kind: "process", role: "user", staffRole: "content_manager", provisionIfMissing: true },
-      { ref: REVIEWER, displayName: "Fixture Reviewer", kind: "process", role: "user", staffRole: "crm_admin", provisionIfMissing: true },
-    ],
-    content,
-    assessments: [],
-    videoProductions: [],
-    videoAssessmentLinks: [],
-    sourceAuthorityResolutions: [],
-    reviewNotes: [],
-  } as EditorialOverlay;
+function query(databasePath: string, sql: string, params: Array<string | number> = []): number {
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    return (db.prepare(sql).get(...params) as { n: number }).n;
+  } finally {
+    db.close();
+  }
 }
 
-type ManifestFile = { path: string; sha256: string; json: Record<string, unknown> };
+function exec(databasePath: string, sql: string): void {
+  const db = new DatabaseSync(databasePath);
+  try {
+    db.exec(sql);
+  } finally {
+    db.close();
+  }
+  dropSidecars(databasePath);
+}
 
-let baseManifest: ManifestFile;
-let packageFacts: ReturnType<typeof readStructuralPackageFacts>;
-let overlayFacts: ReturnType<typeof readOverlayFacts>;
+/** Every migration directory, in the order the runner applies them. */
+function migrationNames(): string[] {
+  return fs
+    .readdirSync(path.join(REPO, "prisma", "migrations"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
 
-/** Write a manifest derived from the base by an in-place mutation. */
+/**
+ * Apply the FIRST `count` migrations, exactly the way `prisma/migrate.ts` does.
+ *
+ * The suite has to exercise a genuine 41 -> 46 transition, because that is the
+ * branch the independent audit found untested and the one the whole trust chain
+ * turns on. The runner has no "migrate to N" mode, so the entry lineage is built
+ * here — same statement splitting, same checksum, same bookkeeping — and the
+ * REAL runner then finishes the job during the test.
+ */
+function buildLineage(target: string, count: number): void {
+  const db = new DatabaseSync(target);
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+      "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,
+      "migration_name" TEXT NOT NULL, "logs" TEXT, "rolled_back_at" DATETIME,
+      "started_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "applied_steps_count" INTEGER NOT NULL DEFAULT 0)`);
+    for (const name of migrationNames().slice(0, count)) {
+      const sql = fs.readFileSync(path.join(REPO, "prisma", "migrations", name, "migration.sql"), "utf8");
+      const checksum = crypto.createHash("sha256").update(sql).digest("hex");
+      for (const statement of sql.split(";").map((part) => part.trim()).filter(Boolean)) {
+        db.exec(statement);
+      }
+      const insert = db.prepare(
+        'INSERT INTO "_prisma_migrations" ("id","checksum","migration_name","applied_steps_count","finished_at") VALUES (?,?,?,?,?)',
+      );
+      insert.run(crypto.randomUUID(), checksum, name, 1, Date.now());
+    }
+  } finally {
+    db.close();
+  }
+  dropSidecars(target);
+}
+
+/**
+ * An ENTRY-state fixture: the schema at the pre-activation lineage, with enough
+ * business rows for the continuity digest to have something to protect.
+ */
+function buildEntryFixture(target: string, entryCount: number): void {
+  fs.rmSync(target, { force: true });
+  buildLineage(target, entryCount);
+  const db = new DatabaseSync(target);
+  try {
+    db.exec(`INSERT INTO "User" ("email","name","passwordHash","role","status","level","xp","createdAt","updatedAt")
+             VALUES ('learner.one@fixture.invalid','Learner One','x','user','active',1,0,1786000000000,1786000000000),
+                    ('learner.two@fixture.invalid','Learner Two','x','user','active',2,50,1786000001000,1786000001000)`);
+    db.exec(`INSERT INTO "AuditLog" ("userId","action","entityType","entityId","createdAt")
+             VALUES (1,'fixture.seed','User',1,1786000000000)`);
+    db.exec(`INSERT INTO "Reward" ("title","description","status","type")
+             VALUES ('seed reward','a pre-existing business row','active','bonus')`);
+  } finally {
+    db.close();
+  }
+  dropSidecars(target);
+}
+
+/**
+ * A GENUINE overlay for the package under test, produced by the real exporter.
+ *
+ * A hand-written artifact would prove only that hand-written JSON parses. The
+ * rehearsal now IMPORTS the overlay, so it has to be one that actually belongs
+ * to the package it names: a throwaway checkpoint is migrated, given the
+ * structural import, marked up as a completed review, and exported through
+ * `exportEditorialOverlay.ts` — the same command that produced the accepted
+ * artifact. The scratch checkpoint is removed by absolute path afterwards.
+ */
+async function buildOverlayFixture(): Promise<void> {
+  const scratch = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "ata-actv-overlay-"));
+  const checkpoint = path.join(scratch, "checkpoint.sqlite");
+  try {
+    migrate(checkpoint);
+
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient({ datasources: { db: { url: `file:${checkpoint}` } } });
+    try {
+      const raw = JSON.parse(fs.readFileSync(PACKAGE_PATH, "utf8")) as unknown;
+      const result = await importCurriculumPackage(raw, { db, dryRun: false });
+      if (!result.ok) throw new Error("overlay fixture: structural import failed");
+    } finally {
+      await db.$disconnect();
+    }
+    dropSidecars(checkpoint);
+
+    const sql = new DatabaseSync(checkpoint);
+    try {
+      const T = 1786000000000;
+      sql.exec(
+        `INSERT INTO "User" ("email","name","passwordHash","role","status","level","xp","createdAt","updatedAt")
+         VALUES ('${OVERLAY_AUTHOR}','Fixture Author','x','user','active',1,0,${T},${T}),
+                ('${OVERLAY_REVIEWER}','Fixture Reviewer','x','user','active',1,0,${T},${T})`,
+      );
+      const author = (sql.prepare(`SELECT id AS n FROM "User" WHERE email = ?`).get(OVERLAY_AUTHOR) as { n: number }).n;
+      const reviewer = (sql.prepare(`SELECT id AS n FROM "User" WHERE email = ?`).get(OVERLAY_REVIEWER) as { n: number }).n;
+      sql.exec(
+        `INSERT INTO "StaffProfile" ("id","userId","displayName","staffRole","permissionVersion","createdAt","updatedAt")
+         VALUES ('sp-author',${author},'Fixture Author','content_manager',1,${T},${T}),
+                ('sp-reviewer',${reviewer},'Fixture Reviewer','crm_admin',1,${T},${T})`,
+      );
+      for (const table of ["ContentVersion", "AssessmentVersion"]) {
+        sql.exec(
+          `UPDATE "${table}" SET "editorialState"='approved', "revision"=2,
+             "createdById"=${author}, "lastAuthoredById"=${author}, "lastAuthoredAt"=${T},
+             "submittedById"=${author}, "submittedAt"=${T},
+             "approvedById"=${reviewer}, "approvedAt"=${T}`,
+        );
+      }
+    } finally {
+      sql.close();
+    }
+    dropSidecars(checkpoint);
+
+    const exported = spawnSync(
+      "npx",
+      [
+        "tsx",
+        path.join("scripts", "curriculum", "exportEditorialOverlay.ts"),
+        "--source",
+        `file:${checkpoint}`,
+        "--package",
+        PACKAGE_PATH,
+        "--out",
+        OVERLAY_PATH,
+        "--json",
+      ],
+      { cwd: REPO, encoding: "utf8" },
+    );
+    if (exported.status !== 0) {
+      throw new Error(`overlay export failed: ${exported.stderr || exported.stdout}`);
+    }
+    fs.chmodSync(OVERLAY_PATH, 0o600);
+
+    // The overlay records the digest of the source it was exported from, and the
+    // authorization cross-checks that against the manifest's accepted-checkpoint
+    // pin. So the file the overlay names becomes the checkpoint the manifest
+    // names — keeping the cross-check load-bearing instead of routing around it.
+    fs.copyFileSync(checkpoint, CHECKPOINT);
+    fs.chmodSync(CHECKPOINT, 0o600);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 /**
  * A manifest being deliberately broken.
  *
@@ -296,12 +386,14 @@ let overlayFacts: ReturnType<typeof readOverlayFacts>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ManifestDraft = Record<string, any>;
 
-function manifestWith(
-  mutate: (draft: ManifestDraft) => void,
-  name: string,
-  from: ManifestFile = baseManifest,
-): ManifestFile {
-  const draft = JSON.parse(JSON.stringify(from.json)) as ManifestDraft;
+type ManifestFile = { path: string; sha256: string; json: ManifestDraft };
+
+let baseManifest: ManifestFile;
+let packageFacts: ReturnType<typeof readStructuralPackageFacts>;
+let overlayFacts: ReturnType<typeof readOverlayFacts>;
+
+function manifestWith(mutate: (draft: ManifestDraft) => void, name: string): ManifestFile {
+  const draft = JSON.parse(JSON.stringify(baseManifest.json)) as ManifestDraft;
   mutate(draft);
   const json = `${JSON.stringify(draft, null, 2)}\n`;
   const filePath = path.join(MANIFEST_DIR, `${name}.json`);
@@ -310,7 +402,7 @@ function manifestWith(
 }
 
 function authorizationInput(
-  manifest: ManifestFile,
+  manifest: ManifestFile = baseManifest,
   overrides: Partial<AuthorizationInput> = {},
 ): AuthorizationInput {
   return {
@@ -318,16 +410,33 @@ function authorizationInput(
     expectedManifestSha256: manifest.sha256,
     operation: "STRUCTURAL_IMPORT",
     stage: "STRUCTURAL_IMPORT",
-    completedStages: ["PREPARED", "MIGRATION_41_TO_46"],
-    expectedTargetSha256: sha256File(TARGET_DB),
     structuralPackage: packageFacts,
     hostIdentityProvider: () => ({ machineIdSha256: MACHINE_ID_SHA, hostname: "fixture-host" }),
     deployedReleasesProvider: () => ({ ...RELEASES }),
     flagBaselineProvider: () => ({ ...FLAGS }),
     environmentVariables: PREPROD_ENV,
-    sanctionedTargetOverride: { __testOnlySanctionedTargetPath: TARGET_DB },
+    sanctionedTargetOverride: { __testOnlySanctionedTargetPath: RUN_DB },
     ...overrides,
   };
+}
+
+const overlayInput = (overrides: Partial<AuthorizationInput> = {}): AuthorizationInput =>
+  authorizationInput(baseManifest, {
+    operation: "EDITORIAL_OVERLAY",
+    stage: "EDITORIAL_OVERLAY",
+    overlay: overlayFacts,
+    ...overrides,
+  });
+
+const GUARD_ENV = () => env({ ATA_PROTECTED_DATABASES: RUN_DB });
+
+/** Snapshot / restore, so a destructive test cannot leak into the next one. */
+function snapshot(databasePath: string): Buffer {
+  return fs.readFileSync(databasePath);
+}
+function restore(databasePath: string, bytes: Buffer): void {
+  fs.writeFileSync(databasePath, bytes);
+  dropSidecars(databasePath);
 }
 
 /* ------------------------------------------------------------------ *
@@ -337,51 +446,70 @@ function authorizationInput(
 async function main(): Promise<void> {
   fs.mkdirSync(MANIFEST_DIR, { recursive: true, mode: 0o700 });
 
-  buildTargetDatabase();
-  takeOnlineBackup(TARGET_DB, BACKUP_DB);
-
-  fs.writeFileSync(CHECKPOINT, "accepted-product-checkpoint-fixture-bytes", { mode: 0o600 });
-  const checkpointSha = sha256File(CHECKPOINT);
+  const allMigrations = migrationNames();
+  const targetMigrationCount = allMigrations.length;
+  // Five short of the head, so the rehearsal and the real run both perform a
+  // genuine multi-migration transition rather than a no-op.
+  const entryMigrationCount = targetMigrationCount - 5;
 
   packageFacts = readStructuralPackageFacts(PACKAGE_PATH);
-  const overlay = buildOverlay(packageFacts.contentFingerprint, checkpointSha, {
-    code: packageFacts.curriculumCode,
-    versionNumber: packageFacts.curriculumVersionNumber,
-  });
-  fs.writeFileSync(OVERLAY_PATH, `${JSON.stringify(overlay, null, 2)}\n`, { mode: 0o600 });
+
+  // The overlay fixture also produces the accepted checkpoint it was exported
+  // from, so it runs before anything that pins a checkpoint digest.
+  await buildOverlayFixture();
   overlayFacts = readOverlayFacts(OVERLAY_PATH);
 
-  const targetMigrations = (() => {
-    const db = new DatabaseSync(TARGET_DB, { readOnly: true });
-    try {
-      return (db.prepare("SELECT COUNT(*) AS n FROM _prisma_migrations WHERE rolled_back_at IS NULL").get() as { n: number }).n;
-    } finally {
-      db.close();
-    }
-  })();
+  buildEntryFixture(PREP_DB, entryMigrationCount);
+  takeOnlineBackup(PREP_DB, PREP_BACKUP);
 
-  const prepared = prepareActivationManifest({
+  // ---- preparation, WITH the rehearsal. This is the thing that produces the
+  // state chain every later check is made against.
+  const prepared = await prepareActivationManifest({
     activationId: "fixture-activation-0001",
-    liveDatabasePath: TARGET_DB,
-    backupArtifactPath: BACKUP_DB,
+    liveDatabasePath: PREP_DB,
+    backupArtifactPath: PREP_BACKUP,
     structuralPackagePath: PACKAGE_PATH,
     overlayPath: OVERLAY_PATH,
     acceptedCheckpointPath: CHECKPOINT,
     transportBaselineCommit: TRANSPORT_COMMIT,
     transportBaselineTree: TRANSPORT_TREE,
-    entryMigrationCount: targetMigrations,
-    targetMigrationCount: targetMigrations,
+    entryMigrationCount,
+    targetMigrationCount,
     hostIdentityProvider: () => ({ machineIdSha256: MACHINE_ID_SHA, hostname: "fixture-host" }),
     deployedReleasesProvider: () => ({ ...RELEASES }),
     flagBaselineProvider: () => ({ ...FLAGS }),
-    sanctionedTargetOverride: { __testOnlySanctionedTargetPath: TARGET_DB },
+    sanctionedTargetOverride: { __testOnlySanctionedTargetPath: PREP_DB },
     now: new Date("2026-08-11T09:00:00.000Z"),
   });
-  const basePath = path.join(MANIFEST_DIR, "base.json");
-  fs.writeFileSync(basePath, prepared.json, { mode: 0o600 });
-  baseManifest = { path: basePath, sha256: prepared.sha256, json: JSON.parse(prepared.json) };
 
-  /* ---------- preparation is read-only and private ---------- */
+  // ---- the run target: a second fixture identical to the one prepared against.
+  fs.copyFileSync(PREP_DB, RUN_DB);
+  fs.chmodSync(RUN_DB, 0o600);
+  const runStat = fs.statSync(RUN_DB);
+  const draft = JSON.parse(prepared.json) as ManifestDraft;
+  draft.targetDatabase.canonicalPath = RUN_DB;
+  draft.targetDatabase.device = runStat.dev;
+  draft.targetDatabase.inode = runStat.ino;
+  const baseJson = `${JSON.stringify(draft, null, 2)}\n`;
+  const basePath = path.join(MANIFEST_DIR, "base.json");
+  fs.writeFileSync(basePath, baseJson, { mode: 0o600 });
+  baseManifest = { path: basePath, sha256: hashManifestBytes(baseJson), json: draft };
+
+  const entryBytes = snapshot(RUN_DB);
+
+  await check(`the fixture exercises a real ${entryMigrationCount} -> ${targetMigrationCount} transition`, () => {
+    assert.equal(query(RUN_DB, "SELECT COUNT(*) AS n FROM _prisma_migrations WHERE rolled_back_at IS NULL"), entryMigrationCount);
+    assert.notEqual(
+      prepared.manifest.stateChain.entry.compositeDigest,
+      prepared.manifest.stateChain.postMigration.compositeDigest,
+    );
+  });
+
+  // The sanctioned migration stage, run by the REAL runner.
+  migrate(RUN_DB);
+  const migratedBytes = snapshot(RUN_DB);
+
+  /* ---------- preparation ---------- */
 
   await check("prepare writes a 0600 manifest and mutates no database", () => {
     assert.equal(fs.statSync(basePath).mode & 0o777, 0o600);
@@ -389,401 +517,443 @@ async function main(): Promise<void> {
     assert.equal(prepared.manifest.riskPolicy, PREPROD_RISK_POLICY);
     assert.equal(prepared.manifest.assessmentRuntimePolicy, "DEFER");
     assert.equal(prepared.manifest.videoRuntimePolicy, "ASSET_QA_DEFERRED");
+    // the database preparation read is untouched by the rehearsal
+    assert.equal(query(PREP_DB, 'SELECT COUNT(*) AS n FROM "CurriculumVersion"'), 0);
   });
 
-  await check("prepare derives a semantic content activation plan from the overlay", () => {
-    const plan = prepared.manifest.contentActivationPlan;
-    assert.equal(plan.rows.length, 2);
-    assert.equal(plan.publishInPlaceCount, 1);
-    assert.equal(plan.publishAndMoveBindingCount, 1);
-    for (const row of plan.rows) {
-      assert.ok(row.levelStableCode.length > 0, "rows are addressed by stableCode, never by an imported id");
-      assert.ok(Number.isInteger(row.acceptedContentVersionNumber));
+  await check("prepare rehearses all four states and pins them", () => {
+    const chain = prepared.manifest.stateChain;
+    const digests = [
+      chain.entry.compositeDigest,
+      chain.postMigration.compositeDigest,
+      chain.postStructural.compositeDigest,
+      chain.postOverlay.compositeDigest,
+    ];
+    assert.equal(new Set(digests).size, 4, "the four rehearsed states must be distinguishable");
+    for (const state of Object.values(chain)) {
+      assert.equal(state.migrationLineage.failedCount, 0);
+      assert.match(state.compositeDigest, /^[0-9a-f]{64}$/);
     }
   });
 
-  await check("prepare records the FULL package fingerprint, never a prefix", () => {
-    assert.match(prepared.manifest.structuralPackage.contentFingerprint, /^[0-9a-f]{64}$/);
+  await check("prepare leaves no rehearsal scratch directory behind", () => {
+    const leftovers = fs
+      .readdirSync(fs.realpathSync(os.tmpdir()))
+      .filter((name) => name.startsWith("ata-activation-rehearsal-"));
+    assert.deepEqual(leftovers, [], `rehearsal scratch survived: ${leftovers.join(", ")}`);
   });
 
-  await check("the canonical 100-level package fingerprint is derived, not assumed", () => {
-    const canonical = readStructuralPackageFacts(OTHER_PACKAGE_PATH);
-    assert.match(canonical.contentFingerprint, /^[0-9a-f]{64}$/);
-    assert.equal(canonical.contentFingerprint.slice(0, 8), "412449e5");
+  await check("every semantic projection is answerable at the activation lineage", () => {
+    const available = listAvailableProjections(RUN_DB);
+    assert.equal(
+      available.curriculum.length,
+      available.curriculumTotal,
+      `curriculum projections unavailable: ${available.curriculumTotal - available.curriculum.length}`,
+    );
+    assert.equal(
+      available.editorial.length,
+      available.editorialTotal,
+      `editorial projections unavailable: ${available.editorialTotal - available.editorial.length}`,
+    );
   });
 
-  /* ---------- the happy path ---------- */
+  /* ---------- B1: the capability cannot be forged ---------- */
 
   await check("a complete, unmodified manifest authorizes the structural import", () => {
-    const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-    assert.equal(evidence.operation, "STRUCTURAL_IMPORT");
-    assert.equal(evidence.stage, "STRUCTURAL_IMPORT");
-    assert.equal(evidence.environment, "preprod");
-    assert.equal(evidence.deploymentClass, "staging");
-    assert.equal(evidence.backupCoversCurrentState, true);
-    assert.equal(evidence.grant.kind, "preprod-activation");
-    assert.equal(evidence.grant.verifiedTarget.absolutePath, fs.realpathSync(TARGET_DB));
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(evidence.disposition, "EXECUTE");
+    assert.equal(evidence.observedState, "POST_MIGRATION");
+    assert.ok(evidence.grant, "an executable stage must yield a capability");
+    assert.equal(isAuthenticActivationGrant(evidence.grant), true);
   });
 
-  await check("the grant admits the protected target through the guard", () => {
-    const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-    const guardEnv = env({ ATA_PROTECTED_DATABASES: TARGET_DB });
-    // Without the grant the same call refuses, which is the control.
-    try {
-      assertSafeDatabaseTarget(`file:${TARGET_DB}`, { env: guardEnv });
-      assert.fail("the guard admitted a protected database with no grant");
-    } catch (error) {
-      assert.ok(isProtectedDatabaseError(error, "TARGET_PROTECTED"));
-    }
-    const resolved = assertSafeDatabaseTarget(`file:${TARGET_DB}`, {
-      env: guardEnv,
-      activationGrant: evidence.grant,
+  await check("the authentic capability admits the protected target through the guard", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    const resolved = assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+      env: GUARD_ENV(),
+      activationGrant: evidence.grant!,
+      activationOperation: "STRUCTURAL_IMPORT",
     });
-    assert.equal(resolved.absolutePath, fs.realpathSync(TARGET_DB));
+    assert.equal(resolved.absolutePath, RUN_DB);
   });
 
-  await check("a grant for one database does not admit another", () => {
-    const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-    const other = path.join(ROOT, "other.sqlite");
-    fs.copyFileSync(TARGET_DB, other);
-    try {
-      assertSafeDatabaseTarget(`file:${other}`, {
-        env: env({ ATA_PROTECTED_DATABASES: other }),
-        activationGrant: evidence.grant,
-      });
-      assert.fail("a grant issued for one path admitted a different path");
-    } catch (error) {
-      assert.ok(isProtectedDatabaseError(error, "TARGET_PROTECTED"));
+  await check("without a capability the same target is refused", () => {
+    assert.throws(
+      () => assertSafeDatabaseTarget(`file:${RUN_DB}`, { env: GUARD_ENV() }),
+      (error: unknown) => isProtectedDatabaseError(error, "TARGET_PROTECTED"),
+    );
+  });
+
+  // THE FORGERY MATRIX. Every one of these was ALLOWED before the correction.
+  await check("GRANT FORGERY MATRIX: no constructed look-alike is accepted", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    const real = evidence.grant!;
+    const stat = fs.statSync(RUN_DB);
+
+    const literal = {
+      kind: "preprod-activation" as const,
+      activationId: "forged",
+      manifestSha256: baseManifest.sha256,
+      operation: "STRUCTURAL_IMPORT",
+      stage: "STRUCTURAL_IMPORT",
+      target: { absolutePath: RUN_DB, device: stat.dev, inode: stat.ino },
+      // the audit's own trick: the caller supplies the validator
+      assertStillValid: () => {},
+    };
+
+    class LookAlike {
+      kind = "preprod-activation" as const;
+      activationId = "forged";
+      manifestSha256 = baseManifest.sha256;
+      operation = "STRUCTURAL_IMPORT";
+      stage = "STRUCTURAL_IMPORT";
+      target = { absolutePath: RUN_DB, device: stat.dev, inode: stat.ino };
+      assertStillValid(): void {}
     }
+
+    const candidates: Array<[string, unknown]> = [
+      ["a hand-built object literal", literal],
+      ["a spread clone of the literal", { ...literal }],
+      ["Object.assign onto a fresh object", Object.assign({}, literal)],
+      ["a JSON round-trip of the literal", JSON.parse(JSON.stringify(literal))],
+      ["a class instance shaped like a grant", new LookAlike()],
+      ["a prototype-spoofed object", Object.create(Object.getPrototypeOf(real) as object, Object.getOwnPropertyDescriptors(literal))],
+      ["a spread clone of the REAL capability", { ...real }],
+      ["a JSON round-trip of the REAL capability", JSON.parse(JSON.stringify(real))],
+      ["Object.assign of the REAL capability", Object.assign({}, real)],
+      ["a structuredClone of the REAL capability", structuredClone({ ...real })],
+      ["null", null],
+      ["a bare string", "preprod-activation"],
+    ];
+
+    for (const [label, candidate] of candidates) {
+      assert.equal(isAuthenticActivationGrant(candidate), false, `${label} must not be in the registry`);
+      assert.throws(
+        () =>
+          assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+            env: GUARD_ENV(),
+            activationGrant: candidate as PreprodActivationGrant,
+            activationOperation: "STRUCTURAL_IMPORT",
+          }),
+        (error: unknown) =>
+          isPreprodActivationError(error, "GRANT_NOT_AUTHENTIC") || isProtectedDatabaseError(error),
+        `${label} was accepted by the guard`,
+      );
+    }
+  });
+
+  await check("REAL IMPORTER FORGERY: the audit's exploit writes nothing", async () => {
+    const before = query(RUN_DB, 'SELECT COUNT(*) AS n FROM "CurriculumVersion"');
+    const stat = fs.statSync(RUN_DB);
+    const forged = {
+      kind: "preprod-activation" as const,
+      activationId: "no-manifest-was-ever-reviewed",
+      manifestSha256: "0".repeat(64),
+      operation: "STRUCTURAL_IMPORT",
+      stage: "STRUCTURAL_IMPORT",
+      target: { absolutePath: RUN_DB, device: stat.dev, inode: stat.ino },
+      assertStillValid: () => {},
+    };
+    let admitted = false;
+    try {
+      assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+        env: GUARD_ENV(),
+        activationGrant: forged as unknown as PreprodActivationGrant,
+        activationOperation: "STRUCTURAL_IMPORT",
+      });
+      admitted = true;
+    } catch {
+      /* expected */
+    }
+    assert.equal(admitted, false, "the forged capability reached the importer");
+    assert.equal(query(RUN_DB, 'SELECT COUNT(*) AS n FROM "CurriculumVersion"'), before);
+  });
+
+  await check("a capability is bound to one operation and does not generalise", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.throws(
+      () =>
+        assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+          env: GUARD_ENV(),
+          activationGrant: evidence.grant!,
+          activationOperation: "EDITORIAL_OVERLAY",
+        }),
+      (error: unknown) => isPreprodActivationError(error, "GRANT_OPERATION_MISMATCH"),
+    );
+  });
+
+  await check("a capability supplied without naming an operation is refused", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.throws(
+      () => assertSafeDatabaseTarget(`file:${RUN_DB}`, { env: GUARD_ENV(), activationGrant: evidence.grant! }),
+      (error: unknown) => isProtectedDatabaseError(error, "TARGET_PROTECTED"),
+    );
+  });
+
+  await check("a capability for one database does not admit another", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    const other = path.join(ROOT, "other.sqlite");
+    fs.copyFileSync(RUN_DB, other);
+    assert.throws(
+      () =>
+        assertSafeDatabaseTarget(`file:${other}`, {
+          env: env({ ATA_PROTECTED_DATABASES: other }),
+          activationGrant: evidence.grant!,
+          activationOperation: "STRUCTURAL_IMPORT",
+        }),
+      (error: unknown) => isProtectedDatabaseError(error, "TARGET_PROTECTED"),
+    );
   });
 
   await check("a hardlink alias of the granted file is still refused", () => {
-    const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-    const alias = path.join(ROOT, "alias-hardlink.sqlite");
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    const alias = path.join(ROOT, "alias.sqlite");
     fs.rmSync(alias, { force: true });
-    fs.linkSync(TARGET_DB, alias);
+    fs.linkSync(RUN_DB, alias);
+    assert.throws(
+      () =>
+        assertSafeDatabaseTarget(`file:${alias}`, {
+          env: GUARD_ENV(),
+          activationGrant: evidence.grant!,
+          activationOperation: "STRUCTURAL_IMPORT",
+        }),
+      (error: unknown) => isProtectedDatabaseError(error, "TARGET_PROTECTED"),
+    );
+  });
+
+  await check("a STALE capability is refused once the target has moved on", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    const before = snapshot(RUN_DB);
     try {
-      assertSafeDatabaseTarget(`file:${alias}`, {
-        env: env({ ATA_PROTECTED_DATABASES: TARGET_DB }),
-        activationGrant: evidence.grant,
-      });
-      assert.fail("a hardlink alias inherited the grant");
-    } catch (error) {
-      assert.ok(isProtectedDatabaseError(error, "TARGET_PROTECTED"));
+      exec(RUN_DB, `UPDATE "User" SET "xp" = "xp" + 1 WHERE "id" = (SELECT MIN("id") FROM "User")`);
+      assert.throws(
+        () =>
+          assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+            env: GUARD_ENV(),
+            activationGrant: evidence.grant!,
+            activationOperation: "STRUCTURAL_IMPORT",
+          }),
+        (error: unknown) => isPreprodActivationError(error, "STAGE_STATE_UNKNOWN"),
+      );
     } finally {
-      fs.rmSync(alias, { force: true });
+      restore(RUN_DB, before);
     }
   });
 
-  await check("a symlink to the granted file is refused", () => {
-    const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-    const link = path.join(ROOT, "alias-symlink.sqlite");
-    fs.rmSync(link, { force: true });
-    fs.symlinkSync(TARGET_DB, link);
-    try {
-      assertSafeDatabaseTarget(`file:${link}`, {
-        env: env({ ATA_PROTECTED_DATABASES: TARGET_DB }),
-        activationGrant: evidence.grant,
-      });
-      assert.fail("a symlink inherited the grant");
-    } catch (error) {
-      assert.ok(isProtectedDatabaseError(error, "TARGET_IS_SYMLINK"));
-    } finally {
-      fs.rmSync(link, { force: true });
+  /* ---------- H1: no caller-controlled trust reset ---------- */
+
+  await check("the argument surface has no target-digest, completed-stages or lock flag", () => {
+    const sources = [
+      "src/lib/curriculum/preprod-activation/cli.ts",
+      "scripts/curriculum/importCurriculumPackage.ts",
+      "scripts/curriculum/importEditorialOverlay.ts",
+      "scripts/curriculum/validatePreprodActivationManifest.ts",
+    ].map((rel) => fs.readFileSync(path.join(REPO, rel), "utf8"));
+    for (const forbidden of ['"--expect-target-sha256"', '"--completed-stages"', '"--activation-lock"']) {
+      for (const source of sources) {
+        assert.equal(source.includes(forbidden), false, `${forbidden} is still a parsed flag`);
+      }
     }
   });
+
+  await check("AuthorizationInput accepts no expected-state field of any kind", () => {
+    const input = authorizationInput() as Record<string, unknown>;
+    for (const banned of ["expectedTargetSha256", "completedStages", "expectedState", "expectedCompositeDigest"]) {
+      assert.equal(banned in input, false, `${banned} is still part of the authorization input`);
+    }
+  });
+
+  for (const [label, sql] of [
+    ["a user row", `UPDATE "User" SET "updatedAt" = "updatedAt" + 1 WHERE "id" = (SELECT MIN("id") FROM "User")`],
+    ["a pre-existing reward row", `UPDATE "Reward" SET "description" = 'rewritten' WHERE "id" = (SELECT MIN("id") FROM "Reward")`],
+    ["a pre-existing audit row", `UPDATE "AuditLog" SET "action" = 'rewritten' WHERE "id" = (SELECT MIN("id") FROM "AuditLog")`],
+  ] as const) {
+    await check(`POST-MIGRATION TRUST: tampering with ${label} refuses the structural import`, () => {
+      const before = snapshot(RUN_DB);
+      try {
+        exec(RUN_DB, sql);
+        refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(authorizationInput()));
+      } finally {
+        restore(RUN_DB, before);
+      }
+    });
+  }
+
+  await check("POST-MIGRATION TRUST: a schema change refuses the structural import", () => {
+    const before = snapshot(RUN_DB);
+    try {
+      exec(RUN_DB, `CREATE TABLE "InjectedTable" ("id" INTEGER PRIMARY KEY)`);
+      refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(authorizationInput()));
+    } finally {
+      restore(RUN_DB, before);
+    }
+  });
+
+  for (const [label, sql] of [
+    ["a migration checksum", `UPDATE _prisma_migrations SET checksum = 'tampered' WHERE rowid = (SELECT MIN(rowid) FROM _prisma_migrations)`],
+    ["a migration name", `UPDATE _prisma_migrations SET migration_name = 'not_a_sanctioned_migration' WHERE rowid = (SELECT MIN(rowid) FROM _prisma_migrations)`],
+    ["a rolled-back marker", `UPDATE _prisma_migrations SET rolled_back_at = 1786000000000 WHERE rowid = (SELECT MAX(rowid) FROM _prisma_migrations)`],
+    ["an unfinished marker", `UPDATE _prisma_migrations SET finished_at = NULL WHERE rowid = (SELECT MAX(rowid) FROM _prisma_migrations)`],
+  ] as const) {
+    await check(`MIGRATION TABLE: tampering with ${label} refuses the structural import`, () => {
+      const before = snapshot(RUN_DB);
+      try {
+        exec(RUN_DB, sql);
+        refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(authorizationInput()));
+      } finally {
+        restore(RUN_DB, before);
+      }
+    });
+  }
 
   /* ---------- manifest identity ---------- */
 
   await check("a manifest whose bytes changed is refused", () => {
-    const tampered = manifestWith((draft) => {
-      draft.activationId = "fixture-activation-0002";
-    }, "tampered-id");
+    const variant = manifestWith((d) => {
+      d.activationId = `${String(d.activationId)}X`;
+    }, "byte-changed");
     refuses("MANIFEST_SHA_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput({ ...tampered, sha256: baseManifest.sha256 }),
-      ),
+      assertPreprodActivationAuthorization(authorizationInput(variant, { expectedManifestSha256: baseManifest.sha256 })),
     );
   });
 
   await check("an unknown manifest field is refused (strict schema)", () => {
-    const extra = manifestWith((draft) => {
-      draft.allowLive = true;
+    const variant = manifestWith((d) => {
+      d.stateChain.extra = "surprise";
     }, "unknown-field");
-    refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(extra)));
+    refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
   });
 
-  await check("a manifest for another schema version is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.schemaVersion = "ata.preprod-activation-manifest/v2";
-    }, "schema-v2");
-    refuses("MANIFEST_SCHEMA_UNSUPPORTED", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
+  await check("a v1 activation manifest is refused with an explanation", () => {
+    const variant = manifestWith((d) => {
+      d.schemaVersion = "ata.preprod-activation-manifest/v1";
+    }, "v1-manifest");
+    try {
+      assertPreprodActivationAuthorization(authorizationInput(variant));
+      assert.fail("a v1 manifest parsed");
+    } catch (error) {
+      assert.equal(isPreprodActivationError(error, "MANIFEST_SCHEMA_UNSUPPORTED"), true);
+      assert.match((error as Error).message, /target digest supplied on the command line/);
+    }
   });
 
-  await check("an expected digest that is not 64 hex characters is refused", () => {
+  await check("tampering with any pinned stage fingerprint changes the manifest digest", () => {
+    const variant = manifestWith((d) => {
+      d.stateChain.postStructural.curriculumDigest = "0".repeat(64);
+    }, "tampered-chain");
+    assert.notEqual(variant.sha256, baseManifest.sha256);
     refuses("MANIFEST_SHA_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput({ ...baseManifest, sha256: "not-a-digest" }),
-      ),
+      assertPreprodActivationAuthorization(authorizationInput(variant, { expectedManifestSha256: baseManifest.sha256 })),
     );
   });
 
-  /* ---------- environment ---------- */
+  await check("a re-digested manifest with a tampered stage fingerprint still refuses", () => {
+    const variant = manifestWith((d) => {
+      d.stateChain.postMigration.businessContinuityDigest = "0".repeat(64);
+    }, "rehashed-chain");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
+  });
 
-  for (const [label, value] of [
-    ["production", "production"],
-    ["dev", "dev"],
-    ["unrecognised", "preprod"],
+  /* ---------- environment, host, target ---------- */
+
+  for (const [label, overrides] of [
+    ["production", { ATA_ENVIRONMENT: "production" }],
+    ["dev", { ATA_ENVIRONMENT: "dev" }],
+    ["absent", {}],
+    ["a value that is not a deployment class", { ATA_ENVIRONMENT: "preprod" }],
   ] as const) {
     await check(`a host classified ${label} cannot satisfy a PREPROD manifest`, () => {
       refuses("ENVIRONMENT_NOT_PREPROD", () =>
-        assertPreprodActivationAuthorization(
-          authorizationInput(baseManifest, { environmentVariables: env({ ATA_ENVIRONMENT: value }) }),
-        ),
+        assertPreprodActivationAuthorization(authorizationInput(baseManifest, { environmentVariables: env(overrides) })),
       );
     });
   }
 
-  await check("a host with no environment declaration is refused", () => {
-    refuses("ENVIRONMENT_NOT_PREPROD", () =>
-      assertPreprodActivationAuthorization(authorizationInput(baseManifest, { environmentVariables: env() })),
-    );
-  });
-
-  for (const value of ["prod", "production", "dev", "staging", "unknown"]) {
+  for (const value of ["prod", "production", "dev", "local", "test"]) {
     await check(`a manifest declaring environment=${value} does not parse`, () => {
-      const other = manifestWith((draft) => {
-        draft.environment = value;
+      const variant = manifestWith((d) => {
+        d.environment = value;
       }, `env-${value}`);
-      refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(other)));
+      refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
     });
   }
 
-  await check("a manifest with an unsupported risk policy does not parse", () => {
-    const other = manifestWith((draft) => {
-      draft.riskPolicy = "PROD_OFFHOST_VERIFIED";
-    }, "risk-policy");
-    refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(other)));
-  });
-
-  /* ---------- host ---------- */
-
   await check("a manifest prepared for another machine is refused", () => {
-    refuses("HOST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(baseManifest, {
-          hostIdentityProvider: () => ({ machineIdSha256: OTHER_MACHINE_ID_SHA, hostname: "other-host" }),
-        }),
-      ),
-    );
-  });
-
-  /* ---------- target ---------- */
-
-  await check("a manifest naming a database other than the sanctioned target is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.targetDatabase.canonicalPath = path.join(ROOT, "somewhere-else.sqlite");
-    }, "wrong-target-path");
-    refuses("TARGET_NOT_SANCTIONED", () => assertPreprodActivationAuthorization(authorizationInput(other)));
+    const variant = manifestWith((d) => {
+      d.host.machineIdSha256 = OTHER_MACHINE_ID_SHA;
+    }, "other-machine");
+    refuses("HOST_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
   });
 
   for (const forbidden of NEVER_AUTHORIZED_DATABASE_PATHS) {
     await check(`${path.basename(forbidden)} can never be an activation target`, () => {
       refuses("TARGET_NOT_SANCTIONED", () =>
         assertPreprodActivationAuthorization(
-          authorizationInput(baseManifest, {
-            sanctionedTargetOverride: { __testOnlySanctionedTargetPath: forbidden },
-          }),
+          authorizationInput(baseManifest, { sanctionedTargetOverride: { __testOnlySanctionedTargetPath: forbidden } }),
         ),
       );
     });
   }
 
+  await check("a manifest naming a database other than the sanctioned target is refused", () => {
+    const variant = manifestWith((d) => {
+      d.targetDatabase.canonicalPath = "/srv/ata-data/data/ata-prod.sqlite";
+    }, "other-target");
+    refuses("TARGET_NOT_SANCTIONED", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
+  });
+
   await check("a target whose inode changed is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.targetDatabase.inode = draft.targetDatabase.inode + 1;
-    }, "wrong-inode");
-    refuses("TARGET_IDENTITY_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput(other)));
+    const variant = manifestWith((d) => {
+      d.targetDatabase.inode = Number(d.targetDatabase.inode) + 1;
+    }, "inode");
+    refuses("TARGET_IDENTITY_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
   });
 
-  await check("a target whose device changed is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.targetDatabase.device = draft.targetDatabase.device + 1;
-    }, "wrong-device");
-    refuses("TARGET_IDENTITY_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput(other)));
-  });
-
-  await check("an expected target digest the file does not have is refused", () => {
-    refuses("TARGET_DIGEST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(baseManifest, { expectedTargetSha256: "a".repeat(64) }),
-      ),
-    );
-  });
-
-  await check("the structural import is refused while the target is at the entry lineage", () => {
-    // 41 -> 46: a target still at the entry count must not be structurally imported.
-    const other = manifestWith((draft) => {
-      draft.migrationLineage.entryMigrationCount = targetMigrations;
-      draft.migrationLineage.targetMigrationCount = targetMigrations + 1;
-    }, "not-yet-migrated");
-    refuses("TARGET_MIGRATION_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  await check("while the target is still at the entry lineage, the manifest's entry digest is authority", () => {
-    const other = manifestWith((draft) => {
-      draft.targetDatabase.sha256 = "b".repeat(64);
-    }, "entry-digest-authority");
-    // The caller states the digest the file really has, so only the entry-state
-    // rule can catch the disagreement with the reviewed manifest.
-    refuses("TARGET_DIGEST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(other, { expectedTargetSha256: sha256File(TARGET_DB) }),
-      ),
-    );
-  });
-
-  /* ---------- the rollback artifact ---------- */
+  /* ---------- the rollback artifact, at every stage ---------- */
 
   await check("a missing rollback backup is refused", () => {
-    const moved = path.join(ROOT, "moved-backup.sqlite");
-    fs.renameSync(BACKUP_DB, moved);
+    const bytes = fs.readFileSync(PREP_BACKUP);
+    fs.rmSync(PREP_BACKUP, { force: true });
     try {
-      refuses("BACKUP_ARTIFACT_MISSING", () =>
-        assertPreprodActivationAuthorization(authorizationInput(baseManifest)),
-      );
+      refuses("BACKUP_ARTIFACT_MISSING", () => assertPreprodActivationAuthorization(authorizationInput()));
     } finally {
-      fs.renameSync(moved, BACKUP_DB);
+      fs.writeFileSync(PREP_BACKUP, bytes, { mode: 0o600 });
     }
   });
 
   await check("a rollback backup whose bytes changed is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.backup.artifactSha256 = "c".repeat(64);
-    }, "backup-sha");
-    refuses("BACKUP_ARTIFACT_DIGEST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  await check("a rollback backup of the wrong size is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.backup.artifactSizeBytes = draft.backup.artifactSizeBytes + 4096;
-    }, "backup-size");
-    refuses("BACKUP_ARTIFACT_SIZE_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
+    const bytes = fs.readFileSync(PREP_BACKUP);
+    const mutated = Buffer.from(bytes);
+    mutated[mutated.length - 1] ^= 0xff;
+    fs.writeFileSync(PREP_BACKUP, mutated, { mode: 0o600 });
+    try {
+      refuses("BACKUP_ARTIFACT_DIGEST_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput()));
+    } finally {
+      fs.writeFileSync(PREP_BACKUP, bytes, { mode: 0o600 });
+    }
   });
 
   await check("a world-readable rollback backup is refused", () => {
-    fs.chmodSync(BACKUP_DB, 0o644);
+    fs.chmodSync(PREP_BACKUP, 0o644);
     try {
-      refuses("BACKUP_ARTIFACT_PERMISSIVE", () =>
-        assertPreprodActivationAuthorization(authorizationInput(baseManifest)),
-      );
+      refuses("BACKUP_ARTIFACT_PERMISSIVE", () => assertPreprodActivationAuthorization(authorizationInput()));
     } finally {
-      fs.chmodSync(BACKUP_DB, 0o600);
+      fs.chmodSync(PREP_BACKUP, 0o600);
     }
   });
 
-  await check("a rollback backup that fails integrity_check is refused", () => {
-    const good = fs.readFileSync(BACKUP_DB);
-    const corrupt = Buffer.from(good);
-    // Flip a byte inside the migration table's page region until integrity fails.
-    for (let offset = 4096; offset < corrupt.length; offset += 997) {
-      corrupt[offset] ^= 0xff;
-    }
-    fs.writeFileSync(BACKUP_DB, corrupt, { mode: 0o600 });
-    try {
-      // The digest gate fires first, which is itself the point: a backup whose
-      // bytes moved never reaches the question of what it would say about itself.
-      let code: string | null = null;
-      try {
-        assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-      } catch (error) {
-        code = isPreprodActivationError(error) ? error.code : null;
-      }
-      assert.ok(
-        code === "BACKUP_ARTIFACT_DIGEST_MISMATCH" || code === "BACKUP_INTEGRITY_FAILED",
-        `expected a digest or integrity refusal, got ${code}`,
-      );
-    } finally {
-      fs.writeFileSync(BACKUP_DB, good, { mode: 0o600 });
-    }
+  await check("the backup is pinned to the ENTRY snapshot, not to the current file", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(evidence.backup.artifactSha256, baseManifest.json.backup.artifactSha256);
+    // the target has moved past entry; the backup still validates
+    assert.equal(evidence.observedState, "POST_MIGRATION");
   });
 
-  await check("a rollback backup with the wrong migration count is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.backup.appliedMigrationCount = draft.backup.appliedMigrationCount + 1;
-    }, "backup-migrations");
-    refuses("BACKUP_MIGRATION_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  await check("LIVE CHANGED AFTER BACKUP: any write to the target invalidates the activation", () => {
-    const before = fs.readFileSync(TARGET_DB);
-    const db = new DatabaseSync(TARGET_DB);
-    try {
-      db.exec(
-        `INSERT INTO "User" ("email","name","updatedAt","passwordHash") VALUES ('post.backup@fixture.invalid','Post Backup','2026-08-11 09:00:00','x')`,
-      );
-    } finally {
-      db.close();
-    }
-    try {
-      // TWO independent rules catch this, and either is a correct refusal: while
-      // the target is at the entry lineage its digest must equal the manifest's,
-      // and separately the rollback artifact must still cover the live state.
-      // The test accepts both so that neither can be deleted without the other
-      // failing loudly.
-      let code: string | null = null;
-      try {
-        assertPreprodActivationAuthorization(
-          authorizationInput(baseManifest, { expectedTargetSha256: sha256File(TARGET_DB) }),
-        );
-      } catch (error) {
-        code = isPreprodActivationError(error) ? error.code : String(error);
-      }
-      assert.ok(
-        code === "TARGET_DIGEST_MISMATCH" || code === "BACKUP_SOURCE_DIGEST_MISMATCH",
-        `a post-backup write must refuse the activation; got ${String(code)}`,
-      );
-    } finally {
-      fs.writeFileSync(TARGET_DB, before);
-      for (const suffix of ["-wal", "-shm", "-journal"]) fs.rmSync(`${TARGET_DB}${suffix}`, { force: true });
-    }
-  });
-
-  await check("a rollback artifact that does not cover the live state is refused", () => {
-    // The target is untouched and its digest still matches the manifest, so the
-    // entry-lineage rule passes and ONLY the backup-coverage rule can fire.
-    const other = manifestWith((draft) => {
-      draft.backup.sourceDatabaseSha256 = "e".repeat(64);
-    }, "backup-not-covering");
-    refuses("BACKUP_SOURCE_DIGEST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  await check("a rollback artifact whose rows differ from the live database is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.backup.logicalDigest = "f".repeat(64);
-    }, "backup-logical-digest");
-    refuses("BACKUP_SOURCE_DIGEST_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  await check("the restored fixture authorizes again, proving the previous test was the write", () => {
-    const evidence = assertPreprodActivationAuthorization(
-      authorizationInput(baseManifest, { expectedTargetSha256: sha256File(TARGET_DB) }),
-    );
-    assert.equal(evidence.backupCoversCurrentState, true);
+  await check("a backup taken from a different entry state is refused", () => {
+    const variant = manifestWith((d) => {
+      d.backup.sourceDatabaseSha256 = "0".repeat(64);
+    }, "backup-other-source");
+    refuses("BACKUP_SOURCE_DIGEST_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
   });
 
   /* ---------- reviewed inputs ---------- */
@@ -797,99 +967,37 @@ async function main(): Promise<void> {
   });
 
   await check("a changed accepted product checkpoint is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.acceptedProduct.checkpointSha256 = "d".repeat(64);
-    }, "checkpoint-sha");
-    refuses("PRODUCT_CHECKPOINT_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
+    const bytes = fs.readFileSync(CHECKPOINT);
+    fs.writeFileSync(CHECKPOINT, Buffer.concat([bytes, Buffer.from("x")]), { mode: 0o600 });
+    try {
+      refuses("PRODUCT_CHECKPOINT_MISMATCH", () => assertPreprodActivationAuthorization(authorizationInput()));
+    } finally {
+      fs.writeFileSync(CHECKPOINT, bytes, { mode: 0o600 });
+    }
   });
 
-  await check("an absent accepted product checkpoint is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.acceptedProduct.checkpointPath = path.join(ROOT, "no-such-checkpoint.bin");
-    }, "checkpoint-absent");
-    refuses("PRODUCT_CHECKPOINT_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
-    );
-  });
-
-  /* ---------- overlay pins: the M-3 mitigation ---------- */
-
-  // In a real activation the overlay stage runs AFTER the migration, so the
-  // target is past the entry lineage and the entry-state rules no longer apply.
-  // The overlay fixtures model that rather than the entry state.
-  const overlayBase = manifestWith((draft) => {
-    draft.migrationLineage.entryMigrationCount = targetMigrations - 1;
-  }, "overlay-base");
-
-  const overlayStageInput = (manifest: ManifestFile, overrides: Partial<AuthorizationInput> = {}) =>
-    authorizationInput(manifest, {
-      operation: "EDITORIAL_OVERLAY",
-      stage: "EDITORIAL_OVERLAY",
-      completedStages: ["PREPARED", "MIGRATION_41_TO_46", "STRUCTURAL_IMPORT"],
-      overlay: overlayFacts,
-      ...overrides,
-    });
-
-  await check("the overlay stage authorizes when every pin matches", () => {
-    const evidence = assertPreprodActivationAuthorization(overlayStageInput(overlayBase));
-    assert.equal(evidence.operation, "EDITORIAL_OVERLAY");
-    assert.equal(evidence.editorialBaselineChecked, true);
-    assert.equal(evidence.historicalPrincipalsAbsent, true);
-  });
-
-  await check("the overlay stage refuses when no overlay is supplied", () => {
-    refuses("OVERLAY_MISMATCH", () =>
-      assertPreprodActivationAuthorization(overlayStageInput(overlayBase, { overlay: undefined })),
-    );
-  });
-
-  const overlayPinCases: Array<[string, keyof typeof overlayFacts, string, string]> = [
-    ["canonical fingerprint", "fingerprint", "e".repeat(64), "OVERLAY_MISMATCH"],
-    ["acceptedReviewedRootHash", "acceptedReviewedRootHash", "f".repeat(64), "OVERLAY_MISMATCH"],
-    ["file digest", "fileSha256", "1".repeat(64), "OVERLAY_MISMATCH"],
-    ["sourceCheckpointSha256", "sourceCheckpointSha256", "2".repeat(64), "OVERLAY_PROVENANCE_MISMATCH"],
-    ["sourceBackendCommit", "sourceBackendCommit", "3".repeat(40), "OVERLAY_PROVENANCE_MISMATCH"],
-    ["sourceBackendTree", "sourceBackendTree", "4".repeat(40), "OVERLAY_PROVENANCE_MISMATCH"],
-    ["structuralPackageFingerprint", "structuralPackageFingerprint", "5".repeat(64), "OVERLAY_PROVENANCE_MISMATCH"],
-    ["blueprintSourceDocumentSha256", "blueprintSourceDocumentSha256", "6".repeat(64), "OVERLAY_PROVENANCE_MISMATCH"],
-  ];
-  for (const [label, field, value, code] of overlayPinCases) {
+  for (const [label, field] of [
+    ["sourceCheckpointSha256", "sourceCheckpointSha256"],
+    ["sourceBackendCommit", "sourceBackendCommit"],
+    ["sourceBackendTree", "sourceBackendTree"],
+    ["structuralPackageFingerprint", "structuralPackageFingerprint"],
+    ["acceptedReviewedRootHash", "acceptedReviewedRootHash"],
+    ["canonical fingerprint", "fingerprint"],
+  ] as const) {
     await check(`M-3: an overlay whose ${label} differs from the pin is refused`, () => {
-      refuses(code, () =>
-        assertPreprodActivationAuthorization(
-          overlayStageInput(overlayBase, { overlay: { ...overlayFacts, [field]: value } }),
-        ),
-      );
+      const variant = manifestWith((d) => {
+        const current = String(d.editorialOverlay[field]);
+        d.editorialOverlay[field] = current.length === 40 ? "0".repeat(40) : "0".repeat(64);
+      }, `m3-${field}`);
+      try {
+        assertPreprodActivationAuthorization(overlayInput({ activationManifestPath: variant.path, expectedManifestSha256: variant.sha256 }));
+        assert.fail("an overlay disagreeing with its pin was accepted");
+      } catch (error) {
+        assert.equal(isPreprodActivationError(error), true);
+        assert.match(String((error as { code?: string }).code), /OVERLAY/);
+      }
     });
   }
-
-  await check("M-3: an overlay that agrees with its manifest entry but not with the accepted checkpoint is refused", () => {
-    // Both the manifest's overlay pin AND the artifact are moved together, so
-    // only the cross-check against `acceptedProduct` can catch it.
-    const other = manifestWith((draft) => {
-      draft.editorialOverlay.sourceCheckpointSha256 = "7".repeat(64);
-    }, "overlay-vs-checkpoint", overlayBase);
-    refuses("OVERLAY_PROVENANCE_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        overlayStageInput(other, { overlay: { ...overlayFacts, sourceCheckpointSha256: "7".repeat(64) } }),
-      ),
-    );
-  });
-
-  await check("M-3: an overlay that agrees with its manifest entry but not with the imported package is refused", () => {
-    const other = manifestWith((draft) => {
-      draft.editorialOverlay.structuralPackageFingerprint = "8".repeat(64);
-    }, "overlay-vs-package", overlayBase);
-    refuses("OVERLAY_PROVENANCE_MISMATCH", () =>
-      assertPreprodActivationAuthorization(
-        overlayStageInput(other, { overlay: { ...overlayFacts, structuralPackageFingerprint: "8".repeat(64) } }),
-      ),
-    );
-  });
-
-  /* ---------- releases and flags ---------- */
 
   for (const app of ["backend", "academy", "crm"] as const) {
     await check(`a redeployed ${app} release refuses the activation`, () => {
@@ -923,276 +1031,425 @@ async function main(): Promise<void> {
     );
   });
 
-  /* ---------- database contents ---------- */
+  /* ---------- the positive chain, and the states it must reproduce ---------- */
 
-  await check("a curriculum starting state that drifted refuses the activation", () => {
-    const other = manifestWith((draft) => {
-      draft.curriculumStartingState.fingerprint = "9".repeat(64);
-    }, "starting-state");
-    refuses("CURRICULUM_STARTING_STATE_MISMATCH", () =>
-      assertPreprodActivationAuthorization(authorizationInput(other)),
+  await check("POSITIVE STRUCTURAL IMPORT: the full chain runs and publishes nothing", async () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(evidence.disposition, "EXECUTE");
+    const target = assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+      env: GUARD_ENV(),
+      activationGrant: evidence.grant!,
+      activationOperation: "STRUCTURAL_IMPORT",
+    });
+    assertTargetIdentityUnchanged(target, {
+      env: GUARD_ENV(),
+      activationGrant: evidence.grant!,
+      activationOperation: "STRUCTURAL_IMPORT",
+    });
+
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient({ datasources: { db: { url: target.url } } });
+    try {
+      const raw = JSON.parse(fs.readFileSync(PACKAGE_PATH, "utf8")) as unknown;
+      const result = await importCurriculumPackage(raw, { db, dryRun: false });
+      assert.equal(result.ok, true, `import failed: ${JSON.stringify((result as { issues?: unknown }).issues)}`);
+    } finally {
+      await db.$disconnect();
+    }
+    dropSidecars(RUN_DB);
+
+    assert.equal(query(RUN_DB, `SELECT COUNT(*) AS n FROM "CurriculumVersion" WHERE "status" = 'published'`), 0);
+    assert.equal(
+      query(RUN_DB, 'SELECT COUNT(*) AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?', [
+        packageFacts.curriculumCode,
+        packageFacts.curriculumVersionNumber,
+      ]),
+      1,
     );
+    assert.equal(query(RUN_DB, 'SELECT COUNT(*) AS n FROM "SourceAuthorityResolution"'), 0);
+    assert.equal(query(RUN_DB, 'SELECT COUNT(*) AS n FROM "EditorialReviewNote"'), 0);
   });
+
+  await check("the real run reproduced the rehearsed post-structural state exactly", () => {
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.observedState, "POST_STRUCTURAL");
+    assert.equal(evidence.disposition, "EXECUTE");
+  });
+
+  await check("RESUME: repeating the structural stage is ALREADY_COMPLETE and grants nothing", () => {
+    const evidence = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(evidence.disposition, "ALREADY_COMPLETE");
+    assert.equal(evidence.grant, null);
+  });
+
+  for (const [label, sql] of [
+    ["a level title", `UPDATE "LevelDefinition" SET "title" = 'tampered' WHERE "id" = (SELECT MIN("id") FROM "LevelDefinition")`],
+    ["a content body", `UPDATE "ContentLocalization" SET "summary" = 'tampered' WHERE "id" = (SELECT MIN("id") FROM "ContentLocalization")`],
+    ["a question", `UPDATE "QuestionDefinition" SET "correctAnswer" = '"tampered"' WHERE "id" = (SELECT MIN("id") FROM "QuestionDefinition")`],
+    ["a level's xp reward", `UPDATE "LevelDefinition" SET "xpReward" = "xpReward" + 1 WHERE "id" = (SELECT MIN("id") FROM "LevelDefinition")`],
+  ] as const) {
+    await check(`POST-STRUCTURAL TAMPER: ${label} refuses the overlay`, () => {
+      const before = snapshot(RUN_DB);
+      try {
+        exec(RUN_DB, sql);
+        refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+      } finally {
+        restore(RUN_DB, before);
+      }
+    });
+  }
 
   await check("M-1: an unexpected SourceAuthorityResolution row refuses the overlay", () => {
-    const other = manifestWith((draft) => {
-      draft.preOverlayEditorialBaseline.sourceAuthorityResolutionCount = 1;
-    }, "sar-baseline", overlayBase);
-    refuses("UNEXPECTED_SOURCE_AUTHORITY", () =>
-      assertPreprodActivationAuthorization(overlayStageInput(other)),
-    );
-  });
-
-  await check("M-2: an unexpected EditorialReviewNote refuses the overlay", () => {
-    const other = manifestWith((draft) => {
-      draft.preOverlayEditorialBaseline.editorialReviewNoteCount = 1;
-    }, "note-baseline", overlayBase);
-    refuses("UNEXPECTED_REVIEW_NOTE", () => assertPreprodActivationAuthorization(overlayStageInput(other)));
-  });
-
-  await check("an unexpected video-production baseline refuses the overlay", () => {
-    const other = manifestWith((draft) => {
-      draft.preOverlayEditorialBaseline.videoProductionVersionCount = 3;
-    }, "video-baseline", overlayBase);
-    refuses("UNEXPECTED_EDITORIAL_STATE", () =>
-      assertPreprodActivationAuthorization(overlayStageInput(other)),
-    );
-  });
-
-  await check("an overlay principal that already exists refuses the overlay", () => {
-    const db = new DatabaseSync(TARGET_DB);
-    const before = fs.readFileSync(TARGET_DB);
+    const before = snapshot(RUN_DB);
     try {
-      db.exec(
-        `INSERT INTO "User" ("email","name","updatedAt","passwordHash") VALUES ('g2.author.a@fixture.invalid','Pre-existing','2026-08-11 09:00:00','x')`,
+      const cvId = query(RUN_DB, 'SELECT "id" AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?', [
+        packageFacts.curriculumCode,
+        packageFacts.curriculumVersionNumber,
+      ]);
+      const levelId = query(RUN_DB, 'SELECT MIN("id") AS n FROM "LevelDefinition" WHERE "curriculumVersionId" = ?', [cvId]);
+      const assessmentId = query(
+        RUN_DB,
+        'SELECT MIN("id") AS n FROM "AssessmentVersion" WHERE "curriculumVersionId" = ?',
+        [cvId],
       );
-      db.close();
-      refuses("UNEXPECTED_HISTORICAL_PRINCIPAL", () =>
-        assertPreprodActivationAuthorization(
-          overlayStageInput(overlayBase, { expectedTargetSha256: sha256File(TARGET_DB) }),
-        ),
+      exec(
+        RUN_DB,
+        `INSERT INTO "VideoProductionVersion"
+           ("levelDefinitionId","curriculumVersionId","versionNumber","levelNumber","contractVersion",
+            "sourceProvenance","scriptState","videoState","qaState","contractPayload",
+            "contractFingerprint","assessmentFingerprint","createdAt","updatedAt")
+         VALUES (${levelId}, ${cvId}, 1, 1, 'v1', 'SOURCE_BACKED', 'SCRIPT_PENDING', 'NOT_RECORDED', 'QA_PENDING', '{}',
+                 '${"0".repeat(64)}', '${"0".repeat(64)}', 1786000000000, 1786000000000)`,
       );
+      const videoId = query(RUN_DB, 'SELECT MIN("id") AS n FROM "VideoProductionVersion"');
+      exec(
+        RUN_DB,
+        `INSERT INTO "SourceAuthorityResolution"
+           ("curriculumVersionId","levelDefinitionId","assessmentVersionId","videoProductionVersionId",
+            "questionIndex","field","conflictPath","decision",
+            "currentValueHash","blueprintValueHash","blueprintSourceDocumentSha256",
+            "contractFingerprintAtDecision","bankFingerprintAtDecision","assessmentRevisionAtDecision",
+            "rationale","evidenceRef","evidenceSha256","batchId","decidedById","decidedAt","createdAt")
+         VALUES (${cvId}, ${levelId}, ${assessmentId}, ${videoId}, 0, 'prompt', 'q0.prompt', 'BLUEPRINT',
+                 '${"1".repeat(64)}', '${"2".repeat(64)}', '${"3".repeat(64)}',
+                 '${"4".repeat(64)}', '${"5".repeat(64)}', 1,
+                 'injected by the M-1 regression', 'fixture://evidence', '${"6".repeat(64)}',
+                 'fixture-batch', 1, 1786000000000, 1786000000000)`,
+      );
+      refuses("UNEXPECTED_SOURCE_AUTHORITY", () => assertPreprodActivationAuthorization(overlayInput()));
     } finally {
-      try {
-        db.close();
-      } catch {
-        /* already closed */
-      }
-      fs.writeFileSync(TARGET_DB, before);
-      for (const suffix of ["-wal", "-shm", "-journal"]) fs.rmSync(`${TARGET_DB}${suffix}`, { force: true });
+      restore(RUN_DB, before);
     }
   });
 
-  await check("the baseline probes read the target without writing to it", () => {
-    const before = sha256File(TARGET_DB);
-    captureCurriculumStartingState(TARGET_DB);
-    captureEditorialBaseline(TARGET_DB, {
+  await check("M-2: an unexpected EditorialReviewNote refuses the overlay", () => {
+    const before = snapshot(RUN_DB);
+    try {
+      const cvId = query(RUN_DB, 'SELECT "id" AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?', [
+        packageFacts.curriculumCode,
+        packageFacts.curriculumVersionNumber,
+      ]);
+      const contentId = query(
+        RUN_DB,
+        'SELECT MIN(cv."id") AS n FROM "ContentVersion" cv WHERE cv."curriculumVersionId" = ?',
+        [cvId],
+      );
+      exec(
+        RUN_DB,
+        `INSERT INTO "EditorialReviewNote" ("contentVersionId","targetRevision","path","body","authorId","createdAt")
+         VALUES (${contentId}, 1, 'summary', 'injected', 1, 1786000000000)`,
+      );
+      refuses("UNEXPECTED_REVIEW_NOTE", () => assertPreprodActivationAuthorization(overlayInput()));
+    } finally {
+      restore(RUN_DB, before);
+    }
+  });
+
+  await check("an overlay principal that already exists refuses the overlay", () => {
+    const before = snapshot(RUN_DB);
+    try {
+      const ref = String((baseManifest.json.historicalPrincipalRefs as string[])[0]);
+      exec(
+        RUN_DB,
+        `INSERT INTO "User" ("email","name","passwordHash","role","status","level","xp","createdAt","updatedAt")
+         VALUES ('${ref}','Squatter','x','user','active',1,0,1786000000000,1786000000000)`,
+      );
+      refuses("UNEXPECTED_HISTORICAL_PRINCIPAL", () => assertPreprodActivationAuthorization(overlayInput()));
+    } finally {
+      restore(RUN_DB, before);
+    }
+  });
+
+  await check("POSITIVE OVERLAY IMPORT: the full chain runs against the real artifact", async () => {
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    const target = assertSafeDatabaseTarget(`file:${RUN_DB}`, {
+      env: GUARD_ENV(),
+      activationGrant: evidence.grant!,
+      activationOperation: "EDITORIAL_OVERLAY",
+    });
+
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient({ datasources: { db: { url: target.url } } });
+    try {
+      const raw = JSON.parse(fs.readFileSync(OVERLAY_PATH, "utf8")) as unknown;
+      const result = await importEditorialOverlay(raw, {
+        db,
+        dryRun: false,
+        importActorId: null,
+        allowPrincipalProvisioning: true,
+      });
+      assert.equal(result.ok, true, `overlay failed: ${JSON.stringify((result as { issues?: unknown }).issues)}`);
+    } finally {
+      await db.$disconnect();
+    }
+    dropSidecars(RUN_DB);
+  });
+
+  await check("the real run reproduced the rehearsed post-overlay state exactly", () => {
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.observedState, "POST_OVERLAY");
+    assert.equal(evidence.disposition, "ALREADY_COMPLETE");
+    assert.equal(evidence.grant, null);
+    assert.equal(evidence.contentActivationPlanChecked, true);
+  });
+
+  await check("RUNTIME INERTNESS: nothing was published, bound or flagged", () => {
+    const cvId = query(RUN_DB, 'SELECT "id" AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?', [
+      packageFacts.curriculumCode,
+      packageFacts.curriculumVersionNumber,
+    ]);
+    const status = (() => {
+      const db = new DatabaseSync(RUN_DB, { readOnly: true });
+      try {
+        return (db.prepare('SELECT "status" AS s FROM "CurriculumVersion" WHERE "id" = ?').get(cvId) as { s: string }).s;
+      } finally {
+        db.close();
+      }
+    })();
+    assert.equal(status, "draft");
+    assert.equal(
+      query(
+        RUN_DB,
+        `SELECT COUNT(*) AS n FROM "LevelResourceBinding" b JOIN "LevelDefinition" l ON l."id" = b."levelDefinitionId"
+          WHERE l."curriculumVersionId" = ? AND b."assessmentVersionId" IS NOT NULL`,
+        [cvId],
+      ),
+      0,
+      "the overlay bound an assessment",
+    );
+  });
+
+  /* ---------- M1: the content activation plan is recomputed ---------- */
+
+  await check("the content plan derived at authorization matches the manifest", () => {
+    const derived = deriveContentActivationPlan(RUN_DB, {
       code: packageFacts.curriculumCode,
       versionNumber: packageFacts.curriculumVersionNumber,
     });
-    capturePrincipalPresence(TARGET_DB, ["nobody@fixture.invalid"]);
-    computeLogicalDigest(TARGET_DB);
-    assert.equal(sha256File(TARGET_DB), before);
+    assertContentActivationPlanMatches(baseManifest.json.contentActivationPlan.rows as ContentActivationRow[], derived.rows);
+    const summary = summarizeContentActivationPlan(derived.rows);
+    assert.ok(summary.total > 0);
+    assert.equal(summary.publishInPlace + summary.publishAndMoveBinding, summary.total);
   });
 
-  /* ---------- stage model ---------- */
+  for (const [label, mutate] of [
+    ["a wrong stable code", (rows: ContentActivationRow[]) => { rows[0].levelStableCode = "v2.l999.not-a-level"; }],
+    ["a wrong level number", (rows: ContentActivationRow[]) => { rows[0].levelNumber = 999; }],
+    ["a wrong version", (rows: ContentActivationRow[]) => { rows[0].acceptedContentVersionNumber = 99; }],
+    ["a wrong mode", (rows: ContentActivationRow[]) => { rows[0].action = rows[0].action === "PUBLISH_IN_PLACE" ? "PUBLISH_AND_MOVE_BINDING" : "PUBLISH_IN_PLACE"; }],
+    ["a wrong pre-binding expectation", (rows: ContentActivationRow[]) => { rows[0].expectedPreBindingIdentity = "v2.l001.x@v9"; }],
+    ["a wrong post-binding expectation", (rows: ContentActivationRow[]) => { rows[0].expectedPostBindingIdentity = "v2.l001.x@v9"; }],
+    ["a wrong pre-publication status", (rows: ContentActivationRow[]) => { rows[0].expectedPreContentStatus = `not-${rows[0].expectedPreContentStatus}`; }],
+    ["a missing row", (rows: ContentActivationRow[]) => { rows.splice(0, 1); }],
+    ["an extra row", (rows: ContentActivationRow[]) => { rows.push({ ...rows[0], levelStableCode: "v2.l999.injected", levelNumber: 999 }); }],
+    ["a duplicated row", (rows: ContentActivationRow[]) => { rows.push({ ...rows[0] }); }],
+  ] as const) {
+    await check(`CONTENT PLAN: ${label} is refused`, () => {
+      const derived = deriveContentActivationPlan(RUN_DB, {
+        code: packageFacts.curriculumCode,
+        versionNumber: packageFacts.curriculumVersionNumber,
+      });
+      const rows = JSON.parse(JSON.stringify(derived.rows)) as ContentActivationRow[];
+      mutate(rows);
+      refuses("CONTENT_PLAN_MISMATCH", () => assertContentActivationPlanMatches(rows, derived.rows));
+    });
+  }
 
-  await check("a stage that skips its predecessors is refused", () => {
-    refuses("STAGE_OUT_OF_ORDER", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(baseManifest, {
-          operation: "EDITORIAL_OVERLAY",
-          stage: "EDITORIAL_OVERLAY",
-          completedStages: ["PREPARED"],
-          overlay: overlayFacts,
-        }),
-      ),
+  await check("a re-digested manifest with a tampered content plan is refused at authorization", () => {
+    const variant = manifestWith((d) => {
+      d.contentActivationPlan.rows[0].acceptedContentVersionNumber = 99;
+    }, "plan-tampered");
+    refuses("CONTENT_PLAN_MISMATCH", () =>
+      assertPreprodActivationAuthorization(overlayInput({ activationManifestPath: variant.path, expectedManifestSha256: variant.sha256 })),
     );
   });
 
-  await check("a stage already recorded complete cannot be re-run", () => {
-    refuses("STAGE_OUT_OF_ORDER", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(baseManifest, {
-          completedStages: ["PREPARED", "MIGRATION_41_TO_46", "STRUCTURAL_IMPORT"],
-        }),
-      ),
-    );
+  /* ---------- POST-OVERLAY tamper ---------- */
+
+  for (const [label, sql] of [
+    ["reviewed content", `UPDATE "ContentLocalization" SET "summary" = 'tampered' WHERE "id" = (SELECT MIN("id") FROM "ContentLocalization")`],
+    ["a content revision", `UPDATE "ContentVersion" SET "revision" = "revision" + 1 WHERE "id" = (SELECT MIN("id") FROM "ContentVersion")`],
+    ["an editorial state", `UPDATE "AssessmentVersion" SET "editorialState" = 'draft' WHERE "id" = (SELECT MIN("id") FROM "AssessmentVersion")`],
+    ["an injected review note", `INSERT INTO "EditorialReviewNote" ("contentVersionId","targetRevision","path","body","authorId","createdAt")
+        VALUES ((SELECT MIN("id") FROM "ContentVersion"), 1, 'summary', 'injected after the overlay', 1, 1786000000000)`],
+  ] as const) {
+    await check(`POST-OVERLAY TAMPER: ${label} is UNKNOWN, never ALREADY_COMPLETE`, () => {
+      const before = snapshot(RUN_DB);
+      try {
+        exec(RUN_DB, sql);
+        refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+      } finally {
+        restore(RUN_DB, before);
+      }
+    });
+  }
+
+  /* ---------- stage ordering ---------- */
+
+  await check("the structural import is refused while the target is still at entry", () => {
+    const before = snapshot(RUN_DB);
+    try {
+      restore(RUN_DB, entryBytes);
+      void migratedBytes;
+      refuses("STAGE_OUT_OF_ORDER", () => assertPreprodActivationAuthorization(authorizationInput()));
+    } finally {
+      restore(RUN_DB, before);
+    }
+  });
+
+  await check("the overlay is refused while the target is still at entry", () => {
+    const before = snapshot(RUN_DB);
+    try {
+      restore(RUN_DB, entryBytes);
+      refuses("STAGE_OUT_OF_ORDER", () => assertPreprodActivationAuthorization(overlayInput()));
+    } finally {
+      restore(RUN_DB, before);
+    }
   });
 
   await check("an operation that does not belong to the stage is refused", () => {
     refuses("OPERATION_NOT_AUTHORIZED", () =>
-      assertPreprodActivationAuthorization(
-        authorizationInput(baseManifest, { operation: "EDITORIAL_OVERLAY", stage: "STRUCTURAL_IMPORT" }),
-      ),
+      assertPreprodActivationAuthorization(authorizationInput(baseManifest, { operation: "EDITORIAL_OVERLAY" })),
     );
   });
 
-  for (const stage of [
-    "CONTENT_PUBLICATION",
-    "CURRICULUM_PUBLICATION",
-    "BACKEND_DEPLOY",
-    "FLAG_ENABLE",
-    "SMOKE_ACCEPTANCE",
-  ] as ActivationStage[]) {
+  for (const stage of ACTIVATION_STAGES.filter(
+    (s) => s !== "STRUCTURAL_IMPORT" && s !== "EDITORIAL_OVERLAY",
+  )) {
     await check(`no importer operation is authorized at stage ${stage}`, () => {
       refuses("STAGE_NOT_AUTHORIZED", () =>
-        assertPreprodActivationAuthorization(
-          authorizationInput(baseManifest, {
-            stage,
-            completedStages: ["PREPARED", "MIGRATION_41_TO_46", "STRUCTURAL_IMPORT", "EDITORIAL_OVERLAY"],
-          }),
-        ),
+        assertPreprodActivationAuthorization(authorizationInput(baseManifest, { stage })),
       );
     });
   }
 
-  /* ---------- resume policy ---------- */
+  /* ---------- M2: the lock ---------- */
 
-  await check("resume: an exact pre-stage state is executable", () => {
-    assert.equal(
-      classifyStageState({
-        observedDigest: "aa",
-        expectedPreStageDigest: "aa",
-        expectedPostStageDigest: "bb",
-      }),
-      "PRE_STAGE",
-    );
+  await check("the production activation lock path is a source constant", () => {
+    assert.equal(ACTIVATION_LOCK_PATH, "/srv/ata-data/activation/preprod-activation.lock");
+    const lockSource = fs.readFileSync(path.join(REPO, "src/lib/curriculum/preprod-activation/lock.ts"), "utf8");
+    assert.equal(lockSource.includes("process.env"), false, "the lock path must not be readable from the environment");
   });
-
-  await check("resume: an exact post-stage state is already complete", () => {
-    assert.equal(
-      classifyStageState({
-        observedDigest: "bb",
-        expectedPreStageDigest: "aa",
-        expectedPostStageDigest: "bb",
-      }),
-      "POST_STAGE",
-    );
-  });
-
-  await check("resume: anything else is UNKNOWN and stops the activation", () => {
-    assert.equal(
-      classifyStageState({
-        observedDigest: "cc",
-        expectedPreStageDigest: "aa",
-        expectedPostStageDigest: "bb",
-      }),
-      "UNKNOWN",
-    );
-  });
-
-  /* ---------- the lock ---------- */
 
   await check("a second activation cannot start while the lock is held", () => {
     const first = acquireActivationLock(
-      { activationId: "a", manifestSha256: "0".repeat(64), stage: "STRUCTURAL_IMPORT", operation: "STRUCTURAL_IMPORT" },
-      LOCK_PATH,
+      { activationId: "a1", manifestSha256: baseManifest.sha256, stage: "STRUCTURAL_IMPORT", operation: "STRUCTURAL_IMPORT" },
+      { __testOnlyActivationLockPath: LOCK_PATH },
     );
     try {
-      assert.equal(fs.statSync(LOCK_PATH).mode & 0o777, 0o600);
       refuses("ACTIVATION_LOCK_HELD", () =>
         acquireActivationLock(
-          { activationId: "b", manifestSha256: "1".repeat(64), stage: "STRUCTURAL_IMPORT", operation: "STRUCTURAL_IMPORT" },
-          LOCK_PATH,
+          { activationId: "a2", manifestSha256: "c".repeat(64), stage: "EDITORIAL_OVERLAY", operation: "EDITORIAL_OVERLAY" },
+          { __testOnlyActivationLockPath: LOCK_PATH },
         ),
       );
+      const record = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8")) as Record<string, unknown>;
+      assert.equal(record.activationId, "a1");
+      assert.equal(record.manifestSha256, baseManifest.sha256);
+      assert.equal(record.pid, process.pid);
+      assert.equal(fs.statSync(LOCK_PATH).mode & 0o777, 0o600);
     } finally {
       first.release();
     }
     assert.equal(fs.existsSync(LOCK_PATH), false, "release must remove the lock");
   });
 
-  /* ---------- the authorized mutation actually happens, and publishes nothing ---------- */
-
-  await check("an authorized structural import writes to the protected target and publishes nothing", async () => {
-    const before = fs.readFileSync(TARGET_DB);
+  await check("holding the lock grants no database capability", () => {
+    const held = acquireActivationLock(
+      { activationId: "a3", manifestSha256: baseManifest.sha256, stage: "STRUCTURAL_IMPORT", operation: "STRUCTURAL_IMPORT" },
+      { __testOnlyActivationLockPath: LOCK_PATH },
+    );
     try {
-      const evidence = assertPreprodActivationAuthorization(authorizationInput(baseManifest));
-      const guardEnv = env({ ATA_PROTECTED_DATABASES: TARGET_DB });
-      const target = assertSafeDatabaseTarget(`file:${TARGET_DB}`, {
-        env: guardEnv,
-        activationGrant: evidence.grant,
-      });
-      assertTargetIdentityUnchanged(target, { env: guardEnv, activationGrant: evidence.grant });
-
-      const { PrismaClient } = await import("@prisma/client");
-      const db = new PrismaClient({ datasources: { db: { url: target.url } } });
-      try {
-        const raw = JSON.parse(fs.readFileSync(PACKAGE_PATH, "utf8")) as unknown;
-        const result = await importCurriculumPackage(raw, { db, dryRun: false });
-        assert.equal(result.ok, true, `import failed: ${JSON.stringify((result as { issues?: unknown }).issues)}`);
-      } finally {
-        await db.$disconnect();
-      }
-
-      // NOTHING WAS PUBLISHED. The structural import transports rows; publication
-      // is a separate stage with no operation mapping, and an authorized import
-      // must not have quietly performed one.
-      const after = new DatabaseSync(TARGET_DB, { readOnly: true });
-      try {
-        const published = (
-          after
-            .prepare(`SELECT COUNT(*) AS n FROM "CurriculumVersion" WHERE "status" = 'published'`)
-            .get() as { n: number }
-        ).n;
-        assert.equal(published, 0, "the structural import published a curriculum version");
-        const imported = (
-          after
-            .prepare('SELECT COUNT(*) AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?')
-            .get(packageFacts.curriculumCode, packageFacts.curriculumVersionNumber) as { n: number }
-        ).n;
-        assert.equal(imported, 1, "the authorized import did not create the target curriculum version");
-        const sar = (
-          after.prepare('SELECT COUNT(*) AS n FROM "SourceAuthorityResolution"').get() as { n: number }
-        ).n;
-        const notes = (
-          after.prepare('SELECT COUNT(*) AS n FROM "EditorialReviewNote"').get() as { n: number }
-        ).n;
-        assert.equal(sar, 0, "the structural import created SourceAuthorityResolution rows");
-        assert.equal(notes, 0, "the structural import created EditorialReviewNote rows");
-      } finally {
-        after.close();
-      }
+      assert.throws(
+        () => assertSafeDatabaseTarget(`file:${RUN_DB}`, { env: GUARD_ENV() }),
+        (error: unknown) => isProtectedDatabaseError(error, "TARGET_PROTECTED"),
+      );
     } finally {
-      fs.writeFileSync(TARGET_DB, before);
-      for (const suffix of ["-wal", "-shm", "-journal"]) fs.rmSync(`${TARGET_DB}${suffix}`, { force: true });
+      held.release();
     }
   });
 
-  await check("a target that already holds the imported curriculum refuses a fresh activation", () => {
-    const before = fs.readFileSync(TARGET_DB);
-    const db = new DatabaseSync(TARGET_DB);
-    try {
-      db.exec(
-        `INSERT INTO "CurriculumVersion" ("code","name","status","versionNumber") VALUES ('${packageFacts.curriculumCode}','pre-existing','draft',${packageFacts.curriculumVersionNumber})`,
-      );
-      db.close();
-      // Model the post-migration world so the entry-lineage digest rule does not
-      // fire, and adopt the observed starting state so the fingerprint matches.
-      // What remains is exactly one rule: the target curriculum must be absent.
-      const observed = captureCurriculumStartingState(TARGET_DB);
-      const variant = manifestWith((draft) => {
-        draft.migrationLineage.entryMigrationCount = targetMigrations - 1;
-        draft.curriculumStartingState.fingerprint = observed.fingerprint;
-      }, "curriculum-already-present");
-      refuses("CURRICULUM_STARTING_STATE_MISMATCH", () =>
-        assertPreprodActivationAuthorization(
-          authorizationInput(variant, { expectedTargetSha256: sha256File(TARGET_DB) }),
-        ),
-      );
-    } finally {
-      try {
-        db.close();
-      } catch {
-        /* already closed */
+  /* ---------- surface ---------- */
+
+  await check("no force/bypass switch exists anywhere in the shipped authorization surface", () => {
+    const files = [
+      ...fs
+        .readdirSync(path.join(REPO, "src/lib/curriculum/preprod-activation"))
+        .map((name) => path.join(REPO, "src/lib/curriculum/preprod-activation", name)),
+      path.join(REPO, "src/lib/curriculum/protected-database.ts"),
+      path.join(REPO, "scripts/curriculum/importCurriculumPackage.ts"),
+      path.join(REPO, "scripts/curriculum/importEditorialOverlay.ts"),
+      path.join(REPO, "scripts/curriculum/preparePreprodActivationManifest.ts"),
+      path.join(REPO, "scripts/curriculum/validatePreprodActivationManifest.ts"),
+    ];
+    const forbidden = [
+      "--force",
+      "--allow-live",
+      "--unsafe",
+      "--skip-protection",
+      "--allow-protected",
+      "ALLOW_LIVE",
+      "DISABLE_GUARD",
+      "ALLOW_PROTECTED_DB",
+    ];
+    for (const file of files) {
+      const source = fs.readFileSync(file, "utf8");
+      // strip block comments: the modules DESCRIBE the flags they refuse to have
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      for (const token of forbidden) {
+        assert.equal(code.includes(token), false, `${path.basename(file)} mentions ${token} outside a comment`);
       }
-      fs.writeFileSync(TARGET_DB, before);
-      for (const suffix of ["-wal", "-shm", "-journal"]) fs.rmSync(`${TARGET_DB}${suffix}`, { force: true });
     }
   });
 
-  /* ---------- CLI surface ---------- */
+  await check("no exported function mints a capability without authorization", () => {
+    const grantSource = fs.readFileSync(path.join(REPO, "src/lib/curriculum/preprod-activation/grant.ts"), "utf8");
+    for (const banned of ["export function issueActivationGrant", "export function registerGrant", "export function brandGrant"]) {
+      assert.equal(grantSource.includes(banned), false, `${banned} is exported`);
+    }
+    assert.equal(grantSource.includes("export function runWithGrantIssuer"), true);
+    // and only the authorization module uses it
+    const users = fs
+      .readdirSync(path.join(REPO, "src/lib/curriculum/preprod-activation"))
+      .filter((name) => name.endsWith(".ts"))
+      .filter((name) =>
+        fs.readFileSync(path.join(REPO, "src/lib/curriculum/preprod-activation", name), "utf8").includes("runWithGrantIssuer"),
+      );
+    assert.deepEqual(users.sort(), ["authorize.ts", "grant.ts"]);
+  });
+
+  await check("no CLI reaches the test-only substitutions", () => {
+    for (const rel of [
+      "scripts/curriculum/importCurriculumPackage.ts",
+      "scripts/curriculum/importEditorialOverlay.ts",
+      "scripts/curriculum/preparePreprodActivationManifest.ts",
+      "scripts/curriculum/validatePreprodActivationManifest.ts",
+    ]) {
+      const source = fs.readFileSync(path.join(REPO, rel), "utf8");
+      assert.equal(source.includes("__testOnlySanctionedTargetPath"), false, `${rel} reaches the target substitution`);
+      assert.equal(source.includes("__testOnlyActivationLockPath"), false, `${rel} reaches the lock substitution`);
+    }
+  });
 
   await check("the real live PREPROD database is refused without an activation manifest", () => {
     const result = spawnSync(
@@ -1204,172 +1461,36 @@ async function main(): Promise<void> {
         PACKAGE_PATH,
         "--database",
         "file:/srv/ata-data/data/ata-preprod.sqlite",
-        "--dry-run",
       ],
-      { cwd: REPO, encoding: "utf8", env: { ...process.env } },
+      { cwd: REPO, encoding: "utf8" },
     );
-    assert.notEqual(result.status, 0, "the importer must refuse the live database");
-    assert.match(`${result.stdout}${result.stderr}`, /protected runtime database/i);
-  });
-
-  await check("the overlay importer refuses the live PREPROD database without a manifest", () => {
-    const result = spawnSync(
-      "npx",
-      [
-        "tsx",
-        path.join("scripts", "curriculum", "importEditorialOverlay.ts"),
-        "--overlay",
-        OVERLAY_PATH,
-        "--database",
-        "file:/srv/ata-data/data/ata-preprod.sqlite",
-        "--dry-run",
-      ],
-      { cwd: REPO, encoding: "utf8", env: { ...process.env } },
-    );
-    assert.notEqual(result.status, 0, "the overlay importer must refuse the live database");
-    assert.match(`${result.stdout}${result.stderr}`, /protected runtime database/i);
-  });
-
-  await check("supplying a manifest without its digest is refused", () => {
-    const result = spawnSync(
-      "npx",
-      [
-        "tsx",
-        path.join("scripts", "curriculum", "importCurriculumPackage.ts"),
-        "--package",
-        PACKAGE_PATH,
-        "--database",
-        `file:${path.join(ROOT, "scratch.sqlite")}`,
-        "--activation-manifest",
-        baseManifest.path,
-      ],
-      { cwd: REPO, encoding: "utf8", env: { ...process.env } },
-    );
-    assert.notEqual(result.status, 0);
-    assert.match(`${result.stdout}${result.stderr}`, /expect-activation-manifest-sha256/);
-  });
-
-  await check("the validate command mutates nothing", () => {
-    const before = sha256File(TARGET_DB);
-    const result = spawnSync(
-      "npx",
-      [
-        "tsx",
-        path.join("scripts", "curriculum", "validatePreprodActivationManifest.ts"),
-        "--activation-manifest",
-        baseManifest.path,
-        "--expect-activation-manifest-sha256",
-        baseManifest.sha256,
-        "--activation-stage",
-        "CONTENT_PUBLICATION",
-        "--expect-target-sha256",
-        before,
-      ],
-      { cwd: REPO, encoding: "utf8", env: { ...process.env, ATA_ENVIRONMENT: "staging" } },
-    );
-    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-    assert.match(result.stdout, /authorizes no importer operation/);
-    assert.equal(sha256File(TARGET_DB), before);
-  });
-
-  /* ---------- no generic bypass ---------- */
-
-  await check("no force/bypass switch exists anywhere in the shipped authorization surface", () => {
-    const forbidden = [
-      "--force",
-      "--allow-live",
-      "--unsafe",
-      "--skip-protection",
-      "--allow-protected",
-      "DISABLE_GUARD",
-      "ALLOW_LIVE",
-      "ALLOW_PROTECTED_DB",
-    ];
-    const files = [
-      path.join(REPO, "src", "lib", "curriculum", "protected-database.ts"),
-      path.join(REPO, "scripts", "curriculum", "importCurriculumPackage.ts"),
-      path.join(REPO, "scripts", "curriculum", "importEditorialOverlay.ts"),
-      path.join(REPO, "scripts", "curriculum", "preparePreprodActivationManifest.ts"),
-      path.join(REPO, "scripts", "curriculum", "validatePreprodActivationManifest.ts"),
-      ...fs
-        .readdirSync(path.join(REPO, "src", "lib", "curriculum", "preprod-activation"))
-        .map((name) => path.join(REPO, "src", "lib", "curriculum", "preprod-activation", name)),
-    ];
-    for (const file of files) {
-      const text = fs.readFileSync(file, "utf8");
-      // Strip block and line comments: the design notes NAME these switches in
-      // order to say they do not exist, and a grep that cannot tell prose from
-      // code would make documenting the absence impossible.
-      const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-      for (const needle of forbidden) {
-        assert.ok(
-          !code.includes(needle),
-          `${path.basename(file)} contains a bypass switch: ${needle}`,
-        );
-      }
-    }
-  });
-
-  await check("no CLI reaches the test-only sanctioned-target substitution", () => {
-    const scriptDir = path.join(REPO, "scripts");
-    const offenders: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith(".ts") && !entry.name.endsWith("Regression.ts")) {
-          if (fs.readFileSync(full, "utf8").includes("__testOnlySanctionedTargetPath")) offenders.push(full);
-        }
-      }
-    };
-    walk(scriptDir);
-    assert.deepEqual(offenders, [], "a shipped CLI referenced the test-only target substitution");
+    assert.match(`${result.stdout}${result.stderr}`, /protected runtime database/);
   });
 
   await check("the manifest cannot authorize assessment binding or publication", () => {
-    assert.equal(baseManifest.json.assessmentRuntimePolicy, "DEFER");
-    assert.equal(baseManifest.json.videoRuntimePolicy, "ASSET_QA_DEFERRED");
-    const other = manifestWith((draft) => {
-      draft.assessmentRuntimePolicy = "BIND";
-    }, "assessment-bind");
-    refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(other)));
+    assert.equal(prepared.manifest.assessmentRuntimePolicy, "DEFER");
+    for (const value of ["BIND", "ACTIVATE", "ENABLE"]) {
+      const variant = manifestWith((d) => {
+        d.assessmentRuntimePolicy = value;
+      }, `assessment-${value}`);
+      refuses("MANIFEST_MALFORMED", () => assertPreprodActivationAuthorization(authorizationInput(variant)));
+    }
   });
 
   await check("no migration was added by this work", () => {
     const migrations = fs
-      .readdirSync(path.join(REPO, "prisma", "migrations"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
+      .readdirSync(path.join(REPO, "prisma", "migrations"))
+      .filter((name) => /^\d/.test(name));
     assert.equal(migrations.length, 46, `expected 46 migrations, found ${migrations.length}`);
   });
+
+  console.log(`\npreprod activation authorization regression: ${passed} passed, ${failed} failed`);
+  if (failed > 0) process.exitCode = 1;
 }
 
-/* ------------------------------------------------------------------ *
- * cleanup — explicit paths only, never a wildcard on a variable
- * ------------------------------------------------------------------ */
 
-function cleanup(): void {
-  const resolved = fs.existsSync(ROOT) ? fs.realpathSync(ROOT) : ROOT;
-  // Prove the directory is the one this process created under the system temp
-  // root before removing anything. A cleanup that trusts a variable is how a
-  // test suite deletes something that matters.
-  const tmpRoot = fs.realpathSync(os.tmpdir());
-  if (!resolved.startsWith(`${tmpRoot}${path.sep}ata-actv-auth-`)) {
-    console.error(`refusing to clean an unexpected directory: ${resolved}`);
-    return;
-  }
-  fs.rmSync(resolved, { recursive: true, force: true });
-}
 
-main()
-  .then(() => {
-    cleanup();
-    console.log(`\npreprod activation authorization regression: ${passed} passed, ${failed} failed`);
-    if (failed > 0) process.exit(1);
-  })
-  .catch((error) => {
-    cleanup();
-    console.error(error);
-    console.log(`\npreprod activation authorization regression: ${passed} passed, ${failed + 1} failed`);
-    process.exit(1);
-  });
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

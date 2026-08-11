@@ -13,7 +13,10 @@
  * "does it exist" and "create it" for a second process to slip through, which is
  * exactly the property a check-then-create implementation would lack.
  *
- * STALENESS IS EXPLICIT, AND NEVER AUTOMATIC. A lock left by a crashed process
+ * STALENESS IS EXPLICIT, AND NEVER AUTOMATIC. There is no force-unlock in any
+ * activation command: clearing a lock is a deliberate act an operator performs
+ * after confirming no activation process is running, not something a tool does
+ * on their behalf while they are reading the message. A lock left by a crashed process
  * is a real operational problem, and the tempting fix — "if the PID is gone,
  * take the lock" — is wrong here: a crashed activation may have left the
  * database part-way through a stage, and the correct next step is a human
@@ -26,7 +29,17 @@ import path from "node:path";
 
 import { PreprodActivationError } from "./errors";
 
-export const DEFAULT_ACTIVATION_LOCK_PATH = "/srv/ata-data/activation/preprod-activation.lock";
+/**
+ * THE ONE LOCK, AND WHY IT IS A CONSTANT.
+ *
+ * The independent audit found that `--activation-lock` let a caller choose the
+ * lock file, which means two concurrent activations can each name a different
+ * one and both proceed — a mutual-exclusion primitive that any caller can opt
+ * out of is not one. The path is a constant in this source now. No CLI argument,
+ * no environment variable and no manifest field selects it, so "take the lock"
+ * and "take THE lock" are the same operation.
+ */
+export const ACTIVATION_LOCK_PATH = "/srv/ata-data/activation/preprod-activation.lock";
 
 export type ActivationLockRecord = {
   activationId: string;
@@ -58,11 +71,25 @@ function readRecord(lockPath: string): ActivationLockRecord | null {
  * manifest digest, the stage, the pid and a timestamp. That is enough for an
  * operator to identify the other session without being enough to impersonate it.
  */
+/**
+ * Test-only substitution of the lock location.
+ *
+ * WHY THIS IS NOT THE DEFECT THAT WAS REMOVED. `--activation-lock` was an ARGV
+ * flag: an operator could pass it, and two of them could pass different values.
+ * This is a function parameter on an options object, reachable only by code
+ * already running inside this process. No CLI in `scripts/` passes it and the
+ * regression suite asserts that none ever does — the same seam, and the same
+ * justification, as the sanctioned-target substitution in `target.ts`.
+ */
+export type ActivationLockOverride = {
+  readonly __testOnlyActivationLockPath: string;
+};
+
 export function acquireActivationLock(
   input: { activationId: string; manifestSha256: string; stage: string; operation: string },
-  lockPath: string = DEFAULT_ACTIVATION_LOCK_PATH,
+  override?: ActivationLockOverride,
 ): ActivationLock {
-  const resolved = path.resolve(lockPath);
+  const resolved = path.resolve(override?.__testOnlyActivationLockPath ?? ACTIVATION_LOCK_PATH);
   try {
     fs.mkdirSync(path.dirname(resolved), { recursive: true, mode: 0o700 });
   } catch {

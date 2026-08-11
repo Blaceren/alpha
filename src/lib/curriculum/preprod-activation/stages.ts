@@ -7,6 +7,28 @@
  * checkpoint between each one — not a single command that migrates, imports,
  * publishes, deploys and flags in one go and leaves you guessing which half ran.
  *
+ * WHAT CHANGED AFTER THE INDEPENDENT AUDIT. The first implementation decided
+ * ordering from `--completed-stages`, a list the caller typed, and decided
+ * whether the target was in the right state from `--expect-target-sha256`, a
+ * digest the caller measured. Both are assertions by the party asking for
+ * permission. They are gone.
+ *
+ * Sequencing is now derived from the DATABASE. The manifest carries a
+ * precomputed fingerprint for every state in the chain — entry, post-migration,
+ * post-structural, post-overlay — each one obtained by rehearsing the sanctioned
+ * stages on a private copy of the rollback backup before any real mutation. At
+ * every authorization boundary the live target is measured and matched against
+ * that chain, and the answer is one of exactly three:
+ *
+ *   AT <state>   the target is byte-for-semantic-byte one of the reviewed
+ *                states; what may run next follows from WHICH one.
+ *   UNKNOWN      it matches none of them. Stop. This is a partially applied
+ *                stage or an externally modified database, and no mutation is
+ *                authorized against it.
+ *
+ * There is no argument that can change that answer, which is the property the
+ * audit found missing.
+ *
  * THE ORDER IS A SAFETY PROPERTY, NOT A CONVENIENCE. Content publication must
  * complete and verify before curriculum publication begins, because neither has
  * an inverse: `publishContentVersion` archives the previous row and moves the
@@ -22,6 +44,7 @@
  * all of them.
  */
 import { PreprodActivationError } from "./errors";
+import { diffStageFingerprint, type StageFingerprint } from "./semantic-state";
 
 export const ACTIVATION_STAGES = [
   "PREPARED",
@@ -63,27 +86,6 @@ export function authorizedOperationForStage(stage: ActivationStage): AuthorizedO
   }
 }
 
-/**
- * The migration count the target must hold at the START of a stage.
- *
- * `entry` is the pre-activation lineage (41 for this activation) and `target` is
- * the post-migration lineage (46). The boundary is the migration stage itself:
- * everything from the structural import onward requires the migrated schema, and
- * there is deliberately no stage at which a count between the two is acceptable.
- */
-export function expectedMigrationCountAtStage(
-  stage: ActivationStage,
-  lineage: { entryMigrationCount: number; targetMigrationCount: number },
-): number {
-  switch (stage) {
-    case "PREPARED":
-    case "MIGRATION_41_TO_46":
-      return lineage.entryMigrationCount;
-    default:
-      return lineage.targetMigrationCount;
-  }
-}
-
 export function assertOperationMatchesStage(
   stage: ActivationStage,
   operation: AuthorizedOperation,
@@ -105,80 +107,141 @@ export function assertOperationMatchesStage(
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * the precomputed state chain
+ * ------------------------------------------------------------------ */
+
 /**
- * Refuse a stage that arrives out of sequence.
+ * The four reviewed states, in order.
  *
- * `completedStages` is what the operator asserts has already finished, and it is
- * checked for contiguity as well as for containing the predecessor: a run that
- * claims `EDITORIAL_OVERLAY` is next while `MIGRATION_41_TO_46` never happened
- * is refused even though the immediate predecessor is present. Skipping ahead is
- * exactly how a curriculum gets published over content that was never imported.
+ * `entry` is the live database as the manifest was prepared against it. The
+ * other three come from the rehearsal: the same sanctioned migration, the same
+ * structural package and the same overlay, applied to a copy of the rollback
+ * backup. Because the backup is proved byte-identical to entry, a state the
+ * rehearsal produced is a state the real run must reproduce.
  */
-export function assertStageOrder(stage: ActivationStage, completedStages: ActivationStage[]): void {
-  const index = stageIndex(stage);
-  if (index < 0) {
-    throw new PreprodActivationError("STAGE_NOT_AUTHORIZED", `unknown activation stage ${stage}`);
+export type ActivationStateChain = {
+  entry: StageFingerprint;
+  postMigration: StageFingerprint;
+  postStructural: StageFingerprint;
+  postOverlay: StageFingerprint;
+};
+
+/** Which reviewed state the target is in, if any. */
+export type ObservedStateName = "ENTRY" | "POST_MIGRATION" | "POST_STRUCTURAL" | "POST_OVERLAY";
+
+export type StageClassification =
+  | { kind: "AT"; state: ObservedStateName }
+  | { kind: "UNKNOWN"; nearest: ObservedStateName; drift: string[] };
+
+const CHAIN_ORDER: ReadonlyArray<[ObservedStateName, keyof ActivationStateChain]> = [
+  ["ENTRY", "entry"],
+  ["POST_MIGRATION", "postMigration"],
+  ["POST_STRUCTURAL", "postStructural"],
+  ["POST_OVERLAY", "postOverlay"],
+];
+
+/**
+ * Where in the reviewed chain is this database?
+ *
+ * Compared against every state rather than only the expected one, because the
+ * useful answers are not just yes and no: "you are one stage further on than you
+ * think" is a resume, and "you are nowhere in the chain" is a stop. When nothing
+ * matches, the state with the fewest differences is reported so the refusal can
+ * say what actually moved.
+ */
+export function classifyTargetState(
+  observed: StageFingerprint,
+  chain: ActivationStateChain,
+): StageClassification {
+  let nearest: ObservedStateName = "ENTRY";
+  let nearestDrift: string[] | null = null;
+
+  for (const [name, key] of CHAIN_ORDER) {
+    const drift = diffStageFingerprint(chain[key], observed);
+    if (drift.length === 0) return { kind: "AT", state: name };
+    if (nearestDrift === null || drift.length < nearestDrift.length) {
+      nearest = name;
+      nearestDrift = drift;
+    }
   }
-  const completed = new Set(completedStages);
-  const missing = ACTIVATION_STAGES.slice(0, index).filter((earlier) => !completed.has(earlier));
-  if (missing.length > 0) {
+  return { kind: "UNKNOWN", nearest, drift: nearestDrift ?? ["everything"] };
+}
+
+/** The state a stage must START from, and the state it produces. */
+const STAGE_TRANSITIONS: Partial<Record<ActivationStage, { from: ObservedStateName; to: ObservedStateName }>> = {
+  MIGRATION_41_TO_46: { from: "ENTRY", to: "POST_MIGRATION" },
+  STRUCTURAL_IMPORT: { from: "POST_MIGRATION", to: "POST_STRUCTURAL" },
+  EDITORIAL_OVERLAY: { from: "POST_STRUCTURAL", to: "POST_OVERLAY" },
+};
+
+export function stageTransition(stage: ActivationStage): { from: ObservedStateName; to: ObservedStateName } {
+  const transition = STAGE_TRANSITIONS[stage];
+  if (!transition) {
     throw new PreprodActivationError(
-      "STAGE_OUT_OF_ORDER",
-      `cannot enter stage ${stage}: ${missing.join(", ")} has not completed. Activation stages run in order — content publication precedes curriculum publication, and neither has an inverse.`,
-      { expected: ACTIVATION_STAGES.slice(0, index).join(" -> "), actual: completedStages.join(" -> ") || "none" },
+      "STAGE_NOT_AUTHORIZED",
+      `stage ${stage} has no state transition in this build; it is declared for ordering only`,
+      { expected: Object.keys(STAGE_TRANSITIONS).join("|"), actual: stage },
     );
   }
-  if (completed.has(stage)) {
-    throw new PreprodActivationError(
-      "STAGE_OUT_OF_ORDER",
-      `stage ${stage} is already recorded as complete. Re-running a mutation stage is not authorized; verify the post-stage state instead.`,
-      { expected: `${stage} not yet complete`, actual: `${stage} complete` },
-    );
-  }
+  return transition;
 }
 
 /**
- * RESUME POLICY.
+ * RESUME POLICY, WIRED.
  *
  * An activation can fail between stages, and the recovery must not be "run it
- * again and hope". There are exactly three answers, and only the first two are
+ * again and hope". There are exactly three answers and only the first two are
  * safe:
  *
- *   PRE_STAGE   the stage demonstrably has not run — execute it;
- *   POST_STAGE  the stage demonstrably completed — mark it done, do not re-run;
- *   UNKNOWN     the observed state matches neither — STOP.
+ *   EXECUTE          the target is in this stage's exact pre-state — run it;
+ *   ALREADY_COMPLETE the target is in this stage's exact post-state — record it
+ *                    as done and move on, do NOT re-run the mutation;
+ *   (throw)          anything else. A partially applied stage is not a thing to
+ *                    retry over.
  *
- * UNKNOWN is not a failure of this function; it is the correct answer to a
- * partially applied stage, and the only honest one. Re-running a mutation over
- * an unknown state is how a half-imported curriculum becomes a fully corrupted
- * one.
+ * The previous implementation described these three answers in a comment and
+ * never called the function that produced them. This one is on the authorization
+ * path: nothing reaches an importer without going through it.
  */
-export type StageStateKind = "PRE_STAGE" | "POST_STAGE" | "UNKNOWN";
+export type StageDisposition = "EXECUTE" | "ALREADY_COMPLETE";
 
-export function classifyStageState(input: {
-  observedDigest: string;
-  expectedPreStageDigest: string;
-  expectedPostStageDigest: string | null;
-}): StageStateKind {
-  if (input.observedDigest === input.expectedPreStageDigest) return "PRE_STAGE";
-  if (input.expectedPostStageDigest && input.observedDigest === input.expectedPostStageDigest) {
-    return "POST_STAGE";
-  }
-  return "UNKNOWN";
-}
+export function decideStageDisposition(
+  stage: ActivationStage,
+  observed: StageFingerprint,
+  chain: ActivationStateChain,
+): StageDisposition {
+  const transition = stageTransition(stage);
+  const classification = classifyTargetState(observed, chain);
 
-export function assertResumableState(kind: StageStateKind, stage: ActivationStage): void {
-  if (kind === "PRE_STAGE") return;
-  if (kind === "POST_STAGE") {
+  if (classification.kind === "UNKNOWN") {
     throw new PreprodActivationError(
-      "STAGE_OUT_OF_ORDER",
-      `stage ${stage} has already been applied to this target (the observed state matches the expected post-stage state). Record the stage as complete and move on; do not re-run the mutation.`,
-      { expected: "pre-stage state", actual: "post-stage state" },
+      "STAGE_STATE_UNKNOWN",
+      `the target matches none of the reviewed activation states (closest is ${classification.nearest}, differing in: ${classification.drift.join("; ")}). This is a partially applied stage or an externally modified database, and no mutation is authorized against it. Restore the rollback artifact and start the stage again.`,
+      { expected: `${transition.from} or ${transition.to}`, actual: `unknown (nearest ${classification.nearest})` },
     );
   }
+
+  if (classification.state === transition.from) return "EXECUTE";
+  if (classification.state === transition.to) return "ALREADY_COMPLETE";
+
   throw new PreprodActivationError(
-    "STAGE_STATE_UNKNOWN",
-    `the target is in neither the expected pre-stage nor the expected post-stage state for ${stage}. This is a partially applied or externally modified database and no mutation is authorized against it. Restore the rollback artifact and start the stage again.`,
-    { expected: "pre-stage or post-stage state", actual: "unknown state" },
+    "STAGE_OUT_OF_ORDER",
+    `stage ${stage} starts from ${transition.from}, but the target is at ${classification.state}. Activation stages run in order and each one is entered from exactly one reviewed state.`,
+    { expected: transition.from, actual: classification.state },
   );
+}
+
+/**
+ * The migration count a state is expected to carry.
+ *
+ * Kept as a cheap, highly diagnostic pre-check: it is the first thing a human
+ * asks and the first thing a refusal should be able to answer. The fingerprint
+ * comparison above is the authority.
+ */
+export function expectedMigrationCountAtState(
+  state: ObservedStateName,
+  lineage: { entryMigrationCount: number; targetMigrationCount: number },
+): number {
+  return state === "ENTRY" ? lineage.entryMigrationCount : lineage.targetMigrationCount;
 }

@@ -148,42 +148,33 @@ export function captureTargetIdentity(absolutePath: string): TargetIdentity {
   };
 }
 
-export type ExpectedTargetIdentity = {
+export type ExpectedPhysicalIdentity = {
   canonicalPath: string;
   device: number;
   inode: number;
-  sizeBytes: number;
-  sha256: string;
-  appliedMigrationCount: number;
 };
 
 /**
- * Prove the file in front of us is the file the manifest was reviewed against.
+ * Prove the file in front of us is the same FILE the manifest was reviewed
+ * against.
  *
- * ORDER IS DELIBERATE. Path, then `(dev, ino)`, then size, then digest, then
- * migration count — cheapest and most diagnostic first, so a refusal names the
- * coarsest thing that moved rather than reporting a digest mismatch when the
- * real story is "you are pointed at a different file".
+ * WHAT THIS DELIBERATELY NO LONGER DOES. It used to compare the target's sha256
+ * as well, against a value the caller supplied. After a sanctioned stage the
+ * bytes have legitimately moved, so that comparison could only be made to pass
+ * by letting the caller nominate the new digest — which is exactly the trust
+ * reset the independent audit demonstrated. Content is now proved by matching
+ * the target against the rehearsal-derived state chain in `semantic-state.ts`;
+ * what remains here is identity, which does not change when a stage runs.
  *
- * `expectedMigrationCount` is passed separately from the manifest's recorded
- * entry count because it changes between stages: the target is at 41 before the
- * migration stage and at 46 before structural import, and both are correct at
- * their own moment.
+ * ORDER IS DELIBERATE. Path, then `(dev, ino)` — coarsest and most diagnostic
+ * first, so a refusal says "you are pointed at a different file" rather than
+ * something subtler further down.
  */
-export function assertTargetMatches(
-  expected: ExpectedTargetIdentity,
+export function assertTargetPhysicalIdentity(
+  expected: ExpectedPhysicalIdentity,
   actual: TargetIdentity,
-  expectedMigrationCount: number,
 ): void {
   requireEqual("TARGET_PATH_MISMATCH", "activation target path", expected.canonicalPath, actual.canonicalPath);
   requireEqual("TARGET_IDENTITY_MISMATCH", "activation target device", expected.device, actual.device);
   requireEqual("TARGET_IDENTITY_MISMATCH", "activation target inode", expected.inode, actual.inode);
-  requireEqual("TARGET_DIGEST_MISMATCH", "activation target size", expected.sizeBytes, actual.sizeBytes);
-  requireEqual("TARGET_DIGEST_MISMATCH", "activation target sha256", expected.sha256, actual.sha256);
-  requireEqual(
-    "TARGET_MIGRATION_MISMATCH",
-    "activation target applied migration count",
-    expectedMigrationCount,
-    actual.appliedMigrationCount,
-  );
 }

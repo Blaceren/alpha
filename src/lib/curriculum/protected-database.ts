@@ -65,6 +65,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  assertAuthenticActivationGrant,
+  type PreprodActivationGrant,
+} from "./preprod-activation/grant";
+import type { AuthorizedOperation } from "./preprod-activation/stages";
+
 export type ProtectedDatabaseErrorCode =
   | "TARGET_URL_INVALID"
   | "TARGET_PATH_RELATIVE"
@@ -313,57 +319,66 @@ export type ResolvedDatabaseTarget = {
 };
 
 /**
- * A PREPROD activation grant, described structurally so that this module keeps
- * no dependency on the authorization package (which depends on this one).
+ * THE ACTIVATION CAPABILITY, AS THIS MODULE SEES IT.
  *
- * Only `src/lib/curriculum/preprod-activation/authorize.ts` produces a value of
- * this shape, and only after every precondition in that module holds. Nothing
- * here validates the activation — it validates that the grant in hand names the
- * file about to be opened, and then hands control back to the issuer's own
- * re-verification.
+ * WHAT WENT WRONG THE FIRST TIME. This type used to be described STRUCTURALLY —
+ * a `kind` string, a path, a device, an inode and a method named
+ * `assertStillValid` — and the guard authenticated a grant by reading those
+ * fields and then calling that method. Every one of them is something a caller
+ * can produce: the identity numbers come from `stat(2)`, and the validator was
+ * whatever function the caller attached. The independent audit built one out of
+ * an object literal and watched the real structural importer write a protected
+ * database with it.
+ *
+ * WHAT IT IS NOW. An opaque handle. This module cannot read anything meaningful
+ * off it and does not try; it passes the value to
+ * `assertAuthenticActivationGrant`, which looks it up in a registry private to
+ * the authorization module and answers from the claims stored there. A copy, a
+ * clone, a JSON round-trip, a class instance or a hand-built object is a
+ * different object and is not in the registry, so it is refused — not for having
+ * the wrong fields, but for never having been issued.
  */
-export type ProtectedDatabaseActivationGrant = {
-  readonly kind: "preprod-activation";
-  readonly activationId: string;
-  readonly operation: string;
-  readonly stage: string;
-  readonly verifiedTarget: {
-    readonly absolutePath: string;
-    readonly device: number;
-    readonly inode: number;
-  };
-  /** Re-reads live state; throws if anything moved since authorization. */
-  readonly assertStillValid: () => void;
-};
+export type ProtectedDatabaseActivationGrant = PreprodActivationGrant;
 
 export type AssertSafeDatabaseTargetOptions = {
   env?: NodeJS.ProcessEnv;
   /** Injectable for tests that need a set the host does not have. */
   protectedDatabases?: ProtectedDatabase[];
   /**
-   * A grant for THIS target, when the caller is a sanctioned PREPROD activation.
+   * A capability for THIS target and THIS operation, when the caller is a
+   * sanctioned PREPROD activation.
    *
    * Absent — which is every ordinary call — leaves the refusal behaviour exactly
    * as it was: a protected database is refused, with no way to ask twice.
+   *
+   * Present but not issued by this process's authorization module: also refused.
+   * Supplying a value here is not a claim the guard takes at face value.
    */
   activationGrant?: ProtectedDatabaseActivationGrant;
+  /**
+   * Which operation the caller is about to perform.
+   *
+   * Required alongside a grant, and compared against what the capability
+   * actually authorizes, so a structural-import grant cannot admit an overlay
+   * import even against the correct file.
+   */
+  activationOperation?: AuthorizedOperation;
 };
 
 /**
- * Does this grant name exactly this path?
+ * Is the caller even claiming a capability for this path?
  *
- * Path equality is required in addition to the identity comparison below,
- * because a hardlink to the granted file has the same `(device, inode)` under a
- * different name. An activation is authorized to write ONE path; an alias of it
- * is a different label for the same bytes and is not what was reviewed.
+ * A cheap pre-filter, and NOTHING MORE. It decides only whether to attempt
+ * verification below; it grants nothing on its own, and a value that passes it
+ * still has to be in the authorization module's registry. The path comparison
+ * is kept because an activation is authorized to write ONE path, and a hardlink
+ * to the granted file is a different label for the same bytes.
  */
-function grantNamesPath(
-  grant: ProtectedDatabaseActivationGrant | undefined,
-  candidatePath: string,
-): grant is ProtectedDatabaseActivationGrant {
-  if (!grant) return false;
-  if (grant.kind !== "preprod-activation") return false;
-  return path.resolve(grant.verifiedTarget.absolutePath) === candidatePath;
+function claimsPath(grant: ProtectedDatabaseActivationGrant | undefined, candidatePath: string): boolean {
+  if (!grant || typeof grant !== "object") return false;
+  const target = (grant as { target?: { absolutePath?: unknown } }).target;
+  if (!target || typeof target.absolutePath !== "string") return false;
+  return path.resolve(target.absolutePath) === candidatePath;
 }
 
 /**
@@ -404,10 +419,11 @@ export function assertSafeDatabaseTarget(
   const normalised = path.resolve(raw);
   const protectedSet = options.protectedDatabases ?? resolveProtectedDatabases(env);
 
-  // Does the caller hold a grant for THIS path? Computed once, consulted at every
-  // refusal site below. A grant for some other path is worth nothing here — the
-  // comparison is by resolved path, so it cannot be widened by an alias.
-  const granted = grantNamesPath(options.activationGrant, normalised);
+  // Is a capability being claimed for THIS path? This is a pre-filter only:
+  // whether it is REAL is decided by the registry lookup at step 1a, after the
+  // file has been resolved and identified. A claim for some other path is worth
+  // nothing here, so an alias cannot widen one.
+  const claimed = claimsPath(options.activationGrant, normalised);
 
   // ---- the coarse lexical net runs FIRST, before anything that needs the file
   // to exist.
@@ -418,7 +434,7 @@ export function assertSafeDatabaseTarget(
   // database is itself disqualifying, whatever the filesystem currently holds.
   // The cost is that a fixture may not borrow a protected name, which is a
   // constraint worth having.
-  if (!granted) {
+  if (!claimed) {
     for (const needle of PROTECTED_PATH_SUBSTRINGS) {
       if (normalised.includes(needle)) {
         throw new ProtectedDatabaseError(
@@ -502,31 +518,39 @@ export function assertSafeDatabaseTarget(
   //         `../` traversal, a second mount point and any alternate name.
   const identity = existed ? resolveIdentity(absolutePath).identity : null;
 
-  // ---- 1a. a grant admits ONE file, and only if the file is still that file.
+  // ---- 1a. a CAPABILITY admits one file, one operation, and only while the
+  //          file is still the file it was issued against.
   //
-  // The grant was issued against a `(device, inode)` read during authorization.
-  // Comparing it again here — after this call has done its own resolution —
-  // means a target that was swapped in the interval is refused rather than
-  // written. Path equality alone was already required by `grantNamesPath`; this
-  // adds the identity half, so neither a renamed file nor a re-created one at
-  // the same path can inherit somebody else's authorization.
-  if (granted) {
-    const grant = options.activationGrant as ProtectedDatabaseActivationGrant;
-    if (
-      !identity ||
-      identity.dev !== grant.verifiedTarget.device ||
-      identity.ino !== grant.verifiedTarget.inode
-    ) {
+  // Everything decisive happens inside `assertAuthenticActivationGrant`: it
+  // looks the value up in the authorization module's private registry, refuses
+  // anything that was not issued there, compares the operation and the
+  // `(device, inode)` against the claims STORED AT ISSUANCE rather than against
+  // fields on the object in hand, and finally runs the issuer's own
+  // revalidation closure — which re-reads the live database at the last possible
+  // moment before this function returns and the caller connects.
+  //
+  // This module contributes the resolution and the identity it just measured. It
+  // does not decide, and it cannot be talked into deciding.
+  if (claimed) {
+    if (!options.activationOperation) {
+      throw new ProtectedDatabaseError(
+        "TARGET_PROTECTED",
+        "an activation grant was supplied without naming the operation it is being used for; a capability is checked against the operation it authorizes, so the operation is not optional",
+        { rule: "activation-grant-operation-absent" },
+      );
+    }
+    if (!identity) {
       throw new ProtectedDatabaseError(
         "TARGET_IDENTITY_CHANGED",
-        `the activation grant for ${absolutePath} was issued against device ${grant.verifiedTarget.device}, inode ${grant.verifiedTarget.inode}; the file now at that path is ${identity ? `device ${identity.dev}, inode ${identity.ino}` : "absent"}. Refusing.`,
+        `an activation grant was supplied for ${absolutePath}, but no file exists at that path to identify. Refusing.`,
         { rule: "activation-grant-identity" },
       );
     }
-    // Last word goes back to the issuer: it re-reads the live digest, the
-    // migration count and everything else it pinned. Anything that moved since
-    // authorization throws from here, immediately before the caller connects.
-    grant.assertStillValid();
+    assertAuthenticActivationGrant(
+      options.activationGrant,
+      { absolutePath, device: identity.dev, inode: identity.ino },
+      options.activationOperation,
+    );
     return { url: `file:${absolutePath}`, absolutePath, identity, existed };
   }
 

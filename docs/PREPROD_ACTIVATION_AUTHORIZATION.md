@@ -72,11 +72,13 @@ and no default.
 | Machine identity — `sha256(/etc/machine-id)` | `HOST_MISMATCH` |
 | Target database — must be the sanctioned constant | `TARGET_NOT_SANCTIONED` |
 | Target `(device, inode)` | `TARGET_IDENTITY_MISMATCH` |
-| Target size and sha256 | `TARGET_DIGEST_MISMATCH` |
-| Applied migration count for the stage | `TARGET_MIGRATION_MISMATCH` |
+| Rehearsed state chain — schema, migration lineage, business data, curriculum, editorial | `STAGE_STATE_UNKNOWN` |
+| Which reviewed state the target is in, and therefore what may run | `STAGE_OUT_OF_ORDER` |
+| Content activation plan, recomputed from the transported target | `CONTENT_PLAN_MISMATCH` |
+| The capability itself — issued by this process, for this operation | `GRANT_NOT_AUTHENTIC`, `GRANT_OPERATION_MISMATCH` |
 | Rollback artifact present, `0600`, exact size and sha256 | `BACKUP_ARTIFACT_*` |
 | Rollback artifact integrity / FK / migration lineage | `BACKUP_INTEGRITY_FAILED`, … |
-| Rollback artifact holds the same rows as the live database | `BACKUP_SOURCE_DIGEST_MISMATCH` |
+| Rollback artifact holds the same rows as the pinned **entry** state | `BACKUP_SOURCE_DIGEST_MISMATCH` |
 | Accepted product checkpoint size and sha256 | `PRODUCT_CHECKPOINT_MISMATCH` |
 | Structural package file digest, code, revision, **full** fingerprint | `PACKAGE_MISMATCH` |
 | Overlay digest, code, revision, canonical fingerprint, root hash | `OVERLAY_MISMATCH` |
@@ -106,10 +108,37 @@ sources for each of them:
 DISABLE_GUARD           ALLOW_LIVE          ALLOW_PROTECTED_DB
 ```
 
-No environment variable produces a grant. `protected-database.ts` was **not** weakened: its
-default behaviour is unchanged, and the one addition is that it will accept a grant naming
-exactly the path and `(device, inode)` in front of it, after which it calls the grant's own
-`assertStillValid()` before returning.
+No environment variable produces a capability. `protected-database.ts` was **not** weakened:
+its default behaviour is unchanged, and the one addition is that it will accept an
+**authentic capability** for exactly the file in front of it.
+
+### The grant is a runtime capability, not a shape
+
+The first implementation of this document described the grant structurally and let the guard
+authenticate it from its own public fields — a `kind` string, a path, a device, an inode —
+and then called a method the caller had supplied, `assertStillValid()`, as the final proof.
+An independent audit built one out of an eight-line object literal and watched the real
+structural importer write a protected database with it. Every field the guard read was
+something any caller could produce.
+
+That design is gone. Authority now lives in a `WeakMap` private to
+`preprod-activation/grant.ts`, keyed by the identity of the handle
+`assertPreprodActivationAuthorization` returns. The handle's public fields are labels for
+humans and carry no power; the claims that decide anything — the operation, the target, and
+the revalidation closure — are held in the registry and read from there. Consequently:
+
+* a hand-built object literal, a spread clone, `Object.assign`, a JSON round-trip, a
+  `structuredClone`, a class instance and a prototype-spoofed object are all **refused** —
+  not for having the wrong fields, but for never having been issued;
+* **`assertStillValid` is no longer part of the contract.** Final revalidation is a closure
+  built by the authorization module from its own measurements. The guard never executes
+  caller-supplied code as proof of authority;
+* there is **no exported `issueGrant()`**. The only path into the registry is
+  `runWithGrantIssuer`, which hands an issuer to a callback and revokes it when the callback
+  returns; `authorize.ts` is its only caller, and a regression asserts that;
+* the guard requires `activationOperation` alongside the capability and compares it against
+  the operation stored at issuance, so a structural-import capability cannot admit an
+  overlay import even against the correct file.
 
 **The sanctioned target is a constant in `src/lib/curriculum/preprod-activation/target.ts`.**
 It is never read from argv, never read from the environment, and never taken from the
@@ -186,27 +215,68 @@ and the curriculum service exports no unpublish at all. Entering a stage require
 earlier stage to be recorded complete, and a stage already recorded complete cannot be
 re-run.
 
-### Which digest is authority, and when
+### Where expected state comes from
 
-While the target is still at the **entry lineage**, nothing this activation authorizes has
-run, so the database must still hold exactly the bytes the manifest and the rollback backup
-were prepared from — the operator does not get to nominate a different value. Once the
-migration stage has moved the lineage forward, the manifest cannot know the new digest (a
-migration's output was not predictable at preparation time), so the operator states it per
-stage with `--expect-target-sha256` and it is checked against the file. Either way, no stage
-runs against a target whose contents were not stated in advance.
+**No command tells the authorization what the database should contain.** The earlier design
+took `--expect-target-sha256`, and once the migration stage had moved the lineage that value
+was compared only against the file itself — so anybody who ran `sha256sum` on whatever was
+there could bless it. An independent audit demonstrated a tampered post-migration database
+being authorized exactly that way. The flag is gone, and so is `--completed-stages`.
+
+Expected state is **precomputed by rehearsal**. Manifest preparation copies the verified
+rollback backup into a private `0700` directory and runs the whole activation against the
+copy — the sanctioned migration, the structural package, the editorial overlay, each through
+the same shipped command an operator runs. Every state along the way is fingerprinted, and
+the four fingerprints go into the manifest, where the externally supplied manifest digest
+pins them along with everything else.
+
+The fingerprints are **semantic, not byte-level**: SQLite page layout and the
+`_prisma_migrations` timestamps differ between two runs of the same migration, so a
+byte digest could never match. Each state records
+
+| part | what it proves |
+| --- | --- |
+| `schemaDigest` | normalised `sqlite_master` — a column added or a constraint dropped is caught |
+| `migrationLineage` | every applied migration by **name and checksum**, plus a zero-failure requirement |
+| `businessContinuityDigest` | every table the activation may not touch, allow-by-default |
+| `curriculumDigest` | the curriculum surface, keyed by stable code and version, never by row id |
+| `editorialDigest` | the evidence the overlay transports, keyed the same way |
+
+`businessContinuityDigest` is the one that closes the audit's finding. It covers **every**
+table except the eighteen the two importers write, so a table added by a future migration is
+inside the fence automatically. `User`, `StaffProfile` and `AuditLog` are included with a row
+filter that removes exactly the rows a sanctioned stage may add — the overlay's historical
+principals, and audit rows above the entry high-water mark — so every pre-existing row stays
+compared. A tampered user, an altered reward, a rewritten audit entry: each moves this digest,
+and nothing on a command line can move it back.
 
 ### Resume policy
 
-Three answers, and only the first two are safe:
+This is **wired**, not described. `decideStageDisposition` runs on the authorization path and
+nothing reaches an importer without it:
 
-- **PRE_STAGE** — the stage demonstrably has not run: execute it.
-- **POST_STAGE** — the stage demonstrably completed: record it and move on, do **not** re-run.
-- **UNKNOWN** — the observed state matches neither: **STOP**. This is a partially applied or
-  externally modified database. Restore the rollback artifact and start the stage again.
+| observed | answer |
+| --- | --- |
+| the stage's exact pre-state | `EXECUTE` — a capability is issued |
+| the stage's exact post-state | `ALREADY_COMPLETE` — **no capability is issued**; record the stage as done |
+| a different reviewed state | refused, naming which state it is actually in |
+| none of them | `STAGE_STATE_UNKNOWN` — stop. Restore the backup and start the stage again |
 
-Re-running a mutation over an unknown state is how a half-imported curriculum becomes a
-fully corrupted one, so `UNKNOWN` never proceeds.
+`ALREADY_COMPLETE` is a successful outcome that authorizes nothing: the importer CLIs print
+it and exit without opening the database. `UNKNOWN` is the correct answer to a partially
+applied stage and the only honest one — re-running a mutation over an unknown state is how a
+half-imported curriculum becomes a fully corrupted one.
+
+### The rollback backup covers the ENTRY snapshot
+
+That is the whole of its claim, and it is verified at **every** stage — existence,
+permissions, size, digest, `integrity_check`, foreign keys, migration count — so a backup
+deleted or replaced after the migration stops the remaining stages.
+
+What it is compared against is the **entry state the manifest pins**, not the current file.
+Once a sanctioned stage has run, the live database has legitimately moved on; comparing the
+two at that point would either refuse every activation after the first stage or force a fresh
+backup after a mutation, which would destroy the rollback point the backup exists to be.
 
 ---
 
@@ -242,9 +312,7 @@ does not pin anything.
 npm run activation:manifest:validate -- \
   --activation-manifest /secure/path/activation-manifest.json \
   --expect-activation-manifest-sha256 <64hex> \
-  --activation-stage STRUCTURAL_IMPORT \
-  --expect-target-sha256 <64hex> \
-  --completed-stages PREPARED,MIGRATION_41_TO_46
+  --activation-stage STRUCTURAL_IMPORT
 ```
 
 Runs the entire authorization and throws the grant away. Mutates nothing and takes no lock.
@@ -257,9 +325,7 @@ npm run curriculum:package:import -- \
   --database file:/srv/ata-data/data/ata-preprod.sqlite \
   --activation-manifest /secure/path/activation-manifest.json \
   --expect-activation-manifest-sha256 <64hex> \
-  --activation-stage STRUCTURAL_IMPORT \
-  --expect-target-sha256 <64hex> \
-  --completed-stages PREPARED,MIGRATION_41_TO_46
+  --activation-stage STRUCTURAL_IMPORT
 ```
 
 ### Authorized editorial overlay
@@ -271,9 +337,7 @@ npm run curriculum:overlay:import -- \
   --database file:/srv/ata-data/data/ata-preprod.sqlite \
   --activation-manifest /secure/path/activation-manifest.json \
   --expect-activation-manifest-sha256 <64hex> \
-  --activation-stage EDITORIAL_OVERLAY \
-  --expect-target-sha256 <64hex> \
-  --completed-stages PREPARED,MIGRATION_41_TO_46,STRUCTURAL_IMPORT
+  --activation-stage EDITORIAL_OVERLAY
 ```
 
 `--package` is required here too: the overlay's declared structural-package fingerprint is
@@ -288,12 +352,16 @@ activation — it is an unreviewed one, and it stops.
 ## 9. What is deliberately NOT automated
 
 - **No migration runner change.** The migration stage remains a separate operational command.
-  Its pre/post state is specified by the manifest (`entryMigrationCount` → `targetMigrationCount`)
-  and verified by the validate command, but no manifest authorizes a migration.
+  No manifest authorizes a migration. What the manifest does carry is the exact state the
+  migration must LEAVE BEHIND — measured during the rehearsal — so the stage after it refuses
+  unless the migration produced precisely that. A migration run with the wrong lineage, or a
+  database touched while it ran, cannot be carried forward.
 - **No publication.** `assessmentRuntimePolicy: "DEFER"` and
   `videoRuntimePolicy: "ASSET_QA_DEFERRED"` are literals in the schema. No assessment binding
-  is authorized. The content activation plan is carried as a *reviewed target to check against*,
-  not as something anything can act on.
+  is authorized. The content activation plan is carried as a *reviewed target to check
+  against*, not as something anything can act on — and it is **recomputed from the transported
+  target and compared row for row**, because an audit showed that pinning the manifest's bytes
+  proves the plan has not changed since review without proving it was ever right.
 - **No deploy, no flag change.** Neither has an operation mapping.
 - **No one-big-script.** There is no command that migrates, imports, publishes, deploys and
   flags in one go. Hard checkpoints are the point.
@@ -303,7 +371,17 @@ activation — it is an unreviewed one, and it stops.
 ## 10. Permissions and secrets
 
 The activation manifest and the local backup artifacts are written `0600`, in directories
-created `0700`. The manifest contains no credential, no token and no session value; the
+created `0700`. The rehearsal copy lives in a `0700` `mkdtemp` directory and is removed by
+absolute path, behind a prefix assertion — no glob is ever expanded.
+
+**The activation lock path is a constant in `lock.ts`** (`/srv/ata-data/activation/preprod-activation.lock`).
+No CLI argument, no environment variable and no manifest field selects it: an audit found that
+a caller-chosen lock path let two concurrent sessions each name a different file and both
+proceed, which is not mutual exclusion. Acquisition is `O_EXCL`, the record is `0600` and
+names the activation, manifest digest, stage and pid, and **a held lock is always refused** —
+there is no force-unlock in any activation command. A crashed activation may have stopped
+part-way through a stage, and the correct next step is a human looking at it. Holding the lock
+confers no database capability whatsoever. The manifest contains no credential, no token and no session value; the
 preparation command never reads one. The machine id is hashed before it enters the manifest —
 not because it is secret, but because a manifest is an evidence artifact that gets read in
 reports and a raw machine id is a stable cross-service correlator with no reason to be
@@ -313,7 +391,12 @@ published.
 
 ## 11. Not valid for PROD
 
-v1 is intentionally PREPROD-specific. `environment` is a literal, the deployment class must
+The manifest schema is `ata.preprod-activation-manifest/2`. A `…/v1` manifest is refused with
+an explanation rather than reinterpreted: v1 authorized each stage from a digest supplied on
+the command line, and reading one under these rules would mean inventing the rehearsed state
+chain it does not carry.
+
+This is intentionally PREPROD-specific. `environment` is a literal, the deployment class must
 classify as `staging`, the sanctioned target is a single constant, and the risk policy names
 PREPROD in its own value. There is no production support hidden in this design, and
 production authorization must be designed separately **after** the offhost-backup and

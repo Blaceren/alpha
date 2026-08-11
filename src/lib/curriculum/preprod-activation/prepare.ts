@@ -16,14 +16,26 @@
  * its digest to the mutation commands by hand. Preparation deliberately does not
  * hand the digest onward automatically: a pin that travels with the file it pins
  * is not a pin.
+ *
+ * AND IT REHEARSES. The states a stage will produce cannot be guessed, but they
+ * can be measured on a copy. Preparation runs the whole activation — the
+ * sanctioned migration, the structural package, the editorial overlay — against
+ * a private copy of the rollback backup, fingerprints every state along the way,
+ * and writes those fingerprints into the manifest. That is what the real run is
+ * later compared against, and it is why no command needs to be told what the
+ * database should contain.
+ *
+ * THE REHEARSAL IS THE ONLY PLACE ANYTHING IS MUTATED, AND IT MUTATES A COPY IN
+ * A 0700 TEMPORARY DIRECTORY THAT IS REMOVED BY ABSOLUTE PATH. The live database
+ * is opened read-only, here and everywhere else in this package.
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { readOverlayFacts, readStructuralPackageFacts } from "./artifact-facts";
-import { PREPROD_RISK_POLICY } from "./backup";
-import { captureCurriculumStartingState } from "./baseline";
+import { assertBackupCoversCurrentState, PREPROD_RISK_POLICY } from "./backup";
+import { fingerprintContentActivationPlan } from "./content-plan";
 import { PreprodActivationError } from "./errors";
 import { readHostIdentity, type HostIdentityProvider } from "./host-identity";
 import {
@@ -38,6 +50,8 @@ import {
   type DeployedReleasesProvider,
   type FlagBaselineProvider,
 } from "./runtime";
+import { captureEntryState, rehearseActivation } from "./rehearsal";
+import type { StageFingerprint } from "./semantic-state";
 import { computeLogicalDigest, probeSqliteDatabase, sha256File } from "./sqlite-probe";
 import { ACTIVATION_STAGES } from "./stages";
 import { assertManifestNamesSanctionedTarget, captureTargetIdentity, type SanctionedTargetOverride } from "./target";
@@ -72,7 +86,30 @@ export type PrepareResult = {
   sha256: string;
 };
 
-export function prepareActivationManifest(input: PrepareInput): PrepareResult {
+/**
+ * A state may only be PINNED if its migration lineage is clean.
+ *
+ * The schema types `failedCount` as the literal `0`, which is the constraint
+ * rather than a formality: a manifest that pinned a state containing a
+ * rolled-back or unfinished migration would be teaching the authorization to
+ * accept one. Preparation refuses instead of writing it.
+ */
+function pinnable(fingerprint: StageFingerprint, label: string): StageFingerprint & {
+  migrationLineage: StageFingerprint["migrationLineage"] & { failedCount: 0 };
+} {
+  if (fingerprint.migrationLineage.failedCount !== 0) {
+    throw new PreprodActivationError(
+      "REHEARSAL_FAILED",
+      `the ${label} state carries ${fingerprint.migrationLineage.failedCount} unfinished or rolled-back migration(s); a manifest does not pin a broken lineage`,
+      { expected: "0", actual: String(fingerprint.migrationLineage.failedCount) },
+    );
+  }
+  return fingerprint as StageFingerprint & {
+    migrationLineage: StageFingerprint["migrationLineage"] & { failedCount: 0 };
+  };
+}
+
+export async function prepareActivationManifest(input: PrepareInput): Promise<PrepareResult> {
   const sanctionedPath = assertManifestNamesSanctionedTarget(
     input.liveDatabasePath,
     input.sanctionedTargetOverride,
@@ -120,6 +157,26 @@ export function prepareActivationManifest(input: PrepareInput): PrepareResult {
   // rollback point at all, whatever its own integrity says. Refusing at
   // preparation time means the operator finds out now, while re-taking a backup
   // is cheap, rather than at the mutation boundary.
+  assertBackupCoversCurrentState(
+    {
+      artifactPath: backupPath,
+      artifactSizeBytes: backupStat.size,
+      artifactSha256: sha256File(backupPath),
+      createdAt: backupStat.mtime.toISOString(),
+      sourceDatabaseSha256: target.sha256,
+      sourceDatabaseAppliedMigrationCount: target.appliedMigrationCount,
+      logicalDigest: backupLogical.digest,
+      integrityCheck: "ok",
+      foreignKeyViolations: 0,
+      appliedMigrationCount: backupProbe.appliedMigrationCount,
+      riskPolicy: PREPROD_RISK_POLICY,
+    },
+    {
+      sha256: target.sha256,
+      appliedMigrationCount: target.appliedMigrationCount,
+      logicalDigest: targetLogical.digest,
+    },
+  );
   if (backupLogical.digest !== targetLogical.digest) {
     throw new PreprodActivationError(
       "BACKUP_SOURCE_DIGEST_MISMATCH",
@@ -153,43 +210,33 @@ export function prepareActivationManifest(input: PrepareInput): PrepareResult {
   const host = (input.hostIdentityProvider ?? readHostIdentity)();
   const deployedReleases = (input.deployedReleasesProvider ?? (() => readDeployedReleases()))();
   const flagBaseline = (input.flagBaselineProvider ?? (() => readFlagBaseline()))();
-  const startingState = captureCurriculumStartingState(sanctionedPath);
 
-  // ---- the content activation plan, addressed semantically
+  // ---- the entry state, measured on the live database, read-only
+  const principalEmails = overlay.principals.map((principal) => principal.ref).sort();
+  const entry = captureEntryState(sanctionedPath, principalEmails);
+
+  // ---- and the states the sanctioned stages produce, measured on a copy
+  const rehearsal = await rehearseActivation({
+    backupArtifactPath: backupPath,
+    structuralPackagePath: input.structuralPackagePath,
+    overlayPath: input.overlayPath,
+    target: {
+      code: structuralPackage.curriculumCode,
+      versionNumber: structuralPackage.curriculumVersionNumber,
+    },
+    principalEmails,
+    entryMaxAuditLogId: entry.entryMaxAuditLogId,
+    expectedEntryMigrationCount: input.entryMigrationCount,
+    expectedTargetMigrationCount: input.targetMigrationCount,
+  });
+
+  // ---- the publication sequence, read off what the activation actually produced
   //
-  // Derived from the overlay's own apply modes, because at preparation time the
-  // structural import has not run and there are no imported rows to measure. An
-  // `update` entry lands on a version the structural package already created, so
-  // publishing it does not move the level's binding; a `create` entry is a
-  // version that does not exist until the overlay writes it, so publication must
-  // move the binding onto it. The later session re-measures against the actual
-  // transported target and compares with this plan.
-  const levelNumbers = new Map(overlay.levels.map((level) => [level.level, level.levelNumber]));
-  const rows = overlay.content
-    .map((entry) => {
-      const levelNumber = levelNumbers.get(entry.level);
-      if (levelNumber === undefined) {
-        throw new PreprodActivationError(
-          "OVERLAY_MISMATCH",
-          `overlay content entry references level ${entry.level}, which the overlay's level list does not declare`,
-        );
-      }
-      const identity = `${entry.level}@v${entry.versionNumber}`;
-      const isCreate = entry.mode === "create";
-      return {
-        levelStableCode: entry.level,
-        levelNumber,
-        acceptedContentVersionNumber: entry.versionNumber,
-        action: isCreate ? ("PUBLISH_AND_MOVE_BINDING" as const) : ("PUBLISH_IN_PLACE" as const),
-        expectedPreBindingIdentity: isCreate ? null : identity,
-        expectedPostBindingIdentity: identity,
-      };
-    })
-    .sort((left, right) =>
-      left.levelNumber === right.levelNumber
-        ? left.levelStableCode.localeCompare(right.levelStableCode)
-        : left.levelNumber - right.levelNumber,
-    );
+  // v1 projected this from the overlay's apply modes, which meant the plan
+  // described what somebody expected rather than what the import made. It is now
+  // derived from the rehearsed post-overlay database, and re-derived and compared
+  // at authorization time — see `content-plan.ts`.
+  const contentActivationPlan = rehearsal.contentActivationPlan;
 
   const manifest: PreprodActivationManifest = {
     schemaVersion: PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION,
@@ -266,16 +313,14 @@ export function prepareActivationManifest(input: PrepareInput): PrepareResult {
 
     deployedReleases,
     flagBaseline,
-    curriculumStartingState: {
-      fingerprint: startingState.fingerprint,
-      versions: startingState.versions.map((v) => `${v.code}@v${v.versionNumber}:${v.status}`),
-      publishedIdentity: startingState.publishedIdentity,
-      levelDefinitionCount: startingState.levelDefinitionCount,
-      moduleDefinitionCount: startingState.moduleDefinitionCount,
-      levelResourceBindingCount: startingState.levelResourceBindingCount,
-      contentVersionCount: startingState.contentVersionCount,
-      assessmentVersionCount: startingState.assessmentVersionCount,
+
+    stateChain: {
+      entry: pinnable(entry.fingerprint, "entry"),
+      postMigration: pinnable(rehearsal.postMigration, "post-migration"),
+      postStructural: pinnable(rehearsal.postStructural, "post-structural"),
+      postOverlay: pinnable(rehearsal.postOverlay, "post-overlay"),
     },
+    entryMaxAuditLogId: entry.entryMaxAuditLogId,
     // A freshly structural-imported curriculum carries no editorial history: the
     // package transports the pre-editorial baseline and nothing else. Zero is
     // therefore the reviewed expectation for all six, and writing it down is what
@@ -289,12 +334,11 @@ export function prepareActivationManifest(input: PrepareInput): PrepareResult {
       approvedContentVersionCount: 0,
       approvedAssessmentVersionCount: 0,
     },
-    historicalPrincipalRefs: overlay.principals.map((principal) => principal.ref).sort(),
+    historicalPrincipalRefs: principalEmails,
 
     contentActivationPlan: {
-      rows,
-      publishInPlaceCount: rows.filter((row) => row.action === "PUBLISH_IN_PLACE").length,
-      publishAndMoveBindingCount: rows.filter((row) => row.action === "PUBLISH_AND_MOVE_BINDING").length,
+      rows: contentActivationPlan.rows,
+      fingerprint: fingerprintContentActivationPlan(contentActivationPlan.rows),
     },
 
     assessmentRuntimePolicy: "DEFER",

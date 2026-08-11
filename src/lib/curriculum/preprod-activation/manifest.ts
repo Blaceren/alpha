@@ -35,10 +35,26 @@ import fs from "node:fs";
 import { z } from "zod";
 
 import { PREPROD_RISK_POLICY } from "./backup";
+import { CONTENT_ACTIVATION_MODES } from "./content-plan";
+import { SEMANTIC_STATE_VERSION } from "./semantic-state";
 import { PreprodActivationError, requireEqual } from "./errors";
 import { ACTIVATION_STAGES } from "./stages";
 
-export const PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION = "ata.preprod-activation-manifest/v1" as const;
+/**
+ * THE VERSION IS A HARD DISCRIMINATOR, NOT A LABEL.
+ *
+ * v1 authorized a stage from a digest the caller supplied, and the independent
+ * audit showed that a caller who recomputes the current digest can bless a
+ * database nobody reviewed. v2 replaces that with a precomputed state chain, and
+ * the two are not interchangeable: reading a v1 manifest under v2 rules would
+ * mean inventing the expectations it does not carry. So a v1 manifest does not
+ * parse, and `parseActivationManifestFile` says why rather than failing on a
+ * missing field.
+ */
+export const PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION = "ata.preprod-activation-manifest/2" as const;
+
+/** Refused explicitly, so an old manifest gets an explanation and not a schema error. */
+export const SUPERSEDED_MANIFEST_SCHEMA_VERSIONS: readonly string[] = ["ata.preprod-activation-manifest/v1"];
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, "expected a lowercase sha256 hex digest");
 const gitObjectId = z.string().regex(/^[0-9a-f]{40}$/, "expected a 40-character git object id");
@@ -164,16 +180,45 @@ const deployedReleasesSchema = z.strictObject({
 
 const flagStateSchema = z.enum(["absent", "true", "false", "other"]);
 
-const curriculumStartingStateSchema = z.strictObject({
-  fingerprint: sha256,
-  /** Rendered for review. The fingerprint is what is compared. */
-  versions: z.array(z.string().trim().min(1).max(200)),
-  publishedIdentity: z.string().trim().min(1).max(200).nullable(),
-  levelDefinitionCount: nonNegativeInt,
-  moduleDefinitionCount: nonNegativeInt,
-  levelResourceBindingCount: nonNegativeInt,
-  contentVersionCount: nonNegativeInt,
-  assessmentVersionCount: nonNegativeInt,
+/**
+ * ONE MEASURED STATE, AS THE REHEARSAL PRODUCED IT.
+ *
+ * Every field is a digest over normalised rows — see `semantic-state.ts` for
+ * exactly what is included and what is normalised away. Nothing here is typed by
+ * an operator: the four states in `stateChain` are measured, three of them by
+ * rehearsing the sanctioned stages on a copy of the rollback backup before the
+ * first real mutation.
+ */
+const stageFingerprintSchema = z.strictObject({
+  version: z.literal(SEMANTIC_STATE_VERSION),
+  schemaDigest: sha256,
+  migrationLineage: z.strictObject({
+    appliedCount: nonNegativeInt,
+    failedCount: z.literal(0),
+    digest: sha256,
+    names: z.array(z.string().trim().min(1).max(200)),
+  }),
+  businessContinuityDigest: sha256,
+  curriculumDigest: sha256,
+  editorialDigest: sha256,
+  compositeDigest: sha256,
+});
+
+/**
+ * THE TRUST CHAIN, IN ONE FIELD.
+ *
+ * `entry` is the live database as reviewed. The other three are what the
+ * sanctioned migration, the sanctioned package and the sanctioned overlay
+ * produced when they were run against a copy of the backup — which is proved
+ * byte-identical to entry, so a state the rehearsal reached is a state the real
+ * run must reach. Authorization compares the live target against these and
+ * against nothing a caller says.
+ */
+const stateChainSchema = z.strictObject({
+  entry: stageFingerprintSchema,
+  postMigration: stageFingerprintSchema,
+  postStructural: stageFingerprintSchema,
+  postOverlay: stageFingerprintSchema,
 });
 
 /**
@@ -208,19 +253,44 @@ const editorialBaselineSchema = z.strictObject({
  * stage with no operation mapping; the plan is carried so the later session has
  * a reviewed target to check itself against, not so that anything can act on it.
  */
+/**
+ * One future content-publication decision, addressed semantically.
+ *
+ * `levelStableCode` and a version number, never an imported row id: ids are
+ * assigned by the structural import and are meaningless until it has run, so a
+ * plan written in terms of them could not be reviewed before the thing it plans.
+ *
+ * NOTHING HERE IS AUTHORIZED BY THIS BUILD. Content publication is a separate
+ * stage with no operation mapping; the plan is carried so the later session has a
+ * reviewed target to check itself against.
+ *
+ * IT IS NOT TAKEN ON TRUST EITHER. The audit found that a wrong code, a wrong
+ * version, a wrong mode, a missing row or an extra row all authorized once the
+ * manifest digest was recomputed — a pinned digest proves the file is unchanged,
+ * not that it is correct. `assertContentActivationPlanMatches` now recomputes the
+ * whole plan from the rehearsed target and compares it row for row.
+ */
 const contentActivationRowSchema = z.strictObject({
   levelStableCode: z.string().trim().min(1).max(120),
   levelNumber: positiveInt,
   acceptedContentVersionNumber: positiveInt,
-  action: z.enum(["PUBLISH_IN_PLACE", "PUBLISH_AND_MOVE_BINDING"]),
+  expectedPreContentStatus: z.string().trim().min(1).max(40),
   expectedPreBindingIdentity: z.string().trim().min(1).max(200).nullable(),
+  action: z.enum(CONTENT_ACTIVATION_MODES),
   expectedPostBindingIdentity: z.string().trim().min(1).max(200),
 });
 
+/**
+ * COUNTS ARE DERIVED, NEVER STORED.
+ *
+ * v1 carried `publishInPlaceCount` and `publishAndMoveBindingCount` beside the
+ * rows, so a manifest could contradict itself and the audit demonstrated exactly
+ * that. `summarizeContentActivationPlan` computes them from the rows when a human
+ * needs to read them; there is nothing left to disagree with.
+ */
 const contentActivationPlanSchema = z.strictObject({
-  rows: z.array(contentActivationRowSchema),
-  publishInPlaceCount: nonNegativeInt,
-  publishAndMoveBindingCount: nonNegativeInt,
+  rows: z.array(contentActivationRowSchema).min(1),
+  fingerprint: sha256,
 });
 
 const carriedMitigationSchema = z.strictObject({
@@ -261,7 +331,14 @@ export const preprodActivationManifestSchema = z.strictObject({
 
   deployedReleases: deployedReleasesSchema,
   flagBaseline: z.record(z.string(), flagStateSchema),
-  curriculumStartingState: curriculumStartingStateSchema,
+
+  /**
+   * The precomputed states, and the one number the business-continuity filter
+   * needs to tell a pre-existing audit row from one this activation wrote.
+   */
+  stateChain: stateChainSchema,
+  entryMaxAuditLogId: nonNegativeInt,
+
   preOverlayEditorialBaseline: editorialBaselineSchema,
   historicalPrincipalRefs: z.array(z.string().trim().min(3).max(320)),
 
@@ -342,13 +419,22 @@ export function parseActivationManifestFile(
     "schemaVersion" in raw &&
     (raw as { schemaVersion: unknown }).schemaVersion !== PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION
   ) {
+    const declared = String((raw as { schemaVersion: unknown }).schemaVersion);
+    // A superseded version gets its own message. Falling through to "unsupported
+    // schema" would be true but would not tell the operator the thing they need
+    // to know, which is that the old manifest is not merely old — its stage
+    // authorization was the defect this version exists to remove.
+    if (SUPERSEDED_MANIFEST_SCHEMA_VERSIONS.includes(declared)) {
+      throw new PreprodActivationError(
+        "MANIFEST_SCHEMA_UNSUPPORTED",
+        `this is a ${declared} activation manifest. That version authorized each stage from a target digest supplied on the command line, which cannot distinguish the state a sanctioned stage produced from any other state with the same declared digest. It is refused rather than reinterpreted: prepare a fresh ${PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION} manifest, which carries the rehearsed state chain this build checks against.`,
+        { expected: PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION, actual: declared },
+      );
+    }
     throw new PreprodActivationError(
       "MANIFEST_SCHEMA_UNSUPPORTED",
-      `unsupported activation manifest schema ${String((raw as { schemaVersion: unknown }).schemaVersion)}; this build implements ${PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION}`,
-      {
-        expected: PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION,
-        actual: String((raw as { schemaVersion: unknown }).schemaVersion),
-      },
+      `unsupported activation manifest schema ${declared}; this build implements ${PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION}`,
+      { expected: PREPROD_ACTIVATION_MANIFEST_SCHEMA_VERSION, actual: declared },
     );
   }
 
