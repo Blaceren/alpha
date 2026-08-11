@@ -26,6 +26,7 @@
  * trimmed it.
  */
 import { STABLE_CODE_PATTERN } from "@/lib/curriculum/constants";
+import { TAKE_ID_PATTERN } from "@/lib/curriculum/video-production-contract";
 
 /** Defensive upper bound; the grammar is already bounded but length is cheap to pin. */
 export const MAX_STABLE_CODE_LENGTH = 128;
@@ -70,12 +71,40 @@ export const MAX_ASSESSMENT_QUESTION_KEY_LENGTH = 64;
 /**
  * Exact canonical check for an assessment question key. No trimming, no case
  * folding — a key that only survives normalisation is rejected.
+ *
+ * TWO VOCABULARIES, AND THE SECOND IS NOT NEW HERE.
+ *
+ * PHASE-G1 established that `QuestionDefinition.stableKey` carries one of two
+ * closed shapes: the lowercase package `questionCode` grammar above, or an ATA
+ * TAKE identifier (`T5.1`). That correction exists because the accepted G0
+ * validator reads a question's take binding OUT of `stableKey`, so a bank whose
+ * key is a lowercase code is permanently `ASSESSMENT_TAKE_MAPPING_INCOMPLETE`.
+ * `assessment-schemas.ts::stableKeySchema` was widened to the union at the time;
+ * `TAKE_ID_PATTERN` is imported here rather than restated so there stays exactly
+ * one definition of what a take is.
+ *
+ * WHAT WENT WRONG. The PUBLICATION validator was never moved with it. It still
+ * asked only the lowercase question, so `validateAssessmentPublication` reported
+ * `ASSESSMENT_QUESTION_KEY_INVALID` for every question the structural importer
+ * writes for a canonical ATA `video_test` level — 236 rows across all 59 banks,
+ * on `ata-v2@v3` as much as on the successor. Not one ATA assessment could ever
+ * be published, so no curriculum carrying them could ever satisfy the
+ * `assessment_pass` completeness gate. It had never fired because assessment
+ * publication had never been attempted against these banks.
+ *
+ * THIS IS NOT A RELAXATION. The union is the same union the authoring side
+ * already accepts, and a take is matched by the accepted closed pattern, not by
+ * a widened character class: uppercase in general is still refused, and `T5.5`,
+ * `T5.0`, `T5-1`, `T5.1.2` and `TAKE5.1` are all still rejected. (`t5.1` IS
+ * accepted — but as an ordinary lowercase question code, exactly as it was
+ * before this change, and not as a take. The take vocabulary gains no
+ * case-insensitive spelling.)
  */
 export function isCanonicalAssessmentQuestionKey(value: unknown): value is string {
   if (typeof value !== "string") return false;
   if (value.length === 0 || value.length > MAX_ASSESSMENT_QUESTION_KEY_LENGTH) return false;
   if (value !== value.trim()) return false;
-  return ASSESSMENT_QUESTION_KEY_PATTERN.test(value);
+  return ASSESSMENT_QUESTION_KEY_PATTERN.test(value) || TAKE_ID_PATTERN.test(value);
 }
 
 export type StableCodeIssue =
