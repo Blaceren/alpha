@@ -199,6 +199,16 @@ const stageFingerprintSchema = z.strictObject({
     names: z.array(z.string().trim().min(1).max(200)),
   }),
   businessContinuityDigest: sha256,
+  // CORRECTION-2. The two components that cover what the raw business-continuity
+  // filters remove: the pinned historical principals in their exact per-stage
+  // state, and the audit rows a sanctioned stage is allowed to have written.
+  // `strictObject` means a manifest prepared before this correction — which has
+  // neither field — is refused rather than read with the gaps still open.
+  historicalPrincipalDigest: sha256,
+  activationAuditDelta: z.strictObject({
+    rowCount: nonNegativeInt,
+    digest: sha256,
+  }),
   curriculumDigest: sha256,
   editorialDigest: sha256,
   compositeDigest: sha256,

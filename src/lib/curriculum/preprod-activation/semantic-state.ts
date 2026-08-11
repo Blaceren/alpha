@@ -44,13 +44,64 @@
  * added by a future migration is therefore covered automatically rather than
  * sitting silently outside the fence, which is the failure mode a hand-kept
  * include-list has.
+ *
+ * CORRECTION-2 — WHAT THE INDEPENDENT AUDIT FOUND. Three tables are filtered
+ * rather than digested whole, because a sanctioned stage legitimately appends to
+ * them and the appended rows carry values that are NOT reproducible between the
+ * rehearsal and the real run: a provisioned principal's `User.passwordHash` ends
+ * in `Date.now()`, its `StaffProfile.id` is a `cuid()`, and an `AuditLog` row
+ * gets an autoincrement id and a wall-clock time. The first implementation dealt
+ * with that by removing those rows from the fence ENTIRELY, at every stage.
+ *
+ * The audit exploited that twice:
+ *
+ *   HIGH-1   a `User` row on a PINNED principal address — with `role = admin` —
+ *            inserted at POST_MIGRATION moved no digest, so the structural
+ *            import was authorized against a database that was not the reviewed
+ *            state. The hole ran backwards too: after the overlay, a principal's
+ *            role could be changed and the target still classified as exactly
+ *            POST_OVERLAY.
+ *
+ *   MEDIUM-1 `AuditLog` was fenced as `id <= entryMaxAuditLogId`, so every row
+ *            above that watermark was invisible and arbitrary audit history
+ *            could be appended during an activation with nothing measuring it.
+ *
+ * THE CORRECTION IS TO STOP EXCLUDING AND START PROJECTING. Those rows stay out
+ * of the RAW per-table digests — their non-reproducible columns would make a
+ * rehearsal-derived expectation unmatchable — and are covered instead by two new
+ * fingerprint components that normalise away exactly the non-reproducible
+ * columns and pin everything else:
+ *
+ *   `historicalPrincipalDigest`  one line per PINNED principal address, saying
+ *                                absent, or present with its role, status,
+ *                                credential SHAPE and staff profile. Absence is
+ *                                a value, so a principal that appears before the
+ *                                stage which creates it changes the digest.
+ *
+ *   `activationAuditDelta`       the rows above the entry watermark, projected
+ *                                semantically and COUNTED. Empty before the
+ *                                overlay; exactly the overlay's own import event
+ *                                after it. An extra row — including a duplicate
+ *                                of the expected one — changes it.
+ *
+ * The contract is now the one the correction brief states: entry state, plus an
+ * explicit sanctioned stage delta, equals the expected state for that stage.
+ * Nothing is ignored; what cannot be compared by value is compared by a normal
+ * form documented here and derived by ONE function, so the rehearsal, the
+ * manifest, authorization and resume classification cannot drift apart.
  */
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import { PreprodActivationError } from "./errors";
 
-export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/1" as const;
+/**
+ * Bumped by CORRECTION-2: a fingerprint now carries two components that did not
+ * exist before, so a manifest prepared by the previous build describes a
+ * measurement this build does not take. The manifest schema compares this
+ * literal, which turns that into a refusal rather than a silent mismatch.
+ */
+export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/2" as const;
 
 /**
  * The tables the two sanctioned importers write.
@@ -60,6 +111,17 @@ export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/1" 
  * They are outside the business-continuity digest because a sanctioned stage is
  * SUPPOSED to change them — and they are covered instead by the curriculum and
  * editorial digests, which pin exactly what each stage was rehearsed to produce.
+ *
+ * CORRECTION-2, ON `ContentAsset`. The independent audit observed that no stage
+ * mutated it and asked whether it belongs here. It does: `package/import.ts`
+ * creates a `ContentAsset` row for every asset a level's content declares, so
+ * ownership is real and belongs to the structural stage. The accepted
+ * `ata-v2.canonical-100` package simply declares no assets yet, which is a fact
+ * about that package and not about the contract. It stays stage-owned, and it is
+ * not unmeasured either way: `CURRICULUM_PROJECTIONS` carries a `ContentAsset`
+ * projection, so a row that appears where the rehearsal produced none moves the
+ * curriculum digest. Moving it into the fence would have been correct only until
+ * the first package that ships an asset, and then wrong silently.
  */
 export const STAGE_MUTABLE_TABLES: readonly string[] = [
   // structural import
@@ -92,8 +154,29 @@ export const STAGE_MUTABLE_TABLES: readonly string[] = [
  * exactly the rows the activation is allowed to add, so everything present at
  * entry stays inside the fence. Dropping them wholesale would have left the
  * audit's own exploit — a tampered `User` row — unmeasured.
+ *
+ * CORRECTION-2. The filter is the RAW half of the contract and is no longer the
+ * whole of it. What each filter removes is named here and is measured by a
+ * dedicated projection below, so no row is outside the fingerprint:
+ *
+ *   `User`, `StaffProfile`  rows for the pinned historical principals →
+ *                           `captureHistoricalPrincipalState`
+ *   `AuditLog`              rows above the entry watermark →
+ *                           `captureActivationAuditDelta`
  */
 export const FILTERED_BUSINESS_TABLES: readonly string[] = ["User", "StaffProfile", "AuditLog"];
+
+/**
+ * Which projection owns the rows each filtered table removes from the raw digest.
+ *
+ * Exported so the regression suite can assert that a filter never gains an owner
+ * of "nobody" — that is precisely the shape of the defect CORRECTION-2 closes.
+ */
+export const FILTERED_TABLE_STAGE_OWNERS: Readonly<Record<string, string>> = {
+  User: "historicalPrincipalDigest",
+  StaffProfile: "historicalPrincipalDigest",
+  AuditLog: "activationAuditDelta",
+};
 
 /** `_prisma_migrations` has its own lineage digest below. */
 const MIGRATION_TABLE = "_prisma_migrations";
@@ -114,11 +197,28 @@ export type MigrationLineage = {
   names: string[];
 };
 
+/**
+ * The rows above the entry `AuditLog` watermark, as a comparable value.
+ *
+ * `rowCount` is carried alongside the digest because it is the number an
+ * operator can check by hand, and because a refusal that can say "one audit row
+ * was expected here and I found four" is worth more than one that says a digest
+ * moved.
+ */
+export type ActivationAuditDelta = {
+  rowCount: number;
+  digest: string;
+};
+
 export type StageFingerprint = {
   version: typeof SEMANTIC_STATE_VERSION;
   schemaDigest: string;
   migrationLineage: MigrationLineage;
   businessContinuityDigest: string;
+  /** CORRECTION-2: the pinned principals, present or absent, in their exact state. */
+  historicalPrincipalDigest: string;
+  /** CORRECTION-2: the audit rows a sanctioned stage is allowed to have written. */
+  activationAuditDelta: ActivationAuditDelta;
   curriculumDigest: string;
   editorialDigest: string;
   /** One value over all of the above. Compared first; the parts name the failure. */
@@ -299,6 +399,213 @@ export function captureBusinessContinuity(
     .sort()
     .map((table) => `${table}\u0000${perTable[table]}`);
   return { digest: sha256(lines.join("\u0001")), perTable };
+}
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-2 — the historical principals, as a stage-aware value
+ * ------------------------------------------------------------------ */
+
+/**
+ * The pinned principal addresses, each in exactly one of three states.
+ *
+ * WHY A PROJECTION AND NOT THE RAW ROWS. The overlay provisions these accounts
+ * itself, and two of the columns it writes cannot be reproduced: `passwordHash`
+ * ends in `Date.now().toString(36)` and `StaffProfile.id` is a `cuid()`. A raw
+ * digest would therefore differ between the rehearsal and the real run for a
+ * database that is CORRECT, which is why the first implementation dropped the
+ * rows instead — and dropping them is what let an `admin` account be smuggled in
+ * on a pinned address without moving any digest.
+ *
+ * WHAT IS COMPARED. Everything that decides whether this identity can act, plus
+ * the identity itself:
+ *
+ *   presence          absent is a VALUE, not a missing line. This is the half
+ *                     that closes HIGH-1: before the overlay these addresses
+ *                     must not exist, and their appearance changes the digest at
+ *                     ENTRY, POST_MIGRATION and POST_STRUCTURAL alike.
+ *   role, status      `status` is the loginability gate — the overlay writes
+ *                     `blocked`, and the login route refuses `blocked` outright.
+ *   name              what the evidence rows attribute authorship to.
+ *   referralCode      derived from the ref and the overlay code, so reproducible.
+ *   credential SHAPE  the placeholder is deliberately not a bcrypt digest. The
+ *                     VALUE is never digested — a credential is not evidence —
+ *                     but "is this still the no-login placeholder" is, because
+ *                     replacing it with a real hash is exactly the privilege
+ *                     escalation this component exists to catch.
+ *   emailVerifiedAt   presence only; the timestamp is not reproducible.
+ *   staff profile     presence, display name, staff role and permission version.
+ *
+ * WHAT IS NOT COMPARED, AND WHY. `id`, `createdAt`, `updatedAt`, the `cuid()`
+ * and the placeholder's random tail: all assigned at write time and different on
+ * every run. Nothing else is left out.
+ */
+export function captureHistoricalPrincipalState(
+  db: DatabaseSync,
+  principalEmails: readonly string[],
+): string {
+  const emails = [...new Set(principalEmails.map((email) => email.trim().toLowerCase()).filter(Boolean))].sort();
+  if (emails.length === 0) return sha256("no-principals-pinned");
+
+  // The placeholder the overlay writes instead of a credential. Matching its
+  // PREFIX keeps the comparison reproducible while still proving that the row
+  // carries no authentication path.
+  const NO_LOGIN_PREFIX = "!overlay-provisioned-no-login!";
+
+  const user = db.prepare(
+    `SELECT "email"        AS email,
+            "role"         AS role,
+            "status"       AS status,
+            "name"         AS name,
+            "referralCode" AS referralCode,
+            CASE WHEN "emailVerifiedAt" IS NULL THEN 'no' ELSE 'yes' END AS emailVerified,
+            "leaderboardExcluded" AS leaderboardExcluded,
+            CASE
+              WHEN "passwordHash" = '' THEN 'empty'
+              WHEN substr("passwordHash", 1, ${NO_LOGIN_PREFIX.length}) = ? THEN 'overlay-no-login-placeholder'
+              ELSE 'other'
+            END AS credentialShape
+       FROM "User"
+      WHERE lower("email") = ?`,
+  );
+  const staff = db.prepare(
+    `SELECT s."displayName"       AS displayName,
+            s."staffRole"         AS staffRole,
+            s."permissionVersion" AS permissionVersion
+       FROM "StaffProfile" s
+       JOIN "User" u ON u."id" = s."userId"
+      WHERE lower(u."email") = ?`,
+  );
+
+  const lines = emails.map((email) => {
+    const row = user.get(NO_LOGIN_PREFIX, email) as Record<string, unknown> | undefined;
+    if (!row) return `${email} absent`;
+    const profile = staff.get(email) as Record<string, unknown> | undefined;
+    const account = ["role", "status", "name", "referralCode", "emailVerified", "leaderboardExcluded", "credentialShape"]
+      .map((column) => cell(row[column]))
+      .join("");
+    const staffPart = profile
+      ? `staff${["displayName", "staffRole", "permissionVersion"].map((column) => cell(profile[column])).join("")}`
+      : "staff absent";
+    return `${email} present${account} ${staffPart}`;
+  });
+
+  lines.sort();
+  return sha256(lines.join(""));
+}
+
+/* ------------------------------------------------------------------ *
+ * CORRECTION-2 — the audit rows a sanctioned stage may have written
+ * ------------------------------------------------------------------ */
+
+/**
+ * Canonical JSON, with autoincrement ids normalised out.
+ *
+ * The overlay's own audit metadata names the principals it provisioned by their
+ * row id, and that id is only stable while the preceding state is. Any key whose
+ * name ends in `Id` and whose value is a number is therefore replaced by a
+ * marker; everything else — the overlay fingerprint, the checkpoint digest, the
+ * source commit, the counts — is compared by value, which is the whole reason
+ * this row is worth pinning.
+ *
+ * Keys are emitted in sorted order so two structurally equal objects that were
+ * serialised in different orders still compare equal.
+ */
+function canonicalAuditMetadata(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalAuditMetadata).join(",")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries
+      .map(([key, v]) => `${JSON.stringify(key)}:${/Id$/.test(key) && typeof v === "number" ? '"<row-id>"' : canonicalAuditMetadata(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The `AuditLog` rows above the entry watermark, projected and counted.
+ *
+ * WHAT THIS REPLACES. `WHERE id <= entryMaxAuditLogId` fenced the prefix and
+ * said nothing at all about the suffix, so any number of rows could be appended
+ * to a database and it still measured as the exact reviewed state. The prefix is
+ * still digested whole by `captureBusinessContinuity`; this is the other half.
+ *
+ * WHY A PROJECTION. The activation legitimately writes one row — the overlay's
+ * import event — and its `id` and `createdAt` are assigned when it is written,
+ * so neither can be compared against a rehearsal. Everything that says WHAT the
+ * event was survives normalisation:
+ *
+ *   action, entityType                 the event's identity in domain terms.
+ *   entity                             resolved to `code@vN` when it names a
+ *                                      `CurriculumVersion`, so a row id never
+ *                                      enters the fingerprint; otherwise the
+ *                                      declared `entityId` is kept verbatim,
+ *                                      because a row nobody sanctioned should
+ *                                      move this digest rather than be tidied.
+ *   actor                              the e-mail behind `userId`, never the id.
+ *   ip, userAgent                      presence only. The activation writes
+ *                                      neither; an application request that
+ *                                      wrote audit history mid-activation would
+ *                                      carry them, and that must be visible.
+ *   metadata                           canonicalised as above.
+ *
+ * COUNT IS PART OF THE VALUE. Lines are sorted and joined, so a duplicate of the
+ * expected row is a second identical line and changes the digest; `rowCount` is
+ * carried as well so the refusal can say the useful number out loud.
+ */
+export function captureActivationAuditDelta(
+  db: DatabaseSync,
+  entryMaxAuditLogId: number,
+): ActivationAuditDelta {
+  const rows = db
+    .prepare(
+      `SELECT a."action"     AS action,
+              a."entityType" AS entityType,
+              CASE
+                WHEN a."entityType" = 'CurriculumVersion'
+                 AND c."code" IS NOT NULL THEN c."code" || '@v' || c."versionNumber"
+                ELSE a."entityId"
+              END AS entity,
+              (SELECT u."email" FROM "User" u WHERE u."id" = a."userId") AS actor,
+              CASE WHEN a."ip" IS NULL THEN 'no' ELSE 'yes' END AS hasIp,
+              CASE WHEN a."userAgent" IS NULL THEN 'no' ELSE 'yes' END AS hasUserAgent,
+              a."metadata"   AS metadata
+         FROM "AuditLog" a
+         LEFT JOIN "CurriculumVersion" c
+                ON a."entityType" = 'CurriculumVersion'
+               AND c."id" = CAST(a."entityId" AS INTEGER)
+        WHERE a."id" > ?`,
+    )
+    .all(entryMaxAuditLogId) as Array<Record<string, unknown>>;
+
+  const lines = rows.map((row) => {
+    let metadata: unknown = null;
+    if (typeof row.metadata === "string" && row.metadata.length > 0) {
+      try {
+        metadata = JSON.parse(row.metadata);
+      } catch {
+        // Unparseable metadata is compared verbatim rather than dropped: a row
+        // this function cannot read is exactly a row that must not be waved past.
+        metadata = { unparseable: row.metadata };
+      }
+    } else if (row.metadata !== null && row.metadata !== undefined) {
+      metadata = row.metadata;
+    }
+    return [
+      cell(row.action),
+      cell(row.entityType),
+      cell(row.entity),
+      cell(row.actor ?? null),
+      cell(row.hasIp),
+      cell(row.hasUserAgent),
+      ` meta:${canonicalAuditMetadata(metadata)}`,
+    ].join("");
+  });
+
+  lines.sort();
+  return { rowCount: rows.length, digest: sha256(lines.join("")) };
 }
 
 /** Highest `AuditLog.id` right now — pinned at entry so later rows can be told apart. */
@@ -590,6 +897,11 @@ export function captureStageFingerprint(
     const schemaDigest = captureSchemaDigest(db);
     const migrationLineage = captureMigrationLineage(db);
     const business = captureBusinessContinuity(db, filter);
+    // CORRECTION-2: the two components that measure exactly what the raw table
+    // filters remove. Read from the same connection and the same instant, so a
+    // fingerprint stays one observation rather than several.
+    const historicalPrincipalDigest = captureHistoricalPrincipalState(db, filter.principalEmails);
+    const activationAuditDelta = captureActivationAuditDelta(db, filter.entryMaxAuditLogId);
     const curriculumDigest = captureCurriculumDigest(db);
     const editorialDigest = captureEditorialDigest(db);
     const compositeDigest = sha256(
@@ -600,6 +912,9 @@ export function captureStageFingerprint(
         String(migrationLineage.appliedCount),
         String(migrationLineage.failedCount),
         business.digest,
+        historicalPrincipalDigest,
+        String(activationAuditDelta.rowCount),
+        activationAuditDelta.digest,
         curriculumDigest,
         editorialDigest,
       ].join("\u0001"),
@@ -609,6 +924,8 @@ export function captureStageFingerprint(
       schemaDigest,
       migrationLineage,
       businessContinuityDigest: business.digest,
+      historicalPrincipalDigest,
+      activationAuditDelta,
       curriculumDigest,
       editorialDigest,
       compositeDigest,
@@ -695,6 +1012,20 @@ export function diffStageFingerprint(expected: StageFingerprint, actual: StageFi
   }
   if (expected.schemaDigest !== actual.schemaDigest) drift.push("database schema");
   if (expected.businessContinuityDigest !== actual.businessContinuityDigest) drift.push("business data continuity");
+  // CORRECTION-2. Both of these are business continuity too, but a refusal that
+  // says "a historical principal is not in its reviewed state" or "3 audit rows
+  // were written where 1 was expected" tells an operator what to go and look at,
+  // and the generic message does not.
+  if (expected.historicalPrincipalDigest !== actual.historicalPrincipalDigest) {
+    drift.push("historical editorial principals (presence, role, status, credential shape or staff profile)");
+  }
+  if (expected.activationAuditDelta.rowCount !== actual.activationAuditDelta.rowCount) {
+    drift.push(
+      `activation-owned audit rows (expected ${expected.activationAuditDelta.rowCount}, found ${actual.activationAuditDelta.rowCount})`,
+    );
+  } else if (expected.activationAuditDelta.digest !== actual.activationAuditDelta.digest) {
+    drift.push("activation-owned audit rows (same count, different events)");
+  }
   if (expected.curriculumDigest !== actual.curriculumDigest) drift.push("curriculum structure");
   if (expected.editorialDigest !== actual.editorialDigest) drift.push("editorial evidence");
   if (drift.length === 0 && expected.compositeDigest !== actual.compositeDigest) drift.push("composite state digest");

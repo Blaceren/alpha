@@ -65,7 +65,16 @@ import {
 import { ACTIVATION_LOCK_PATH, acquireActivationLock } from "../../src/lib/curriculum/preprod-activation/lock";
 import { hashManifestBytes } from "../../src/lib/curriculum/preprod-activation/manifest";
 import { prepareActivationManifest } from "../../src/lib/curriculum/preprod-activation/prepare";
-import { listAvailableProjections } from "../../src/lib/curriculum/preprod-activation/semantic-state";
+import {
+  captureStageFingerprint,
+  listAvailableProjections,
+  FILTERED_BUSINESS_TABLES,
+  FILTERED_TABLE_STAGE_OWNERS,
+  SEMANTIC_STATE_VERSION,
+  type StageFingerprint,
+} from "../../src/lib/curriculum/preprod-activation/semantic-state";
+import { rehearseActivation } from "../../src/lib/curriculum/preprod-activation/rehearsal";
+import { classifyTargetState, type ActivationStateChain } from "../../src/lib/curriculum/preprod-activation/stages";
 import { ACTIVATION_STAGES } from "../../src/lib/curriculum/preprod-activation/stages";
 import { NEVER_AUTHORIZED_DATABASE_PATHS } from "../../src/lib/curriculum/preprod-activation/target";
 import {
@@ -156,6 +165,28 @@ async function check(name: string, fn: () => Promise<void> | void): Promise<void
     console.error(`FAIL ${name}`);
     console.error(`     ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+/**
+ * Assert that `fn` refuses with one of `codes`, and returns which one.
+ *
+ * Used where two refusals are BOTH correct and the more specific one is
+ * preferred: an unexpected historical principal before the overlay is caught by
+ * name (`UNEXPECTED_HISTORICAL_PRINCIPAL`) when the stage runs that check, and by
+ * the state chain (`STAGE_STATE_UNKNOWN`) when it does not. Pinning one string
+ * would make the test about which message won rather than about the refusal.
+ */
+function refusesOneOf(codes: readonly string[], fn: () => unknown): string {
+  try {
+    fn();
+  } catch (error) {
+    if (isPreprodActivationError(error)) {
+      assert.ok(codes.includes(error.code), `expected one of ${codes.join("|")}, got ${error.code}: ${error.message}`);
+      return error.code;
+    }
+    assert.fail(`expected a PreprodActivationError, got: ${String(error)}`);
+  }
+  assert.fail(`expected a refusal (${codes.join("|")}), but the call succeeded`);
 }
 
 /** Assert that `fn` throws a PreprodActivationError with exactly `code`. */
@@ -1076,6 +1107,9 @@ async function main(): Promise<void> {
     assert.equal(evidence.disposition, "EXECUTE");
   });
 
+  // CORRECTION-2 works across three states, so each one is kept to restore to.
+  const structuralBytes = snapshot(RUN_DB);
+
   await check("RESUME: repeating the structural stage is ALREADY_COMPLETE and grants nothing", () => {
     const evidence = assertPreprodActivationAuthorization(authorizationInput());
     assert.equal(evidence.disposition, "ALREADY_COMPLETE");
@@ -1213,6 +1247,8 @@ async function main(): Promise<void> {
     assert.equal(evidence.contentActivationPlanChecked, true);
   });
 
+  const overlayBytes = snapshot(RUN_DB);
+
   await check("RUNTIME INERTNESS: nothing was published, bound or flagged", () => {
     const cvId = query(RUN_DB, 'SELECT "id" AS n FROM "CurriculumVersion" WHERE "code" = ? AND "versionNumber" = ?', [
       packageFacts.curriculumCode,
@@ -1303,6 +1339,329 @@ async function main(): Promise<void> {
       }
     });
   }
+
+
+  /* ---------------------------------------------------------------- *
+   * CORRECTION-2 — complete semantic business continuity
+   *
+   * The independent audit found two rows that no fingerprint measured: a `User`
+   * (and its `StaffProfile`) on a pinned historical-principal address, and any
+   * `AuditLog` row above the entry watermark. Both were excluded so a rehearsal
+   * could reproduce them; both are now PROJECTED instead. These checks are the
+   * permanent proof that the exclusions did not come back.
+   * ---------------------------------------------------------------- */
+
+  /** The pinned principal addresses, from the manifest the run is authorized by. */
+  const principalRefs = baseManifest.json.historicalPrincipalRefs as string[];
+  const auditFilter = () => ({
+    principalEmails: principalRefs,
+    entryMaxAuditLogId: baseManifest.json.entryMaxAuditLogId as number,
+  });
+  const fingerprintOf = (db: string): StageFingerprint => captureStageFingerprint(db, auditFilter());
+  const chainOf = (): ActivationStateChain => baseManifest.json.stateChain as unknown as ActivationStateChain;
+  /** Where the chain says this database is, measured rather than asserted. */
+  const stateOf = (db: string): string => {
+    const c = classifyTargetState(fingerprintOf(db), chainOf());
+    return c.kind === "AT" ? c.state : "UNKNOWN";
+  };
+  const auditRows = (db: string): number =>
+    query(db, 'SELECT COUNT(*) AS n FROM "AuditLog" WHERE "id" > ?', [baseManifest.json.entryMaxAuditLogId as number]);
+  /** Insert a principal-shaped account the way an attacker would: on a pinned address. */
+  const injectPrincipal = (db: string, email: string, role = "admin"): void => {
+    exec(
+      db,
+      `INSERT INTO "User" ("email","name","passwordHash","role","status","referralCode","level","xp","createdAt","updatedAt")
+       VALUES ('${email}','Injected','$2b$10$injected','${role}','active','injected-${email.replace(/[^a-z0-9]+/g, "-")}',1,0,1786000000000,1786000000000)`,
+    );
+  };
+
+  await check("CORRECTION-2: every filtered business table names the projection that owns it", () => {
+    for (const table of FILTERED_BUSINESS_TABLES) {
+      const owner = FILTERED_TABLE_STAGE_OWNERS[table];
+      assert.ok(owner, `${table} is filtered out of the raw digest and nothing owns what it removes`);
+      assert.ok(
+        ["historicalPrincipalDigest", "activationAuditDelta"].includes(owner),
+        `${table} names an owner that is not a fingerprint component: ${owner}`,
+      );
+    }
+    // Both owners must actually be part of the composite, or naming them proves nothing.
+    const fp = fingerprintOf(RUN_DB);
+    assert.equal(fp.version, SEMANTIC_STATE_VERSION);
+    assert.equal(typeof fp.historicalPrincipalDigest, "string");
+    assert.equal(typeof fp.activationAuditDelta.digest, "string");
+    assert.equal(typeof fp.activationAuditDelta.rowCount, "number");
+  });
+
+  /* ---- historical principals ---- */
+
+  await check("PRINCIPALS 1: the reviewed pre-overlay state has none, and is accepted", () => {
+    restore(RUN_DB, structuralBytes);
+    for (const ref of principalRefs) {
+      assert.equal(query(RUN_DB, 'SELECT COUNT(*) AS n FROM "User" WHERE lower("email") = lower(?)', [ref]), 0);
+    }
+    assert.equal(stateOf(RUN_DB), "POST_STRUCTURAL");
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.disposition, "EXECUTE");
+    assert.equal(evidence.observedState, "POST_STRUCTURAL");
+    assert.ok(evidence.grant);
+  });
+
+  for (const [stateLabel, bytes, expectedState, input] of [
+    ["POST_MIGRATION", () => migratedBytes, "POST_MIGRATION", () => authorizationInput()],
+    ["POST_STRUCTURAL", () => structuralBytes, "POST_STRUCTURAL", () => overlayInput()],
+  ] as const) {
+    await check(`PRINCIPALS 2: a principal present at ${stateLabel} is no longer that state`, () => {
+      restore(RUN_DB, bytes());
+      assert.equal(stateOf(RUN_DB), expectedState, "the fixture must start at the reviewed state");
+      const beforeDigest = fingerprintOf(RUN_DB).historicalPrincipalDigest;
+      injectPrincipal(RUN_DB, principalRefs[0]);
+      // The defect was that this row moved NOTHING. It must move the component
+      // that owns it, and therefore the classification.
+      assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipalDigest, beforeDigest);
+      assert.equal(stateOf(RUN_DB), "UNKNOWN");
+      // Either refusal is correct: the state chain no longer recognises this
+      // database, and where the stage also runs the named principal check that
+      // one fires first and says so more precisely. What must never happen is a
+      // capability.
+      refusesOneOf(["STAGE_STATE_UNKNOWN", "UNEXPECTED_HISTORICAL_PRINCIPAL"], () =>
+        assertPreprodActivationAuthorization(input()),
+      );
+    });
+
+    await check(`PRINCIPALS 3: a StaffProfile for that principal at ${stateLabel} is no longer that state`, () => {
+      restore(RUN_DB, bytes());
+      injectPrincipal(RUN_DB, principalRefs[0]);
+      exec(
+        RUN_DB,
+        `INSERT INTO "StaffProfile" ("id","userId","displayName","staffRole","permissionVersion","createdAt","updatedAt")
+         VALUES ('injected-profile',(SELECT "id" FROM "User" WHERE lower("email") = lower('${principalRefs[0]}')),
+                 'Injected','admin',1,1786000000000,1786000000000)`,
+      );
+      assert.equal(stateOf(RUN_DB), "UNKNOWN");
+      refusesOneOf(["STAGE_STATE_UNKNOWN", "UNEXPECTED_HISTORICAL_PRINCIPAL"], () =>
+        assertPreprodActivationAuthorization(input()),
+      );
+    });
+  }
+
+  await check("PRINCIPALS 4: the overlay-created principals in their exact reviewed state are accepted", () => {
+    restore(RUN_DB, overlayBytes);
+    for (const ref of principalRefs) {
+      assert.equal(query(RUN_DB, 'SELECT COUNT(*) AS n FROM "User" WHERE lower("email") = lower(?)', [ref]), 1);
+      // Provenance identities, never accounts: the overlay writes `blocked`.
+      assert.equal(
+        query(RUN_DB, `SELECT COUNT(*) AS n FROM "User" WHERE lower("email") = lower(?) AND "status" = 'blocked'`, [ref]),
+        1,
+      );
+    }
+    assert.equal(stateOf(RUN_DB), "POST_OVERLAY");
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.disposition, "ALREADY_COMPLETE");
+    assert.equal(evidence.grant, null);
+  });
+
+  for (const [label, sql] of [
+    ["its role", `UPDATE "User" SET "role" = 'admin' WHERE lower("email") = lower('${"REF"}')`],
+    ["its status (loginability)", `UPDATE "User" SET "status" = 'active' WHERE lower("email") = lower('${"REF"}')`],
+    ["its credential shape", `UPDATE "User" SET "passwordHash" = '$2b$10$a-real-looking-bcrypt-digest' WHERE lower("email") = lower('${"REF"}')`],
+    ["its name", `UPDATE "User" SET "name" = 'Someone Else' WHERE lower("email") = lower('${"REF"}')`],
+  ] as const) {
+    await check(`PRINCIPALS 5: changing ${label} after the overlay is no longer POST_OVERLAY`, () => {
+      restore(RUN_DB, overlayBytes);
+      exec(RUN_DB, sql.replace(/REF/g, principalRefs[0]));
+      assert.equal(stateOf(RUN_DB), "UNKNOWN");
+      const evidence = (() => {
+        try {
+          return assertPreprodActivationAuthorization(overlayInput());
+        } catch (error) {
+          assert.ok(isPreprodActivationError(error) && error.code === "STAGE_STATE_UNKNOWN", String(error));
+          return null;
+        }
+      })();
+      assert.equal(evidence, null, "a tampered principal must never read as ALREADY_COMPLETE");
+    });
+  }
+
+  await check("PRINCIPALS 6: changing an expected StaffProfile after the overlay is no longer POST_OVERLAY", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).historicalPrincipalDigest;
+    exec(
+      RUN_DB,
+      `UPDATE "StaffProfile" SET "staffRole" = 'admin'
+        WHERE "userId" = (SELECT "id" FROM "User" WHERE lower("email") = lower('${principalRefs[0]}'))`,
+    );
+    assert.notEqual(fingerprintOf(RUN_DB).historicalPrincipalDigest, before);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+  });
+
+  await check("PRINCIPALS: removing an expected principal after the overlay is no longer POST_OVERLAY", () => {
+    restore(RUN_DB, overlayBytes);
+    exec(RUN_DB, `DELETE FROM "StaffProfile" WHERE "userId" = (SELECT "id" FROM "User" WHERE lower("email") = lower('${principalRefs[0]}'))`);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+  });
+
+  /* ---- AuditLog ---- */
+
+  await check("AUDIT 7: the untouched entry history is accepted at every reviewed state", () => {
+    restore(RUN_DB, migratedBytes);
+    assert.equal(stateOf(RUN_DB), "POST_MIGRATION");
+    assert.equal(auditRows(RUN_DB), 0, "the migration stage owns no audit rows");
+    restore(RUN_DB, structuralBytes);
+    assert.equal(stateOf(RUN_DB), "POST_STRUCTURAL");
+    assert.equal(auditRows(RUN_DB), 0, "the structural stage owns no audit rows");
+  });
+
+  await check("AUDIT 8: the sanctioned overlay audit delta is expected, counted and accepted", () => {
+    restore(RUN_DB, overlayBytes);
+    const fp = fingerprintOf(RUN_DB);
+    assert.equal(fp.activationAuditDelta.rowCount, 1, "the overlay writes exactly one import event");
+    assert.equal(auditRows(RUN_DB), 1);
+    assert.equal(fp.activationAuditDelta.digest, chainOf().postOverlay.activationAuditDelta.digest);
+    assert.equal(stateOf(RUN_DB), "POST_OVERLAY");
+  });
+
+  for (const [stateLabel, bytes, input] of [
+    ["POST_MIGRATION", () => migratedBytes, () => authorizationInput()],
+    ["POST_STRUCTURAL", () => structuralBytes, () => overlayInput()],
+    ["POST_OVERLAY", () => overlayBytes, () => overlayInput()],
+  ] as const) {
+    await check(`AUDIT 9: an unexpected audit row at ${stateLabel} is no longer that state`, () => {
+      restore(RUN_DB, bytes());
+      const before = fingerprintOf(RUN_DB).activationAuditDelta;
+      exec(RUN_DB, `INSERT INTO "AuditLog" ("userId","action","entityType","entityId","createdAt")
+                    VALUES (NULL,'INJECTED_BY_REGRESSION','Nothing','0',1786000000000)`);
+      const after = fingerprintOf(RUN_DB).activationAuditDelta;
+      assert.equal(after.rowCount, before.rowCount + 1);
+      assert.notEqual(after.digest, before.digest);
+      assert.equal(stateOf(RUN_DB), "UNKNOWN");
+      refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(input()));
+    });
+  }
+
+  await check("AUDIT 9b: a DUPLICATE of the expected overlay event is still unexpected", () => {
+    restore(RUN_DB, overlayBytes);
+    exec(
+      RUN_DB,
+      `INSERT INTO "AuditLog" ("userId","action","entityType","entityId","metadata","ip","userAgent","createdAt")
+       SELECT "userId","action","entityType","entityId","metadata","ip","userAgent",1786000000001
+         FROM "AuditLog" WHERE "id" > ${baseManifest.json.entryMaxAuditLogId as number} LIMIT 1`,
+    );
+    assert.equal(fingerprintOf(RUN_DB).activationAuditDelta.rowCount, 2);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+  });
+
+  await check("AUDIT 9c: altering the sanctioned event's own metadata is unexpected", () => {
+    restore(RUN_DB, overlayBytes);
+    const before = fingerprintOf(RUN_DB).activationAuditDelta;
+    exec(
+      RUN_DB,
+      `UPDATE "AuditLog" SET "metadata" = json_set("metadata", '$.overlayFingerprint', '${"0".repeat(64)}')
+        WHERE "id" > ${baseManifest.json.entryMaxAuditLogId as number}`,
+    );
+    const after = fingerprintOf(RUN_DB).activationAuditDelta;
+    assert.equal(after.rowCount, before.rowCount, "the count is unchanged; only the event differs");
+    assert.notEqual(after.digest, before.digest);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+  });
+
+  await check("AUDIT 10: mutating protected pre-entry audit history is no longer the reviewed state", () => {
+    restore(RUN_DB, overlayBytes);
+    exec(RUN_DB, `UPDATE "AuditLog" SET "action" = 'tampered' WHERE "id" = (SELECT MIN("id") FROM "AuditLog")`);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+  });
+
+  await check("AUDIT 11: removing protected pre-entry audit history is no longer the reviewed state", () => {
+    restore(RUN_DB, overlayBytes);
+    exec(RUN_DB, `DELETE FROM "AuditLog" WHERE "id" = (SELECT MIN("id") FROM "AuditLog")`);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(overlayInput()));
+  });
+
+  await check("AUDIT 12: resume after the exact stage-owned audit delta still reports ALREADY_COMPLETE", () => {
+    restore(RUN_DB, overlayBytes);
+    const evidence = assertPreprodActivationAuthorization(overlayInput());
+    assert.equal(evidence.observedState, "POST_OVERLAY");
+    assert.equal(evidence.disposition, "ALREADY_COMPLETE");
+    assert.equal(evidence.grant, null);
+    assert.equal(evidence.contentActivationPlanChecked, true);
+  });
+
+  /* ---- general ---- */
+
+  await check("GENERAL 13/14: exact pre-state EXECUTEs, exact post-state is ALREADY_COMPLETE", () => {
+    restore(RUN_DB, migratedBytes);
+    const pre = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(pre.observedState, "POST_MIGRATION");
+    assert.equal(pre.disposition, "EXECUTE");
+    assert.ok(pre.grant);
+    restore(RUN_DB, structuralBytes);
+    const post = assertPreprodActivationAuthorization(authorizationInput());
+    assert.equal(post.observedState, "POST_STRUCTURAL");
+    assert.equal(post.disposition, "ALREADY_COMPLETE");
+    assert.equal(post.grant, null);
+  });
+
+  await check("GENERAL 15: an unreviewed business mutation matches no reviewed state", () => {
+    restore(RUN_DB, migratedBytes);
+    exec(RUN_DB, `UPDATE "User" SET "role" = 'admin' WHERE "id" = (SELECT MIN("id") FROM "User")`);
+    assert.equal(stateOf(RUN_DB), "UNKNOWN");
+    const chain = chainOf();
+    for (const key of ["entry", "postMigration", "postStructural", "postOverlay"] as const) {
+      assert.notEqual(fingerprintOf(RUN_DB).compositeDigest, chain[key].compositeDigest);
+    }
+    refuses("STAGE_STATE_UNKNOWN", () => assertPreprodActivationAuthorization(authorizationInput()));
+    restore(RUN_DB, overlayBytes);
+  });
+
+  await check("GENERAL 16: rehearsal and authorization derive the same state semantics", () => {
+    restore(RUN_DB, overlayBytes);
+    const observed = fingerprintOf(RUN_DB);
+    const rehearsed = chainOf().postOverlay;
+    // Component by component, so a future change that silently drops one of them
+    // from the composite cannot pass this by accident.
+    assert.equal(observed.version, rehearsed.version);
+    assert.equal(observed.schemaDigest, rehearsed.schemaDigest);
+    assert.equal(observed.migrationLineage.digest, rehearsed.migrationLineage.digest);
+    assert.equal(observed.businessContinuityDigest, rehearsed.businessContinuityDigest);
+    assert.equal(observed.historicalPrincipalDigest, rehearsed.historicalPrincipalDigest);
+    assert.equal(observed.activationAuditDelta.rowCount, rehearsed.activationAuditDelta.rowCount);
+    assert.equal(observed.activationAuditDelta.digest, rehearsed.activationAuditDelta.digest);
+    assert.equal(observed.curriculumDigest, rehearsed.curriculumDigest);
+    assert.equal(observed.editorialDigest, rehearsed.editorialDigest);
+    assert.equal(observed.compositeDigest, rehearsed.compositeDigest);
+  });
+
+  await check("GENERAL 17: a second independent rehearsal reproduces the semantics, not the bytes", async () => {
+    const second = await rehearseActivation({
+      backupArtifactPath: PREP_BACKUP,
+      structuralPackagePath: PACKAGE_PATH,
+      overlayPath: OVERLAY_PATH,
+      target: { code: packageFacts.curriculumCode, versionNumber: packageFacts.curriculumVersionNumber },
+      principalEmails: principalRefs,
+      entryMaxAuditLogId: baseManifest.json.entryMaxAuditLogId as number,
+      expectedEntryMigrationCount: entryMigrationCount,
+      expectedTargetMigrationCount: targetMigrationCount,
+    });
+    const first = chainOf();
+    for (const [label, a, b] of [
+      ["post-migration", second.postMigration, first.postMigration],
+      ["post-structural", second.postStructural, first.postStructural],
+      ["post-overlay", second.postOverlay, first.postOverlay],
+    ] as const) {
+      assert.equal(a.compositeDigest, b.compositeDigest, `${label} composite differs between two rehearsals`);
+      assert.equal(a.historicalPrincipalDigest, b.historicalPrincipalDigest, `${label} principals differ`);
+      assert.equal(a.activationAuditDelta.digest, b.activationAuditDelta.digest, `${label} audit delta differs`);
+      assert.equal(a.activationAuditDelta.rowCount, b.activationAuditDelta.rowCount, `${label} audit row count differs`);
+    }
+    assert.equal(second.businessContinuityHeld, true);
+    // The raw bytes are NOT expected to match: the whole reason these components
+    // are projections is that `cuid()`, `Date.now()` and autoincrement ids differ.
+    assert.notEqual(second.postOverlay.activationAuditDelta.rowCount, 0);
+  });
+
+  restore(RUN_DB, overlayBytes);
 
   /* ---------- stage ordering ---------- */
 

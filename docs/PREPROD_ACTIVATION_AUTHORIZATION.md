@@ -239,16 +239,66 @@ byte digest could never match. Each state records
 | `schemaDigest` | normalised `sqlite_master` — a column added or a constraint dropped is caught |
 | `migrationLineage` | every applied migration by **name and checksum**, plus a zero-failure requirement |
 | `businessContinuityDigest` | every table the activation may not touch, allow-by-default |
+| `historicalPrincipalDigest` | the pinned editorial principals, per stage — absent, or present in their exact reviewed state |
+| `activationAuditDelta` | the audit rows a sanctioned stage is allowed to have written, projected and counted |
 | `curriculumDigest` | the curriculum surface, keyed by stable code and version, never by row id |
 | `editorialDigest` | the evidence the overlay transports, keyed the same way |
 
-`businessContinuityDigest` is the one that closes the audit's finding. It covers **every**
-table except the eighteen the two importers write, so a table added by a future migration is
-inside the fence automatically. `User`, `StaffProfile` and `AuditLog` are included with a row
-filter that removes exactly the rows a sanctioned stage may add — the overlay's historical
-principals, and audit rows above the entry high-water mark — so every pre-existing row stays
-compared. A tampered user, an altered reward, a rewritten audit entry: each moves this digest,
-and nothing on a command line can move it back.
+`businessContinuityDigest` covers **every** table except the eighteen the two importers write,
+so a table added by a future migration is inside the fence automatically. A tampered user, an
+altered reward, a rewritten audit entry: each moves this digest, and nothing on a command line
+can move it back.
+
+#### The two filtered surfaces, and why they are projections (CORRECTION-2)
+
+Three tables cannot be digested whole, because a sanctioned stage appends rows to them whose
+values are **not reproducible** between the rehearsal and the real run: a provisioned
+principal's `User.passwordHash` ends in `Date.now()`, its `StaffProfile.id` is a `cuid()`, and
+an `AuditLog` row gets an autoincrement id and a wall-clock time. The first implementation
+handled that by removing those rows from the fence entirely, at every stage, and the
+independent audit showed what that cost:
+
+- **HIGH-1** — a `User` row on a pinned principal address, with `role = admin`, inserted at
+  POST_MIGRATION moved no digest at all. The structural import was authorized against a
+  database that was not the reviewed state. Backwards too: after the overlay, a principal's
+  role could be changed and the target still read as exactly POST_OVERLAY.
+- **MEDIUM-1** — `AuditLog` was fenced as `id <= entryMaxAuditLogId`, so every row above that
+  watermark was invisible and arbitrary audit history could be appended mid-activation.
+
+Both are now measured rather than excluded. The filters on the raw table digests are unchanged
+— that is what keeps a correct database matchable — and what they remove is covered by two
+components that normalise away exactly the non-reproducible columns:
+
+`historicalPrincipalDigest` emits one line per **pinned** address. Absence is a value, not a
+missing line, which is what makes the component stage-aware: at ENTRY, POST_MIGRATION and
+POST_STRUCTURAL every principal must read `absent`, and one that appears changes the digest and
+therefore the classification. Where a principal is present the line carries its role, `status`
+(the loginability gate — the overlay writes `blocked`, and the login route refuses `blocked`
+outright), name, referral code, e-mail-verification presence, the **shape** of its credential,
+and its staff profile's display name, staff role and permission version. The credential value
+is never digested; "is this still the non-bcrypt no-login placeholder" is, because swapping it
+for a real hash is precisely the escalation this exists to catch.
+
+`activationAuditDelta` projects the rows above the entry watermark and carries their **count**
+alongside the digest. It is `0` at ENTRY, POST_MIGRATION and POST_STRUCTURAL — neither the
+migration nor the structural import writes audit history — and exactly `1` at POST_OVERLAY, the
+overlay's own import event. Each row is projected as its action, entity type, entity resolved
+to `code@vN` rather than a row id, the actor's e-mail rather than a user id, whether it carries
+an `ip` or a `userAgent` (the activation writes neither; an application request would), and its
+metadata canonicalised with autoincrement ids replaced. Lines are sorted and joined, so a
+duplicate of the expected event is a second identical line and is caught.
+
+So the contract is: **entry state + explicit sanctioned stage delta = expected state for that
+stage**. Nothing is ignored. Both components are part of `compositeDigest`, both are named
+individually when they drift, and both are derived by one function — `captureStageFingerprint`
+— so the rehearsal, manifest preparation, authorization and resume classification cannot
+disagree about what a state is.
+
+`ContentAsset` stays stage-owned. The audit observed that no stage mutated it and asked whether
+it belongs there; `package/import.ts` creates a `ContentAsset` row for every asset a level's
+content declares, so the ownership is real. The accepted `ata-v2.canonical-100` package simply
+declares no assets yet — a fact about that package, not about the contract — and the table is
+still measured, by `curriculumDigest`.
 
 ### Resume policy
 
