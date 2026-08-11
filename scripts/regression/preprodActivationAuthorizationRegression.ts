@@ -1270,15 +1270,55 @@ async function main(): Promise<void> {
       }
     })();
     assert.equal(status, "draft");
+    /*
+     * INERTNESS IS "NOT SERVABLE", NOT "NOT NAMED".
+     *
+     * This assertion used to require ZERO assessment bindings. That was the
+     * right test until the accepted assessment-binding correction, which makes
+     * the structural importer create the binding where it creates the bank —
+     * precisely so a level cannot reach `published` with its assessment unbound,
+     * which is the defect that made `ata-v2@v3` permanently unusable.
+     *
+     * So a binding after the sanctioned stages is now EXPECTED, and it is still
+     * inert: the binding only NAMES a resource, and the runtime refuses a bank
+     * that is not published. What must remain zero is anything a learner could
+     * actually be served, so that is what is measured — bound banks whose status
+     * is `published`. Keeping the old count would have made the suite assert the
+     * absence of the correction.
+     */
+    /*
+     * The measure is "did a stage PUBLISH anything the artifact did not already
+     * declare published", because publication is what makes a resource servable
+     * and it is the operator's separate, reviewed act. The package is the
+     * authority for what arrives already published — the approved first slice
+     * ships its level-2 bank that way — so the expectation is read from the
+     * artifact rather than hard-coded, and a stage that published one more row
+     * than the artifact declares still fails.
+     */
+    const declared = JSON.parse(fs.readFileSync(PACKAGE_PATH, "utf8")) as {
+      modules: Array<{ levels: Array<{ assessment: { status: string } | null; content: { status: string } | null }> }>;
+    };
+    const declaredLevels = declared.modules.flatMap((moduleRow) => moduleRow.levels);
+    const declaredPublishedAssessments = declaredLevels.filter((l) => l.assessment?.status === "published").length;
+    const declaredPublishedContent = declaredLevels.filter((l) => l.content?.status === "published").length;
+
     assert.equal(
       query(
         RUN_DB,
-        `SELECT COUNT(*) AS n FROM "LevelResourceBinding" b JOIN "LevelDefinition" l ON l."id" = b."levelDefinitionId"
-          WHERE l."curriculumVersionId" = ? AND b."assessmentVersionId" IS NOT NULL`,
+        `SELECT COUNT(*) AS n FROM "AssessmentVersion" WHERE "curriculumVersionId" = ? AND "status" = 'published'`,
         [cvId],
       ),
-      0,
-      "the overlay bound an assessment",
+      declaredPublishedAssessments,
+      "a sanctioned stage published an assessment the package did not declare published",
+    );
+    assert.equal(
+      query(
+        RUN_DB,
+        `SELECT COUNT(*) AS n FROM "ContentVersion" WHERE "curriculumVersionId" = ? AND "status" = 'published'`,
+        [cvId],
+      ),
+      declaredPublishedContent,
+      "a sanctioned stage published content the package did not declare published",
     );
   });
 
