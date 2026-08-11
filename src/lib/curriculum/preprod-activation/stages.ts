@@ -157,15 +157,65 @@ export function classifyTargetState(
   let nearest: ObservedStateName = "ENTRY";
   let nearestDrift: string[] | null = null;
 
-  for (const [name, key] of CHAIN_ORDER) {
+  for (let index = 0; index < CHAIN_ORDER.length; index += 1) {
+    const [name, key] = CHAIN_ORDER[index];
     const drift = diffStageFingerprint(chain[key], observed);
-    if (drift.length === 0) return { kind: "AT", state: name };
+    if (drift.length === 0) return { kind: "AT", state: collapseNoOpStages(index, chain) };
     if (nearestDrift === null || drift.length < nearestDrift.length) {
       nearest = name;
       nearestDrift = drift;
     }
   }
   return { kind: "UNKNOWN", nearest, drift: nearestDrift ?? ["everything"] };
+}
+
+/**
+ * A STAGE THAT WROTE NOTHING HAS ALREADY RUN.
+ *
+ * WHAT WENT WRONG. `classifyTargetState` answered with the FIRST reviewed state
+ * the target matched, which is right whenever the states are distinct and wrong
+ * in exactly one situation: when the stage between two of them performs no
+ * mutation, both states carry the same fingerprint and the earlier LABEL wins a
+ * tie it has no claim to. The successor repair is that situation. Its entry
+ * database is already at the target migration lineage, so the sanctioned
+ * migration is a no-op, `entry` and `postMigration` are identical, and the
+ * target was reported `ENTRY` — leaving `STRUCTURAL_IMPORT`, which starts from
+ * `POST_MIGRATION`, permanently `STAGE_OUT_OF_ORDER`. No successor could ever be
+ * imported into a protected database.
+ *
+ * WHAT THIS IS NOT. It is NOT "take the most advanced state that matches".
+ * Collapsing forward is permitted only across states the MANIFEST ITSELF proves
+ * indistinguishable, one adjacent pair at a time, and it stops at the first pair
+ * that differs. So a target that happens to match both `entry` and
+ * `postStructural` while `postMigration` differs is still classified `ENTRY`:
+ * the walk halts at the `entry → postMigration` boundary and never reaches the
+ * later coincidence. That case is a genuinely ambiguous database and must not be
+ * read as "the structural import has run".
+ *
+ * WHY THE MANIFEST IS THE AUTHORITY AND NOT THE TARGET. The chain was measured
+ * by rehearsing the sanctioned stages on a copy of the verified rollback backup,
+ * before any real mutation, and it is pinned by the manifest's own digest.
+ * Asking the chain "did this stage change anything?" is therefore asking a
+ * reviewed artifact, not the party requesting permission — which is the property
+ * the whole authorization model rests on. The observed target is used for one
+ * thing only: deciding which reviewed state it is in.
+ *
+ * RESUME SEMANTICS FOLLOW FOR FREE. A no-op stage classifies as its own
+ * post-state, so `decideStageDisposition` answers `ALREADY_COMPLETE` for it and
+ * `EXECUTE` for the stage that genuinely comes next. Nothing is skipped: the
+ * work that was skipped is work that did not exist.
+ */
+function collapseNoOpStages(matchedIndex: number, chain: ActivationStateChain): ObservedStateName {
+  let index = matchedIndex;
+  while (index + 1 < CHAIN_ORDER.length) {
+    const current = chain[CHAIN_ORDER[index][1]];
+    const next = chain[CHAIN_ORDER[index + 1][1]];
+    // Adjacent, and compared in the chain rather than against the target: this
+    // asks whether the reviewed transition produced any change at all.
+    if (diffStageFingerprint(current, next).length > 0) break;
+    index += 1;
+  }
+  return CHAIN_ORDER[index][0];
 }
 
 /** The state a stage must START from, and the state it produces. */
