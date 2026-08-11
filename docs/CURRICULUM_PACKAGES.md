@@ -119,6 +119,20 @@ npm run curriculum:canonical100:check   # fail if the artifact has drifted from 
 Deterministic: same inputs → identical bytes and fingerprint. Reads no other
 repository, no database and no network, and can never emit an `approved` package.
 
+The target curriculum version is an explicit build input defaulting to 3, and
+each version writes to its own file, so a successor is built beside its
+predecessor rather than over it:
+
+```bash
+npx tsx scripts/curriculum/buildCanonical100.ts --curriculum-version-number 4
+# -> curriculum/packages/ata-v2-canonical-100.v4.draft.json
+```
+
+The importer keeps sole authority over nothing but what the artifact declares —
+there is no import-time version override. See
+**[CURRICULUM_SUCCESSOR_ARTIFACT.md](CURRICULUM_SUCCESSOR_ARTIFACT.md)** for the
+accepted v3/v4 identities and the successor rules.
+
 ## Tests
 
 ```bash
@@ -127,6 +141,7 @@ npm run test:regression:curriculum-package-roundtrip  # real /current -> /conten
 npm run test:regression:curriculum-content-blocks     # body format, block catalog, sanitizer, assets, tools
 npm run test:regression:curriculum-ata100             # ATA-100 profile, unlock vocabulary, converter determinism
 npm run test:regression:curriculum-video-blueprint    # 58 video contracts, 232 takes/questions, fingerprint coherence
+npm run test:regression:curriculum-canonical-successor # the version build contract, v3/v4 equivalence, successor import
 ```
 
 ## Video+test production contracts

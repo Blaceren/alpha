@@ -57,6 +57,7 @@
     "test:regression:curriculum-content-lifecycle": "tsx scripts/regression/curriculumContentLifecycleRegression.ts",
     "test:regression:curriculum-assessment-lifecycle": "tsx scripts/regression/curriculumAssessmentLifecycleRegression.ts",
     "test:regression:curriculum-assessment-binding-sequence": "tsx scripts/regression/curriculumAssessmentBindingSequenceRegression.ts",
+    "test:regression:curriculum-canonical-successor": "tsx scripts/regression/curriculumCanonicalSuccessorRegression.ts",
     "test:regression:curriculum-lesson-progress-schema": "tsx scripts/regression/curriculumLessonProgressSchemaRegression.ts",
     "test:regression:curriculum-report-schema": "tsx scripts/regression/curriculumReportSchemaRegression.ts",
     "test:regression:curriculum-report-authoring": "tsx scripts/regression/curriculumReportAuthoringRegression.ts",

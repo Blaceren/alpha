@@ -323,6 +323,22 @@ function serialize(value: Json): string {
     .join(",")}}`;
 }
 
+/**
+ * The canonical projection's own JSON shape, and its own serialiser.
+ *
+ * Both are exported for ONE reason: an audit that wants to compare two packages
+ * on everything EXCEPT a deliberately-changed identity field must hash the same
+ * bytes this module hashes, or the comparison proves nothing about the
+ * fingerprint it claims to explain. Re-implementing the walk next door would
+ * drift the moment either copy changed. Nothing here alters what
+ * `calculateFingerprint` covers or how it covers it — the canonical fingerprint
+ * remains the whole projection, `curriculumVersionNumber` included.
+ */
+export type CanonicalJson = Json;
+export function serializeCanonicalProjection(value: CanonicalJson): string {
+  return serialize(value);
+}
+
 export function calculateFingerprint(pkg: CurriculumPackage): string {
   return createHash("sha256").update(serialize(canonicalProjection(pkg)), "utf8").digest("hex");
 }

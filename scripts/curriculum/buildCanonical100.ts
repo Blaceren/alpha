@@ -24,6 +24,16 @@
  * fingerprint. `--check` proves the checked-in artifact still matches its
  * inputs, which is how editorial drift is caught in CI rather than at import.
  *
+ * ========================= WHICH VERSION IT BUILDS =========================
+ *   tsx scripts/curriculum/buildCanonical100.ts [--curriculum-version-number N]
+ *                                               [--check]
+ *
+ * The target curriculum version is an explicit build input with a retained
+ * default of 3, and each version writes to its own file — so v3 stays exactly
+ * where and what it was while a successor is built beside it. See
+ * `DEFAULT_CURRICULUM_VERSION_NUMBER` for why the value is never allocated from
+ * a database.
+ *
  * ========================== WHAT IT REFUSES TO DO ==========================
  * It does not write lessons. The brief is a brief: a hook, a list of things to
  * cover, sometimes a main idea. Turning that into a lesson is editorial work,
@@ -57,6 +67,7 @@ import {
 } from "@/lib/curriculum/product-xp-policy";
 import { findObsoleteBrand } from "@/lib/curriculum/product-vocabulary";
 import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
+import { calculateSemanticEquivalenceDigest } from "@/lib/curriculum/package/successor-equivalence";
 import { validateCurriculumPackage } from "@/lib/curriculum/package/validate";
 import {
   ATA_100_PACKAGE_CODE,
@@ -76,12 +87,87 @@ const REPO_ROOT = process.cwd();
 const EDITORIAL_SOURCE = path.join(REPO_ROOT, "curriculum/canonical/ata-100-editorial-source.json");
 const VIDEO_CONTRACTS = path.join(REPO_ROOT, "curriculum/canonical/ata-video-production-contracts.v1.json");
 const APPROVED_SLICE = path.join(REPO_ROOT, "curriculum/packages/ata-v2-first-slice.rev3.approved.json");
-const OUTPUT = path.join(REPO_ROOT, "curriculum/packages/ata-v2-canonical-100.draft.json");
 
 const PACKAGE_CODE = ATA_100_PACKAGE_CODE;
 const PACKAGE_REVISION = 1;
-const CURRICULUM_VERSION_NUMBER = 3;
 const LOCALE = "ru";
+
+/**
+ * PHASE-G2 SUCCESSOR — the target curriculum version is a BUILD INPUT.
+ *
+ * `ata-v2@v3` was published with its 58 assessment banks unbound, which
+ * `assertParentDraft` makes permanent: there is no unpublish, so the defect can
+ * only be repaired by a SUCCESSOR version. The importer takes
+ * `curriculumVersionNumber` from the package and nothing else — deliberately,
+ * because the artifact is the release identity and a runtime flag that could
+ * retarget it would make an accepted fingerprint meaningless. That authority
+ * stays exactly where it is; what was missing is the ability to BUILD an
+ * artifact that declares a different version, and that is what this adds.
+ *
+ * The value is EXPLICIT AND SOURCE-DEFINED. It is never allocated from a
+ * database, an environment variable, a clock or "one more than the highest row
+ * in PREPROD" — every one of those would make the artifact a function of live
+ * state, so two builds of the same source could disagree and no fingerprint
+ * could be pinned in advance.
+ *
+ * `DEFAULT_CURRICULUM_VERSION_NUMBER` is the RETAINED repository contract: an
+ * invocation with no explicit version keeps building the historical v3 artifact
+ * at its historical path, so `--check`, the ATA-100 regression and the accepted
+ * activation manifest all keep meaning what they meant.
+ */
+const DEFAULT_CURRICULUM_VERSION_NUMBER = 3;
+
+/**
+ * Where a build for `versionNumber` is written.
+ *
+ * v3 keeps the unsuffixed filename it has always had. That is not cosmetic: the
+ * accepted activation manifest pins that path, the ATA-100 regression reads it
+ * by name, and `docs/CURRICULUM_PACKAGES.md` documents it — renaming it to fit a
+ * new scheme would rewrite history to make the new code tidier. Every other
+ * version gets a version-keyed sibling, so successors accumulate beside their
+ * predecessor and no build can ever overwrite an accepted artifact.
+ */
+function outputPathFor(versionNumber: number): string {
+  const name =
+    versionNumber === DEFAULT_CURRICULUM_VERSION_NUMBER
+      ? "ata-v2-canonical-100.draft.json"
+      : `ata-v2-canonical-100.v${versionNumber}.draft.json`;
+  return path.join(REPO_ROOT, "curriculum/packages", name);
+}
+
+/**
+ * Read `--curriculum-version-number <n>` and refuse everything that is not a
+ * plain positive integer.
+ *
+ * The parse is deliberately stricter than `Number()`: `4.0`, `+4`, `0x4`, `4e0`
+ * and ` 4 ` all denote 4 to JavaScript and none of them is a version number a
+ * human typed on purpose. A silently coerced value here becomes a curriculum
+ * identity in a published database, so the only accepted spelling is digits.
+ * The upper bound is the package schema's own (`max(10_000)`), asserted here so
+ * the build fails at its argument rather than after producing an artifact that
+ * validation would reject.
+ */
+function parseCurriculumVersionNumber(argv: readonly string[]): number {
+  const index = argv.indexOf("--curriculum-version-number");
+  if (index < 0) return DEFAULT_CURRICULUM_VERSION_NUMBER;
+  const raw = argv[index + 1];
+  if (raw === undefined || raw.startsWith("--")) {
+    throw new Error("--curriculum-version-number requires a value");
+  }
+  if (!/^[0-9]+$/.test(raw)) {
+    throw new Error(
+      `--curriculum-version-number must be a positive integer written in digits, got ${JSON.stringify(raw)}`,
+    );
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`--curriculum-version-number must be >= 1, got ${JSON.stringify(raw)}`);
+  }
+  if (parsed > 10_000) {
+    throw new Error(`--curriculum-version-number must be <= 10000, got ${JSON.stringify(raw)}`);
+  }
+  return parsed;
+}
 
 /** The approved first slice covers levels 1–4 and is carried over unchanged. */
 const APPROVED_SLICE_LEVELS = 4;
@@ -361,7 +447,7 @@ function buildProposedAssessment(source: AtaLevelSource, contract: VideoProducti
   };
 }
 
-function buildPackage(): Json {
+function buildPackage(curriculumVersionNumber: number): Json {
   const editorialDocument = JSON.parse(readFileSync(EDITORIAL_SOURCE, "utf8")) as {
     levels: EditorialLevel[];
   };
@@ -438,7 +524,7 @@ function buildPackage(): Json {
     packageRevision: PACKAGE_REVISION,
     status: "draft",
     curriculumCode: "ata-v2",
-    curriculumVersionNumber: CURRICULUM_VERSION_NUMBER,
+    curriculumVersionNumber,
     curriculumTitle: "Alfa Trade Academy — программа 1–100",
     curriculumDescription:
       "Канонические 100 уровней и 20 модулей Alfa Trade Academy: структура, прогрессия, контрольные точки и разблокировки.",
@@ -657,8 +743,11 @@ function sha256(value: string): string {
 }
 
 function main(): void {
-  const args = new Set(process.argv.slice(2));
-  const pkg = buildPackage();
+  const argv = process.argv.slice(2);
+  const args = new Set(argv);
+  const curriculumVersionNumber = parseCurriculumVersionNumber(argv);
+  const output = outputPathFor(curriculumVersionNumber);
+  const pkg = buildPackage(curriculumVersionNumber);
   const serialized = serialize(pkg);
 
   // A generated production artifact must never carry a retired brand. Checked on
@@ -690,24 +779,31 @@ function main(): void {
   }
 
   if (args.has("--check")) {
-    const existing = readFileSync(OUTPUT, "utf8");
+    const existing = readFileSync(output, "utf8");
     if (existing !== serialized) {
-      console.error(`DRIFT: ${OUTPUT} does not match its inputs`);
+      console.error(`DRIFT: ${output} does not match its inputs`);
       console.error(`  checked-in sha256 ${sha256(existing)}`);
       console.error(`  rebuilt    sha256 ${sha256(serialized)}`);
       process.exitCode = 1;
       return;
     }
-    console.log(`ok ${OUTPUT} matches its inputs`);
+    console.log(`ok ${output} matches its inputs`);
   } else {
-    writeFileSync(OUTPUT, serialized);
-    console.log(`written ${OUTPUT}`);
+    writeFileSync(output, serialized);
+    console.log(`written ${output}`);
   }
 
   console.log(
     JSON.stringify(
       {
+        curriculumCode: pkg.curriculumCode,
+        curriculumVersionNumber,
+        path: path.relative(REPO_ROOT, output),
         fingerprint: validation.fingerprint,
+        // Audit-only, and never a substitute for `fingerprint`: the semantic
+        // payload with the intentional successor identity removed, so a reviewer
+        // can prove two versions carry the SAME educational product.
+        semanticEquivalenceDigest: calculateSemanticEquivalenceDigest(validation.package),
         sha256: sha256(serialized),
         bytes: Buffer.byteLength(serialized, "utf8"),
         status: pkg.status,
