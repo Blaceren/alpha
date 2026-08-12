@@ -259,8 +259,17 @@ async function main() {
     });
     const issues = await validateCurriculumResourceCompleteness(db, curriculum.id);
     assert.ok(
-      !issues.some((i) => i.reference === "level:3"),
+      !issues.some(
+        (i) => i.reference === "level:3" && (i.code.includes("ASSESSMENT") || i.code.includes("CONTENT")),
+      ),
       "a financial_checkpoint must never be asked for a content or assessment resource",
+    );
+    // It IS asked for the resource its OWN runtime needs. Package revision 2
+    // made a `LevelCheckpointRequirement` expressible, so a checkpoint without
+    // one is now a publication defect rather than an unreachable wish.
+    assert.deepEqual(
+      issues.filter((i) => i.reference === "level:3").map((i) => i.code),
+      ["LEVEL_CHECKPOINT_REQUIREMENT_MISSING"],
     );
   });
 

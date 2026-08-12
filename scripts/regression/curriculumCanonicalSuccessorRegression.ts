@@ -285,7 +285,10 @@ async function main() {
     for (const line of assignments) {
       assert.match(
         line,
-        /^versionNumber: (pkg\.curriculumVersionNumber|level\.[a-zA-Z]+\.versionNumber)/,
+        // A nested package path (`level.report.rubric.versionNumber`) is still
+        // the package declaring its own version; a local alias or an option is
+        // not, and neither matches.
+        /^versionNumber: (pkg\.curriculumVersionNumber|level(\.[a-zA-Z]+)+\.versionNumber)/,
         `unexpected version source: ${line}`,
       );
     }

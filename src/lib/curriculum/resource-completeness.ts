@@ -25,14 +25,28 @@
  *
  *   assessment_pass -> exactly one binding naming a runtime-valid published
  *                      assessment that belongs to this level and this version
+ *   report_approval -> a LevelReportBinding whose assignment and rubric both
+ *                      belong to this level/version and whose rubric is published
+ *   balance_check   -> a LevelCheckpointRequirement whose integrationCode is the
+ *                      level's own, with a positive integer threshold
  *   everything else -> no resource requirement here
  *
- * ONLY `assessment_pass` IS GATED, AND THAT IS A DELIBERATE LIMIT. The rule
- * enforced here is exactly the one the runtime already enforces: `assessment-
- * runtime` refuses a level whose binding is absent, foreign, or names a bank
- * that is not `published` with a `publishedAt`. So this gate adds no new product
- * rule — it moves an existing runtime requirement earlier, to the last moment
+ * EVERY RULE HERE MIRRORS ONE THE RUNTIME ALREADY ENFORCES, and none is a new
+ * product rule. `assessment-runtime` refuses a level whose binding is absent,
+ * foreign, or names a bank that is not `published` with a `publishedAt`.
+ * `report-submission` resolves the assignment and rubric through
+ * `LevelReportBinding` and refuses without one. `checkpoint-verification`
+ * returns `CHECKPOINT_REQUIREMENT_UNCONFIGURED` without a requirement row. All
+ * three move an existing runtime requirement earlier, to the last moment
  * something can still be done about it.
+ *
+ * THE REPORT AND CHECKPOINT RULES SHIPPED WITH THEIR MATERIALIZATION, IN ONE
+ * CHANGE, AND THAT PAIRING IS THE POINT. Before package revision 2 neither owner
+ * could exist: the package had no field for a rubric or a threshold, so adding
+ * these rules on their own would have made every version of this product
+ * unpublishable — a gate with no reachable passing state is a deadlock, not a
+ * safety property. The importer now materializes both from the package, so the
+ * gate has something to pass.
  *
  * `manual` and `mentor_review` levels are NOT required to carry content, because
  * nothing in the current contract requires it: `manual-completion` never reads a
@@ -54,6 +68,12 @@ import type { CurriculumValidationIssue } from "@/lib/curriculum/types";
 /** Completion methods whose level must carry a runtime-valid assessment. */
 const ASSESSMENT_BACKED = new Set(["assessment_pass"]);
 
+/** Completion methods whose level must carry a runtime-valid report owner. */
+const REPORT_BACKED = new Set(["report_approval"]);
+
+/** Completion methods whose level must carry a checkpoint requirement. */
+const CHECKPOINT_BACKED = new Set(["balance_check"]);
+
 export async function validateCurriculumResourceCompleteness(
   tx: Prisma.TransactionClient,
   curriculumVersionId: number,
@@ -66,9 +86,107 @@ export async function validateCurriculumResourceCompleteness(
   });
 
   for (const level of levels) {
+    const ref = `level:${level.levelNumber}`;
+
+    if (REPORT_BACKED.has(level.completionMethod)) {
+      const binding = await tx.levelReportBinding.findUnique({
+        where: { levelDefinitionId: level.id },
+      });
+      if (!binding) {
+        issues.push({
+          code: "LEVEL_REPORT_BINDING_MISSING",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) completes by report_approval but has no report binding`,
+        });
+        continue;
+      }
+      if (binding.curriculumVersionId !== curriculumVersionId) {
+        issues.push({
+          code: "LEVEL_REPORT_BINDING_FOREIGN",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) is bound to a report that belongs to another curriculum version`,
+        });
+        continue;
+      }
+      const assignment = await tx.reportAssignmentVersion.findUnique({
+        where: { id: binding.reportAssignmentVersionId },
+      });
+      if (
+        !assignment ||
+        assignment.levelDefinitionId !== level.id ||
+        assignment.curriculumVersionId !== curriculumVersionId
+      ) {
+        issues.push({
+          code: "LEVEL_REPORT_BINDING_FOREIGN",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) is bound to a report assignment that does not belong to it`,
+        });
+        continue;
+      }
+      const rubric = await tx.reportRubricVersion.findUnique({
+        where: { id: binding.reportRubricVersionId },
+      });
+      if (!rubric || rubric.reportAssignmentVersionId !== assignment.id) {
+        issues.push({
+          code: "LEVEL_REPORT_RUBRIC_FOREIGN",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) is bound to a rubric that does not belong to its report assignment`,
+        });
+      } else if (rubric.status !== "published" || !rubric.publishedAt) {
+        // A mentor reviews against a PUBLISHED rubric. An unpublished one can be
+        // bound and then leaves every submission unreviewable.
+        issues.push({
+          code: "LEVEL_REPORT_RUBRIC_NOT_PUBLISHED",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) is bound to rubric version ${rubric.versionNumber}, which is "${rubric.status}" — a review needs a published rubric`,
+        });
+      }
+      continue;
+    }
+
+    if (CHECKPOINT_BACKED.has(level.completionMethod)) {
+      const requirement = await tx.levelCheckpointRequirement.findUnique({
+        where: { levelDefinitionId: level.id },
+      });
+      if (!requirement) {
+        issues.push({
+          code: "LEVEL_CHECKPOINT_REQUIREMENT_MISSING",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) completes by balance_check but has no checkpoint requirement`,
+        });
+        continue;
+      }
+      // The requirement must name the level's OWN integration, which the level
+      // records in `featureUnlockCode` at import. A requirement pointing at
+      // another module's checkpoint would verify the wrong threshold.
+      if (level.featureUnlockCode && requirement.integrationCode !== level.featureUnlockCode) {
+        issues.push({
+          code: "LEVEL_CHECKPOINT_REQUIREMENT_FOREIGN",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) declares integration ${level.featureUnlockCode} but its requirement names ${requirement.integrationCode}`,
+        });
+        continue;
+      }
+      if (!Number.isSafeInteger(requirement.thresholdMinorUnits) || requirement.thresholdMinorUnits <= 0) {
+        issues.push({
+          code: "LEVEL_CHECKPOINT_THRESHOLD_INVALID",
+          entity: "level",
+          reference: ref,
+          message: `level ${level.levelNumber} (${level.stableCode}) has a non-positive checkpoint threshold`,
+        });
+      }
+      continue;
+    }
+
     if (!ASSESSMENT_BACKED.has(level.completionMethod)) continue;
 
-    const ref = `level:${level.levelNumber}`;
     const binding = await tx.levelResourceBinding.findUnique({
       where: { levelDefinitionId: level.id },
     });

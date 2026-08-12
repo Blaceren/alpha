@@ -14,11 +14,21 @@
  * machine marker. That keeps CV-1 free of a Prisma migration while still giving
  * idempotency and drift detection a durable anchor.
  *
- * Report levels: the assignment, its localizations and its fields are imported,
- * but `LevelReportBinding` is deliberately NOT created — that row requires a
- * `reportRubricVersionId`, and inventing rubric criteria would fabricate mentor
- * acceptance rules. Binding a report is therefore a follow-up once rubric
- * criteria are approved.
+ * Report levels: the assignment, its localizations and its fields are always
+ * imported. Its `LevelReportBinding` is created if — and ONLY if — the package
+ * declares the rubric to bind. The importer still never invents rubric criteria;
+ * what changed is that the package can now carry them (revision 2), so the
+ * binding is a copy of a declared product decision rather than a fabricated one.
+ * A package without a rubric imports exactly as it always did, and leaves a
+ * report level with no completion owner — which `resource-completeness.ts` then
+ * refuses to publish.
+ *
+ * Financial checkpoints: the same rule. `LevelCheckpointRequirement` is created
+ * from `gate.requirement` when the package declares it, and not at all when it
+ * does not. The importer reads no balance, calls no provider and writes no
+ * financial event: a requirement is product CONFIGURATION — which threshold, in
+ * which currency, for which integration — and verifying a learner against it is
+ * the checkpoint engine's job, not the importer's.
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { validateCurriculumPackage, type PackageIssue } from "@/lib/curriculum/package/validate";
@@ -62,6 +72,12 @@ export type ImportSummary = {
     reportLocalizations: number;
     reportFields: number;
     reportFieldLocalizations: number;
+    reportRubrics: number;
+    reportCriteria: number;
+    reportScaleOptions: number;
+    reportRejectionReasons: number;
+    reportBindings: number;
+    checkpointRequirements: number;
   };
   warnings: PackageIssue[];
   notes: string[];
@@ -106,6 +122,12 @@ function emptyCounts(): ImportSummary["counts"] {
     reportLocalizations: 0,
     reportFields: 0,
     reportFieldLocalizations: 0,
+    reportRubrics: 0,
+    reportCriteria: 0,
+    reportScaleOptions: 0,
+    reportRejectionReasons: 0,
+    reportBindings: 0,
+    checkpointRequirements: 0,
   };
 }
 
@@ -570,6 +592,147 @@ async function writePackage(
             counts.reportFieldLocalizations += 1;
           }
         }
+
+        /* ------------------- report rubric + binding ------------------- */
+        /*
+         * The completion owner for a `report_approval` level, materialized here
+         * because here is the only place it CAN be.
+         *
+         * `publishReportRubric` and `setLevelReportBinding` both load the level
+         * through `assertParentDraft`, so the window in which a report can be
+         * given an owner closes the moment the curriculum is published — and
+         * there is no unpublish. `ata-v2@v3` went through that window with its
+         * level 3 unbound, which is why level 3 is where the learner journey
+         * stops today. Creating the binding inside the import transaction is the
+         * same fix, and for the same reason, as the assessment binding above.
+         *
+         * Every value below is copied from the package. The importer chooses
+         * nothing: not the criteria, not their order, not the scale, not which
+         * rubric a level gets. A package with no rubric creates none of these
+         * rows and no binding.
+         */
+        if (level.report.rubric) {
+          const rubricSource = level.report.rubric;
+          const rubric = await tx.reportRubricVersion.create({
+            data: {
+              reportAssignmentVersionId: assignment.id,
+              // Spelled out rather than through the local alias: the successor
+              // regression proves at SOURCE level that every version this
+              // importer writes is read off the package it was handed.
+              versionNumber: level.report.rubric.versionNumber,
+              status: rubricSource.status,
+              publishedAt: rubricSource.status === "published" ? effectiveAt : null,
+            },
+          });
+          counts.reportRubrics += 1;
+
+          for (const criterion of rubricSource.criteria) {
+            const criterionRow = await tx.reportRubricCriterion.create({
+              data: {
+                reportRubricVersionId: rubric.id,
+                stableKey: criterion.stableKey,
+                categoryCode: criterion.categoryCode,
+                sortOrder: criterion.sortOrder,
+                commentRequired: criterion.commentRequired,
+              },
+            });
+            counts.reportCriteria += 1;
+            for (const localization of criterion.localizations) {
+              await tx.reportRubricCriterionLocalization.create({
+                data: {
+                  reportRubricCriterionId: criterionRow.id,
+                  locale: localization.locale,
+                  title: localization.title,
+                  description: localization.description,
+                },
+              });
+            }
+          }
+
+          for (const option of rubricSource.scaleOptions) {
+            const optionRow = await tx.reportRubricScaleOption.create({
+              data: {
+                reportRubricVersionId: rubric.id,
+                stableKey: option.stableKey,
+                ordinal: option.ordinal,
+              },
+            });
+            counts.reportScaleOptions += 1;
+            for (const localization of option.localizations) {
+              await tx.reportRubricScaleOptionLocalization.create({
+                data: {
+                  reportRubricScaleOptionId: optionRow.id,
+                  locale: localization.locale,
+                  label: localization.label,
+                  description: localization.description,
+                },
+              });
+            }
+          }
+
+          for (const reason of rubricSource.rejectionReasons) {
+            const reasonRow = await tx.reportRejectionReason.create({
+              data: {
+                reportRubricVersionId: rubric.id,
+                stableKey: reason.stableKey,
+                sortOrder: reason.sortOrder,
+                active: reason.active,
+              },
+            });
+            counts.reportRejectionReasons += 1;
+            for (const localization of reason.localizations) {
+              await tx.reportRejectionReasonLocalization.create({
+                data: {
+                  reportRejectionReasonId: reasonRow.id,
+                  locale: localization.locale,
+                  title: localization.title,
+                  guidance: localization.guidance,
+                },
+              });
+            }
+          }
+
+          // `LevelReportBinding` is unique per level, and the level was created
+          // in this transaction, so this is a create and never an upsert: a
+          // second binding for the same level is a constraint violation that
+          // must roll the import back rather than quietly win.
+          await tx.levelReportBinding.create({
+            data: {
+              levelDefinitionId: levelRow.id,
+              curriculumVersionId: version.id,
+              reportAssignmentVersionId: assignment.id,
+              reportRubricVersionId: rubric.id,
+              revision: 0,
+            },
+          });
+          counts.reportBindings += 1;
+        }
+      }
+
+      /* ---------------------- checkpoint requirement ---------------------- */
+      /*
+       * The completion owner for a `balance_check` level.
+       *
+       * `integrationCode` is taken from the GATE, not restated by the
+       * requirement, so the two can never name different integrations for the
+       * same level — `checkpoint-verification.ts` resolves the requirement by
+       * level and then compares its integration code with the gate's.
+       *
+       * This writes CONFIGURATION and nothing else. No balance is read, no
+       * Pocket call is made, no `ExchangeAccount`, `Checkpoint`,
+       * `CheckpointVerificationAttempt` or financial event row is touched, and
+       * no amount is attributed to any learner.
+       */
+      if (level.gate?.requirement) {
+        await tx.levelCheckpointRequirement.create({
+          data: {
+            levelDefinitionId: levelRow.id,
+            integrationCode: level.gate.integrationCode,
+            thresholdCurrency: level.gate.requirement.thresholdCurrency,
+            thresholdMinorUnits: level.gate.requirement.thresholdMinorUnits,
+          },
+        });
+        counts.checkpointRequirements += 1;
       }
     }
   }
@@ -616,9 +779,20 @@ export async function importCurriculumPackage(input: unknown, options: ImportOpt
   }
 
   const notes: string[] = [];
-  if (pkg.modules.some((m) => m.levels.some((l) => l.report !== null))) {
+  const unownedReportLevels = pkg.modules.flatMap((m) =>
+    m.levels.filter((l) => l.report !== null && !l.report.rubric),
+  );
+  if (unownedReportLevels.length > 0) {
     notes.push(
       "report assignment imported without LevelReportBinding: binding requires an approved reportRubricVersion",
+    );
+  }
+  const unownedCheckpointLevels = pkg.modules.flatMap((m) =>
+    m.levels.filter((l) => l.gate?.completionSource === "financial_checkpoint" && !l.gate.requirement),
+  );
+  if (unownedCheckpointLevels.length > 0) {
+    notes.push(
+      `financial checkpoints imported without LevelCheckpointRequirement: ${unownedCheckpointLevels.length} level(s) will fail verification with CHECKPOINT_REQUIREMENT_UNCONFIGURED`,
     );
   }
   const conditionalFieldCount = pkg.modules.reduce(
