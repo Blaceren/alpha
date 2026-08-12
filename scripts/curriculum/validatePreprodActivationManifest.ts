@@ -83,7 +83,9 @@ function main(): void {
       `releases        : backend=${evidence.deployedReleases.backend} academy=${evidence.deployedReleases.academy} crm=${evidence.deployedReleases.crm}`,
       `observed state  : ${evidence.observedState}  ->  ${evidence.disposition}`,
       `content plan    : ${evidence.contentActivationPlanChecked ? "recomputed and matched" : "n/a before the overlay stage"}`,
-      `editorial baseline checked: ${evidence.editorialBaselineChecked}   historical principals absent: ${evidence.historicalPrincipalsAbsent}`,
+      `editorial baseline checked: ${evidence.editorialBaselineChecked}   historical principals: ${
+        evidence.historicalPrincipalDispositions.map((p) => `${p.ref}=${p.disposition}`).join(", ") || "not checked at this stage"
+      }`,
       "",
       "NOTHING WAS MUTATED. This command validates only.",
     ].join("\n"),

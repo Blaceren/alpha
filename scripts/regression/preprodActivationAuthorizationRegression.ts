@@ -1206,10 +1206,17 @@ async function main(): Promise<void> {
     }
   });
 
-  await check("an overlay principal that already exists refuses the overlay", () => {
+  /*
+   * CORRECTION-5 replaced "the principal must be absent" with "absent-and-creatable
+   * or present-and-exactly-compatible". Both halves are pinned here, at the
+   * authorization surface, against the real fixture manifest and overlay.
+   */
+  await check("an INCOMPATIBLE existing overlay principal refuses the overlay", () => {
     const before = snapshot(RUN_DB);
     try {
       const ref = String((baseManifest.json.historicalPrincipalRefs as string[])[0]);
+      // Loginable, and carrying none of the declared staff identity: an account
+      // that merely squats the reserved address is not the historical principal.
       exec(
         RUN_DB,
         `INSERT INTO "User" ("email","name","passwordHash","role","status","level","xp","createdAt","updatedAt")
@@ -1219,6 +1226,52 @@ async function main(): Promise<void> {
     } finally {
       restore(RUN_DB, before);
     }
+  });
+
+  /*
+   * The POSITIVE half — an exactly compatible existing principal being reused —
+   * is proved at the operator surface instead of here. This suite's manifest is
+   * rehearsed against a fixture that has no principals at all, so its reviewed
+   * `postStructural` state pins `userRowCount = 0`; inserting two would refuse on
+   * the state chain before the principal check was ever reached, which would
+   * test the fixture rather than the contract. A live-shaped target carries the
+   * principals at entry, so every reviewed state carries them too.
+   * See `curriculum-overlay-principal-reuse` for the classifier, and
+   * `12_OPERATOR_SURFACE_PROOF.md` for the end-to-end run.
+   */
+  await check("the overlay may not name a principal the manifest never reviewed", () => {
+    const tampered = JSON.parse(fs.readFileSync(OVERLAY_PATH, "utf8")) as {
+      principals: Array<Record<string, unknown>>;
+    };
+    tampered.principals.push({
+      ref: "not.reviewed@fixture.invalid",
+      displayName: "Unreviewed",
+      kind: "process",
+      role: "user",
+      staffRole: null,
+      provisionIfMissing: true,
+    });
+    const tamperedPath = path.join(MANIFEST_DIR, "overlay-extra-principal.json");
+    fs.writeFileSync(tamperedPath, JSON.stringify(tampered), { mode: 0o600 });
+    // The file digest is checked first, so the manifest is re-pointed at the
+    // tampered file: this isolates the principal-set check from the byte pin.
+    const draft = JSON.parse(JSON.stringify(baseManifest.json)) as ManifestDraft;
+    const facts = readOverlayFacts(tamperedPath);
+    (draft.editorialOverlay as Record<string, unknown>).path = tamperedPath;
+    (draft.editorialOverlay as Record<string, unknown>).fileSha256 = facts.fileSha256;
+    (draft.editorialOverlay as Record<string, unknown>).fingerprint = facts.fingerprint;
+    const json = `${JSON.stringify(draft, null, 2)}\n`;
+    const manifestPath = path.join(MANIFEST_DIR, "overlay-extra-principal-manifest.json");
+    fs.writeFileSync(manifestPath, json, { mode: 0o600 });
+    refuses("OVERLAY_PROVENANCE_MISMATCH", () =>
+      assertPreprodActivationAuthorization(
+        authorizationInput({ path: manifestPath, sha256: hashManifestBytes(json), json: draft }, {
+          operation: "EDITORIAL_OVERLAY",
+          stage: "EDITORIAL_OVERLAY",
+          overlay: facts,
+        }),
+      ),
+    );
   });
 
   await check("POSITIVE OVERLAY IMPORT: the full chain runs against the real artifact", async () => {

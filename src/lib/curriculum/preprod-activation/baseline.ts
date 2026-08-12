@@ -39,7 +39,7 @@ import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import { PreprodActivationError } from "./errors";
-import { resolvePrincipalRowSets } from "./semantic-state";
+import { canonicalPrincipalIdentity, resolvePrincipalRowSets } from "./semantic-state";
 
 export type CurriculumVersionIdentity = {
   code: string;
@@ -313,14 +313,33 @@ export function assertEditorialBaselineMatches(
 }
 
 /**
- * The overlay's historical principals must not already exist.
+ * Where each of the overlay's historical principals stands on the target.
  *
  * The overlay carries authorship and review evidence attributed to G2 historical
- * identities. On a first activation the structural import creates none of them,
- * so finding one means either a previous overlay run got partway through or
- * somebody provisioned an account with a reserved address. Both are states this
- * authorization has no basis to interpret, and re-running an overlay over the
- * first would attach fresh evidence to a half-built principal set.
+ * identities. On a FIRST activation the structural import creates none of them,
+ * so this used to require absence outright.
+ *
+ * CORRECTION-5. That is right for a first activation and wrong for a successor.
+ * `User` and `StaffProfile` carry no `curriculumVersionId`: a historical
+ * principal is an ENVIRONMENT identity, not a curriculum-version-owned row, and
+ * `User.email` is unique — so publishing a successor curriculum into an
+ * environment a previous overlay has already provisioned MUST reuse the same
+ * identity rather than mint a second account. Requiring absence made every
+ * successor overlay permanently unauthorizable, while the importer had always
+ * handled the case correctly.
+ *
+ * So absence is no longer the question. The question is which of three states
+ * each declared principal is in, and the answer is fail-closed: anything that is
+ * not "absent and creatable" or "present and exactly compatible" is refused.
+ *
+ * THE PREDICATE IS THE IMPORTER'S, NOT A SECOND OPINION. `editorial-overlay/
+ * import.ts` already decides compatibility on `role`, the `StaffProfile`'s
+ * `staffRole`, and — for a `process` identity — that the account cannot log in.
+ * Re-deriving those rules here would be a second equivalence rule that could
+ * drift from the first, which is the defect CORRECTION-3 closed for identity
+ * folding. They are restated in one place, with the same fields and the same
+ * refusal reasons, and `curriculum-overlay-principal-reuse` pins that the two
+ * agree case by case.
  */
 export function capturePrincipalPresence(
   absolutePath: string,
@@ -350,21 +369,154 @@ export function capturePrincipalPresence(
   }
 }
 
-export function assertHistoricalPrincipalsAbsent(
-  present: string[],
-  rowCountByIdentity: Record<string, number> = {},
+/** What an overlay declares about one historical principal. */
+export type HistoricalPrincipalDeclaration = {
+  readonly ref: string;
+  readonly kind: "process" | "human";
+  readonly role: string;
+  readonly staffRole: string | null;
+  readonly provisionIfMissing: boolean;
+};
+
+/**
+ * `CREATE` the overlay may mint it · `REUSE_EXACT` an identical identity already
+ * exists · `REFUSE_CONFLICT` anything else. There is no fourth answer, and no
+ * answer repairs the target.
+ */
+export type HistoricalPrincipalDisposition = "CREATE" | "REUSE_EXACT" | "REFUSE_CONFLICT";
+
+export type HistoricalPrincipalClassification = {
+  readonly ref: string;
+  readonly identity: string;
+  readonly disposition: HistoricalPrincipalDisposition;
+  /** The row a `REUSE_EXACT` will bind to, or the single row a conflict is about. */
+  readonly matchedUserId: number | null;
+  readonly rowCount: number;
+  readonly conflicts: readonly string[];
+};
+
+export function classifyHistoricalPrincipals(
+  absolutePath: string,
+  declared: readonly HistoricalPrincipalDeclaration[],
+): HistoricalPrincipalClassification[] {
+  if (declared.length === 0) return [];
+  const db = open(absolutePath);
+  try {
+    const sets = resolvePrincipalRowSets(
+      db,
+      declared.map((principal) => principal.ref),
+    );
+    const out: HistoricalPrincipalClassification[] = [];
+
+    for (const principal of declared) {
+      const identity = canonicalPrincipalIdentity(principal.ref);
+      const userIds = sets.userIdsByIdentity.get(identity) ?? [];
+      const base = { ref: principal.ref, identity, rowCount: userIds.length };
+
+      if (userIds.length === 0) {
+        // Absent. Creatable only if the ARTIFACT says so; the run-time
+        // `--allow-principal-provisioning` switch is the importer's to check.
+        out.push(
+          principal.provisionIfMissing
+            ? { ...base, disposition: "CREATE", matchedUserId: null, conflicts: [] }
+            : {
+                ...base,
+                disposition: "REFUSE_CONFLICT",
+                matchedUserId: null,
+                conflicts: ["principal is absent and this overlay does not permit provisioning it"],
+              },
+        );
+        continue;
+      }
+
+      if (userIds.length > 1) {
+        // AMBIGUITY IS A REFUSAL, NOT A CHOICE. `User.email` is unique only
+        // case-sensitively, so one canonical identity can hold several rows.
+        // Picking one would be guessing which account authored 78 reviews.
+        out.push({
+          ...base,
+          disposition: "REFUSE_CONFLICT",
+          matchedUserId: null,
+          conflicts: [
+            `${userIds.length} accounts share this canonical identity (ids ${userIds.join(", ")}); the principal a reviewed approval belongs to cannot be guessed`,
+          ],
+        });
+        continue;
+      }
+
+      const [userId] = userIds;
+      const row = db
+        .prepare('SELECT "role" AS role, "status" AS status FROM "User" WHERE "id" = ?')
+        .get(userId) as { role?: unknown; status?: unknown } | undefined;
+      const staff = db
+        .prepare('SELECT "staffRole" AS staffRole FROM "StaffProfile" WHERE "userId" = ?')
+        .all(userId) as Array<{ staffRole?: unknown }>;
+
+      const conflicts: string[] = [];
+      const targetRole = typeof row?.role === "string" ? row.role : null;
+      const targetStatus = typeof row?.status === "string" ? row.status : null;
+
+      if (staff.length > 1) {
+        conflicts.push(`the account holds ${staff.length} StaffProfile rows; exactly one is expected`);
+      }
+      const targetStaffRole = staff.length === 1 && typeof staff[0].staffRole === "string" ? staff[0].staffRole : null;
+
+      // The importer's three rules, restated. Address equality is not identity
+      // equality: an account that reuses the address with a different role is a
+      // DIFFERENT principal, and binding a reviewer's approvals to it is exactly
+      // the misattribution the design exists to prevent.
+      if (targetStaffRole !== principal.staffRole) {
+        conflicts.push(`staffRole ${targetStaffRole ?? "<none>"} != ${principal.staffRole ?? "<none>"}`);
+      }
+      if (targetRole !== principal.role) {
+        conflicts.push(`role ${targetRole ?? "<none>"} != ${principal.role}`);
+      }
+      // A historical PROCESS identity names a role in a review that must never
+      // be able to act. An account at the same address that can still log in is
+      // a different thing entirely — very possibly a real person. Refuse; never
+      // demote the account to make it fit.
+      if (principal.kind === "process" && targetStatus !== "blocked") {
+        conflicts.push(
+          `target account is ${targetStatus ?? "<unknown>"} and therefore loginable, but the overlay declares a non-loginable historical process identity`,
+        );
+      }
+
+      out.push({
+        ...base,
+        disposition: conflicts.length === 0 ? "REUSE_EXACT" : "REFUSE_CONFLICT",
+        matchedUserId: userId,
+        conflicts,
+      });
+    }
+    return out;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Refuse the activation if any declared principal is in a state this
+ * authorization has no basis to interpret.
+ *
+ * The error code is unchanged on purpose. `UNEXPECTED_HISTORICAL_PRINCIPAL` still
+ * means "the target's principal state is not what the reviewed overlay
+ * describes" — what changed is that an exactly compatible existing identity is
+ * no longer one of those states.
+ */
+export function assertHistoricalPrincipalsAuthorized(
+  classifications: readonly HistoricalPrincipalClassification[],
 ): void {
-  if (present.length === 0) return;
-  // CORRECTION-3: report the row COUNT per identity, not just presence. A
-  // canonical identity class can hold more than one row — `User.email` is unique
-  // case-sensitively — and "2 rows on this address" is the sentence an operator
-  // needs to see.
-  const detail = present
-    .map((identity) => `${identity} (${rowCountByIdentity[identity] ?? 1} row(s))`)
+  const refused = classifications.filter((entry) => entry.disposition === "REFUSE_CONFLICT");
+  if (refused.length === 0) return;
+  const detail = refused
+    .map((entry) => `${entry.identity} (${entry.rowCount} row(s): ${entry.conflicts.join("; ")})`)
     .join(", ");
   throw new PreprodActivationError(
     "UNEXPECTED_HISTORICAL_PRINCIPAL",
-    `the target already contains ${present.length} of the overlay's historical principal(s): ${detail}. A first activation imports into a target that has none; this database has been through a previous overlay run or has accounts on reserved addresses.`,
-    { expected: "0 present", actual: `${present.length} present` },
+    `${refused.length} of the overlay's historical principal(s) are in a state this activation cannot interpret: ${detail}. An exactly compatible existing identity is reused; anything else is refused rather than repaired.`,
+    {
+      expected: "each declared principal absent-and-creatable, or present-and-exactly-compatible",
+      actual: `${refused.length} in conflict`,
+    },
   );
 }

@@ -36,7 +36,7 @@ import { z } from "zod";
 
 import { PREPROD_RISK_POLICY } from "./backup";
 import { CONTENT_ACTIVATION_MODES } from "./content-plan";
-import { SEMANTIC_STATE_VERSION } from "./semantic-state";
+import { canonicalPrincipalIdentity, SEMANTIC_STATE_VERSION } from "./semantic-state";
 import { PreprodActivationError, requireEqual } from "./errors";
 import { ACTIVATION_STAGES } from "./stages";
 
@@ -521,6 +521,24 @@ export type OverlayFacts = {
   blueprintSourceDocumentSha256: string;
   curriculumCode: string;
   curriculumVersionNumber: number;
+  /**
+   * CORRECTION-5. What the overlay declares about each historical principal.
+   *
+   * The manifest pins the REFS (`historicalPrincipalRefs`); deciding whether an
+   * existing account at one of those addresses is the SAME principal needs the
+   * declared `role`, `staffRole` and `kind` as well. They come from the overlay,
+   * whose bytes this manifest already pins by `editorialOverlay.fileSha256` —
+   * so this is a wider read of an artifact that was already trusted, not a new
+   * trusted input, and the manifest schema is unchanged.
+   */
+  principals: ReadonlyArray<{
+    ref: string;
+    displayName: string;
+    kind: "process" | "human";
+    role: string;
+    staffRole: string | null;
+    provisionIfMissing: boolean;
+  }>;
 };
 
 /**
@@ -617,6 +635,39 @@ export function assertOverlayMatchesManifest(
     "overlay source Backend tree against the accepted transport baseline",
     manifest.acceptedBackend.transportBaselineTree,
     actual.sourceBackendTree,
+  );
+}
+
+/**
+ * CORRECTION-5. The overlay may only speak for the reviewed principal set.
+ *
+ * `assertOverlayMatchesManifest` proves the overlay is the reviewed FILE. This
+ * proves its principal declarations are the reviewed SET — the same canonical
+ * identities the manifest recorded at preparation time, no more and no fewer.
+ *
+ * Without it, the classification below would take `role`, `staffRole` and `kind`
+ * from an artifact whose principal list nothing had compared, and an overlay
+ * that legitimately matched every digest could still name a principal the review
+ * never saw. Compared as canonical identity sets, using the same folding rule as
+ * the fence and the fingerprint.
+ */
+export function assertOverlayPrincipalsAreReviewed(
+  reviewedRefs: readonly string[],
+  declared: ReadonlyArray<{ ref: string }>,
+): void {
+  const fold = (refs: readonly string[]): string[] =>
+    [...new Set(refs.map(canonicalPrincipalIdentity).filter((ref) => ref.length > 0))].sort();
+  const expected = fold(reviewedRefs);
+  const actual = fold(declared.map((principal) => principal.ref));
+  if (expected.length === actual.length && expected.every((ref, index) => ref === actual[index])) return;
+  const missing = expected.filter((ref) => !actual.includes(ref));
+  const extra = actual.filter((ref) => !expected.includes(ref));
+  throw new PreprodActivationError(
+    "OVERLAY_PROVENANCE_MISMATCH",
+    `the overlay declares a different historical principal set than the manifest reviewed${
+      missing.length > 0 ? `; missing ${missing.join(", ")}` : ""
+    }${extra.length > 0 ? `; unreviewed ${extra.join(", ")}` : ""}`,
+    { expected: expected.join(", "), actual: actual.join(", ") },
   );
 }
 

@@ -125,5 +125,25 @@ export function readOverlayFacts(overlayPath: string): OverlayFacts {
     blueprintSourceDocumentSha256: overlay.binding.blueprintSourceDocumentSha256,
     curriculumCode: overlay.binding.curriculumCode,
     curriculumVersionNumber: overlay.binding.curriculumVersionNumber,
+    /*
+     * CORRECTION-5. The declared historical principals, not merely their
+     * addresses.
+     *
+     * Authorization has to decide whether an EXISTING account at a declared
+     * address is the same principal or a different one, and that question is
+     * answered by `role`, `staffRole` and `kind` — which the manifest's
+     * `historicalPrincipalRefs` does not carry. They are read from the overlay
+     * rather than added to the manifest because the overlay is already pinned by
+     * `editorialOverlay.fileSha256`, which `assertOverlayMatchesManifest` checks
+     * before any of this is consulted. No new trust, and no new manifest field.
+     */
+    principals: overlay.principals.map((principal) => ({
+      ref: principal.ref,
+      displayName: principal.displayName,
+      kind: principal.kind,
+      role: principal.role,
+      staffRole: principal.staffRole,
+      provisionIfMissing: principal.provisionIfMissing,
+    })),
   };
 }

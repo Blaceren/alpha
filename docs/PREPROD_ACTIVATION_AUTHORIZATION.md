@@ -384,6 +384,29 @@ Ownership without projection would have made the manifest preparable while leavi
 data the successor exists to deliver unmeasured. `test:regression:curriculum-progression-owner-projection`
 pins both halves.
 
+**Historical principals: reuse is a decision, not a default.** A historical editorial principal
+is an ENVIRONMENT identity — `User` and `StaffProfile` carry no `curriculumVersionId`, and
+`User.email` is unique — so a successor overlay published into an environment a previous overlay
+already provisioned must bind to the same account. Authorization used to require those identities
+to be ABSENT, which is right for a first activation and makes every successor permanently
+unauthorizable. Each declared principal is now classified into exactly one of:
+
+| disposition | when | what the importer then does |
+| --- | --- | --- |
+| `CREATE` | no account in the canonical identity class, and the overlay declares `provisionIfMissing` | provisions it once, blocked and non-loginable |
+| `REUSE_EXACT` | exactly one account, matching on `role`, the `StaffProfile`'s `staffRole`, and — for a `process` identity — being non-loginable | binds to that account; creates nothing |
+| `REFUSE_CONFLICT` | anything else | never runs: no capability is issued |
+
+The predicate is the overlay importer's own, restated in one place rather than re-derived, and
+`curriculum-overlay-principal-reuse` fails if the two ever diverge. Refused states include a
+different `role`, a different `staffRole`, a missing StaffProfile, an account that can still log
+in where a process identity is declared, an absent principal the overlay may not provision, and
+more than one account sharing a canonical identity — ambiguity is refused rather than resolved,
+because `User.email` is unique only case-sensitively. Nothing is repaired to fit: no demotion, no
+elevation, no merge. The overlay's declared principal set is additionally compared against the
+manifest's reviewed `historicalPrincipalRefs`, so a validly signed overlay cannot introduce a
+principal the review never saw.
+
 ### Resume policy
 
 This is **wired**, not described. `decideStageDisposition` runs on the authorization path and

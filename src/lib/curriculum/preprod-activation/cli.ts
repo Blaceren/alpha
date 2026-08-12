@@ -227,6 +227,7 @@ export function describeAuthorization(evidence: AuthorizationEvidence): Record<s
     flagBaselineMatched: evidence.flagBaselineMatched,
     contentActivationPlanChecked: evidence.contentActivationPlanChecked,
     editorialBaselineChecked: evidence.editorialBaselineChecked,
-    historicalPrincipalsAbsent: evidence.historicalPrincipalsAbsent,
+    historicalPrincipalsChecked: evidence.historicalPrincipalsChecked,
+    historicalPrincipalDispositions: evidence.historicalPrincipalDispositions,
   };
 }

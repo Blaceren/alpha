@@ -42,6 +42,7 @@
     "test:regression:curriculum-definitions-api": "tsx scripts/regression/curriculumDefinitionsAdminApiRegression.ts",
     "test:regression:curriculum-upgrade": "tsx scripts/regression/curriculumUpgradeCompatibilityRegression.ts",
     "test:regression:curriculum-phase1": "tsx scripts/regression/curriculumPhase1Gate.ts",
+    "test:regression:curriculum-overlay-principal-reuse": "tsx scripts/regression/curriculumOverlayPrincipalReuseRegression.ts",
     "test:regression:curriculum-enrollment-schema": "tsx scripts/regression/curriculumEnrollmentSchemaRegression.ts",
     "test:regression:curriculum-enrollment-command": "tsx scripts/regression/curriculumEnrollmentCommandRegression.ts",
     "test:regression:curriculum-level-state": "tsx scripts/regression/curriculumLevelStateRegression.ts",

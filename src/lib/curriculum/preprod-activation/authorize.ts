@@ -49,11 +49,12 @@ import {
 } from "./backup";
 import {
   assertEditorialBaselineMatches,
-  assertHistoricalPrincipalsAbsent,
+  assertHistoricalPrincipalsAuthorized,
+  classifyHistoricalPrincipals,
+  type HistoricalPrincipalDisposition,
   assertTargetCurriculumAbsent,
   captureCurriculumStartingState,
   captureEditorialBaseline,
-  capturePrincipalPresence,
 } from "./baseline";
 import {
   assertContentActivationPlanMatches,
@@ -70,6 +71,7 @@ import {
 import {
   assertAcceptedProductCheckpoint,
   assertOverlayMatchesManifest,
+  assertOverlayPrincipalsAreReviewed,
   assertStructuralPackageMatchesManifest,
   parseActivationManifestFile,
   type OverlayFacts,
@@ -146,7 +148,14 @@ export type AuthorizationEvidence = {
   flagBaselineMatched: boolean;
   contentActivationPlanChecked: boolean;
   editorialBaselineChecked: boolean;
-  historicalPrincipalsAbsent: boolean;
+  /** True once the overlay stage has classified every declared principal. */
+  historicalPrincipalsChecked: boolean;
+  /** What was decided for each, so an operator can see reuse rather than infer it. */
+  historicalPrincipalDispositions: ReadonlyArray<{
+    ref: string;
+    disposition: HistoricalPrincipalDisposition;
+    matchedUserId: number | null;
+  }>;
   /** Absent when the disposition is ALREADY_COMPLETE: nothing is authorized. */
   grant: PreprodActivationGrant | null;
 };
@@ -253,6 +262,9 @@ export function assertPreprodActivationAuthorization(
   // ---- 7. the reviewed inputs.
   assertAcceptedProductCheckpoint(manifest, readCheckpointFacts(manifest.acceptedProduct.checkpointPath));
   assertStructuralPackageMatchesManifest(manifest, input.structuralPackage);
+  // Narrowed once, here, where its presence is proved — step 10 needs the
+  // overlay's principal declarations and cannot re-derive that proof.
+  let overlayFacts: OverlayFacts | null = null;
   if (input.stage === "EDITORIAL_OVERLAY") {
     if (!input.overlay) {
       throw new PreprodActivationError(
@@ -261,6 +273,7 @@ export function assertPreprodActivationAuthorization(
       );
     }
     assertOverlayMatchesManifest(manifest, input.overlay);
+    overlayFacts = input.overlay;
   }
 
   // ---- 8. the environment around the database.
@@ -302,7 +315,8 @@ export function assertPreprodActivationAuthorization(
   // exist at the entry lineage, and a stage-ordering refusal is the right answer
   // there rather than an unreadable-table error.
   let editorialBaselineChecked = false;
-  let historicalPrincipalsAbsent = false;
+  let historicalPrincipalsChecked = false;
+  let historicalPrincipalDispositions: AuthorizationEvidence["historicalPrincipalDispositions"] = [];
   let contentActivationPlanChecked = false;
 
   const nearPostStructural =
@@ -320,9 +334,27 @@ export function assertPreprodActivationAuthorization(
     );
     editorialBaselineChecked = true;
 
-    const principals = capturePrincipalPresence(target.canonicalPath, manifest.historicalPrincipalRefs);
-    assertHistoricalPrincipalsAbsent(principals.present, principals.rowCountByIdentity);
-    historicalPrincipalsAbsent = true;
+    /*
+     * CORRECTION-5. The overlay may only speak for the principal set the
+     * manifest reviewed.
+     *
+     * The declarations used below come from the overlay file. Its bytes are
+     * already pinned (`assertOverlayMatchesManifest`, step 7), but pinning the
+     * bytes does not by itself say the reviewed principal SET is the one being
+     * asked for — so the refs are compared against the manifest's own list
+     * before any of them is classified. A swapped-but-validly-signed overlay
+     * cannot smuggle a principal past the review this way.
+     */
+    assertOverlayPrincipalsAreReviewed(manifest.historicalPrincipalRefs, overlayFacts!.principals);
+
+    const principals = classifyHistoricalPrincipals(target.canonicalPath, overlayFacts!.principals);
+    assertHistoricalPrincipalsAuthorized(principals);
+    historicalPrincipalDispositions = principals.map((entry) => ({
+      ref: entry.ref,
+      disposition: entry.disposition,
+      matchedUserId: entry.matchedUserId,
+    }));
+    historicalPrincipalsChecked = true;
   }
 
   // ---- 11. and then the state chain itself, which is the authority.
@@ -369,7 +401,8 @@ export function assertPreprodActivationAuthorization(
     flagBaselineMatched: true,
     contentActivationPlanChecked,
     editorialBaselineChecked,
-    historicalPrincipalsAbsent,
+    historicalPrincipalsChecked,
+    historicalPrincipalDispositions,
   };
 
   // ---- 12. an already-completed stage gets evidence and NO capability.
