@@ -81,6 +81,31 @@ export type AtaCheckpointSource = {
   readonly levelNumber: number;
   /** Minimum REAL Pocket balance. Demo does not count. */
   readonly thresholdUsd: number;
+  /**
+   * The SAME threshold in the units the runtime requirement actually stores.
+   *
+   * `LevelCheckpointRequirement` has no dollars column: it has
+   * `thresholdCurrency` + `thresholdMinorUnits`, both NOT NULL, and
+   * `checkpoint-verification.ts` compares integers. `thresholdUsd` alone could
+   * therefore never reach the database, which is why the 20 checkpoints have
+   * had no requirement row and every verification returned
+   * `CHECKPOINT_REQUIREMENT_UNCONFIGURED`.
+   *
+   * Written as an EXPLICIT LITERAL per row rather than computed from
+   * `thresholdUsd`, because a threshold a learner's money is measured against
+   * must be readable in the source it is approved in — not the output of an
+   * expression. `assertCheckpointRowsConsistent` below then proves the two
+   * columns still agree, so a typo is a build failure rather than a wrong gate.
+   *
+   * The convention is the platform's existing one and is not invented here:
+   * `analytics/decimal.ts::AMOUNT_SCALE = 2` for Pocket amounts, the accepted
+   * L4 requirement live on PREPROD (`USD`, `5000`), and
+   * `curriculum/candidates/ata-v2-checkpoint-requirement.rev4-candidate.json`
+   * ("5000 minor units = USD 50.00") all say the same thing.
+   */
+  readonly thresholdMinorUnits: number;
+  /** ISO-4217. `LevelCheckpointRequirement` accepts USD and nothing else. */
+  readonly thresholdCurrency: "USD";
   readonly rankCode: string;
   /** L4 is the one checkpoint that releases no tool. */
   readonly toolCode: string | null;
@@ -222,32 +247,74 @@ const LEVEL_ROWS: ReadonlyArray<
 ];
 
 /* ------------------------------------------------------------------ *
- * Rows: [levelNumber, thresholdUsd, rankCode, toolCode, channelCode]
+ * Rows: [levelNumber, thresholdUsd, thresholdMinorUnits, rankCode,
+ *        toolCode, channelCode]
+ *
+ * The dollar column and the minor-unit column are the SAME approved threshold
+ * written twice, deliberately. Every one of the 20 values agrees, character for
+ * character, with four independent accepted sources:
+ *
+ *   src/lib/curriculum/product-ata-100.ts   this table (thresholdUsd)
+ *   academy/src/data/curriculum/fixture.ts  LEVEL_ROWS «Контрольная точка $N»
+ *   academy/les-prog.txt                    the canonical product document
+ *   curriculum/packages/ata-v2-canonical-100*.json   the level titles
+ *
+ * so no value here is a new product decision. What IS new is that the threshold
+ * can now reach `LevelCheckpointRequirement`, which stores integer minor units
+ * and no dollars.
  * ------------------------------------------------------------------ */
 const CHECKPOINT_ROWS: ReadonlyArray<
-  readonly [number, number, string, string | null, string | null]
+  readonly [number, number, number, string, string | null, string | null]
 > = [
-  [  4,    50, "rank.observer_1"       , null                           , "channel.start_questions"],
-  [ 10,   100, "rank.observer_2"       , "tool.trading_journal"         , null],
-  [ 15,   150, "rank.observer_3"       , "tool.risk_calculator"         , null],
-  [ 20,   200, "rank.observer_4"       , "tool.chart_markup"            , "channel.chart_review"],
-  [ 25,   300, "rank.analyst_1"        , "tool.indicator_checklist"     , null],
-  [ 30,   400, "rank.analyst_2"        , "tool.news_calendar"           , null],
-  [ 35,   500, "rank.analyst_3"        , "tool.pause_mode"              , "channel.discipline_journal"],
-  [ 40,   750, "rank.analyst_4"        , "tool.weekly_review"           , null],
-  [ 45,  1000, "rank.tactician_1"      , "tool.strategy_builder"        , "channel.strategies"],
-  [ 50,  1500, "rank.tactician_2"      , "tool.capital_plan"            , null],
-  [ 55,  2000, "rank.tactician_3"      , "tool.market_regime_board"     , null],
-  [ 60,  2500, "rank.tactician_4"      , "tool.session_planner"         , null],
-  [ 65,  3000, "rank.strategist_1"     , "tool.strategy_statistics"     , null],
-  [ 70,  4000, "rank.strategist_2"     , "tool.watchlist"               , null],
-  [ 75,  5000, "rank.strategist_3"     , "tool.psychology_checkin"      , null],
-  [ 80,  6000, "rank.strategist_4"     , "tool.habit_calendar"          , null],
-  [ 85,  7000, "rank.architect_1"      , "tool.mentor_case_room"        , "channel.advanced_circle"],
-  [ 90,  8000, "rank.architect_2"      , "tool.performance_dashboard"   , null],
-  [ 95,  9000, "rank.architect_3"      , "tool.personal_playbook"       , null],
-  [100, 10000, "rank.architect_4"      , "tool.pro_workspace"           , null],
+  [  4,    50,    5_000, "rank.observer_1"       , null                           , "channel.start_questions"],
+  [ 10,   100,   10_000, "rank.observer_2"       , "tool.trading_journal"         , null],
+  [ 15,   150,   15_000, "rank.observer_3"       , "tool.risk_calculator"         , null],
+  [ 20,   200,   20_000, "rank.observer_4"       , "tool.chart_markup"            , "channel.chart_review"],
+  [ 25,   300,   30_000, "rank.analyst_1"        , "tool.indicator_checklist"     , null],
+  [ 30,   400,   40_000, "rank.analyst_2"        , "tool.news_calendar"           , null],
+  [ 35,   500,   50_000, "rank.analyst_3"        , "tool.pause_mode"              , "channel.discipline_journal"],
+  [ 40,   750,   75_000, "rank.analyst_4"        , "tool.weekly_review"           , null],
+  [ 45,  1000,  100_000, "rank.tactician_1"      , "tool.strategy_builder"        , "channel.strategies"],
+  [ 50,  1500,  150_000, "rank.tactician_2"      , "tool.capital_plan"            , null],
+  [ 55,  2000,  200_000, "rank.tactician_3"      , "tool.market_regime_board"     , null],
+  [ 60,  2500,  250_000, "rank.tactician_4"      , "tool.session_planner"         , null],
+  [ 65,  3000,  300_000, "rank.strategist_1"     , "tool.strategy_statistics"     , null],
+  [ 70,  4000,  400_000, "rank.strategist_2"     , "tool.watchlist"               , null],
+  [ 75,  5000,  500_000, "rank.strategist_3"     , "tool.psychology_checkin"      , null],
+  [ 80,  6000,  600_000, "rank.strategist_4"     , "tool.habit_calendar"          , null],
+  [ 85,  7000,  700_000, "rank.architect_1"      , "tool.mentor_case_room"        , "channel.advanced_circle"],
+  [ 90,  8000,  800_000, "rank.architect_2"      , "tool.performance_dashboard"   , null],
+  [ 95,  9000,  900_000, "rank.architect_3"      , "tool.personal_playbook"       , null],
+  [100, 10000, 1000_000, "rank.architect_4"      , "tool.pro_workspace"           , null],
 ];
+
+/** The only currency `LevelCheckpointRequirement` accepts (schema CHECK). */
+const CHECKPOINT_CURRENCY = "USD" as const;
+
+/** Minor units per major unit for a two-decimal currency (`AMOUNT_SCALE`). */
+const MINOR_UNITS_PER_USD = 100;
+
+/**
+ * The two threshold columns must agree, and this is checked at module load.
+ *
+ * Writing the minor units out by hand is what keeps the approved number
+ * readable; this is what stops a hand-written number from being WRONG. A
+ * mismatch is a build-time throw, not a gate that silently asks a learner for
+ * ten times the money.
+ */
+function assertCheckpointRowsConsistent(): void {
+  for (const [levelNumber, thresholdUsd, thresholdMinorUnits] of CHECKPOINT_ROWS) {
+    if (thresholdMinorUnits !== thresholdUsd * MINOR_UNITS_PER_USD) {
+      throw new Error(
+        `checkpoint level ${levelNumber}: thresholdMinorUnits ${thresholdMinorUnits} does not express USD ${thresholdUsd}`,
+      );
+    }
+    if (!Number.isSafeInteger(thresholdMinorUnits) || thresholdMinorUnits <= 0) {
+      throw new Error(`checkpoint level ${levelNumber}: threshold must be a positive integer of minor units`);
+    }
+  }
+}
+assertCheckpointRowsConsistent();
 
 export const ATA_MODULES: readonly AtaModuleSource[] = MODULE_ROWS.map(
   ([moduleNumber, title, description, startLevel, endLevel]) => ({
@@ -273,9 +340,11 @@ export const ATA_LEVELS: readonly AtaLevelSource[] = LEVEL_ROWS.map(
 );
 
 export const ATA_CHECKPOINTS: readonly AtaCheckpointSource[] = CHECKPOINT_ROWS.map(
-  ([levelNumber, thresholdUsd, rankCode, toolCode, channelCode]) => ({
+  ([levelNumber, thresholdUsd, thresholdMinorUnits, rankCode, toolCode, channelCode]) => ({
     levelNumber,
     thresholdUsd,
+    thresholdMinorUnits,
+    thresholdCurrency: CHECKPOINT_CURRENCY,
     rankCode,
     toolCode,
     channelCode,
@@ -378,6 +447,33 @@ export function gateIntegrationCode(level: AtaLevelSource): string | null {
     return `checkpoint.module-${String(level.moduleNumber).padStart(2, "0")}`;
   }
   return null;
+}
+
+/**
+ * The runtime requirement a `financial_checkpoint` gate must carry, or null for
+ * every other level — including L1, whose gate is an `external_event` and has no
+ * threshold at all.
+ *
+ * This is the ONE place a package-shaped checkpoint requirement is composed, for
+ * the same reason `gateIntegrationCode` is the one place an integration code is:
+ * a threshold assembled at two call sites is a threshold that can disagree with
+ * itself.
+ */
+export function checkpointRequirementFor(
+  level: AtaLevelSource,
+): { readonly thresholdCurrency: "USD"; readonly thresholdMinorUnits: number } | null {
+  if (level.kind !== "checkpoint") return null;
+  const checkpoint = ataCheckpoint(level.levelNumber);
+  if (!checkpoint) {
+    // Unreachable while ATA_CHECKPOINTS covers every checkpoint level, and a
+    // throw rather than a null because a checkpoint with no approved threshold
+    // must never be emitted as a gate the runtime cannot verify.
+    throw new Error(`checkpoint level ${level.levelNumber} has no approved threshold`);
+  }
+  return {
+    thresholdCurrency: checkpoint.thresholdCurrency,
+    thresholdMinorUnits: checkpoint.thresholdMinorUnits,
+  };
 }
 
 /* ------------------------------------------------------------------ *
