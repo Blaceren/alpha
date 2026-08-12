@@ -243,6 +243,96 @@ const reportFieldSchema = z.strictObject({
     .max(20),
 });
 
+/**
+ * PROGRESSION OWNER — the mentor grading standard a report is approved against.
+ *
+ * ============================ WHY IT IS HERE ============================
+ * `LevelReportBinding.reportRubricVersionId` is NOT NULL and
+ * `ReportRubricVersion` is ASSIGNMENT-scoped, so a report level has no
+ * completion owner until a rubric exists for its own assignment. Revision 1 of
+ * this package carried the assignment and no rubric, and recorded the fact in
+ * its own `pendingApprovals` (`element: "report_rubric"`). The importer then
+ * refused — correctly — to invent one, and `ata-v2@v3` published a level 3 that
+ * no learner can ever complete.
+ *
+ * The rubric is therefore product data the package MUST be able to carry, not a
+ * row the importer may make up. It is optional so that every already-approved
+ * artifact keeps validating unchanged; a package that omits it is still a valid
+ * package, and still an unpublishable curriculum once the completeness gate
+ * (`resource-completeness.ts`) sees a `report_approval` level with no owner.
+ *
+ * Criteria carry no weights and no pass threshold: `validateReportRubricPublication`
+ * refuses a profit-only criterion, and the review domain — not the rubric —
+ * decides approval. The shape below is exactly the four tables the authoring
+ * domain writes, so an imported rubric and an authored one are the same graph.
+ */
+const reportRubricCriterionSchema = z.strictObject({
+  stableKey: z.string().trim().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/).max(64),
+  /** Grouping label, e.g. `review`. Profit-only categories are refused later. */
+  categoryCode: z.string().trim().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/).max(64),
+  sortOrder: z.number().int().min(0).max(999),
+  commentRequired: z.boolean(),
+  localizations: z
+    .array(
+      z.strictObject({
+        locale: localeSchema,
+        title: text(300, "criterion title"),
+        /** May be empty: the title alone can be the whole criterion. */
+        description: optionalText(2_000, "criterion description"),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
+const reportRubricScaleOptionSchema = z.strictObject({
+  stableKey: z.string().trim().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/).max(64),
+  ordinal: z.number().int().min(0).max(999),
+  localizations: z
+    .array(
+      z.strictObject({
+        locale: localeSchema,
+        label: text(300, "scale label"),
+        description: optionalText(2_000, "scale description"),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
+const reportRejectionReasonSchema = z.strictObject({
+  stableKey: z.string().trim().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/).max(64),
+  sortOrder: z.number().int().min(0).max(999),
+  active: z.boolean(),
+  localizations: z
+    .array(
+      z.strictObject({
+        locale: localeSchema,
+        title: text(300, "rejection reason title"),
+        guidance: text(2_000, "rejection reason guidance"),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
+export const reportRubricSchema = z.strictObject({
+  /** Source-stable identity, like `reportCode`. Not a database column. */
+  rubricCode: z.string().trim().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/).max(120),
+  versionNumber: z.number().int().positive().max(10_000),
+  status: z.enum(["draft", "published"]),
+  criteria: z.array(reportRubricCriterionSchema).min(1).max(50),
+  /**
+   * At least one NEUTRAL scale option. `validateReportRubricPublication`
+   * requires one; a rubric with none cannot be published and so could never
+   * back a binding.
+   */
+  scaleOptions: z.array(reportRubricScaleOptionSchema).min(1).max(20),
+  /** At least one ACTIVE reason, enforced by the package validator. */
+  rejectionReasons: z.array(reportRejectionReasonSchema).min(1).max(50),
+  provenance: provenanceRecordSchema,
+});
+
 const reportSchema = z.strictObject({
   reportCode: z.string().trim().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/).max(120),
   versionNumber: z.number().int().positive().max(10_000),
@@ -264,10 +354,42 @@ const reportSchema = z.strictObject({
   maxAttachments: z.number().int().min(0).max(20),
   draftAllowed: z.boolean(),
   mentorReviewRequired: z.boolean(),
+  /**
+   * OPTIONAL, and the option is the compatibility contract: revision 1 of
+   * `ata-v2.canonical-100` and both approved first-slice revisions omit it, so
+   * they keep parsing and keep their fingerprints. `null` and absent mean the
+   * same thing — no rubric was declared — and both leave the level without a
+   * completion owner.
+   */
+  rubric: reportRubricSchema.nullable().optional(),
   provenance: provenanceRecordSchema,
 });
 
 /* -------------------------------- levels -------------------------------- */
+
+/**
+ * PROGRESSION OWNER — the threshold a `financial_checkpoint` is verified against.
+ *
+ * Stored in the units the runtime actually compares: `LevelCheckpointRequirement`
+ * has `thresholdCurrency` + `thresholdMinorUnits`, both NOT NULL, and
+ * `checkpoint-verification.ts` returns `CHECKPOINT_REQUIREMENT_UNCONFIGURED`
+ * without them. Revision 1 of this package carried only `integrationCode`, so
+ * the `$50` in a level TITLE was the only place the number existed and all 20
+ * checkpoints were unverifiable.
+ *
+ * Money is never a float and never a display string: `"$1,000"` is not a
+ * threshold, `100000` minor units of `USD` is. The currency is an enum of one
+ * because the requirement table's CHECK constraint is — a currency the platform
+ * cannot compare against must be an `unsupported_currency` outcome, never a
+ * silently coerced comparison.
+ *
+ * Optional for the same compatibility reason as `report.rubric`.
+ */
+const gateRequirementSchema = z.strictObject({
+  thresholdCurrency: z.enum(["USD"]),
+  thresholdMinorUnits: z.number().int().positive().max(1_000_000_000),
+  provenance: provenanceRecordSchema,
+});
 
 const gateSchema = z.strictObject({
   /** Completion is produced outside the learner UI. Never client-completable. */
@@ -278,6 +400,12 @@ const gateSchema = z.strictObject({
     .array(z.strictObject({ locale: localeSchema, text: text(2_000) }))
     .min(1)
     .max(20),
+  /**
+   * Only a `financial_checkpoint` may carry one — enforced in the package
+   * validator, which can see `completionSource` and this field together. An
+   * `external_event` gate has no balance to compare.
+   */
+  requirement: gateRequirementSchema.nullable().optional(),
   provenance: provenanceRecordSchema,
 });
 
@@ -415,4 +543,6 @@ export type PackageContent = z.infer<typeof contentSchema>;
 export type PackageAssessment = z.infer<typeof assessmentSchema>;
 export type PackageQuestion = z.infer<typeof questionSchema>;
 export type PackageReport = z.infer<typeof reportSchema>;
+export type PackageReportRubric = z.infer<typeof reportRubricSchema>;
 export type PackageGate = z.infer<typeof gateSchema>;
+export type PackageGateRequirement = z.infer<typeof gateRequirementSchema>;

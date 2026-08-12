@@ -74,6 +74,82 @@ export function calculateSemanticEquivalenceDigest(pkg: CurriculumPackage): stri
     .digest("hex");
 }
 
+/**
+ * The projection keys that carry RUNTIME OWNER CONFIGURATION rather than
+ * educational content.
+ *
+ * Added by package revision 2: the level-3 report rubric and the 20 checkpoint
+ * thresholds. They are semantic — they decide whether a level can be completed
+ * and how much money a checkpoint asks for — so the real fingerprint covers
+ * them, and two artifacts that differ here are correctly different artifacts.
+ * What they are NOT is educational content: adding a mentor grading standard
+ * does not change a lesson, a question, an answer key or a pass percent.
+ *
+ * `docs/CURRICULUM_SUCCESSOR_ARTIFACT.md` claims v3 and v4 teach identically,
+ * and that claim must survive the revision that makes v4 completable. Without
+ * this second digest the only available proof would be the successor digest,
+ * which now legitimately differs — so "nothing educational changed" would once
+ * again be an assertion rather than a computation.
+ */
+export const RUNTIME_OWNER_KEYS = ["packageRevision", "report.rubric", "gate.requirement"] as const;
+
+/**
+ * The canonical projection with version identity, package revision and the
+ * runtime owner configuration removed.
+ *
+ * Owner keys are stripped AT THEIR EXACT POSITIONS — `report.rubric` and
+ * `gate.requirement` under a level — rather than by deleting every key with
+ * those names wherever it appears. A blanket name filter would silently start
+ * excluding an unrelated future field that happened to be called `requirement`,
+ * which is how a digest quietly stops covering something.
+ */
+export function educationalPayloadProjection(pkg: CurriculumPackage): CanonicalJson {
+  const payload = semanticPayloadProjection(pkg);
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("semantic payload projection is not an object");
+  }
+  const record = { ...(payload as Record<string, CanonicalJson>) };
+  delete record.packageRevision;
+
+  const modules = record.modules;
+  if (!Array.isArray(modules)) throw new Error("canonical projection has no modules array");
+  record.modules = modules.map((moduleValue) => {
+    if (moduleValue === null || typeof moduleValue !== "object" || Array.isArray(moduleValue)) return moduleValue;
+    const moduleRecord = { ...(moduleValue as Record<string, CanonicalJson>) };
+    const levels = moduleRecord.levels;
+    if (!Array.isArray(levels)) return moduleRecord;
+    moduleRecord.levels = levels.map((levelValue) => {
+      if (levelValue === null || typeof levelValue !== "object" || Array.isArray(levelValue)) return levelValue;
+      const levelRecord = { ...(levelValue as Record<string, CanonicalJson>) };
+      levelRecord.report = withoutKey(levelRecord.report, "rubric");
+      levelRecord.gate = withoutKey(levelRecord.gate, "requirement");
+      return levelRecord;
+    });
+    return moduleRecord;
+  });
+  return record;
+}
+
+function withoutKey(value: CanonicalJson, key: string): CanonicalJson {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = { ...(value as Record<string, CanonicalJson>) };
+  delete record[key];
+  return record;
+}
+
+/**
+ * sha256 of the EDUCATIONAL payload alone.
+ *
+ * Equal digests mean the two packages teach, test and grade identically even if
+ * one of them carries progression-owner configuration the other could not
+ * express. Like the successor digest it is audit-only and is never an identity.
+ */
+export function calculateEducationalPayloadDigest(pkg: CurriculumPackage): string {
+  return createHash("sha256")
+    .update(serializeCanonicalProjection(educationalPayloadProjection(pkg)), "utf8")
+    .digest("hex");
+}
+
 export type SemanticDifference = {
   /** Dotted path into the canonical projection, e.g. `modules[2].levels[7].xpReward`. */
   path: string;

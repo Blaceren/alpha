@@ -19,8 +19,10 @@ import type {
   PackageAssessment,
   PackageContent,
   PackageGate,
+  PackageGateRequirement,
   PackageLevel,
   PackageReport,
+  PackageReportRubric,
 } from "@/lib/curriculum/package/schema";
 import { isBlocksV2, type ContentBody } from "@/lib/curriculum/content-body";
 
@@ -198,6 +200,73 @@ function projectAssessment(assessment: PackageAssessment | null): Json {
   };
 }
 
+/**
+ * PROGRESSION OWNER PROJECTION — covered by the fingerprint, and ABSENT when the
+ * package does not declare it.
+ *
+ * Two requirements pull in opposite directions and this is how both are met.
+ * The rubric and the checkpoint threshold are semantic: they decide whether a
+ * level can be completed and, for a checkpoint, how much money the platform will
+ * ask a learner for, so excluding them from the canonical fingerprint would make
+ * the fingerprint blind to the thing this revision exists to add. But a package
+ * that carries neither — every artifact approved before revision 2 — must
+ * fingerprint to the byte-identical value it was approved with, or the accepted
+ * `ata-v2@v3` artifact stops importing.
+ *
+ * So the key is EMITTED ONLY WHEN PRESENT rather than emitted as `null`. The
+ * serialiser walks `Object.keys`, so an absent owner adds no bytes at all and
+ * historical projections are unchanged; a present one changes the hash, which is
+ * exactly what a new artifact identity means.
+ */
+function projectReportRubric(rubric: PackageReportRubric | null | undefined): Json {
+  if (!rubric) return null;
+  return {
+    rubricCode: rubric.rubricCode,
+    versionNumber: rubric.versionNumber,
+    status: rubric.status,
+    criteria: byKey(rubric.criteria, (c) => c.stableKey).map((c) => ({
+      stableKey: c.stableKey,
+      categoryCode: c.categoryCode,
+      sortOrder: c.sortOrder,
+      commentRequired: c.commentRequired,
+      localizations: byKey(c.localizations, (l) => l.locale).map((l) => ({
+        locale: l.locale,
+        title: l.title,
+        description: l.description,
+      })),
+    })),
+    scaleOptions: byKey(rubric.scaleOptions, (s) => s.stableKey).map((s) => ({
+      stableKey: s.stableKey,
+      ordinal: s.ordinal,
+      localizations: byKey(s.localizations, (l) => l.locale).map((l) => ({
+        locale: l.locale,
+        label: l.label,
+        description: l.description,
+      })),
+    })),
+    rejectionReasons: byKey(rubric.rejectionReasons, (r) => r.stableKey).map((r) => ({
+      stableKey: r.stableKey,
+      sortOrder: r.sortOrder,
+      active: r.active,
+      localizations: byKey(r.localizations, (l) => l.locale).map((l) => ({
+        locale: l.locale,
+        title: l.title,
+        guidance: l.guidance,
+      })),
+    })),
+    provenance: rubric.provenance.classification,
+  };
+}
+
+function projectGateRequirement(requirement: PackageGateRequirement | null | undefined): Json {
+  if (!requirement) return null;
+  return {
+    thresholdCurrency: requirement.thresholdCurrency,
+    thresholdMinorUnits: requirement.thresholdMinorUnits,
+    provenance: requirement.provenance.classification,
+  };
+}
+
 function projectReport(report: PackageReport | null): Json {
   if (!report) return null;
   return {
@@ -236,6 +305,7 @@ function projectReport(report: PackageReport | null): Json {
     maxAttachments: report.maxAttachments,
     draftAllowed: report.draftAllowed,
     mentorReviewRequired: report.mentorReviewRequired,
+    ...(report.rubric ? { rubric: projectReportRubric(report.rubric) } : {}),
     provenance: report.provenance.classification,
   };
 }
@@ -250,6 +320,7 @@ function projectGate(gate: PackageGate | null): Json {
       locale: b.locale,
       text: b.text,
     })),
+    ...(gate.requirement ? { requirement: projectGateRequirement(gate.requirement) } : {}),
     provenance: gate.provenance.classification,
   };
 }

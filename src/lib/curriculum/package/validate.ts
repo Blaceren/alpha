@@ -182,6 +182,14 @@ const SELF_COMPLETABLE_METHODS = new Set([
   "mentor_review",
 ]);
 
+/**
+ * Categories that describe only the money outcome. Kept identical to
+ * `report-validation.ts::PROFIT_ONLY_CATEGORIES`, which is what
+ * `publishReportRubric` enforces — a package that slipped one past this check
+ * would import a rubric that can never be published.
+ */
+const PROFIT_ONLY_CRITERION_CATEGORIES: ReadonlySet<string> = new Set(["profit", "pnl", "roi", "return"]);
+
 function issue(list: PackageIssue[], code: string, path: string, message: string): void {
   list.push({ code, path, message });
 }
@@ -321,6 +329,7 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
   const seenContentCodes = new Set<string>();
   const seenAssessmentCodes = new Set<string>();
   const seenReportCodes = new Set<string>();
+  const seenRubricCodes = new Set<string>();
 
   pkg.modules.forEach((moduleDefinition, moduleIndex) => {
     const modulePath = `modules[${moduleIndex}]`;
@@ -446,6 +455,24 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
           }
           if (!level.gate.blockedExplanation.some((b) => b.locale === pkg.locale)) {
             issue(issues, "GATE_EXPLANATION_MISSING", `${levelPath}.gate.blockedExplanation`, `missing package locale ${pkg.locale}`);
+          }
+          /*
+           * PROGRESSION OWNER — a threshold belongs to a balance check and to
+           * nothing else.
+           *
+           * `external_event` completion arrives from a provider postback; there
+           * is no amount to compare, so a requirement on one would be a number
+           * nothing reads. The schema cannot express this rule on its own — it
+           * needs `completionSource` and `requirement` in the same scope, which
+           * is here.
+           */
+          if (level.gate.requirement && level.gate.completionSource !== "financial_checkpoint") {
+            issue(
+              issues,
+              "GATE_REQUIREMENT_NOT_ALLOWED",
+              `${levelPath}.gate.requirement`,
+              `${level.gate.completionSource} gate must not carry a balance threshold`,
+            );
           }
         }
         if (SELF_COMPLETABLE_METHODS.has(level.completionMethod)) {
@@ -706,6 +733,103 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         if (!level.report.attachmentsAllowed && level.report.maxAttachments !== 0) {
           issue(issues, "REPORT_ATTACHMENT_POLICY_INVALID", `${reportPath}.maxAttachments`, "maxAttachments must be 0 when attachments are not allowed");
         }
+
+        /* ---------------------- rubric (owner) ---------------------- */
+        /*
+         * A declared rubric must be one the report domain would actually
+         * publish. `publishReportRubric` runs `validateReportRubricPublication`,
+         * and a rubric that fails it can be imported but never published, never
+         * bound, and so never completes a level — a silent progression dead end
+         * of exactly the kind this revision exists to remove. The rules below
+         * are that validator's structural subset, checked BEFORE import instead
+         * of after.
+         */
+        if (level.report.rubric) {
+          const rubric = level.report.rubric;
+          const rubricPath = `${reportPath}.rubric`;
+          if (seenRubricCodes.has(rubric.rubricCode)) {
+            issue(issues, "REPORT_RUBRIC_CODE_DUPLICATE", `${rubricPath}.rubricCode`, "duplicate rubric code");
+          }
+          seenRubricCodes.add(rubric.rubricCode);
+
+          const criterionKeys = new Set<string>();
+          const criterionOrders = new Set<number>();
+          rubric.criteria.forEach((criterion, ci) => {
+            const criterionPath = `${rubricPath}.criteria[${ci}]`;
+            if (criterionKeys.has(criterion.stableKey)) {
+              issue(issues, "REPORT_CRITERION_KEY_DUPLICATE", `${criterionPath}.stableKey`, "duplicate criterion stableKey");
+            }
+            criterionKeys.add(criterion.stableKey);
+            if (criterionOrders.has(criterion.sortOrder)) {
+              issue(issues, "REPORT_CRITERION_ORDER_DUPLICATE", `${criterionPath}.sortOrder`, "duplicate criterion sortOrder");
+            }
+            criterionOrders.add(criterion.sortOrder);
+            // The one product rule the review domain will not bend: whether a
+            // learner made money is never on its own an approval criterion.
+            if (PROFIT_ONLY_CRITERION_CATEGORIES.has(criterion.categoryCode)) {
+              issue(
+                issues,
+                "REPORT_PROFIT_CRITERION_FORBIDDEN",
+                `${criterionPath}.categoryCode`,
+                "profit or return alone cannot be an approval criterion",
+              );
+            }
+            if (!criterion.localizations.some((l) => l.locale === pkg.locale)) {
+              issue(issues, "REPORT_CRITERION_LOCALIZATION_MISSING", `${criterionPath}.localizations`, `missing package locale ${pkg.locale}`);
+            }
+          });
+
+          const scaleKeys = new Set<string>();
+          const scaleOrdinals = new Set<number>();
+          rubric.scaleOptions.forEach((option, si) => {
+            const optionPath = `${rubricPath}.scaleOptions[${si}]`;
+            if (scaleKeys.has(option.stableKey)) {
+              issue(issues, "REPORT_SCALE_KEY_DUPLICATE", `${optionPath}.stableKey`, "duplicate scale option stableKey");
+            }
+            scaleKeys.add(option.stableKey);
+            if (scaleOrdinals.has(option.ordinal)) {
+              issue(issues, "REPORT_SCALE_ORDER_DUPLICATE", `${optionPath}.ordinal`, "duplicate scale option ordinal");
+            }
+            scaleOrdinals.add(option.ordinal);
+            if (!option.localizations.some((l) => l.locale === pkg.locale)) {
+              issue(issues, "REPORT_SCALE_LOCALIZATION_MISSING", `${optionPath}.localizations`, `missing package locale ${pkg.locale}`);
+            }
+          });
+
+          const reasonKeys = new Set<string>();
+          const reasonOrders = new Set<number>();
+          rubric.rejectionReasons.forEach((reason, ri) => {
+            const reasonPath = `${rubricPath}.rejectionReasons[${ri}]`;
+            if (reasonKeys.has(reason.stableKey)) {
+              issue(issues, "REPORT_REASON_KEY_DUPLICATE", `${reasonPath}.stableKey`, "duplicate rejection reason stableKey");
+            }
+            reasonKeys.add(reason.stableKey);
+            if (reasonOrders.has(reason.sortOrder)) {
+              issue(issues, "REPORT_REASON_ORDER_DUPLICATE", `${reasonPath}.sortOrder`, "duplicate rejection reason sortOrder");
+            }
+            reasonOrders.add(reason.sortOrder);
+            if (!reason.localizations.some((l) => l.locale === pkg.locale)) {
+              issue(issues, "REPORT_REASON_LOCALIZATION_MISSING", `${reasonPath}.localizations`, `missing package locale ${pkg.locale}`);
+            }
+          });
+          // A rejection reason is how a reviewer sends work back. A rubric whose
+          // reasons are all inactive can be published and then strands every
+          // rejection, so the ACTIVE count is what is required, not the count.
+          if (!rubric.rejectionReasons.some((reason) => reason.active)) {
+            issue(issues, "REPORT_REASON_REQUIRED", `${rubricPath}.rejectionReasons`, "at least one active rejection reason is required");
+          }
+          // A rubric that is not published cannot back a binding: the
+          // completeness gate requires a published rubric, and `publishReportRubric`
+          // is unreachable for an imported curriculum once it leaves draft.
+          if (rubric.status !== level.report.status) {
+            issue(
+              issues,
+              "REPORT_RUBRIC_STATUS_MISMATCH",
+              `${rubricPath}.status`,
+              `rubric status "${rubric.status}" must match the report assignment status "${level.report.status}"`,
+            );
+          }
+        }
       }
     });
   });
@@ -802,7 +926,20 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
       collectProvenance(level.provenance, `${levelPath}.provenance`, "level");
       if (level.content) collectProvenance(level.content.provenance, `${levelPath}.content.provenance`, "content");
       if (level.gate) collectProvenance(level.gate.provenance, `${levelPath}.gate.provenance`, "gate");
+      // A progression owner carries its OWN provenance and is held to the same
+      // standard as any other content decision: an approved package may not ship
+      // a threshold or a grading standard whose origin is `MISSING`.
+      if (level.gate?.requirement) {
+        collectProvenance(
+          level.gate.requirement.provenance,
+          `${levelPath}.gate.requirement.provenance`,
+          "checkpoint requirement",
+        );
+      }
       if (level.report) collectProvenance(level.report.provenance, `${levelPath}.report.provenance`, "report");
+      if (level.report?.rubric) {
+        collectProvenance(level.report.rubric.provenance, `${levelPath}.report.rubric.provenance`, "report rubric");
+      }
       if (level.assessment) {
         collectProvenance(level.assessment.provenance, `${levelPath}.assessment.provenance`, "assessment");
         level.assessment.questions.forEach((question, qi) => {

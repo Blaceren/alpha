@@ -1,0 +1,151 @@
+{
+  "$schema": "ata.curriculum.report-rubric/1",
+  "$comment": "ACCEPTED L3 REPORT RUBRIC, PROMOTED TO CANONICAL SOURCE. Not authored here and not invented here: every criterion, scale option and rejection reason below is transcribed verbatim from the rubric that was published under EXPLICIT_OPERATOR_APPROVAL on 2026-07-24 for the SAME report assignment, and that has backed the level-3 report of curriculum versions 1 and 2 ever since. Read only by scripts/curriculum/buildCanonical100.ts, which embeds it in the package; never read at import time and never read from a database.",
+  "status": "accepted",
+  "curriculumCode": "ata-v2",
+  "levelStableCode": "v2.l003.pervye-pyat-demo-sdelok",
+  "locale": "ru",
+  "sourceAuthority": {
+    "SOURCE_ASSIGNMENT": "ata-v2@v1 ReportAssignmentVersion for level 3 «Отчёт по 5 demo-сделкам» (43 fields, mentorReviewRequired), imported from curriculum/packages/ata-v2-first-slice.approved.json",
+    "SOURCE_RUBRIC": "ReportRubricVersion published for that assignment, changeNotes \"L3-RUBRIC-V1 — EXPLICIT_OPERATOR_APPROVAL 2026-07-24\"",
+    "SOURCE_VERSION": "versionNumber 1, status published; re-published unchanged for ata-v2@v2 as \"L3-RUBRIC-V1 — CI-3D curriculum v2 (content identical to CV-2 R1-R7)\"",
+    "SUCCESSOR_ASSIGNMENT": "ata-v2@v4 report ata-v2.l003.report on level v2.l003.pervye-pyat-demo-sdelok",
+    "SEMANTIC_EQUIVALENCE": "The v1, v2 and v3 assignments are identical in every semantic field — 43 field definitions with the same stable keys, types, required flags, sort orders, length rules, choice codes and 5 requiredWhen conditions, and identical ru title, instructions, successCriteriaSummary and submitLabel. The v4 report object is byte-identical to v3's. The task the rubric grades is therefore unchanged: five completed demo-only trades, a pre-trade reason per trade, a post-trade observation per trade, and a closing reflection. No criterion requires reinterpretation to apply.",
+    "PROVENANCE_NOTE": "The report assignment itself carries revision \"L3-REPORT-V1\" from the same 2026-07-24 approval (ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1). The rubric is its sibling under that approval and was the one half never transported into a package."
+  },
+  "rubric": {
+    "rubricCode": "ata-v2.l003.rubric",
+    "versionNumber": 1,
+    "status": "published",
+    "criteria": [
+      {
+        "stableKey": "r1",
+        "categoryCode": "review",
+        "sortOrder": 0,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Пять demo-сделок",
+            "description": "Есть ровно 5 завершённых записей; подтверждён demo-only режим."
+          }
+        ]
+      },
+      {
+        "stableKey": "r2",
+        "categoryCode": "review",
+        "sortOrder": 1,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Причина до сделки",
+            "description": "В каждой записи есть конкретная причина входа, а не общая фраза «почувствовал/показалось»."
+          }
+        ]
+      },
+      {
+        "stableKey": "r3",
+        "categoryCode": "review",
+        "sortOrder": 2,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Процесс отдельно от результата",
+            "description": "Ученик отличает качество выполнения плана от positive/negative результата."
+          }
+        ]
+      },
+      {
+        "stableKey": "r4",
+        "categoryCode": "review",
+        "sortOrder": 3,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Наблюдение после сделки",
+            "description": "В каждой записи есть конкретное наблюдение, связанное с процессом или поведением."
+          }
+        ]
+      },
+      {
+        "stableKey": "r5",
+        "categoryCode": "review",
+        "sortOrder": 4,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Итоговая рефлексия",
+            "description": "Назван повторяющийся паттерн и одно применимое правило на следующую demo-сессию."
+          }
+        ]
+      },
+      {
+        "stableKey": "r6",
+        "categoryCode": "review",
+        "sortOrder": 5,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Безопасность и приватность",
+            "description": "Нет реальных средств, персональных данных, реквизитов или призыва пополнять счёт."
+          }
+        ]
+      },
+      {
+        "stableKey": "r7",
+        "categoryCode": "review",
+        "sortOrder": 6,
+        "commentRequired": false,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Profitability-neutral",
+            "description": "Approval не зависит от количества положительных результатов. Важны полнота и осмысленность отчёта."
+          }
+        ]
+      }
+    ],
+    "scaleOptions": [
+      {
+        "stableKey": "meets",
+        "ordinal": 0,
+        "localizations": [
+          {
+            "locale": "ru",
+            "label": "Соответствует",
+            "description": "Критерий выполнен"
+          }
+        ]
+      }
+    ],
+    "rejectionReasons": [
+      {
+        "stableKey": "revision-needed",
+        "sortOrder": 0,
+        "active": true,
+        "localizations": [
+          {
+            "locale": "ru",
+            "title": "Требуется доработка",
+            "guidance": "Укажите, что нужно исправить (50–1000 символов). Отрицательный demo-результат не является причиной доработки."
+          }
+        ]
+      }
+    ],
+    "provenance": {
+      "classification": "EXPLICIT_OPERATOR_APPROVAL",
+      "sourcePath": null,
+      "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+      "revision": "L3-RUBRIC-V1",
+      "confidence": "high",
+      "conflicts": [],
+      "approvalRequired": false,
+      "note": "Rubric published for the identical level-3 report assignment of curriculum versions 1 and 2 (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator). Transcribed, not authored."
+    }
+  }
+}
