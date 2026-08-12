@@ -358,6 +358,32 @@ content declares, so the ownership is real. The accepted `ata-v2.canonical-100` 
 declares no assets yet — a fact about that package, not about the contract — and the table is
 still measured, by `curriculumDigest`.
 
+**The progression-owner tables are stage-owned, and projected in the same breath.** Package
+revision 2 makes the structural importer materialize the completion owners a level's
+`completionMethod` needs at runtime — the L3 report's grading contract and the twenty financial
+checkpoint requirements — across nine further tables:
+
+    LevelCheckpointRequirement            ReportRubricCriterion
+    LevelReportBinding                    ReportRubricCriterionLocalization
+    ReportRejectionReason                 ReportRubricScaleOption
+    ReportRejectionReasonLocalization     ReportRubricScaleOptionLocalization
+                                          ReportRubricVersion
+
+Until they were declared, they fell to the business fence and manifest rehearsal reported a
+legitimate import as a business-data breach, so no successor could be authorized at all. Only
+`package/import.ts` and `report-authoring.ts` write them; the editorial overlay writes none of
+them and no learner flow writes any of them. Every row is curriculum-version-owned — learner
+grading lives in `ReportReview`, `ReportReviewScore` and `ReportSubmission`, which stay fenced and
+reference these tables `onDelete: Restrict`.
+
+Declaring ownership is only half of it. Nine matching `CURRICULUM_PROJECTIONS` entries were added
+in the same commit, keyed by stable domain identity — level `stableCode`, rubric `versionNumber`,
+criterion / option / reason `stableKey` — and spanning every curriculum version, so a wrong
+threshold, a wrong rubric or a missing binding moves `curriculumDigest` at the POST_IMPORT gate.
+Ownership without projection would have made the manifest preparable while leaving exactly the
+data the successor exists to deliver unmeasured. `test:regression:curriculum-progression-owner-projection`
+pins both halves.
+
 ### Resume policy
 
 This is **wired**, not described. `decideStageDisposition` runs on the authorization path and

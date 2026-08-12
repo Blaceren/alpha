@@ -169,6 +169,39 @@ export const SEMANTIC_STATE_VERSION = "ata.preprod-activation-semantic-state/3" 
  * projection, so a row that appears where the rehearsal produced none moves the
  * curriculum digest. Moving it into the fence would have been correct only until
  * the first package that ships an asset, and then wrong silently.
+ *
+ * CORRECTION-4, ON THE PROGRESSION-OWNER TABLES. Package revision 2 made the
+ * structural importer materialize the completion owners a level's
+ * `completionMethod` needs at runtime — the L3 report's grading contract and the
+ * twenty financial checkpoint requirements. That grew the importer's surface by
+ * nine tables which this list did not name, so they fell to the business fence
+ * and `rehearseActivation` reported the successor's own product data as a
+ * business-data breach. No manifest could be prepared and no successor could be
+ * authorized.
+ *
+ * The classification was re-derived from source rather than from the table
+ * names. Only two files in `src/` write any of the nine: `package/import.ts`
+ * (the structural stage) and `report-authoring.ts` (the CRM authoring surface,
+ * which is not an activation stage). The editorial overlay importer writes none
+ * of them, and no learner or runtime flow writes any of them.
+ *
+ * WHY THIS DOES NOT WEAKEN THE BUSINESS FENCE. Every row in all nine is
+ * curriculum-version-owned configuration reachable from a `CurriculumVersion` —
+ * verified on live PREPROD, where all nine tables together hold 41 rows and
+ * **zero** are orphans. Learner grading data is not in them: it lives in
+ * `ReportReview`, `ReportReviewScore` and `ReportSubmission`, which stay inside
+ * the fence, and which reference these tables `onDelete: Restrict`, so a rubric
+ * row that has graded a real report cannot be deleted at all.
+ *
+ * This is the same shape as `ContentVersion`, already stage-owned while holding
+ * rows for v1, v2 and v3 at once: ownership is declared at table scope and the
+ * rows are measured by `CURRICULUM_PROJECTIONS` entries that span EVERY
+ * curriculum version, so tampering with an archived version's rubric still moves
+ * the curriculum digest. Nine matching projections were added below in the same
+ * commit. Neither half is safe alone — declaring ownership without projecting
+ * would let a wrong threshold or a wrong rubric pass POST_IMPORT unseen, which
+ * is the "filter with an owner of nobody" failure CORRECTION-2 exists to
+ * prevent.
  */
 export const STAGE_MUTABLE_TABLES: readonly string[] = [
   // structural import
@@ -186,6 +219,16 @@ export const STAGE_MUTABLE_TABLES: readonly string[] = [
   "ReportAssignmentVersion",
   "ReportFieldDefinition",
   "ReportFieldLocalization",
+  // structural import — progression owners, package revision 2 (CORRECTION-4)
+  "LevelCheckpointRequirement",
+  "LevelReportBinding",
+  "ReportRejectionReason",
+  "ReportRejectionReasonLocalization",
+  "ReportRubricCriterion",
+  "ReportRubricCriterionLocalization",
+  "ReportRubricScaleOption",
+  "ReportRubricScaleOptionLocalization",
+  "ReportRubricVersion",
   // editorial overlay
   "EditorialReviewNote",
   "SourceAuthorityResolution",
@@ -1229,6 +1272,120 @@ const CURRICULUM_PROJECTIONS: readonly Projection[] = [
        JOIN "ReportAssignmentVersion" r ON r."id" = f."reportAssignmentVersionId"
        JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
     ["level", "assignmentVersion", "fieldKey", "locale", "label", "helpText", "placeholder", "choiceLabels"],
+  ],
+
+  /*
+   * CORRECTION-4 — the progression owners package revision 2 materializes.
+   *
+   * Addressed the way the rest of this registry is: by stable domain identity,
+   * never by row id. A level is its `stableCode`, a rubric is its
+   * `versionNumber` under its assignment, and a criterion, scale option or
+   * rejection reason is its `stableKey`. Auto-increment ids are storage
+   * accidents and appear nowhere below, so re-importing the same product data
+   * into a fresh database reproduces the same digest.
+   *
+   * The joins deliberately reach `CurriculumVersion` for the two level-owned
+   * tables and stop at `LevelDefinition` for the rubric family, matching
+   * `LevelResourceBinding` and `ReportFieldLocalization` respectively. Every
+   * curriculum version is covered, not just the successor, so editing an
+   * archived version's rubric moves the digest too.
+   */
+  [
+    "LevelCheckpointRequirement",
+    `SELECT c."code" || '@v' || c."versionNumber" AS curriculum, l."stableCode" AS level,
+            q."integrationCode" AS integrationCode, q."thresholdCurrency" AS thresholdCurrency,
+            q."thresholdMinorUnits" AS thresholdMinorUnits
+       FROM "LevelCheckpointRequirement" q
+       JOIN "LevelDefinition" l ON l."id" = q."levelDefinitionId"
+       JOIN "CurriculumVersion" c ON c."id" = l."curriculumVersionId"`,
+    ["curriculum", "level", "integrationCode", "thresholdCurrency", "thresholdMinorUnits"],
+  ],
+  [
+    "LevelReportBinding",
+    `SELECT c."code" || '@v' || c."versionNumber" AS curriculum, l."stableCode" AS level,
+            r."versionNumber" AS assignmentVersion, v."versionNumber" AS rubricVersion,
+            b."revision" AS revision
+       FROM "LevelReportBinding" b
+       JOIN "LevelDefinition" l ON l."id" = b."levelDefinitionId"
+       JOIN "CurriculumVersion" c ON c."id" = b."curriculumVersionId"
+       LEFT JOIN "ReportAssignmentVersion" r ON r."id" = b."reportAssignmentVersionId"
+       LEFT JOIN "ReportRubricVersion" v ON v."id" = b."reportRubricVersionId"`,
+    ["curriculum", "level", "assignmentVersion", "rubricVersion", "revision"],
+  ],
+  [
+    "ReportRubricVersion",
+    `SELECT l."stableCode" AS level, r."versionNumber" AS assignmentVersion,
+            v."versionNumber" AS versionNumber, v."status" AS status, v."changeNotes" AS changeNotes,
+            CASE WHEN v."publishedAt" IS NULL THEN 'no' ELSE 'yes' END AS published,
+            CASE WHEN v."archivedAt" IS NULL THEN 'no' ELSE 'yes' END AS archived
+       FROM "ReportRubricVersion" v
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "assignmentVersion", "versionNumber", "status", "changeNotes", "published", "archived"],
+  ],
+  [
+    "ReportRubricCriterion",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS stableKey,
+            x."categoryCode" AS categoryCode, x."sortOrder" AS sortOrder,
+            x."commentRequired" AS commentRequired
+       FROM "ReportRubricCriterion" x
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "stableKey", "categoryCode", "sortOrder", "commentRequired"],
+  ],
+  [
+    "ReportRubricCriterionLocalization",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS criterionKey,
+            y."locale" AS locale, y."title" AS title, y."description" AS description
+       FROM "ReportRubricCriterionLocalization" y
+       JOIN "ReportRubricCriterion" x ON x."id" = y."reportRubricCriterionId"
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "criterionKey", "locale", "title", "description"],
+  ],
+  [
+    "ReportRubricScaleOption",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS stableKey,
+            x."ordinal" AS ordinal
+       FROM "ReportRubricScaleOption" x
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "stableKey", "ordinal"],
+  ],
+  [
+    "ReportRubricScaleOptionLocalization",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS optionKey,
+            y."locale" AS locale, y."label" AS label, y."description" AS description
+       FROM "ReportRubricScaleOptionLocalization" y
+       JOIN "ReportRubricScaleOption" x ON x."id" = y."reportRubricScaleOptionId"
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "optionKey", "locale", "label", "description"],
+  ],
+  [
+    "ReportRejectionReason",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS stableKey,
+            x."sortOrder" AS sortOrder, x."active" AS active
+       FROM "ReportRejectionReason" x
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "stableKey", "sortOrder", "active"],
+  ],
+  [
+    "ReportRejectionReasonLocalization",
+    `SELECT l."stableCode" AS level, v."versionNumber" AS rubricVersion, x."stableKey" AS reasonKey,
+            y."locale" AS locale, y."title" AS title, y."guidance" AS guidance
+       FROM "ReportRejectionReasonLocalization" y
+       JOIN "ReportRejectionReason" x ON x."id" = y."reportRejectionReasonId"
+       JOIN "ReportRubricVersion" v ON v."id" = x."reportRubricVersionId"
+       JOIN "ReportAssignmentVersion" r ON r."id" = v."reportAssignmentVersionId"
+       JOIN "LevelDefinition" l ON l."id" = r."levelDefinitionId"`,
+    ["level", "rubricVersion", "reasonKey", "locale", "title", "guidance"],
   ],
 ];
 
