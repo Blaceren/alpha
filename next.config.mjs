@@ -115,6 +115,27 @@ export const REVIEW_CLAIM_PATH = "/api/curriculum/v2/report-submissions/:submiss
 export const REVIEW_REJECT_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/reject";
 export const REVIEW_APPROVE_PATH = "/api/curriculum/v2/report-submissions/:submissionRef/approve";
 
+/**
+ * G3 — Mentor Review. TWO paths, and deliberately only two.
+ *
+ * The mentor-review lifecycle has exactly two transitions: the learner's
+ * `in_progress -> pending_review` (an Academy surface, never proxied here) and
+ * the reviewer's `pending_review -> completed`. The reviewer therefore needs a
+ * way to DISCOVER waiting work and a way to APPROVE one item, and nothing else.
+ *
+ * There is no claim, no release, no reassign and no reject entry, because the
+ * canonical lifecycle has none of those transitions. Adding a rewrite for a
+ * command the domain does not implement would advertise a workflow that does not
+ * exist — and adding a REJECT path in particular would be inventing product
+ * behaviour, which this phase must not do.
+ *
+ * `:progressId` matches EXACTLY ONE path segment — not `:progressId*`, not a
+ * catch-all — so `/api/curriculum/v2/mentor-reviews/1/approve/extra` is NOT
+ * proxied and falls through to the CRM app.
+ */
+export const MENTOR_REVIEW_QUEUE_PATH = "/api/curriculum/v2/mentor-reviews/queue";
+export const MENTOR_REVIEW_APPROVE_PATH = "/api/curriculum/v2/mentor-reviews/:progressId/approve";
+
 /* ------------------------------------------- Affiliate management (AFD-5A)
  *
  * Six exact paths — three collections and three single-segment details. Each
@@ -217,6 +238,8 @@ export const PROXIED_PATHS = [
   REVIEW_CLAIM_PATH,
   REVIEW_REJECT_PATH,
   REVIEW_APPROVE_PATH,
+  MENTOR_REVIEW_QUEUE_PATH,
+  MENTOR_REVIEW_APPROVE_PATH,
   AFFILIATE_PARTNERS_PATH,
   AFFILIATE_PARTNER_DETAIL_PATH,
   AFFILIATE_CAMPAIGNS_PATH,

@@ -31,7 +31,7 @@ describe("rewrites — api mode", () => {
     // + three affiliate lead paths (AFD-5C2). Pinning the count is the point:
     // a new proxied path must be a deliberate change to this number, never a
     // side effect.
-    expect(buildRewrites(env)).toHaveLength(29);
+    expect(buildRewrites(env)).toHaveLength(31);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -55,7 +55,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the twenty-nine reviewed paths", () => {
+  it("exposes exactly the thirty-one reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -69,6 +69,11 @@ describe("rewrites — api mode", () => {
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
       "/api/curriculum/v2/report-submissions/:submissionRef/reject",
       "/api/curriculum/v2/report-submissions/:submissionRef/approve",
+      // G3 — mentor review. Exactly two: discover, and approve. There is no
+      // claim, release, reassign or reject path because the canonical lifecycle
+      // has no such transition.
+      "/api/curriculum/v2/mentor-reviews/queue",
+      "/api/curriculum/v2/mentor-reviews/:progressId/approve",
       "/api/crm/v1/affiliates/partners",
       "/api/crm/v1/affiliates/partners/:partnerId",
       "/api/crm/v1/affiliates/campaigns",
@@ -258,6 +263,11 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
       "/api/curriculum/v2/report-submissions/:submissionRef/reject",
       "/api/curriculum/v2/report-submissions/:submissionRef/approve",
+      // G3 — mentor review. Exactly two: discover, and approve. There is no
+      // claim, release, reassign or reject path because the canonical lifecycle
+      // has no such transition.
+      "/api/curriculum/v2/mentor-reviews/queue",
+      "/api/curriculum/v2/mentor-reviews/:progressId/approve",
       "/api/crm/v1/affiliates/partners",
       "/api/crm/v1/affiliates/partners/:partnerId",
       "/api/crm/v1/affiliates/campaigns",

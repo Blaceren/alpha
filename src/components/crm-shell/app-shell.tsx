@@ -16,6 +16,7 @@ import {
   AFFILIATE_LEADS_PATH,
 } from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
+import { MentorReviewWorkspace, MENTOR_REVIEW_PATH } from "@/features/mentor-review/mentor-review-workspace";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
 import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace";
@@ -112,6 +113,19 @@ function ApiModeLanding() {
     return (
       <ApiShell session={session}>
         <ReportReviewWorkspace />
+      </ApiShell>
+    );
+  }
+
+  // G3 — mentor practice review. A staff route on the same terms as
+  // `/report-review`: it renders for any authenticated CRM employee, and the
+  // REVIEWER boundary is decided by the Backend queue response inside the
+  // workspace, so a valid staff member who is not a reviewer gets a bounded
+  // forbidden panel rather than an authentication loop.
+  if (pathname === MENTOR_REVIEW_PATH) {
+    return (
+      <ApiShell session={session}>
+        <MentorReviewWorkspace />
       </ApiShell>
     );
   }
