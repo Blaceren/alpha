@@ -78,8 +78,17 @@ export const STAGING_ATTESTATION_EVENT_CLASSES = [
 export type StagingAttestationEventClassName =
   (typeof STAGING_ATTESTATION_EVENT_CLASSES)[number];
 
-/** The level pair each event class may target. Exactly one each, no wildcards. */
-const EVENT_CLASS_TARGET: Record<
+/**
+ * The level pair each event class may target. Exactly one each, no wildcards.
+ *
+ * EXPORTED so an out-of-band operator tool can VERIFY a target against the same
+ * table this service decides with, instead of restating the mapping and drifting
+ * from it. Exporting it changes nothing about who may attest: the authorization,
+ * the environment gate and the refusal all still live below, and a reader of
+ * this constant learns only which level kind each event class is bound to —
+ * which is already stated in this file's header and in the route's.
+ */
+export const STAGING_ATTESTATION_EVENT_CLASS_TARGET: Record<
   StagingAttestationEventClassName,
   { type: string; completionMethod: string }
 > = {
@@ -249,7 +258,7 @@ async function attestInTransaction(
 
   // The event class decides the level kind. This is what stops the endpoint
   // being a generic "complete any level for me" tool.
-  const expected = EVENT_CLASS_TARGET[input.eventClass];
+  const expected = STAGING_ATTESTATION_EVENT_CLASS_TARGET[input.eventClass];
   if (level.type !== expected.type || level.completionMethod !== expected.completionMethod) {
     fail("STAGING_ATTESTATION_LEVEL_WRONG_KIND", "level does not match the event class");
   }

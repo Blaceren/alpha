@@ -124,6 +124,7 @@
     "test:regression:curriculum-phase-a": "tsx scripts/regression/curriculumPhaseARuntimeRegression.ts",
     "test:regression:curriculum-phase-a-http": "tsx scripts/regression/curriculumPhaseAHttpRegression.ts",
     "test:regression:curriculum-staging-attestation": "tsx scripts/regression/curriculumStagingAttestationRegression.ts",
+    "test:regression:preprod-qa-operator": "tsx scripts/regression/preprodQaOperatorRegression.ts",
     "test:regression:public-referral-url": "tsx scripts/regression/publicReferralUrlRegression.ts",
     "test:regression:pocket-affiliate-url": "tsx scripts/regression/pocketAffiliateUrlRegression.ts",
     "test:regression:pocketcta-disposable-e2e": "tsx scripts/regression/pocketCtaDisposableE2E.ts",
@@ -175,7 +176,8 @@
     "test:regression:preprod-activation-authorization": "tsx scripts/regression/preprodActivationAuthorizationRegression.ts",
     "test:regression:preprod-activation-stage-collapse": "tsx scripts/regression/preprodActivationStageCollapseRegression.ts",
     "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts",
-    "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts"
+    "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts",
+    "ops:preprod-qa-operator": "tsx scripts/ops/preprodQaOperator.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
