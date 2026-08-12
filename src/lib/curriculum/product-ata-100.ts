@@ -450,6 +450,35 @@ export function gateIntegrationCode(level: AtaLevelSource): string | null {
 }
 
 /**
+ * G3 — every checkpoint integration code the canonical product declares.
+ *
+ * WHY THIS LIVES HERE AND NOT IN THE RUNTIME
+ * `checkpoint.ts` used to carry a hand-written allowlist containing a single
+ * literal, `checkpoint.module-01` — correct when only level 4's gate had been
+ * approved, and silently wrong from the moment the canonical 100-level product
+ * introduced nineteen more. The runtime then refused nineteen gates it was
+ * supposed to open, with `integration_unknown`, and no test noticed because the
+ * allowlist and the curriculum had no shared source.
+ *
+ * Deriving the set from `gateIntegrationCode` — the ONE function that composes an
+ * integration code anywhere in this repository — makes that divergence
+ * unrepresentable: the string the package builder writes into
+ * `LevelDefinition.featureUnlockCode` and the string the runtime recognises are
+ * now produced by the same expression, so they cannot disagree by construction.
+ *
+ * This is a VOCABULARY, not an authorization. Recognising a code means only "this
+ * is a gate the platform understands". Everything that decides whether a
+ * particular learner may pass it — the capability flags, the provider, the
+ * `LevelCheckpointRequirement` threshold, the cooldown, the attempt allowance —
+ * is unchanged and still checked afterwards, in that order.
+ */
+export const ATA_CHECKPOINT_INTEGRATION_CODES: readonly string[] = Object.freeze(
+  ATA_LEVELS.filter((level) => level.kind === "checkpoint")
+    .map((level) => gateIntegrationCode(level))
+    .filter((code): code is string => code !== null),
+);
+
+/**
  * The runtime requirement a `financial_checkpoint` gate must carry, or null for
  * every other level — including L1, whose gate is an `external_event` and has no
  * threshold at all.

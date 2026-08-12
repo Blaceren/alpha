@@ -508,8 +508,20 @@ async function main() {
     // neither of which is network-capable (the simulator's own suite proves that
     // with a live network tripwire).
     //
+    // G3 adds a sixth: the canonical product definition, and ONLY for the
+    // checkpoint integration-code vocabulary. It is a pure data module — level
+    // rows, module rows, approved thresholds and the `gateIntegrationCode`
+    // string composer — with a single import of its own (`practical-mapping`,
+    // equally pure). It performs no I/O, holds no credential and reaches no
+    // network, so it does not weaken the property this assertion protects.
+    //
+    // It is imported precisely so the allowlist cannot drift from the published
+    // curriculum again: before G3 the runtime recognised one integration code
+    // while the product declared twenty, and nineteen gates answered
+    // `integration_unknown` with nothing to catch it.
+    //
     // The list stays asserted EXACTLY rather than loosened to a pattern, so a
-    // sixth dependency — an exchange module, an HTTP client, a credential
+    // seventh dependency — an exchange module, an HTTP client, a credential
     // source — still fails this check the moment it appears. The resolver
     // remains free of any network call, which is the property that matters: it
     // decides WHICH provider answers, and never talks to one.
@@ -518,6 +530,7 @@ async function main() {
       "./checkpoint-provider-dev-simulator",
       "./checkpoint-provider-mode",
       "./checkpoint-provider-pocket",
+      "./product-ata-100",
       "@/lib/env",
     ]);
     for (const specifier of specifiers) {

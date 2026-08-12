@@ -33,6 +33,7 @@ import {
 import { resolvePocketPartnerProvider } from "./checkpoint-provider-pocket";
 import { resolveDevSimulatorProvider } from "./checkpoint-provider-dev-simulator";
 import { effectiveCheckpointProviderMode } from "./checkpoint-provider-mode";
+import { ATA_CHECKPOINT_INTEGRATION_CODES } from "./product-ata-100";
 
 /**
  * Learner-visible verification state.
@@ -121,8 +122,23 @@ export type CheckpointReadModel = {
  * Recognised checkpoint integration codes. Bounded on purpose: an unknown code
  * is a definition the runtime does not understand, and the safe response to
  * "I do not know what this gate is" is to keep the gate shut.
+ *
+ * G3 — DERIVED, NOT HAND-WRITTEN. This was `new Set(["checkpoint.module-01"])`,
+ * a literal that was accurate while only level 4's gate existed and silently
+ * wrong from the moment the canonical 100-level product shipped nineteen more.
+ * The set now comes from `ATA_CHECKPOINT_INTEGRATION_CODES`, which the canonical
+ * product definition builds with `gateIntegrationCode` — the same function the
+ * package builder uses to write `LevelDefinition.featureUnlockCode`. One
+ * expression produces both strings, so the allowlist cannot fall behind a
+ * curriculum again.
+ *
+ * The bound is unchanged in kind: this is still an exact-membership test against
+ * a closed set, and a code outside it is still refused. What changed is where the
+ * set comes from.
  */
-const KNOWN_INTEGRATION_CODES = new Set<string>(["checkpoint.module-01"]);
+const KNOWN_INTEGRATION_CODES: ReadonlySet<string> = new Set<string>(
+  ATA_CHECKPOINT_INTEGRATION_CODES,
+);
 
 /** Shape guard for a checkpoint integration code (`checkpoint.<segment>`). */
 const INTEGRATION_CODE_PATTERN = /^checkpoint\.[a-z0-9]+(?:-[a-z0-9]+)*$/;
