@@ -26,6 +26,7 @@
  *
  * ========================= WHICH VERSION IT BUILDS =========================
  *   tsx scripts/curriculum/buildCanonical100.ts [--curriculum-version-number N]
+ *                                               [--package-revision R]
  *                                               [--check]
  *
  * The target curriculum version is an explicit build input with a retained
@@ -58,6 +59,7 @@ import {
   canonicalModuleCode,
   completionContractFor,
   gateIntegrationCode,
+  checkpointRequirementFor,
   pad3,
   type AtaLevelSource,
 } from "@/lib/curriculum/product-ata-100";
@@ -67,8 +69,12 @@ import {
 } from "@/lib/curriculum/product-xp-policy";
 import { findObsoleteBrand } from "@/lib/curriculum/product-vocabulary";
 import { calculateFingerprint } from "@/lib/curriculum/package/fingerprint";
-import { calculateSemanticEquivalenceDigest } from "@/lib/curriculum/package/successor-equivalence";
+import {
+  calculateEducationalPayloadDigest,
+  calculateSemanticEquivalenceDigest,
+} from "@/lib/curriculum/package/successor-equivalence";
 import { validateCurriculumPackage } from "@/lib/curriculum/package/validate";
+import { reportRubricSchema } from "@/lib/curriculum/package/schema";
 import {
   ATA_100_PACKAGE_CODE,
   validateAtaProduct100Package,
@@ -89,8 +95,48 @@ const VIDEO_CONTRACTS = path.join(REPO_ROOT, "curriculum/canonical/ata-video-pro
 const APPROVED_SLICE = path.join(REPO_ROOT, "curriculum/packages/ata-v2-first-slice.rev3.approved.json");
 
 const PACKAGE_CODE = ATA_100_PACKAGE_CODE;
-const PACKAGE_REVISION = 1;
 const LOCALE = "ru";
+
+/**
+ * ========================= WHAT A PACKAGE REVISION IS =========================
+ *
+ * `packageRevision` denotes the revision of the package's declared CONTENT AND
+ * CONFIGURATION payload, and bumping it is an act of operator approval — the
+ * meaning `ata-v2.first-slice` established when it went 1 → 2 → 3, and the
+ * meaning `docs/L4_CHECKPOINT_HANDOFF.md` names when it says a real requirement
+ * store needs "a package revision that carries it — which means operator content
+ * approval, as rev2 and rev3 did". It is NOT the curriculum version: that is
+ * `curriculumVersionNumber`, and the two are independent.
+ *
+ *   revision 1  structure, content, assessments, the report assignment, gate
+ *               integration codes. What `ata-v2@v3` was published from and what
+ *               the intermediate `ata-v2@v4` artifact carried.
+ *
+ *   revision 2  revision 1, plus the PROGRESSION OWNER CONFIGURATION the runtime
+ *               needs to complete a level: the level-3 report rubric and the 20
+ *               financial-checkpoint thresholds. Nothing educational differs —
+ *               that is provable, and proved, by the semantic-equivalence digest.
+ *
+ * The revision is an explicit build input for the same reason the version is:
+ * revision 1 must stay buildable, byte for byte, so the accepted `ata-v2@v3`
+ * artifact remains reproducible from source and its fingerprint keeps meaning
+ * what the activation manifest says it means. A `if (versionNumber === 3)`
+ * special case would have made history a side effect of the new code instead of
+ * a contract the builder still honours.
+ */
+const DEFAULT_PACKAGE_REVISION = 1;
+
+/** The first revision whose payload includes progression-owner configuration. */
+const PROGRESSION_OWNER_REVISION = 2;
+
+/** The highest revision this builder knows how to compose. */
+const MAX_PACKAGE_REVISION = PROGRESSION_OWNER_REVISION;
+
+/** The canonical rubric source, promoted from the accepted predecessor rubric. */
+const REPORT_RUBRIC_SOURCE = path.join(
+  REPO_ROOT,
+  "curriculum/canonical/ata-v2-l003-report-rubric.v1.json",
+);
 
 /**
  * PHASE-G2 SUCCESSOR — the target curriculum version is a BUILD INPUT.
@@ -127,12 +173,17 @@ const DEFAULT_CURRICULUM_VERSION_NUMBER = 3;
  * version gets a version-keyed sibling, so successors accumulate beside their
  * predecessor and no build can ever overwrite an accepted artifact.
  */
-function outputPathFor(versionNumber: number): string {
-  const name =
+function outputPathFor(versionNumber: number, packageRevision: number): string {
+  const version =
     versionNumber === DEFAULT_CURRICULUM_VERSION_NUMBER
-      ? "ata-v2-canonical-100.draft.json"
-      : `ata-v2-canonical-100.v${versionNumber}.draft.json`;
-  return path.join(REPO_ROOT, "curriculum/packages", name);
+      ? "ata-v2-canonical-100"
+      : `ata-v2-canonical-100.v${versionNumber}`;
+  // Revision 1 keeps the historical names for the same reason v3 keeps its:
+  // those paths are pinned by accepted artifacts. A revision that carries new
+  // payload is a new artifact and gets its own file, so no build can ever
+  // overwrite one that has already been accepted.
+  const revision = packageRevision === DEFAULT_PACKAGE_REVISION ? "" : `.rev${packageRevision}`;
+  return path.join(REPO_ROOT, "curriculum/packages", `${version}${revision}.draft.json`);
 }
 
 /**
@@ -147,26 +198,40 @@ function outputPathFor(versionNumber: number): string {
  * the build fails at its argument rather than after producing an artifact that
  * validation would reject.
  */
-function parseCurriculumVersionNumber(argv: readonly string[]): number {
-  const index = argv.indexOf("--curriculum-version-number");
-  if (index < 0) return DEFAULT_CURRICULUM_VERSION_NUMBER;
+function parseDigits(argv: readonly string[], flag: string, fallback: number, max: number): number {
+  const index = argv.indexOf(flag);
+  if (index < 0) return fallback;
   const raw = argv[index + 1];
   if (raw === undefined || raw.startsWith("--")) {
-    throw new Error("--curriculum-version-number requires a value");
+    throw new Error(`${flag} requires a value`);
   }
   if (!/^[0-9]+$/.test(raw)) {
-    throw new Error(
-      `--curriculum-version-number must be a positive integer written in digits, got ${JSON.stringify(raw)}`,
-    );
+    throw new Error(`${flag} must be a positive integer written in digits, got ${JSON.stringify(raw)}`);
   }
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 1) {
-    throw new Error(`--curriculum-version-number must be >= 1, got ${JSON.stringify(raw)}`);
+    throw new Error(`${flag} must be >= 1, got ${JSON.stringify(raw)}`);
   }
-  if (parsed > 10_000) {
-    throw new Error(`--curriculum-version-number must be <= 10000, got ${JSON.stringify(raw)}`);
+  if (parsed > max) {
+    throw new Error(`${flag} must be <= ${max}, got ${JSON.stringify(raw)}`);
   }
   return parsed;
+}
+
+function parseCurriculumVersionNumber(argv: readonly string[]): number {
+  return parseDigits(argv, "--curriculum-version-number", DEFAULT_CURRICULUM_VERSION_NUMBER, 10_000);
+}
+
+/**
+ * Read `--package-revision <n>`, held to the same digits-only rule.
+ *
+ * The upper bound is what this builder can actually COMPOSE, not what the schema
+ * permits: asking for revision 3 must fail at the argument rather than silently
+ * emit a revision-2 payload under a revision-3 label, which would make the
+ * revision a lie and the fingerprint unverifiable against its own contract.
+ */
+function parsePackageRevision(argv: readonly string[]): number {
+  return parseDigits(argv, "--package-revision", DEFAULT_PACKAGE_REVISION, MAX_PACKAGE_REVISION);
 }
 
 /** The approved first slice covers levels 1–4 and is carried over unchanged. */
@@ -447,7 +512,7 @@ function buildProposedAssessment(source: AtaLevelSource, contract: VideoProducti
   };
 }
 
-function buildPackage(curriculumVersionNumber: number): Json {
+function buildPackage(curriculumVersionNumber: number, packageRevision: number): Json {
   const editorialDocument = JSON.parse(readFileSync(EDITORIAL_SOURCE, "utf8")) as {
     levels: EditorialLevel[];
   };
@@ -497,9 +562,17 @@ function buildPackage(curriculumVersionNumber: number): Json {
     });
   }
 
+  // Revision 2 and later carry the progression-owner configuration; revision 1
+  // is composed exactly as it always was, so it stays byte-reproducible.
+  const rubricSource = packageRevision >= PROGRESSION_OWNER_REVISION ? loadReportRubricSource() : null;
+
   const modules = ATA_MODULES.map((moduleSource) => {
     const levels = ATA_LEVELS.filter((level) => level.moduleNumber === moduleSource.moduleNumber).map(
-      (level) => buildLevel(level, editorialByLevel, approvedByCode, contractsByLevel, pendingApprovals),
+      (level) => {
+        const built = buildLevel(level, editorialByLevel, approvedByCode, contractsByLevel, pendingApprovals);
+        if (rubricSource) applyProgressionOwners(built, level, rubricSource);
+        return built;
+      },
     );
     const checkpoint = ATA_LEVELS.find(
       (level) => level.kind === "checkpoint" && level.levelNumber === moduleSource.endLevel,
@@ -521,7 +594,7 @@ function buildPackage(curriculumVersionNumber: number): Json {
     schemaVersion: "ata.curriculum.package/1",
     minImporterVersion: 1,
     packageCode: PACKAGE_CODE,
-    packageRevision: PACKAGE_REVISION,
+    packageRevision,
     status: "draft",
     curriculumCode: "ata-v2",
     curriculumVersionNumber,
@@ -716,6 +789,106 @@ function buildLevel(
   return level;
 }
 
+/* ------------------------------------------------------------------ *
+ * Progression owners (package revision 2)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Overlay the completion-owner configuration onto an assembled level.
+ *
+ * ============================ WHY AN OVERLAY ============================
+ * The same reason XP is one. Levels 1–4 are carried over VERBATIM from the
+ * approved first slice, which predates both owners — its level 3 declares a
+ * report with no rubric and its level 4 a gate with no threshold, because in
+ * revision 1 the package could not express either. Rewriting the approved slice
+ * on disk to add them would revise approved editorial work to make new code
+ * tidier; overlaying leaves that file byte-identical, its own fingerprint
+ * regressions passing, and applies the same rule to a carried-over level 4 and a
+ * generated level 100.
+ *
+ * Both owners come from ONE canonical source each and are copied, not composed:
+ * the rubric from the accepted predecessor rubric transcribed into
+ * `curriculum/canonical/ata-v2-l003-report-rubric.v1.json`, the thresholds from
+ * `product-ata-100.ts::checkpointRequirementFor`. Neither is derived from a
+ * level number, a module number or a title.
+ */
+function applyProgressionOwners(level: Json, source: AtaLevelSource, rubric: Json): void {
+  const gate = level.gate as Json | null;
+  if (gate && gate.completionSource === "financial_checkpoint") {
+    const requirement = checkpointRequirementFor(source);
+    if (!requirement) {
+      throw new Error(`level ${source.levelNumber} carries a checkpoint gate with no approved threshold`);
+    }
+    level.gate = {
+      ...gate,
+      requirement: {
+        thresholdCurrency: requirement.thresholdCurrency,
+        thresholdMinorUnits: requirement.thresholdMinorUnits,
+        provenance: CHECKPOINT_REQUIREMENT_PROVENANCE,
+      },
+    };
+  }
+
+  const report = level.report as Json | null;
+  if (report) {
+    if (report.reportCode !== (rubric as Json).reportCodeExpected) {
+      // Defensive: the rubric source names the assignment it was approved for.
+      // A rubric silently attached to a different report is precisely the
+      // "closest match" behaviour the canonical contract forbids.
+      throw new Error(
+        `rubric source is approved for ${String((rubric as Json).reportCodeExpected)}, not ${String(report.reportCode)}`,
+      );
+    }
+    level.report = { ...report, rubric: (rubric as Json).rubric };
+  }
+}
+
+/**
+ * Read and validate the canonical rubric source once per build.
+ *
+ * Parsed with the PACKAGE's own rubric schema rather than a second definition of
+ * the same shape, so the source file and the artifact it lands in can never
+ * drift apart.
+ */
+function loadReportRubricSource(): Json {
+  const raw = JSON.parse(readFileSync(REPORT_RUBRIC_SOURCE, "utf8")) as Json;
+  const parsed = reportRubricSchema.safeParse(raw.rubric);
+  if (!parsed.success) {
+    throw new Error(`canonical report rubric source is invalid: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  }
+  if (raw.levelStableCode !== REPORT_RUBRIC_LEVEL_CODE) {
+    throw new Error(`canonical report rubric source targets ${String(raw.levelStableCode)}, expected ${REPORT_RUBRIC_LEVEL_CODE}`);
+  }
+  return {
+    reportCodeExpected: REPORT_RUBRIC_REPORT_CODE,
+    // Re-emitted through the parsed value so an unknown key in the source file
+    // cannot reach the artifact.
+    rubric: parsed.data as unknown as Json,
+  };
+}
+
+/** The one level whose report the accepted rubric was approved for. */
+const REPORT_RUBRIC_LEVEL_CODE = "v2.l003.pervye-pyat-demo-sdelok";
+const REPORT_RUBRIC_REPORT_CODE = "ata-v2.l003.report";
+
+/**
+ * The thresholds are Academy's own, and the provenance says exactly that. They
+ * are not an operator decision taken here: the same 20 values appear in the
+ * Academy fixture, in `les-prog.txt` and in the canonical level titles of every
+ * shipped artifact. What revision 2 adds is the ability to store them in the
+ * units the runtime compares.
+ */
+const CHECKPOINT_REQUIREMENT_PROVENANCE = {
+  classification: "EXISTING_ACADEMY_SOURCE",
+  sourcePath: "src/lib/curriculum/product-ata-100.ts",
+  sourceRef: "CHECKPOINT_ROWS thresholdUsd/thresholdMinorUnits (academy@4c4ced39 fixture.ts + les-prog.txt)",
+  revision: "4c4ced39",
+  confidence: "high",
+  conflicts: [],
+  approvalRequired: false,
+  note: "Threshold transferred by value from the canonical level title and the Academy source; expressed in integer minor units because LevelCheckpointRequirement stores no dollars.",
+} as const;
+
 /**
  * The learning objective, derived from the brief in a fixed priority order.
  *
@@ -746,8 +919,9 @@ function main(): void {
   const argv = process.argv.slice(2);
   const args = new Set(argv);
   const curriculumVersionNumber = parseCurriculumVersionNumber(argv);
-  const output = outputPathFor(curriculumVersionNumber);
-  const pkg = buildPackage(curriculumVersionNumber);
+  const packageRevision = parsePackageRevision(argv);
+  const output = outputPathFor(curriculumVersionNumber, packageRevision);
+  const pkg = buildPackage(curriculumVersionNumber, packageRevision);
   const serialized = serialize(pkg);
 
   // A generated production artifact must never carry a retired brand. Checked on
@@ -798,12 +972,17 @@ function main(): void {
       {
         curriculumCode: pkg.curriculumCode,
         curriculumVersionNumber,
+        packageRevision,
         path: path.relative(REPO_ROOT, output),
         fingerprint: validation.fingerprint,
         // Audit-only, and never a substitute for `fingerprint`: the semantic
         // payload with the intentional successor identity removed, so a reviewer
         // can prove two versions carry the SAME educational product.
         semanticEquivalenceDigest: calculateSemanticEquivalenceDigest(validation.package),
+        // Audit-only, and narrower still: version identity, package revision and
+        // the runtime owner configuration removed, so a revision that adds a
+        // rubric or a threshold can still PROVE it taught nothing new.
+        educationalPayloadDigest: calculateEducationalPayloadDigest(validation.package),
         sha256: sha256(serialized),
         bytes: Buffer.byteLength(serialized, "utf8"),
         status: pkg.status,
