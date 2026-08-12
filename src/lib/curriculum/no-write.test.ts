@@ -56,6 +56,12 @@ const SCAN_DIRS = [
   "src/lib/level-start",
   "src/features/level-start",
   "src/features/lesson-media",
+  "src/server/proxy/manual-completion-proxy.ts",
+  "src/lib/manual-completion",
+  "src/features/manual-completion",
+  "src/server/proxy/mentor-review-proxy.ts",
+  "src/lib/mentor-review",
+  "src/features/mentor-review",
 ].map((p) => path.join(REPO_ROOT, p));
 
 /** The sanctioned CI-3 assessment write surface (start + submit attempt). */
@@ -66,13 +72,37 @@ const REPORT_WRITE = /report-proxy|report-client|level-report|report-machine|[\\
 const CHECKPOINT_WRITE = /checkpoint-proxy|checkpoint-client|level-checkpoint|checkpoint-machine|[\\/]checkpoint[\\/]/;
 /** The sanctioned L2START-PLAYER-1 learner level-start surface (start). */
 const LEVEL_START_WRITE = /level-start-proxy|level-start-client|[\\/]level-start[\\/]|[\\/]start[\\/]route\.tsx?$/;
+/**
+ * The sanctioned G3 learner MANUAL COMPLETION surface (complete).
+ *
+ * The fifth and — as of G3 — final learner write. It carries a `{ requestId }`
+ * body to one pinned Backend path and owns nothing: the completion decision, the
+ * owner check, the XP award and the idempotency all live in the Backend command
+ * it forwards to. It is listed here rather than left unsanctioned because the
+ * 13 canonical `lesson:manual` levels had no learner-reachable completion path
+ * at all before it existed.
+ */
+const MANUAL_COMPLETION_WRITE =
+  /manual-completion-proxy|manual-completion-client|[\\/]manual-completion[\\/]|[\\/]complete[\\/]route\.tsx?$/;
+/**
+ * The sanctioned G3 learner MENTOR REVIEW SUBMISSION surface (request).
+ *
+ * The sixth learner write, and the narrowest of them: it forwards NO body at
+ * all. It covers only the learner half of the lifecycle — `in_progress ->
+ * pending_review`. The reviewer half lives on the CRM origin and is asserted
+ * absent from the Academy by the reviewer-path test below.
+ */
+const MENTOR_REVIEW_WRITE =
+  /mentor-review-proxy|mentor-review-client|[\\/]mentor-review[\\/]/;
 
 function sanctionedWrite(file: string): boolean {
   return (
     ASSESSMENT_WRITE.test(file) ||
     REPORT_WRITE.test(file) ||
     CHECKPOINT_WRITE.test(file) ||
-    LEVEL_START_WRITE.test(file)
+    LEVEL_START_WRITE.test(file) ||
+    MANUAL_COMPLETION_WRITE.test(file) ||
+    MENTOR_REVIEW_WRITE.test(file)
   );
 }
 
@@ -201,6 +231,78 @@ describe("curriculum write contract (CI-4: read-only + bounded assessment & repo
       for (const m of matches) {
         expect(allowed.test(m) || m.includes("assessment/attempts"), `${f}: unexpected assessment path ${m}`).toBe(true);
       }
+    }
+  });
+
+  /* --------------------------------------------------------------- G3 */
+
+  it("manual completion API paths are only ever the single complete path", () => {
+    // The whole manual write surface is ONE URL. A second completion path
+    // anywhere in the Academy would mean a second way to finish a level.
+    const apiPath = /(?:\/api\/|curriculum\/levels\/)[A-Za-z0-9_${}().\\/[\]-]*\/complete\b/g;
+    for (const { f, src } of sources) {
+      if ((src.match(apiPath) ?? []).length > 0) {
+        expect(MANUAL_COMPLETION_WRITE.test(f), `${f} may only use a complete path in the manual surface`).toBe(true);
+      }
+    }
+  });
+
+  it("the manual completion surface SENDS only a request identity", () => {
+    // Structural: the only outgoing body is `JSON.stringify({ requestId })`.
+    // Checked on what is SENT rather than on every identifier in the file — the
+    // module also declares the RESPONSE receipt, which legitimately names
+    // `xpAwarded` and `completedAt` because the Backend reports them back.
+    const stripComments = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    const bodyLiteral = /body:\s*JSON\.stringify\(([^)]*)\)/g;
+    for (const { f, src } of sources) {
+      if (!MANUAL_COMPLETION_WRITE.test(f)) continue;
+      const clean = stripComments(src);
+      for (const [, payload] of clean.matchAll(bodyLiteral)) {
+        expect(payload.replace(/\s/g, ""), `${f} sends more than a request identity`).toBe("{requestId}");
+      }
+      // And no other body-building mechanism is used at all.
+      expect(clean, `${f} builds a request body some other way`).not.toMatch(
+        /body:\s*(new FormData|new URLSearchParams|["'])/,
+      );
+    }
+  });
+
+  it("mentor-review API paths are only ever the learner REQUEST path", () => {
+    // The Academy owns exactly one half of the mentor-review lifecycle. Matched
+    // against REAL API path literals (`/api/...`, `curriculum/levels/...`) so
+    // that module specifiers such as `@/server/proxy/mentor-review-proxy` and
+    // CSS imports are not mistaken for routes — the same technique the
+    // checkpoint and level-start path tests use.
+    const apiPath = /(?:\/api\/|curriculum\/levels\/)[A-Za-z0-9_${}().\\/[\]-]*mentor-review[A-Za-z0-9_${}().\\/[\]-]*/g;
+    for (const { f, src } of sources) {
+      for (const m of src.match(apiPath) ?? []) {
+        expect(m.includes("mentor-review/request"), `${f}: unexpected mentor-review path ${m}`).toBe(true);
+        expect(MENTOR_REVIEW_WRITE.test(f), `${f} may only use a mentor-review path in the mentor-review surface`).toBe(true);
+      }
+    }
+  });
+
+  it("the Academy never references the reviewer-only mentor-review routes", () => {
+    // `mentor-reviews/` (plural) is the reviewer namespace: the approve command
+    // and the queue. Both are staff surfaces on the CRM origin, and their
+    // absence from every learner-facing file is what stops a learner bundle from
+    // ever carrying a reviewer command.
+    for (const { f, src } of sources) {
+      expect(src, `${f} references a reviewer-only mentor-review route`).not.toMatch(
+        /mentor-reviews\//,
+      );
+    }
+  });
+
+  it("the mentor-review surface sends no request body at all", () => {
+    const forbidden =
+      /body:\s*(JSON\.stringify|raw\b|new FormData|new URLSearchParams|["'])|\buserId\b|\blearnerId\b|\breviewerId\b|\bscore\b|\brubric\b/;
+    const stripComments = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    for (const { f, src } of sources) {
+      if (!MENTOR_REVIEW_WRITE.test(f)) continue;
+      expect(stripComments(src), `${f} sends something with the mentor-review request`).not.toMatch(forbidden);
     }
   });
 });

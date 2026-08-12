@@ -6,6 +6,9 @@ import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum
 import { LevelAssessment } from "@/features/assessment/level-assessment";
 import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
+import { LevelManualCompletion } from "@/features/manual-completion/level-manual-completion";
+import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
+import { isManualCompletionMethod } from "@/lib/curriculum/completion-method";
 import { LevelStart } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
 import { shouldShowPocketRegistration } from "@/features/pocket-registration/model/pocket-registration-visibility";
@@ -157,13 +160,39 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
 
           {/* Server-graded assessment (CI-3). Rendered for accessible lesson levels;
               a lesson without a configured assessment degrades to a bounded notice
-              from the Backend. Pass/completion are derived from Backend responses. */}
-          {summary.typeInfo.type === "lesson" && summary.routeAccessible ? (
+              from the Backend. Pass/completion are derived from Backend responses.
+
+              G3 narrows this by completion method. A `lesson` is not one thing:
+              58 canonical levels are `lesson:assessment_pass` and 13 are
+              `lesson:manual`. Rendering the assessment surface on a manual level
+              showed a check that does not exist and offered no way to finish, so
+              the two are now selected explicitly and are mutually exclusive. */}
+          {summary.typeInfo.type === "lesson" &&
+          summary.completionMethod === "assessment" &&
+          summary.routeAccessible ? (
             <LevelAssessment
               stableCode={summary.levelCode}
               locale={ASSESSMENT_LOCALE}
               alreadyCompleted={summary.state === "completed"}
               nextLevelCode={navigation.nextLevelCode}
+            />
+          ) : null}
+
+          {/* Manual practical completion (G3). The 13 canonical `lesson:manual`
+              levels are finished by an explicit learner declaration against real
+              instructional content — the platform cannot witness the exercise and
+              does not pretend to. The control asks for a confirmation and then
+              calls the shipped `level_completion` owner, which re-checks the
+              enrollment, the owner, the current level and the started state and
+              is idempotent on the request identity. Nothing about completion is
+              decided here. */}
+          {summary.typeInfo.type === "lesson" &&
+          isManualCompletionMethod(summary.completionMethod) &&
+          summary.routeAccessible ? (
+            <LevelManualCompletion
+              stableCode={summary.levelCode}
+              xpReward={summary.xpReward}
+              alreadyCompleted={summary.state === "completed"}
             />
           ) : null}
 
@@ -175,6 +204,21 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
               stableCode={summary.levelCode}
               locale={REPORT_LOCALE}
               nextLevelCode={navigation.nextLevelCode}
+            />
+          ) : null}
+
+          {/* Mentor-reviewed practical (G3). The learner's only transition is
+              `in_progress -> pending_review`; a reviewer, never the learner, moves
+              it to `completed`. The canonical lifecycle has no artifact, no rubric
+              and no rejection path, so this surface offers exactly one action and
+              then shows the honest waiting state. */}
+          {summary.typeInfo.type === "mentor-review" &&
+          summary.completionMethod === "mentor-review" &&
+          summary.routeAccessible ? (
+            <LevelMentorReview
+              stableCode={summary.levelCode}
+              xpReward={summary.xpReward}
+              levelState={summary.state}
             />
           ) : null}
 

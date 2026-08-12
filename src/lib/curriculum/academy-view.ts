@@ -7,6 +7,7 @@
  * are the identity. Timestamps are ISO strings; nulls are explicit.
  */
 import type { AcademyLevelType } from "@/lib/curriculum/level-type";
+import type { AcademyCompletionMethod } from "@/lib/curriculum/completion-method";
 import type { AcademyLevelState, AcademyLockReason } from "@/lib/curriculum/progress-state";
 
 export type AcademyCurriculumSummary = {
@@ -97,6 +98,25 @@ export type AcademyLevelSummary = {
   progressVersion: string | null;
   /** Present only on checkpoint levels; null everywhere else. */
   checkpoint: AcademyCheckpointState | null;
+  /**
+   * G3 — the BOUNDED completion method, mapped from the Backend's own field.
+   *
+   * `typeInfo.type` alone cannot distinguish the two things a `lesson` can be:
+   * `lesson:assessment_pass` (58 levels, finished by a graded check) and
+   * `lesson:manual` (13 canonical practical levels, finished by an explicit
+   * learner declaration). Before this field the page offered the assessment
+   * surface to both, so a practical level showed a check that did not exist and
+   * offered no way to finish.
+   *
+   * Mapped through a closed vocabulary rather than passed through, for the same
+   * reason `mapLevelType` exists: an unrecognised value must degrade to a
+   * bounded `unsupported`, never be treated as one of the known methods.
+   *
+   * This is presentation only. It selects which surface is rendered; it never
+   * decides whether a completion is allowed — the Backend owner does that and
+   * refuses anything else, whatever this page offers.
+   */
+  completionMethod: AcademyCompletionMethod;
 };
 
 export type AcademyModuleSummary = {

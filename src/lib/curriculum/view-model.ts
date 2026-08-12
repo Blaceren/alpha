@@ -15,6 +15,7 @@ import type {
   BackendContentAsset,
 } from "@/lib/curriculum/backend-dto";
 import { mapLevelType, type AcademyLevelType } from "@/lib/curriculum/level-type";
+import { mapCompletionMethod } from "@/lib/curriculum/completion-method";
 import { mapLevelState } from "@/lib/curriculum/progress-state";
 import type {
   AcademyCheckpointState,
@@ -173,6 +174,10 @@ function mapLevel(level: BackendLevel): AcademyLevelSummary {
     xpReward: level.xpReward,
     progressVersion: progressVersionOf(level),
     checkpoint: mapCheckpoint(level, typeInfo.isCheckpoint),
+    // G3. `completionMethod` has always travelled in the Backend payload and was
+    // dropped here, which is why a `lesson:manual` level was indistinguishable
+    // from a `lesson:assessment_pass` one and got the wrong surface.
+    completionMethod: mapCompletionMethod(level.completionMethod),
   };
 }
 

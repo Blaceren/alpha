@@ -69,9 +69,20 @@ describe("toAcademyCurriculumView (enrolled)", () => {
 
   it("does not expose email/xp-internal/prisma fields (only whitelisted keys)", () => {
     const level0 = view.modules[0]!.levels[0]!;
+    // G3 adds `completionMethod`: a bounded, mapped display value (never the raw
+    // Backend string) that tells the page whether a `lesson` is finished by a
+    // graded check or by an explicit learner declaration. It carries no learner
+    // data, so the property this whitelist protects is unchanged.
     expect(Object.keys(level0).sort()).toEqual(
-      ["actions", "checkpoint", "completionSource", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
+      ["actions", "checkpoint", "completionMethod", "completionSource", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
     );
+  });
+
+  it("maps completionMethod through a closed vocabulary, fail-closed", () => {
+    const level0 = view.modules[0]!.levels[0]!;
+    expect(
+      ["external-event", "assessment", "report", "checkpoint", "manual", "mentor-review", "unsupported"],
+    ).toContain(level0.completionMethod);
   });
 });
 
