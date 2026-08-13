@@ -83,16 +83,28 @@ const countsSchema = z.object({
   firstDeposits: z.number(),
   confirmedRedeposits: z.number(),
   unresolvedRedeposits: z.number(),
+  /**
+   * G4-R2/G4-R5. Every rate here is a subset fraction of a named population.
+   * The two that were not — a click-denominated event quotient and an approval
+   * quotient across two windows — are replaced by cohort metrics, not renamed.
+   */
   ratios: z.object({
-    attributedAtaRegistrationRate: ratioSchema,
+    attributedClickToRegistrationRate: ratioSchema,
+    attributedRegistrationToActivationRate: ratioSchema.optional().default(null),
+    attributedRegistrationToPocketRegistrationRate: ratioSchema.optional().default(null),
+    attributedRegistrationToDepositRate: ratioSchema.optional().default(null),
+    attributedPocketRegistrationToDepositRate: ratioSchema.optional().default(null),
     activationRate: ratioSchema,
     enrollmentRate: ratioSchema,
     assessmentPassRate: ratioSchema,
-    reportApprovalRate: ratioSchema,
+    submittedReportCohortApprovalRate: ratioSchema,
     pocketRegistrationRate: ratioSchema,
     depositRatePerRegistration: ratioSchema,
     depositRatePerPocketRegistration: ratioSchema,
   }),
+  reportCohort: z
+    .object({ submittedCohort: z.number(), approvedFromCohort: z.number() })
+    .nullable(),
 });
 
 export type GrowthCounts = z.infer<typeof countsSchema>;
@@ -182,7 +194,11 @@ export const growthFunnelSchema = z.object({
     assessmentPassRate: ratioSchema,
     reportsSubmitted: z.number(),
     reportsApproved: z.number(),
-    reportApprovalRate: ratioSchema,
+    // G4-R5. Event volume and the cohort share are different questions and are
+    // now different fields. The quotient of the first two is not published.
+    submittedReportCohort: z.number(),
+    approvedFromSubmittedReportCohort: z.number(),
+    submittedReportCohortApprovalRate: ratioSchema,
     mentorReviewsSubmitted: z.number(),
     mentorReviewsApproved: z.number(),
   }),
@@ -200,20 +216,42 @@ export const growthAcquisitionSchema = z.object({
   limit: z.number(),
   rankingPolicy: z.string(),
   qualityScorePolicy: z.string(),
+  metricClass: z.string(),
+  cohortAnchor: z.string(),
+  downstreamObservation: z.string(),
+  /** The unfiltered cohort the rows are a breakdown of. */
+  totals: z.object({
+    clicks: z.number(),
+    convertedClicks: z.number(),
+    registeredLearners: z.number(),
+    activatedLearners: z.number(),
+    pocketRegisteredLearners: z.number(),
+    depositedLearners: z.number(),
+    depositedAmongPocketRegistered: z.number(),
+    attributedClickToRegistrationRate: ratioSchema,
+    attributedRegistrationToActivationRate: ratioSchema,
+    attributedRegistrationToPocketRegistrationRate: ratioSchema,
+    attributedRegistrationToDepositRate: ratioSchema,
+    attributedPocketRegistrationToDepositRate: ratioSchema,
+  }),
   rows: z.array(
     z.object({
       dimension: z.string(),
       label: z.string().nullable(),
+      // G4-R2. Every field below describes ONE click cohort: the qualified
+      // clicks this source produced in the period, and what became of them.
       clicks: z.number(),
-      ataRegistrations: z.number(),
+      convertedClicks: z.number(),
+      registeredLearners: z.number(),
       activatedLearners: z.number(),
-      pocketRegistrations: z.number(),
-      firstDeposits: z.number(),
-      attributedAtaRegistrationRate: ratioSchema,
-      activationRate: ratioSchema,
-      pocketRegistrationRate: ratioSchema,
-      depositRatePerRegistration: ratioSchema,
-      depositRatePerPocketRegistration: ratioSchema,
+      pocketRegisteredLearners: z.number(),
+      depositedLearners: z.number(),
+      depositedAmongPocketRegistered: z.number(),
+      attributedClickToRegistrationRate: ratioSchema,
+      attributedRegistrationToActivationRate: ratioSchema,
+      attributedRegistrationToPocketRegistrationRate: ratioSchema,
+      attributedRegistrationToDepositRate: ratioSchema,
+      attributedPocketRegistrationToDepositRate: ratioSchema,
     }),
   ),
   dataAvailability: growthAvailabilitySchema,

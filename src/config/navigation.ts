@@ -3,6 +3,7 @@
  * Icons are lucide-react names resolved in the sidebar component.
  */
 import type { SectionKey } from "@/domain/identity/roles";
+import { GROWTH_ROOT_PATH } from "@/features/growth/growth-routes";
 
 export interface NavItem {
   key: SectionKey;
@@ -62,7 +63,10 @@ export const NAV_GROUPS: NavGroup[] = [
       // G4-GROWTH. Beside Аффилейты because an operator looking for traffic
       // sources looks here, but a separate section: that one is configuration
       // and this one is measurement.
-      { key: "growth", label: "Growth", href: "/growth", icon: "TrendingUp" },
+      // G4-R1. The href comes from the Growth route registry, which is also what
+      // both shells route with, so the mock navigation cannot point at a path
+      // api mode does not serve — or vice versa, which is what broke G4.
+      { key: "growth", label: "Growth", href: GROWTH_ROOT_PATH, icon: "TrendingUp" },
       { key: "audit", label: "Audit", href: "/audit", icon: "ScrollText" },
     ],
   },

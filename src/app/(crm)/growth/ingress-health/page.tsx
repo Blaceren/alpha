@@ -4,20 +4,20 @@ import { GrowthWorkspace } from "@/features/growth/growth-workspace";
 import { LoadingBlock } from "@/features/growth/growth-primitives";
 
 /**
- * G4-GROWTH — the internal staff Growth workspace route.
+ * G4-R1 — Здоровье приёма.
  *
- * Suspense-wrapped like the affiliate analytics route: the workspace is a client
- * component that fetches on mount, and the fallback is the same loading block
- * the sections use, so the first paint is consistent with every later one.
+ * One route per Growth surface, so each is addressable, reloadable and
+ * reachable with the browser's back button. The path is declared once in
+ * `growth-routes.ts` and this page renders the surface that registry names.
  */
 export const metadata: Metadata = {
-  title: "Growth",
+  title: "Growth — Здоровье приёма",
 };
 
 export default function GrowthPage() {
   return (
     <React.Suspense fallback={<LoadingBlock label="Загружаем Growth…" />}>
-      <GrowthWorkspace surface="overview" />
+      <GrowthWorkspace surface="ingress" />
     </React.Suspense>
   );
 }

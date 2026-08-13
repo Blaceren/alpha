@@ -45,6 +45,8 @@ import {
   GrowthSection,
   LoadingBlock,
 } from "./growth-primitives";
+import Link from "next/link";
+import { GROWTH_ROUTES, type GrowthSurface } from "./growth-routes";
 import {
   DIMENSION_LABEL,
   FUNNEL_STEP_LABEL,
@@ -57,15 +59,13 @@ import {
   formatRatio,
 } from "./growth-labels";
 
-type Tab = "overview" | "funnel" | "acquisition" | "pocket" | "ingress";
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "overview", label: "Обзор" },
-  { key: "funnel", label: "CRO-воронка" },
-  { key: "acquisition", label: "Качество трафика" },
-  { key: "pocket", label: "Конверсии Pocket" },
-  { key: "ingress", label: "Здоровье приёма" },
-];
+/**
+ * G4-R1 — the surface comes from the URL, not from component state.
+ *
+ * The tab strip below is a set of real links, so each surface is addressable,
+ * reloadable and reachable with the browser's back button. `GROWTH_ROUTES` is
+ * the same definition both CRM shells route with — see `growth-routes.ts`.
+ */
 
 /** Map a closed outcome to the one sentence an operator can act on. */
 function outcomeMessage(status: string): string {
@@ -122,8 +122,8 @@ function useGrowthData<T>(
   return state;
 }
 
-export function GrowthWorkspace() {
-  const [tab, setTab] = React.useState<Tab>("overview");
+export function GrowthWorkspace({ surface = "overview" }: { surface?: GrowthSurface }) {
+  const tab = surface;
   const [preset, setPreset] = React.useState<string>("last_30_days");
 
   return (
@@ -155,20 +155,19 @@ export function GrowthWorkspace() {
       </div>
 
       <nav aria-label="Разделы Growth" className="flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            onClick={() => setTab(entry.key)}
-            aria-current={tab === entry.key ? "page" : undefined}
+        {GROWTH_ROUTES.map((entry) => (
+          <Link
+            key={entry.surface}
+            href={entry.path}
+            aria-current={tab === entry.surface ? "page" : undefined}
             className={
-              tab === entry.key
+              tab === entry.surface
                 ? "border-b-2 border-primary px-3 py-1.5 text-xs font-medium text-text-primary"
                 : "px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
             }
           >
             {entry.label}
-          </button>
+          </Link>
         ))}
       </nav>
 
@@ -251,13 +250,13 @@ function OverviewTab({ preset }: { preset: string }) {
 
       <GrowthSection
         title="Конверсии"
-        description={`Показатели «регистрация → …» считаются по УНИКАЛЬНЫМ учащимся: числитель — те, кто зарегистрировался в периоде И сделал следующий шаг, знаменатель — все зарегистрировавшиеся. Поэтому доля никогда не превышает 100%. Конверсия «клик → регистрация» существует только для атрибутированного среза — у органических регистраций нет клика в знаменателе, и делить одно на другое означало бы получить долю выше 100%. ${state.data.rateModeExplanation}`}
+        description={`Показатели «регистрация → …» считаются по УНИКАЛЬНЫМ учащимся: числитель — те, кто зарегистрировался в периоде И сделал следующий шаг, знаменатель — все зарегистрировавшиеся. Поэтому доля никогда не превышает 100%. Конверсия «клик → регистрация» считается по КОГОРТЕ КЛИКОВ: знаменатель — клики, совершённые в выбранном периоде, числитель — те же клики, которые привели к регистрации (когда бы она ни произошла). Поэтому регистрация в феврале по январскому клику относится к январской когорте, а не завышает февральскую долю. ${state.data.rateModeExplanation}`}
       >
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <GrowthRatio
             label="Клик → регистрация"
-            value={attributedRatios.ratios.attributedAtaRegistrationRate}
-            denominatorLabel="квалифицированные клики"
+            value={attributedRatios.ratios.attributedClickToRegistrationRate}
+            denominatorLabel="клики периода, давшие регистрацию / все клики периода"
           />
           <GrowthRatio
             label="Регистрация → активация"
@@ -293,8 +292,8 @@ function OverviewTab({ preset }: { preset: string }) {
           />
           <GrowthRatio
             label="Одобрение отчётов"
-            value={ratioCounts.ratios.reportApprovalRate}
-            denominatorLabel="отправленные отчёты"
+            value={ratioCounts.ratios.submittedReportCohortApprovalRate}
+            denominatorLabel="отчёты, отправленные в периоде (одобренные сегодня / все)"
           />
         </div>
       </GrowthSection>
@@ -531,6 +530,17 @@ function AcquisitionTab({ preset }: { preset: string }) {
         качества трафика» — сравнение делает читатель по наблюдаемым метрикам.
       </GrowthNote>
 
+      {/* G4-R2. The cohort contract, said in the UI and not only in the payload:
+          without it a reader assumes the row's registrations happened in the
+          selected period, which is exactly the assumption that produced 683%. */}
+      <GrowthNote>
+        Таблица считается по КОГОРТЕ КЛИКОВ: знаменатель каждой строки — клики,
+        совершённые в выбранном периоде, а остальные столбцы описывают, что стало
+        с учащимися ИМЕННО ЭТИХ кликов — независимо от того, когда они
+        зарегистрировались, активировались или внесли депозит. Поэтому ни одна
+        доля не может превысить 100%.
+      </GrowthNote>
+
       {state.data.rows.length === 0 ? (
         <GrowthNote>
           За период нет ТРЕКИНГОВЫХ источников с данными. Это таблица
@@ -545,7 +555,7 @@ function AcquisitionTab({ preset }: { preset: string }) {
             <thead className="text-text-secondary">
               <tr>
                 <th className="py-1.5 pr-3 font-medium">Источник</th>
-                <th className="py-1.5 pr-3 font-medium">Клики</th>
+                <th className="py-1.5 pr-3 font-medium">Клики периода</th>
                 <th className="py-1.5 pr-3 font-medium">Рег. ATA</th>
                 <th className="py-1.5 pr-3 font-medium">Активация</th>
                 <th className="py-1.5 pr-3 font-medium">Рег. Pocket</th>
@@ -559,17 +569,17 @@ function AcquisitionTab({ preset }: { preset: string }) {
                 <tr key={`${row.dimension}-${row.label ?? index}`} className="border-t border-border">
                   <td className="py-1.5 pr-3">{row.label ?? "—"}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.clicks)}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.ataRegistrations)}</td>
+                  <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.registeredLearners)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.activatedLearners)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {formatCount(row.pocketRegistrations)}
+                    {formatCount(row.pocketRegisteredLearners)}
                   </td>
-                  <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.firstDeposits)}</td>
+                  <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.depositedLearners)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {formatRatio(row.attributedAtaRegistrationRate)}
+                    {formatRatio(row.attributedClickToRegistrationRate)}
                   </td>
                   <td className="py-1.5 tabular-nums">
-                    {formatRatio(row.depositRatePerRegistration)}
+                    {formatRatio(row.attributedRegistrationToDepositRate)}
                   </td>
                 </tr>
               ))}

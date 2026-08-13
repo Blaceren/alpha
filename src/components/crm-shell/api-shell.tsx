@@ -2,8 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CRM_ROLE_LABEL } from "@/domain/identity/roles";
+import { CRM_ROLE_LABEL, type Permission } from "@/domain/identity/roles";
 import { grants } from "@/domain/identity/access";
+import {
+  GROWTH_ROOT_PATH,
+  GROWTH_SECTION_PERMISSIONS,
+} from "@/features/growth/growth-routes";
 import type { EmployeeSession } from "@/domain/identity/session";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
@@ -45,6 +49,50 @@ export const AFFILIATE_ANALYTICS_PATH = "/affiliates/analytics";
  */
 export const AFFILIATE_ATLAS_PATH = "/affiliates/analytics/atlas";
 export const AFFILIATE_LEADS_PATH = "/affiliates/leads";
+
+/**
+ * G4-R1 — the api-mode topbar, as DATA rather than as markup.
+ *
+ * This nav used to be two hand-written `<li>` blocks, and `ApiModeLanding` used
+ * to be a hand-written list of pathnames. Two lists, edited by hand, that had to
+ * agree — and when G4 added a section to neither, the workspace existed and was
+ * unreachable with no test able to notice.
+ *
+ * One array now describes what the shell offers. `permissions` is an OR: an
+ * empty list means "every authenticated employee", and anything else must be
+ * satisfied by the session. The rule for each entry is deliberately the SAME
+ * permission the corresponding backend routes enforce, so navigation canon and
+ * the real gate cannot drift into showing a section that answers 403.
+ */
+type ApiNavItem = {
+  readonly href: string;
+  readonly label: string;
+  readonly permissions: readonly Permission[];
+};
+
+export const API_NAV_ITEMS: readonly ApiNavItem[] = [
+  { href: API_USERS_PATH, label: "Пользователи", permissions: [] },
+  {
+    href: AFFILIATES_PATH,
+    label: "Аффилейты",
+    permissions: ["view_affiliate_analytics", "manage_settings"],
+  },
+  // G4-GROWTH. Beside Аффилейты because an operator looking for traffic sources
+  // looks here, but a separate section: that one is configuration and this one
+  // is measurement. The href and the permission rule both come from the Growth
+  // route registry, which is also what `ApiModeLanding` routes with.
+  {
+    href: GROWTH_ROOT_PATH,
+    label: "Growth",
+    permissions: GROWTH_SECTION_PERMISSIONS,
+  },
+];
+
+/** An entry with no permissions is open to every authenticated employee. */
+function isNavItemVisible(item: ApiNavItem, session: EmployeeSession): boolean {
+  if (item.permissions.length === 0) return true;
+  return item.permissions.some((permission) => grants(session.effectivePermissions, permission));
+}
 
 export function ApiShell({
   session,
@@ -112,26 +160,16 @@ export function ApiShell({
           className="ml-1 min-w-0 flex-1 basis-0 overflow-x-auto sm:ml-4"
         >
           <ul className="flex items-center gap-1 whitespace-nowrap">
-            <li>
-              <Link
-                href={API_USERS_PATH}
-                aria-current="page"
-                className="rounded px-2 py-1 text-sm font-medium text-text-primary hover:bg-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Пользователи
-              </Link>
-            </li>
-            {grants(session.effectivePermissions, "view_affiliate_analytics") ||
-            grants(session.effectivePermissions, "manage_settings") ? (
-              <li>
+            {API_NAV_ITEMS.filter((item) => isNavItemVisible(item, session)).map((item) => (
+              <li key={item.href}>
                 <Link
-                  href={AFFILIATES_PATH}
+                  href={item.href}
                   className="rounded px-2 py-1 text-sm font-medium text-text-primary hover:bg-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  Аффилейты
+                  {item.label}
                 </Link>
               </li>
-            ) : null}
+            ))}
           </ul>
         </nav>
 

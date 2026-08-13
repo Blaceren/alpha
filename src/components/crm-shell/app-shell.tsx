@@ -26,6 +26,8 @@ import { AffiliateAnalyticsWorkspace } from "@/features/affiliate-analytics/anal
 import { CurieAtlasWorkspace } from "@/features/curie-atlas/atlas-workspace";
 import { AffiliateLeadsWorkspace } from "@/features/affiliate-leads/leads-workspace";
 import { AffiliateLeadDetailWorkspace } from "@/features/affiliate-leads/lead-detail-workspace";
+import { GrowthWorkspace } from "@/features/growth/growth-workspace";
+import { resolveGrowthSurface } from "@/features/growth/growth-routes";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
 import { Sidebar } from "./sidebar";
@@ -240,6 +242,40 @@ function ApiModeLanding() {
     return (
       <ApiShell session={session}>
         <AffiliateDetailWorkspace partnerId={decodeURIComponent(partner[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
+  /* ------------------------------------------------------------ Growth (G4)
+   *
+   * G4-R1 — THE FIVE GROWTH SURFACES, MOUNTED FROM THE SHARED REGISTRY.
+   *
+   * G4 shipped the workspace and its Next.js page but never mounted it here, so
+   * in api mode — which is what every deployed environment runs — all five
+   * Growth URLs answered with the deferred placeholder while the backend served
+   * correct data behind them. That is the same omission this file records for
+   * the AFD-5A affiliate workspaces, and this is the same repair.
+   *
+   * `resolveGrowthSurface` matches EXACTLY against `GROWTH_ROUTES`, so it keeps
+   * the property the rest of this router has: a nested path nobody has built —
+   * `/growth/funnel/x` — stays deferred rather than appearing to exist. Because
+   * both shells and the navigation read that one registry, a sixth surface
+   * cannot appear in one mode and be missing from the other again.
+   *
+   * Authorization is UNCHANGED and is not weakened by becoming reachable: the
+   * whole branch sits inside `SessionBoundary`, so an unauthenticated visitor
+   * never reaches it, and each backend route independently enforces the CRM
+   * affiliate-reader gate before any read. A staff member without the permission
+   * sees the workspace's own bounded forbidden panel, exactly as they would on
+   * any other section.
+   */
+  const growthSurface = resolveGrowthSurface(pathname);
+  if (growthSurface) {
+    return (
+      <ApiShell session={session}>
+        <React.Suspense fallback={null}>
+          <GrowthWorkspace surface={growthSurface} />
+        </React.Suspense>
       </ApiShell>
     );
   }
