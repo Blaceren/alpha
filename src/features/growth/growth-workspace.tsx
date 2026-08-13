@@ -199,8 +199,17 @@ function OverviewTab({ preset }: { preset: string }) {
   // signups that had no click at all. Dividing the second by the first would
   // produce a "click → registration" rate above 100% as soon as any learner
   // arrives organically — a number that looks like a bug and hides a real one.
+  // G4-H4. The headline is the BUSINESS: every canonical event, whatever its
+  // acquisition origin. The attributed block answers a different question and is
+  // shown beside it as coverage, never instead of it.
   const counts = state.data.coverage.total ?? state.data.coverage.attributed;
-  const ratioCounts = state.data.coverage.attributed;
+  // G4-H3. Same-population ratios are read from the same block the counts came
+  // from. The one click-denominated rate is read from the attributed block —
+  // which is the only block in which the API defines it at all — and is labelled
+  // as attributed traffic rather than as a generic registration rate.
+  const ratioCounts = counts;
+  const attributedRatios = state.data.coverage.attributed;
+  const coverage = state.data.attributionCoverage;
 
   return (
     <div className="space-y-5">
@@ -223,24 +232,42 @@ function OverviewTab({ preset }: { preset: string }) {
       </GrowthSection>
 
       <GrowthSection
-        title="Конверсии по атрибутированному трафику"
-        description={`Знаменатели и числители берутся из атрибутированного среза, чтобы органические регистрации не завышали конверсию из клика. ${state.data.rateModeExplanation}`}
+        title="Покрытие атрибуции"
+        description="Сколько канонических регистраций удалось связать с кликом по трекинговой ссылке. Это метрика ПОКРЫТИЯ трекинга, а не конверсии кампании: низкое покрытие означает, что таблица источников трафика видит лишь часть бизнеса, а не что бизнеса нет."
+      >
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+          <GrowthMetric
+            label="Атрибутированные регистрации"
+            value={coverage.attributedRegistrations}
+            hint={`из ${coverage.totalRegistrations} всего`}
+          />
+          <GrowthRatio
+            label="Покрытие атрибуции"
+            value={coverage.attributionCoverageRate}
+            denominatorLabel="все канонические регистрации ATA"
+          />
+        </div>
+      </GrowthSection>
+
+      <GrowthSection
+        title="Конверсии"
+        description={`Показатели «регистрация → …» считаются по УНИКАЛЬНЫМ учащимся: числитель — те, кто зарегистрировался в периоде И сделал следующий шаг, знаменатель — все зарегистрировавшиеся. Поэтому доля никогда не превышает 100%. Конверсия «клик → регистрация» существует только для атрибутированного среза — у органических регистраций нет клика в знаменателе, и делить одно на другое означало бы получить долю выше 100%. ${state.data.rateModeExplanation}`}
       >
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <GrowthRatio
             label="Клик → регистрация"
-            value={ratioCounts.ratios.ataRegistrationRate}
+            value={attributedRatios.ratios.attributedAtaRegistrationRate}
             denominatorLabel="квалифицированные клики"
           />
           <GrowthRatio
             label="Регистрация → активация"
             value={ratioCounts.ratios.activationRate}
-            denominatorLabel="регистрации ATA"
+            denominatorLabel="уникальные зарегистрированные учащиеся"
           />
           <GrowthRatio
             label="Регистрация → Pocket"
             value={ratioCounts.ratios.pocketRegistrationRate}
-            denominatorLabel="регистрации ATA"
+            denominatorLabel="уникальные зарегистрированные учащиеся"
           />
           <GrowthRatio
             label="Pocket → депозит"
@@ -250,7 +277,7 @@ function OverviewTab({ preset }: { preset: string }) {
           <GrowthRatio
             label="Регистрация → депозит"
             value={ratioCounts.ratios.depositRatePerRegistration}
-            denominatorLabel="регистрации ATA"
+            denominatorLabel="уникальные зарегистрированные учащиеся"
           />
         </div>
       </GrowthSection>
@@ -388,6 +415,14 @@ function FunnelTab({ preset }: { preset: string }) {
           />
         </div>
 
+        <GrowthNote>
+          Счёт ведётся по уникальным парам «запись на курс + уровень», а не по
+          событиям. «Начали → завершили» — это доля тех, кто начал уровень в
+          периоде и затем его завершил, поэтому она никогда не превышает 100%.
+          Колонка «Без старта» — завершения уровней, которые нельзя начать
+          (финансовые чекпоинты): они входят в «Завершили», но не участвуют в
+          доле.
+        </GrowthNote>
         {state.data.levelFunnel.steps.length === 0 ? (
           <GrowthNote>За период не было событий по уровням.</GrowthNote>
         ) : (
@@ -398,16 +433,26 @@ function FunnelTab({ preset }: { preset: string }) {
                   <th className="py-1.5 pr-3 font-medium">Уровень</th>
                   <th className="py-1.5 pr-3 font-medium">Начали</th>
                   <th className="py-1.5 pr-3 font-medium">Завершили</th>
-                  <th className="py-1.5 font-medium">Завершение</th>
+                  <th className="py-1.5 pr-3 font-medium">Без старта</th>
+                  <th className="py-1.5 font-medium">Начали → завершили</th>
                 </tr>
               </thead>
               <tbody className="text-text-primary">
                 {state.data.levelFunnel.steps.map((level) => (
                   <tr key={level.levelNumber} className="border-t border-border">
                     <td className="py-1.5 pr-3">L{level.levelNumber}</td>
-                    <td className="py-1.5 pr-3 tabular-nums">{formatCount(level.started)}</td>
-                    <td className="py-1.5 pr-3 tabular-nums">{formatCount(level.completed)}</td>
-                    <td className="py-1.5 tabular-nums">{formatRatio(level.completionRate)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">
+                      {formatCount(level.startedLearners)}
+                    </td>
+                    <td className="py-1.5 pr-3 tabular-nums">
+                      {formatCount(level.completedLearners)}
+                    </td>
+                    <td className="py-1.5 pr-3 tabular-nums">
+                      {formatCount(level.completedWithoutStartLearners)}
+                    </td>
+                    <td className="py-1.5 tabular-nums">
+                      {formatRatio(level.startedCompletionRate)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -487,7 +532,13 @@ function AcquisitionTab({ preset }: { preset: string }) {
       </GrowthNote>
 
       {state.data.rows.length === 0 ? (
-        <GrowthNote>За период нет источников с данными.</GrowthNote>
+        <GrowthNote>
+          За период нет ТРЕКИНГОВЫХ источников с данными. Это таблица
+          атрибутированного трафика: она пуста, когда ни одна регистрация не
+          связана с кликом по трекинговой ссылке. Это не значит, что за период не
+          было регистраций, активаций или депозитов — общие цифры бизнеса
+          смотрите на вкладках «Обзор», «CRO-воронка» и «Pocket».
+        </GrowthNote>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-xs">
@@ -515,7 +566,7 @@ function AcquisitionTab({ preset }: { preset: string }) {
                   </td>
                   <td className="py-1.5 pr-3 tabular-nums">{formatCount(row.firstDeposits)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {formatRatio(row.ataRegistrationRate)}
+                    {formatRatio(row.attributedAtaRegistrationRate)}
                   </td>
                   <td className="py-1.5 tabular-nums">
                     {formatRatio(row.depositRatePerRegistration)}

@@ -84,7 +84,7 @@ const countsSchema = z.object({
   confirmedRedeposits: z.number(),
   unresolvedRedeposits: z.number(),
   ratios: z.object({
-    ataRegistrationRate: ratioSchema,
+    attributedAtaRegistrationRate: ratioSchema,
     activationRate: ratioSchema,
     enrollmentRate: ratioSchema,
     assessmentPassRate: ratioSchema,
@@ -116,9 +116,14 @@ export const growthOverviewSchema = z.object({
   rateModeExplanation: z.string(),
   attributionExplanation: z.string(),
   period: periodSchema,
+  attributionCoverage: z.object({
+    attributedRegistrations: z.number(),
+    totalRegistrations: z.number(),
+    attributionCoverageRate: ratioSchema,
+  }),
   coverage: z.object({
     attributed: countsSchema,
-    unattributed: countsSchema.nullable(),
+    organic: countsSchema.nullable(),
     total: countsSchema.nullable(),
   }),
   firstDepositAmount: depositAmountSchema,
@@ -129,6 +134,8 @@ export const growthOverviewSchema = z.object({
 export type GrowthOverview = z.infer<typeof growthOverviewSchema>;
 
 const funnelStepSchema = z.object({
+  learners: z.number().nullable(),
+  ofLearners: z.number().nullable(),
   step: z.string(),
   count: z.number(),
   /** The step this one is a fraction OF. Null on the first step only. */
@@ -142,18 +149,30 @@ export const growthFunnelSchema = z.object({
   attributionExplanation: z.string(),
   period: periodSchema,
   maxLevel: z.number(),
+  scope: z.string(),
+  defaultScope: z.string(),
+  attributionCoverage: z.object({
+    attributedRegistrations: z.number(),
+    totalRegistrations: z.number(),
+    attributionCoverageRate: ratioSchema,
+  }),
   acquisitionFunnel: z.object({
     denominatorModel: z.string(),
+    rateBasis: z.string(),
     steps: z.array(funnelStepSchema),
   }),
   levelFunnel: z.object({
     absentMeans: z.string(),
+    countBasis: z.string(),
+    rateDefinition: z.string(),
     steps: z.array(
       z.object({
         levelNumber: z.number(),
-        started: z.number(),
-        completed: z.number(),
-        completionRate: ratioSchema,
+        startedLearners: z.number(),
+        completedLearners: z.number(),
+        startedAndCompletedLearners: z.number(),
+        completedWithoutStartLearners: z.number(),
+        startedCompletionRate: ratioSchema,
       }),
     ),
   }),
@@ -190,7 +209,7 @@ export const growthAcquisitionSchema = z.object({
       activatedLearners: z.number(),
       pocketRegistrations: z.number(),
       firstDeposits: z.number(),
-      ataRegistrationRate: ratioSchema,
+      attributedAtaRegistrationRate: ratioSchema,
       activationRate: ratioSchema,
       pocketRegistrationRate: ratioSchema,
       depositRatePerRegistration: ratioSchema,
@@ -206,6 +225,8 @@ export type GrowthAcquisition = z.infer<typeof growthAcquisitionSchema>;
 export const growthPocketConversionsSchema = z.object({
   mode: z.string(),
   period: periodSchema,
+  scope: z.string(),
+  defaultScope: z.string(),
   conversions: z.object({
     pocketRegistrations: z.number(),
     firstDeposits: z.number(),
@@ -216,6 +237,7 @@ export const growthPocketConversionsSchema = z.object({
   operational: z.object({
     unresolvedRedeposits: z.number(),
     unresolvedRedepositsMeaning: z.string(),
+    unresolvedRedepositsScope: z.string(),
   }),
   firstDepositAmount: depositAmountSchema,
   totalDepositAmountNote: z.string(),
