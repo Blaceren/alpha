@@ -72,7 +72,46 @@ export const AVAILABILITY_REASON: Record<string, string> = {
   currency_unspecified: "Валюта не указана провайдером",
   currency_mixed: "В выборке несколько валют",
   currency_unspecified_or_mixed: "Валюта не указана или в выборке их несколько",
+
+  // G4-R13-B. The redeposit identity policy's OTHER reason. It reaches the
+  // operator through the ingress-health surface, and it became more reachable
+  // when a mixed-case `POCKET_RDEP_EVENT_ID_PARAM` started being refused loudly
+  // instead of silently lower-cased — so the label has to exist before anyone
+  // configures one.
+  configured_param_rejected:
+    "Указанное имя параметра отклонено политикой. Идентичность редепозита не " +
+    "устанавливается, пока имя не будет исправлено.",
 };
+
+/**
+ * G4-R13-B — the redeposit identity CONTRACT state, as an operator sentence.
+ *
+ * WHAT WENT WRONG. «Здоровье приёма» printed the domain enum and its reason
+ * verbatim: «Контракт идентичности редепозита: unavailable —
+ * provider_event_identity_contract_absent.» Both are internal machine values,
+ * and a human label for the reason already existed and rendered correctly on
+ * the four other surfaces. The first G4-R13 correction fixed
+ * `availabilityReason()`'s lookup and the `AvailabilityList` component; this
+ * render site reaches the same vocabulary by a different route and was missed.
+ *
+ * WHY IT IS A MAP AND NOT AN INLINE TERNARY. The API contract types this field
+ * as an open string, so a state this build has not learned must still render as
+ * something an operator can quote — the same last-resort rule
+ * `availabilityReason()` follows.
+ *
+ * THE WORDING IS FAIL-CLOSED, DELIBERATELY. `unavailable` is not a UI outage
+ * and not a temporary condition: no provider event-identity contract has been
+ * established, so canonical redeposit processing cannot run and does not.
+ * Copy that read «временно недоступно» would imply this resolves itself.
+ */
+export const REDEPOSIT_IDENTITY_CONTRACT: Record<string, string> = {
+  unavailable: "не установлен",
+  available: "установлен",
+};
+
+export function redepositIdentityContractLabel(kind: string): string {
+  return REDEPOSIT_IDENTITY_CONTRACT[kind] ?? kind;
+}
 
 /**
  * G4-R13 — one lookup for every reason the availability block can carry.
@@ -136,6 +175,52 @@ export function registrationScopeHint(scope: {
     `не восстанавливается${breakdown}.`
   );
 }
+
+/**
+ * GROWTH-I18N — the operator copy that used to arrive in English from the API.
+ *
+ * WHAT WAS HAPPENING. Four payload fields — `rateModeExplanation`,
+ * `attributionExplanation`, `unresolvedRedepositsMeaning` and
+ * `totalDepositAmountNote` — carry English prose, and the CRM rendered them
+ * verbatim into a Russian UI. Live Acceptance recorded it as LOW; the
+ * product-wide closure's register omitted it; the final browser gate surfaced
+ * it again. It pre-existed all three.
+ *
+ * WHY THE COPY MOVED HERE INSTEAD OF THE STRINGS BEING TRANSLATED UPSTREAM.
+ * Those fields are part of the published API contract and are read by machine
+ * consumers as well as by this screen. Translating them would change what the
+ * API says to everyone in order to fix what one UI shows to one audience, and
+ * the closure's own rule is not to alter a domain contract to make a surface
+ * prettier. The payload keeps its canonical English; the operator UI owns its
+ * own locale. That is also why this is a CRM-only correction.
+ *
+ * The meaning is preserved exactly — including the parts that are load-bearing:
+ * a ratio is null rather than zero, a period is a cohort rather than a window,
+ * an unresolved delivery is not money, and a deposit total covers first
+ * deposits only.
+ */
+export const GROWTH_COPY = {
+  /** Appended to the «Конверсии» section, which already explains the cohort rule. */
+  rateMode:
+    "Доля равна null, а не нулю, когда знаменатель равен нулю: это «нечего делить», " +
+    "а не «ноль процентов».",
+
+  attribution:
+    "События разрезаются по ЗАФИКСИРОВАННОЙ атрибуции учащегося: она определяется " +
+    "один раз при регистрации по модели последнего зачётного партнёрского клика. " +
+    "Более поздний клик никогда не переатрибутирует существующего учащегося.",
+
+  unresolvedRedepositsMeaning:
+    "Доставки получены и проверены. НЕ считаются деньгами, потому что Pocket не " +
+    "передаёт уникальный идентификатор события: повторную доставку невозможно " +
+    "отличить от настоящего второго депозита. Это не счётчик нулевых редепозитов.",
+
+  totalDepositAmount:
+    "Учитываются ТОЛЬКО первые депозиты. Подтверждённые редепозиты структурно " +
+    "равны нулю, пока не установлен контракт идентичности события у провайдера, " +
+    "а доставки в карантине и с неопределённой идентичностью никогда не входят " +
+    "ни в одну денежную сумму.",
+} as const;
 
 export const CAPABILITY_LABEL: Record<string, string> = {
   trafficClicks: "Клики",

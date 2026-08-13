@@ -53,7 +53,10 @@ import {
   INGRESS_STATUS_LABEL,
   PRESET_LABEL,
   PRESET_ORDER,
+  GROWTH_COPY,
   amountUnavailableReason,
+  availabilityReason,
+  redepositIdentityContractLabel,
   registrationScopeHint,
   formatAmount,
   formatCount,
@@ -263,7 +266,7 @@ function OverviewTab({ preset }: { preset: string }) {
 
       <GrowthSection
         title="Конверсии"
-        description={`Показатели «регистрация → …» считаются по УНИКАЛЬНЫМ учащимся: числитель — те, кто зарегистрировался в периоде И сделал следующий шаг, знаменатель — все зарегистрировавшиеся. Поэтому доля никогда не превышает 100%. Конверсия «клик → регистрация» считается по КОГОРТЕ КЛИКОВ: знаменатель — клики, совершённые в выбранном периоде, числитель — те же клики, которые привели к регистрации (когда бы она ни произошла). Поэтому регистрация в феврале по январскому клику относится к январской когорте, а не завышает февральскую долю. ${state.data.rateModeExplanation}`}
+        description={`Показатели «регистрация → …» считаются по УНИКАЛЬНЫМ учащимся: числитель — те, кто зарегистрировался в периоде И сделал следующий шаг, знаменатель — все зарегистрировавшиеся. Поэтому доля никогда не превышает 100%. Конверсия «клик → регистрация» считается по КОГОРТЕ КЛИКОВ: знаменатель — клики, совершённые в выбранном периоде, числитель — те же клики, которые привели к регистрации (когда бы она ни произошла). Поэтому регистрация в феврале по январскому клику относится к январской когорте, а не завышает февральскую долю. ${GROWTH_COPY.rateMode}`}
       >
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <GrowthRatio
@@ -351,7 +354,9 @@ function OverviewTab({ preset }: { preset: string }) {
         )}
       </GrowthSection>
 
-      <GrowthNote>{state.data.attributionExplanation}</GrowthNote>
+      {/* GROWTH-I18N. The payload carries the canonical English for machine
+          consumers; the operator UI renders its own locale. */}
+      <GrowthNote>{GROWTH_COPY.attribution}</GrowthNote>
       <AvailabilityList availability={state.data.dataAvailability} />
     </div>
   );
@@ -651,7 +656,7 @@ function PocketTab({ preset }: { preset: string }) {
             value={state.data.operational.unresolvedRedeposits}
             emphasis="muted"
           />
-          <GrowthNote>{state.data.operational.unresolvedRedepositsMeaning}</GrowthNote>
+          <GrowthNote>{GROWTH_COPY.unresolvedRedepositsMeaning}</GrowthNote>
         </div>
       </GrowthSection>
 
@@ -691,7 +696,7 @@ function PocketTab({ preset }: { preset: string }) {
             {amountUnavailableReason(state.data.firstDepositAmount.unavailableReason ?? "")}.
           </GrowthNote>
         )}
-        <GrowthNote>{state.data.totalDepositAmountNote}</GrowthNote>
+        <GrowthNote>{GROWTH_COPY.totalDepositAmount}</GrowthNote>
       </GrowthSection>
 
       <GrowthSection title="Чего здесь нет">
@@ -732,9 +737,17 @@ function IngressTab({ preset }: { preset: string }) {
           <SwitchRow label="Приём DEP" on={switches.depIngestEnabled} />
           <SwitchRow label="Приём RDEP" on={switches.rdepIngestEnabled} />
         </ul>
+        {/* G4-R13-B. Both values are DOMAIN enums and neither may reach the
+            operator raw. The contract state goes through its own label map and
+            the reason through the same `availabilityReason()` the other four
+            surfaces use — which is the point: one presentation contract, not a
+            second one invented here. The API keeps its machine values. */}
         <GrowthNote>
-          Контракт идентичности редепозита: {switches.redepositIdentityContract}
-          {switches.redepositIdentityReason ? ` — ${switches.redepositIdentityReason}` : ""}.
+          Контракт идентичности редепозита:{" "}
+          {redepositIdentityContractLabel(switches.redepositIdentityContract)}
+          {switches.redepositIdentityReason
+            ? `. ${availabilityReason(switches.redepositIdentityReason)}`
+            : "."}
         </GrowthNote>
       </GrowthSection>
 
