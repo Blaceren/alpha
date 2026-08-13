@@ -22,10 +22,27 @@ export const growthErrorSchema = z.object({
   requestId: z.string().optional(),
 });
 
+/**
+ * G4-R12 — the scope an AVAILABLE metric was computed over.
+ *
+ * Optional, so a response that omits it parses exactly as it did before. The
+ * schema is strict everywhere else on purpose, and this stays strict too: the
+ * field is either absent or fully formed, never half-supplied.
+ */
+const availabilityScopeSchema = z.object({
+  provable: z.number(),
+  population: z.number(),
+  unprovableStaff: z.number(),
+  unprovableOther: z.number(),
+  basis: z.string(),
+});
+
 const availabilityStateSchema = z.union([
-  z.object({ available: z.literal(true) }),
+  z.object({ available: z.literal(true), scope: availabilityScopeSchema.optional() }),
   z.object({ available: z.literal(false), reason: z.string() }),
 ]);
+
+export type GrowthAvailabilityScope = z.infer<typeof availabilityScopeSchema>;
 
 export type GrowthAvailabilityState = z.infer<typeof availabilityStateSchema>;
 

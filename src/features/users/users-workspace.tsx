@@ -18,9 +18,28 @@ import {
   UsersUnauthorized,
 } from "./users-states";
 
-/** `providerOverride` is for tests only; production uses the app provider. */
-export function UsersWorkspace({ providerOverride }: { providerOverride?: CrmDataProvider }) {
-  const q = useUsersQuery(providerOverride);
+/**
+ * `providerOverride` is for tests only; production uses the app provider.
+ *
+ * `searchDebounceMs` is a TEST SEAM WITH A REASON, not a convenience. The search
+ * box debounces on a real 300 ms timer, so any assertion about a search result
+ * has to sit through 300 ms of wall clock before the work it is actually waiting
+ * for even begins — on top of a jsdom re-render of a table that renders twice
+ * because Tailwind's responsive classes do not apply there. Measured on an idle
+ * machine that assertion took 782 ms against `waitFor`'s 1000 ms budget, and
+ * under parallel workers it took 1152 ms and failed. The debounce is not what
+ * those tests are about; a test that is about it sets a real value here.
+ *
+ * Production passes nothing and gets 300 ms, unchanged.
+ */
+export function UsersWorkspace({
+  providerOverride,
+  searchDebounceMs,
+}: {
+  providerOverride?: CrmDataProvider;
+  searchDebounceMs?: number;
+}) {
+  const q = useUsersQuery(providerOverride, searchDebounceMs);
   const { visible, toggle } = useColumnVisibility();
 
   const columnVisibility = React.useMemo<VisibilityState>(() => ({ ...visible }), [visible]);

@@ -54,6 +54,7 @@ import {
   PRESET_LABEL,
   PRESET_ORDER,
   amountUnavailableReason,
+  registrationScopeHint,
   formatAmount,
   formatCount,
   formatRatio,
@@ -215,7 +216,19 @@ function OverviewTab({ preset }: { preset: string }) {
       <GrowthSection title="Сводка">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
           <GrowthMetric label="Клики" value={counts.clicks} />
-          <GrowthMetric label="Регистрации ATA" value={counts.ataRegistrations} />
+          {/* G4-R12. The figure is exact; the hint states the population it
+              covers, so a reader never has to guess why «Активированы» can
+              exceed it. `scope` is absent when every account is provable. */}
+          <GrowthMetric
+            label="Регистрации ATA"
+            value={counts.ataRegistrations}
+            hint={
+              "scope" in state.data.dataAvailability.ataRegistrations &&
+              state.data.dataAvailability.ataRegistrations.scope
+                ? registrationScopeHint(state.data.dataAvailability.ataRegistrations.scope)
+                : undefined
+            }
+          />
           <GrowthMetric label="Активированы" value={counts.activatedLearners} />
           <GrowthMetric label="Регистрации Pocket" value={counts.pocketRegistrations} />
           <GrowthMetric label="Первые депозиты" value={counts.firstDeposits} />

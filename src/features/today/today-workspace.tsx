@@ -25,8 +25,15 @@ import {
  * renders — it derives no priority, applies no permission rule, and offers no
  * mutation. `providerOverride` is for tests only.
  */
-export function TodayWorkspace({ providerOverride }: { providerOverride?: CrmDataProvider }) {
-  const q = useTodayQuery(providerOverride);
+export function TodayWorkspace({
+  providerOverride,
+  searchDebounceMs,
+}: {
+  providerOverride?: CrmDataProvider;
+  /** Test seam. See `UsersWorkspace` for why it exists and what it costs. */
+  searchDebounceMs?: number;
+}) {
+  const q = useTodayQuery(providerOverride, searchDebounceMs);
   const { session } = useSession();
 
   const result = q.result;

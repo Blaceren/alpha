@@ -71,10 +71,70 @@ export const AVAILABILITY_REASON: Record<string, string> = {
   not_in_scope_for_growth_v1: "Вне объёма текущей фазы",
   currency_unspecified: "Валюта не указана провайдером",
   currency_mixed: "В выборке несколько валют",
+  currency_unspecified_or_mixed: "Валюта не указана или в выборке их несколько",
 };
 
+/**
+ * G4-R13 — one lookup for every reason the availability block can carry.
+ *
+ * WHAT WAS WRONG. `dataAvailability.firstDepositAmountAggregation` carries the
+ * AMOUNT reasons — `no_deposits_in_period`, `not_requested_on_this_surface`,
+ * `per_row_amounts_not_published_on_this_surface`, `amount_unreadable` — while
+ * this function looked only in `AVAILABILITY_REASON`. Every one of them fell
+ * through to `?? reason` and the «Что платформа не измеряет» block printed a raw
+ * snake_case enum to the operator. The Russian already existed, twenty lines
+ * above, in `AMOUNT_UNAVAILABLE_REASON`.
+ *
+ * Both maps are consulted, in that order, because the two vocabularies overlap
+ * on `currency_*` and this map's wording is the one written for this block.
+ *
+ * THE RAW CODE IS STILL THE LAST RESORT, deliberately. A reason the backend
+ * introduces and the CRM has not learned yet must render as SOMETHING an
+ * operator can quote into a bug report — an empty string or a generic "не
+ * измеряется" would hide the very fact this block exists to state. The contract
+ * test beside this file is what keeps that path unreachable in practice.
+ */
 export function availabilityReason(reason: string): string {
-  return AVAILABILITY_REASON[reason] ?? reason;
+  return AVAILABILITY_REASON[reason] ?? AMOUNT_UNAVAILABLE_REASON[reason] ?? reason;
+}
+
+/**
+ * G4-R12 — the sentence that tells the dashboard's reader what «Регистрации
+ * ATA» actually counts, before they read the number.
+ *
+ * WHY IT IS NEEDED. The figure is exact and canonical: accounts holding a
+ * provable self-service registration record. It is not the number of accounts
+ * on the platform. That is why «Активированы 14» can sit beside «Регистрации
+ * ATA 12» — some activated learners registered before, or outside, the audited
+ * registration path — and without this sentence that reads as a data error.
+ *
+ * IT INVENTS NOTHING. The unprovable population is split only into what a staff
+ * profile explains and what nothing explains, and the second group is named
+ * «исторические» rather than being assigned an origin. Uncertainty stays
+ * uncertainty; §12 of the closure brief and §49 of the migration both require
+ * exactly that.
+ *
+ * PRODUCT WORDING, NOT AUDIT JARGON: no finding ids, no field names.
+ */
+export function registrationScopeHint(scope: {
+  provable: number;
+  population: number;
+  unprovableStaff: number;
+  unprovableOther: number;
+}): string | undefined {
+  const unprovable = scope.population - scope.provable;
+  if (unprovable <= 0) return undefined;
+
+  const parts: string[] = [];
+  if (scope.unprovableStaff > 0) parts.push(`${scope.unprovableStaff} — сотрудники`);
+  if (scope.unprovableOther > 0) parts.push(`${scope.unprovableOther} — исторические`);
+
+  const breakdown = parts.length > 0 ? `: ${parts.join(", ")}` : "";
+  return (
+    `${scope.provable} регистраций с подтверждённым источником. ` +
+    `Всего аккаунтов — ${scope.population}; у ещё ${unprovable} происхождение ` +
+    `не восстанавливается${breakdown}.`
+  );
 }
 
 export const CAPABILITY_LABEL: Record<string, string> = {

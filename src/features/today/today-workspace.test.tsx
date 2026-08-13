@@ -20,11 +20,19 @@ const clock = new FixedMockClock();
 const provider = () => new MockCrmDataProvider({ clock, delayMs: 0 });
 
 /** Mirrors the shell: MockSessionProvider + TooltipProvider wrap every CRM page. */
+/**
+ * The search box debounces on a real 300 ms timer and this suite's assertions
+ * must sit through it before the work they actually test begins. Measured: 782
+ * ms idle against `waitFor`'s 1000 ms budget, 1152 ms under parallel workers —
+ * i.e. the assertion was failing on machine speed, not on behaviour. Nothing
+ * here is a test OF the debounce, so it is driven to 0 and the assertions
+ * measure what they are named after.
+ */
 function renderToday(p = provider()) {
   return render(
     <MockSessionProvider>
       <TooltipProvider>
-        <TodayWorkspace providerOverride={p} />
+        <TodayWorkspace providerOverride={p} searchDebounceMs={0} />
       </TooltipProvider>
     </MockSessionProvider>,
   );
