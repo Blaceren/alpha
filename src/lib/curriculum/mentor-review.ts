@@ -66,6 +66,7 @@
  */
 import type { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { emitMentorReviewSubmittedEvent } from "@/lib/growth/product-events";
 import {
   completeCurriculumLevelInTransaction,
   isCurriculumLevelCompletionError,
@@ -244,6 +245,22 @@ export async function requestMentorReview({
       data: { status: "pending_review", lastProgressAt: now },
     });
     if (claimed.count !== 1) fail("MENTOR_REVIEW_CONFLICT", "review request lost the claim");
+
+    // G4-GROWTH — the learner side of the mentor-review step.
+    //
+    // Emitted at the moment of the transition, which is the ONLY moment this
+    // instant is knowable: `pending_review` is recorded on the progress row and
+    // `lastProgressAt` is overwritten by whatever happens next, so a later
+    // reader cannot reconstruct when the learner submitted. The migration
+    // backfill can therefore only cover rows still awaiting review, and says so.
+    await emitMentorReviewSubmittedEvent(tx, {
+      userLevelProgressId: progress.id,
+      enrollmentId: enrollment.id,
+      userId: user.id,
+      levelDefinitionId: level.id,
+      levelNumber: level.levelNumber,
+      occurredAt: now,
+    });
 
     await tx.auditLog.create({
       data: {

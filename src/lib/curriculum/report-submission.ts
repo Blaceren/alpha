@@ -22,6 +22,7 @@ import {
   isCurriculumV2ReportEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { emitReportSubmittedEvent } from "@/lib/growth/product-events";
 import { resolveUserCurriculumLevelStates } from "@/lib/curriculum/level-state";
 import { resolveUserCurriculumContext } from "@/lib/curriculum/resolver";
 import {
@@ -1365,6 +1366,26 @@ async function transitionOwnReport(
       },
     });
     if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "report changed concurrently");
+
+    // G4-GROWTH — the canonical `report_submitted` event.
+    //
+    // KEYED ON THE SUBMISSION, so a resubmission after a rejection does NOT
+    // produce a second event. The learner submitted one report and revised it;
+    // counting that as two submissions would inflate the report-submission rate
+    // every time a mentor asked for changes, making a stricter reviewer look
+    // like better learner engagement.
+    //
+    // `occurredAt` is `firstSubmittedAt` for the same reason — a resubmission
+    // must not move the original submission into a later reporting period and
+    // silently change a month that has already closed.
+    await emitReportSubmittedEvent(tx, {
+      submissionId: submission.id,
+      userId: submission.userId,
+      enrollmentId: submission.enrollmentId,
+      levelDefinitionId: submission.levelDefinitionId,
+      occurredAt: submission.firstSubmittedAt ?? evaluationTime,
+    });
+
     const progress = await tx.userLevelProgress.updateMany({
       where: { id: scope.progress!.id, status: "in_progress" },
       data: { status: "pending_review", lastProgressAt: evaluationTime },

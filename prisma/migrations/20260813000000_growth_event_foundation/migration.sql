@@ -1,0 +1,907 @@
+-- G4-GROWTH -- the canonical growth event ledger, its outbox, and durable
+-- provider ingress evidence.
+--
+-- WHAT THIS ADDS, AND WHAT IT DELIBERATELY DOES NOT TOUCH.
+-- Three new tables. No existing table is altered, rewritten, renamed or
+-- dropped. No published curriculum row is touched. No money column changes
+-- meaning. PocketProviderEvent keeps UNIQUE(provider, eventType,
+-- pocketPlayerId) and remains the sole enforcer of the one-first-deposit-per-
+-- player invariant -- this migration adds a ledger that PROJECTS that fact and
+-- never a second place where it could be decided.
+--
+-- THE LEDGER IS A PROJECTION WITH A PROVABLE ORIGIN. Every GrowthEvent row
+-- names the owner table and owner row it was derived from, and carries that
+-- owner's idempotency key. UNIQUE(eventType, sourceOwner, sourceEventId) is
+-- what a replayed emitter collides with. The backfill at the end of this file
+-- uses EXACTLY the same keys the runtime emitters use, so a backfilled row and
+-- a later runtime row for the same owner cannot both exist.
+--
+-- WHY THERE IS A BACKFILL AT ALL. A ledger whose coverage begins at deploy time
+-- reports zero registrations for every period before the deploy, and zero is a
+-- business number. Every backfilled row is derived from an owner row that
+-- already exists, using that owner's OWN occurrence timestamp -- never now(),
+-- never updatedAt, never a neighbouring event's time -- and is stamped
+-- origin = backfill so a reader can always separate reconstructed history from
+-- observed history.
+--
+-- WHAT THE BACKFILL CANNOT RECONSTRUCT, STATED RATHER THAN FAKED.
+-- mentor_review_submitted has no durably owned timestamp: entering
+-- pending_review updates lastProgressAt, which a later action overwrites. Rows
+-- STILL in pending_review are backfilled from lastProgressAt, which is exact
+-- for them. Rows that have since been approved are NOT backfilled, because
+-- their submission instant is genuinely not recorded anywhere. The analytics
+-- availability block reports this rather than showing a smaller number as if it
+-- were complete.
+--
+-- NOT APPLIED ANYWHERE BY THIS PHASE. Source-only, exactly like the migrations
+-- it descends from. No live, preprod or production database is touched by this
+-- wave, no Pocket ingress switch is enabled, and no service is restarted.
+--
+-- IT DESCENDS FROM 20260811000000_assessment_successor_lineage AND DOES NOT
+-- EDIT IT. Correcting a shipped migration in place would change its checksum
+-- and make every database that already ran it disagree with the repository.
+--
+-- MIGRATION RUNNER CONTRACT. prisma/migrate.ts splits this file on the
+-- semicolon character, so NO COMMENT IN THIS FILE CONTAINS ONE, and every
+-- statement is a single complete statement terminated by exactly one semicolon.
+
+CREATE TABLE "GrowthEvent" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+
+    -- Opaque, server-generated, never a database id. A future outbound postback
+    -- quotes this, and quoting a sequential integer would leak volume.
+    "eventId" TEXT NOT NULL
+        CHECK (length("eventId") BETWEEN 16 AND 64)
+        CHECK ("eventId" NOT GLOB '*[^0-9a-z]*'),
+
+    "eventType" TEXT NOT NULL
+        CHECK ("eventType" IN (
+            'traffic_click',
+            'ata_reg',
+            'curriculum_enrollment',
+            'academy_activation',
+            'level_started',
+            'level_completed',
+            'assessment_completed',
+            'report_submitted',
+            'report_approved',
+            'mentor_review_submitted',
+            'mentor_review_approved',
+            'pocket_reg',
+            'dep',
+            'rdep'
+        )),
+
+    "occurredAt" DATETIME NOT NULL,
+    "recordedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    "origin" TEXT NOT NULL DEFAULT 'runtime'
+        CHECK ("origin" IN ('runtime', 'backfill')),
+
+    "schemaVersion" INTEGER NOT NULL DEFAULT 1
+        CHECK ("schemaVersion" >= 1),
+
+    "userId" INTEGER,
+    "enrollmentId" INTEGER,
+    "acquisitionClickId" INTEGER,
+    "attributionId" INTEGER,
+    "pocketTraderIdentityId" INTEGER,
+    "providerIngressEventId" INTEGER,
+
+    "provider" TEXT
+        CHECK ("provider" IS NULL OR "provider" IN ('pocket')),
+
+    "levelDefinitionId" INTEGER,
+    "levelNumber" INTEGER
+        CHECK ("levelNumber" IS NULL OR "levelNumber" >= 1),
+
+    -- Canonical decimal TEXT with exactly two fractional digits. The same shape
+    -- PocketProviderEvent enforces, restated here so a row cannot enter this
+    -- table carrying a float rendering, a thousands separator, an exponent or a
+    -- sign.
+    "amount" TEXT
+        CHECK ("amount" IS NULL OR (
+            length("amount") BETWEEN 4 AND 15
+            AND "amount" GLOB '*[0-9].[0-9][0-9]'
+            AND "amount" NOT GLOB '*[^0-9.]*'
+            AND "amount" NOT GLOB '*.*.*'
+        )),
+
+    "currencyCode" TEXT
+        CHECK ("currencyCode" IS NULL OR (
+            length("currencyCode") = 3 AND "currencyCode" NOT GLOB '*[^A-Z]*'
+        )),
+
+    "currencyStatus" TEXT
+        CHECK ("currencyStatus" IS NULL OR "currencyStatus" IN ('unspecified', 'configured')),
+
+    "sourceOwner" TEXT NOT NULL
+        CHECK ("sourceOwner" IN (
+            'acquisition_click',
+            'auth_register',
+            'curriculum_enrollment',
+            'curriculum_level_progress',
+            'curriculum_assessment_attempt',
+            'curriculum_report_submission',
+            'curriculum_report_review',
+            'curriculum_mentor_review',
+            'pocket_identity_binding',
+            'pocket_first_deposit',
+            'pocket_redeposit'
+        )),
+
+    "sourceEntityType" TEXT NOT NULL
+        CHECK (length("sourceEntityType") BETWEEN 1 AND 64),
+
+    "sourceEntityId" TEXT NOT NULL
+        CHECK (length("sourceEntityId") BETWEEN 1 AND 128),
+
+    "sourceEventId" TEXT NOT NULL
+        CHECK (length("sourceEventId") BETWEEN 1 AND 200),
+
+    "metadata" JSONB,
+
+    -- A currency may be named only when the row says it was configured, and a
+    -- configured row must name one. This is the AFD-4 rule restated so that
+    -- "we know the unit is unknown" can never decay into "nobody filled this in
+    -- yet", which is how a NULL becomes USD.
+    CHECK (("currencyStatus" = 'configured') = ("currencyCode" IS NOT NULL)),
+
+    -- Money-bearing rows carry a currency STATUS even when the unit is unknown,
+    -- and rows that carry no money carry no currency at all.
+    CHECK (("amount" IS NULL) = ("currencyStatus" IS NULL)),
+
+    -- Only the three Pocket families may carry money. A level completion with an
+    -- amount would be a category error, and this makes it unrepresentable.
+    CHECK ("amount" IS NULL OR "eventType" IN ('dep', 'rdep')),
+
+    -- Provider-sourced families must name their provider, first-party families
+    -- must not.
+    CHECK (
+        ("eventType" IN ('pocket_reg', 'dep', 'rdep') AND "provider" IS NOT NULL)
+        OR ("eventType" NOT IN ('pocket_reg', 'dep', 'rdep') AND "provider" IS NULL)
+    ),
+
+    -- A traffic click happens before anyone is a user, and every other family
+    -- happens to somebody. Enforced here so an emitter cannot record an
+    -- ownerless registration.
+    CHECK (
+        ("eventType" = 'traffic_click' AND "userId" IS NULL)
+        OR ("eventType" <> 'traffic_click' AND "userId" IS NOT NULL)
+    ),
+
+    -- A level ordinal and a level definition travel together or not at all.
+    CHECK (("levelDefinitionId" IS NULL) = ("levelNumber" IS NULL)),
+
+    CONSTRAINT "GrowthEvent_userId_fkey" FOREIGN KEY ("userId")
+        REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_enrollmentId_fkey" FOREIGN KEY ("enrollmentId")
+        REFERENCES "UserCurriculumEnrollment" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_acquisitionClickId_fkey" FOREIGN KEY ("acquisitionClickId")
+        REFERENCES "AffiliateClick" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_attributionId_fkey" FOREIGN KEY ("attributionId")
+        REFERENCES "AffiliateAttribution" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_pocketTraderIdentityId_fkey" FOREIGN KEY ("pocketTraderIdentityId")
+        REFERENCES "PocketTraderIdentity" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_providerIngressEventId_fkey" FOREIGN KEY ("providerIngressEventId")
+        REFERENCES "ProviderIngressEvent" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "GrowthEvent_levelDefinitionId_fkey" FOREIGN KEY ("levelDefinitionId")
+        REFERENCES "LevelDefinition" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "GrowthEvent_eventId_key" ON "GrowthEvent"("eventId");
+
+-- THE IDEMPOTENCY CONTRACT OF THE WHOLE LEDGER. Every emitter declares an owner
+-- and a key within that owner. A replay collides here rather than producing a
+-- second event.
+CREATE UNIQUE INDEX "GrowthEvent_eventType_sourceOwner_sourceEventId_key"
+    ON "GrowthEvent"("eventType", "sourceOwner", "sourceEventId");
+
+CREATE INDEX "GrowthEvent_eventType_occurredAt_idx"
+    ON "GrowthEvent"("eventType", "occurredAt");
+
+CREATE INDEX "GrowthEvent_eventType_levelNumber_occurredAt_idx"
+    ON "GrowthEvent"("eventType", "levelNumber", "occurredAt");
+
+CREATE INDEX "GrowthEvent_userId_occurredAt_idx"
+    ON "GrowthEvent"("userId", "occurredAt");
+
+CREATE INDEX "GrowthEvent_acquisitionClickId_eventType_idx"
+    ON "GrowthEvent"("acquisitionClickId", "eventType");
+
+CREATE INDEX "GrowthEvent_attributionId_eventType_idx"
+    ON "GrowthEvent"("attributionId", "eventType");
+
+CREATE INDEX "GrowthEvent_enrollmentId_eventType_idx"
+    ON "GrowthEvent"("enrollmentId", "eventType");
+
+CREATE INDEX "GrowthEvent_occurredAt_idx" ON "GrowthEvent"("occurredAt");
+
+CREATE INDEX "GrowthEvent_providerIngressEventId_idx"
+    ON "GrowthEvent"("providerIngressEventId");
+
+CREATE INDEX "GrowthEvent_levelDefinitionId_idx"
+    ON "GrowthEvent"("levelDefinitionId");
+
+-- The transactional outbox. Written in the SAME transaction as the event it
+-- announces, so "the conversion happened" and "the conversion was announced"
+-- commit together and are recovered together. There is no destination column
+-- because there is no consumer yet -- and adding one later must not mean adding
+-- a second copy of the semantic event.
+CREATE TABLE "GrowthEventOutbox" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "growthEventId" INTEGER NOT NULL,
+    "eventType" TEXT NOT NULL
+        CHECK ("eventType" IN (
+            'traffic_click',
+            'ata_reg',
+            'curriculum_enrollment',
+            'academy_activation',
+            'level_started',
+            'level_completed',
+            'assessment_completed',
+            'report_submitted',
+            'report_approved',
+            'mentor_review_submitted',
+            'mentor_review_approved',
+            'pocket_reg',
+            'dep',
+            'rdep'
+        )),
+    "status" TEXT NOT NULL DEFAULT 'pending'
+        CHECK ("status" IN ('pending', 'in_flight', 'delivered', 'failed')),
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "availableAt" DATETIME NOT NULL,
+    "attemptCount" INTEGER NOT NULL DEFAULT 0
+        CHECK ("attemptCount" >= 0),
+    "lastAttemptAt" DATETIME,
+
+    -- A bounded code only. A provider response body or a stack trace here would
+    -- be an unbounded, unreviewed sink for whatever a third party returned.
+    "lastErrorCode" TEXT
+        CHECK ("lastErrorCode" IS NULL OR (
+            length("lastErrorCode") BETWEEN 1 AND 64
+            AND "lastErrorCode" NOT GLOB '*[^a-z_0-9]*'
+        )),
+
+    -- An attempt count without an attempt time, or the reverse, would make the
+    -- retry history unreadable.
+    CHECK (("attemptCount" = 0) = ("lastAttemptAt" IS NULL)),
+
+    CONSTRAINT "GrowthEventOutbox_growthEventId_fkey" FOREIGN KEY ("growthEventId")
+        REFERENCES "GrowthEvent" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "GrowthEventOutbox_growthEventId_key"
+    ON "GrowthEventOutbox"("growthEventId");
+
+CREATE INDEX "GrowthEventOutbox_status_availableAt_idx"
+    ON "GrowthEventOutbox"("status", "availableAt");
+
+CREATE INDEX "GrowthEventOutbox_eventType_status_idx"
+    ON "GrowthEventOutbox"("eventType", "status");
+
+-- Durable, sanitized evidence of every provider delivery.
+--
+-- A row here says a REQUEST ARRIVED and what it carried. A GrowthEvent says a
+-- BUSINESS FACT IS TRUE. Keeping them apart is what lets an operator answer
+-- "did Pocket ever send this and why was it refused" without the canonical
+-- ledger filling up with rows that are not facts.
+--
+-- NO SECRET REACHES THIS TABLE. The route redacts ow, secret and token before
+-- anything is persisted, and rawPayloadHash is computed over the SAME redacted
+-- structure -- so the hash cannot be used as an offline oracle for the secret
+-- either.
+CREATE TABLE "ProviderIngressEvent" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+
+    "provider" TEXT NOT NULL DEFAULT 'pocket'
+        CHECK ("provider" IN ('pocket')),
+
+    -- EXACTLY THREE GOALS. withdraw, commission, email and the other nine
+    -- aliases the legacy route accepted are absent by design: a caller-supplied
+    -- string must not select a financial mutation, and this is the database
+    -- saying so as well as the application.
+    "goal" TEXT NOT NULL
+        CHECK ("goal" IN ('reg', 'dep', 'redep')),
+
+    "receivedAt" DATETIME NOT NULL,
+    "providerEventAt" DATETIME,
+    "providerEventAtRaw" TEXT
+        CHECK ("providerEventAtRaw" IS NULL OR length("providerEventAtRaw") BETWEEN 1 AND 64),
+    "providerEventAtStatus" TEXT NOT NULL DEFAULT 'absent'
+        CHECK ("providerEventAtStatus" IN ('absent', 'parsed', 'unparseable')),
+
+    "playerIdNormalized" TEXT
+        CHECK ("playerIdNormalized" IS NULL OR (
+            length("playerIdNormalized") BETWEEN 1 AND 16
+            AND "playerIdNormalized" NOT GLOB '*[^0-9]*'
+            AND "playerIdNormalized" NOT GLOB '0*'
+        )),
+
+    "clickId" TEXT
+        CHECK ("clickId" IS NULL OR length("clickId") BETWEEN 1 AND 64),
+
+    "amount" TEXT
+        CHECK ("amount" IS NULL OR (
+            length("amount") BETWEEN 4 AND 15
+            AND "amount" GLOB '*[0-9].[0-9][0-9]'
+            AND "amount" NOT GLOB '*[^0-9.]*'
+            AND "amount" NOT GLOB '*.*.*'
+        )),
+
+    "campaignId" TEXT CHECK ("campaignId" IS NULL OR length("campaignId") BETWEEN 1 AND 128),
+    "campaignName" TEXT CHECK ("campaignName" IS NULL OR length("campaignName") BETWEEN 1 AND 128),
+    "sub1" TEXT CHECK ("sub1" IS NULL OR length("sub1") BETWEEN 1 AND 128),
+    "sub2" TEXT CHECK ("sub2" IS NULL OR length("sub2") BETWEEN 1 AND 128),
+    "sub3" TEXT CHECK ("sub3" IS NULL OR length("sub3") BETWEEN 1 AND 128),
+    "sub4" TEXT CHECK ("sub4" IS NULL OR length("sub4") BETWEEN 1 AND 128),
+    "sub5" TEXT CHECK ("sub5" IS NULL OR length("sub5") BETWEEN 1 AND 128),
+    "country" TEXT CHECK ("country" IS NULL OR length("country") BETWEEN 1 AND 64),
+    "deviceType" TEXT CHECK ("deviceType" IS NULL OR length("deviceType") BETWEEN 1 AND 64),
+
+    "sanitizedPayload" JSONB NOT NULL,
+
+    "rawPayloadHash" TEXT NOT NULL
+        CHECK (length("rawPayloadHash") = 64)
+        CHECK ("rawPayloadHash" NOT GLOB '*[^0-9a-f]*'),
+
+    -- The provider's own unique event id, when a contract proves one exists.
+    -- NULL for every Pocket delivery today, which is exactly why a canonical
+    -- rdep cannot be emitted.
+    "providerEventIdentity" TEXT
+        CHECK ("providerEventIdentity" IS NULL OR length("providerEventIdentity") BETWEEN 1 AND 128),
+
+    "processingStatus" TEXT NOT NULL
+        CHECK ("processingStatus" IN (
+            'accepted_processed',
+            'accepted_duplicate',
+            'accepted_pending_linkage',
+            'identity_unresolved',
+            'rejected',
+            'quarantined'
+        )),
+
+    "rejectionCode" TEXT
+        CHECK ("rejectionCode" IS NULL OR "rejectionCode" IN (
+            'auth_failed',
+            'goal_unknown',
+            'goal_disabled',
+            'schema_invalid',
+            'amount_invalid',
+            'click_unknown',
+            'player_conflict',
+            'identity_owner_mismatch',
+            'provider_event_identity_missing',
+            'ordering_unresolved'
+        )),
+
+    "canonicalEventId" INTEGER,
+
+    "schemaVersion" INTEGER NOT NULL DEFAULT 1 CHECK ("schemaVersion" >= 1),
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    -- A parsed time must have a value, an unparseable one must have kept the raw
+    -- string, and an absent one must have neither. This is what stops a
+    -- timezone being invented for a money timestamp.
+    CHECK (("providerEventAtStatus" = 'parsed') = ("providerEventAt" IS NOT NULL)),
+    CHECK (("providerEventAtStatus" = 'unparseable') = ("providerEventAtRaw" IS NOT NULL)),
+
+    -- Refusals carry a reason, acceptances do not.
+    CHECK (
+        ("processingStatus" IN ('rejected', 'quarantined', 'identity_unresolved')
+            AND "rejectionCode" IS NOT NULL)
+        OR ("processingStatus" NOT IN ('rejected', 'quarantined', 'identity_unresolved')
+            AND "rejectionCode" IS NULL)
+    ),
+
+    -- A delivery that produced no canonical event must not name one, and a
+    -- refused delivery can never have produced one.
+    CHECK (
+        "canonicalEventId" IS NULL
+        OR "processingStatus" IN ('accepted_processed', 'accepted_duplicate')
+    ),
+
+    -- A registration carries no money.
+    CHECK ("goal" <> 'reg' OR "amount" IS NULL),
+
+    CONSTRAINT "ProviderIngressEvent_canonicalEventId_fkey" FOREIGN KEY ("canonicalEventId")
+        REFERENCES "GrowthEvent" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Two deliveries may not claim the same provider event identity. SQLite treats
+-- NULLs as distinct in a unique index, so today -- when every Pocket delivery
+-- has a NULL identity -- this constrains nothing, which is the honest outcome.
+-- The moment a provider contract supplies real identities it becomes the
+-- redeposit idempotency key without a schema change.
+CREATE UNIQUE INDEX "ProviderIngressEvent_provider_goal_identity_key"
+    ON "ProviderIngressEvent"("provider", "goal", "providerEventIdentity");
+
+CREATE INDEX "ProviderIngressEvent_provider_goal_receivedAt_idx"
+    ON "ProviderIngressEvent"("provider", "goal", "receivedAt");
+
+CREATE INDEX "ProviderIngressEvent_processingStatus_receivedAt_idx"
+    ON "ProviderIngressEvent"("processingStatus", "receivedAt");
+
+CREATE INDEX "ProviderIngressEvent_rejectionCode_receivedAt_idx"
+    ON "ProviderIngressEvent"("rejectionCode", "receivedAt");
+
+CREATE INDEX "ProviderIngressEvent_playerIdNormalized_idx"
+    ON "ProviderIngressEvent"("playerIdNormalized");
+
+CREATE INDEX "ProviderIngressEvent_clickId_idx"
+    ON "ProviderIngressEvent"("clickId");
+
+CREATE INDEX "ProviderIngressEvent_rawPayloadHash_idx"
+    ON "ProviderIngressEvent"("rawPayloadHash");
+
+-- ---------------------------------------------------------------------------
+-- BACKFILL
+--
+-- Every statement below reads an owner table and writes the projection of it.
+-- The sourceEventId expressions are the SAME strings the runtime emitters
+-- produce -- see src/lib/growth/event-keys.ts, which is the single definition
+-- both sides are written against and which its own test asserts against these
+-- statements. eventId is 20 random bytes as lowercase hex, which satisfies the
+-- charset CHECK and is unique with overwhelming probability -- and the unique
+-- index is the actual guarantee.
+-- ---------------------------------------------------------------------------
+
+-- traffic_click. Qualified clicks only: a prefetch was made by a machine and an
+-- authenticated_user click cannot be attributed, and counting either as
+-- acquisition traffic would inflate every downstream denominator.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "acquisitionClickId",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'traffic_click',
+    c."occurredAt",
+    'backfill',
+    c."id",
+    'acquisition_click',
+    'AffiliateClick',
+    CAST(c."id" AS TEXT),
+    'click:' || CAST(c."id" AS TEXT)
+FROM "AffiliateClick" c
+WHERE c."classification" = 'qualified'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'traffic_click'
+      AND existing."sourceOwner" = 'acquisition_click'
+      AND existing."sourceEventId" = 'click:' || CAST(c."id" AS TEXT)
+);
+
+-- ata_reg. Sourced from the accepted conversion ledger rather than from User,
+-- because that ledger is already the frozen answer to "this learner registered
+-- and this is who acquired them", including for a direct signup whose affiliate
+-- columns are all NULL.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId",
+    "acquisitionClickId", "attributionId",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'ata_reg',
+    e."occurredAt",
+    'backfill',
+    e."userId",
+    e."selectedClickId",
+    e."attributionId",
+    'auth_register',
+    'AffiliateConversionEvent',
+    CAST(e."id" AS TEXT),
+    'user:' || CAST(e."userId" AS TEXT)
+FROM "AffiliateConversionEvent" e
+WHERE e."eventType" = 'academy_registration'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'ata_reg'
+      AND existing."sourceOwner" = 'auth_register'
+      AND existing."sourceEventId" = 'user:' || CAST(e."userId" AS TEXT)
+);
+
+-- ata_reg for learners the conversion ledger has no row for.
+--
+-- WHY THIS SECOND PASS IS NEEDED. `recordRegistrationConversion` only runs while
+-- AFFILIATE_ATTRIBUTION_ENABLED is on, so every learner who registered while it
+-- was off exists with no conversion row. Backfilling only from the ledger would
+-- report those months as having had no registrations at all -- a zero with a
+-- business meaning, which §60 forbids.
+--
+-- The key is identical to the pass above, so a learner covered there cannot be
+-- inserted twice: the NOT EXISTS makes it explicit and the unique index would
+-- refuse it regardless. occurredAt is the account's own creation time, which is
+-- the registration instant by definition.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'ata_reg',
+    u."createdAt",
+    'backfill',
+    u."id",
+    'auth_register',
+    'User',
+    CAST(u."id" AS TEXT),
+    'user:' || CAST(u."id" AS TEXT)
+FROM "User" u
+WHERE NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" g
+    WHERE g."eventType" = 'ata_reg'
+      AND g."sourceOwner" = 'auth_register'
+      AND g."sourceEventId" = 'user:' || CAST(u."id" AS TEXT)
+);
+
+-- curriculum_enrollment.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'curriculum_enrollment',
+    en."enrolledAt",
+    'backfill',
+    en."userId",
+    en."id",
+    'curriculum_enrollment',
+    'UserCurriculumEnrollment',
+    CAST(en."id" AS TEXT),
+    'enrollment:' || CAST(en."id" AS TEXT)
+FROM "UserCurriculumEnrollment" en
+WHERE NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'curriculum_enrollment'
+      AND existing."sourceOwner" = 'curriculum_enrollment'
+      AND existing."sourceEventId" = 'enrollment:' || CAST(en."id" AS TEXT)
+);
+
+-- level_started.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'level_started',
+    p."startedAt",
+    'backfill',
+    en."userId",
+    p."enrollmentId",
+    p."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_level_progress',
+    'UserLevelProgress',
+    CAST(p."id" AS TEXT),
+    'progress:' || CAST(p."id" AS TEXT)
+FROM "UserLevelProgress" p
+JOIN "UserCurriculumEnrollment" en ON en."id" = p."enrollmentId"
+JOIN "LevelDefinition" ld ON ld."id" = p."levelDefinitionId"
+WHERE NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'level_started'
+      AND existing."sourceOwner" = 'curriculum_level_progress'
+      AND existing."sourceEventId" = 'progress:' || CAST(p."id" AS TEXT)
+);
+
+-- level_completed.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'level_completed',
+    p."completedAt",
+    'backfill',
+    en."userId",
+    p."enrollmentId",
+    p."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_level_progress',
+    'UserLevelProgress',
+    CAST(p."id" AS TEXT),
+    'progress:' || CAST(p."id" AS TEXT)
+FROM "UserLevelProgress" p
+JOIN "UserCurriculumEnrollment" en ON en."id" = p."enrollmentId"
+JOIN "LevelDefinition" ld ON ld."id" = p."levelDefinitionId"
+WHERE p."status" = 'completed' AND p."completedAt" IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'level_completed'
+      AND existing."sourceOwner" = 'curriculum_level_progress'
+      AND existing."sourceEventId" = 'progress:' || CAST(p."id" AS TEXT)
+);
+
+-- academy_activation. DEFINED AS the enrollment's FIRST completed level, which
+-- is a real product event with a real timestamp rather than an invented
+-- engagement heuristic. One per enrollment, keyed on the enrollment, so a
+-- second completion can never produce a second activation.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'academy_activation',
+    first_completion."completedAt",
+    'backfill',
+    en."userId",
+    first_completion."enrollmentId",
+    first_completion."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_level_progress',
+    'UserLevelProgress',
+    CAST(first_completion."id" AS TEXT),
+    'enrollment:' || CAST(first_completion."enrollmentId" AS TEXT)
+FROM (
+    SELECT p."id", p."enrollmentId", p."levelDefinitionId", p."completedAt",
+           ROW_NUMBER() OVER (
+               PARTITION BY p."enrollmentId"
+               ORDER BY p."completedAt" ASC, p."id" ASC
+           ) AS rn
+    FROM "UserLevelProgress" p
+    WHERE p."status" = 'completed' AND p."completedAt" IS NOT NULL
+) AS first_completion
+JOIN "UserCurriculumEnrollment" en ON en."id" = first_completion."enrollmentId"
+JOIN "LevelDefinition" ld ON ld."id" = first_completion."levelDefinitionId"
+WHERE first_completion.rn = 1
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'academy_activation'
+      AND existing."sourceOwner" = 'curriculum_level_progress'
+      AND existing."sourceEventId" = 'enrollment:' || CAST(first_completion."enrollmentId" AS TEXT)
+);
+
+-- assessment_completed. A SUBMITTED attempt, whether it passed or failed --
+-- "how many learners finished the quiz" and "how many passed it" are different
+-- questions and the ledger must be able to answer both.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber", "metadata",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'assessment_completed',
+    a."submittedAt",
+    'backfill',
+    a."userId",
+    a."enrollmentId",
+    a."levelDefinitionId",
+    ld."levelNumber",
+    json_object(
+        'attemptNumber', a."attemptNumber",
+        'passed', CASE WHEN a."status" = 'passed' THEN 1 ELSE 0 END
+    ),
+    'curriculum_assessment_attempt',
+    'AssessmentAttempt',
+    CAST(a."id" AS TEXT),
+    'attempt:' || CAST(a."id" AS TEXT)
+FROM "AssessmentAttempt" a
+JOIN "LevelDefinition" ld ON ld."id" = a."levelDefinitionId"
+WHERE a."submittedAt" IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'assessment_completed'
+      AND existing."sourceOwner" = 'curriculum_assessment_attempt'
+      AND existing."sourceEventId" = 'attempt:' || CAST(a."id" AS TEXT)
+);
+
+-- report_submitted. firstSubmittedAt, not submittedAt: a resubmission after a
+-- rejection must not move the learner's original submission into a later period
+-- and silently change a past month's numbers.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'report_submitted',
+    s."firstSubmittedAt",
+    'backfill',
+    s."userId",
+    s."enrollmentId",
+    s."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_report_submission',
+    'ReportSubmission',
+    CAST(s."id" AS TEXT),
+    'submission:' || CAST(s."id" AS TEXT)
+FROM "ReportSubmission" s
+JOIN "LevelDefinition" ld ON ld."id" = s."levelDefinitionId"
+WHERE s."firstSubmittedAt" IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'report_submitted'
+      AND existing."sourceOwner" = 'curriculum_report_submission'
+      AND existing."sourceEventId" = 'submission:' || CAST(s."id" AS TEXT)
+);
+
+-- report_approved. Keyed on the SUBMISSION, not the review row: a submission is
+-- approved once, and keying on the review would let a second approval of the
+-- same work produce a second business event.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'report_approved',
+    r."reviewedAt",
+    'backfill',
+    s."userId",
+    s."enrollmentId",
+    s."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_report_review',
+    'ReportReview',
+    CAST(r."id" AS TEXT),
+    'submission:' || CAST(s."id" AS TEXT)
+FROM "ReportReview" r
+JOIN "ReportSubmission" s ON s."id" = r."submissionId"
+JOIN "LevelDefinition" ld ON ld."id" = s."levelDefinitionId"
+WHERE r."decision" = 'approved'
+  AND r."id" = (
+      SELECT MIN(r2."id") FROM "ReportReview" r2
+      WHERE r2."submissionId" = r."submissionId" AND r2."decision" = 'approved'
+  )
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'report_approved'
+      AND existing."sourceOwner" = 'curriculum_report_review'
+      AND existing."sourceEventId" = 'submission:' || CAST(s."id" AS TEXT)
+);
+
+-- mentor_review_submitted -- PARTIAL BY NECESSITY, see the header. Only rows
+-- still awaiting review can be reconstructed, because for those lastProgressAt
+-- IS the moment the learner submitted. An approved level's submission instant
+-- was never recorded and is not invented here.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'mentor_review_submitted',
+    COALESCE(p."lastProgressAt", p."startedAt"),
+    'backfill',
+    en."userId",
+    p."enrollmentId",
+    p."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_mentor_review',
+    'UserLevelProgress',
+    CAST(p."id" AS TEXT),
+    'progress:' || CAST(p."id" AS TEXT)
+FROM "UserLevelProgress" p
+JOIN "UserCurriculumEnrollment" en ON en."id" = p."enrollmentId"
+JOIN "LevelDefinition" ld ON ld."id" = p."levelDefinitionId"
+WHERE p."status" = 'pending_review'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'mentor_review_submitted'
+      AND existing."sourceOwner" = 'curriculum_mentor_review'
+      AND existing."sourceEventId" = 'progress:' || CAST(p."id" AS TEXT)
+);
+
+-- mentor_review_approved. The completion method recorded on the progress row is
+-- the durable fact that a mentor approved it.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
+    "levelDefinitionId", "levelNumber",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'mentor_review_approved',
+    p."completedAt",
+    'backfill',
+    en."userId",
+    p."enrollmentId",
+    p."levelDefinitionId",
+    ld."levelNumber",
+    'curriculum_mentor_review',
+    'UserLevelProgress',
+    CAST(p."id" AS TEXT),
+    'progress:' || CAST(p."id" AS TEXT)
+FROM "UserLevelProgress" p
+JOIN "UserCurriculumEnrollment" en ON en."id" = p."enrollmentId"
+JOIN "LevelDefinition" ld ON ld."id" = p."levelDefinitionId"
+WHERE p."status" = 'completed'
+  AND p."completedAt" IS NOT NULL
+  AND p."completionMethod" = 'mentor_completion'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'mentor_review_approved'
+      AND existing."sourceOwner" = 'curriculum_mentor_review'
+      AND existing."sourceEventId" = 'progress:' || CAST(p."id" AS TEXT)
+);
+
+-- pocket_reg. Keyed on the POCKET PLAYER, which is the provider-side identity
+-- the idempotency contract names, and not on the local row id -- so the key
+-- means the same thing to a future provider reconciliation as it does here.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId",
+    "pocketTraderIdentityId", "provider",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'pocket_reg',
+    t."boundAt",
+    'backfill',
+    t."userId",
+    t."id",
+    'pocket',
+    'pocket_identity_binding',
+    'PocketTraderIdentity',
+    CAST(t."id" AS TEXT),
+    'pocket:player:' || t."pocketUserId"
+FROM "PocketTraderIdentity" t
+WHERE t."source" = 'registration_postback'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'pocket_reg'
+      AND existing."sourceOwner" = 'pocket_identity_binding'
+      AND existing."sourceEventId" = 'pocket:player:' || t."pocketUserId"
+);
+
+-- dep. Sourced from the provider event table, which owns the one-first-deposit-
+-- per-player invariant, and only for rows that have been MATCHED to a learner:
+-- a deposit whose owner is unknown is not yet a business fact about anybody,
+-- and the pending rows remain visible in the ingress-health surface instead.
+INSERT INTO "GrowthEvent" (
+    "eventId", "eventType", "occurredAt", "origin", "userId", "provider",
+    "amount", "currencyCode", "currencyStatus",
+    "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
+)
+SELECT
+    lower(hex(randomblob(20))),
+    'dep',
+    pe."firstReceivedAt",
+    'backfill',
+    pe."matchedUserId",
+    'pocket',
+    pe."normalizedAmount",
+    pe."currencyCode",
+    pe."currencyStatus",
+    'pocket_first_deposit',
+    'PocketProviderEvent',
+    CAST(pe."id" AS TEXT),
+    'pocket:player:' || pe."pocketPlayerId"
+FROM "PocketProviderEvent" pe
+WHERE pe."eventType" = 'first_deposit'
+  AND pe."status" = 'matched'
+  AND pe."matchedUserId" IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEvent" existing
+    WHERE existing."eventType" = 'dep'
+      AND existing."sourceOwner" = 'pocket_first_deposit'
+      AND existing."sourceEventId" = 'pocket:player:' || pe."pocketPlayerId"
+);
+
+-- rdep is NOT backfilled and cannot be: no redeposit has ever been recorded,
+-- because Pocket supplies no event identifier that could tell one apart from a
+-- redelivery. This absence is reported as unresolved by the analytics layer and
+-- never as a count of zero.
+
+-- The outbox is populated for every backfilled event so that a future consumer
+-- can replay history rather than starting from whatever happened to be next.
+-- availableAt is the event's own occurrence time, so a dispatcher that ever runs
+-- processes reconstructed history in the order it actually happened.
+INSERT INTO "GrowthEventOutbox" ("growthEventId", "eventType", "availableAt")
+SELECT g."id", g."eventType", g."occurredAt"
+FROM "GrowthEvent" g
+WHERE g."origin" = 'backfill';

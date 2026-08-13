@@ -8,15 +8,27 @@ import {
   authenticatePocketQuerySecret,
   authenticatePocketRequest,
   fingerprintEventId,
-  goalAcceptsQuerySecret,
   hasQueryAuthMaterial,
-  isQueryAuthenticatedDepositAttempt,
   parsePocketDepositFields,
   parsePocketRegistrationFields,
   readPostbackGoalForAuthMode,
   resolvePocketPostbackConfig,
-  POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL,
 } from "@/lib/exchange/pocketPostbackAuth";
+import { resolveGrowthV1Goal } from "@/lib/growth/pocket/goal-allowlist";
+import {
+  isPocketDepIngestEnabled,
+  isPocketRdepIngestEnabled,
+  isPocketRegIngestEnabled,
+} from "@/lib/growth/ingress-config";
+import { ingestPocketRedeposit } from "@/lib/growth/pocket/redeposit";
+import { recordPocketRegistrationGrowthEvent } from "@/lib/growth/pocket/registration";
+import { recordProviderIngressSafely } from "@/lib/growth/pocket/ingress";
+import {
+  POCKET_CALLBACK_AUTH_FAILURE_LIMIT,
+  POCKET_CALLBACK_RATE_LIMIT,
+  pocketCallbackAuthFailureKey,
+  pocketCallbackRateKey,
+} from "@/lib/growth/pocket/rate-policy";
 import { parsePocketDepositAmount } from "@/lib/exchange/pocketDepositAmount";
 import {
   isPocketFirstDepositEnabled,
@@ -34,21 +46,35 @@ import { prisma } from "@/lib/prisma";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import { receivePostbackSchema } from "@/lib/validation";
 
+/**
+ * G4-GROWTH — the goals the LEGACY header-authenticated path may still dispatch.
+ *
+ * WHAT WAS HERE BEFORE, AND WHY IT WAS THE PROBLEM. This map had FOURTEEN
+ * entries, including `commission`, `withdrawal`, `successful_withdrawal` and
+ * `canceled_withdrawal`. Every one of them reached
+ * `processExchangePostbackPayload`, which mutates `ExchangeAccount` money state
+ * — and the caller chose which by sending a string. One authenticated request
+ * could therefore select any financial behaviour the processor implemented. The
+ * PROD-readiness audit named this, and §15/§17 of the G4 brief require it
+ * corrected in source rather than documented again.
+ *
+ * WHAT REMAINS. Two goals, which are the two this path has an accepted, tested
+ * contract for. Nothing that works today stops working.
+ *
+ * WHY `redep` IS ABSENT FROM THIS MAP. A redeposit on this path would reach the
+ * legacy processor, whose money handling is `Float`-based. Redeposits are owned
+ * exclusively by the typed Growth V1 handler on the `ow` query contract — which
+ * is also the shape Pocket actually sends — and that handler uses exact decimal
+ * arithmetic and refuses to emit a canonical event it cannot identify.
+ *
+ * WHERE WITHDRAWAL AND COMMISSION WENT. Nowhere: `postbackProcessor` still
+ * implements them for owners that legitimately need them. What changed is that
+ * NO Pocket receiver can reach them, which is exactly §17's "separate them from
+ * this trusted Growth V1 receiver".
+ */
 const goalToPocketType: Record<string, PocketPostbackType> = {
   reg: "Registration",
-  registration: "Registration",
   dep: "First Deposit",
-  ftd: "First Deposit",
-  first_deposit: "First Deposit",
-  redep: "Re-deposit",
-  redeposit: "Re-deposit",
-  email: "Email Confirmation",
-  email_confirmed: "Email Confirmation",
-  email_confirmation: "Email Confirmation",
-  commission: "Commission",
-  withdrawal: "Withdrawal",
-  successful_withdrawal: "Successful Withdrawal",
-  canceled_withdrawal: "Canceled Withdrawal",
 };
 
 const ROUTE = "/api/postbacks/pocket";
@@ -72,10 +98,12 @@ const MAX_QUERY_PARAMS = 40;
 const MAX_QUERY_KEY_LENGTH = 80;
 const MAX_QUERY_VALUE_LENGTH = 1000;
 
-// Bounded per-IP budget, applied before any database work. Authentication
-// failures consume the same budget as accepted events, so an attacker cannot
-// probe the secret at unbounded rates.
-const RATE_LIMIT = { limit: 60, windowMs: 60_000 } as const;
+// G4-GROWTH — a PROVIDER budget, not a consumer one. See rate-policy.ts: a
+// login-shaped ceiling would throttle the whole integration during a catch-up
+// burst, and the events it refused would be real conversions. Authentication
+// failures are additionally bounded by a much tighter separate budget, so
+// raising this ceiling does not raise the rate at which a secret can be probed.
+const RATE_LIMIT = POCKET_CALLBACK_RATE_LIMIT;
 
 /** Every response is uncacheable and carries a correlation id. */
 function respond(status: number, body: Record<string, unknown>) {
@@ -329,6 +357,37 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
     await reconcileFirstDepositAfterRegistration(prisma, fields.playerId);
   }
 
+  // G4-GROWTH — durable ingress evidence, then the canonical `pocket_reg` event.
+  //
+  // BOTH RUN LAST AND NEITHER CAN FAIL THE POSTBACK, for the same reason the
+  // deposit reconciliation above cannot: they are measurements of something that
+  // has already legitimately happened. A binding that committed must not be
+  // reported as a failure because the row describing it could not be written.
+  //
+  // Emission is idempotent on the Pocket PLAYER, so a retry after a crash
+  // between the binding and this line produces exactly one event, not two.
+  const ingress = await recordProviderIngressSafely(prisma, {
+    goal: "reg",
+    params,
+    receivedAt: new Date(),
+    processingStatus:
+      result.outcome === "bound"
+        ? "accepted_processed"
+        : result.outcome === "already_bound"
+          ? "accepted_duplicate"
+          : "quarantined",
+    rejectionCode:
+      result.outcome === "bound" || result.outcome === "already_bound"
+        ? null
+        : "player_conflict",
+    playerIdNormalized: fields.playerId,
+    clickId: fields.clickId,
+  });
+
+  if (result.outcome === "bound" || result.outcome === "already_bound") {
+    await recordPocketRegistrationGrowthEvent(prisma, fields.playerId, ingress?.id ?? null);
+  }
+
   return respond(200, { ok: true });
 }
 
@@ -413,6 +472,36 @@ async function handleDirectFirstDeposit(params: URLSearchParams, request: Reques
     return fail(400, "INVALID_DEPOSIT");
   }
 
+  // G4-GROWTH — durable ingress evidence for the deposit delivery.
+  //
+  // The canonical `dep` growth event is NOT written here: it is emitted inside
+  // `emitFirstDepositConversion`, in the same transaction as the affiliate
+  // conversion row, so the two ledgers cannot disagree about whether a deposit
+  // happened. This call records only that a delivery arrived and how it was
+  // treated, and it cannot fail the postback.
+  await recordProviderIngressSafely(prisma, {
+    goal: "dep",
+    params,
+    receivedAt: new Date(),
+    processingStatus:
+      result.outcome === "matched"
+        ? "accepted_processed"
+        : result.outcome === "pending_identity"
+          ? "accepted_pending_linkage"
+          : result.outcome === "replayed" || result.outcome === "unchanged_pending"
+            ? "accepted_duplicate"
+            : "quarantined",
+    rejectionCode:
+      result.outcome === "conflict"
+        ? result.conflictCode === "identity_owner_mismatch"
+          ? "identity_owner_mismatch"
+          : "player_conflict"
+        : null,
+    playerIdNormalized: fields.playerId,
+    clickId: fields.clickId,
+    amount: amount.normalized,
+  });
+
   // Only conflicts are audited. A successful replay is ordinary transport
   // behaviour and auditing every one of them would bury the events that matter
   // under unbounded noise — the replay counter on the row already records it.
@@ -425,6 +514,47 @@ async function handleDirectFirstDeposit(params: URLSearchParams, request: Reques
       metadata: { route: ROUTE, reason: result.conflictCode ?? "conflict" },
       request,
     });
+  }
+
+  return respond(200, { ok: true });
+}
+
+/**
+ * G4-GROWTH — the official direct Pocket REDEPOSIT postback, past authentication.
+ *
+ * WHAT THIS HANDLER MAY NOT DO. It never binds a Pocket identity, never
+ * completes a level, never awards XP, never records a balance, and never creates
+ * or modifies a FIRST deposit. `goal=reg` owns identity and `goal=dep` owns the
+ * first deposit, and neither is reachable from here.
+ *
+ * WHAT IT USUALLY DOES. Records durable, sanitized evidence and stops, because
+ * Pocket supplies no unique event identifier and ATA therefore cannot tell a
+ * retried delivery from a genuinely new deposit. That outcome is
+ * `identity_unresolved` — an honest terminal state, not an error.
+ *
+ * ONE RESPONSE FOR EVERY BUSINESS OUTCOME. Emitted, unresolved, pending linkage
+ * and quarantined all return the same bounded `{ ok: true }`, for exactly the
+ * reason the deposit handler does: an upstream sender has no business learning
+ * whether a player exists, whether a first deposit preceded this one, or whose
+ * learner it landed on, and an attacker holding a stolen `ow` must not be handed
+ * an enumeration oracle on top of it.
+ *
+ * A MALFORMED DELIVERY IS 400. Unlike a business outcome, a schema failure is
+ * the caller's to fix and telling them so does not disclose business state.
+ */
+async function handleDirectRedeposit(params: URLSearchParams, request: Request) {
+  const result = await ingestPocketRedeposit(prisma, { params, now: new Date() });
+
+  if (result.kind === "rejected") {
+    await auditSecurityEvent({
+      action: "POCKET_POSTBACK_REJECTED",
+      reason: PocketRejectionReason.ValidationError,
+      request,
+    });
+
+    // The same bounded body every malformed field produces. The specific reason
+    // is durable in the ingress row, which is where an operator reads it.
+    return fail(400, "INVALID_REDEPOSIT");
   }
 
   return respond(200, { ok: true });
@@ -444,7 +574,7 @@ export async function GET(request: Request) {
 
   // 2. Rate limit, before any database work including the audit write.
   const ip = getRequestIp(request);
-  const limit = rateLimit(`postback:pocket:${ip}`, RATE_LIMIT);
+  const limit = rateLimit(pocketCallbackRateKey(ip), RATE_LIMIT);
 
   if (!limit.allowed) {
     return fail(429, "RATE_LIMITED");
@@ -468,20 +598,39 @@ export async function GET(request: Request) {
   //    AFD-4 extends this by exactly one goal: `dep` may also authenticate with
   //    `ow`, and ONLY while first-deposit ingestion is switched on. Every other
   //    financial goal is unaffected and still rejects URL-borne secrets.
+  //
+  //    G4-GROWTH generalises that rule instead of adding a third special case.
+  //    The `ow` contract is open to exactly the three Growth V1 goals, and each
+  //    one only while ITS OWN switch is on. `reg` is no longer unconditional:
+  //    §16 requires that enabling one family cannot enable another, and the
+  //    registration family now has a switch like the other two.
   const authGoal = readPostbackGoalForAuthMode(params);
-  const firstDepositEnabled = isPocketFirstDepositEnabled();
+  const growthGoalForAuth = resolveGrowthV1Goal(params);
+  const enabledGrowthGoals = {
+    reg: isPocketRegIngestEnabled(),
+    dep: isPocketDepIngestEnabled(),
+    redep: isPocketRdepIngestEnabled(),
+  } as const;
 
-  // A deposit offered on the query contract while the feature is off is answered
-  // "unavailable", not "forbidden". 403 would send an operator hunting for a
-  // secret mismatch that does not exist, and — unlike a rejection — 503 is
-  // retry-safe, so a deposit delivered during a rollout window is not lost. It
+  // A Growth V1 goal offered on the query contract while ITS feature is off is
+  // answered "unavailable", not "forbidden". 403 would send an operator hunting
+  // for a secret mismatch that does not exist, and — unlike a rejection — 503 is
+  // retry-safe, so an event delivered during a rollout window is not lost. It
   // reveals only that a feature is off, which step 1 already reveals for the
   // integration as a whole, and it happens before any lookup or write.
-  if (!firstDepositEnabled && isQueryAuthenticatedDepositAttempt(params)) {
+  //
+  // Checked on the presence of `ow`, so this branch describes only callers that
+  // actually attempted the direct contract.
+  if (
+    growthGoalForAuth.kind === "supported" &&
+    !enabledGrowthGoals[growthGoalForAuth.goal] &&
+    params.has(POCKET_POSTBACK_QUERY_SECRET_KEY)
+  ) {
     return unavailableResponse();
   }
 
-  const directRegistration = goalAcceptsQuerySecret(authGoal, firstDepositEnabled);
+  const directRegistration =
+    growthGoalForAuth.kind === "supported" && enabledGrowthGoals[growthGoalForAuth.goal];
 
   // The legacy aliases have no provider mandate and are never acceptable. For
   // non-registration goals `ow` joins them, preserving the header-only contract
@@ -511,6 +660,25 @@ export async function GET(request: Request) {
     : authenticatePocketRequest(request.headers, config.secret);
 
   if (!auth.ok) {
+    // G4-GROWTH — the tight budget, consumed only by FAILURES.
+    //
+    // The accepted-traffic ceiling above is deliberately high so a provider
+    // catch-up burst is never refused. That would, on its own, also raise the
+    // rate at which somebody could hunt for the secret — so failures draw from
+    // their own far smaller budget, in a separate namespace. A correctly
+    // configured provider never touches it.
+    //
+    // Charged BEFORE the audit write, so a flood of wrong secrets cannot turn
+    // the audit log into the amplifier.
+    const failures = rateLimit(
+      pocketCallbackAuthFailureKey(ip),
+      POCKET_CALLBACK_AUTH_FAILURE_LIMIT,
+    );
+
+    if (!failures.allowed) {
+      return fail(429, "RATE_LIMITED");
+    }
+
     await auditSecurityEvent({
       action: "POCKET_POSTBACK_FORBIDDEN",
       reason: auth.reason,
@@ -532,13 +700,44 @@ export async function GET(request: Request) {
   //    the legacy path below with its established response shape, so nothing
   //    that works today changes.
   if (usedQuerySecret) {
-    // AFD-4 — the query contract now carries two events. They are dispatched to
-    // separate owners with no shared mutation path: registration binds identity
-    // and completes Level 1 and never touches money, deposit records money and
-    // never touches identity or progression.
-    return authGoal === POCKET_FIRST_DEPOSIT_QUERY_SECRET_GOAL
-      ? handleDirectFirstDeposit(params, request)
-      : handleDirectRegistration(params, request);
+    // G4-GROWTH — typed dispatch on an explicit allowlist, with a SEPARATE
+    // switch per family.
+    //
+    // Three handlers, three owners, no shared mutation path: registration binds
+    // identity and completes Level 1 and never touches money; first deposit
+    // records money and never touches identity or progression; redeposit records
+    // evidence and refuses to emit a canonical event it cannot identify.
+    //
+    // `resolveGrowthV1Goal` re-reads the goal from the query rather than trusting
+    // `authGoal`, so the string that selected the AUTH MODE and the string that
+    // selects the HANDLER are derived by the same rules from the same source — a
+    // request cannot present one goal to the authenticator and another to the
+    // dispatcher.
+    const growthGoal = resolveGrowthV1Goal(params);
+
+    if (growthGoal.kind !== "supported") {
+      await auditSecurityEvent({
+        action: "POCKET_POSTBACK_REJECTED",
+        reason: PocketRejectionReason.UnknownGoal,
+        request,
+      });
+      return fail(400, "UNSUPPORTED_GOAL");
+    }
+
+    // Each family is gated on its own switch. Disabled is 503 and not 403: a
+    // disabled feature is not an authentication failure, and 503 is retry-safe
+    // so a delivery during a rollout window is not lost.
+    switch (growthGoal.goal) {
+      case "reg":
+        if (!isPocketRegIngestEnabled()) return unavailableResponse();
+        return handleDirectRegistration(params, request);
+      case "dep":
+        if (!isPocketDepIngestEnabled()) return unavailableResponse();
+        return handleDirectFirstDeposit(params, request);
+      case "redep":
+        if (!isPocketRdepIngestEnabled()) return unavailableResponse();
+        return handleDirectRedeposit(params, request);
+    }
   }
 
   const clickId = firstParam(params, ["clickid", "click_id"]);

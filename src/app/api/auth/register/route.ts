@@ -6,6 +6,8 @@ import {
   clearedAttributionCookieOptions,
 } from "@/lib/affiliate/attribution-cookie";
 import { isAffiliateAttributionEnabled } from "@/lib/affiliate/attribution-config";
+import { emitGrowthEvent } from "@/lib/growth/emit";
+import { userSourceEventId } from "@/lib/growth/event-keys";
 import {
   freezeAttribution,
   isVisitorAlreadyAttributed,
@@ -310,6 +312,36 @@ export async function POST(request: Request) {
         occurredAt: now,
       });
     }
+
+    // G4-GROWTH — the canonical ATA_REG event, for EVERY successful registration.
+    //
+    // DELIBERATELY NOT INSIDE THE `attributionEnabled` BRANCH ABOVE. The
+    // affiliate conversion ledger only records registrations while attribution
+    // is switched on, because its purpose is payout. The growth ledger's purpose
+    // is the funnel, and a funnel whose denominator disappears when a marketing
+    // flag is toggled is worse than no funnel — §10 requires exactly one ATA_REG
+    // per successfully created user, and organic registration with no
+    // attribution is explicitly still a registration.
+    //
+    // ONE PER USER, KEYED ON THE USER ID. Not the email: an address is mutable
+    // and re-registrable, so keying on it would let one learner produce two
+    // registrations by changing it.
+    //
+    // IN THIS TRANSACTION, so a rolled-back registration leaves no event. Using
+    // the strict emitter rather than the safe one is intentional here and
+    // matches the accepted reasoning for the conversion row directly above: a
+    // learner who exists with no growth event is a silent hole nothing
+    // downstream can detect, whereas a failed registration is loud and
+    // retryable.
+    await emitGrowthEvent(tx, {
+      eventType: "ata_reg",
+      occurredAt: now,
+      sourceEventId: userSourceEventId(created.id),
+      sourceEntityId: created.id,
+      userId: created.id,
+      attributionId,
+      acquisitionClickId: attributionCandidate?.selectedClickId ?? null,
+    });
 
     // PHASE-F — automatic curriculum enrollment, INSIDE this transaction.
     //

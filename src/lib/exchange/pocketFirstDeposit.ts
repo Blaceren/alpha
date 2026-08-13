@@ -23,6 +23,8 @@
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { randomBase32Id } from "@/lib/affiliate/random-id";
+import { emitGrowthEvent } from "@/lib/growth/emit";
+import { pocketPlayerSourceEventId } from "@/lib/growth/event-keys";
 import {
   resolvePocketFirstDepositConfig,
   type PocketDepositCurrency,
@@ -237,6 +239,7 @@ async function applyDelivery(
 
   await emitFirstDepositConversion(tx, {
     providerEventId: created.id,
+    pocketPlayerId: input.pocketPlayerId,
     userId: clickUserId,
     normalizedAmount: input.normalizedAmount,
     currency: input.currency,
@@ -419,6 +422,7 @@ export async function convergePendingEvent(
   // here would let a currency change silently re-denominate an old deposit.
   await emitFirstDepositConversion(tx, {
     providerEventId: event.id,
+    pocketPlayerId: event.pocketPlayerId,
     userId: account.userId,
     normalizedAmount: event.normalizedAmount,
     currency:
@@ -449,6 +453,14 @@ export async function emitFirstDepositConversion(
   tx: Prisma.TransactionClient,
   input: {
     providerEventId: number;
+    /**
+     * G4-GROWTH. The provider-side identity, which is the canonical growth
+     * ledger's idempotency key for a first deposit. Required rather than
+     * optional: a `dep` growth event keyed on anything else would not be
+     * checkable against Pocket, and making it optional would let a call site
+     * silently produce an unkeyed one.
+     */
+    pocketPlayerId: string;
     userId: number;
     normalizedAmount: string;
     currency: PocketDepositCurrency;
@@ -500,6 +512,31 @@ export async function emitFirstDepositConversion(
       occurredAt: input.occurredAt,
     },
     select: { id: true },
+  });
+
+  // G4-GROWTH — the canonical growth event for the same fact, in the SAME
+  // transaction as the conversion row above.
+  //
+  // ONE FACT, TWO READERS, NO DRIFT. The affiliate conversion ledger answers
+  // "what does this affiliate get paid for"; the growth ledger answers "what
+  // happened in the funnel". Writing them together is what makes it impossible
+  // for a deposit to appear in one and not the other — which is the failure the
+  // whole G4 design exists to prevent.
+  //
+  // NO NEW MONEY AUTHORITY. The amount and currency are the ones the provider
+  // event row already established. This is a projection, not a second decision.
+  await emitGrowthEvent(tx, {
+    eventType: "dep",
+    occurredAt: input.occurredAt,
+    sourceEventId: pocketPlayerSourceEventId(input.pocketPlayerId),
+    sourceEntityId: input.providerEventId,
+    userId: input.userId,
+    attributionId: attribution?.id ?? null,
+    acquisitionClickId: attribution?.selectedClickId ?? null,
+    provider: "pocket",
+    amount: input.normalizedAmount,
+    currencyCode: input.currency.code,
+    currencyStatus: input.currency.status,
   });
 }
 

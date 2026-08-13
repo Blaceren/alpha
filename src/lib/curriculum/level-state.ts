@@ -11,6 +11,7 @@ import {
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
 } from "@/lib/env";
+import { emitLevelStartedEvent } from "@/lib/growth/product-events";
 import { prisma } from "@/lib/prisma";
 import {
   isFinancialCheckpointType,
@@ -885,6 +886,22 @@ async function runStartTransaction(
       attemptCount: 0,
     },
   });
+
+  // G4-GROWTH — the level-started step of the CRO funnel.
+  //
+  // This is the only place a `UserLevelProgress` row is created by a learner
+  // action, so it is the only place a level genuinely starts. The other two
+  // creators — checkpoint verification and staging attestation — create progress
+  // for an operator-driven path and are covered by the completion hook instead.
+  await emitLevelStartedEvent(tx, {
+    userLevelProgressId: progress.id,
+    enrollmentId: result.enrollment.id,
+    userId: result.enrollment.userId,
+    levelDefinitionId: state.levelDefinition.id,
+    levelNumber: state.levelDefinition.levelNumber,
+    occurredAt: evaluationTime,
+  });
+
   const enrollment = await tx.userCurriculumEnrollment.update({
     where: { id: result.enrollment.id },
     data: { lastMeaningfulActionAt: evaluationTime },

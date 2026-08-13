@@ -11,6 +11,7 @@ import {
   isCurriculumV2ReadEnabled,
   isCurriculumV2XpEnabled,
 } from "@/lib/env";
+import { emitAssessmentCompletedEvent } from "@/lib/growth/product-events";
 import { prisma } from "@/lib/prisma";
 import {
   canonicalizeQuestion,
@@ -977,6 +978,22 @@ async function runSubmit(
   if (claim.count !== 1) {
     fail("ASSESSMENT_ATTEMPT_CONFLICT", "assessment submission claim was lost", true);
   }
+
+  // G4-GROWTH — a submitted attempt, PASSED OR FAILED.
+  //
+  // Both outcomes produce an event. Recording only passes would make the
+  // assessment pass rate uncomputable, because its denominator — learners who
+  // actually sat the assessment — would exist nowhere.
+  await emitAssessmentCompletedEvent(tx, {
+    attemptId: attempt.id,
+    userId: attempt.userId,
+    enrollmentId: attempt.enrollmentId,
+    levelDefinitionId: level.id,
+    levelNumber: level.levelNumber,
+    attemptNumber: attempt.attemptNumber,
+    passed: graded.passed,
+    occurredAt: now,
+  });
   await tx.auditLog.create({
     data: {
       userId: actorUserId,

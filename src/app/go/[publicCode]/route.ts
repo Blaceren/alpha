@@ -18,6 +18,7 @@ import {
   isAffiliateAttributionEnabled,
   requireAttributionSecret,
 } from "@/lib/affiliate/attribution-config";
+import { emitTrafficClickEvent } from "@/lib/growth/product-events";
 import { applyGoAbuseLimit } from "@/lib/affiliate/go-abuse-limit";
 import { prisma } from "@/lib/prisma";
 
@@ -147,12 +148,29 @@ export async function GET(request: Request, context: RouteContext): Promise<Next
     now,
   });
 
-  await recordAcquisitionClick(prisma, {
+  const click = await recordAcquisitionClick(prisma, {
     link,
     classification,
     anonymousVisitorId: journey.anonymousVisitorId,
     captured: capture.captured,
     referer: request.headers.get("referer"),
+    occurredAt: now,
+  });
+
+  // G4-GROWTH — the `traffic_click` event for the canonical ledger.
+  //
+  // FOR THE EVENT-CONSUMER CONTRACT, NOT FOR COUNTING. Every click METRIC in the
+  // Growth surfaces is counted from `AffiliateClick`, exactly as the accepted
+  // AFD-5B1 analytics counts it, so the two can never report different totals.
+  // This event exists so a future outbound postback or CPA consumer has an
+  // addressable, immutable event id for the click — which a row id is not.
+  //
+  // Emitted only for QUALIFIED clicks (the emitter enforces it), and it cannot
+  // fail the redirect: a visitor must never see an error because a measurement
+  // did not write.
+  await emitTrafficClickEvent(prisma, {
+    affiliateClickId: click.id,
+    classification,
     occurredAt: now,
   });
 

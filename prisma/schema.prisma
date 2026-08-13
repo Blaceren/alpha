@@ -217,6 +217,11 @@ model User {
   /// an ENROLLMENT, made by an operator, and is never presented as something
   /// the learner did.
   stagingAttestationsMade         StagingAttestation[]         @relation("StagingAttestationOperator")
+  /// G4-GROWTH. Every canonical growth fact about this learner, in one
+  /// vocabulary and one time basis. `onDelete: Restrict` on the far side: a
+  /// learner who produced a conversion cannot be deleted out from under the
+  /// ledger that a payout may later be computed from.
+  growthEvents                    GrowthEvent[]                @relation("GrowthEventLearner")
 }
 
 model XpEvent {
@@ -1083,6 +1088,7 @@ model LevelDefinition {
   reportAssignments       ReportAssignmentVersion[]
   reportBinding           LevelReportBinding?
   reportSubmissions       ReportSubmission[]
+  growthEvents            GrowthEvent[]              @relation("GrowthEventLevel")
   checkpointRequirement   LevelCheckpointRequirement?
   checkpointAttempts      CheckpointVerificationAttempt[]
   stagingAttestations     StagingAttestation[]
@@ -1265,6 +1271,8 @@ model PocketTraderIdentity {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// G4-GROWTH. The `pocket_reg` event this binding produced.
+  growthEvents GrowthEvent[] @relation("GrowthEventPocketIdentity")
 
   @@index([clickId])
   /// AFD-5B1 — the trusted Pocket-registration metric counts this table by
@@ -1589,6 +1597,9 @@ model AffiliateClick {
   lastTouchOf                    AffiliateAttribution[]       @relation("AffiliateAttributionLastTouch")
   selectedBy                     AffiliateAttribution[]       @relation("AffiliateAttributionSelected")
   conversionEvents               AffiliateConversionEvent[]
+  /// G4-GROWTH. The `traffic_click` event, plus every downstream event this
+  /// click is the acquisition origin of.
+  growthEvents                   GrowthEvent[]                @relation("GrowthEventAcquisitionClick")
 
   @@index([trackingLinkId, occurredAt])
   @@index([anonymousVisitorId, occurredAt])
@@ -1622,6 +1633,8 @@ model AffiliateAttribution {
   lastTouchClick     AffiliateClick                      @relation("AffiliateAttributionLastTouch", fields: [lastTouchClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   selectedClick      AffiliateClick                      @relation("AffiliateAttributionSelected", fields: [selectedClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   conversionEvents   AffiliateConversionEvent[]
+  /// G4-GROWTH. Growth events carrying the frozen acquisition answer.
+  growthEvents       GrowthEvent[]                       @relation("GrowthEventAttribution")
 
   @@index([selectedClickId])
   @@index([selectedAt])
@@ -1705,6 +1718,9 @@ model UserCurriculumEnrollment {
   reportSubmissions      ReportSubmission[]
   checkpointAttempts     CheckpointVerificationAttempt[]
   stagingAttestations    StagingAttestation[]
+  /// G4-GROWTH. The enrollment's progression events, which is what makes a CRO
+  /// funnel a per-enrollment question rather than a per-user one.
+  growthEvents           GrowthEvent[]                  @relation("GrowthEventEnrollment")
 
   @@unique([id, curriculumVersionId])
   @@unique([id, userId, curriculumVersionId])
@@ -3604,4 +3620,359 @@ model ModelInvocation {
   @@index([providerCode, modelCode, createdAt])
   /// "What is in flight or recently failed" — the operational sweep.
   @@index([status, createdAt])
+}
+
+/// G4-GROWTH — the canonical growth event taxonomy.
+///
+/// ONE VOCABULARY, NOT FOUR. Before this phase ATA had an affiliate conversion
+/// ledger, a Pocket provider-event table and a curriculum progression model that
+/// each described part of a learner's journey in its own words. Analytics that
+/// wanted the whole funnel had to join three shapes and invent the connective
+/// tissue. These members are that connective tissue, named once.
+///
+/// THE FOUR MONEY-ADJACENT NAMES ARE KEPT APART DELIBERATELY. `ata_reg` is a
+/// registration in ATA. `pocket_reg` is a trusted provider confirmation that the
+/// learner also registered with Pocket. `dep` is the FIRST Pocket deposit for a
+/// player. `rdep` is any later one. Collapsing any pair of these would make a
+/// future CPA calculation wrong in a way no downstream reader could detect.
+enum GrowthEventType {
+  traffic_click
+  ata_reg
+  curriculum_enrollment
+  academy_activation
+  level_started
+  level_completed
+  assessment_completed
+  report_submitted
+  report_approved
+  mentor_review_submitted
+  mentor_review_approved
+  pocket_reg
+  dep
+  rdep
+}
+
+/// G4-GROWTH — which module produced an event, and therefore the namespace its
+/// `sourceEventId` is unique within.
+///
+/// A GrowthEvent is DERIVED from a row that already exists in an owner table.
+/// This enum names that owner. It is what makes the ledger a projection with a
+/// provable origin rather than a second, independently writable truth.
+enum GrowthEventSourceOwner {
+  acquisition_click
+  auth_register
+  curriculum_enrollment
+  curriculum_level_progress
+  curriculum_assessment_attempt
+  curriculum_report_submission
+  curriculum_report_review
+  curriculum_mentor_review
+  pocket_identity_binding
+  pocket_first_deposit
+  pocket_redeposit
+}
+
+/// G4-GROWTH — whether a row was written by a live emitter or by the migration
+/// that backfilled history from the owner tables.
+///
+/// Recorded because "the ledger has no registrations before 13 August" and "no
+/// registrations happened before 13 August" are different statements, and a
+/// reader must be able to tell which one a sparse period means.
+enum GrowthEventOrigin {
+  runtime
+  backfill
+}
+
+/// G4-GROWTH — whether a money-bearing growth event knows its unit. Mirrors the
+/// AFD-4 vocabulary rather than inventing a second spelling of the same idea.
+enum GrowthEventCurrencyStatus {
+  unspecified
+  configured
+}
+
+/// G4-GROWTH — the canonical append-only growth event ledger.
+///
+/// WHAT THIS TABLE IS. One row per business-significant fact in the acquisition
+/// and progression journey, in one vocabulary, with one time basis, addressable
+/// by one key. Future affiliate postbacks, CPA qualification, Atlas adapters and
+/// the CRO/CMO dashboards are all consumers of THIS, so that adding a consumer
+/// never means adding a second definition of "a registration".
+///
+/// WHAT THIS TABLE IS NOT. It is not where money invariants live. The rule that
+/// one Pocket player has at most one first deposit is enforced by
+/// `PocketProviderEvent.UNIQUE(provider, eventType, pocketPlayerId)` and stays
+/// there. A `dep` GrowthEvent is a projection OF that row, carrying its already
+/// canonical amount for reporting. No emitter may write a GrowthEvent carrying a
+/// fact that is not already true in the owner row it names.
+///
+/// THE IDEMPOTENCY KEY IS `(eventType, sourceOwner, sourceEventId)`. Each family
+/// declares its own authority: `ata_reg` keys on the user id, `pocket_reg` on
+/// the trader identity row, `dep` on the provider event row, a level completion
+/// on the progress row. A replayed emitter collides with the index instead of
+/// producing a second event, and the migration backfill uses exactly the same
+/// keys so a backfilled row and a runtime row can never both exist.
+///
+/// IMMUTABLE AFTER INSERT. There is no update path in the application. The only
+/// nullable field a later phase may legitimately fill is
+/// `providerIngressEventId` on rows whose evidence arrives late, and even that
+/// is written by the ingress owner inside the same transaction as the insert.
+model GrowthEvent {
+  id            Int               @id @default(autoincrement())
+  /// Opaque, server-generated, 160-bit base32. The identifier a future outbound
+  /// postback quotes, so it can never be a database id.
+  eventId       String            @unique
+  eventType     GrowthEventType
+  /// When the fact HAPPENED, copied from the owner row's own occurrence column.
+  /// Never `now()`, never `updatedAt`, never a neighbouring event's time.
+  occurredAt    DateTime
+  /// When ATA wrote it down. Separate from `occurredAt` on purpose.
+  recordedAt    DateTime          @default(now())
+  origin        GrowthEventOrigin @default(runtime)
+  schemaVersion Int               @default(1)
+
+  /// Null for `traffic_click`, which happens before anyone is a user.
+  userId                 Int?
+  enrollmentId           Int?
+  /// `AffiliateClick.id` — the ACQUISITION click. Never the Pocket referral
+  /// click, which is `ExchangeAccount.clickId` and a different identity.
+  acquisitionClickId     Int?
+  attributionId          Int?
+  pocketTraderIdentityId Int?
+  providerIngressEventId Int?
+  /// `pocket` on provider-sourced rows, null on first-party ones.
+  provider               String?
+
+  /// The level a progression event belongs to. TYPED COLUMNS, NOT METADATA JSON,
+  /// because "L1 completion rate by campaign" is the single most-run CRO query
+  /// and `json_extract` cannot use an index. `levelNumber` is denormalised from
+  /// `LevelDefinition` so a funnel can be built without joining the curriculum
+  /// on every read, and it is the level's ordinal AT THE TIME OF THE EVENT.
+  levelDefinitionId      Int?
+  levelNumber            Int?
+
+  /// Canonical decimal TEXT with exactly two fractional digits, copied from the
+  /// owner row. Never a float, never a balance, never a running total, and never
+  /// a commission — a future CPA amount is a different field on a different table.
+  amount         String?
+  currencyCode   String?
+  currencyStatus GrowthEventCurrencyStatus?
+
+  sourceOwner      GrowthEventSourceOwner
+  /// The owner TABLE this row was derived from, spelled out so a reader can find
+  /// the origin without consulting a mapping held somewhere else.
+  sourceEntityType String
+  /// The owner ROW id, as text.
+  sourceEntityId   String
+  /// The owner's idempotency key within its namespace.
+  sourceEventId    String
+
+  /// Bounded, validated, allowlisted keys only. Never a raw payload, never a
+  /// query string, never PII, never authentication material.
+  metadata Json?
+
+  user            User?                     @relation("GrowthEventLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment      UserCurriculumEnrollment? @relation("GrowthEventEnrollment", fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  acquisitionClick AffiliateClick?          @relation("GrowthEventAcquisitionClick", fields: [acquisitionClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attribution     AffiliateAttribution?     @relation("GrowthEventAttribution", fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  pocketIdentity  PocketTraderIdentity?     @relation("GrowthEventPocketIdentity", fields: [pocketTraderIdentityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ingressEvent    ProviderIngressEvent?     @relation("GrowthEventIngress", fields: [providerIngressEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition LevelDefinition?          @relation("GrowthEventLevel", fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  outboxItem      GrowthEventOutbox?
+
+  @@unique([eventType, sourceOwner, sourceEventId])
+  /// "Every DEP in August" — the primary analytics read.
+  @@index([eventType, occurredAt])
+  /// "How many enrollments reached L3" — the level funnel read.
+  @@index([eventType, levelNumber, occurredAt])
+  /// "This learner's journey in order" — the funnel and the drilldown.
+  @@index([userId, occurredAt])
+  /// "Which events did this campaign's traffic produce" — the CMO join.
+  @@index([acquisitionClickId, eventType])
+  @@index([attributionId, eventType])
+  @@index([enrollmentId, eventType])
+  @@index([occurredAt])
+  @@index([providerIngressEventId])
+}
+
+/// G4-GROWTH — the durable hand-off point between a committed growth event and
+/// anything that wants to act on it.
+///
+/// WHY IT EXISTS BEFORE ANY CONSUMER DOES. The failure this prevents is an
+/// outbound affiliate postback issued from inside the transaction that records a
+/// deposit: a slow or failing partner endpoint would then be able to roll back a
+/// real conversion, and a retry would either double-send or lose the event.
+/// Writing the intent to a table in the same transaction, and delivering from it
+/// afterwards, is what makes "the event happened" and "the event was announced"
+/// two separately recoverable facts.
+///
+/// NO DESTINATION COLUMN IN THIS PHASE. There is no partner endpoint, no URL and
+/// no delivery engine yet. One item per event, one time — fan-out to several
+/// consumers is a later phase's problem and will add a consumer table beside
+/// this, never a second copy of the semantic event.
+enum GrowthEventOutboxStatus {
+  pending
+  /// Claimed by a worker. Present so a future dispatcher has a state to take.
+  in_flight
+  delivered
+  /// Exhausted its attempts. Never deleted, so an operator can see it.
+  failed
+}
+
+model GrowthEventOutbox {
+  id            Int                     @id @default(autoincrement())
+  growthEventId Int                     @unique
+  /// Denormalised so a dispatcher can filter without joining the ledger.
+  eventType     GrowthEventType
+  status        GrowthEventOutboxStatus @default(pending)
+  createdAt     DateTime                @default(now())
+  /// Not before this instant. The backoff mechanism, and it is a column rather
+  /// than a sleep so a restart does not lose the schedule.
+  availableAt   DateTime
+  attemptCount  Int                     @default(0)
+  lastAttemptAt DateTime?
+  /// A bounded code only. Never a provider response body and never a stack.
+  lastErrorCode String?
+
+  growthEvent GrowthEvent @relation(fields: [growthEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// "What is due right now" — the dispatcher's only hot query.
+  @@index([status, availableAt])
+  @@index([eventType, status])
+}
+
+/// G4-GROWTH — which provider goal a delivery claimed to be.
+///
+/// EXACTLY THREE MEMBERS. `withdraw`, `commission`, `email` and the other nine
+/// aliases the legacy route accepted are absent by design: a caller-supplied
+/// string must not be able to select a financial mutation, and this enum is the
+/// database saying so as well as the application.
+enum ProviderIngressGoal {
+  reg
+  dep
+  redep
+}
+
+/// G4-GROWTH — how far a delivery got, and why it stopped.
+///
+/// `identity_unresolved` is the honest terminal state for a redeposit: the
+/// evidence is durable and complete, and ATA still cannot say whether it is a
+/// retry of a delivery it already has or a genuinely new deposit, because Pocket
+/// supplies no event identifier. It is NOT an error and NOT a rejection.
+enum ProviderIngressStatus {
+  accepted_processed
+  accepted_duplicate
+  accepted_pending_linkage
+  identity_unresolved
+  rejected
+  quarantined
+}
+
+/// G4-GROWTH — the bounded reasons a delivery was refused or quarantined.
+enum ProviderIngressRejectionCode {
+  auth_failed
+  goal_unknown
+  goal_disabled
+  schema_invalid
+  amount_invalid
+  click_unknown
+  player_conflict
+  identity_owner_mismatch
+  provider_event_identity_missing
+  ordering_unresolved
+}
+
+/// G4-GROWTH — whether the provider's own event time could be trusted.
+///
+/// `unparseable` keeps the raw string beside the failure instead of guessing a
+/// timezone, which is the one thing a money timestamp must never be.
+enum ProviderIngressTimeStatus {
+  absent
+  parsed
+  unparseable
+}
+
+/// G4-GROWTH — durable, sanitized evidence of every provider delivery.
+///
+/// SEPARATE FROM THE CANONICAL EVENT ON PURPOSE. A GrowthEvent says a business
+/// fact is true. A row here says a request arrived and what it contained. The
+/// overwhelming majority of operational questions — "did Pocket ever send this",
+/// "why was it refused", "is the integration healthy" — are questions about
+/// deliveries, not about facts, and answering them from the canonical ledger
+/// would mean polluting it with rows that are not facts.
+///
+/// NO SECRET REACHES THIS TABLE. `sanitizedPayload` is built by the route's
+/// existing redactor, which replaces `ow`, `secret` and `token` with a marker
+/// before anything is persisted. `rawPayloadHash` is computed over the SAME
+/// sanitized structure, so the hash cannot be used as an offline oracle for the
+/// secret either.
+///
+/// `rawPayloadHash` IS NOT AN EVENT IDENTITY. Two legitimate redeposits with the
+/// same player, amount and second produce byte-identical payloads and therefore
+/// the same hash. It identifies a repeated DELIVERY, never a repeated DEPOSIT,
+/// and nothing in this schema treats it as the latter.
+model ProviderIngressEvent {
+  id       Int                 @id @default(autoincrement())
+  provider String              @default("pocket")
+  goal     ProviderIngressGoal
+
+  receivedAt         DateTime
+  /// The provider's own event time, parsed. Null unless `providerEventAtStatus`
+  /// is `parsed`.
+  providerEventAt    DateTime?
+  /// The raw provider string, kept when it could not be parsed rather than
+  /// discarded or guessed at.
+  providerEventAtRaw String?
+  providerEventAtStatus ProviderIngressTimeStatus @default(absent)
+
+  /// The Pocket player id, digits only, as delivered.
+  playerIdNormalized String?
+  /// The POCKET REFERRAL click (`tq-<uuid>`), not the acquisition click id.
+  clickId            String?
+
+  /// Canonical decimal TEXT. Null on a registration, which carries no money.
+  amount String?
+
+  campaignId   String?
+  campaignName String?
+  sub1         String?
+  sub2         String?
+  sub3         String?
+  sub4         String?
+  sub5         String?
+  /// Provider- or network-asserted, never a user identity claim. See COUNTRY_IP
+  /// in the contract document.
+  country      String?
+  deviceType   String?
+
+  /// Redacted structured payload. Bounded keys, bounded lengths.
+  sanitizedPayload Json
+  /// SHA-256 over the sanitized payload. Delivery identity, never event identity.
+  rawPayloadHash   String
+
+  /// The provider's own unique event id, when a contract proves one exists.
+  /// Null for every Pocket delivery today — which is precisely why a canonical
+  /// `rdep` cannot be emitted.
+  providerEventIdentity String?
+
+  processingStatus ProviderIngressStatus
+  rejectionCode    ProviderIngressRejectionCode?
+  /// The canonical event this delivery produced, when it produced one.
+  canonicalEventId Int?
+
+  schemaVersion Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  growthEvents GrowthEvent[] @relation("GrowthEventIngress")
+
+  /// Two deliveries may not claim the same provider event identity. Enforced
+  /// only where the identity EXISTS, which on SQLite a partial index gives us
+  /// for free by leaving nulls out of the uniqueness domain.
+  @@unique([provider, goal, providerEventIdentity])
+  /// "Ingress health for Pocket redeposits this week" — the operator sweep.
+  @@index([provider, goal, receivedAt])
+  @@index([processingStatus, receivedAt])
+  @@index([rejectionCode, receivedAt])
+  @@index([playerIdNormalized])
+  @@index([clickId])
+  @@index([rawPayloadHash])
 }

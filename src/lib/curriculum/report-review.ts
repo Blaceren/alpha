@@ -22,6 +22,7 @@ import {
   isCurriculumV2ReportEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { emitReportApprovedEvent } from "@/lib/growth/product-events";
 import {
   completeCurriculumLevelInTransaction,
   isCurriculumLevelCompletionError,
@@ -1456,6 +1457,26 @@ export async function approveReportSubmission(
       },
     });
     if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "report approval changed concurrently");
+
+    // G4-GROWTH — the canonical `report_approved` event.
+    //
+    // KEYED ON THE SUBMISSION, not on this review row. A submission is approved
+    // once, and a key on the review would let a second approval of the same work
+    // — however it arose — produce a second business event. The review id is
+    // still recorded as the source ENTITY, so the exact row that approved it
+    // stays traceable.
+    //
+    // The level completion this approval drives emits its own `level_completed`
+    // from the completion owner. Both are true and neither is derived from the
+    // other.
+    await emitReportApprovedEvent(tx, {
+      submissionId: submission.id,
+      reviewId: review.id,
+      userId: submission.userId,
+      enrollmentId: submission.enrollmentId,
+      levelDefinitionId: submission.levelDefinitionId,
+      occurredAt: evaluationTime,
+    });
 
     const safeResult = approvalReceiptResult({
       submission, workflowVersion, claimVersion, reviewId: review.id, completion,

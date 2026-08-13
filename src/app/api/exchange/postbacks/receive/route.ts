@@ -119,5 +119,71 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
+  // G4-GROWTH — the Growth V1 type boundary, applied to the SECOND receiver too.
+  //
+  // WHY THIS IS HERE. `receivePostbackSchema` accepts a nine-member `type` enum
+  // including `Withdrawal`, `Commission`, `Successful Withdrawal` and
+  // `Canceled Withdrawal`, and `processExchangePostbackPayload` below mutates
+  // `ExchangeAccount` money state according to whichever the CALLER named. The
+  // GET receiver's alias table was the loudest instance of that defect, but it
+  // was never the only one: fixing one receiver and leaving the other would have
+  // left the same capability reachable by changing the HTTP method.
+  //
+  // THE SCHEMA IS DELIBERATELY NOT NARROWED. It is shared with the simulator and
+  // with the processor's own type inference, and rewriting it would change
+  // surfaces this phase has no mandate over. The boundary belongs at the
+  // receiver, which is what decides what a remote caller may ask for.
+  if (!isGrowthV1PostbackType(parsed.data.type)) {
+    await createAuditLog({
+      action: "POCKET_POSTBACK_REJECTED",
+      entityType: "API_ROUTE",
+      entityId: ROUTE,
+      // A bounded reason. The refused type is NOT echoed: it came from the
+      // caller, and reflecting caller input into an audit row is how an
+      // injection sink starts.
+      metadata: { route: ROUTE, reason: "unsupported_growth_v1_type" },
+      request,
+    });
+
+    return NextResponse.json(
+      { success: false, error: "UNSUPPORTED_GOAL" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   return processExchangePostbackPayload(parsed.data, request);
+}
+
+/**
+ * The only postback `type` values this receiver may dispatch.
+ *
+ * `Re-deposit` is absent for the same reason it is absent from the GET
+ * receiver's map: redeposits are owned by the typed Growth V1 handler, which
+ * uses exact decimal arithmetic and refuses to emit a canonical event it cannot
+ * identify — neither of which is true of the legacy processor's `Float` path.
+ * `Withdrawal`, `Commission` and both withdrawal-outcome types are absent
+ * because §17 forbids them on a trusted Growth V1 receiver outright.
+ *
+ * WHAT THIS DOES NOT CLOSE, STATED PLAINLY. An ABSENT `type` is allowed through,
+ * because this receiver also carries the older `eventType` contract
+ * (`deposit`, `trade`, `balance`, `account_connected`, `account_rejected`) used
+ * by the SANDBOX/MANUAL exchange provider — a different integration from Pocket,
+ * exercised by `scripts/smoke/integrationSmoke.ts` and
+ * `scripts/smoke/mvpAcceptanceSmoke.ts`. `eventType: "deposit"` with a
+ * caller-supplied `externalEventId` still reaches `ExchangeAccount.depositAmount`
+ * and `totalDeposits`, which are legacy `Float` columns.
+ *
+ * That path is deliberately left working rather than broken in an implementation
+ * wave, because an accepted integration depends on it and §17 asks that this be
+ * checked before deleting anything. It is bounded in three ways that matter
+ * here: it requires the shared `POSTBACK_SECRET`, it cannot bind or move a
+ * `PocketTraderIdentity`, and NOTHING in the G4 growth layer reads those Float
+ * columns — every DEP figure the CRO/CMO surfaces publish comes from
+ * `PocketProviderEvent.normalizedAmount` by way of `GrowthEvent`.
+ *
+ * It is carried to the deep-audit handoff as an open item rather than silently
+ * accepted.
+ */
+function isGrowthV1PostbackType(type: string | undefined): boolean {
+  return type === undefined || type === "Registration" || type === "First Deposit";
 }

@@ -4,6 +4,7 @@ import {
   isCurriculumV2ReadEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { emitCurriculumEnrollmentEvent } from "@/lib/growth/product-events";
 import { reconcilePocketRegistrationLevelCompletion } from "./pocket-registration-completion";
 import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
 import {
@@ -235,6 +236,13 @@ async function runEnrollmentTransaction(
       completedAt: null,
       migrationSource: null,
     },
+  });
+
+  // G4-GROWTH — the enrollment step of the CRO funnel, in this transaction.
+  await emitCurriculumEnrollmentEvent(tx, {
+    enrollmentId: enrollment.id,
+    userId: targetUser.id,
+    occurredAt: input.asOf,
   });
 
   await tx.auditLog.create({

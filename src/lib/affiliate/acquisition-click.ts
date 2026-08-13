@@ -279,6 +279,13 @@ export async function recordAcquisitionClick(
 ): Promise<{ id: number; ataClickId: string }> {
   return db.affiliateClick.create({
     data: {
+      // G4-GROWTH note: `AffiliateClick` REMAINS the counting authority for every
+      // click metric, in the G4 growth surfaces exactly as in AFD-5B1. The
+      // `traffic_click` growth event emitted alongside it (see
+      // `emitTrafficClickEvent`) exists for the event-consumer contract — a
+      // future outbound postback needs an addressable event id — and is
+      // deliberately NOT what any dashboard counts, so the two can never report
+      // different click totals.
       ataClickId: randomBase32Id(),
       trackingLinkId: input.link.id,
       // Belt and braces against a future caller: only a qualified click may ever

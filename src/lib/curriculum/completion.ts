@@ -11,6 +11,10 @@ import {
   isCurriculumV2XpEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import {
+  emitLevelCompletedEvent,
+  emitMentorReviewApprovedEvent,
+} from "@/lib/growth/product-events";
 import { isFinancialCheckpointType } from "./checkpoint";
 import {
   PRODUCTION_COMPLETION_PAIRS,
@@ -1208,6 +1212,52 @@ async function runCompletionTransaction(
       },
     },
   });
+
+  // G4-GROWTH — the canonical progression events for this completion.
+  //
+  // PLACED HERE BECAUSE THIS IS THE ONE PLACE A LEVEL EVER COMPLETES. Every
+  // completion family — assessment_pass, level_completion, report_approval,
+  // mentor_completion, checkpoint_verification, pocket_registration_postback —
+  // arrives at this same claim. Hooking each owner separately would guarantee
+  // that a future seventh owner is added without one, and the funnel would then
+  // under-report a family nobody remembered to instrument.
+  //
+  // IN THIS TRANSACTION, so a completion that rolls back leaves no growth event.
+  // Emission uses the swallowing emitter, so the reverse is not true: a growth
+  // event that cannot be written never costs a learner their level.
+  //
+  // `academy_activation` is emitted alongside and keyed on the ENROLLMENT, so
+  // only the first completion of an enrollment produces one — the unique index
+  // decides that, not an ordering assumption here.
+  await emitLevelCompletedEvent(tx, {
+    userLevelProgressId: context.progress.id,
+    enrollmentId: context.enrollment.id,
+    userId: context.enrollment.userId,
+    levelDefinitionId: context.level.id,
+    levelNumber: context.level.levelNumber,
+    occurredAt: input.evaluationTime,
+    completionMethod: input.sourceType,
+  });
+
+  // A mentor-approved level is a true answer to two different questions, so it
+  // produces two different events rather than one that has to be reinterpreted.
+  if (input.sourceType === "mentor_completion") {
+    await emitMentorReviewApprovedEvent(tx, {
+      userLevelProgressId: context.progress.id,
+      enrollmentId: context.enrollment.id,
+      userId: context.enrollment.userId,
+      levelDefinitionId: context.level.id,
+      levelNumber: context.level.levelNumber,
+      occurredAt: input.evaluationTime,
+    });
+  }
+
+  // `report_approved` is deliberately NOT emitted here. Its owner is the REVIEW,
+  // not the completion, and its key is the SUBMISSION — which is what the
+  // migration backfills and what `emitReportApprovedEvent` produces. Emitting it
+  // from this owner as well, under a progress-shaped key, would put two rows in
+  // the ledger for one approval: one backfilled, one live, neither colliding.
+  // The report workflow emits it, once, where the submission id is known.
 
   return completedResult(
     context,
