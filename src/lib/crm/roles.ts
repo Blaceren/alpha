@@ -1,4 +1,5 @@
 import type { StaffRole } from "@prisma/client";
+import type { CrmSessionPermission } from "@/lib/crm/session-permission-contract";
 
 // Canonical CRM staff roles — exactly nine, in the locked contract order.
 // This is the single source of truth for the StaffRole axis. It is deliberately
@@ -83,6 +84,26 @@ export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
 type AssertEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const _staffRoleParity: AssertEqual<CrmStaffRole, StaffRole> = true;
 void _staffRoleParity;
+
+// G4-R7 — the same proof, applied to the axis that actually broke.
+//
+// CRM_PERMISSIONS is the vocabulary the CRM's session parser must be able to
+// read. Its closed enum rejects the WHOLE session response when it meets a name
+// it does not know, so a permission appended here and nowhere else does not
+// degrade one affordance: it logs every holder of that permission out of the
+// CRM entirely. PHASE-G0 and PHASE-G2 each did exactly that, five days apart,
+// and nothing failed until a production cutover was blocked.
+//
+// The contract module is byte-identical in the CRM repository, and the CRM
+// pins its own `Permission` union to it with this same idiom. So the vocabulary
+// now cannot change on one side alone without a compile error here, a failure
+// in session-permission-contract.test.ts, and a mismatched digest between the
+// two repositories.
+//
+// This says nothing about GRANTS. STAFF_ROLE_PERMISSIONS below remains the only
+// place a role receives a permission.
+const _permissionVocabularyParity: AssertEqual<CrmPermission, CrmSessionPermission> = true;
+void _permissionVocabularyParity;
 
 // Locked role -> permission matrix. Typed as a full Record so every StaffRole
 // must have an explicit entry (a missing role stops compiling). Do not widen

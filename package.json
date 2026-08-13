@@ -181,6 +181,7 @@
     "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts",
     "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts",
     "ops:preprod-qa-operator": "tsx scripts/ops/preprodQaOperator.ts",
+    "verify:crm-session-permission-contract": "tsx scripts/ops/verifyCrmSessionPermissionContract.ts",
     "test:regression:growth-fix-wave": "tsx scripts/regression/growthFixWaveRegression.ts",
     "test:regression:growth-fix-wave-2": "tsx scripts/regression/growthFixWave2Regression.ts"
   },
