@@ -498,13 +498,17 @@ async function main() {
   });
 
   await check("§17 the click-denominated rate is NULL outside the attributed scope", async () => {
-    for (const scope of ["total", "organic"] as const) {
+    // G4-R2. Renamed to `attributedClickToRegistrationRate` and moved onto a
+    // click-cohort basis, so `computeGrowthRatios` no longer produces it at all —
+    // which is the stronger version of this assertion: it is null in EVERY scope
+    // here, because a cohort ratio can only come from the cohort query.
+    for (const scope of ["total", "organic", "attributed"] as const) {
       const counts = await loadGrowthCounts(prisma, PERIOD, NOFILTER, scope);
       const ratios = computeGrowthRatios(counts, scope);
       assert.equal(
-        ratios.attributedAtaRegistrationRate,
+        ratios.attributedClickToRegistrationRate,
         null,
-        `scope=${scope} published a click-denominated rate`,
+        `scope=${scope} published a click-denominated rate from event counts`,
       );
     }
   });

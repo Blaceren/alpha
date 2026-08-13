@@ -44,6 +44,49 @@
 -- MIGRATION RUNNER CONTRACT. prisma/migrate.ts splits this file on the
 -- semicolon character, so NO COMMENT IN THIS FILE CONTAINS ONE, and every
 -- statement is a single complete statement terminated by exactly one semicolon.
+--
+-- ===========================================================================
+-- G4-R3 -- THE CANONICAL TIME REPRESENTATION OF THIS LEDGER.
+--
+-- WHAT WENT WRONG. This migration used to copy each owner's timestamp VERBATIM
+-- into GrowthEvent.occurredAt. That is right for provenance and wrong for
+-- storage: SQLite is dynamically typed, and PREPROD holds rows written by raw
+-- SQL whose datetime columns are TEXT rather than the integer epoch
+-- milliseconds Prisma writes. Copying them verbatim produced a ledger with
+-- MIXED STORAGE CLASSES, and because SQLite orders every TEXT value above every
+-- INTEGER, a `occurredAt >= ? AND occurredAt < ?` range filter was true on the
+-- lower bound and FALSE on the upper one for every such row. Fifteen real,
+-- correctly derived events on frozen PREPROD therefore matched no period at
+-- all -- enrollments counted 19 of 21, level_started 38 of 44, level_completed
+-- 43 of 49 -- silently, with no availability flag.
+--
+-- THE CANONICAL REPRESENTATION IS INTEGER EPOCH MILLISECONDS, and it was chosen
+-- by measuring the stack rather than by preference. Prisma's SQLite connector
+-- writes every DateTime as an integer number of milliseconds since the epoch
+-- and binds range parameters the same way -- observed directly on the live
+-- database, where User.createdAt is `integer` 1784577045092. Any other choice
+-- would make the ORM disagree with the column on every read. It sorts
+-- chronologically, compares correctly against a bound parameter, round-trips
+-- through Prisma unchanged, keeps the occurredAt indexes usable because no
+-- function wraps the column, and is identical for backfilled and runtime rows.
+--
+-- HOW HISTORY IS CONVERTED. Exactly one historical TEXT shape exists on frozen
+-- PREPROD: `YYYY-MM-DD HH:MM:SS`, the format SQLite's own CURRENT_TIMESTAMP and
+-- datetime('now') produce, which SQLite defines as UTC. `strftime('%s', v)`
+-- reads it back to the same instant with the same UTC assumption the writer
+-- used, so the conversion preserves the instant rather than inventing a zone.
+-- Verified to round-trip: '2026-07-29 09:01:26' -> 1785315686000 ->
+-- '2026-07-29 09:01:26'.
+--
+-- AN UNRECOGNISED SHAPE IS A LOUD FAILURE, NOT A GUESS. The guard statements
+-- below count every source timestamp that is neither numeric nor that exact
+-- shape and abort the whole migration through a CHECK if the count is not zero.
+-- §35 forbids substituting the migration time, recordedAt or now() for an
+-- unknown historical instant, and this makes that substitution unrepresentable.
+--
+-- THE SOURCE TABLES ARE NOT REWRITTEN. Normalisation happens on the way INTO
+-- the projection. Every authoritative historical row keeps the bytes it had.
+-- ===========================================================================
 
 CREATE TABLE "GrowthEvent" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -72,8 +115,21 @@ CREATE TABLE "GrowthEvent" (
             'rdep'
         )),
 
-    "occurredAt" DATETIME NOT NULL,
-    "recordedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- G4-R3. Integer epoch milliseconds, enforced. The CHECK is what makes a
+    -- mixed-storage-class ledger unrepresentable rather than merely unintended:
+    -- a raw INSERT carrying a datetime string is refused at the boundary
+    -- instead of becoming a row that no date range can ever match. Prisma's own
+    -- writes satisfy it by construction -- its SQLite connector serialises
+    -- DateTime as an integer -- which is asserted at runtime, not assumed.
+    "occurredAt" DATETIME NOT NULL
+        CHECK (typeof("occurredAt") = 'integer'),
+
+    -- The DEFAULT is an integer expression rather than CURRENT_TIMESTAMP, which
+    -- would produce TEXT and violate the CHECK on any raw insert that omits the
+    -- column -- including this migration's own backfill.
+    "recordedAt" DATETIME NOT NULL
+        DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+        CHECK (typeof("recordedAt") = 'integer'),
 
     "origin" TEXT NOT NULL DEFAULT 'runtime'
         CHECK ("origin" IN ('runtime', 'backfill')),
@@ -250,11 +306,18 @@ CREATE TABLE "GrowthEventOutbox" (
         )),
     "status" TEXT NOT NULL DEFAULT 'pending'
         CHECK ("status" IN ('pending', 'in_flight', 'delivered', 'failed')),
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "availableAt" DATETIME NOT NULL,
+    -- G4-R3. Same canonical representation as the ledger it announces: a
+    -- dispatcher ordering by availableAt must not sort a TEXT row above every
+    -- integer one and process reconstructed history out of order.
+    "createdAt" DATETIME NOT NULL
+        DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+        CHECK (typeof("createdAt") = 'integer'),
+    "availableAt" DATETIME NOT NULL
+        CHECK (typeof("availableAt") = 'integer'),
     "attemptCount" INTEGER NOT NULL DEFAULT 0
         CHECK ("attemptCount" >= 0),
-    "lastAttemptAt" DATETIME,
+    "lastAttemptAt" DATETIME
+        CHECK ("lastAttemptAt" IS NULL OR typeof("lastAttemptAt") = 'integer'),
 
     -- A bounded code only. A provider response body or a stack trace here would
     -- be an unbounded, unreviewed sink for whatever a third party returned.
@@ -305,8 +368,14 @@ CREATE TABLE "ProviderIngressEvent" (
     "goal" TEXT NOT NULL
         CHECK ("goal" IN ('reg', 'dep', 'redep')),
 
-    "receivedAt" DATETIME NOT NULL,
-    "providerEventAt" DATETIME,
+    -- G4-R3. Canonical integer epoch milliseconds, like every other timestamp
+    -- this migration creates. `receivedAt` is the ingress-health surface's date
+    -- basis, so a TEXT row here would disappear from an operator's window in
+    -- exactly the way ledger rows used to.
+    "receivedAt" DATETIME NOT NULL
+        CHECK (typeof("receivedAt") = 'integer'),
+    "providerEventAt" DATETIME
+        CHECK ("providerEventAt" IS NULL OR typeof("providerEventAt") = 'integer'),
     "providerEventAtRaw" TEXT
         CHECK ("providerEventAtRaw" IS NULL OR length("providerEventAtRaw") BETWEEN 1 AND 64),
     "providerEventAtStatus" TEXT NOT NULL DEFAULT 'absent'
@@ -379,7 +448,9 @@ CREATE TABLE "ProviderIngressEvent" (
     "canonicalEventId" INTEGER,
 
     "schemaVersion" INTEGER NOT NULL DEFAULT 1 CHECK ("schemaVersion" >= 1),
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" DATETIME NOT NULL
+        DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+        CHECK (typeof("createdAt") = 'integer'),
 
     -- A parsed time must have a value, an unparseable one must have kept the raw
     -- string, and an absent one must have neither. This is what stops a
@@ -436,7 +507,69 @@ CREATE INDEX "ProviderIngressEvent_rawPayloadHash_idx"
     ON "ProviderIngressEvent"("rawPayloadHash");
 
 -- ---------------------------------------------------------------------------
+-- G4-R3 -- TIME NORMALISATION PRE-FLIGHT GUARD
+--
+-- Every source timestamp this migration projects is checked BEFORE any event is
+-- written. A value that is numeric is already canonical. A value that is TEXT is
+-- convertible only if it matches the one historical shape this codebase has ever
+-- produced, `YYYY-MM-DD HH:MM:SS`. Anything else -- an ISO string with a zone
+-- offset, a fractional second, a locale rendering, a blob -- would require
+-- GUESSING a zone or a format, and §35 forbids guessing.
+--
+-- The guard is a table whose CHECK admits only zero. If a single unsupported
+-- value exists anywhere, the INSERT violates
+-- `unsupportedSourceTimestamps` and the ENTIRE migration transaction rolls back
+-- with that constraint named -- no partial ledger, no fabricated instant, and a
+-- diagnostic that points at the cause rather than at a downstream symptom.
+--
+-- It is created and dropped inside the same transaction, so it leaves no trace
+-- on a successful run.
+CREATE TABLE "_growth_time_normalization_guard" (
+    "id" INTEGER NOT NULL PRIMARY KEY CHECK ("id" = 0),
+    "unsupportedSourceTimestamps" INTEGER NOT NULL
+        CHECK ("unsupportedSourceTimestamps" = 0)
+);
+
+INSERT INTO "_growth_time_normalization_guard" ("id", "unsupportedSourceTimestamps")
+SELECT 0, COUNT(*) FROM (
+    SELECT c."occurredAt" AS v FROM "AffiliateClick" c
+    UNION ALL SELECT e."occurredAt" FROM "AffiliateConversionEvent" e
+    UNION ALL SELECT u."createdAt" FROM "User" u
+    UNION ALL SELECT en."enrolledAt" FROM "UserCurriculumEnrollment" en
+    UNION ALL SELECT p."startedAt" FROM "UserLevelProgress" p
+    UNION ALL SELECT p."completedAt" FROM "UserLevelProgress" p
+    UNION ALL SELECT p."lastProgressAt" FROM "UserLevelProgress" p
+    UNION ALL SELECT a."submittedAt" FROM "AssessmentAttempt" a
+    UNION ALL SELECT s."firstSubmittedAt" FROM "ReportSubmission" s
+    UNION ALL SELECT r."reviewedAt" FROM "ReportReview" r
+    UNION ALL SELECT t."boundAt" FROM "PocketTraderIdentity" t
+    UNION ALL SELECT pe."firstReceivedAt" FROM "PocketProviderEvent" pe
+) AS every_source_timestamp
+WHERE v IS NOT NULL
+  AND typeof(v) NOT IN ('integer', 'real')
+  AND NOT (
+      typeof(v) = 'text'
+      AND v GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
+      AND strftime('%s', v) IS NOT NULL
+  );
+
+DROP TABLE "_growth_time_normalization_guard";
+
+-- ---------------------------------------------------------------------------
 -- BACKFILL
+--
+-- G4-R3 -- EVERY TIMESTAMP BELOW IS NORMALISED, NOT COPIED.
+--
+-- The expression is the same everywhere and is written inline rather than
+-- hidden behind a name, because SQLite has no user-defined function available
+-- to a migration and a half-applied abstraction would be worse than repetition:
+--
+--   CASE WHEN typeof(X) = 'text' THEN strftime('%s', X) * 1000
+--        ELSE CAST(X AS INTEGER) END
+--
+-- NULL flows through the ELSE branch as NULL, so an absent timestamp stays
+-- absent. The guard above has already proved that every TEXT value reaching the
+-- first branch is the one convertible shape.
 --
 -- Every statement below reads an owner table and writes the projection of it.
 -- The sourceEventId expressions are the SAME strings the runtime emitters
@@ -457,7 +590,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'traffic_click',
-    c."occurredAt",
+    CASE WHEN typeof(c."occurredAt") = 'text' THEN strftime('%s', c."occurredAt") * 1000
+         ELSE CAST(c."occurredAt" AS INTEGER) END,
     'backfill',
     c."id",
     'acquisition_click',
@@ -490,7 +624,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'ata_reg',
-    e."occurredAt",
+    CASE WHEN typeof(e."occurredAt") = 'text' THEN strftime('%s', e."occurredAt") * 1000
+         ELSE CAST(e."occurredAt" AS INTEGER) END,
     'backfill',
     e."userId",
     e."selectedClickId",
@@ -530,56 +665,97 @@ AND NOT EXISTS (
 -- at all. History counted staff as customers, runtime did not, and every ratio
 -- denominated in registrations changed meaning at the cutover instant.
 --
--- ATA_REG IS A SELF-SERVICE REGISTRATION. Not "a User row exists". So this pass
--- backfills ONLY where there is authoritative evidence that the account arose
--- through the self-service registration domain, using two independent artifacts
--- that ONLY that domain produces:
+-- G4-R4 -- POSITIVE AUTHORITY ONLY. THE NEGATIVE INFERENCE IS GONE.
+--
+-- The previous correction narrowed the population but kept a NEGATIVE tier: an
+-- account was accepted if it held a `NotificationSettings` row and did NOT hold
+-- a `StaffProfile`. The re-audit proved that unsafe, and the reason is that the
+-- two axes belong to different owners:
+--
+--   * this platform's staff authority is `User.role` -- `hasRole`,
+--     `requireAdmin` and `requireSupportAccess` all read it, and NOTHING reads
+--     `StaffProfile` to decide backend authorization,
+--   * `POST /api/admin/users` creates a staff-ROLE account and creates NO
+--     `StaffProfile` at all,
+--   * `PATCH /api/me/notification-settings` upserts a `NotificationSettings`
+--     row for ANY authenticated principal.
+--
+-- So a staff account created by exactly the route this comment names as the
+-- source of staff accounts acquired the positive artefact and escaped the
+-- negative one the moment its owner saved a notification preference -- and was
+-- counted as an ATA customer registration. Absence of evidence of staff is not
+-- evidence of self-service.
+--
+-- WHAT REPLACES IT. Only artefacts that the self-service registration domain
+-- EXCLUSIVELY produces, verified by exhaustive grep over `src/`:
+--
+--   TIER 1  AffiliateConversionEvent(eventType = 'academy_registration').
+--           Written in exactly one place, `registration-attribution.ts`, inside
+--           the registration transaction. Handled by the pass above.
 --
 --   TIER 2  AuditLog(action = 'AUTH_REGISTER', userId = u.id).
---           Written by the registration route itself, immediately after the
---           account commits. Unambiguous, and it OUTRANKS role and staff status:
---           §14 of the fix brief requires that a staff principal who genuinely
---           self-registered as a learner is NOT excluded on role alone, and on
---           PREPROD exactly one such account exists.
+--           Written in exactly one place, `POST /api/auth/register`, naming the
+--           REGISTERED user. `/api/admin/users` audits
+--           `ADMIN_SERVICE_ACCOUNT_CREATED` against the ACTING ADMIN instead, so
+--           a provisioned account never acquires this row. AuditLog is never
+--           deleted by any production path.
 --
---   TIER 3  NotificationSettings(userId = u.id).
---           Created INLINE in the same `tx.user.create` call as the account, and
---           it has been there since `ac4476b`, the sanitized ATA V2 baseline --
---           so every self-service registration in this codebase's entire history
---           has one. `/api/admin/users` and the QA operator provisioner create
---           neither. It is accepted only for accounts with no StaffProfile,
---           because `/api/me/notification-settings` upserts the same row, so a
---           staff principal could in principle acquire one by changing their own
---           settings. Tier 2 covers that case and outranks this one.
+-- WHY THIS SURVIVES THE CASES THAT BROKE THE OLD PREDICATE:
 --
--- WHAT IS DELIBERATELY NOT BACKFILLED. An account with none of the three tiers
--- of evidence has an origin this database cannot prove. §15 is explicit that
--- uncertainty must not be recorded as a self-service registration, so no event is
--- written and the analytics layer declares the coverage limitation instead --
--- exactly the pattern `mentor_review_submitted` already uses and that the deep
--- audit named as the model to follow. On PREPROD that class is: 17 seeded
--- accounts with a password but no NotificationSettings (so not created by the
--- registration route), 4 accounts with no password at all (the registration route
--- always sets one), 9 staff-role accounts and 2 further StaffProfile accounts.
+--   * an admin-created staff account, with or without a `StaffProfile`, with or
+--     without notification settings, has no AUTH_REGISTER row and is NOT
+--     counted -- role is never consulted, so there is nothing to evade,
+--   * a learner who self-registered and was LATER PROMOTED to staff keeps their
+--     AUTH_REGISTER row and IS still counted, because origin is historical and
+--     role is current. §46 requires exactly that, and a role-based exclusion --
+--     the obvious "fix" -- would have broken it.
+--
+-- WHAT IS DELIBERATELY NOT BACKFILLED. An account with neither artefact has an
+-- origin this database cannot prove. §49 is explicit that uncertainty must not
+-- be recorded as a self-service registration, so no event is written, the User
+-- and its enrollment remain visible everywhere else, and the analytics
+-- availability block declares the coverage limitation rather than showing a
+-- number as if it were complete.
+--
+-- `NotificationSettings` is now referenced NOWHERE in this migration.
 --
 -- The key is identical to the pass above, so a learner covered there cannot be
 -- inserted twice. occurredAt is the account's own creation time, which is the
--- registration instant by definition.
+-- registration instant by definition, normalised by the rule in the header.
+--
+-- G4-R2 -- THIS PASS ALSO CARRIES THE LEARNER'S FROZEN ATTRIBUTION.
+--
+-- It used to project `ata_reg` with a NULL `acquisitionClickId` even when
+-- `AffiliateAttribution` held a frozen decision for that learner, because only
+-- the conversion-ledger pass above copied those columns. Every registration
+-- proven by an audit row therefore looked ORGANIC to the ledger, whatever the
+-- attribution table said -- which would have made `attributionCoverageRate`
+-- understate coverage, emptied the `attributed` scope, and left the acquisition
+-- surface unable to see conversions that provably came from a tracked click.
+--
+-- The LEFT JOIN reads the ACCEPTED attribution authority and copies the decision
+-- it already froze at registration. It invents nothing: a learner with no
+-- attribution row still projects NULL, which is what organic means.
 INSERT INTO "GrowthEvent" (
     "eventId", "eventType", "occurredAt", "origin", "userId",
+    "acquisitionClickId", "attributionId",
     "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
 )
 SELECT
     lower(hex(randomblob(20))),
     'ata_reg',
-    u."createdAt",
+    CASE WHEN typeof(u."createdAt") = 'text' THEN strftime('%s', u."createdAt") * 1000
+         ELSE CAST(u."createdAt" AS INTEGER) END,
     'backfill',
     u."id",
+    at."selectedClickId",
+    at."id",
     'auth_register',
     'User',
     CAST(u."id" AS TEXT),
     'user:' || CAST(u."id" AS TEXT)
 FROM "User" u
+LEFT JOIN "AffiliateAttribution" at ON at."userId" = u."id"
 -- G4-H6 -- SET-BASED, NOT CORRELATED, AND THE DIFFERENCE IS QUADRATIC.
 --
 -- Written as `EXISTS (SELECT 1 FROM "AuditLog" a WHERE a."userId" = u."id" ...)`
@@ -593,15 +769,11 @@ FROM "User" u
 -- it per user, so every source table is read ONCE. Migration 47 deliberately
 -- alters no existing table, so adding an index to `AuditLog` was not an option
 -- here -- and it is not needed: the set-based form is index-independent.
-WHERE (
-    u."id" IN (
-        SELECT a."userId" FROM "AuditLog" a
-        WHERE a."action" = 'AUTH_REGISTER' AND a."userId" IS NOT NULL
-    )
-    OR (
-        u."id" IN (SELECT ns."userId" FROM "NotificationSettings" ns)
-        AND u."id" NOT IN (SELECT sp."userId" FROM "StaffProfile" sp)
-    )
+--
+-- G4-R4 made this predicate SMALLER, not larger: one positive set membership.
+WHERE u."id" IN (
+    SELECT a."userId" FROM "AuditLog" a
+    WHERE a."action" = 'AUTH_REGISTER' AND a."userId" IS NOT NULL
 )
 AND NOT EXISTS (
     SELECT 1 FROM "GrowthEvent" g
@@ -618,7 +790,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'curriculum_enrollment',
-    en."enrolledAt",
+    CASE WHEN typeof(en."enrolledAt") = 'text' THEN strftime('%s', en."enrolledAt") * 1000
+         ELSE CAST(en."enrolledAt" AS INTEGER) END,
     'backfill',
     en."userId",
     en."id",
@@ -672,7 +845,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'level_started',
-    p."startedAt",
+    CASE WHEN typeof(p."startedAt") = 'text' THEN strftime('%s', p."startedAt") * 1000
+         ELSE CAST(p."startedAt" AS INTEGER) END,
     'backfill',
     en."userId",
     p."enrollmentId",
@@ -702,7 +876,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'level_completed',
-    p."completedAt",
+    CASE WHEN typeof(p."completedAt") = 'text' THEN strftime('%s', p."completedAt") * 1000
+         ELSE CAST(p."completedAt" AS INTEGER) END,
     'backfill',
     en."userId",
     p."enrollmentId",
@@ -735,7 +910,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'academy_activation',
-    first_completion."completedAt",
+    CASE WHEN typeof(first_completion."completedAt") = 'text' THEN strftime('%s', first_completion."completedAt") * 1000
+         ELSE CAST(first_completion."completedAt" AS INTEGER) END,
     'backfill',
     en."userId",
     first_completion."enrollmentId",
@@ -775,7 +951,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'assessment_completed',
-    a."submittedAt",
+    CASE WHEN typeof(a."submittedAt") = 'text' THEN strftime('%s', a."submittedAt") * 1000
+         ELSE CAST(a."submittedAt" AS INTEGER) END,
     'backfill',
     a."userId",
     a."enrollmentId",
@@ -810,7 +987,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'report_submitted',
-    s."firstSubmittedAt",
+    CASE WHEN typeof(s."firstSubmittedAt") = 'text' THEN strftime('%s', s."firstSubmittedAt") * 1000
+         ELSE CAST(s."firstSubmittedAt" AS INTEGER) END,
     'backfill',
     s."userId",
     s."enrollmentId",
@@ -841,7 +1019,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'report_approved',
-    r."reviewedAt",
+    CASE WHEN typeof(r."reviewedAt") = 'text' THEN strftime('%s', r."reviewedAt") * 1000
+         ELSE CAST(r."reviewedAt" AS INTEGER) END,
     'backfill',
     s."userId",
     s."enrollmentId",
@@ -878,7 +1057,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'mentor_review_submitted',
-    COALESCE(p."lastProgressAt", p."startedAt"),
+    CASE WHEN typeof(COALESCE(p."lastProgressAt", p."startedAt")) = 'text' THEN strftime('%s', COALESCE(p."lastProgressAt", p."startedAt")) * 1000
+         ELSE CAST(COALESCE(p."lastProgressAt", p."startedAt") AS INTEGER) END,
     'backfill',
     en."userId",
     p."enrollmentId",
@@ -909,7 +1089,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'mentor_review_approved',
-    p."completedAt",
+    CASE WHEN typeof(p."completedAt") = 'text' THEN strftime('%s', p."completedAt") * 1000
+         ELSE CAST(p."completedAt" AS INTEGER) END,
     'backfill',
     en."userId",
     p."enrollmentId",
@@ -943,7 +1124,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'pocket_reg',
-    t."boundAt",
+    CASE WHEN typeof(t."boundAt") = 'text' THEN strftime('%s', t."boundAt") * 1000
+         ELSE CAST(t."boundAt" AS INTEGER) END,
     'backfill',
     t."userId",
     t."id",
@@ -973,7 +1155,8 @@ INSERT INTO "GrowthEvent" (
 SELECT
     lower(hex(randomblob(20))),
     'dep',
-    pe."firstReceivedAt",
+    CASE WHEN typeof(pe."firstReceivedAt") = 'text' THEN strftime('%s', pe."firstReceivedAt") * 1000
+         ELSE CAST(pe."firstReceivedAt" AS INTEGER) END,
     'backfill',
     pe."matchedUserId",
     'pocket',

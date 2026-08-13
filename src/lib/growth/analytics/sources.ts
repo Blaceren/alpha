@@ -153,10 +153,40 @@ export const GROWTH_RATIO_DENOMINATORS = {
    * produced. The name now says so, and `computeGrowthRatios` returns null for it
    * outside the `attributed` scope rather than publishing a number.
    */
-  attributedAtaRegistrationRate: {
-    numerator: "ataRegistrations",
+  attributedClickToRegistrationRate: {
+    basis: "click_cohort" as const,
+    numerator: "convertedClicks",
     denominator: "clicks",
+    cohortAnchor: "qualified clicks whose own occurredAt falls in the period",
     /** Only the attributed population has a click denominator. */
+    definedInScopes: ["attributed"] as const,
+  },
+  attributedRegistrationToActivationRate: {
+    basis: "click_cohort" as const,
+    numerator: "activatedLearners",
+    denominator: "registeredLearners",
+    cohortAnchor: "learners whose frozen attribution names a click in the period",
+    definedInScopes: ["attributed"] as const,
+  },
+  attributedRegistrationToPocketRegistrationRate: {
+    basis: "click_cohort" as const,
+    numerator: "pocketRegisteredLearners",
+    denominator: "registeredLearners",
+    cohortAnchor: "learners whose frozen attribution names a click in the period",
+    definedInScopes: ["attributed"] as const,
+  },
+  attributedRegistrationToDepositRate: {
+    basis: "click_cohort" as const,
+    numerator: "depositedLearners",
+    denominator: "registeredLearners",
+    cohortAnchor: "learners whose frozen attribution names a click in the period",
+    definedInScopes: ["attributed"] as const,
+  },
+  attributedPocketRegistrationToDepositRate: {
+    basis: "click_cohort" as const,
+    numerator: "depositedAmongPocketRegistered",
+    denominator: "pocketRegisteredLearners",
+    cohortAnchor: "learners whose frozen attribution names a click in the period",
     definedInScopes: ["attributed"] as const,
   },
   /**
@@ -188,9 +218,21 @@ export const GROWTH_RATIO_DENOMINATORS = {
     denominator: "assessmentsCompleted",
     definedInScopes: GROWTH_COVERAGE_SCOPES,
   },
-  reportApprovalRate: {
-    numerator: "reportsApproved",
-    denominator: "reportsSubmitted",
+  /**
+   * G4-R5 — RENAMED, AND COHORT-BASED.
+   *
+   * It used to be `reportApprovalRate = report_approved events ÷
+   * report_submitted events` in the same window, which is two populations and
+   * measured 200%. It is now the share of the SUBMISSION COHORT anchored in the
+   * period that is approved today, computed by `computeReportCohortRatio`, so
+   * the entry here documents the shape for the payload's `ratioDenominators`
+   * block and the value is never produced from event counts.
+   */
+  submittedReportCohortApprovalRate: {
+    basis: "submission_cohort" as const,
+    numerator: "approvedFromCohort",
+    denominator: "submittedCohort",
+    cohortAnchor: "report submissions whose firstSubmittedAt falls in the period",
     definedInScopes: GROWTH_COVERAGE_SCOPES,
   },
   /**
@@ -284,6 +326,65 @@ export function computeLearnerFunnelRatios(funnel: {
   };
 }
 
+/**
+ * G4-R2 — the ratios of a CLICK COHORT, used by both surfaces that have one.
+ *
+ * The acquisition table computes these per source row and the overview computes
+ * them once for the whole tracked population. Sharing the function is the point:
+ * the previous wave fixed the overview's arithmetic and left the acquisition
+ * table's, and the re-audit measured the difference at 683%.
+ *
+ * Every numerator here is drawn from the denominator's own set — see
+ * `loadClickCohortFunnel` — so each value is in [0, 1] by construction. Nothing
+ * is clamped.
+ */
+export function computeClickCohortRatios(cohort: {
+  readonly clicks: number;
+  readonly convertedClicks: number;
+  readonly registeredLearners: number;
+  readonly activatedLearners: number;
+  readonly pocketRegisteredLearners: number;
+  readonly depositedLearners: number;
+  readonly depositedAmongPocketRegistered: number;
+}): Record<string, string | null> {
+  return {
+    /** Of the clicks in this cohort, how many produced a registration. */
+    attributedClickToRegistrationRate: exactRatio(cohort.convertedClicks, cohort.clicks),
+    /** Of the learners this cohort produced, how many reached each later step. */
+    attributedRegistrationToActivationRate: exactRatio(
+      cohort.activatedLearners,
+      cohort.registeredLearners,
+    ),
+    attributedRegistrationToPocketRegistrationRate: exactRatio(
+      cohort.pocketRegisteredLearners,
+      cohort.registeredLearners,
+    ),
+    attributedRegistrationToDepositRate: exactRatio(
+      cohort.depositedLearners,
+      cohort.registeredLearners,
+    ),
+    attributedPocketRegistrationToDepositRate: exactRatio(
+      cohort.depositedAmongPocketRegistered,
+      cohort.pocketRegisteredLearners,
+    ),
+  };
+}
+
+/**
+ * G4-R5 — the approval rate of a SUBMISSION COHORT.
+ *
+ * `approvedFromCohort` is the subset of `submittedCohort` that is approved
+ * today, so the rate is in [0, 1] whatever the review latency. A window with
+ * approvals but no submissions of its own yields `null` — "this period started
+ * no reports" — rather than dividing by a population that does not exist.
+ */
+export function computeReportCohortRatio(cohort: {
+  readonly submittedCohort: number;
+  readonly approvedFromCohort: number;
+}): string | null {
+  return exactRatio(cohort.approvedFromCohort, cohort.submittedCohort);
+}
+
 export function computeGrowthRatios(
   counts: GrowthMetricCounts,
   scope: GrowthCoverageScope,
@@ -300,12 +401,22 @@ export function computeGrowthRatios(
         return [key, null];
       }
 
-      // G4-H3. A learner-basis ratio is NEVER computed from event counts here.
-      // Its numerator and denominator populations are not nested — an enrollment
-      // belongs to an enrollment and a registration to a user — so the quotient
-      // is meaningless and reported 158% on real data. `computeLearnerFunnelRatios`
-      // is the only place these are produced.
-      if ("basis" in spec && spec.basis === "unique_learners") {
+      // G4-H3/G4-R2/G4-R5. ANY ratio that declares a `basis` is produced by the
+      // dedicated function that owns that basis — `computeLearnerFunnelRatios`,
+      // `computeClickCohortRatios`, `computeReportCohortRatio` — and is NEVER
+      // computed from event counts here.
+      //
+      // This is a default-deny rather than a list of three known cases: a metric
+      // added to the registry with a cohort basis and no wiring reads as `null`
+      // ("not answerable here"), never as a plausible number produced by the
+      // wrong arithmetic. Both defects this file has now carried were exactly
+      // that — a quotient of two event counts that looked like a conversion.
+      //
+      // Only a ratio whose numerator and denominator are the SAME population of
+      // events, counted the same way in the same window, may be divided here.
+      // `assessmentPassRate` is the one such metric: its numerator is its
+      // denominator's rows filtered by a metadata flag.
+      if ("basis" in spec) {
         return [key, null];
       }
 

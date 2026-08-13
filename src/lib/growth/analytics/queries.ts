@@ -482,6 +482,219 @@ export async function loadLearnerFunnel(
   };
 }
 
+export type ClickCohortFunnel = {
+  /** Qualified clicks whose OWN occurrence falls in the period. The cohort. */
+  readonly clicks: number;
+  /** Of those clicks, how many produced at least one canonical registration. */
+  readonly convertedClicks: number;
+  /** Distinct learners whose frozen attribution names a click in the cohort. */
+  readonly registeredLearners: number;
+  /** Of those learners, how many later activated / registered with Pocket / deposited. */
+  readonly activatedLearners: number;
+  readonly pocketRegisteredLearners: number;
+  readonly depositedLearners: number;
+  /** Of the cohort's Pocket-registered learners, how many deposited. */
+  readonly depositedAmongPocketRegistered: number;
+};
+
+export const ZERO_CLICK_COHORT: ClickCohortFunnel = {
+  clicks: 0,
+  convertedClicks: 0,
+  registeredLearners: 0,
+  activatedLearners: 0,
+  pocketRegisteredLearners: 0,
+  depositedLearners: 0,
+  depositedAmongPocketRegistered: 0,
+};
+
+/**
+ * G4-R2 — the acquisition funnel on a CLICK-COHORT basis.
+ *
+ * WHAT WENT WRONG TWICE. `ataRegistrationRate = ata_reg events in the period ÷
+ * qualified clicks in the period` reads as a click-to-registration conversion
+ * and is not one. The two counts share a filter and a period but not a
+ * POPULATION: a click is counted in the period it happened, a registration in
+ * the period IT happened, and a learner who clicks in January and registers in
+ * February is counted once on each side of a boundary they never crossed
+ * together. The first deep audit measured 683% from that; the fix wave narrowed
+ * the scope and left the arithmetic, and the re-audit measured 683% again from
+ * 41 January clicks converting in February against 6 February clicks. The same
+ * shape produced 583% on `activationRate`.
+ *
+ * THE FIX IS A COHORT, NOT A CLAMP. One population is chosen as the anchor — the
+ * CLICKS THAT HAPPENED IN THE PERIOD — and every other number is a property OF
+ * THAT SAME SET:
+ *
+ *   clicks                  the cohort: qualified clicks with their own
+ *                           occurredAt in the period, matching the row's filter
+ *   convertedClicks         ⊆ clicks. Clicks that produced a canonical ata_reg.
+ *   registeredLearners      learners whose FROZEN attribution names a cohort
+ *                           click. One learner per click at most in practice,
+ *                           but counted distinctly either way.
+ *   activatedLearners       ⊆ registeredLearners
+ *   pocketRegisteredLearners ⊆ registeredLearners
+ *   depositedLearners       ⊆ registeredLearners
+ *   depositedAmongPocketRegistered ⊆ pocketRegisteredLearners
+ *
+ * Every published rate divides one of these by the set it is drawn from, so no
+ * rate can exceed 1 by construction. Nothing is clamped and nothing is capped:
+ * a value above 1 is now unrepresentable rather than hidden.
+ *
+ * DOWNSTREAM STATE IS OBSERVED WITHOUT A SECOND DATE WINDOW, DELIBERATELY. §24
+ * asks for the cohort's downstream behaviour rather than "every activation event
+ * in the window", and those are different questions: a January cohort that
+ * activates in March has activated, and a surface that only counted March
+ * activations against March clicks would answer neither question. The API states
+ * this in `cohortBasis` so nobody has to infer it.
+ *
+ * ONE STATEMENT, FULLY PARAMETERISED. `scope` and `filters` are validated enum
+ * members and positive integers before they arrive, and every value below is a
+ * bound parameter.
+ */
+export async function loadClickCohortFunnel(
+  db: Pick<PrismaClient, "$queryRaw">,
+  period: GrowthPeriod,
+  filters: GrowthFilters,
+): Promise<ClickCohortFunnel> {
+  const conditions: Prisma.Sql[] = [];
+  if (filters.trackingLinkId !== undefined) {
+    conditions.push(Prisma.sql`c."trackingLinkId" = ${filters.trackingLinkId}`);
+  }
+  if (filters.affiliatePartnerId !== undefined) {
+    conditions.push(Prisma.sql`l."affiliatePartnerId" = ${filters.affiliatePartnerId}`);
+  }
+  if (filters.affiliateCampaignId !== undefined) {
+    conditions.push(Prisma.sql`l."affiliateCampaignId" = ${filters.affiliateCampaignId}`);
+  }
+  const linkFilter =
+    conditions.length === 0
+      ? Prisma.empty
+      : Prisma.sql` AND ${Prisma.join(conditions, " AND ")}`;
+
+  const rows = await db.$queryRaw<Array<Record<string, number | bigint | null>>>(Prisma.sql`
+    WITH cohort AS (
+      SELECT c."id" AS "clickId"
+      FROM "AffiliateClick" c
+      JOIN "AffiliateTrackingLink" l ON l."id" = c."trackingLinkId"
+      WHERE c."classification" = 'qualified'
+        AND c."occurredAt" >= ${period.start}
+        AND c."occurredAt" < ${period.end}
+        ${linkFilter}
+    ),
+    registered AS (
+      SELECT DISTINCT g."userId" AS uid, g."acquisitionClickId" AS "clickId"
+      FROM "GrowthEvent" g
+      WHERE g."eventType" = 'ata_reg'
+        AND g."userId" IS NOT NULL
+        AND g."acquisitionClickId" IN (SELECT "clickId" FROM cohort)
+    ),
+    pocket AS (
+      SELECT DISTINCT r.uid FROM registered r
+      WHERE EXISTS (SELECT 1 FROM "GrowthEvent" p
+                    WHERE p."eventType" = 'pocket_reg' AND p."userId" = r.uid)
+    )
+    SELECT
+      (SELECT COUNT(*) FROM cohort) AS "clicks",
+      (SELECT COUNT(DISTINCT "clickId") FROM registered) AS "convertedClicks",
+      (SELECT COUNT(DISTINCT uid) FROM registered) AS "registeredLearners",
+      (SELECT COUNT(DISTINCT r.uid) FROM registered r
+        WHERE EXISTS (SELECT 1 FROM "GrowthEvent" a
+                      WHERE a."eventType" = 'academy_activation' AND a."userId" = r.uid)
+      ) AS "activatedLearners",
+      (SELECT COUNT(*) FROM pocket) AS "pocketRegisteredLearners",
+      (SELECT COUNT(DISTINCT r.uid) FROM registered r
+        WHERE EXISTS (SELECT 1 FROM "GrowthEvent" d
+                      WHERE d."eventType" = 'dep' AND d."userId" = r.uid)
+      ) AS "depositedLearners",
+      (SELECT COUNT(DISTINCT p.uid) FROM pocket p
+        WHERE EXISTS (SELECT 1 FROM "GrowthEvent" d
+                      WHERE d."eventType" = 'dep' AND d."userId" = p.uid)
+      ) AS "depositedAmongPocketRegistered"
+  `);
+
+  const row = rows[0] ?? {};
+  const n = (key: string) => Number(row[key] ?? 0);
+
+  return {
+    clicks: n("clicks"),
+    convertedClicks: n("convertedClicks"),
+    registeredLearners: n("registeredLearners"),
+    activatedLearners: n("activatedLearners"),
+    pocketRegisteredLearners: n("pocketRegisteredLearners"),
+    depositedLearners: n("depositedLearners"),
+    depositedAmongPocketRegistered: n("depositedAmongPocketRegistered"),
+  };
+}
+
+export type ReportCohort = {
+  /** Distinct report submissions whose FIRST submission falls in the period. */
+  readonly submittedCohort: number;
+  /** Of that exact cohort, how many are approved today. A subset. */
+  readonly approvedFromCohort: number;
+};
+
+/**
+ * G4-R5 — report approval on a SUBMISSION-COHORT basis.
+ *
+ * WHAT WENT WRONG. `reportApprovalRate = report_approved events ÷
+ * report_submitted events`, both counted in the requested window, published as
+ * an approval rate and declared `events_same_population`. They are not one
+ * population: a submission is counted when the learner submitted and an approval
+ * when the mentor decided, so any review latency that crosses a period boundary
+ * decouples them. Two January submissions approved in February against one
+ * February submission published `"2.000000"` — a 200% approval rate.
+ *
+ * THE QUESTION THIS ANSWERS NOW. "Of the reports SUBMITTED in this period, what
+ * share have been approved?" The denominator is the cohort of submissions
+ * anchored in the window, and the numerator is that same cohort filtered by its
+ * own current source-owned state. Numerator ⊆ denominator by construction.
+ *
+ * THE ENTITY IS THE SUBMISSION, COUNTED ONCE. Both families key on
+ * `submission:<id>` — `report_submitted` from `firstSubmittedAt` (so a
+ * resubmission never moves the original into a later period) and
+ * `report_approved` from the FIRST approving review. A submit → reject →
+ * resubmit → approve history is therefore one denominator row and one numerator
+ * row, and revisions cannot push the rate above 1.
+ *
+ * MATCHED ON `sourceEventId` ALONE, deliberately: the two families declare
+ * different `sourceOwner`s (`curriculum_report_submission` and
+ * `curriculum_report_review`) precisely because they are derived from different
+ * owner tables, and the submission key is the documented thing they share.
+ *
+ * A PENDING REPORT STAYS IN THE DENOMINATOR. It lowers the rate, which is the
+ * truthful answer — excluding it would report "everything we finished, we
+ * approved" and call it an approval rate.
+ */
+export async function loadReportCohort(
+  db: Pick<PrismaClient, "$queryRaw">,
+  period: GrowthPeriod,
+  filters: GrowthFilters,
+  scope: CoverageScope,
+): Promise<ReportCohort> {
+  const acquisition = levelFunnelAcquisitionSql(filters, scope);
+
+  const rows = await db.$queryRaw<Array<Record<string, number | bigint | null>>>(Prisma.sql`
+    SELECT
+      COUNT(DISTINCT g."sourceEventId") AS "submittedCohort",
+      COUNT(DISTINCT CASE WHEN EXISTS (
+        SELECT 1 FROM "GrowthEvent" a
+        WHERE a."eventType" = 'report_approved'
+          AND a."sourceEventId" = g."sourceEventId"
+      ) THEN g."sourceEventId" END) AS "approvedFromCohort"
+    FROM "GrowthEvent" g
+    WHERE g."eventType" = 'report_submitted'
+      AND g."occurredAt" >= ${period.start}
+      AND g."occurredAt" < ${period.end}
+      ${acquisition}
+  `);
+
+  const row = rows[0] ?? {};
+  return {
+    submittedCohort: Number(row.submittedCohort ?? 0),
+    approvedFromCohort: Number(row.approvedFromCohort ?? 0),
+  };
+}
+
 export type DepositAmountSummary = {
   readonly count: number;
   /** Canonical decimal TEXT, or null when no aggregation is possible. */
@@ -619,11 +832,15 @@ function fromMinorUnits(value: bigint): string {
 export type AcquisitionRow = {
   readonly dimension: string;
   readonly label: string | null;
+  /** The cohort anchor: qualified clicks from this source in the period. */
   readonly clicks: number;
-  readonly ataRegistrations: number;
+  readonly convertedClicks: number;
+  /** Every count below is a property of the learners THAT cohort produced. */
+  readonly registeredLearners: number;
   readonly activatedLearners: number;
-  readonly pocketRegistrations: number;
-  readonly firstDeposits: number;
+  readonly pocketRegisteredLearners: number;
+  readonly depositedLearners: number;
+  readonly depositedAmongPocketRegistered: number;
 };
 
 /**
@@ -667,23 +884,23 @@ export async function loadAcquisitionBreakdown(
             ? { affiliateCampaignId: row.id }
             : { trackingLinkId: row.id };
 
-      const [clicks, ataRegistrations, activatedLearners, pocketRegistrations, firstDeposits] =
-        await Promise.all([
-          countClicks(db, period, filters, "attributed"),
-          countLedgerEvents(db, period, filters, "attributed", "ata_reg"),
-          countLedgerEvents(db, period, filters, "attributed", "academy_activation"),
-          countLedgerEvents(db, period, filters, "attributed", "pocket_reg"),
-          countLedgerEvents(db, period, filters, "attributed", "dep"),
-        ]);
+      // G4-R2. ONE cohort query per row, scoped to that row's own filter, so
+      // every number on the row describes the same set of clicks. The previous
+      // form issued five independent counts and divided them by each other,
+      // which is how a campaign's activations could be divided by a different
+      // period's registrations.
+      const cohort = await loadClickCohortFunnel(db, period, filters);
 
       return {
         dimension,
         label: "code" in row ? row.code : row.displayName,
-        clicks,
-        ataRegistrations,
-        activatedLearners,
-        pocketRegistrations,
-        firstDeposits,
+        clicks: cohort.clicks,
+        convertedClicks: cohort.convertedClicks,
+        registeredLearners: cohort.registeredLearners,
+        activatedLearners: cohort.activatedLearners,
+        pocketRegisteredLearners: cohort.pocketRegisteredLearners,
+        depositedLearners: cohort.depositedLearners,
+        depositedAmongPocketRegistered: cohort.depositedAmongPocketRegistered,
       };
     }),
   );

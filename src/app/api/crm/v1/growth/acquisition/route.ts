@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { exactRatio } from "@/lib/analytics/decimal";
 import { resolvePeriod } from "@/lib/analytics/periods";
 import {
   analyticsErrorResponse,
@@ -10,8 +9,14 @@ import {
 } from "@/lib/analytics/routes";
 import { assertKnownAnalyticsKeys, parsePeriodInput } from "@/lib/analytics/request";
 import { AffiliateInputError } from "@/lib/crm/affiliates";
-import { GROWTH_ANALYTICS_MODE } from "@/lib/growth/analytics/sources";
-import { loadAcquisitionBreakdown } from "@/lib/growth/analytics/queries";
+import {
+  GROWTH_ANALYTICS_MODE,
+  computeClickCohortRatios,
+} from "@/lib/growth/analytics/sources";
+import {
+  loadAcquisitionBreakdown,
+  loadClickCohortFunnel,
+} from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
   buildGrowthAvailability,
@@ -69,11 +74,22 @@ export async function GET(request: Request) {
     const limit = parseGrowthLimit(params);
     const window = { start: period.startUtc ?? new Date(0), end: period.endUtc };
 
-    const rows = await loadAcquisitionBreakdown(prisma, window, dimension, limit);
-
-    // The accepted exact-decimal helper, not a float quotient. Null — never
-    // zero — when the denominator is zero.
-    const rate = exactRatio;
+    // The unfiltered cohort across every source, computed even when no source
+    // row exists.
+    //
+    // TWO REASONS, AND THE SECOND IS THE IMPORTANT ONE. It gives a reader the
+    // denominator the rows are a breakdown OF — a table of three campaigns says
+    // nothing about how much tracked traffic they are between them. And it makes
+    // this route DEPEND ON THE LEDGER: with no affiliate partner configured,
+    // `loadAcquisitionBreakdown` returns an empty list without ever touching
+    // `GrowthEvent`, so on a database that predates migration 47 this surface
+    // used to answer 200 with `rows: []` — "no acquisition sources" — while its
+    // four siblings correctly failed loudly. An empty answer and an impossible
+    // answer must not look the same.
+    const [rows, totals] = await Promise.all([
+      loadAcquisitionBreakdown(prisma, window, dimension, limit),
+      loadClickCohortFunnel(prisma, window, {}),
+    ]);
 
     return NextResponse.json(
       {
@@ -85,13 +101,26 @@ export async function GET(request: Request) {
         // Said out loud so nobody has to infer it from the ordering.
         rankingPolicy: "none_ordered_by_id",
         qualityScorePolicy: "not_computed_by_design",
+        // G4-R2. THE CONTRACT THIS SURFACE ANSWERS, stated in the payload rather
+        // than left to a reader's assumption — because the assumption is exactly
+        // what was wrong twice. Every count and every rate on a row describes ONE
+        // set: the qualified clicks this source produced in the period. Downstream
+        // state is the cohort's state today, not a second window's event count.
+        metricClass: "attributed_click_cohort",
+        cohortAnchor: "qualified_clicks_occurred_in_period",
+        downstreamObservation: "cohort_state_to_date_not_windowed_events",
+        rateBasis: {
+          attributedClickToRegistrationRate: "converted_clicks_subset_of_cohort_clicks",
+          attributedRegistrationToActivationRate: "subset_of_cohort_registered_learners",
+          attributedRegistrationToPocketRegistrationRate: "subset_of_cohort_registered_learners",
+          attributedRegistrationToDepositRate: "subset_of_cohort_registered_learners",
+          attributedPocketRegistrationToDepositRate:
+            "subset_of_cohort_pocket_registered_learners",
+        },
+        totals: { ...totals, ...computeClickCohortRatios(totals) },
         rows: rows.map((row) => ({
           ...row,
-          ataRegistrationRate: rate(row.ataRegistrations, row.clicks),
-          activationRate: rate(row.activatedLearners, row.ataRegistrations),
-          pocketRegistrationRate: rate(row.pocketRegistrations, row.ataRegistrations),
-          depositRatePerRegistration: rate(row.firstDeposits, row.ataRegistrations),
-          depositRatePerPocketRegistration: rate(row.firstDeposits, row.pocketRegistrations),
+          ...computeClickCohortRatios(row),
         })),
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: false,

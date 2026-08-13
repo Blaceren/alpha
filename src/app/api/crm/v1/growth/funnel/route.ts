@@ -13,13 +13,17 @@ import {
   GROWTH_ANALYTICS_MODE,
   GROWTH_DEFAULT_COVERAGE_SCOPE,
   computeAttributionCoverage,
+  computeClickCohortRatios,
   computeLearnerFunnelRatios,
+  computeReportCohortRatio,
 } from "@/lib/growth/analytics/sources";
 import {
   countLedgerEvents,
+  loadClickCohortFunnel,
   loadGrowthCounts,
   loadLearnerFunnel,
   loadLevelFunnel,
+  loadReportCohort,
 } from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
@@ -71,15 +75,28 @@ export async function GET(request: Request) {
 
     const window = { start: period.startUtc ?? new Date(0), end: period.endUtc };
 
-    const [counts, levels, learners, attributedRegistrations, totalRegistrations] =
-      await Promise.all([
+    const [
+      counts,
+      levels,
+      learners,
+      attributedRegistrations,
+      totalRegistrations,
+      clickCohort,
+      reportCohort,
+    ] = await Promise.all([
         loadGrowthCounts(prisma, window, filters, scope),
         loadLevelFunnel(prisma, window, filters, scope, maxLevel),
         loadLearnerFunnel(prisma, window, filters, scope),
         countLedgerEvents(prisma, window, filters, "attributed", "ata_reg"),
         countLedgerEvents(prisma, window, filters, "total", "ata_reg"),
+        // G4-R2. The click step's rate comes from the shared cohort query, not
+        // from dividing two independently windowed event counts.
+        loadClickCohortFunnel(prisma, window, filters),
+        // G4-R5. Report approval is the submission cohort's own share.
+        loadReportCohort(prisma, window, filters, scope),
       ]);
     const learnerRates = computeLearnerFunnelRatios(learners);
+    const cohortRates = computeClickCohortRatios(clickCohort);
 
     // Each step states its own denominator, and the accepted exact-decimal
     // helper computes it: `null` — never zero — when that denominator is zero,
@@ -92,14 +109,19 @@ export async function GET(request: Request) {
         step: "ata_registration",
         count: counts.ataRegistrations,
         learners: learners.registeredLearners,
-        ofLearners: scope === "attributed" ? counts.clicks : null,
-        // G4-H3. A click denominator only exists for the attributed population.
-        // In `total` and `organic` the numerator contains learners no tracking
-        // link could have produced, so the step states that it has no rate here
-        // rather than publishing one that reads above 100%.
+        // G4-R2. A click denominator exists only for the attributed population,
+        // and even there it must be a COHORT rather than a second event count.
+        // `rate` is now "of the clicks that happened in this period, how many
+        // produced a registration" — converted clicks over cohort clicks, a
+        // subset of the same set. The previous form divided registrations in the
+        // window by clicks in the window, which are different populations
+        // whenever anyone registers in a later period than they clicked, and it
+        // published 683% on exactly that shape.
+        ofLearners: scope === "attributed" ? clickCohort.clicks : null,
         ofStep: scope === "attributed" ? "click" : null,
-        rate: scope === "attributed" ? rate(counts.ataRegistrations, counts.clicks) : null,
-        dropOff: scope === "attributed" ? counts.clicks - counts.ataRegistrations : null,
+        rate: scope === "attributed" ? cohortRates.attributedClickToRegistrationRate : null,
+        dropOff:
+          scope === "attributed" ? clickCohort.clicks - clickCohort.convertedClicks : null,
       },
       // G4-H3. `count` is the EVENT count — "19 enrollments happened" is true and
       // useful. `rate` is a UNIQUE-LEARNER SUBSET fraction of the registered
@@ -173,6 +195,10 @@ export async function GET(request: Request) {
           // `rate` divides `learners` by `ofLearners` — a subset of a set it is
           // drawn from, so no rate can exceed 1.
           rateBasis: "unique_learners_subset_of_ofStep",
+          // G4-R2. The first step is the exception and says so: it is a click
+          // cohort, not a learner subset.
+          clickStepBasis: "attributed_click_cohort_converted_over_cohort",
+          clickCohort,
           steps: acquisitionSteps,
         },
         levelFunnel: {
@@ -203,9 +229,18 @@ export async function GET(request: Request) {
           assessmentsCompleted: counts.assessmentsCompleted,
           assessmentsPassed: counts.assessmentsPassed,
           assessmentPassRate: rate(counts.assessmentsPassed, counts.assessmentsCompleted),
+          // G4-R5. The two EVENT-VOLUME counts stay, because "seven reports were
+          // submitted this month" and "seven were approved this month" are both
+          // true and useful. What is no longer published is their quotient.
           reportsSubmitted: counts.reportsSubmitted,
           reportsApproved: counts.reportsApproved,
-          reportApprovalRate: rate(counts.reportsApproved, counts.reportsSubmitted),
+          // The COHORT: reports whose first submission falls in this period, and
+          // how many of those exact reports are approved today. A pending report
+          // stays in the denominator and lowers the rate, which is the honest
+          // answer. A period that started no reports yields null, not zero.
+          submittedReportCohort: reportCohort.submittedCohort,
+          approvedFromSubmittedReportCohort: reportCohort.approvedFromCohort,
+          submittedReportCohortApprovalRate: computeReportCohortRatio(reportCohort),
           mentorReviewsSubmitted: counts.mentorReviewsSubmitted,
           mentorReviewsApproved: counts.mentorReviewsApproved,
         },
