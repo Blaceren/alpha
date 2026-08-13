@@ -16,6 +16,7 @@ import {
 import {
   loadAcquisitionBreakdown,
   loadClickCohortFunnel,
+  loadRegistrationOriginCoverage,
 } from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
@@ -86,9 +87,11 @@ export async function GET(request: Request) {
     // used to answer 200 with `rows: []` — "no acquisition sources" — while its
     // four siblings correctly failed loudly. An empty answer and an impossible
     // answer must not look the same.
-    const [rows, totals] = await Promise.all([
+    const [rows, totals, registrationOriginCoverage] = await Promise.all([
       loadAcquisitionBreakdown(prisma, window, dimension, limit),
       loadClickCohortFunnel(prisma, window, {}),
+      // G4-R12. See the overview route.
+      loadRegistrationOriginCoverage(prisma),
     ]);
 
     return NextResponse.json(
@@ -125,6 +128,7 @@ export async function GET(request: Request) {
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: false,
           amountUnavailableReason: "per_row_amounts_not_published_on_this_surface",
+          registrationOriginCoverage,
         }),
         generatedAt: now.toISOString(),
       },

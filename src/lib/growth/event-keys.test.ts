@@ -101,6 +101,49 @@ describe("growth event keys", () => {
     }
   });
 
+  /**
+   * G4-R8. The runtime's `sourceEntityType` for a family must be the table the
+   * migration names for the SAME family, because a reader uses the pair
+   * (`sourceEntityType`, `sourceEntityId`) to find the origin row.
+   *
+   * Read from the shipped SQL rather than from a second hard-coded list, for
+   * the same reason as the key test above: a list that is maintained by hand
+   * drifts with the thing it is supposed to be checking.
+   */
+  const MIGRATION_ENTITY_TYPES: Array<[string, string]> = [
+    ["ata_reg", "User"],
+    ["curriculum_enrollment", "UserCurriculumEnrollment"],
+    ["academy_activation", "UserLevelProgress"],
+    ["level_started", "UserLevelProgress"],
+    ["level_completed", "UserLevelProgress"],
+    ["assessment_completed", "AssessmentAttempt"],
+    ["report_submitted", "ReportSubmission"],
+    ["report_approved", "ReportReview"],
+    ["pocket_reg", "PocketTraderIdentity"],
+    ["dep", "PocketProviderEvent"],
+  ];
+
+  it.each(MIGRATION_ENTITY_TYPES)(
+    "runtime sourceEntityType for %s equals the table the migration writes",
+    (eventType, entityType) => {
+      expect(GROWTH_SOURCE_ENTITY_TYPES[eventType as (typeof GROWTH_EVENT_TYPES)[number]]).toBe(
+        entityType,
+      );
+      // And the migration really does write that string for this family, so a
+      // change to either side without the other fails here.
+      expect(MIGRATION).toContain(`'${eventType}',`);
+      expect(MIGRATION).toContain(`'${entityType}',`);
+    },
+  );
+
+  it("names the User as the ata_reg owner, matching every backfilled row", () => {
+    // The defect this closes: the constant said `AffiliateConversionEvent`
+    // while `sourceEntityId` carried a `User.id` and both backfill passes wrote
+    // `'User'`. A reader following the declared type looked in the wrong table.
+    expect(GROWTH_SOURCE_ENTITY_TYPES.ata_reg).toBe("User");
+    expect(MIGRATION).not.toContain("'AffiliateConversionEvent',");
+  });
+
   it("has no way to build a redeposit key without a provider identity", () => {
     // A degraded overload taking (player, amount, time) is exactly what §26
     // forbids. Its absence is what makes the fail-closed path unavoidable.

@@ -12,8 +12,36 @@
  * mechanism, and §60 is the rule it implements.
  */
 
+/**
+ * G4-R12 — the scope an AVAILABLE metric was computed over.
+ *
+ * A third state, added ADDITIVELY. `{available:true}` and
+ * `{available:false,reason}` keep their exact meanings and their exact shapes,
+ * so every existing reader keeps working and no consumer has to learn a new
+ * contract to stay correct. What this adds is the case the block could not
+ * express before: a metric that IS measured, exactly, over a population smaller
+ * than the reader assumes.
+ *
+ * DELIBERATELY NOT `available:false`. Filing a canonical, exact metric under
+ * "what the platform does not measure" would be a worse lie than saying nothing
+ * — it measures it, and the number is right.
+ */
+export type GrowthAvailabilityScope = {
+  /** Rows the metric can prove. */
+  readonly provable: number;
+  /** Rows that exist in the owner population. */
+  readonly population: number;
+  /** Unprovable rows a staff profile explains. */
+  readonly unprovableStaff: number;
+  /** Unprovable rows with no explanation — origin is genuinely unknown. */
+  readonly unprovableOther: number;
+  /** How provability was decided. Named, not described, so it cannot drift. */
+  readonly basis: "positive_registration_authority";
+};
+
 export type GrowthAvailabilityState =
   | { readonly available: true }
+  | { readonly available: true; readonly scope: GrowthAvailabilityScope }
   | { readonly available: false; readonly reason: string };
 
 const available: GrowthAvailabilityState = { available: true };
@@ -38,10 +66,42 @@ export type GrowthDataAvailability = {
 export function buildGrowthAvailability(input: {
   readonly amountAggregationAvailable: boolean;
   readonly amountUnavailableReason: string | null;
+  /**
+   * G4-R12. Optional so a surface that has not loaded it still emits the exact
+   * shape it emitted before — the field is additive, not required.
+   */
+  readonly registrationOriginCoverage?: {
+    readonly population: number;
+    readonly provable: number;
+    readonly unprovableStaff: number;
+    readonly unprovableOther: number;
+  };
 }): GrowthDataAvailability {
+  const coverage = input.registrationOriginCoverage;
+
   return {
     trafficClicks: available,
-    ataRegistrations: available,
+
+    // The registration count is exact and canonical. What the reader could not
+    // see is that it covers accounts with a PROVABLE registration record, which
+    // on a database with pre-audit or operator-created accounts is fewer than
+    // the accounts that exist. Declared only when it is actually a limitation:
+    // on a population where every account is provable there is nothing to warn
+    // about, and an always-present caveat is one nobody reads.
+    ataRegistrations:
+      coverage && coverage.provable < coverage.population
+        ? {
+            available: true,
+            scope: {
+              provable: coverage.provable,
+              population: coverage.population,
+              unprovableStaff: coverage.unprovableStaff,
+              unprovableOther: coverage.unprovableOther,
+              basis: "positive_registration_authority",
+            },
+          }
+        : available,
+
     enrollments: available,
     academyActivation: available,
 

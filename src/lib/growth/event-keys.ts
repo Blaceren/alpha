@@ -130,10 +130,33 @@ export function redepositSourceEventId(providerEventIdentity: string): string {
   return `pocket:event:${providerEventIdentity}`;
 }
 
-/** The owner table each family is derived from, for `sourceEntityType`. */
+/**
+ * The owner table each family is derived from, for `sourceEntityType`.
+ *
+ * G4-R8 — WHY `ata_reg` NAMES THE USER.
+ *
+ * It used to declare `AffiliateConversionEvent` while `sourceEntityId` carried
+ * a `User.id` and both backfill passes wrote `'User'`. The column exists so a
+ * reader can find the origin row without a mapping, and a type that does not
+ * name the table the id belongs to defeats exactly that. The disagreement was
+ * never a duplication risk — `sourceEntityType` is not part of `UNIQUE
+ * (eventType, sourceOwner, sourceEventId)` — but it made the ledger's own
+ * provenance untrue, which is the reason it is corrected rather than tolerated.
+ *
+ * SAFE TO CHANGE, MEASURED RATHER THAN ASSUMED. Every `ata_reg` row that exists
+ * carries `'User'` already: the family is backfill-only today and the runtime
+ * emitter has never written one. So this changes no stored row, contradicts no
+ * stored row, and brings the runtime into agreement with 100% of the history
+ * rather than introducing a second spelling into it.
+ *
+ * The registration event is the account coming into existence. The
+ * `AUTH_REGISTER` audit row proves that origin was self-service — it is the
+ * membership predicate the backfill selects on — but it is not the owner of the
+ * fact, and `sourceEntityId` has always been the `User.id`.
+ */
 export const GROWTH_SOURCE_ENTITY_TYPES = {
   traffic_click: "AffiliateClick",
-  ata_reg: "AffiliateConversionEvent",
+  ata_reg: "User",
   curriculum_enrollment: "UserCurriculumEnrollment",
   academy_activation: "UserLevelProgress",
   level_started: "UserLevelProgress",

@@ -952,4 +952,73 @@ export async function loadIngressHealth(
   };
 }
 
+export type RegistrationOriginCoverage = {
+  /** Every account that exists. */
+  readonly population: number;
+  /** Accounts holding a canonical `ata_reg`, i.e. a provable registration. */
+  readonly provable: number;
+  /** Accounts with no provable origin that a staff profile explains. */
+  readonly unprovableStaff: number;
+  /** Accounts with no provable origin and no explanation at all. */
+  readonly unprovableOther: number;
+};
+
+/**
+ * G4-R12 — how much of the account population the registration figure covers.
+ *
+ * WHY THIS IS PUBLISHED. `ataRegistrations` is exact and canonical: it counts
+ * accounts with a PROVABLE self-service registration record, and set equality
+ * against the audited registration path holds in both directions. What it is
+ * not is the number of accounts on the platform. On a database carrying
+ * accounts created before the audited path existed, or created by an operator,
+ * the two differ — which is why «Активированы» can legitimately exceed
+ * «Регистрации ATA» and look like a data error when it is a coverage fact.
+ *
+ * NOT A CORRECTION TO THE METRIC. The count does not change and no denominator
+ * is widened: every dependent rate stays a subset ratio over the registered
+ * cohort, which is what makes them bounded. This block only lets the reader see
+ * the scope the number was always computed over.
+ *
+ * ORIGIN IS NEVER INFERRED. An account with no registration record and no staff
+ * profile is reported as exactly that — unprovable — and is not guessed into
+ * either bucket. §49 forbids recording uncertainty as a registration, and the
+ * same rule applies to describing it.
+ *
+ * PERIOD-INDEPENDENT BY CONSTRUCTION. This is a property of the account
+ * population and of the ledger's coverage of it, not of the selected window, so
+ * it does not take a period. Reading it through a period filter would produce a
+ * different, meaningless number for every selector position.
+ */
+export async function loadRegistrationOriginCoverage(
+  db: Pick<PrismaClient, "user" | "growthEvent" | "staffProfile">,
+): Promise<RegistrationOriginCoverage> {
+  const [population, provableRows, staffRows] = await Promise.all([
+    db.user.count(),
+    db.growthEvent.findMany({
+      where: { eventType: "ata_reg" },
+      select: { userId: true },
+      distinct: ["userId"],
+    }),
+    db.staffProfile.findMany({ select: { userId: true }, distinct: ["userId"] }),
+  ]);
+
+  const provableUserIds = new Set(
+    provableRows.map((row) => row.userId).filter((id): id is number => id !== null),
+  );
+  const staffUserIds = new Set(staffRows.map((row) => row.userId));
+
+  // A learner who self-registered and was LATER promoted to staff keeps their
+  // registration record and stays in `provable`: origin is historical, role is
+  // current. Only accounts with NO provable origin are explained by staffing.
+  let unprovableStaff = 0;
+  for (const userId of staffUserIds) {
+    if (!provableUserIds.has(userId)) unprovableStaff += 1;
+  }
+
+  const provable = provableUserIds.size;
+  const unprovableOther = Math.max(0, population - provable - unprovableStaff);
+
+  return { population, provable, unprovableStaff, unprovableOther };
+}
+
 export { GROWTH_METRIC_KEYS };

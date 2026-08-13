@@ -24,6 +24,7 @@ import {
   loadLearnerFunnel,
   loadLevelFunnel,
   loadReportCohort,
+  loadRegistrationOriginCoverage,
 } from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
@@ -83,6 +84,7 @@ export async function GET(request: Request) {
       totalRegistrations,
       clickCohort,
       reportCohort,
+      registrationOriginCoverage,
     ] = await Promise.all([
         loadGrowthCounts(prisma, window, filters, scope),
         loadLevelFunnel(prisma, window, filters, scope, maxLevel),
@@ -94,6 +96,8 @@ export async function GET(request: Request) {
         loadClickCohortFunnel(prisma, window, filters),
         // G4-R5. Report approval is the submission cohort's own share.
         loadReportCohort(prisma, window, filters, scope),
+        // G4-R12. See the overview route.
+        loadRegistrationOriginCoverage(prisma),
       ]);
     const learnerRates = computeLearnerFunnelRatios(learners);
     const cohortRates = computeClickCohortRatios(clickCohort);
@@ -247,6 +251,7 @@ export async function GET(request: Request) {
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: false,
           amountUnavailableReason: "not_requested_on_this_surface",
+          registrationOriginCoverage,
         }),
         generatedAt: now.toISOString(),
       },

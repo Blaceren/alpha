@@ -16,6 +16,7 @@ import {
   countLedgerEvents,
   countUnresolvedRedeposits,
   loadFirstDepositAmounts,
+  loadRegistrationOriginCoverage,
 } from "@/lib/growth/analytics/queries";
 import { buildGrowthAvailability } from "@/lib/growth/analytics/availability";
 import {
@@ -69,13 +70,21 @@ export async function GET(request: Request) {
     const scope = parseGrowthScope(params);
     const window = { start: period.startUtc ?? new Date(0), end: period.endUtc };
 
-    const [pocketRegistrations, firstDeposits, confirmedRedeposits, unresolvedRedeposits, amounts] =
-      await Promise.all([
+    const [
+      pocketRegistrations,
+      firstDeposits,
+      confirmedRedeposits,
+      unresolvedRedeposits,
+      amounts,
+      registrationOriginCoverage,
+    ] = await Promise.all([
         countLedgerEvents(prisma, window, filters, scope, "pocket_reg"),
         countLedgerEvents(prisma, window, filters, scope, "dep"),
         countLedgerEvents(prisma, window, filters, scope, "rdep"),
         countUnresolvedRedeposits(prisma, window),
         loadFirstDepositAmounts(prisma, window, filters, scope),
+        // G4-R12. See the overview route.
+        loadRegistrationOriginCoverage(prisma),
       ]);
 
     return NextResponse.json(
@@ -121,6 +130,7 @@ export async function GET(request: Request) {
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: amounts.amountAggregationAvailable,
           amountUnavailableReason: amounts.unavailableReason,
+          registrationOriginCoverage,
         }),
         generatedAt: now.toISOString(),
       },

@@ -26,6 +26,7 @@ import {
   loadGrowthCounts,
   loadLearnerFunnel,
   loadReportCohort,
+  loadRegistrationOriginCoverage,
 } from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
@@ -92,6 +93,7 @@ export async function GET(request: Request) {
       reportCohortAttributed,
       reportCohortOrganic,
       reportCohortTotal,
+      registrationOriginCoverage,
     ] = await Promise.all([
       loadGrowthCounts(prisma, window, filters, "attributed"),
       unfiltered ? loadGrowthCounts(prisma, window, filters, "organic") : Promise.resolve(null),
@@ -108,6 +110,10 @@ export async function GET(request: Request) {
       loadReportCohort(prisma, window, filters, "attributed"),
       unfiltered ? loadReportCohort(prisma, window, filters, "organic") : Promise.resolve(null),
       unfiltered ? loadReportCohort(prisma, window, filters, "total") : Promise.resolve(null),
+      // G4-R12. Population coverage of the registration authority. Period- and
+      // filter-independent by construction: it describes the ledger's reach
+      // over the account population, not the selected window.
+      loadRegistrationOriginCoverage(prisma),
     ]);
 
     // G4-H3. Ratios are computed PER SCOPE, and a ratio whose denominator does
@@ -187,6 +193,7 @@ export async function GET(request: Request) {
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: amounts.amountAggregationAvailable,
           amountUnavailableReason: amounts.unavailableReason,
+          registrationOriginCoverage,
         }),
         generatedAt: now.toISOString(),
       },
