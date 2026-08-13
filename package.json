@@ -180,7 +180,8 @@
     "test:regression:preprod-activation-stage-collapse": "tsx scripts/regression/preprodActivationStageCollapseRegression.ts",
     "test:regression:successor-authoring": "tsx scripts/regression/curriculumSuccessorAuthoringRecoveryRegression.ts",
     "test:regression:review-surface-correction": "tsx scripts/regression/curriculumReviewSurfaceCorrectionRegression.ts",
-    "ops:preprod-qa-operator": "tsx scripts/ops/preprodQaOperator.ts"
+    "ops:preprod-qa-operator": "tsx scripts/ops/preprodQaOperator.ts",
+    "test:regression:growth-fix-wave": "tsx scripts/regression/growthFixWaveRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

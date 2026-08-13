@@ -157,33 +157,40 @@ export async function POST(request: Request) {
 /**
  * The only postback `type` values this receiver may dispatch.
  *
- * `Re-deposit` is absent for the same reason it is absent from the GET
- * receiver's map: redeposits are owned by the typed Growth V1 handler, which
- * uses exact decimal arithmetic and refuses to emit a canonical event it cannot
- * identify — neither of which is true of the legacy processor's `Float` path.
- * `Withdrawal`, `Commission` and both withdrawal-outcome types are absent
- * because §17 forbids them on a trusted Growth V1 receiver outright.
+ * G4-H5 — `Registration` AND `First Deposit` ARE NOW BOTH REFUSED HERE.
  *
- * WHAT THIS DOES NOT CLOSE, STATED PLAINLY. An ABSENT `type` is allowed through,
- * because this receiver also carries the older `eventType` contract
- * (`deposit`, `trade`, `balance`, `account_connected`, `account_rejected`) used
- * by the SANDBOX/MANUAL exchange provider — a different integration from Pocket,
+ * The deep audit found that both reached `processExchangePostbackPayload` and
+ * produced no canonical growth event: a POST-shaped Pocket registration or first
+ * deposit could move legacy `ExchangeAccount` money state and write a
+ * `PostbackEvent` while the growth ledger never heard about it. Fixing the GET
+ * receiver and leaving these two here would have left the same shadow path
+ * reachable by changing the HTTP method — exactly the mistake the previous wave
+ * made in the other direction.
+ *
+ * They are refused rather than re-routed because this receiver is not the Pocket
+ * contract. Pocket sends the `ow` query shape to `/api/postbacks/pocket`, which
+ * owns both semantics, is gated per family, uses exact decimal arithmetic and
+ * always projects. A second, laxer intake for the same two business facts is the
+ * thing being removed.
+ *
+ * WHAT REMAINS, AND WHY IT IS NOT A HOLE. An ABSENT `type` is still allowed,
+ * because this receiver also carries the older `eventType` contract (`deposit`,
+ * `trade`, `balance`, `account_connected`, `account_rejected`) used by the
+ * SANDBOX/MANUAL exchange provider — a different integration from Pocket,
  * exercised by `scripts/smoke/integrationSmoke.ts` and
- * `scripts/smoke/mvpAcceptanceSmoke.ts`. `eventType: "deposit"` with a
- * caller-supplied `externalEventId` still reaches `ExchangeAccount.depositAmount`
- * and `totalDeposits`, which are legacy `Float` columns.
+ * `scripts/smoke/mvpAcceptanceSmoke.ts`, both of which send `eventType` and no
+ * `type` at all. That path is bounded in three ways that matter: it requires the
+ * shared `POSTBACK_SECRET`, it CANNOT bind or move a `PocketTraderIdentity` and
+ * it CANNOT write a `PocketProviderEvent` — so it cannot create canonical Pocket
+ * identity or first-deposit business state — and nothing in the growth layer
+ * reads the legacy `Float` columns it does touch. Every DEP figure the CRO/CMO
+ * surfaces publish comes from `PocketProviderEvent.normalizedAmount` by way of
+ * `GrowthEvent`.
  *
- * That path is deliberately left working rather than broken in an implementation
- * wave, because an accepted integration depends on it and §17 asks that this be
- * checked before deleting anything. It is bounded in three ways that matter
- * here: it requires the shared `POSTBACK_SECRET`, it cannot bind or move a
- * `PocketTraderIdentity`, and NOTHING in the G4 growth layer reads those Float
- * columns — every DEP figure the CRO/CMO surfaces publish comes from
- * `PocketProviderEvent.normalizedAmount` by way of `GrowthEvent`.
- *
- * It is carried to the deep-audit handoff as an open item rather than silently
- * accepted.
+ * §34 of the fix brief asks for an explicit decision per legacy path rather than
+ * a blanket one. This is it: Pocket-shaped types are obsolete here and fail
+ * closed; the non-Pocket sandbox provider keeps its accepted contract.
  */
 function isGrowthV1PostbackType(type: string | undefined): boolean {
-  return type === undefined || type === "Registration" || type === "First Deposit";
+  return type === undefined;
 }

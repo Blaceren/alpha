@@ -14,6 +14,11 @@
 import { AffiliateInputError } from "@/lib/crm/affiliates";
 import { prisma } from "@/lib/prisma";
 import type { GrowthFilters } from "@/lib/growth/analytics/queries";
+import {
+  GROWTH_COVERAGE_SCOPES,
+  GROWTH_DEFAULT_COVERAGE_SCOPE,
+  type GrowthCoverageScope,
+} from "@/lib/growth/analytics/sources";
 
 export const GROWTH_MAX_LIMIT = 100;
 export const GROWTH_DEFAULT_LIMIT = 25;
@@ -26,7 +31,33 @@ export const GROWTH_COMMON_KEYS = [
   "affiliatePartnerId",
   "affiliateCampaignId",
   "trackingLinkId",
+  "scope",
 ] as const;
+
+/**
+ * G4-H4 — the acquisition coverage the caller is asking about.
+ *
+ * A CLOSED ENUM WITH A BUSINESS DEFAULT. `total` when absent, because the
+ * question a staff surface answers by default is "what is happening in the
+ * business", not "what did tracked traffic do". The audited candidate hard-coded
+ * `attributed` on the funnel and Pocket surfaces, so on a dataset with real
+ * learners and no attribution coverage they reported zero — indistinguishable
+ * from a platform with no customers.
+ *
+ * An unknown value is a 400, never a silent fallback: a caller that asked for a
+ * population this API does not have must not be handed a different one.
+ */
+export function parseGrowthScope(params: URLSearchParams): GrowthCoverageScope {
+  const values = params.getAll("scope");
+  if (values.length === 0) return GROWTH_DEFAULT_COVERAGE_SCOPE;
+  if (values.length > 1) throw new AffiliateInputError("crm.analytics.query_duplicated");
+
+  const raw = values[0];
+  if (!(GROWTH_COVERAGE_SCOPES as readonly string[]).includes(raw)) {
+    throw new AffiliateInputError("crm.analytics.scope_invalid");
+  }
+  return raw as GrowthCoverageScope;
+}
 
 function parseId(params: URLSearchParams, key: string): number | undefined {
   const raw = params.get(key);

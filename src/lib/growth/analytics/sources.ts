@@ -72,6 +72,31 @@ export const GROWTH_METRIC_KEYS = [
   "unresolvedRedeposits",
 ] as const;
 
+/**
+ * G4-H3/H4 — the acquisition coverage a request is asking about.
+ *
+ * A TYPED, CLOSED VOCABULARY, NOT A FREE-FORM STRING (§23). Three populations
+ * that are genuinely different questions:
+ *
+ *   `total`      every canonical event, whatever its acquisition origin. This is
+ *                "what is happening in the business".
+ *   `attributed` events whose learner carries a frozen acquisition click. This is
+ *                "what did tracked traffic produce" — the only population in
+ *                which a click-denominated rate means anything.
+ *   `organic`    events whose learner carries no acquisition click at all.
+ *
+ * `total` is the DEFAULT for every business surface. The audited candidate
+ * hard-coded `attributed` on the funnel and the Pocket surfaces, so on a platform
+ * with real learners and no attribution coverage — which is precisely the current
+ * PREPROD — both reported zero. An absence of tracking is not an absence of
+ * business.
+ */
+export const GROWTH_COVERAGE_SCOPES = ["total", "attributed", "organic"] as const;
+
+export type GrowthCoverageScope = (typeof GROWTH_COVERAGE_SCOPES)[number];
+
+export const GROWTH_DEFAULT_COVERAGE_SCOPE: GrowthCoverageScope = "total";
+
 export type GrowthMetricKey = (typeof GROWTH_METRIC_KEYS)[number];
 
 export type GrowthMetricCounts = Record<GrowthMetricKey, number>;
@@ -113,16 +138,96 @@ export const LEDGER_METRIC_EVENT_TYPES = {
  * and a denominator for every metric, and this is where a client reads them.
  */
 export const GROWTH_RATIO_DENOMINATORS = {
-  ataRegistrationRate: { numerator: "ataRegistrations", denominator: "clicks" },
-  activationRate: { numerator: "activatedLearners", denominator: "ataRegistrations" },
-  enrollmentRate: { numerator: "enrollments", denominator: "ataRegistrations" },
-  assessmentPassRate: { numerator: "assessmentsPassed", denominator: "assessmentsCompleted" },
-  reportApprovalRate: { numerator: "reportsApproved", denominator: "reportsSubmitted" },
-  pocketRegistrationRate: { numerator: "pocketRegistrations", denominator: "ataRegistrations" },
-  depositRatePerRegistration: { numerator: "firstDeposits", denominator: "ataRegistrations" },
+  /**
+   * G4-H3 — RENAMED, AND DEFINED ONLY WHERE IT MEANS SOMETHING.
+   *
+   * It used to be `ataRegistrationRate`, computed in every coverage block. In the
+   * `total` block that divided organic-plus-attributed registrations by
+   * tracking-link clicks — two different populations — and the audit measured the
+   * result: `"6.833333"`, a 683% "conversion rate". On PREPROD the arithmetic is
+   * worse, because 40 backfilled registrations against the first tracking click
+   * would read 4000%.
+   *
+   * `clicks` can only ever count traffic that came through a tracking link, so
+   * the numerator must be restricted to learners those clicks could have
+   * produced. The name now says so, and `computeGrowthRatios` returns null for it
+   * outside the `attributed` scope rather than publishing a number.
+   */
+  attributedAtaRegistrationRate: {
+    numerator: "ataRegistrations",
+    denominator: "clicks",
+    /** Only the attributed population has a click denominator. */
+    definedInScopes: ["attributed"] as const,
+  },
+  /**
+   * G4-H3. Published from `computeLearnerFunnelRatios` on a UNIQUE-LEARNER
+   * subset basis, not as an event-count quotient — the two populations are not
+   * nested and the event form reported above 100% on real data. The entry here
+   * documents the shape for the payload's `ratioDenominators` block.
+   */
+  activationRate: {
+    basis: "unique_learners" as const,
+    numerator: "activatedLearners",
+    denominator: "ataRegistrations",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  /**
+   * G4-H3. Published from `computeLearnerFunnelRatios` on a UNIQUE-LEARNER
+   * subset basis, not as an event-count quotient — the two populations are not
+   * nested and the event form reported above 100% on real data. The entry here
+   * documents the shape for the payload's `ratioDenominators` block.
+   */
+  enrollmentRate: {
+    basis: "unique_learners" as const,
+    numerator: "enrollments",
+    denominator: "ataRegistrations",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  assessmentPassRate: {
+    numerator: "assessmentsPassed",
+    denominator: "assessmentsCompleted",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  reportApprovalRate: {
+    numerator: "reportsApproved",
+    denominator: "reportsSubmitted",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  /**
+   * G4-H3. Published from `computeLearnerFunnelRatios` on a UNIQUE-LEARNER
+   * subset basis, not as an event-count quotient — the two populations are not
+   * nested and the event form reported above 100% on real data. The entry here
+   * documents the shape for the payload's `ratioDenominators` block.
+   */
+  pocketRegistrationRate: {
+    basis: "unique_learners" as const,
+    numerator: "pocketRegistrations",
+    denominator: "ataRegistrations",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  /**
+   * G4-H3. Published from `computeLearnerFunnelRatios` on a UNIQUE-LEARNER
+   * subset basis, not as an event-count quotient — the two populations are not
+   * nested and the event form reported above 100% on real data. The entry here
+   * documents the shape for the payload's `ratioDenominators` block.
+   */
+  depositRatePerRegistration: {
+    basis: "unique_learners" as const,
+    numerator: "firstDeposits",
+    denominator: "ataRegistrations",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
+  },
+  /**
+   * G4-H3. Published from `computeLearnerFunnelRatios` on a UNIQUE-LEARNER
+   * subset basis, not as an event-count quotient — the two populations are not
+   * nested and the event form reported above 100% on real data. The entry here
+   * documents the shape for the payload's `ratioDenominators` block.
+   */
   depositRatePerPocketRegistration: {
+    basis: "unique_learners" as const,
     numerator: "firstDeposits",
     denominator: "pocketRegistrations",
+    definedInScopes: GROWTH_COVERAGE_SCOPES,
   },
 } as const;
 
@@ -150,10 +255,60 @@ export type GrowthRatios = Record<GrowthRatioKey, string | null>;
  * `exactRatio` is the accepted helper: BigInt arithmetic, truncated at a fixed
  * scale so a rate is never overstated, and null on a zero denominator.
  */
-export function computeGrowthRatios(counts: GrowthMetricCounts): GrowthRatios {
+/**
+ * G4-H3 — the ratios that are SUBSET FRACTIONS of a learner population.
+ *
+ * These replace the event-count quotients for every step whose numerator is not
+ * drawn from its denominator's population. Each one divides "learners who did
+ * BOTH" by "learners who did the first", so it is a fraction of a set by its own
+ * subset and cannot exceed 1.
+ */
+export function computeLearnerFunnelRatios(funnel: {
+  readonly registeredLearners: number;
+  readonly enrolledLearners: number;
+  readonly activatedLearners: number;
+  readonly pocketRegisteredLearners: number;
+  readonly depositedLearners: number;
+  readonly pocketRegisteredTotal: number;
+  readonly depositedAmongPocketRegistered: number;
+}): Record<string, string | null> {
+  return {
+    enrollmentRate: exactRatio(funnel.enrolledLearners, funnel.registeredLearners),
+    activationRate: exactRatio(funnel.activatedLearners, funnel.registeredLearners),
+    pocketRegistrationRate: exactRatio(funnel.pocketRegisteredLearners, funnel.registeredLearners),
+    depositRatePerRegistration: exactRatio(funnel.depositedLearners, funnel.registeredLearners),
+    depositRatePerPocketRegistration: exactRatio(
+      funnel.depositedAmongPocketRegistered,
+      funnel.pocketRegisteredTotal,
+    ),
+  };
+}
+
+export function computeGrowthRatios(
+  counts: GrowthMetricCounts,
+  scope: GrowthCoverageScope,
+): GrowthRatios {
   return Object.fromEntries(
     (Object.keys(GROWTH_RATIO_DENOMINATORS) as GrowthRatioKey[]).map((key) => {
       const spec = GROWTH_RATIO_DENOMINATORS[key];
+
+      // G4-H3. A ratio that is not defined for this population is NULL, and null
+      // is already this API's word for "not answerable" — the same word a zero
+      // denominator produces. It is deliberately not omitted from the payload:
+      // a missing key reads as a bug, a null reads as an answer.
+      if (!(spec.definedInScopes as readonly string[]).includes(scope)) {
+        return [key, null];
+      }
+
+      // G4-H3. A learner-basis ratio is NEVER computed from event counts here.
+      // Its numerator and denominator populations are not nested — an enrollment
+      // belongs to an enrollment and a registration to a user — so the quotient
+      // is meaningless and reported 158% on real data. `computeLearnerFunnelRatios`
+      // is the only place these are produced.
+      if ("basis" in spec && spec.basis === "unique_learners") {
+        return [key, null];
+      }
+
       return [
         key,
         exactRatio(
@@ -163,4 +318,35 @@ export function computeGrowthRatios(counts: GrowthMetricCounts): GrowthRatios {
       ];
     }),
   ) as GrowthRatios;
+}
+
+/**
+ * G4-H3 (§19) — how much of the business the tracked-acquisition view can see.
+ *
+ * THIS IS A COVERAGE METRIC AND NOT A CONVERSION RATE, and the distinction is the
+ * whole point. `attributedAtaRegistrationRate` asks "of the clicks we bought, how
+ * many registered". This asks "of the registrations we have, how many can we
+ * attribute to a click at all" — a property of ATA's own tracking, not of any
+ * campaign's performance.
+ *
+ * It is what turns the empty attributed funnel from a mystery into a fact: 0 of
+ * 12 registrations attributed is a coverage statement, and a reader who sees it
+ * beside an empty acquisition table knows why the table is empty.
+ *
+ * Both counts come from the SAME population (canonical `ata_reg` events in the
+ * period), so the ratio is a genuine subset fraction and can never exceed 1.
+ */
+export function computeAttributionCoverage(input: {
+  readonly attributedRegistrations: number;
+  readonly totalRegistrations: number;
+}): {
+  readonly attributedRegistrations: number;
+  readonly totalRegistrations: number;
+  readonly attributionCoverageRate: string | null;
+} {
+  return {
+    attributedRegistrations: input.attributedRegistrations,
+    totalRegistrations: input.totalRegistrations,
+    attributionCoverageRate: exactRatio(input.attributedRegistrations, input.totalRegistrations),
+  };
 }

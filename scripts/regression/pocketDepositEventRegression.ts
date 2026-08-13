@@ -95,6 +95,36 @@ async function main() {
   const account = (userId: number) =>
     prisma.exchangeAccount.findUniqueOrThrow({ where: { userId } });
 
+  /**
+   * G4-H5 — the DEVACT-1 claims, addressed to their actual owner.
+   *
+   * These assertions have always been about `processExchangePostbackPayload`:
+   * that it persists no trading balance, that it moves no money without a
+   * provider event identity, and that it is idempotent when it has one. They
+   * used to reach it through the Pocket receiver's `goal=dep` dispatch, which
+   * this wave removed because that path emitted no canonical growth event and
+   * was therefore a shadow money path. The claims are unchanged; only the way
+   * they reach the processor is.
+   */
+  const sendDirect = async (input: {
+    userId: number;
+    clickId: string;
+    amount: number;
+    externalEventId?: string;
+    type?: string;
+  }) =>
+    processor.processExchangePostbackPayload(
+      {
+        type: input.type ?? "First Deposit",
+        userId: input.userId,
+        amount: input.amount,
+        currency: "USD",
+        click_id: input.clickId,
+        ...(input.externalEventId ? { externalEventId: input.externalEventId } : {}),
+      } as never,
+      new Request("https://ata.invalid/direct", { method: "POST" }),
+    );
+
   /** A header-authenticated Pocket event, exactly as the live route accepts it. */
   const sendPocket = (params: Record<string, string>) => {
     const p = new URLSearchParams(params);
@@ -178,12 +208,18 @@ async function main() {
   await check("B3 a deposit with NO provider event id moves no money", async () => {
     const learner = await createLearner();
     const before = await account(learner.userId);
+    // G4-H5 — THE LEGACY HEADER PATH NO LONGER DISPATCHES `goal=dep` AT ALL.
+    //
+    // It used to reach `processExchangePostbackPayload` and move
+    // `ExchangeAccount` Float state while emitting no canonical growth event, so
+    // a real Pocket deposit could be taken on a path the growth ledger never
+    // heard about. `goalToPocketType` now maps only `reg`, and the typed `ow`
+    // contract is the sole Pocket first-deposit intake. The refusal is asserted
+    // here; every DEVACT-1 claim about the PROCESSOR's own behaviour is asserted
+    // directly against the processor below, which is where it always belonged.
     const response = await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "150", playerid: "500100" });
-    // The ROUTE deliberately normalises every accepted postback to a uniform
-    // 200 so an upstream caller cannot probe business outcomes by status code
-    // (PDP-1). The refusal is therefore proven by state, not by the response —
-    // and by the processor's own 202, asserted directly below.
-    assert.equal(response.status, 200, await response.clone().text());
+    assert.equal(response.status, 400, await response.clone().text());
+    assert.equal((await response.clone().json()).error, "UNKNOWN_GOAL");
 
     const direct = await processor.processExchangePostbackPayload(
       {
@@ -206,7 +242,13 @@ async function main() {
 
   await check("B4 the unidentified deposit is still DURABLY RECORDED as evidence", async () => {
     const learner = await createLearner();
-    await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "220", playerid: "500101" });
+    // The receiver refuses `goal=dep` now (G4-H5). The evidence claim belongs to
+    // the processor, so it is made there.
+    assert.equal(
+      (await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "220", playerid: "500101" })).status,
+      400,
+    );
+    await sendDirect({ userId: learner.userId, clickId: learner.clickId, amount: 220 });
     const acct = await account(learner.userId);
     const events = await prisma.postbackEvent.findMany({ where: { exchangeAccountId: acct.id } });
     assert.equal(events.length, 1);
@@ -220,7 +262,12 @@ async function main() {
   await check("B5 repeated unidentified deposits never accumulate a total", async () => {
     const learner = await createLearner();
     for (let i = 0; i < 5; i += 1) {
-      await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "100", playerid: "500102" });
+      assert.equal(
+        (await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "100", playerid: "500102" })).status,
+        400,
+        "the receiver must refuse the legacy deposit goal",
+      );
+      await sendDirect({ userId: learner.userId, clickId: learner.clickId, amount: 100 });
     }
     const acct = await account(learner.userId);
     assert.equal(acct.totalDeposits, 0);
@@ -243,9 +290,9 @@ async function main() {
 
   await check("C1 an identified deposit IS processed and moves historical totals", async () => {
     const learner = await createLearner();
-    const response = await sendPocket({
-      clickid: learner.clickId, goal: "dep", sumdep: "120", playerid: "500200",
-      transaction_id: "pocket-txn-devact1-0001",
+    const response = await sendDirect({
+      userId: learner.userId, clickId: learner.clickId, amount: 120,
+      externalEventId: "pocket-txn-devact1-0001",
     });
     assert.equal(response.status, 200, await response.clone().text());
     const acct = await account(learner.userId);
@@ -257,12 +304,12 @@ async function main() {
   await check("C2 a duplicate delivery of the same event is IDEMPOTENT", async () => {
     const learner = await createLearner();
     const params = {
-      clickid: learner.clickId, goal: "dep", sumdep: "300", playerid: "500201",
-      transaction_id: "pocket-txn-devact1-0002",
+      userId: learner.userId, clickId: learner.clickId, amount: 300,
+      externalEventId: "pocket-txn-devact1-0002",
     };
-    await sendPocket(params);
-    await sendPocket(params);
-    await sendPocket(params);
+    await sendDirect(params);
+    await sendDirect(params);
+    await sendDirect(params);
     const acct = await account(learner.userId);
     assert.equal(acct.totalDeposits, 300, "a duplicate was counted twice");
     const events = await prisma.postbackEvent.count({
@@ -276,9 +323,9 @@ async function main() {
     // identical learner, identical type — distinguished only by the provider's
     // own transaction id.
     const learner = await createLearner();
-    const base = { clickid: learner.clickId, goal: "dep", sumdep: "250", playerid: "500202" };
-    await sendPocket({ ...base, transaction_id: "pocket-txn-devact1-0003-a" });
-    await sendPocket({ ...base, transaction_id: "pocket-txn-devact1-0003-b" });
+    const base = { userId: learner.userId, clickId: learner.clickId, amount: 250 };
+    await sendDirect({ ...base, externalEventId: "pocket-txn-devact1-0003-a" });
+    await sendDirect({ ...base, externalEventId: "pocket-txn-devact1-0003-b" });
     const acct = await account(learner.userId);
     assert.equal(acct.totalDeposits, 500, "two distinct same-amount deposits were merged");
     assert.equal(await prisma.postbackEvent.count({ where: { exchangeAccountId: acct.id } }), 2);
@@ -287,10 +334,10 @@ async function main() {
   await check("C4 concurrent duplicate deliveries are database-safe", async () => {
     const learner = await createLearner();
     const params = {
-      clickid: learner.clickId, goal: "dep", sumdep: "410", playerid: "500203",
-      transaction_id: "pocket-txn-devact1-0004",
+      userId: learner.userId, clickId: learner.clickId, amount: 410,
+      externalEventId: "pocket-txn-devact1-0004",
     };
-    await Promise.all([sendPocket(params), sendPocket(params), sendPocket(params), sendPocket(params)]);
+    await Promise.all([sendDirect(params), sendDirect(params), sendDirect(params), sendDirect(params)]);
     const acct = await account(learner.userId);
     assert.equal(acct.totalDeposits, 410, "a concurrent duplicate double-counted");
     assert.equal(
@@ -318,7 +365,10 @@ async function main() {
   await check("D1 no deposit — identified or not — creates or changes an identity", async () => {
     const learner = await createLearner();
     const before = await prisma.pocketTraderIdentity.count();
-    await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "100", playerid: "500300" });
+    assert.equal(
+      (await sendPocket({ clickid: learner.clickId, goal: "dep", sumdep: "100", playerid: "500300" })).status,
+      400,
+    );
     await sendPocket({ clickid: learner.clickId, goal: "ftd", sumdep: "100", playerid: "500301", transaction_id: "pocket-txn-devact1-0006" });
     await sendPocket({ clickid: learner.clickId, goal: "redep", sumdep: "100", playerid: "500302", transaction_id: "pocket-txn-devact1-0007" });
     assert.equal(await prisma.pocketTraderIdentity.count(), before, "a deposit bound an identity");

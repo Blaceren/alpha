@@ -21,7 +21,10 @@ import {
   isPocketRegIngestEnabled,
 } from "@/lib/growth/ingress-config";
 import { ingestPocketRedeposit } from "@/lib/growth/pocket/redeposit";
-import { recordPocketRegistrationGrowthEvent } from "@/lib/growth/pocket/registration";
+import {
+  bindPocketIdentityCanonical,
+  bindingEstablishedIdentity,
+} from "@/lib/growth/pocket/identity-authority";
 import { recordProviderIngressSafely } from "@/lib/growth/pocket/ingress";
 import {
   POCKET_CALLBACK_AUTH_FAILURE_LIMIT,
@@ -39,7 +42,7 @@ import {
   reconcileFirstDepositAfterRegistration,
 } from "@/lib/exchange/pocketFirstDeposit";
 import { reconcilePocketRegistrationLevelCompletion } from "@/lib/curriculum/pocket-registration-completion";
-import { bindPocketTraderIdentity } from "@/lib/exchange/pocketTraderIdentity";
+import type { PocketIdentityBindResult } from "@/lib/exchange/pocketTraderIdentity";
 import { processExchangePostbackPayload } from "@/lib/exchange/postbackProcessor";
 import type { PocketPostbackType } from "@/lib/exchange/pocket";
 import { prisma } from "@/lib/prisma";
@@ -54,27 +57,35 @@ import { receivePostbackSchema } from "@/lib/validation";
  * `canceled_withdrawal`. Every one of them reached
  * `processExchangePostbackPayload`, which mutates `ExchangeAccount` money state
  * — and the caller chose which by sending a string. One authenticated request
- * could therefore select any financial behaviour the processor implemented. The
- * PROD-readiness audit named this, and §15/§17 of the G4 brief require it
- * corrected in source rather than documented again.
+ * could therefore select any financial behaviour the processor implemented.
  *
- * WHAT REMAINS. Two goals, which are the two this path has an accepted, tested
- * contract for. Nothing that works today stops working.
+ * G4-H5 — WHY `dep` IS NOW GONE TOO. The deep audit proved that a
+ * header-authenticated `goal=dep` reached the legacy `Float` processor, moved
+ * `ExchangeAccount.depositAmount`/`totalDeposits`, wrote a `PostbackEvent`, and
+ * produced NEITHER a `PocketProviderEvent` NOR a canonical `dep` growth event. So
+ * a real Pocket deposit could be taken on a path the growth ledger — and every
+ * DEP figure the CRO/CMO surfaces publish — never heard about. That is the
+ * "shadow money path" §31 of the fix brief forbids.
  *
- * WHY `redep` IS ABSENT FROM THIS MAP. A redeposit on this path would reach the
- * legacy processor, whose money handling is `Float`-based. Redeposits are owned
- * exclusively by the typed Growth V1 handler on the `ow` query contract — which
- * is also the shape Pocket actually sends — and that handler uses exact decimal
- * arithmetic and refuses to emit a canonical event it cannot identify.
+ * It is closed by REMOVAL rather than by re-routing. Routing it into
+ * `ingestPocketFirstDeposit` would have made a legacy header request able to
+ * write canonical provider-event money while `POCKET_DEP_INGEST_ENABLED` was off,
+ * which is a wider capability than the flag contract grants. The typed `ow`
+ * contract — the shape Pocket actually sends — is now the SOLE Pocket
+ * first-deposit intake, it is gated on its own switch, it uses exact decimal
+ * arithmetic, and it always emits the canonical event.
+ *
+ * WHAT REMAINS. One goal: `reg`. It is the only legacy Pocket semantic with an
+ * accepted, tested contract that this receiver still owns, and as of this wave it
+ * runs through the SAME canonical domain authority the `ow` path uses, so it can
+ * no longer bind an identity without projecting it.
  *
  * WHERE WITHDRAWAL AND COMMISSION WENT. Nowhere: `postbackProcessor` still
  * implements them for owners that legitimately need them. What changed is that
- * NO Pocket receiver can reach them, which is exactly §17's "separate them from
- * this trusted Growth V1 receiver".
+ * NO Pocket receiver can reach them.
  */
 const goalToPocketType: Record<string, PocketPostbackType> = {
   reg: "Registration",
-  dep: "First Deposit",
 };
 
 const ROUTE = "/api/postbacks/pocket";
@@ -258,12 +269,33 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
     return fail(400, "INVALID_REGISTRATION");
   }
 
-  const result = await bindPocketTraderIdentity({
+  // G4-H5 — the canonical domain operation. Binding and `pocket_reg` emission are
+  // one operation now, so no receiver can create the binding without the event.
+  //
+  // The ingress evidence row is written BEFORE the binding rather than after, so
+  // the canonical event can name the delivery it arrived on. Evidence is a
+  // measurement and cannot fail the postback (`recordProviderIngressSafely`).
+  const ingress = await recordProviderIngressSafely(prisma, {
+    goal: "reg",
+    params,
+    receivedAt: new Date(),
+    // Provisional: the delivery arrived and validated. Corrected below once the
+    // binding outcome is known.
+    processingStatus: "accepted_processed",
+    playerIdNormalized: fields.playerId,
+    clickId: fields.clickId,
+  });
+
+  const canonical = await bindPocketIdentityCanonical({
     userId: learner.userId,
     pocketUserId: fields.playerId,
     clickId: fields.clickId,
     db: prisma,
+    ingressEventId: ingress?.id ?? null,
   });
+  const result = canonical.binding;
+
+  await settleRegistrationIngress(ingress?.id ?? null, result);
 
   // `bound` and `already_bound` are the two expected outcomes and are silent;
   // everything else is a conflict an operator should be able to see.
@@ -357,38 +389,45 @@ async function handleDirectRegistration(params: URLSearchParams, request: Reques
     await reconcileFirstDepositAfterRegistration(prisma, fields.playerId);
   }
 
-  // G4-GROWTH — durable ingress evidence, then the canonical `pocket_reg` event.
-  //
-  // BOTH RUN LAST AND NEITHER CAN FAIL THE POSTBACK, for the same reason the
-  // deposit reconciliation above cannot: they are measurements of something that
-  // has already legitimately happened. A binding that committed must not be
-  // reported as a failure because the row describing it could not be written.
-  //
-  // Emission is idempotent on the Pocket PLAYER, so a retry after a crash
-  // between the binding and this line produces exactly one event, not two.
-  const ingress = await recordProviderIngressSafely(prisma, {
-    goal: "reg",
-    params,
-    receivedAt: new Date(),
-    processingStatus:
-      result.outcome === "bound"
-        ? "accepted_processed"
-        : result.outcome === "already_bound"
-          ? "accepted_duplicate"
-          : "quarantined",
-    rejectionCode:
-      result.outcome === "bound" || result.outcome === "already_bound"
-        ? null
-        : "player_conflict",
-    playerIdNormalized: fields.playerId,
-    clickId: fields.clickId,
-  });
-
-  if (result.outcome === "bound" || result.outcome === "already_bound") {
-    await recordPocketRegistrationGrowthEvent(prisma, fields.playerId, ingress?.id ?? null);
-  }
+  // G4-H5 — the canonical `pocket_reg` event was emitted by
+  // `bindPocketIdentityCanonical` above, in the same domain operation as the
+  // binding it projects. There is deliberately no second emitter call here: a
+  // receiver that can bind without projecting is the defect this wave closed.
 
   return respond(200, { ok: true });
+}
+
+/**
+ * G4-H5 — record how the registration delivery was finally treated.
+ *
+ * The evidence row is written before the binding so the canonical event can point
+ * at it, which means its status starts optimistic and is corrected here. A failure
+ * to correct it is swallowed for the same reason the write itself is: evidence is
+ * a measurement and must not fail a binding that already committed.
+ */
+async function settleRegistrationIngress(
+  ingressEventId: number | null,
+  result: PocketIdentityBindResult,
+): Promise<void> {
+  if (ingressEventId === null) return;
+
+  const established = bindingEstablishedIdentity(result);
+  try {
+    await prisma.providerIngressEvent.update({
+      where: { id: ingressEventId },
+      data: {
+        processingStatus:
+          result.outcome === "bound"
+            ? "accepted_processed"
+            : result.outcome === "already_bound"
+              ? "accepted_duplicate"
+              : "quarantined",
+        rejectionCode: established ? null : "player_conflict",
+      },
+    });
+  } catch {
+    // Bounded on purpose: a Prisma error can quote the conflicting row.
+  }
 }
 
 /**
@@ -889,6 +928,14 @@ export async function GET(request: Request) {
  * A failure here never fails the postback: the financial event was already
  * accepted and committed, and reversing it because an identity could not be
  * recorded would lose a real event to protect a derived one.
+ *
+ * G4-H5 — THIS IS THE LEGACY HEADER PATH, AND IT NOW PROJECTS. It used to call
+ * `bindPocketTraderIdentity` directly and emit nothing, so a header-authenticated
+ * `goal=reg` created a real `PocketTraderIdentity` that the canonical ledger never
+ * learned about — while migration 47 backfilled `pocket_reg` from exactly those
+ * rows. It calls the same canonical domain operation as the `ow` path now, so both
+ * receivers produce one binding and one event, and the emission is idempotent on
+ * the Pocket player so a delivery arriving on both contracts still yields one.
  */
 async function bindRegistrationIdentity(input: {
   userId: number;
@@ -897,14 +944,19 @@ async function bindRegistrationIdentity(input: {
   request: Request;
 }) {
   try {
-    const result = await bindPocketTraderIdentity({
+    const { binding: result } = await bindPocketIdentityCanonical({
       userId: input.userId,
       pocketUserId: input.pocketUserId,
       clickId: input.clickId,
       db: prisma,
+      // The legacy path writes no `ProviderIngressEvent`: that table is the
+      // Growth V1 ingress evidence contract, and inventing a row for a delivery
+      // this receiver never validated under that contract would put a fact in it
+      // that is not one. The canonical event is still emitted.
+      ingressEventId: null,
     });
 
-    if (result.outcome === "bound" || result.outcome === "already_bound") return;
+    if (bindingEstablishedIdentity(result)) return;
 
     await createAuditLog({
       action: "POCKET_IDENTITY_BINDING_REJECTED",

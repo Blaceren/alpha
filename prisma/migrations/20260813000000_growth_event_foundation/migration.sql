@@ -477,6 +477,11 @@ AND NOT EXISTS (
 -- because that ledger is already the frozen answer to "this learner registered
 -- and this is who acquired them", including for a direct signup whose affiliate
 -- columns are all NULL.
+--
+-- G4-H2 -- THIS IS TIER 1 OF THREE. See the second pass below for the full
+-- population rule. The conversion ledger only ever records a SELF-SERVICE
+-- academy registration, so every row it holds is proven evidence and needs no
+-- further predicate.
 INSERT INTO "GrowthEvent" (
     "eventId", "eventType", "occurredAt", "origin", "userId",
     "acquisitionClickId", "attributionId",
@@ -491,8 +496,12 @@ SELECT
     e."selectedClickId",
     e."attributionId",
     'auth_register',
-    'AffiliateConversionEvent',
-    CAST(e."id" AS TEXT),
+    -- G4-L4. The owner of an `ata_reg` is the USER: that is what the key names
+    -- (`user:<id>`) and what the runtime emitter records as the source entity.
+    -- This pass used to name the conversion-event row instead, so one family had
+    -- two spellings of its own provenance and neither matched the runtime.
+    'User',
+    CAST(e."userId" AS TEXT),
     'user:' || CAST(e."userId" AS TEXT)
 FROM "AffiliateConversionEvent" e
 WHERE e."eventType" = 'academy_registration'
@@ -509,12 +518,53 @@ AND NOT EXISTS (
 -- AFFILIATE_ATTRIBUTION_ENABLED is on, so every learner who registered while it
 -- was off exists with no conversion row. Backfilling only from the ledger would
 -- report those months as having had no registrations at all -- a zero with a
--- business meaning, which §60 forbids.
+-- business meaning.
+--
+-- G4-H2 -- WHAT WAS WRONG, AND WHAT THE POPULATION IS NOW.
+--
+-- This pass used to read `FROM "User"` with NO PREDICATE AT ALL. On PREPROD that
+-- backfilled 44 registrations from 44 accounts, of which NINE were staff: four
+-- admins, three mentors and two support agents. Meanwhile the runtime emitter
+-- fires in exactly one place -- POST /api/auth/register -- so an account created
+-- by /api/admin/users or by the PREPROD QA operator provisioner produces no event
+-- at all. History counted staff as customers, runtime did not, and every ratio
+-- denominated in registrations changed meaning at the cutover instant.
+--
+-- ATA_REG IS A SELF-SERVICE REGISTRATION. Not "a User row exists". So this pass
+-- backfills ONLY where there is authoritative evidence that the account arose
+-- through the self-service registration domain, using two independent artifacts
+-- that ONLY that domain produces:
+--
+--   TIER 2  AuditLog(action = 'AUTH_REGISTER', userId = u.id).
+--           Written by the registration route itself, immediately after the
+--           account commits. Unambiguous, and it OUTRANKS role and staff status:
+--           §14 of the fix brief requires that a staff principal who genuinely
+--           self-registered as a learner is NOT excluded on role alone, and on
+--           PREPROD exactly one such account exists.
+--
+--   TIER 3  NotificationSettings(userId = u.id).
+--           Created INLINE in the same `tx.user.create` call as the account, and
+--           it has been there since `ac4476b`, the sanitized ATA V2 baseline --
+--           so every self-service registration in this codebase's entire history
+--           has one. `/api/admin/users` and the QA operator provisioner create
+--           neither. It is accepted only for accounts with no StaffProfile,
+--           because `/api/me/notification-settings` upserts the same row, so a
+--           staff principal could in principle acquire one by changing their own
+--           settings. Tier 2 covers that case and outranks this one.
+--
+-- WHAT IS DELIBERATELY NOT BACKFILLED. An account with none of the three tiers
+-- of evidence has an origin this database cannot prove. §15 is explicit that
+-- uncertainty must not be recorded as a self-service registration, so no event is
+-- written and the analytics layer declares the coverage limitation instead --
+-- exactly the pattern `mentor_review_submitted` already uses and that the deep
+-- audit named as the model to follow. On PREPROD that class is: 17 seeded
+-- accounts with a password but no NotificationSettings (so not created by the
+-- registration route), 4 accounts with no password at all (the registration route
+-- always sets one), 9 staff-role accounts and 2 further StaffProfile accounts.
 --
 -- The key is identical to the pass above, so a learner covered there cannot be
--- inserted twice: the NOT EXISTS makes it explicit and the unique index would
--- refuse it regardless. occurredAt is the account's own creation time, which is
--- the registration instant by definition.
+-- inserted twice. occurredAt is the account's own creation time, which is the
+-- registration instant by definition.
 INSERT INTO "GrowthEvent" (
     "eventId", "eventType", "occurredAt", "origin", "userId",
     "sourceOwner", "sourceEntityType", "sourceEntityId", "sourceEventId"
@@ -530,7 +580,30 @@ SELECT
     CAST(u."id" AS TEXT),
     'user:' || CAST(u."id" AS TEXT)
 FROM "User" u
-WHERE NOT EXISTS (
+-- G4-H6 -- SET-BASED, NOT CORRELATED, AND THE DIFFERENCE IS QUADRATIC.
+--
+-- Written as `EXISTS (SELECT 1 FROM "AuditLog" a WHERE a."userId" = u."id" ...)`
+-- this predicate cost 3.5 seconds of the 10.4-second backfill at 16k learners,
+-- because `AuditLog` carries no index on `userId` or `action`, so the plan was
+-- `CORRELATED SCALAR SUBQUERY -> SCAN a`: one full scan of the audit log FOR EVERY
+-- USER ROW. That is O(users x auditRows) and it degrades quadratically, which is
+-- exactly the shape a bigger timeout would have hidden rather than fixed.
+--
+-- `IN (SELECT ...)` lets SQLite build one transient index over each set and probe
+-- it per user, so every source table is read ONCE. Migration 47 deliberately
+-- alters no existing table, so adding an index to `AuditLog` was not an option
+-- here -- and it is not needed: the set-based form is index-independent.
+WHERE (
+    u."id" IN (
+        SELECT a."userId" FROM "AuditLog" a
+        WHERE a."action" = 'AUTH_REGISTER' AND a."userId" IS NOT NULL
+    )
+    OR (
+        u."id" IN (SELECT ns."userId" FROM "NotificationSettings" ns)
+        AND u."id" NOT IN (SELECT sp."userId" FROM "StaffProfile" sp)
+    )
+)
+AND NOT EXISTS (
     SELECT 1 FROM "GrowthEvent" g
     WHERE g."eventType" = 'ata_reg'
       AND g."sourceOwner" = 'auth_register'
@@ -562,6 +635,35 @@ WHERE NOT EXISTS (
 );
 
 -- level_started.
+--
+-- G4-H1 -- A PROGRESS ROW IS NOT A START, AND ONE FAMILY PROVES IT.
+--
+-- This pass used to backfill a `level_started` for EVERY `UserLevelProgress` row.
+-- Three code paths create those rows and only one of them is a start:
+--
+--   * level-state.ts `runStartTransaction` -- the learner (or the trusted Pocket
+--     registration reconciliation acting for them) explicitly starts the current
+--     level. This is a real start transition and it emits `level_started`.
+--
+--   * checkpoint-verification.ts -- a FINANCIAL CHECKPOINT verification reached
+--     `met`. It creates the `in_progress` row the completion primitive requires
+--     and hands straight over. It is scaffolding created in the same breath as
+--     the completion, not a start.
+--
+--   * staging-attestation.ts -- an OPERATOR attests a financial checkpoint, with
+--     `actorId: null` precisely because the learner did not do it. Same shape.
+--
+-- The domain settles it: `runStartTransaction` REFUSES a financial checkpoint
+-- outright (`LEVEL_START_CHECKPOINT_UNVERIFIED` -- "it is not a learning level,
+-- it cannot be started"), and both non-start creators operate EXCLUSIVELY on
+-- financial checkpoint levels. So a progress row on a `financial_checkpoint`
+-- level was never explicitly started, and inventing a start for it would be a
+-- false product history -- which §7 of the fix brief forbids more strongly than
+-- it wants a tidy chart.
+--
+-- Excluding them here is what makes the backfill agree with the runtime, and it
+-- is what stops a per-level completion rate exceeding 100%. The rate itself is
+-- additionally computed as a subset ratio -- see analytics/queries.ts.
 INSERT INTO "GrowthEvent" (
     "eventId", "eventType", "occurredAt", "origin", "userId", "enrollmentId",
     "levelDefinitionId", "levelNumber",
@@ -583,7 +685,8 @@ SELECT
 FROM "UserLevelProgress" p
 JOIN "UserCurriculumEnrollment" en ON en."id" = p."enrollmentId"
 JOIN "LevelDefinition" ld ON ld."id" = p."levelDefinitionId"
-WHERE NOT EXISTS (
+WHERE ld."type" <> 'financial_checkpoint'
+AND NOT EXISTS (
     SELECT 1 FROM "GrowthEvent" existing
     WHERE existing."eventType" = 'level_started'
       AND existing."sourceOwner" = 'curriculum_level_progress'
@@ -901,7 +1004,31 @@ AND NOT EXISTS (
 -- can replay history rather than starting from whatever happened to be next.
 -- availableAt is the event's own occurrence time, so a dispatcher that ever runs
 -- processes reconstructed history in the order it actually happened.
+--
+-- G4-M1 -- THIS STATEMENT USED TO BE THE ONE UNGUARDED ONE.
+--
+-- The previous wave claimed "every backfill statement is guarded, so the
+-- migration is deterministic under replay". Fourteen of fifteen were. This one
+-- had no NOT EXISTS, so replaying the backfill against a database that already
+-- held backfilled rows failed with
+-- `UNIQUE constraint failed: GrowthEventOutbox.growthEventId`. The shipped
+-- integration test could not see it because its fixture was migrated while empty,
+-- so the backfill produced nothing and its single replay had nothing to collide
+-- with -- it stopped exactly one iteration short.
+--
+-- The transaction masked the defect for the migration runner. It did NOT mask it
+-- for the thing the guards exist for: re-running the backfill logic to REBUILD
+-- the projection after an event was lost. That repair aborted here.
+--
+-- The guard is on `growthEventId`, which is the outbox's own unique key, so a
+-- replay skips exactly the items it already created and still creates the ones it
+-- has not. It does not weaken anything: the unique index, the foreign key and the
+-- event relationship all remain, so an outbox row pointing at a conflicting event
+-- is still refused rather than silently accepted.
 INSERT INTO "GrowthEventOutbox" ("growthEventId", "eventType", "availableAt")
 SELECT g."id", g."eventType", g."occurredAt"
 FROM "GrowthEvent" g
-WHERE g."origin" = 'backfill';
+WHERE g."origin" = 'backfill'
+AND NOT EXISTS (
+    SELECT 1 FROM "GrowthEventOutbox" o WHERE o."growthEventId" = g."id"
+);

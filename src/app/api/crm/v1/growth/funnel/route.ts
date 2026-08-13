@@ -9,8 +9,18 @@ import {
   serializePeriod,
 } from "@/lib/analytics/routes";
 import { assertKnownAnalyticsKeys, parsePeriodInput } from "@/lib/analytics/request";
-import { GROWTH_ANALYTICS_MODE } from "@/lib/growth/analytics/sources";
-import { loadGrowthCounts, loadLevelFunnel } from "@/lib/growth/analytics/queries";
+import {
+  GROWTH_ANALYTICS_MODE,
+  GROWTH_DEFAULT_COVERAGE_SCOPE,
+  computeAttributionCoverage,
+  computeLearnerFunnelRatios,
+} from "@/lib/growth/analytics/sources";
+import {
+  countLedgerEvents,
+  loadGrowthCounts,
+  loadLearnerFunnel,
+  loadLevelFunnel,
+} from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
   buildGrowthAvailability,
@@ -20,6 +30,7 @@ import {
   assertGrowthFilterHierarchy,
   parseFunnelMaxLevel,
   parseGrowthFilters,
+  parseGrowthScope,
 } from "@/lib/growth/analytics/request";
 
 export const dynamic = "force-dynamic";
@@ -55,13 +66,20 @@ export async function GET(request: Request) {
     await assertGrowthFilterHierarchy(filters);
     const period = resolvePeriod(parsePeriodInput(params), timezone, now);
     const maxLevel = parseFunnelMaxLevel(params);
+    // G4-H4. `total` unless the caller asks otherwise. See parseGrowthScope.
+    const scope = parseGrowthScope(params);
 
     const window = { start: period.startUtc ?? new Date(0), end: period.endUtc };
 
-    const [counts, levels] = await Promise.all([
-      loadGrowthCounts(prisma, window, filters, "attributed"),
-      loadLevelFunnel(prisma, window, filters, "attributed", maxLevel),
-    ]);
+    const [counts, levels, learners, attributedRegistrations, totalRegistrations] =
+      await Promise.all([
+        loadGrowthCounts(prisma, window, filters, scope),
+        loadLevelFunnel(prisma, window, filters, scope, maxLevel),
+        loadLearnerFunnel(prisma, window, filters, scope),
+        countLedgerEvents(prisma, window, filters, "attributed", "ata_reg"),
+        countLedgerEvents(prisma, window, filters, "total", "ata_reg"),
+      ]);
+    const learnerRates = computeLearnerFunnelRatios(learners);
 
     // Each step states its own denominator, and the accepted exact-decimal
     // helper computes it: `null` — never zero — when that denominator is zero,
@@ -69,41 +87,60 @@ export async function GET(request: Request) {
     const rate = exactRatio;
 
     const acquisitionSteps = [
-      { step: "click", count: counts.clicks, ofStep: null, rate: null, dropOff: null },
+      { step: "click", count: counts.clicks, learners: null, ofStep: null, ofLearners: null, rate: null, dropOff: null },
       {
         step: "ata_registration",
         count: counts.ataRegistrations,
-        ofStep: "click",
-        rate: rate(counts.ataRegistrations, counts.clicks),
-        dropOff: counts.clicks - counts.ataRegistrations,
+        learners: learners.registeredLearners,
+        ofLearners: scope === "attributed" ? counts.clicks : null,
+        // G4-H3. A click denominator only exists for the attributed population.
+        // In `total` and `organic` the numerator contains learners no tracking
+        // link could have produced, so the step states that it has no rate here
+        // rather than publishing one that reads above 100%.
+        ofStep: scope === "attributed" ? "click" : null,
+        rate: scope === "attributed" ? rate(counts.ataRegistrations, counts.clicks) : null,
+        dropOff: scope === "attributed" ? counts.clicks - counts.ataRegistrations : null,
       },
+      // G4-H3. `count` is the EVENT count — "19 enrollments happened" is true and
+      // useful. `rate` is a UNIQUE-LEARNER SUBSET fraction of the registered
+      // population, because the event quotient divided two populations that are
+      // not nested and reported 158% on real PREPROD data. `learners` names the
+      // numerator's own basis so the two can never be confused.
       {
         step: "enrollment",
         count: counts.enrollments,
+        learners: learners.enrolledLearners,
         ofStep: "ata_registration",
-        rate: rate(counts.enrollments, counts.ataRegistrations),
-        dropOff: counts.ataRegistrations - counts.enrollments,
+        ofLearners: learners.registeredLearners,
+        rate: learnerRates.enrollmentRate,
+        dropOff: learners.registeredLearners - learners.enrolledLearners,
       },
       {
         step: "academy_activation",
         count: counts.activatedLearners,
-        ofStep: "enrollment",
-        rate: rate(counts.activatedLearners, counts.enrollments),
-        dropOff: counts.enrollments - counts.activatedLearners,
+        learners: learners.activatedLearners,
+        ofStep: "ata_registration",
+        ofLearners: learners.registeredLearners,
+        rate: learnerRates.activationRate,
+        dropOff: learners.registeredLearners - learners.activatedLearners,
       },
       {
         step: "pocket_registration",
         count: counts.pocketRegistrations,
-        ofStep: "academy_activation",
-        rate: rate(counts.pocketRegistrations, counts.activatedLearners),
-        dropOff: counts.activatedLearners - counts.pocketRegistrations,
+        learners: learners.pocketRegisteredLearners,
+        ofStep: "ata_registration",
+        ofLearners: learners.registeredLearners,
+        rate: learnerRates.pocketRegistrationRate,
+        dropOff: learners.registeredLearners - learners.pocketRegisteredLearners,
       },
       {
         step: "first_deposit",
         count: counts.firstDeposits,
+        learners: learners.depositedAmongPocketRegistered,
         ofStep: "pocket_registration",
-        rate: rate(counts.firstDeposits, counts.pocketRegistrations),
-        dropOff: counts.pocketRegistrations - counts.firstDeposits,
+        ofLearners: learners.pocketRegisteredTotal,
+        rate: learnerRates.depositRatePerPocketRegistration,
+        dropOff: learners.pocketRegisteredTotal - learners.depositedAmongPocketRegistered,
       },
     ];
 
@@ -118,10 +155,24 @@ export async function GET(request: Request) {
           trackingLinkId: filters.trackingLinkId ?? null,
         },
         maxLevel,
+        scope,
+        defaultScope: GROWTH_DEFAULT_COVERAGE_SCOPE,
+        // G4-H4. How much of the business the attributed view can see, so an
+        // empty acquisition table is readable as a coverage fact rather than as
+        // an absence of customers. Always computed on the TOTAL population, so it
+        // is a genuine subset fraction whatever scope was requested.
+        attributionCoverage: computeAttributionCoverage({
+          attributedRegistrations,
+          totalRegistrations,
+        }),
         acquisitionFunnel: {
           // Stated explicitly so a client cannot assume the previous row is the
           // denominator when a step is filtered out of a chart.
           denominatorModel: "each_step_states_its_own_ofStep",
+          // G4-H3. `count` is events, `learners` is distinct learners, and every
+          // `rate` divides `learners` by `ofLearners` — a subset of a set it is
+          // drawn from, so no rate can exceed 1.
+          rateBasis: "unique_learners_subset_of_ofStep",
           steps: acquisitionSteps,
         },
         levelFunnel: {
@@ -129,9 +180,23 @@ export async function GET(request: Request) {
           // deliberately not the same as a level with zero, and the client is
           // told which it is looking at rather than left to guess.
           absentMeans: "no_events_in_period",
+          // G4-H1. Counts are DISTINCT enrollment+level pairs, not events, and
+          // the rate is a subset fraction of the started set — so it cannot
+          // exceed 100% by construction rather than by clamping.
+          countBasis: "distinct_enrollment_level_pairs",
+          rateDefinition:
+            "startedCompletionRate = startedAndCompletedLearners / startedLearners. " +
+            "Both are drawn from the same set, so the rate is always between 0 and 1. " +
+            "completedLearners counts every completion in the period, including " +
+            "financial-checkpoint levels that cannot be started and therefore have " +
+            "no start event — those are reported as completedWithoutStartLearners " +
+            "and are never used as a numerator over starts.",
           steps: levels.map((level) => ({
             ...level,
-            completionRate: rate(level.completed, level.started),
+            startedCompletionRate: rate(
+              level.startedAndCompletedLearners,
+              level.startedLearners,
+            ),
           })),
         },
         educationQuality: {

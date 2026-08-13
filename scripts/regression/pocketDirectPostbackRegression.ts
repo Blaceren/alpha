@@ -484,13 +484,23 @@ async function main() {
   /* G. Legacy events never touch identity                               */
   /* ------------------------------------------------------------------ */
 
-  await check("G1 a header-authenticated deposit creates no identity", async () => {
+  await check("G1 a header-authenticated deposit is refused and creates no identity", async () => {
+    // G4-H5 — STRONGER THAN IT WAS. This used to assert that a legacy
+    // header-authenticated `goal=dep` was ACCEPTED (200) and merely did not bind
+    // an identity. It was accepted straight into the legacy `Float` processor
+    // while emitting no canonical growth event, so a real Pocket deposit could
+    // move money on a path the growth ledger never heard about.
+    //
+    // `goalToPocketType` maps only `reg` now, so the deposit goal is refused at
+    // the receiver. The original claim — no identity — still holds, and is still
+    // asserted.
     const learner = await createLearner();
     const r = await send({
       clickid: learner.clickId, goal: "dep", playerid: nextPlayerId(),
       extra: { sum: "100", event_id: "pdp1-dep-1" }, header: SECRET,
     });
-    assert.equal(r.status, 200);
+    assert.equal(r.status, 400, await r.clone().text());
+    assert.equal((await r.clone().json()).error, "UNKNOWN_GOAL");
     assert.equal(await bindingFor(learner.userId), null);
   });
 

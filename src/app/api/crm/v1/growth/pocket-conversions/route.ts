@@ -8,7 +8,10 @@ import {
   serializePeriod,
 } from "@/lib/analytics/routes";
 import { assertKnownAnalyticsKeys, parsePeriodInput } from "@/lib/analytics/request";
-import { GROWTH_ANALYTICS_MODE } from "@/lib/growth/analytics/sources";
+import {
+  GROWTH_ANALYTICS_MODE,
+  GROWTH_DEFAULT_COVERAGE_SCOPE,
+} from "@/lib/growth/analytics/sources";
 import {
   countLedgerEvents,
   countUnresolvedRedeposits,
@@ -19,6 +22,7 @@ import {
   GROWTH_COMMON_KEYS,
   assertGrowthFilterHierarchy,
   parseGrowthFilters,
+  parseGrowthScope,
 } from "@/lib/growth/analytics/request";
 
 export const dynamic = "force-dynamic";
@@ -58,15 +62,20 @@ export async function GET(request: Request) {
     const filters = parseGrowthFilters(params);
     await assertGrowthFilterHierarchy(filters);
     const period = resolvePeriod(parsePeriodInput(params), timezone, now);
+    // G4-H4. `total` by default. Pocket registrations and deposits are business
+    // facts whether or not ATA can attribute the learner to a tracking link, and
+    // the audited candidate made all nine of PREPROD's Pocket registrations
+    // disappear by hard-coding `attributed` here.
+    const scope = parseGrowthScope(params);
     const window = { start: period.startUtc ?? new Date(0), end: period.endUtc };
 
     const [pocketRegistrations, firstDeposits, confirmedRedeposits, unresolvedRedeposits, amounts] =
       await Promise.all([
-        countLedgerEvents(prisma, window, filters, "attributed", "pocket_reg"),
-        countLedgerEvents(prisma, window, filters, "attributed", "dep"),
-        countLedgerEvents(prisma, window, filters, "attributed", "rdep"),
+        countLedgerEvents(prisma, window, filters, scope, "pocket_reg"),
+        countLedgerEvents(prisma, window, filters, scope, "dep"),
+        countLedgerEvents(prisma, window, filters, scope, "rdep"),
         countUnresolvedRedeposits(prisma, window),
-        loadFirstDepositAmounts(prisma, window, filters, "attributed"),
+        loadFirstDepositAmounts(prisma, window, filters, scope),
       ]);
 
     return NextResponse.json(
@@ -78,6 +87,8 @@ export async function GET(request: Request) {
           affiliateCampaignId: filters.affiliateCampaignId ?? null,
           trackingLinkId: filters.trackingLinkId ?? null,
         },
+        scope,
+        defaultScope: GROWTH_DEFAULT_COVERAGE_SCOPE,
         conversions: {
           pocketRegistrations,
           firstDeposits,
@@ -91,6 +102,11 @@ export async function GET(request: Request) {
             "Deliveries received and validated. NOT counted as money because Pocket " +
             "supplies no unique event identifier, so a retry cannot be told apart " +
             "from a genuine second deposit. This is not a count of zero redeposits.",
+          // G4-M3. ProviderIngressEvent carries no acquisition linkage, so this
+          // count cannot be narrowed to a campaign or a coverage scope. Saying so
+          // is the honest alternative to silently reporting a platform-wide
+          // number inside a filtered slice, which is what it used to do.
+          unresolvedRedepositsScope: "platform_wide_not_filtered",
         },
         firstDepositAmount: amounts,
         totalDepositAmountNote:

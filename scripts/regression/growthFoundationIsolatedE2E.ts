@@ -318,7 +318,7 @@ async function main() {
     // Campaign A's deposit rate is a real zero — it had registrations that did
     // not convert. That is NOT the same as null, and the distinction is §60.
     const { computeGrowthRatios } = await import("@/lib/growth/analytics/sources");
-    const aRatios = computeGrowthRatios(aCounts);
+    const aRatios = computeGrowthRatios(aCounts, "attributed");
     check(
       "a real zero rate is 0, not null, when the denominator exists",
       aRatios.depositRatePerRegistration !== null &&
@@ -332,7 +332,7 @@ async function main() {
       {},
       "attributed",
     );
-    const emptyRatios = computeGrowthRatios(emptyCounts);
+    const emptyRatios = computeGrowthRatios(emptyCounts, "attributed");
     check(
       "an absent denominator gives null, never 0",
       emptyRatios.depositRatePerRegistration === null,
@@ -454,16 +454,18 @@ async function main() {
         userId: organic.id,
       }),
     );
-    const unattributed = await loadGrowthCounts(prisma, period, {}, "unattributed");
+    // G4-H4: the scope is named `organic` now. Same population, one vocabulary
+    // across the query layer, the API, the metric registry and the CRM.
+    const organicSlice = await loadGrowthCounts(prisma, period, {}, "organic");
     check(
-      "an organic registration appears in the unattributed slice",
-      unattributed.ataRegistrations === 1,
-      String(unattributed.ataRegistrations),
+      "an organic registration appears in the organic slice",
+      organicSlice.ataRegistrations === 1,
+      String(organicSlice.ataRegistrations),
     );
     check(
-      "and the unattributed slice reports zero clicks by construction",
-      unattributed.clicks === 0,
-      String(unattributed.clicks),
+      "and the organic slice reports zero clicks by construction",
+      organicSlice.clicks === 0,
+      String(organicSlice.clicks),
     );
 
     // ---- 9. append-only: the ledger has no update path --------------------
@@ -510,8 +512,15 @@ async function main() {
 
     const beforeReplay = await prisma.growthEvent.count();
 
-    for (const statement of backfillStatements) {
-      await prisma.$executeRawUnsafe(statement);
+    // G4-M1 / fix-wave §100. TWICE, deliberately. The previous version replayed
+    // once against a fixture whose backfill had produced nothing, so the
+    // unguarded outbox statement had nothing to collide with and the defect it
+    // appeared to cover was one iteration away. The second pass is the test.
+    for (const pass of [1, 2]) {
+      for (const statement of backfillStatements) {
+        await prisma.$executeRawUnsafe(statement);
+      }
+      void pass;
     }
 
     const afterReplay = await prisma.growthEvent.count();

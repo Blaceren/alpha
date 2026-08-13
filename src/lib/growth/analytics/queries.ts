@@ -23,6 +23,7 @@ import {
   GROWTH_METRIC_KEYS,
   LEDGER_METRIC_EVENT_TYPES,
   ZERO_GROWTH_COUNTS,
+  type GrowthCoverageScope,
   type GrowthMetricCounts,
 } from "@/lib/growth/analytics/sources";
 
@@ -82,21 +83,28 @@ function clickWhere(filters: GrowthFilters): Prisma.AffiliateClickWhereInput {
   return where;
 }
 
-export type CoverageScope = "attributed" | "unattributed" | "total";
+/**
+ * G4-H3/H4 — the coverage vocabulary, defined once in `sources.ts`.
+ *
+ * `unattributed` was renamed to `organic` so the API, the query layer, the metric
+ * registry and the CRM all use one word for one population. The semantics are
+ * unchanged: `acquisitionClickId IS NULL`.
+ */
+export type CoverageScope = GrowthCoverageScope;
 
 /**
  * Turn filters plus a coverage scope into the ledger-side acquisition predicate.
  *
- * `unattributed` is `acquisitionClickId IS NULL`, and it is a FIRST-CLASS
- * category rather than a residual. A learner who arrived organically is a real
- * learner, and a funnel that silently omitted them would report a registration
- * total smaller than the platform's own user count with no visible reason.
+ * `organic` is `acquisitionClickId IS NULL`, and it is a FIRST-CLASS category
+ * rather than a residual. A learner who arrived organically is a real learner,
+ * and a funnel that silently omitted them would report a registration total
+ * smaller than the platform's own user count with no visible reason.
  */
 function ledgerAcquisitionWhere(
   filters: GrowthFilters,
   scope: CoverageScope,
 ): Prisma.GrowthEventWhereInput {
-  if (scope === "unattributed") return { acquisitionClickId: null };
+  if (scope === "organic") return { acquisitionClickId: null };
 
   const click = clickWhere(filters);
   const filtered = Object.keys(click).length > 0;
@@ -107,9 +115,9 @@ function ledgerAcquisitionWhere(
       : { acquisitionClickId: { not: null } };
   }
 
-  // `total` with filters cannot include unattributed rows: events belonging to
-  // nobody cannot belong to the campaign that was asked about. Returning them
-  // anyway would answer a question the caller did not pose.
+  // `total` with filters cannot include organic rows: events belonging to nobody
+  // cannot belong to the campaign that was asked about. Returning them anyway
+  // would answer a question the caller did not pose.
   return filtered ? { acquisitionClick: click } : {};
 }
 
@@ -120,10 +128,10 @@ export async function countClicks(
   filters: GrowthFilters,
   scope: CoverageScope,
 ): Promise<number> {
-  // An unattributed slice has no clicks BY CONSTRUCTION: a click is the thing
-  // that creates attribution, so "clicks with no acquisition click" is not a
-  // small number, it is a category error. Zero here is exact, not a placeholder.
-  if (scope === "unattributed") return 0;
+  // An organic slice has no clicks BY CONSTRUCTION: a click is the thing that
+  // creates attribution, so "clicks with no acquisition click" is not a small
+  // number, it is a category error. Zero here is exact, not a placeholder.
+  if (scope === "organic") return 0;
 
   return db.affiliateClick.count({
     where: {
@@ -235,65 +243,243 @@ export async function loadGrowthCounts(
 
 export type LevelFunnelStep = {
   readonly levelNumber: number;
-  readonly started: number;
-  readonly completed: number;
+  /** Distinct enrollment+level pairs with a real source-owned START in the period. */
+  readonly startedLearners: number;
+  /** Distinct enrollment+level pairs with a durable COMPLETION in the period. */
+  readonly completedLearners: number;
+  /**
+   * The subset of `startedLearners` that went on to complete, ever. A subset, so
+   * `startedAndCompletedLearners <= startedLearners` always holds.
+   */
+  readonly startedAndCompletedLearners: number;
+  /**
+   * Completions in the period whose progress row has NO start event at all —
+   * the financial-checkpoint family, which cannot be started. Published so the
+   * difference between the two completion figures is visible rather than
+   * mysterious, never folded into a rate.
+   */
+  readonly completedWithoutStartLearners: number;
 };
 
 /**
- * The per-level funnel.
+ * G4-H1 — the per-level funnel, on a UNIQUE-ENTITY basis with a subset rate.
  *
- * ONE GROUPED QUERY PER EVENT TYPE, not one query per level. A hundred-level
- * curriculum would otherwise mean two hundred round trips per dashboard load,
- * and the index `(eventType, levelNumber, occurredAt)` exists precisely so this
- * grouping is cheap.
+ * WHAT WAS WRONG. The audited version published
+ * `completionRate = level_completed events / level_started events`. Those are two
+ * different populations: `runStartTransaction` REFUSES to start a financial
+ * checkpoint, while checkpoint verification and staging attestation both complete
+ * one. So a level could report more completions than starts, and the audit
+ * measured it — L1 started=4, completed=5, `completionRate: "1.250000"`, a 125%
+ * completion rate, with the per-step drop-off going negative.
  *
- * A LEVEL WITH NO EVENTS IS ABSENT FROM THE RESULT, not present as zero. The
- * caller decides whether "no learner reached L47 in this period" should render
- * as a zero row or as nothing at all — a query should not make that editorial
- * choice on its behalf.
+ * WHAT IS PUBLISHED NOW. Four counts on an explicit unique-entity basis, and one
+ * rate that is a genuine subset fraction:
+ *
+ *   startedLearners              distinct progress rows started in the period
+ *   completedLearners            distinct progress rows completed in the period
+ *   startedAndCompletedLearners  of those STARTED in the period, how many ever
+ *                                completed — a subset of `startedLearners`
+ *   completedWithoutStartLearners completions whose progress row has no start
+ *
+ *   startedCompletionRate = startedAndCompletedLearners / startedLearners
+ *
+ * Because the numerator is drawn from the denominator's own set, the rate cannot
+ * exceed 1 by construction rather than by clamping. `completedLearners` is still
+ * published — "how many levels were finished this period" is a real question —
+ * but it is never a numerator over starts.
+ *
+ * THE UNIQUE KEY IS THE PROGRESS ROW. Both families key on `progress:<id>`, and
+ * `UserLevelProgress` is already unique per (enrollment, level), so counting
+ * distinct `sourceEventId` counts distinct enrollment+level pairs exactly.
+ *
+ * ONE STATEMENT, NOT ONE PER LEVEL. `Prisma.sql` composition, fully
+ * parameterised: every value below is a bound parameter and no identifier,
+ * column, table or ORDER BY comes from a caller. `scope` and `filters` are
+ * already-validated enum members and integers by the time they arrive.
  */
 export async function loadLevelFunnel(
-  db: Pick<PrismaClient, "growthEvent">,
+  db: Pick<PrismaClient, "$queryRaw">,
   period: GrowthPeriod,
   filters: GrowthFilters,
   scope: CoverageScope,
   maxLevel: number,
 ): Promise<LevelFunnelStep[]> {
-  const base: Prisma.GrowthEventWhereInput = {
-    occurredAt: { gte: period.start, lt: period.end },
-    levelNumber: { not: null, lte: maxLevel },
-    ...ledgerAcquisitionWhere(filters, scope),
+  const acquisition = levelFunnelAcquisitionSql(filters, scope);
+
+  const rows = await db.$queryRaw<
+    Array<{
+      levelNumber: number;
+      startedLearners: number | bigint;
+      completedLearners: number | bigint;
+      startedAndCompletedLearners: number | bigint;
+      completedWithoutStartLearners: number | bigint;
+    }>
+  >(Prisma.sql`
+    SELECT
+      g."levelNumber" AS "levelNumber",
+      COUNT(DISTINCT CASE WHEN g."eventType" = 'level_started'
+                          THEN g."sourceEventId" END) AS "startedLearners",
+      COUNT(DISTINCT CASE WHEN g."eventType" = 'level_completed'
+                          THEN g."sourceEventId" END) AS "completedLearners",
+      COUNT(DISTINCT CASE WHEN g."eventType" = 'level_started' AND EXISTS (
+                            SELECT 1 FROM "GrowthEvent" c
+                            WHERE c."eventType" = 'level_completed'
+                              AND c."sourceOwner" = g."sourceOwner"
+                              AND c."sourceEventId" = g."sourceEventId")
+                          THEN g."sourceEventId" END) AS "startedAndCompletedLearners",
+      COUNT(DISTINCT CASE WHEN g."eventType" = 'level_completed' AND NOT EXISTS (
+                            SELECT 1 FROM "GrowthEvent" s
+                            WHERE s."eventType" = 'level_started'
+                              AND s."sourceOwner" = g."sourceOwner"
+                              AND s."sourceEventId" = g."sourceEventId")
+                          THEN g."sourceEventId" END) AS "completedWithoutStartLearners"
+    FROM "GrowthEvent" g
+    WHERE g."eventType" IN ('level_started', 'level_completed')
+      AND g."occurredAt" >= ${period.start}
+      AND g."occurredAt" < ${period.end}
+      AND g."levelNumber" IS NOT NULL
+      AND g."levelNumber" <= ${maxLevel}
+      ${acquisition}
+    GROUP BY g."levelNumber"
+    ORDER BY g."levelNumber" ASC
+  `);
+
+  return rows.map((row) => ({
+    levelNumber: Number(row.levelNumber),
+    startedLearners: Number(row.startedLearners),
+    completedLearners: Number(row.completedLearners),
+    startedAndCompletedLearners: Number(row.startedAndCompletedLearners),
+    completedWithoutStartLearners: Number(row.completedWithoutStartLearners),
+  }));
+}
+
+/**
+ * The acquisition predicate for the level funnel, as a composable SQL fragment.
+ *
+ * Mirrors `ledgerAcquisitionWhere` exactly, so the funnel and every counted
+ * metric agree about what a scope and a campaign mean. Filter ids are bound
+ * parameters — `parseGrowthFilters` has already refused anything that is not a
+ * positive safe integer, and `assertGrowthFilterHierarchy` has already proved
+ * each one exists.
+ */
+function levelFunnelAcquisitionSql(
+  filters: GrowthFilters,
+  scope: CoverageScope,
+): Prisma.Sql {
+  if (scope === "organic") return Prisma.sql` AND g."acquisitionClickId" IS NULL`;
+
+  const conditions: Prisma.Sql[] = [];
+  if (filters.trackingLinkId !== undefined) {
+    conditions.push(Prisma.sql`c."trackingLinkId" = ${filters.trackingLinkId}`);
+  }
+  if (filters.affiliatePartnerId !== undefined) {
+    conditions.push(Prisma.sql`l."affiliatePartnerId" = ${filters.affiliatePartnerId}`);
+  }
+  if (filters.affiliateCampaignId !== undefined) {
+    conditions.push(Prisma.sql`l."affiliateCampaignId" = ${filters.affiliateCampaignId}`);
+  }
+
+  if (conditions.length === 0) {
+    // Unfiltered: `attributed` needs a click, `total` accepts everything.
+    return scope === "attributed"
+      ? Prisma.sql` AND g."acquisitionClickId" IS NOT NULL`
+      : Prisma.empty;
+  }
+
+  return Prisma.sql` AND g."acquisitionClickId" IN (
+    SELECT c."id" FROM "AffiliateClick" c
+    JOIN "AffiliateTrackingLink" l ON l."id" = c."trackingLinkId"
+    WHERE ${Prisma.join(conditions, " AND ")}
+  )`;
+}
+
+export type LearnerFunnel = {
+  /** Distinct learners with a canonical `ata_reg` in the period. */
+  readonly registeredLearners: number;
+  /** Of those, how many also enrolled / activated / registered with Pocket / deposited. */
+  readonly enrolledLearners: number;
+  readonly activatedLearners: number;
+  readonly pocketRegisteredLearners: number;
+  readonly depositedLearners: number;
+  /** Distinct learners with a `pocket_reg`, and of those how many deposited. */
+  readonly pocketRegisteredTotal: number;
+  readonly depositedAmongPocketRegistered: number;
+};
+
+/**
+ * G4-H3 — the acquisition funnel on a UNIQUE-LEARNER, SUBSET basis.
+ *
+ * WHY THIS EXISTS, AND WHY EVENT COUNTS ARE NOT ENOUGH. The audited candidate
+ * computed `activationRate = academy_activation events / ata_reg events`. Two
+ * different populations: an activation belongs to an enrollment, a registration
+ * to a user, and the two sets are not nested. That was tolerable while `ata_reg`
+ * covered every `User` row — and it stopped being tolerable the moment G4-H2
+ * narrowed `ata_reg` to PROVEN self-service registrations, because enrollments
+ * and activations still exist for learners whose registration origin this
+ * database cannot prove. The first rehearsal against real PREPROD data reported
+ * `activationRate = 1.250000` and `enrollmentRate = 1.583333` — 125% and 158%.
+ *
+ * So every downstream rate is now a SUBSET FRACTION of a learner population it is
+ * actually drawn from: of the learners who registered in this period, how many
+ * also enrolled, activated, registered with Pocket, deposited. Numerator ⊆
+ * denominator by construction, so the rate cannot exceed 1 — the same guarantee
+ * `startedCompletionRate` gets, for the same reason.
+ *
+ * The event COUNTS are still published separately and unchanged: "19 enrollments
+ * happened" is a true and useful statement even when only 12 of those learners
+ * have a provable registration. What is no longer published is a ratio between
+ * the two.
+ *
+ * One statement, fully parameterised, no caller-supplied identifier.
+ */
+export async function loadLearnerFunnel(
+  db: Pick<PrismaClient, "$queryRaw">,
+  period: GrowthPeriod,
+  filters: GrowthFilters,
+  scope: CoverageScope,
+): Promise<LearnerFunnel> {
+  const acquisition = levelFunnelAcquisitionSql(filters, scope);
+
+  const rows = await db.$queryRaw<
+    Array<Record<string, number | bigint | null>>
+  >(Prisma.sql`
+    WITH scoped AS (
+      SELECT g."userId" AS uid, g."eventType" AS et
+      FROM "GrowthEvent" g
+      WHERE g."userId" IS NOT NULL
+        AND g."occurredAt" >= ${period.start}
+        AND g."occurredAt" < ${period.end}
+        ${acquisition}
+    ),
+    registered AS (SELECT DISTINCT uid FROM scoped WHERE et = 'ata_reg'),
+    pocket AS (SELECT DISTINCT uid FROM scoped WHERE et = 'pocket_reg')
+    SELECT
+      (SELECT COUNT(*) FROM registered) AS "registeredLearners",
+      (SELECT COUNT(DISTINCT s.uid) FROM scoped s
+        WHERE s.et = 'curriculum_enrollment' AND s.uid IN (SELECT uid FROM registered)) AS "enrolledLearners",
+      (SELECT COUNT(DISTINCT s.uid) FROM scoped s
+        WHERE s.et = 'academy_activation' AND s.uid IN (SELECT uid FROM registered)) AS "activatedLearners",
+      (SELECT COUNT(DISTINCT s.uid) FROM scoped s
+        WHERE s.et = 'pocket_reg' AND s.uid IN (SELECT uid FROM registered)) AS "pocketRegisteredLearners",
+      (SELECT COUNT(DISTINCT s.uid) FROM scoped s
+        WHERE s.et = 'dep' AND s.uid IN (SELECT uid FROM registered)) AS "depositedLearners",
+      (SELECT COUNT(*) FROM pocket) AS "pocketRegisteredTotal",
+      (SELECT COUNT(DISTINCT s.uid) FROM scoped s
+        WHERE s.et = 'dep' AND s.uid IN (SELECT uid FROM pocket)) AS "depositedAmongPocketRegistered"
+  `);
+
+  const row = rows[0] ?? {};
+  const n = (key: string) => Number(row[key] ?? 0);
+
+  return {
+    registeredLearners: n("registeredLearners"),
+    enrolledLearners: n("enrolledLearners"),
+    activatedLearners: n("activatedLearners"),
+    pocketRegisteredLearners: n("pocketRegisteredLearners"),
+    depositedLearners: n("depositedLearners"),
+    pocketRegisteredTotal: n("pocketRegisteredTotal"),
+    depositedAmongPocketRegistered: n("depositedAmongPocketRegistered"),
   };
-
-  const [started, completed] = await Promise.all([
-    db.growthEvent.groupBy({
-      by: ["levelNumber"],
-      where: { ...base, eventType: "level_started" },
-      _count: { _all: true },
-    }),
-    db.growthEvent.groupBy({
-      by: ["levelNumber"],
-      where: { ...base, eventType: "level_completed" },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const byLevel = new Map<number, { started: number; completed: number }>();
-
-  for (const row of started) {
-    if (row.levelNumber === null) continue;
-    byLevel.set(row.levelNumber, { started: row._count._all, completed: 0 });
-  }
-  for (const row of completed) {
-    if (row.levelNumber === null) continue;
-    const entry = byLevel.get(row.levelNumber) ?? { started: 0, completed: 0 };
-    entry.completed = row._count._all;
-    byLevel.set(row.levelNumber, entry);
-  }
-
-  return [...byLevel.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([levelNumber, value]) => ({ levelNumber, ...value }));
 }
 
 export type DepositAmountSummary = {

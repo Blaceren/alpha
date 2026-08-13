@@ -12,12 +12,16 @@ import {
   GROWTH_ANALYTICS_MODE,
   GROWTH_RATE_MODE,
   GROWTH_RATIO_DENOMINATORS,
+  computeAttributionCoverage,
   computeGrowthRatios,
+  computeLearnerFunnelRatios,
+  type GrowthCoverageScope,
   type GrowthMetricCounts,
 } from "@/lib/growth/analytics/sources";
 import {
   loadFirstDepositAmounts,
   loadGrowthCounts,
+  loadLearnerFunnel,
 } from "@/lib/growth/analytics/queries";
 import {
   GROWTH_ATTRIBUTION_EXPLANATION,
@@ -72,18 +76,34 @@ export async function GET(request: Request) {
     // A filtered report has no unattributed slice to show: events belonging to
     // nobody cannot belong to the campaign that was asked about. Computing it
     // anyway would publish a number answering a question nobody posed.
-    const [attributed, unattributed, total, amounts] = await Promise.all([
+    const [attributed, organic, total, amounts, learnersAttributed, learnersOrganic, learnersTotal] = await Promise.all([
       loadGrowthCounts(prisma, window, filters, "attributed"),
-      unfiltered
-        ? loadGrowthCounts(prisma, window, filters, "unattributed")
-        : Promise.resolve(null),
+      unfiltered ? loadGrowthCounts(prisma, window, filters, "organic") : Promise.resolve(null),
       unfiltered ? loadGrowthCounts(prisma, window, filters, "total") : Promise.resolve(null),
       loadFirstDepositAmounts(prisma, window, filters, unfiltered ? "total" : "attributed"),
+      loadLearnerFunnel(prisma, window, filters, "attributed"),
+      unfiltered ? loadLearnerFunnel(prisma, window, filters, "organic") : Promise.resolve(null),
+      unfiltered ? loadLearnerFunnel(prisma, window, filters, "total") : Promise.resolve(null),
     ]);
 
-    const block = (counts: GrowthMetricCounts) => ({
+    // G4-H3. Ratios are computed PER SCOPE, and a ratio whose denominator does
+    // not exist for that population comes back null instead of dividing two
+    // different populations by each other.
+    // G4-H3. Event-basis ratios come from `computeGrowthRatios` (which returns
+    // null for anything whose populations are not nested); learner-basis subset
+    // ratios come from `computeLearnerFunnelRatios`. The two are merged so a
+    // client reads one `ratios` object, and `ratioBasis` names which is which.
+    const block = (
+      counts: GrowthMetricCounts,
+      scope: GrowthCoverageScope,
+      learners: Awaited<ReturnType<typeof loadLearnerFunnel>> | null,
+    ) => ({
       ...counts,
-      ratios: computeGrowthRatios(counts),
+      learnerFunnel: learners,
+      ratios: {
+        ...computeGrowthRatios(counts, scope),
+        ...(learners ? computeLearnerFunnelRatios(learners) : {}),
+      },
     });
 
     return NextResponse.json(
@@ -93,6 +113,16 @@ export async function GET(request: Request) {
         rateModeExplanation: GROWTH_RATE_MODE_EXPLANATION,
         attributionExplanation: GROWTH_ATTRIBUTION_EXPLANATION,
         ratioDenominators: GROWTH_RATIO_DENOMINATORS,
+        ratioBasis: {
+          attributedAtaRegistrationRate: "events_over_qualified_clicks_attributed_scope_only",
+          enrollmentRate: "unique_learners_subset_of_registered",
+          activationRate: "unique_learners_subset_of_registered",
+          pocketRegistrationRate: "unique_learners_subset_of_registered",
+          depositRatePerRegistration: "unique_learners_subset_of_registered",
+          depositRatePerPocketRegistration: "unique_learners_subset_of_pocket_registered",
+          assessmentPassRate: "events_same_population",
+          reportApprovalRate: "events_same_population",
+        },
         period: serializePeriod(period),
         filters: {
           affiliatePartnerId: filters.affiliatePartnerId ?? null,
@@ -100,11 +130,17 @@ export async function GET(request: Request) {
           trackingLinkId: filters.trackingLinkId ?? null,
         },
         coverage: {
-          attributed: block(attributed),
+          attributed: block(attributed, "attributed", learnersAttributed),
           // Null rather than a block of zeroes when a filter is set — see above.
-          unattributed: unattributed === null ? null : block(unattributed),
-          total: total === null ? null : block(total),
+          organic: organic === null ? null : block(organic, "organic", learnersOrganic),
+          total: total === null ? null : block(total, "total", learnersTotal),
         },
+        // G4-H3/H4. Published at the top level because it is a property of ATA's
+        // tracking, not of any one coverage block.
+        attributionCoverage: computeAttributionCoverage({
+          attributedRegistrations: attributed.ataRegistrations,
+          totalRegistrations: (total ?? attributed).ataRegistrations,
+        }),
         firstDepositAmount: amounts,
         dataAvailability: buildGrowthAvailability({
           amountAggregationAvailable: amounts.amountAggregationAvailable,
