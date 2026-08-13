@@ -29,6 +29,29 @@ import crypto from "node:crypto";
  */
 export const SECRET_QUERY_KEYS: readonly string[] = ["ow", "secret", "token"];
 
+/**
+ * G4-M4 — a secret must not survive by being RENAMED.
+ *
+ * The exact list above is the REJECTION set: those three names are the ones the
+ * route refuses a delivery over, and it stays exact because rejecting on a
+ * guess would refuse legitimate provider traffic. Recasing was already handled
+ * (`OW`, `Ow`, `oW` all redact, because keys are lower-cased first). Renaming
+ * was not: `?authorization=Bearer%20abc` and `?x-postback-secret=hdr` were
+ * persisted VERBATIM into `sanitizedPayload` and kept indefinitely.
+ *
+ * That is credential material at rest in a JSON column. It is reachable only
+ * past the authenticated boundary — so the writer already holds the shared
+ * secret — but a MISCONFIGURED PROVIDER putting a live secret in an unexpected
+ * parameter is exactly the scenario this evidence row exists to survive.
+ *
+ * So redaction is broader than rejection, deliberately. A key that merely LOOKS
+ * like credential material is redacted and still recorded as present, which
+ * loses an operator nothing: the fact that the parameter arrived is preserved,
+ * only its value is not.
+ */
+const SECRET_SHAPED_KEY =
+  /(secret|token|auth|apikey|api_key|passw|credential|signature|\bsig\b|bearer|session|cookie)/i;
+
 export const REDACTED = "[redacted]";
 
 const MAX_KEYS = 40;
@@ -78,7 +101,7 @@ export function sanitizeProviderQuery(params: URLSearchParams): Record<string, s
 
     const key = rawKey.toLowerCase();
 
-    if (secretKeys.has(key)) {
+    if (secretKeys.has(key) || SECRET_SHAPED_KEY.test(key)) {
       // Recorded as present-but-redacted rather than dropped: "the caller sent a
       // secret" is itself a fact an operator may need, and the value never is.
       out[key] = REDACTED;
@@ -105,10 +128,24 @@ export function sanitizeProviderQuery(params: URLSearchParams): Record<string, s
  * intermediary reordered the query.
  */
 export function hashSanitizedPayload(sanitized: Record<string, string>): string {
+  // G4-L1 — LENGTH-PREFIXED, so the canonical form is injective.
+  //
+  // Joining `key=value` with `&` is ambiguous the moment a value contains one
+  // of the separators: `{a:"b&c=d"}` and `{a:"b",c:"d"}` produced the SAME
+  // digest. Nothing branches on this hash today — it is a delivery fingerprint
+  // — but a fingerprint that collides on two different deliveries cannot do the
+  // one job it has.
+  //
+  // Safe to change: it is not stored in any index, no code compares it against
+  // a previously computed value, and no ProviderIngressEvent row exists on any
+  // accepted database.
   const canonical = Object.keys(sanitized)
     .sort()
-    .map((key) => `${key}=${sanitized[key]}`)
-    .join("&");
+    .map((key) => {
+      const value = sanitized[key];
+      return `${key.length}:${key}${value.length}:${value}`;
+    })
+    .join("");
 
   return crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
 }

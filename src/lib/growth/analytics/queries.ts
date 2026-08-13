@@ -850,12 +850,35 @@ export type AcquisitionRow = {
  * by the caller, and the query counts rows rather than returning them — no lead,
  * no email, no click id and no player id can leave through this surface.
  */
+export type AcquisitionBreakdown = {
+  readonly rows: AcquisitionRow[];
+  /**
+   * G4-M9 — how many members the dimension actually has.
+   *
+   * The rows are the first `limit` members BY ID, with no ranking, which the
+   * payload has always said. What it could not say is whether there were more:
+   * a reader saw twenty-five campaigns and had no way to tell whether that was
+   * all of them or the oldest twenty-five of two hundred, and the oldest can
+   * all be dormant while the active ones sit past the cutoff. An absence must
+   * be visible as an absence here too.
+   */
+  readonly totalMembers: number;
+  readonly truncated: boolean;
+};
+
 export async function loadAcquisitionBreakdown(
   db: PrismaClient,
   period: GrowthPeriod,
   dimension: Extract<GrowthDimension, "affiliatePartner" | "affiliateCampaign" | "trackingLink">,
   limit: number,
-): Promise<AcquisitionRow[]> {
+): Promise<AcquisitionBreakdown> {
+  const totalMembers =
+    dimension === "affiliatePartner"
+      ? await db.affiliatePartner.count()
+      : dimension === "affiliateCampaign"
+        ? await db.affiliateCampaign.count()
+        : await db.affiliateTrackingLink.count();
+
   const partners =
     dimension === "affiliatePartner"
       ? await db.affiliatePartner.findMany({
@@ -875,7 +898,7 @@ export async function loadAcquisitionBreakdown(
             take: limit,
           });
 
-  return Promise.all(
+  const rows = await Promise.all(
     partners.map(async (row) => {
       const filters: GrowthFilters =
         dimension === "affiliatePartner"
@@ -904,6 +927,8 @@ export async function loadAcquisitionBreakdown(
       };
     }),
   );
+
+  return { rows, totalMembers, truncated: totalMembers > rows.length };
 }
 
 export type IngressHealthCounts = {

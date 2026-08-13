@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     // used to answer 200 with `rows: []` — "no acquisition sources" — while its
     // four siblings correctly failed loudly. An empty answer and an impossible
     // answer must not look the same.
-    const [rows, totals, registrationOriginCoverage] = await Promise.all([
+    const [breakdown, totals, registrationOriginCoverage] = await Promise.all([
       loadAcquisitionBreakdown(prisma, window, dimension, limit),
       loadClickCohortFunnel(prisma, window, {}),
       // G4-R12. See the overview route.
@@ -103,6 +103,12 @@ export async function GET(request: Request) {
         limit,
         // Said out loud so nobody has to infer it from the ordering.
         rankingPolicy: "none_ordered_by_id",
+        // G4-M9. The rows are the first `limit` members by id. Whether that is
+        // ALL of them was previously unknowable from the payload, so an
+        // operator could not tell twenty-five campaigns from the oldest
+        // twenty-five of two hundred — and the oldest can all be dormant.
+        totalDimensionMembers: breakdown.totalMembers,
+        truncated: breakdown.truncated,
         qualityScorePolicy: "not_computed_by_design",
         // G4-R2. THE CONTRACT THIS SURFACE ANSWERS, stated in the payload rather
         // than left to a reader's assumption — because the assumption is exactly
@@ -121,7 +127,7 @@ export async function GET(request: Request) {
             "subset_of_cohort_pocket_registered_learners",
         },
         totals: { ...totals, ...computeClickCohortRatios(totals) },
-        rows: rows.map((row) => ({
+        rows: breakdown.rows.map((row) => ({
           ...row,
           ...computeClickCohortRatios(row),
         })),

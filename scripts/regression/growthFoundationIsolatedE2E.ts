@@ -71,7 +71,7 @@ async function main() {
     progressSourceEventId,
     userSourceEventId,
   } = await import("@/lib/growth/event-keys");
-  const { loadFirstDepositAmounts, loadGrowthCounts, countUnresolvedRedeposits } = await import(
+  const { loadFirstDepositAmounts, loadGrowthCounts, loadLearnerFunnel, countUnresolvedRedeposits } = await import(
     "@/lib/growth/analytics/queries"
   );
 
@@ -317,8 +317,24 @@ async function main() {
 
     // Campaign A's deposit rate is a real zero — it had registrations that did
     // not convert. That is NOT the same as null, and the distinction is §60.
-    const { computeGrowthRatios } = await import("@/lib/growth/analytics/sources");
-    const aRatios = computeGrowthRatios(aCounts, "attributed");
+    //
+    // ASSERTED AGAINST THE FUNCTION THAT OWNS THE RATE. This check used to read
+    // `computeGrowthRatios`, and it had been RED since the G4-H3/R2 corrections
+    // moved every cohort-basis ratio out of that function: it now returns null
+    // for anything declaring a `basis`, deliberately, so a metric can never be
+    // produced by the wrong arithmetic. The rate itself was correct the whole
+    // time; the assertion was pointed at the wrong owner and nothing noticed,
+    // because the suite's failure was never attributed.
+    const { computeGrowthRatios, computeLearnerFunnelRatios } = await import(
+      "@/lib/growth/analytics/sources"
+    );
+    const aFunnel = await loadLearnerFunnel(
+      prisma,
+      period,
+      { affiliateCampaignId: A.campaign.id },
+      "attributed",
+    );
+    const aRatios = computeLearnerFunnelRatios(aFunnel);
     check(
       "a real zero rate is 0, not null, when the denominator exists",
       aRatios.depositRatePerRegistration !== null &&
@@ -326,13 +342,22 @@ async function main() {
       String(aRatios.depositRatePerRegistration),
     );
 
-    const emptyCounts = await loadGrowthCounts(
+    // And the default-deny itself is now asserted, so a future wave that
+    // reintroduced event-count arithmetic for a cohort metric would fail here.
+    const aEventRatios = computeGrowthRatios(aCounts, "attributed");
+    check(
+      "a cohort-basis rate is never computed from raw event counts",
+      aEventRatios.depositRatePerRegistration === null,
+      String(aEventRatios.depositRatePerRegistration),
+    );
+
+    const emptyFunnel = await loadLearnerFunnel(
       prisma,
       { start: new Date(Date.UTC(2030, 0, 1)), end: new Date(Date.UTC(2030, 1, 1)) },
       {},
       "attributed",
     );
-    const emptyRatios = computeGrowthRatios(emptyCounts, "attributed");
+    const emptyRatios = computeLearnerFunnelRatios(emptyFunnel);
     check(
       "an absent denominator gives null, never 0",
       emptyRatios.depositRatePerRegistration === null,

@@ -155,19 +155,32 @@ describe("redeposit identity policy", () => {
   );
 
   /**
-   * The configured name is lower-cased and trimmed, matching how
-   * `sanitizeProviderQuery` normalises incoming keys. Asserted explicitly
-   * because it has a consequence worth knowing: `readProviderEventIdentity`
-   * reads the NORMALISED name from the query, so a provider sending an
-   * upper-case parameter finds no identity and the delivery falls through to
-   * `identity_unresolved` — fail-closed, never a silent mis-key.
+   * The configured name is TRIMMED but no longer silently lower-cased.
+   *
+   * G4-L2 CHANGED THIS DELIBERATELY, and this test changed with it. The old
+   * behaviour accepted `Transaction_ID` and resolved it to `transaction_id`,
+   * while `readProviderEventIdentity` reads the resolved name back from the
+   * query CASE-SENSITIVELY — so a provider sending `Transaction_ID=…` never
+   * matched, RDEP stayed `identity_unresolved`, and the operator who had just
+   * configured it saw nothing happen and no reason why. Fail-closed, yes, but
+   * silently: the configuration said "available" while nothing could ever
+   * resolve. A misconfiguration must be loud, so a name that is not already
+   * lower-case is now REFUSED with a named reason.
    */
-  it("normalises the configured parameter name to lower case", () => {
+  it("trims surrounding whitespace", () => {
+    expect(
+      resolveRedepositIdentityPolicy(env({
+        POCKET_RDEP_EVENT_ID_PARAM: "  transaction_id  ",
+      })),
+    ).toEqual({ kind: "available", parameterName: "transaction_id" });
+  });
+
+  it("REFUSES a mixed-case name rather than resolving it to something else", () => {
     expect(
       resolveRedepositIdentityPolicy(env({
         POCKET_RDEP_EVENT_ID_PARAM: "  Transaction_ID  ",
       })),
-    ).toEqual({ kind: "available", parameterName: "transaction_id" });
+    ).toEqual({ kind: "unavailable", reason: "configured_param_rejected" });
   });
 
   it("refuses a forbidden name however it is cased", () => {
@@ -178,5 +191,36 @@ describe("redeposit identity policy", () => {
       })).kind,
       ).toBe("unavailable");
     }
+  });
+});
+
+describe("G4-L2 — a mixed-case event-id parameter is refused, loudly", () => {
+  it("REFUSES rather than silently lower-casing", () => {
+    // It used to resolve to `upper`, while the reader matched case-sensitively,
+    // so a provider sending `UPPER=...` never matched and RDEP stayed
+    // identity_unresolved with no reason an operator could see.
+    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: "UPPER" }));
+
+    expect(policy.kind).toBe("unavailable");
+    if (policy.kind !== "unavailable") return;
+    expect(policy.reason).toBe("configured_param_rejected");
+  });
+
+  it.each(["Trx_Id", "eventID", "EVENT_ID"])("refuses %s", (name) => {
+    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: name }));
+
+    expect(policy.kind).toBe("unavailable");
+  });
+
+  it("still accepts an already-lower-case name", () => {
+    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: "trx_id" }));
+
+    expect(policy.kind).toBe("available");
+    if (policy.kind !== "available") return;
+    expect(policy.parameterName).toBe("trx_id");
+  });
+
+  it("is still absent-means-unavailable, which is the fail-closed default", () => {
+    expect(resolveRedepositIdentityPolicy(env()).kind).toBe("unavailable");
   });
 });

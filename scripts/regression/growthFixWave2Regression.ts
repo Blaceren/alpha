@@ -537,7 +537,13 @@ async function main() {
   });
 
   await check("§21 a campaign row's numerators are scoped to that campaign", async () => {
-    const rows = await queries.loadAcquisitionBreakdown(prisma, PERIODS.january, "affiliateCampaign", 50);
+    const breakdown = await queries.loadAcquisitionBreakdown(
+      prisma,
+      PERIODS.january,
+      "affiliateCampaign",
+      50,
+    );
+    const rows = breakdown.rows;
     assert.equal(rows.length, 1);
     assert.equal(rows[0].clicks, 20);
     assert.equal(rows[0].registeredLearners, 12, "no cross-campaign leakage");
@@ -545,6 +551,23 @@ async function main() {
       if (value === null) continue;
       assert.ok(Number(value) <= 1, `campaign row ${key}=${value}`);
     }
+
+    // G4-M9 — the population is now declared, so a reader can tell a complete
+    // list from the oldest N of many.
+    assert.equal(breakdown.totalMembers, 1);
+    assert.equal(breakdown.truncated, false);
+
+    // And a limit below the population reports the truncation rather than
+    // presenting a partial list as if it were the whole one.
+    const clipped = await queries.loadAcquisitionBreakdown(
+      prisma,
+      PERIODS.january,
+      "affiliateCampaign",
+      0,
+    );
+    assert.equal(clipped.rows.length, 0);
+    assert.equal(clipped.totalMembers, 1);
+    assert.equal(clipped.truncated, true);
   });
 
   // ------------------------------------------------------------------ R5

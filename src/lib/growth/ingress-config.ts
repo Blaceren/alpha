@@ -140,7 +140,22 @@ export function resolveRedepositIdentityPolicy(
     return { kind: "unavailable", reason: "provider_event_identity_contract_absent" };
   }
 
-  const name = raw.trim().toLowerCase();
+  const trimmed = raw.trim();
+
+  // G4-L2 — REFUSE a name that is not already lower-case, rather than quietly
+  // lower-casing it.
+  //
+  // The policy used to accept `UPPER` and resolve it to `upper`, while
+  // `readProviderEventIdentity` reads `params.getAll("upper")` case-sensitively
+  // — so a provider sending `UPPER=...` never matched. RDEP then stayed
+  // `identity_unresolved` forever, which is fail-closed and therefore produced
+  // no wrong money, but an operator who believed they had enabled RDEP saw
+  // nothing happen and no reason why. A misconfiguration must be LOUD.
+  if (trimmed !== trimmed.toLowerCase()) {
+    return { kind: "unavailable", reason: "configured_param_rejected" };
+  }
+
+  const name = trimmed;
 
   if (!PARAM_NAME_SHAPE.test(name) || FORBIDDEN_EVENT_ID_PARAMS.has(name)) {
     return { kind: "unavailable", reason: "configured_param_rejected" };

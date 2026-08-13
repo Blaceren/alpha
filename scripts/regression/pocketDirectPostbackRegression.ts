@@ -88,6 +88,14 @@ async function main() {
   process.env.DATABASE_URL = dbUrl;
   process.env.POSTBACK_SECRET = SECRET;
   process.env.POCKET_POSTBACK_ENABLED = "true";
+  // G4 made ingest GRANULAR: the master switch alone no longer admits a goal.
+  // These suites predate that gate and still wrote the pre-G4 contract, so every
+  // positive case answered 503 and they had been red ever since — on the
+  // accepted release too, unattributed. Fixture-only and isolated: this sets
+  // environment variables inside a throwaway process against a throwaway SQLite
+  // file, and changes nothing about the live PREPROD flags, which stay OFF.
+  process.env.POCKET_REG_INGEST_ENABLED = "true";
+  process.env.POCKET_DEP_INGEST_ENABLED = "true";
 
   const { prisma } = await import("../../src/lib/prisma");
   const route = await import("../../src/app/api/postbacks/pocket/route");

@@ -156,6 +156,14 @@ async function main() {
 
   await check("A2 with the flag on, registration still works and stays idempotent", async () => {
     process.env.POCKET_POSTBACK_ENABLED = "true";
+  // G4 made ingest GRANULAR: the master switch alone no longer admits a goal.
+  // These suites predate that gate and still wrote the pre-G4 contract, so every
+  // positive case answered 503 and they had been red ever since — on the
+  // accepted release too, unattributed. Fixture-only and isolated: this sets
+  // environment variables inside a throwaway process against a throwaway SQLite
+  // file, and changes nothing about the live PREPROD flags, which stay OFF.
+  process.env.POCKET_REG_INGEST_ENABLED = "true";
+  process.env.POCKET_DEP_INGEST_ENABLED = "true";
     try {
       const learner = await createLearner();
       const playerId = "600100301";
@@ -397,6 +405,18 @@ async function main() {
           if (/\b(balance|currentBalance|checkpointBalance)\s*:/.test(line)) {
             // `balance: 0` is zero-initialisation and records no observation.
             if (/\b(balance|currentBalance)\s*:\s*0\s*,?\s*$/.test(line)) continue;
+            // A DECLARATION THAT THE PLATFORM DOES NOT COLLECT ONE is the
+            // opposite of a disclosure, and this guard exists to catch
+            // disclosures. G4's `currentBalance: "not_collected"` is the
+            // pocket-conversions route stating the prohibition in its own
+            // payload; matching it made this assertion red on the accepted
+            // release for the wrong reason. The allowance is a closed set of
+            // literal absence markers — never a number, never a variable, never
+            // an expression — so a route that actually returned a balance is
+            // still caught.
+            if (/\b(balance|currentBalance|checkpointBalance)\s*:\s*"(not_collected|prohibited_not_collected|unavailable)"\s*,?\s*$/.test(line)) {
+              continue;
+            }
             offenders.push(`${full}:${i + 1}: ${line.trim()}`);
           }
         }

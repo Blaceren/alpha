@@ -19,6 +19,19 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * G4 GROWTH FOUNDATION: 46 -> 47. One additive migration,
+ * `20260813000000_growth_event_foundation`, which creates GrowthEvent,
+ * GrowthEventOutbox and ProviderIngressEvent and backfills the ledger from the
+ * owner tables. It alters no existing table and rewrites no existing row.
+ *
+ * IT WAS NOT BUMPED WHEN THE MIGRATION LANDED, and this file exists precisely
+ * to stop that: five assertions across the Pocket suites read this constant,
+ * so they had been failing on the accepted, deployed release with nobody
+ * attributing the failure — the fourth time this exact decay has happened, and
+ * the first time it survived a cutover. Corrected during the product-wide
+ * deferred-work closure, which found it by running the suites and attributing
+ * every failure rather than accepting a red suite as normal.
+ *
  * PHASE-G2 SUCCESSOR: 45 -> 46. One additive migration,
  * `20260811000000_assessment_successor_lineage`, which adds the nullable
  * `AssessmentVersion.predecessorVersionId` self-relation and its index. No
@@ -45,7 +58,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 46;
+export const EXPECTED_MIGRATION_COUNT = 47;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;
