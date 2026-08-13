@@ -59,6 +59,10 @@ export const NAV_GROUPS: NavGroup[] = [
       // for traffic sources, but the section itself is configuration-only in
       // this phase — it shows no metric of any kind.
       { key: "affiliates", label: "Аффилейты", href: "/affiliates", icon: "Share2" },
+      // G4-GROWTH. Beside Аффилейты because an operator looking for traffic
+      // sources looks here, but a separate section: that one is configuration
+      // and this one is measurement.
+      { key: "growth", label: "Growth", href: "/growth", icon: "TrendingUp" },
       { key: "audit", label: "Audit", href: "/audit", icon: "ScrollText" },
     ],
   },

@@ -71,6 +71,11 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
    * refuses them, and showing a section that answers 403 would be a lie.
    */
   affiliates: ["crm_admin", "crm_manager", "analyst"],
+  // G4-GROWTH. The same three roles as `affiliates`: growth measurement is
+  // commercially sensitive and is not something every staff role needs. A
+  // mentor or a support agent has no workflow that requires knowing which
+  // campaign produced which deposit.
+  growth: ["crm_admin", "crm_manager", "analyst"],
   audit: [
     "crm_admin",
     "crm_manager",

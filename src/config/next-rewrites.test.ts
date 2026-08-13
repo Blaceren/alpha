@@ -24,14 +24,14 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly twenty-eight rewrite definitions", () => {
+  it("produces exactly thirty-six rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
     // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
-    // + three affiliate lead paths (AFD-5C2). Pinning the count is the point:
-    // a new proxied path must be a deliberate change to this number, never a
-    // side effect.
-    expect(buildRewrites(env)).toHaveLength(31);
+    // + three affiliate lead paths (AFD-5C2) + five read-only Growth paths
+    // (G4-GROWTH). Pinning the count is the point: a new proxied path must be a
+    // deliberate change to this number, never a side effect.
+    expect(buildRewrites(env)).toHaveLength(36);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -55,7 +55,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the thirty-one reviewed paths", () => {
+  it("exposes exactly the thirty-six reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -91,6 +91,15 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/affiliates/leads",
       "/api/crm/v1/affiliates/leads/:leadId",
       "/api/crm/v1/affiliates/leads/:leadId/reveal",
+      // G4-GROWTH — five exact, terminal, read-only Growth paths. The Pocket
+      // postback intake is deliberately NOT among them: it is provider-facing
+      // traffic on the public origin and must never be reachable through the
+      // CRM origin.
+      "/api/crm/v1/growth/overview",
+      "/api/crm/v1/growth/funnel",
+      "/api/crm/v1/growth/acquisition",
+      "/api/crm/v1/growth/pocket-conversions",
+      "/api/crm/v1/growth/ingress-health",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -285,11 +294,25 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/affiliates/leads",
       "/api/crm/v1/affiliates/leads/:leadId",
       "/api/crm/v1/affiliates/leads/:leadId/reveal",
+      // G4-GROWTH — read-only Growth surfaces.
+      "/api/crm/v1/growth/overview",
+      "/api/crm/v1/growth/funnel",
+      "/api/crm/v1/growth/acquisition",
+      "/api/crm/v1/growth/pocket-conversions",
+      "/api/crm/v1/growth/ingress-health",
     ]);
     for (const forbidden of [
       "/api/:path*",
       "/api/crm/v1/:path*",
       "/api/crm/:path*",
+      // G4-GROWTH. The Pocket postback intake must never be reachable through
+      // the CRM origin: it is provider-facing traffic authenticated by the
+      // shared POSTBACK_SECRET, and proxying it here would put a money-bearing
+      // intake behind a staff-session origin. The CRM reads the RESULT of
+      // provider events, never their intake.
+      "/api/postbacks/pocket",
+      "/api/exchange/postbacks/receive",
+      "/api/crm/v1/growth/:path*",
       "/api/auth/login",
       "/api/auth/csrf",
       "/api/health",

@@ -11,6 +11,7 @@ import {
   ScrollText,
   Settings,
   Share2,
+  TrendingUp,
   Users,
   Wallet,
   Workflow,
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   ScrollText,
   Settings,
   Share2,
+  TrendingUp,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {

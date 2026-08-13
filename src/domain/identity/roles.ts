@@ -61,6 +61,16 @@ export type SectionKey =
    * campaigns, tracking links), and AFD-5A ships no traffic analytics at all.
    */
   | "affiliates"
+  /**
+   * G4-GROWTH — the internal staff Growth observability workspace.
+   *
+   * Its own section rather than a tab under `affiliates`, because the two answer
+   * different questions for different people: `affiliates` is CONFIGURATION
+   * (who buys traffic, which link were they given), and `growth` is
+   * MEASUREMENT (what did that traffic do). It is also NOT the external
+   * affiliate partner portal, which does not exist and is out of scope.
+   */
+  | "growth"
   | "settings";
 
 /**

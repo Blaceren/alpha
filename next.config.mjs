@@ -220,6 +220,26 @@ export const ANALYTICS_ANALYSIS_PATH = "/api/crm/v1/affiliates/analytics/analysi
  * to a path finds no handler and fails there — and the reveal additionally
  * requires `reveal_pii` and a valid CSRF token regardless of how it was reached.
  */
+/* ------------------------------------------------- Growth (G4-GROWTH)
+ *
+ * Five exact, terminal, READ-ONLY paths. Every one is a literal string: there is
+ * no `:id`, no `/growth/:path*` and no catch-all, so a growth route added to the
+ * backend later is NOT proxied until somebody adds it here on purpose.
+ *
+ * The backend routes export only `GET`, so a POST reaching one finds no handler
+ * and fails there. Each independently enforces the CRM affiliate-reader
+ * authorization before any database read.
+ *
+ * DELIBERATELY ABSENT: the Pocket postback paths. They are provider-facing
+ * traffic on the public origin and must never be reachable through the CRM
+ * origin — the CRM reads the RESULT of provider events, never their intake.
+ */
+export const GROWTH_OVERVIEW_PATH = "/api/crm/v1/growth/overview";
+export const GROWTH_FUNNEL_PATH = "/api/crm/v1/growth/funnel";
+export const GROWTH_ACQUISITION_PATH = "/api/crm/v1/growth/acquisition";
+export const GROWTH_POCKET_CONVERSIONS_PATH = "/api/crm/v1/growth/pocket-conversions";
+export const GROWTH_INGRESS_HEALTH_PATH = "/api/crm/v1/growth/ingress-health";
+
 export const AFFILIATE_LEADS_PATH = "/api/crm/v1/affiliates/leads";
 export const AFFILIATE_LEAD_DETAIL_PATH = "/api/crm/v1/affiliates/leads/:leadId";
 export const AFFILIATE_LEAD_REVEAL_PATH = "/api/crm/v1/affiliates/leads/:leadId/reveal";
@@ -257,6 +277,11 @@ export const PROXIED_PATHS = [
   AFFILIATE_LEADS_PATH,
   AFFILIATE_LEAD_DETAIL_PATH,
   AFFILIATE_LEAD_REVEAL_PATH,
+  GROWTH_OVERVIEW_PATH,
+  GROWTH_FUNNEL_PATH,
+  GROWTH_ACQUISITION_PATH,
+  GROWTH_POCKET_CONVERSIONS_PATH,
+  GROWTH_INGRESS_HEALTH_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {
