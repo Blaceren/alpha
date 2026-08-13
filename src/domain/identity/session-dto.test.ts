@@ -135,26 +135,24 @@ describe("SessionDtoSchema — closed to extra fields", () => {
 });
 
 describe("Notes v1 permission schema", () => {
-  it("declares exactly eleven permissions in the backend's canonical order", () => {
-    // AFD-5A appended view_affiliate_analytics. This list must track the
-    // backend's CRM_PERMISSIONS exactly: because PermissionSchema is a closed
-    // enum, a missing entry makes the whole session response fail to parse and
-    // logs the operator out.
-    expect([...SESSION_PERMISSIONS]).toEqual([
-      "view_exact_financials",
-      "view_identity_full_email",
-      "reveal_pii",
-      "assign_owner",
-      "export",
-      "view_audit",
-      "manage_settings",
-      "edit_user_notes",
-      "view_user_notes",
-      "create_user_notes",
-      "view_affiliate_analytics",
-    ]);
-  });
-
+  /**
+   * G4-R7 — the "declares exactly eleven permissions in the backend's canonical
+   * order" assertion that used to stand here has been REMOVED, not updated.
+   *
+   * It compared `SESSION_PERMISSIONS` against a literal list copied into this
+   * file, so it could only ever prove that two copies of the same list agreed
+   * with each other. It passed for the entire period the CRM was broken, while
+   * `crm_admin`, `crm_manager`, `content_manager` and `read_only` could not
+   * hold a session at all. Re-pointing it at fifteen entries would rebuild the
+   * same blind spot one permission later.
+   *
+   * The vocabulary is now asserted against the canonical contract module, and
+   * the complete-vocabulary and role-grant coverage live in
+   * `session-permission-contract.test.ts`. The order assertions below are kept
+   * deliberately: array ORDER is a real protocol property, distinct from
+   * identity, and pinning the historical prefixes is exactly how "append, never
+   * insert" stays enforced.
+   */
   it("keeps the ten pre-AFD-5A permissions in their exact prior order", () => {
     expect(SESSION_PERMISSIONS.slice(0, 10)).toEqual([
       "view_exact_financials",

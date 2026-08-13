@@ -3,8 +3,13 @@
  * Source of truth: docs/ROLE_PERMISSION_MATRIX.md.
  *
  * NOTE: This is a frontend visibility model for Phase 1A mock mode. It is NOT
- * production security. Real authorization is enforced by the future backend API.
+ * production security. Real authorization is enforced by the backend API.
+ *
+ * The `Permission` union below is the one exception to "visibility only": it is
+ * also the vocabulary the production session parser accepts, so it is pinned to
+ * the canonical cross-repository contract. See `Permission` and G4-R7.
  */
+import type { CrmSessionPermission } from "@/domain/identity/crm-session-permission-contract";
 
 export type CrmRole =
   | "crm_admin"
@@ -75,7 +80,18 @@ export type SectionKey =
 
 /**
  * Discrete permissions checked by the centralized permission layer.
- * Kept intentionally small for Phase 1A; extend as later phases need them.
+ *
+ * G4-R7: this union must contain EXACTLY the canonical session vocabulary in
+ * `crm-session-permission-contract.ts`, no more and no less. It is not "kept
+ * intentionally small" any more — that description is what let it fall four
+ * entries behind the backend and break every session that carried one of them.
+ * The `_permissionVocabularyParity` assertion below turns any divergence into a
+ * compile error rather than a runtime logout.
+ *
+ * Recognising a permission is NOT granting it. Membership here only means the
+ * session parser can read the name; which roles HOLD it is decided solely by
+ * the backend's `STAFF_ROLE_PERMISSIONS`, and `ROLE_PERMISSIONS` in
+ * `permissions.ts` (mock mode only) is unchanged by anything in this union.
  */
 export type Permission =
   | "view_exact_financials"
@@ -101,12 +117,54 @@ export type Permission =
   | "view_user_notes"
   | "create_user_notes"
   /**
-   * AFD-5A (backend `CRM_PERMISSIONS[10]`). A READ permission over the
-   * affiliate inventory — partners, campaigns and tracking links — and, from
-   * AFD-5B, their traffic analytics.
+   * AFD-5A. A READ permission over the affiliate inventory — partners,
+   * campaigns and tracking links — and, from AFD-5B, their traffic analytics.
    *
    * It grants no mutation. Creating, editing, activating, pausing and archiving
    * affiliate entities all still require `manage_settings`, and the backend is
    * what enforces that: hiding a button here is a convenience, not the gate.
+   *
+   * G4-R7 note: this comment used to identify the permission as backend
+   * `CRM_PERMISSIONS[10]`. That positional reference was accidental coupling —
+   * nothing in either repository resolves a permission by index — and it is now
+   * named instead. Array ORDER remains a deliberate protocol property (entries
+   * are appended, never inserted) and is pinned by the contract tests; array
+   * POSITION is not an identity and never was.
    */
-  | "view_affiliate_analytics";
+  | "view_affiliate_analytics"
+  /**
+   * PHASE-G0 curriculum authoring, and PHASE-G2 source adjudication. These four
+   * are the entries whose absence caused G4-R7: the backend has emitted them
+   * since 2026-08-08 and 2026-08-10 respectively, and this union never received
+   * them, so every session carrying one failed to parse.
+   *
+   * The CRM has no authoring surface today and reads none of these four for any
+   * affordance. They are here because the SESSION PARSER must be able to read
+   * the complete vocabulary the backend can send — a permission the client
+   * cannot name is a permission that logs its holder out.
+   *
+   * They are four rather than one because four-eyes review needs them separate:
+   * `curriculum_read` is "may look", `curriculum_author` is "may write a draft
+   * and submit it", `curriculum_approve` is "may accept work as editorial
+   * truth", and `curriculum_source_authority` is "may decide which of two
+   * competing SOURCES wins". Collapsing them would make every editor their own
+   * reviewer.
+   */
+  | "curriculum_read"
+  | "curriculum_author"
+  | "curriculum_approve"
+  | "curriculum_source_authority";
+
+/**
+ * Compile-time proof that this union and the canonical cross-repository session
+ * vocabulary stay identical. If either drifts, this stops compiling — the same
+ * idiom the backend already uses to pin `CrmStaffRole` to the Prisma enum.
+ *
+ * This is the mechanism G4-R7 lacked. The previous agreement between the two
+ * repositories was a comment saying the list "must track the backend's
+ * CRM_PERMISSIONS exactly, not approximately", and a comment cannot fail a
+ * build.
+ */
+type AssertEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const _permissionVocabularyParity: AssertEqual<Permission, CrmSessionPermission> = true;
+void _permissionVocabularyParity;
