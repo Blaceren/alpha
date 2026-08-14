@@ -803,6 +803,30 @@ export async function GET(request: Request) {
     return fail(400, "UNKNOWN_GOAL");
   }
 
+  // POCKET-REG-INGRESS-1 — the REG family switch applies to EVERY receiver
+  // channel, the legacy header one included.
+  //
+  // ingress-config.ts states the rule this route must implement: "A family is
+  // enabled only when the MASTER gate and its OWN switch are both on", and
+  // "turning POCKET_POSTBACK_ENABLED=true on its own no longer admits
+  // goal=reg". The `ow` channel honoured that; this legacy branch did not — a
+  // header-authenticated `goal=reg` still bound an identity, projected the
+  // canonical event and mutated ExchangeAccount state with the master on and
+  // the REG family off. While the receiver was loopback-only that gap was
+  // unreachable in practice; the moment this route is publicly routable, "REG
+  // is disabled" must mean disabled on every channel, or disabling the family
+  // fails open for anyone holding the header secret.
+  //
+  // Same refusal the `ow` channel gives a disabled family: 503, before any
+  // lookup or write. Not 403 — the secret was fine; the feature is off — and
+  // 503 is retry-safe, so a delivery during a rollout window is not lost. In
+  // the intended operating states this branch is invisible: with the master
+  // off everything is already 503, and activation sets the master and the REG
+  // family together.
+  if (type === "Registration" && !isPocketRegIngestEnabled()) {
+    return unavailableResponse();
+  }
+
   if (amount === null) {
     return fail(400, "INVALID_AMOUNT");
   }

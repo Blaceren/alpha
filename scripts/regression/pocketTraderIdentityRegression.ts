@@ -259,6 +259,13 @@ async function main() {
     assert.equal(bound.source, "registration_postback");
   });
 
+  // POCKET-REG-INGRESS-1 — updated to the post-G4 contract. This case used to
+  // expect 200: the pre-G4 header path processed every financial goal through
+  // the legacy alias table and the assertion "never binds" was proven against
+  // an ACCEPTED financial mutation. G4 removed every non-`reg` goal from the
+  // header path outright (the alias table has one entry), so a financial goal
+  // is now refused as UNKNOWN_GOAL before touching anything — the stronger
+  // spelling of the same invariant: it does not bind because it does not run.
   await check("B2 a non-registration goal never binds", async () => {
     const learner = await createLearner();
     for (const goal of ["dep", "ftd", "redep", "commission", "withdrawal"]) {
@@ -267,7 +274,7 @@ async function main() {
         playerId: POCKET_USER_ID,
         goal,
       });
-      assert.equal(response.status, 200, goal);
+      assert.equal(response.status, 400, goal);
       assert.equal(await bindingFor(learner.userId), null, goal);
     }
   });
@@ -557,7 +564,14 @@ async function main() {
     }
   });
 
-  await check("G3 no code path binds an identity outside the postback route", async () => {
+  // POCKET-REG-INGRESS-1 — updated to the G4-H5 architecture, and STRENGTHENED.
+  // The old spelling matched the identifier as TEXT, so after G4-H5 fused the
+  // binding into `bindPocketIdentityCanonical` it flagged two files that only
+  // MENTION the binder in prose. What the invariant actually protects is the
+  // call graph: the raw binder has exactly ONE caller — the canonical domain
+  // operation that also projects `pocket_reg` — so no receiver can ever bind
+  // without projecting again. The assertion now matches the CALL, not the name.
+  await check("G3 only the canonical authority calls the raw binder", async () => {
     const roots = ["src/app", "src/lib", "src/components"];
     const callers: string[] = [];
     const walk = (dir: string) => {
@@ -566,7 +580,7 @@ async function main() {
         if (entry.isDirectory()) walk(full);
         else if (/\.tsx?$/.test(entry.name)) {
           const text = fs.readFileSync(full, "utf8");
-          if (text.includes("bindPocketTraderIdentity") && !full.endsWith("pocketTraderIdentity.ts")) {
+          if (/(?<!function )bindPocketTraderIdentity\s*\(/.test(text) && !full.endsWith("pocketTraderIdentity.ts")) {
             callers.push(full);
           }
         }
@@ -575,7 +589,7 @@ async function main() {
     for (const root of roots) walk(root);
     assert.deepEqual(
       callers,
-      [path.join("src", "app", "api", "postbacks", "pocket", "route.ts")],
+      [path.join("src", "lib", "growth", "pocket", "identity-authority.ts")],
       `unexpected binder callers: ${callers.join(", ")}`,
     );
   });

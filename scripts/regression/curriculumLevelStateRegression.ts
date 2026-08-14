@@ -77,6 +77,12 @@ async function main() {
   const levelState = await import("../../src/lib/curriculum/level-state");
 
   async function resetFixtures() {
+    // POCKET-REG-INGRESS-1: migration 47 gave completions a Growth ledger
+    // projection whose enrollment/level/user relations are Restrict, so the
+    // ledger rows a scenario produced must go before the rows they reference —
+    // this cleanup predates the ledger and had been failing since it landed.
+    await prisma.growthEventOutbox.deleteMany();
+    await prisma.growthEvent.deleteMany();
     await prisma.userLevelProgress.deleteMany();
     await prisma.userCurriculumEnrollment.deleteMany();
     await prisma.auditLog.deleteMany();

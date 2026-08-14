@@ -86,6 +86,11 @@ async function main() {
     ]) {
       await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${trigger}`);
     }
+    // POCKET-REG-INGRESS-1: migration 47's Growth ledger references the
+    // enrollment/level/user rows with Restrict; ledger rows first, or the
+    // cleanup below violates the FK it predates.
+    await prisma.growthEventOutbox.deleteMany();
+    await prisma.growthEvent.deleteMany();
     await prisma.xPTransaction.deleteMany();
     await prisma.userLevelProgress.deleteMany();
     await prisma.userCurriculumEnrollment.deleteMany();

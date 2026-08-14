@@ -273,18 +273,36 @@ async function main() {
 
   // AFD-4 amended this contract for `dep` ALONE, and only behind
   // POCKET_FIRST_DEPOSIT_ENABLED (default false, and unset in this suite). Every
-  // other financial goal stays header-only unconditionally, which is what this
-  // case now pins. The deposit contract itself is proven in
+  // goal OUTSIDE the Growth V1 vocabulary stays header-only unconditionally,
+  // which is what this case now pins. The deposit contract itself is proven in
   // pocketFirstDepositRegression.
+  //
+  // POCKET-REG-INGRESS-1 — the post-G4 refusal contract, stated once
+  // (TEST-POCKET-REFUSAL-CONTRACT). G4 made ingest granular: a goal the
+  // allowlist SUPPORTS (`reg`/`dep`/`redep`) whose own family switch is off is
+  // answered `503 POCKET_POSTBACK_UNAVAILABLE` BEFORE authentication — a
+  // disabled feature is not an authentication failure, 503 is retry-safe so a
+  // delivery during a rollout window is not lost, and no lookup or write has
+  // happened yet. `redep` therefore answers 503 here (RDEP is off in this
+  // suite), while goals with NO Growth V1 mandate (`ftd`, `commission`,
+  // `withdrawal`, `email`) still treat a query-borne secret as forbidden auth
+  // material and answer the one indistinguishable 403. Both refusals are total:
+  // nothing authenticates, nothing binds, nothing is written.
   await check("C1 ow cannot authenticate any financial goal", async () => {
     const learner = await createLearner();
-    for (const goal of ["ftd", "redep", "commission", "withdrawal", "email"]) {
+    for (const goal of ["ftd", "commission", "withdrawal", "email"]) {
       const r = await send({
         clickid: learner.clickId, goal, ow: SECRET,
         playerid: nextPlayerId(), extra: { sum: "10", event_id: `pdp1-fin-${goal}` },
       });
       assert.equal(r.status, 403, `${goal} must stay header-only`);
     }
+    const redep = await send({
+      clickid: learner.clickId, goal: "redep", ow: SECRET,
+      playerid: nextPlayerId(), extra: { sum: "10", event_id: "pdp1-fin-redep" },
+    });
+    // Unavailable rather than forbidden — the family is off, not the secret.
+    assert.equal(redep.status, 503, "redep while RDEP is off must be unavailable, pre-auth");
     assert.equal(await bindingFor(learner.userId), null);
   });
 

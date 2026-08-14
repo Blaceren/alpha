@@ -378,11 +378,18 @@ async function main() {
     }
   });
 
+  // POCKET-REG-INGRESS-1 — the post-G4 refusal contract
+  // (TEST-POCKET-REFUSAL-CONTRACT): `redep` IS a Growth V1 goal, so with its
+  // family switch off a query-authenticated attempt is answered
+  // `503 POCKET_POSTBACK_UNAVAILABLE` before authentication — retry-safe, and
+  // not an invitation to hunt for a secret mismatch that does not exist. Goals
+  // with no Growth V1 mandate keep the one indistinguishable 403. Neither
+  // refusal reaches the database.
   await check("A8 no other financial goal accepts ow, enabled or not", async () => {
     const learner = await createLearner();
     for (const enabled of ["true", "false"]) {
       process.env.POCKET_FIRST_DEPOSIT_ENABLED = enabled;
-      for (const goal of ["ftd", "redep", "commission", "withdrawal", "email"]) {
+      for (const goal of ["ftd", "commission", "withdrawal", "email"]) {
         const response = await send({
           clickid: learner.clickId,
           goal,
@@ -392,6 +399,14 @@ async function main() {
         });
         assert.equal(response.status, 403, `${goal} must stay header-only (fd=${enabled})`);
       }
+      const redep = await send({
+        clickid: learner.clickId,
+        goal: "redep",
+        playerid: nextPlayerId(),
+        sum: "10.00",
+        ow: SECRET,
+      });
+      assert.equal(redep.status, 503, `redep while RDEP is off is unavailable, pre-auth (fd=${enabled})`);
     }
     process.env.POCKET_FIRST_DEPOSIT_ENABLED = "true";
   });
@@ -467,14 +482,23 @@ async function main() {
     }
   });
 
-  await check("B6 no table anywhere holds a redeposit, balance or outbox concept", async () => {
+  // POCKET-REG-INGRESS-1 (TEST-POCKET-REFUSAL-CONTRACT): migration 47
+  // (`growth_event_foundation`) creates `GrowthEventOutbox` BY DESIGN — the
+  // canonical Growth ledger's single outbox. The pre-47 spelling of this
+  // assertion ("no outbox concept anywhere") had therefore been failing on the
+  // accepted, deployed release while guarding nothing. The post-47 contract it
+  // now pins: still no redeposit table (RDEP identity is an external
+  // dependency and no schema may pre-empt it), still no balance column on the
+  // provider event, and no SECOND outbox — `GrowthEventOutbox` is the only one
+  // allowed to exist.
+  await check("B6 no redeposit table, no balance column, no second outbox", async () => {
     const tables = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
       "SELECT name FROM sqlite_master WHERE type='table'",
     );
     const names = tables.map((t) => t.name.toLowerCase());
-    for (const forbidden of ["redeposit", "outbox"]) {
-      assert.ok(!names.some((n) => n.includes(forbidden)), `found a ${forbidden} table`);
-    }
+    assert.ok(!names.some((n) => n.includes("redeposit")), "found a redeposit table");
+    const outboxes = names.filter((n) => n.includes("outbox"));
+    assert.deepEqual(outboxes, ["growtheventoutbox"], "GrowthEventOutbox must be the only outbox");
     const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
       'PRAGMA table_info("PocketProviderEvent")',
     );
@@ -546,7 +570,14 @@ async function main() {
       // PHASE-G2 SUCCESSOR: the assessment lineage migration makes it 8. Nothing
       // about Pocket changed — this suite pins the migration chain twice, by
       // total and by offset, and both pins move when a migration is added.
-      assert.equal(prior.length, expectedPriorMigrationCount(8));
+      //
+      // POCKET-REG-INGRESS-1 (TEST-POCKET-REFUSAL-CONTRACT): G4's
+      // `growth_event_foundation` (migration 47) landed after this one and the
+      // offset was not bumped with it — the same decay this comment already
+      // documents twice, caught this time by the activation phase that owns the
+      // post-G4 contract. 8 -> 9. No Pocket schema changed; both pins move
+      // together, and EXPECTED_MIGRATION_COUNT remains 47.
+      assert.equal(prior.length, expectedPriorMigrationCount(9));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

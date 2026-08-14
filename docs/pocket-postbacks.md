@@ -1,166 +1,169 @@
 # Pocket postbacks
 
-Pocket can send simple GET postback URLs to:
+The canonical Pocket provider callback contract, as the deployed source
+implements it. Rewritten by `ATA-PREPROD-POCKET-REG-INGRESS-ENABLEMENT-AND-ACTIVATION-1`
+(2026-08-14): the previous version of this document described the pre-PDP-1
+header-only contract and a fingerprint fallback that were both removed by later
+accepted waves. Source is authority; the files are named beside each rule.
+
+## The endpoint
 
 ```text
-http://57.128.213.204:8080/api/postbacks/pocket
+GET /api/postbacks/pocket
 ```
 
-Use a HTTPS domain instead of the raw IP/HTTP address before production.
+One public callback path, GET only. On PREPROD it is reachable at:
 
-## Required URLs
+```text
+https://preprod.alfatrade.media/api/postbacks/pocket
+```
+
+This exact path — and only this exact path — is exempt from the PREPROD human
+Basic Auth gate at the nginx edge; it answers with the Backend's own
+fail-closed provider authentication instead. Every other path on the host stays
+behind the gate. The nginx location keeps the sanitized access log
+(`postback_noquery`, `$uri` never `$request`) and a `crit`-level error log so
+the query-borne secret can never reach a log file.
+
+## Required URLs (configure at Pocket)
 
 Registration:
 
 ```text
-http://57.128.213.204:8080/api/postbacks/pocket?clickid={click_id}&goal=reg&playerid={trader_id}
+https://preprod.alfatrade.media/api/postbacks/pocket?clickid={click_id}&goal=reg&playerid={trader_id}&ow=<POSTBACK_SECRET>
 ```
 
-First Deposit:
+First Deposit (only once DEP is switched on):
 
 ```text
-http://57.128.213.204:8080/api/postbacks/pocket?clickid={click_id}&goal=dep&playerid={trader_id}&sum={sumdep}
+https://preprod.alfatrade.media/api/postbacks/pocket?clickid={click_id}&goal=dep&playerid={trader_id}&sum={sumdep}&ow=<POSTBACK_SECRET>
 ```
 
-Re-deposit:
+Re-deposit (only once RDEP is switched on):
 
 ```text
-http://57.128.213.204:8080/api/postbacks/pocket?clickid={click_id}&goal=redep&playerid={trader_id}&sum={sumdep}
+https://preprod.alfatrade.media/api/postbacks/pocket?clickid={click_id}&goal=redep&playerid={trader_id}&sum={sumdep}&ow=<POSTBACK_SECRET>
 ```
 
-Optional Email Confirmation:
+Never put the real secret in docs, code, issue trackers, or chat. If an `ow`
+value was ever shared in screenshots or chats, rotate it and update only
+`POSTBACK_SECRET` in env.
 
-```text
-http://57.128.213.204:8080/api/postbacks/pocket?clickid={click_id}&goal=email_confirmed&playerid={trader_id}
-```
+## Goals — exactly three, no synonyms
 
-Never put the real secret in docs, code, issue trackers, or chat.
-If the old CRM `ow` value was shared in screenshots or chats, rotate it before production and update only `POSTBACK_SECRET` in env.
+`reg`, `dep`, `redep` (`src/lib/growth/pocket/goal-allowlist.ts`). The literals
+Pocket's own macro documentation uses; no case folding, no trimming, no alias
+table. A duplicated `goal` parameter is refused. `registration`, `ftd`,
+`first_deposit`, `redeposit`, `email_confirmed`, `commission`, `withdrawal` and
+every other historical spelling name no Growth V1 event and are refused; no
+Pocket receiver can reach commission or withdrawal processing at all.
 
-## Accepted macros
+## Switches — one per family, all AND-ed with the master
 
-- `clickid` or `click_id` -> `click_id`
-- `goal`, `event`, or `type` -> Pocket event
-- `playerid`, `trader_id`, `traderId`, or `user_id` -> `trader_id`
-- `sum`, `sumdep`, `amount`, or `deposit_amount` -> `amount`
-- `externalEventId`, `event_id`, `transaction_id`, or `conversion_id` -> idempotency key
-- `currency` -> currency, default `USD`
-- `x-postback-secret` header -> the shared `POSTBACK_SECRET` (the **only** accepted authentication channel)
-- `ow`, `secret`, `token` in the query string -> **rejected**; a request carrying any of them is refused with `403`
+| key | meaning |
+|---|---|
+| `POCKET_POSTBACK_ENABLED` | master gate: "Pocket is integrated at all"; owns the secret |
+| `POCKET_REG_INGEST_ENABLED` | the REG family |
+| `POCKET_DEP_INGEST_ENABLED` + `POCKET_FIRST_DEPOSIT_ENABLED` | the DEP family (the second key owns the deposit currency contract) |
+| `POCKET_RDEP_INGEST_ENABLED` | the RDEP family (evidence capture; canonical emission additionally requires `POCKET_RDEP_EVENT_ID_PARAM`) |
 
-Goal mapping:
+Turning the master on alone admits **nothing** — each family needs its own
+switch (`src/lib/growth/ingress-config.ts`).
 
-- `reg`, `registration` -> `Registration`
-- `dep`, `ftd`, `first_deposit` -> `First Deposit`
-- `redep`, `redeposit` -> `Re-deposit`
-- `email`, `email_confirmed`, `email_confirmation` -> `Email Confirmation`
-- `commission` -> `Commission`
-- `withdrawal` -> `Withdrawal`
-- `successful_withdrawal` -> `Successful Withdrawal`
-- `canceled_withdrawal` -> `Canceled Withdrawal`
+## Authentication — two channels, no third
 
-## Security
+1. `?ow=<POSTBACK_SECRET>` — Pocket's official direct contract
+   (`authenticatePocketQuerySecret`). Accepted **only** for a Growth V1 goal
+   whose own family switch is on. Exactly one `ow`; duplicated, empty or
+   malformed values are refused; the comparison is timing-safe.
+2. `X-Postback-Secret: <POSTBACK_SECRET>` header — the legacy ATA integration
+   channel (`authenticatePocketRequest`), timing-safe, one header only.
 
-The endpoint **fails closed**. There is no unauthenticated mode.
+`?secret=` and `?token=` are legacy aliases with no provider mandate and are
+rejected outright, even beside a valid header. For any goal outside the enabled
+Growth V1 set, `ow` joins them — a request carrying query auth material for
+such a goal is refused with the one indistinguishable `403` so a legacy
+integration fails loudly rather than continuing to leak.
 
-`POCKET_POSTBACK_ENABLED` must be exactly `true` for the route to accept anything.
-Absent, `false`, or a `POSTBACK_SECRET` that fails the strength bounds (16-200
-printable non-whitespace characters, no comma) all produce the same `503`
-`POCKET_POSTBACK_UNAVAILABLE`. Disabled and misconfigured are deliberately
-indistinguishable, so the response never reveals whether a secret is configured.
+The secret must satisfy 16–200 printable non-whitespace characters with no
+comma; a value failing those bounds produces the same `503` as "disabled",
+deliberately (`resolvePocketPostbackConfig`).
 
-When enabled, every request must carry the secret in the request header:
+## Order of evaluation (the post-G4 refusal contract)
 
-```text
-X-Postback-Secret: <POSTBACK_SECRET>
-```
+1. **Master gate.** Off or misconfigured → `503 POCKET_POSTBACK_UNAVAILABLE`,
+   indistinguishable on purpose, before any database work.
+2. **Per-IP rate limit** — 600/min accepted-traffic budget; authentication
+   failures draw from their own 20/min budget (`rate-policy.ts`). Exceeded →
+   `429 RATE_LIMITED`.
+3. **Bounded query shape** — max 40 params, key ≤ 80, value ≤ 1000 → `400`.
+4. **Supported goal, own family off, `ow` present** → `503`, **before
+   authentication**. A disabled family is not an authentication failure; 503 is
+   retry-safe, so a delivery during a rollout window is not lost
+   (TEST-POCKET-REFUSAL-CONTRACT pins this in the regression suites).
+5. **Forbidden query auth material** → one identical `403`.
+6. **Authentication** (timing-safe) → failures are one identical `403`.
+7. **Dispatch** on the goal allowlist: `reg` binds identity and reconciles L1
+   and never touches money; `dep` records money and never touches identity or
+   progression; `redep` records evidence and refuses to emit a canonical event
+   it cannot identify.
 
-Authentication is **header-only**. Secrets in URLs are captured by access logs,
-proxies, browser history and `Referer` headers, so `?ow=`, `?secret=` and
-`?token=` are no longer accepted — a request carrying any of them is rejected
-even if a valid header is also present, so a legacy integration fails loudly
-instead of silently continuing to leak its secret.
+## Registration (`goal=reg`, `ow` channel)
 
-The comparison is timing-safe. Missing, empty, malformed, ambiguous (the header
-sent more than once) and simply wrong secrets all return one identical `403`
-`FORBIDDEN` body, and authentication happens before any database lookup, so a
-rejected postback changes zero rows.
+Strict single-spelling fields (`parsePocketRegistrationFields`): `clickid`
+exactly once, matching `tq-<uuid v4 lowercase>` (minted by
+`POST /api/exchange/referral-link`); `playerid` exactly once, matching
+`^[1-9][0-9]{0,15}$` and safe-integer bounded. An unknown clickid returns the
+**same** bounded `400 INVALID_REGISTRATION` a malformed field produces — a
+caller cannot distinguish them.
 
-Requests are rate-limited per IP before any database work. Exceeding the budget
-returns `429` `RATE_LIMITED`. Authentication failures consume the same budget, so
-the secret cannot be probed at unbounded rates.
+Past validation: one durable `ProviderIngressEvent` per delivery (evidence,
+written before the binding, settled after), then `bindPocketIdentityCanonical`
+— the identity binding and the canonical `pocket_reg` GrowthEvent are **one
+domain operation** (G4-H5), idempotent on `pocket:player:<id>`, with
+`occurredAt = boundAt` so a retry never moves a registration between reporting
+periods. Then `ExchangeAccount.registrationStatus = true` plus a durable
+receipt (`PostbackEvent.externalEventId` is `null` for registrations: Pocket
+documents no transaction id for one, and a fabricated id would be a lie about
+provenance). Then the L1 reconciliation through the shipped start + completion
+owners — zero XP, enforced by a throw that rolls the transaction back.
 
-> The previous `POCKET_POSTBACK_REQUIRE_SECRET` flag failed **open**: when it was
-> absent or not `"true"` the secret check was skipped entirely and the endpoint
-> accepted any unauthenticated request. It has been removed and must not return.
+Replay: identical delivery → identity `already_bound` → L1 `already_completed`
+→ `pocket_reg` duplicate → `200 {"ok":true}`, zero mutation beyond a new
+evidence row (`accepted_duplicate`). Concurrent duplicates: the database
+decides via the UNIQUE constraints; the loser re-reads and reports the stored
+truth. A conflicting player is quarantined (`player_conflict`); the original
+binding survives.
 
-### Replay and idempotency
+## Responses
 
-`PostbackEvent.externalEventId` carries a database `UNIQUE` constraint, which is
-the durable replay control — not process memory. Pocket supplies the identifier
-through `externalEventId`, `event_id`, `transaction_id` or `conversion_id`; when
-none is present a deterministic fingerprint of
-`clickId|traderId|type|amount|date_time` is used instead.
+| condition | response |
+|---|---|
+| integration disabled / secret misconfigured | `503 POCKET_POSTBACK_UNAVAILABLE` |
+| family disabled (`reg`/`dep`/`redep` with `ow`) | `503 POCKET_POSTBACK_UNAVAILABLE`, pre-auth |
+| bad/missing/ambiguous secret, or query-borne secret where forbidden | `403 FORBIDDEN` |
+| rate limited | `429 RATE_LIMITED` |
+| malformed field **or** unknown clickid | `400 INVALID_REGISTRATION` (reg) / `400 INVALID_DEPOSIT` (dep) / `400 INVALID_REDEPOSIT` (redep) |
+| unsupported goal on the `ow` channel | `400 UNSUPPORTED_GOAL` |
+| transient failure during L1 reconciliation | `503 {"ok":false}` + `POCKET_REGISTRATION_LEVEL_RECONCILE_DEFERRED` audit — Pocket's retry is the recovery path |
+| success (every business outcome) | `200 {"ok":true}` — matched, duplicate and quarantined are deliberately indistinguishable to the caller; no enumeration oracle |
 
-- A replayed identifier returns `{"success":true,"duplicate":true}` and applies
-  no mutation.
-- Concurrent duplicates lose the unique-constraint race; the losing request's
-  whole transaction, including the account update, rolls back.
-- A replayed identifier describing *different* business facts (event type, amount
-  or currency) is a conflict, not a duplicate: it returns `409`
-  `POSTBACK_CONFLICT` and never overwrites the original receipt.
+## The legacy header channel
 
-Pocket's `date_time` is an untrusted upstream value and is **not** used as a
-freshness or replay control; durable event-id idempotency is the sole guarantee.
+A header-authenticated `goal=reg` continues down the legacy response shape
+(`{"success":true,...}` / `404 UNKNOWN_CLICK_ID`) for existing ATA
+integrations; it now projects through the same canonical domain operation, so
+both receivers produce one binding and one event. The JSON intake
+`POST /api/exchange/postbacks/receive` remains header-only, master-gated, and
+cannot bind identities. Neither legacy channel is part of the Pocket provider
+contract.
 
-The existing JSON endpoint remains available:
+## What is deliberately absent
 
-```text
-POST /api/exchange/postbacks/receive
-```
-
-It still requires the `x-postback-secret` header and accepts JSON.
-
-## Manual checks
-
-Use a real known `click_id` from admin/CRM before testing accepted events.
-
-Registration:
-
-```text
-GET /api/postbacks/pocket?clickid=REAL_CLICK_ID&goal=reg&playerid=TEST_PLAYER_ID
-```
-
-First Deposit:
-
-```text
-GET /api/postbacks/pocket?clickid=REAL_CLICK_ID&goal=dep&playerid=TEST_PLAYER_ID&sum=94.18
-```
-
-Re-deposit:
-
-```text
-GET /api/postbacks/pocket?clickid=REAL_CLICK_ID&goal=redep&playerid=TEST_PLAYER_ID&sum=205.10
-```
-
-Unknown click id:
-
-```text
-GET /api/postbacks/pocket?clickid=FAKE_CLICK_ID&goal=reg&playerid=TEST_PLAYER_ID
-```
-
-Send the secret as a header, for example:
-
-```bash
-curl -H "X-Postback-Secret: $POSTBACK_SECRET" "<url>"
-```
-
-Expected result:
-
-- known `clickid` events return `{"success":true,"duplicate":false}`
-- duplicate idempotency keys return `{"success":true,"duplicate":true}`
-- a reused idempotency key with different facts returns `409` `POSTBACK_CONFLICT`
-- unknown `clickid` returns `{"success":false,"error":"UNKNOWN_CLICK_ID"}`
-- no/wrong/query-supplied secret returns `403` `FORBIDDEN`
-- integration disabled or misconfigured returns `503` `POCKET_POSTBACK_UNAVAILABLE`
-- admin/CRM shows `click_id`, `trader_id`, event history, deposit totals, email confirmation, rejected events, and duplicate behavior
+- No fingerprint fallback for a missing provider event id — that key
+  (`clickId|traderId|type|amount|date_time`) is forbidden in both directions
+  and was removed (DEVACT-1); a registration simply has no external event id.
+- No `date_time` freshness or replay control — untrusted upstream data.
+- No redeposit identity synthesis — canonical `rdep` requires an operator to
+  name a provider-guaranteed unique parameter in `POCKET_RDEP_EVENT_ID_PARAM`;
+  until then deliveries land as durable `identity_unresolved` evidence.

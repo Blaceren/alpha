@@ -346,16 +346,24 @@ async function main() {
     );
   });
 
-  await check("C5 an identified deposit still persists NO balance", async () => {
+  // POCKET-REG-INGRESS-1 — updated to the post-G4 contract. This case used to
+  // prove "an identified `ftd` deposit moves the legacy money state but never a
+  // balance". G4 removed `ftd` (and every legacy financial alias) from the
+  // Pocket receiver outright — the typed `ow` contract is the sole first-deposit
+  // intake — so the honest post-G4 statement is stronger: the delivery is
+  // refused entirely, and NOTHING moves. Not the balance, not the legacy
+  // first-deposit marker, not the totals.
+  await check("C5 a legacy ftd delivery is refused and moves nothing", async () => {
     const learner = await createLearner();
-    await sendPocket({
+    const response = await sendPocket({
       clickid: learner.clickId, goal: "ftd", sumdep: "900", playerid: "500204",
       transaction_id: "pocket-txn-devact1-0005",
     });
+    assert.equal(response.status, 400, "ftd has no post-G4 mandate");
     const acct = await account(learner.userId);
     assert.equal(acct.balance, 0);
-    assert.equal(acct.firstDepositConfirmed, true, "historical first-deposit status must still work");
-    assert.equal(acct.totalDeposits, 900);
+    assert.equal(acct.firstDepositConfirmed, false, "a refused goal must not move legacy state");
+    assert.equal(acct.totalDeposits, 0);
   });
 
   /* ================================================================== */

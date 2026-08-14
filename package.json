@@ -123,6 +123,7 @@
     "test:regression:pocket-first-deposit": "tsx scripts/regression/pocketFirstDepositRegression.ts",
     "test:regression:pocket-first-deposit-e2e": "tsx scripts/regression/pocketFirstDepositIsolatedE2E.ts",
     "test:regression:pocket-l1-owner": "tsx scripts/regression/pocketRegistrationLevelOwnerRegression.ts",
+    "test:regression:pocket-reg-ingress-phase": "tsx scripts/regression/pocketRegIngressActivationPhase.ts",
     "test:regression:curriculum-level-start": "tsx scripts/regression/curriculumLevelStartRegression.ts",
     "test:regression:curriculum-phase-a": "tsx scripts/regression/curriculumPhaseARuntimeRegression.ts",
     "test:regression:curriculum-phase-a-http": "tsx scripts/regression/curriculumPhaseAHttpRegression.ts",

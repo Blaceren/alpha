@@ -73,6 +73,14 @@ for (const key of [
   "NODE_ENV",
   "POCKET_POSTBACK_ENABLED",
   "POCKET_POSTBACK_REQUIRE_SECRET",
+  // POCKET-REG-INGRESS-1: the granular family switches are THIS SUITE'S
+  // fixtures, never inherited — an operator shell that happens to export one
+  // must not silently convert a disabled-family refusal case into an accepted
+  // mutation. Each server start states exactly the families it turns on.
+  "POCKET_REG_INGEST_ENABLED",
+  "POCKET_DEP_INGEST_ENABLED",
+  "POCKET_RDEP_INGEST_ENABLED",
+  "POCKET_FIRST_DEPOSIT_ENABLED",
   "CURRICULUM_V2_ADMIN_ENABLED",
   "CURRICULUM_V2_READ_ENABLED",
   "CURRICULUM_V2_ENROLLMENT_ENABLED",
@@ -85,7 +93,14 @@ for (const key of [
 
 async function start(overrides: Record<string, string | undefined>) {
   const env = { ...baseEnv, ...overrides };
-  const child = spawn("npx", ["next", "dev", "--turbopack", "-p", String(port)], {
+  // POCKET-REG-INGRESS-1: `--turbopack` removed. The accepted phase-worktree
+  // layout provisions node_modules as per-package symlinks into the canonical
+  // store, and Turbopack's dev resolver refuses to cross them ("Next.js
+  // package not found" / jsx-runtime unresolved), which failed this suite on
+  // an environment property rather than on its subject. The suite's subject is
+  // the route's HTTP behaviour; the webpack dev server resolves the symlinked
+  // store correctly and serves the identical routes.
+  const child = spawn("npx", ["next", "dev", "-p", String(port)], {
     cwd: process.cwd(),
     env,
     detached: true,
@@ -324,7 +339,10 @@ async function main() {
     server = null;
 
     // --------------------------------------- C. enabled and configured ------
-    server = await start({ POCKET_POSTBACK_ENABLED: "true" });
+    // POCKET-REG-INGRESS-1: the REG family switch is stated explicitly — G4 made
+    // ingest granular, and the master alone admits nothing. DEP/RDEP stay off:
+    // this suite's deposit cases assert the DISABLED behaviour.
+    server = await start({ POCKET_POSTBACK_ENABLED: "true", POCKET_REG_INGEST_ENABLED: "true" });
 
     await check("auth: a missing header is refused", async () => {
       const reply = await postback(regQuery("auth-1"));
@@ -368,16 +386,23 @@ async function main() {
 
     // AFD-4 amended this contract for `dep` ALONE, and only behind
     // POCKET_FIRST_DEPOSIT_ENABLED (default false, and unset in this suite).
-    // Every other financial goal stays header-only unconditionally, which is
-    // what this case now pins.
+    // POCKET-REG-INGRESS-1 (TEST-POCKET-REFUSAL-CONTRACT): `redep` is a Growth
+    // V1 goal with its own switch, so with the family off a query-authenticated
+    // attempt is `503` BEFORE authentication — retry-safe, and not a secret
+    // problem. Goals with no Growth V1 mandate keep the indistinguishable 403.
     await check("auth: ow cannot authenticate a financial goal", async () => {
-      for (const goal of ["ftd", "redep", "commission", "withdrawal"]) {
+      for (const goal of ["ftd", "commission", "withdrawal"]) {
         const reply = await postback({
           goal, clickid: CLICK_ID, playerid: "ps1-player",
           event_id: `auth-q-fin-${goal}`, sum: "10", ow: SECRET,
         });
         assert.equal(reply.status, 403, `${goal} must stay header-only`);
       }
+      const redep = await postback({
+        goal: "redep", clickid: CLICK_ID, playerid: "ps1-player",
+        event_id: "auth-q-fin-redep", sum: "10", ow: SECRET,
+      });
+      assert.equal(redep.status, 503, "redep while RDEP is off is unavailable, pre-auth");
     });
 
     await check("auth: ow cannot authenticate a deposit while first deposit is off", async () => {
@@ -539,19 +564,28 @@ async function main() {
       assert.deepEqual(first.body, second.body);
     });
 
-    await check("replay: a deposit applies its amount exactly once", async () => {
+    // POCKET-REG-INGRESS-1 (post-G4 restatement). This case used to prove the
+    // legacy header deposit was credited exactly once. G4 closed that path by
+    // REMOVAL — `goal=dep` on the header channel is the shadow money path the
+    // ledger never heard about, so it no longer exists; the canonical replay
+    // and conflict proofs for deposits live in pocketFirstDepositRegression.
+    // What this case pins now is the removal itself: however many times the
+    // legacy delivery is sent, it is refused and moves NOTHING.
+    await check("replay: a legacy header deposit is refused every time, moving nothing", async () => {
       const query = { goal: "dep", clickid: CLICK_ID, playerid: "ps1-player", event_id: "evt-dep", sum: "100" };
-      const first = await postback(query, authed());
-      assert.equal(first.status, 200);
-      assert.equal(first.body.duplicate, false);
-
-      for (let i = 0; i < 3; i += 1) {
-        const repeat = await postback(query, authed());
-        assert.equal(repeat.body.duplicate, true);
+      for (let i = 0; i < 4; i += 1) {
+        const reply = await postback(query, authed());
+        assert.equal(reply.status, 400, "the legacy header deposit goal is gone");
+        assert.equal(reply.body.error, "UNKNOWN_GOAL");
       }
+      assert.equal(
+        await prisma.postbackEvent.count({ where: { externalEventId: "evt-dep" } }),
+        0,
+        "a refused delivery must not leave a receipt",
+      );
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
-      assert.equal(account?.totalDeposits, 100, "deposit must be credited exactly once");
+      assert.equal(account?.totalDeposits, 0, "a refused deposit must credit nothing");
       // DEVACT-1 — a deposit must NOT credit a current trading balance.
       //
       // This assertion previously required `balance` to track the deposit
@@ -563,10 +597,15 @@ async function main() {
       // and it is asserted immediately above. The idempotency property this
       // test exists to prove is unchanged and still enforced.
       assert.equal(account?.balance, 0, "a deposit must never persist a current balance");
-      assert.equal(account?.firstDepositConfirmed, true);
+      assert.equal(account?.firstDepositConfirmed, false, "a refused deposit confirms nothing");
     });
 
-    await check("replay: concurrent duplicates apply the mutation exactly once", async () => {
+    // POCKET-REG-INGRESS-1 (post-G4 restatement). The header `redep` goal went
+    // the way of `dep`: removed outright. Concurrency-exactly-once for the
+    // surviving canonical paths is pinned in pocketDirectPostbackRegression
+    // (F4/F5) and pocketFirstDepositRegression; what a concurrent legacy burst
+    // must prove now is that every request is refused and nothing races at all.
+    await check("replay: concurrent legacy redeposits are all refused, mutating nothing", async () => {
       const query = {
         goal: "redep",
         clickid: CLICK_ID,
@@ -575,26 +614,23 @@ async function main() {
         sum: "50",
       };
 
-      // Fired in one batch with no sleep: the durable unique constraint, not
-      // timing, is what makes this deterministic.
       const replies = await Promise.all(
         Array.from({ length: 6 }, () => postback(query, authed())),
       );
 
       for (const reply of replies) {
-        assert.equal(reply.status, 200, `unexpected status ${reply.status}: ${reply.text}`);
+        assert.equal(reply.status, 400, `unexpected status ${reply.status}: ${reply.text}`);
+        assert.equal(reply.body.error, "UNKNOWN_GOAL");
       }
-      const applied = replies.filter((reply) => reply.body.duplicate === false);
-      assert.equal(applied.length, 1, `exactly one request may apply the mutation, got ${applied.length}`);
 
       assert.equal(
         await prisma.postbackEvent.count({ where: { externalEventId: "evt-concurrent" } }),
-        1,
-        "the unique constraint must keep a single receipt",
+        0,
+        "a refused delivery must not leave a receipt",
       );
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
-      assert.equal(account?.totalDeposits, 150, "re-deposit must be credited exactly once");
+      assert.equal(account?.totalDeposits, 0, "a refused redeposit must credit nothing");
       // DEVACT-1 — a deposit must NOT credit a current trading balance.
       //
       // This assertion previously required `balance` to track the deposit
@@ -608,7 +644,12 @@ async function main() {
       assert.equal(account?.balance, 0, "a deposit must never persist a current balance");
     });
 
-    await check("replay: a conflicting duplicate fails safely without overwriting", async () => {
+    // POCKET-REG-INGRESS-1 (post-G4 restatement). With the legacy goal removed
+    // there is no receipt for a conflicting redelivery to collide with — the
+    // conflict-never-overwrites proof for canonical deposits lives in
+    // pocketFirstDepositRegression. A conflicting legacy delivery is simply
+    // refused like every other one, and stores nothing to conflict WITH.
+    await check("replay: a conflicting legacy duplicate is refused and stores nothing", async () => {
       const conflicting = {
         goal: "redep",
         clickid: CLICK_ID,
@@ -617,14 +658,14 @@ async function main() {
         sum: "9999",
       };
       const reply = await postback(conflicting, authed());
-      assert.equal(reply.status, 409);
-      assert.equal(reply.body.error, "POSTBACK_CONFLICT");
+      assert.equal(reply.status, 400);
+      assert.equal(reply.body.error, "UNKNOWN_GOAL");
 
       const stored = await prisma.postbackEvent.findUnique({ where: { externalEventId: "evt-concurrent" } });
-      assert.equal(stored?.amount, 50, "the original receipt must not be overwritten");
+      assert.equal(stored, null, "a refused delivery must not store a receipt");
 
       const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
-      assert.equal(account?.totalDeposits, 150, "a conflict must not move money");
+      assert.equal(account?.totalDeposits, 0, "a refused conflict must not move money");
       // DEVACT-1 — a deposit must NOT credit a current trading balance.
       //
       // This assertion previously required `balance` to track the deposit
@@ -641,6 +682,17 @@ async function main() {
     await check("replay: idempotency is durable, not process memory", async () => {
       // The receipt is a database row with a UNIQUE column; prove the constraint
       // itself rejects a second insert independently of any route or cache.
+      // POCKET-REG-INGRESS-1: the first row is seeded directly now — the legacy
+      // route no longer writes one — so this stays a pure database proof.
+      await prisma.postbackEvent.create({
+        data: {
+          externalEventId: "evt-concurrent",
+          type: "Re-deposit",
+          eventType: "deposit",
+          status: "processed",
+          rawPayload: "{}",
+        },
+      });
       await assert.rejects(
         prisma.postbackEvent.create({
           data: {
@@ -696,14 +748,19 @@ async function main() {
       }
     });
 
-    await check("rate limit: unauthenticated attempts consume the budget", async () => {
-      // The exhausted bucket above was filled entirely by requests with no
-      // valid secret, proving authentication failures are rate-limited.
+    // POCKET-REG-INGRESS-1 (post-G4 restatement). The budgets were deliberately
+    // SPLIT by G4's rate policy: authentication failures draw from their own far
+    // tighter budget, and accepted traffic from a generous provider-shaped one —
+    // precisely so a flood of wrong secrets cannot lock the real provider out
+    // (rate-policy.ts states the design). The failure flood above was limited by
+    // the failure budget; the correctly authenticated request that follows must
+    // therefore SUCCEED, not inherit the attacker's exhaustion.
+    await check("rate limit: an auth-failure flood cannot lock out the provider", async () => {
       const reply = await postback(regQuery("rl-authed"), {
         ...authed(),
         "x-forwarded-for": "203.0.113.77",
       });
-      assert.equal(reply.status, 429, "a valid secret must not bypass the limit");
+      assert.equal(reply.status, 200, "a valid request must not pay for the attacker's failures");
     });
 
     await check("rate limit: buckets are isolated per IP", async () => {
@@ -715,10 +772,19 @@ async function main() {
     });
 
     await check("rate limit: the exhausted bucket wrote no domain rows", async () => {
-      // Every "rl-" request came from the throttled IP and carried no valid
-      // secret, so none of them may have reached the database.
-      const stray = await prisma.postbackEvent.count({ where: { externalEventId: { startsWith: "rl-" } } });
+      // Every rejected or rate-limited "rl-" request must have reached no
+      // database. The ONE accepted request above ("rl-authed") legitimately
+      // wrote exactly its own receipt — that is the provider not being locked
+      // out, not a leak.
+      const stray = await prisma.postbackEvent.count({
+        where: { externalEventId: { startsWith: "rl-" }, NOT: { externalEventId: "rl-authed" } },
+      });
       assert.equal(stray, 0, "rate-limited and rejected requests must not create receipts");
+      assert.equal(
+        await prisma.postbackEvent.count({ where: { externalEventId: "rl-authed" } }),
+        1,
+        "the accepted request writes exactly one receipt",
+      );
     });
   } finally {
     await stop(server);

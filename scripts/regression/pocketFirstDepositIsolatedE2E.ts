@@ -656,12 +656,19 @@ async function main() {
       }
     });
 
+    // POCKET-REG-INGRESS-1: migration 47 creates `GrowthEventOutbox` by design —
+    // the canonical Growth ledger's single outbox. The invariant this case
+    // protects is unchanged and now stated post-47: no redeposit structure, no
+    // SECOND outbox, no balance and no fabricated transaction id.
     await check("F3 no redeposit, no balance and no fabricated transaction id", async () => {
       const tables = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
         "SELECT name FROM sqlite_master WHERE type='table'",
       );
       for (const { name } of tables) {
-        assert.ok(!/redeposit|outbox/i.test(name), `unexpected table ${name}`);
+        assert.ok(!/redeposit/i.test(name), `unexpected table ${name}`);
+        if (/outbox/i.test(name)) {
+          assert.equal(name, "GrowthEventOutbox", `unexpected outbox table ${name}`);
+        }
       }
       const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
         'PRAGMA table_info("PocketProviderEvent")',
