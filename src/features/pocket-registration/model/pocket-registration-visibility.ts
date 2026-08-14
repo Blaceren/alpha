@@ -31,3 +31,20 @@ export function shouldShowPocketRegistration(
   // `completed`, `pending_review`, `locked` and `checkpoint_unverified` are not.
   return input.state === "available" || input.state === "in_progress";
 }
+
+/**
+ * XP-L1-FEEDBACK (POCKET-REG-INGRESS-1) — when the learner is TOLD the
+ * registration was received.
+ *
+ * Exactly the complement of the action within the external_event kind: the one
+ * Backend state that means "the postback arrived and the level closed" is
+ * `completed`, so that is the whole rule. Anything else — including states
+ * this module does not recognise — shows nothing, which is the safe direction
+ * for a message that asserts an external fact.
+ */
+export function shouldShowPocketRegistrationConfirmed(input: {
+  readonly isExternal: boolean;
+  readonly state: AcademyLevelState;
+}): boolean {
+  return input.isExternal && input.state === "completed";
+}

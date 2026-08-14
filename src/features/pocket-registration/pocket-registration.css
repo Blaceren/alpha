@@ -82,6 +82,23 @@
   color: var(--text-primary);
 }
 
+/* XP-L1-FEEDBACK — the confirmed state. Same surface, calm emphasis: the
+   accent border says "resolved", nothing pulses and nothing celebrates money. */
+.pocket-reg--confirmed {
+  border-color: var(--accent, var(--divider));
+}
+
+.pocket-reg__next {
+  margin: 0;
+}
+
+/* The one affordance of the confirmed state is a LINK to the next level,
+   dressed as the same primary action shape the section always had. */
+.pocket-reg__action--link {
+  display: inline-block;
+  text-decoration: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pocket-reg__action,
   .pocket-reg__recheck {

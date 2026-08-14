@@ -259,7 +259,11 @@ describe("curriculum write contract (CI-4: read-only + bounded assessment & repo
       if (!MANUAL_COMPLETION_WRITE.test(f)) continue;
       const clean = stripComments(src);
       for (const [, payload] of clean.matchAll(bodyLiteral)) {
-        expect(payload.replace(/\s/g, ""), `${f} sends more than a request identity`).toBe("{requestId}");
+        // POCKET-REG-INGRESS-1: a capture group is `string | undefined` to the
+        // compiler; an absent group must fail the assertion, not the typecheck.
+        expect((payload ?? "").replace(/\s/g, ""), `${f} sends more than a request identity`).toBe(
+          "{requestId}",
+        );
       }
       // And no other body-building mechanism is used at all.
       expect(clean, `${f} builds a request body some other way`).not.toMatch(

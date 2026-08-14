@@ -11,7 +11,11 @@ import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review"
 import { isManualCompletionMethod } from "@/lib/curriculum/completion-method";
 import { LevelStart } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
-import { shouldShowPocketRegistration } from "@/features/pocket-registration/model/pocket-registration-visibility";
+import { PocketRegistrationConfirmed } from "@/features/pocket-registration/pocket-registration-confirmed";
+import {
+  shouldShowPocketRegistration,
+  shouldShowPocketRegistrationConfirmed,
+} from "@/features/pocket-registration/model/pocket-registration-visibility";
 import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import "@/features/curriculum-api/curriculum-api.css";
 
@@ -143,6 +147,18 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
               real Pocket postback arrives, which is the only owner that can
               complete it and unlock Level 2. */}
           {showPocketRegistration ? <PocketRegistration /> : null}
+
+          {/* XP-L1-FEEDBACK (minimum viable). Once the Backend reports the
+              external_event level completed, the learner is told in words that
+              Pocket confirmed the registration — not left to infer it from a
+              vanished button — and is offered the one next step. Server-derived
+              state only; nothing is polled and nothing is written. */}
+          {shouldShowPocketRegistrationConfirmed({
+            isExternal: summary.typeInfo.isExternal,
+            state: summary.state,
+          }) ? (
+            <PocketRegistrationConfirmed nextLevelCode={navigation.nextLevelCode} />
+          ) : null}
 
           {/* Financial checkpoint (L4HG-1, L4VC-1). The Backend decides whether
               the condition can be verified at all and what the answer is; the
