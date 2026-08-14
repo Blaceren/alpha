@@ -88,6 +88,12 @@ export type AcademyLevelSummary = {
   lockReason: AcademyLockReason | null;
   stateLabel: string;
   completionSource: string;
+  /**
+   * Learner-facing Russian for `completionSource`. Added beside the enum rather
+   * than replacing it: the payload contract keeps the machine value, and the UI
+   * renders this. See lib/curriculum/completion-source.ts.
+   */
+  completionSourceLabel: string;
   requirements: { previousLevel: number | null; requiredXp: number; checkpointLevel: number | null };
   routeAccessible: boolean;
   /** Read-only in CI-2: "view" only, never a write action. */

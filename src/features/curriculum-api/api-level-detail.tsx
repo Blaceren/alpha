@@ -84,7 +84,7 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
           <section className="cur-detail__meta" aria-label="Параметры уровня">
             <dl>
               <div><dt>Тип</dt><dd>{summary.typeInfo.label}</dd></div>
-              <div><dt>Способ завершения</dt><dd>{summary.completionSource}</dd></div>
+              <div><dt>Способ завершения</dt><dd>{summary.completionSourceLabel}</dd></div>
               <div><dt>XP за уровень</dt><dd>{summary.xpReward}</dd></div>
               <div><dt>Предыдущий уровень</dt><dd>{prerequisites.previousLevel ?? "—"}</dd></div>
               {prerequisites.checkpointLevel !== null ? (

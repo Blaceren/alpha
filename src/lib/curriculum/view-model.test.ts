@@ -74,7 +74,7 @@ describe("toAcademyCurriculumView (enrolled)", () => {
     // graded check or by an explicit learner declaration. It carries no learner
     // data, so the property this whitelist protects is unchanged.
     expect(Object.keys(level0).sort()).toEqual(
-      ["actions", "checkpoint", "completionMethod", "completionSource", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
+      ["actions", "checkpoint", "completionMethod", "completionSource", "completionSourceLabel", "href", "learningObjective", "levelCode", "lockReason", "order", "progressVersion", "requirements", "routeAccessible", "shortDescription", "state", "stateLabel", "title", "typeInfo", "xpReward"].sort(),
     );
   });
 

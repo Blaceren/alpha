@@ -28,6 +28,7 @@ import type {
   AcademyModuleSummary,
   AcademyProgressSummary,
 } from "@/lib/curriculum/academy-view";
+import { completionSourceLabel } from "@/lib/curriculum/completion-source";
 
 export function levelHref(levelCode: string): string {
   return `/lessons/${encodeURIComponent(levelCode)}`;
@@ -163,6 +164,7 @@ function mapLevel(level: BackendLevel): AcademyLevelSummary {
     lockReason: stateInfo.lockReason,
     stateLabel: stateInfo.label,
     completionSource: COMPLETION_SOURCE[typeInfo.type],
+    completionSourceLabel: completionSourceLabel(COMPLETION_SOURCE[typeInfo.type]),
     requirements: {
       previousLevel: level.requirements.previousLevel,
       requiredXp: level.requirements.requiredXp,
