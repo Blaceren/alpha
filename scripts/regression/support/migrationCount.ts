@@ -32,6 +32,21 @@
  * deferred-work closure, which found it by running the suites and attributing
  * every failure rather than accepting a red suite as normal.
  *
+ * POCKET-DEP-RDEP-FINANCIAL-INGRESS-1: 48 -> 49. One migration,
+ * `20260814120000_pocket_redeposit_financial_event`, which rebuilds
+ * PocketProviderEvent to carry redeposits: it widens `eventType` to
+ * ('first_deposit','redeposit'), adds the derived-identity and temporal columns
+ * (providerEventKey, providerEventLocal, providerEventAt, providerEventAtRaw,
+ * providerEventAtStatus), and REPLACES the compound unique
+ * `(provider, eventType, pocketPlayerId)` with two PARTIAL unique indexes —
+ * one keeping exactly one first_deposit per player, one keying redeposits on
+ * the derived providerEventKey. Existing rows are preserved by the rebuild.
+ *
+ * THE INDEX CHANGE IS WHY THE COUNT ALONE WAS NOT ENOUGH THIS TIME. The Pocket
+ * suite also names the required indexes explicitly, and the old compound unique
+ * is deliberately gone, so that list was corrected in the same commit rather
+ * than loosened — the same discipline this file records.
+ *
  * POCKET-REG-FINAL-INTERNAL-CORRECTION-1: 47 -> 48. One migration,
  * `20260814000000_normalize_legacy_timestamp_storage`, which normalises 70
  * legacy TEXT datetime values in 19 columns to the integer epoch milliseconds
@@ -71,7 +86,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 48;
+export const EXPECTED_MIGRATION_COUNT = 49;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

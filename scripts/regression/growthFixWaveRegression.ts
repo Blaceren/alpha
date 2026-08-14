@@ -90,7 +90,7 @@ async function main() {
   } = await import("@/lib/growth/analytics/sources");
   const { emitGrowthEvent } = await import("@/lib/growth/emit");
   const { resolveGrowthV1Goal } = await import("@/lib/growth/pocket/goal-allowlist");
-  const { readPocketIngressSwitches, resolveRedepositIdentityPolicy } = await import(
+  const { readPocketIngressSwitches, resolveRedepositCapability } = await import(
     "@/lib/growth/ingress-config"
   );
   const { bindPocketIdentityCanonical } = await import("@/lib/growth/pocket/identity-authority");
@@ -703,17 +703,60 @@ async function main() {
     assert.equal(masterOnly.regEnabled, false, "master alone must not admit REG");
   });
 
-  await check("§67 RDEP canonical emission remains fail-closed", async () => {
-    const policy = resolveRedepositIdentityPolicy({} as NodeJS.ProcessEnv);
-    assert.equal(policy.kind, "unavailable");
-    for (const bad of ["ow", "secret", "token", "playerid", "clickid", "sum", "date_time", "goal"]) {
-      const p = resolveRedepositIdentityPolicy({
-        POCKET_RDEP_EVENT_ID_PARAM: bad,
-      } as unknown as NodeJS.ProcessEnv);
-      assert.equal(p.kind, "unavailable", `${bad} was accepted as an event identity`);
+  await check("§67 RDEP capability is truthful, and OFF means OFF", async () => {
+    // WHAT THIS ASSERTION USED TO SAY. "RDEP canonical emission remains
+    // fail-closed" — that no canonical redeposit could EVER be emitted until an
+    // operator named a PROVIDER-issued unique event-id parameter, and that
+    // several parameter names were forbidden as identities. POCKET-DEP-RDEP-1
+    // superseded that premise: ATA derives its own deterministic identity, so
+    // there is no provider contract to wait for and no parameter to nominate.
+    // The forbidden-name list guarded a nomination mechanism that no longer
+    // exists.
+    //
+    // WHAT STILL NEEDS GUARDING is that the capability surface tells the truth
+    // in both directions, because the failure this replaces would now be an
+    // availability surface claiming a capability the deployment does not have.
+    const off = resolveRedepositCapability({} as NodeJS.ProcessEnv);
+    assert.equal(off.kind, "unavailable");
+    assert.equal(
+      off.kind === "unavailable" ? off.reason : null,
+      "master_gate_disabled",
+      "with no Pocket integration at all the reason must be the master gate",
+    );
+
+    const masterOn = resolveRedepositCapability({
+      POCKET_POSTBACK_ENABLED: "true",
+      POSTBACK_SECRET: "x".repeat(32),
+    } as unknown as NodeJS.ProcessEnv);
+    assert.equal(masterOn.kind, "unavailable");
+    assert.equal(
+      masterOn.kind === "unavailable" ? masterOn.reason : null,
+      "redeposit_ingest_disabled",
+      "master on but RDEP off must say RDEP is off",
+    );
+
+    const on = resolveRedepositCapability({
+      POCKET_POSTBACK_ENABLED: "true",
+      POSTBACK_SECRET: "x".repeat(32),
+      POCKET_RDEP_INGEST_ENABLED: "true",
+    } as unknown as NodeJS.ProcessEnv);
+    assert.equal(on.kind, "available", "master + family on is the whole contract");
+
+    // THE SUPERSEDED REASON MUST BE UNREACHABLE. This is the RDEP-AVAIL-1 lock.
+    for (const env of [{}, { POCKET_POSTBACK_ENABLED: "true", POSTBACK_SECRET: "x".repeat(32) }]) {
+      const r = resolveRedepositCapability(env as unknown as NodeJS.ProcessEnv);
+      if (r.kind === "unavailable") {
+        assert.notEqual(
+          r.reason as string,
+          "provider_event_identity_contract_absent",
+          "the superseded provider-contract reason must not be reachable",
+        );
+      }
     }
+
+    // And with RDEP off in this fixture, nothing canonical was emitted.
     const rdep = await prisma.growthEvent.count({ where: { eventType: "rdep" } });
-    assert.equal(rdep, 0, "a canonical redeposit was emitted without a provider identity");
+    assert.equal(rdep, 0, "no canonical redeposit may exist while RDEP is disabled");
   });
 
   await check("§68 unresolved RDEP is reported separately and never as money", async () => {

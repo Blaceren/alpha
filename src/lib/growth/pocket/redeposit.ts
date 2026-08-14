@@ -1,54 +1,56 @@
 /**
- * G4-GROWTH — the redeposit handler, and the boundary it refuses to cross.
+ * POCKET-DEP-RDEP-1 — the redeposit handler.
  *
- * THE HONEST SUMMARY. Everything a redeposit needs is implemented here: the
- * typed parser, the field validation, the exact decimal amount, the provider
- * timestamp, the click and player linkage, the durable sanitized evidence, and
- * an explicit processing state. The one thing that does NOT happen is the
- * emission of a canonical `rdep` business event — because ATA cannot currently
- * tell a retried delivery from a genuinely new deposit, and pretending otherwise
- * would put invented money in a ledger a CPA calculation will later read.
+ * A valid authenticated `goal=redep` callback is authoritative evidence that a
+ * redeposit occurred. Pocket issues no per-deposit event identifier and is not
+ * required to: ATA derives its OWN deterministic business identity from the
+ * authenticated provider attributes and counts the event.
  *
- * WHY THE OBVIOUS KEY IS FORBIDDEN. `UNIQUE(playerId, dateTime, amount)` looks
- * like an identity and is not one. A learner who deposits 25.00 twice in the
- * same second — a double-click on a deposit button, an automated top-up, two
- * genuine trades — produces two identical tuples. Under that key the second
- * deposit silently disappears. The inverse is just as bad: a redelivery whose
- * timestamp differs by one second becomes new money. This platform already
- * refused exactly this reasoning for first deposits, in
- * `20260731010000_pocket_first_deposit`, and refuses it again here.
+ *     v1:pocket:redeposit:<playerId>:<canonical provider-local time>:<amount>
  *
- * WHY THE PAYLOAD HASH IS ALSO NOT THE ANSWER. It identifies repeated BYTES. Two
- * legitimate redeposits that agree on every field produce one hash. It can say
- * "we have seen this exact message before"; it cannot say "this is the same
- * deposit", and those are different claims.
+ * WHAT THIS FILE USED TO SAY, AND WHY IT CHANGED. It previously refused to emit
+ * any canonical `rdep` event at all, on the reasoning that ATA "cannot tell a
+ * retried delivery from a genuinely new deposit" without a provider-issued id,
+ * and that emission would begin only once an operator named such a parameter in
+ * `POCKET_RDEP_EVENT_ID_PARAM`. That gate is gone, together with the parameter,
+ * because the premise was rejected: waiting for an identifier the provider does
+ * not publish meant redeposits were never counted at all.
  *
- * SO WHAT WOULD BE SUFFICIENT. An identifier the PROVIDER generates, that is
- * unique per deposit, and that is STABLE ACROSS RETRIES. Pocket's documented
- * macro set — CLICK_ID, TRADER_ID, SUMDEP, DATE_TIME, CID, AC, SITE_ID,
- * SUB_ID1..5, PROMO, COUNTRY, DEVICE_TYPE, OS_VERSION, BROWSER, LINK_TYPE,
- * VISITOR_ID, COUNTRY_IP — contains no such field. When a contract supplies one,
- * an operator names the parameter in `POCKET_RDEP_EVENT_ID_PARAM` and canonical
- * emission begins with no schema change and no code change here.
+ * THE COST IS NAMED, NOT HIDDEN — BUSINESS_ACCEPTED_COLLISION_BEHAVIOUR. The old
+ * objection to `(player, time, amount)` was real and still is: two conceptually
+ * distinct redeposits by the same player, for the same exact amount, inside the
+ * same DATE_TIME second, collapse into ONE canonical ATA redeposit. That is an
+ * ACCEPTED BUSINESS ASSUMPTION and an ATA-DERIVED identity — it is NOT
+ * provider-guaranteed uniqueness, and it must never be described as such. The
+ * same property is what makes retries safe: a redelivery reproduces the same key
+ * and is recognised instead of double-counted.
  *
- * THIS IS NOT A PHASE FAILURE. It is the accepted safety boundary of §27: typed
- * ingress implemented, evidence durably captured, canonical conversion
- * fail-closed as `identity_unresolved`.
- */
-import type { PrismaClient } from "@prisma/client";
+ * `clickid` is deliberately EXCLUDED from the key. It identifies the acquisition
+ * journey, not the deposit, so including it would split one redeposit into
+ * several whenever the click context differed. It is not the fix for a collision.
+ *
+ * A REDEPOSIT NEVER BECOMES A FIRST DEPOSIT. Promoting one would fabricate the
+ * DEP a CPA calculation will later read; the two families are separated by
+ * partial unique indexes in migration 49 and by an explicit refusal below.
+ */import type { PrismaClient } from "@prisma/client";
 import { parsePocketDepositAmount } from "@/lib/exchange/pocketDepositAmount";
-import {
-  resolveRedepositIdentityPolicy,
-  type RedepositIdentityPolicy,
-} from "@/lib/growth/ingress-config";
 import { emitGrowthEvent } from "@/lib/growth/emit";
 import { redepositSourceEventId } from "@/lib/growth/event-keys";
 import { recordProviderIngress } from "@/lib/growth/pocket/ingress";
+import { createAuditLog } from "@/lib/audit";
+import {
+  deriveRedepositEventKey,
+  resolveRedepositTemporal,
+} from "@/lib/growth/pocket/redeposit-identity";
+import { readProviderEventTimeRaw } from "@/lib/growth/pocket/ingress-payload";
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const POCKET_REFERRAL_CLICK_ID =
   /^tq-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const POCKET_PLAYER_ID = /^[1-9][0-9]{0,15}$/;
+
+/** Bounded so a retry storm cannot grow the counter without limit. */
+const MAX_REDELIVERY_COUNT = 1000;
 
 export type RedepositFieldRejection =
   | "ambiguous_param"
@@ -100,32 +102,6 @@ export function parseRedepositFields(params: URLSearchParams): RedepositFields {
   return { ok: true, clickId: clickIds[0], playerId: playerIds[0], sum: sums[0] };
 }
 
-/**
- * Read the provider event identity, if and only if an operator has asserted a
- * contract that supplies one.
- *
- * A CALLER CANNOT OPT IN. If `POCKET_RDEP_EVENT_ID_PARAM` is unset, a delivery
- * carrying `event_id=whatever` is ignored entirely — the parameter is not read,
- * not stored as an identity, and cannot cause emission. This is what stops an
- * attacker who has obtained the secret from minting arbitrary "unique" deposits
- * by inventing identifiers, and it is why the policy lives in configuration
- * rather than in payload sniffing.
- */
-export function readProviderEventIdentity(
-  params: URLSearchParams,
-  policy: RedepositIdentityPolicy,
-): string | null {
-  if (policy.kind !== "available") return null;
-
-  const values = params.getAll(policy.parameterName);
-  if (values.length !== 1) return null;
-
-  const value = values[0].trim();
-  if (value.length === 0 || value.length > 128) return null;
-  if (CONTROL_CHARACTERS.test(value)) return null;
-
-  return value;
-}
 
 export type RedepositOutcome =
   /** Fields, amount or shape were wrong. Nothing was linked. */
@@ -184,17 +160,30 @@ export async function ingestPocketRedeposit(
     return { kind: "rejected", reason: "amount_invalid", ingressEventId: evidence.id };
   }
 
-  const policy = resolveRedepositIdentityPolicy(input.env ?? process.env);
-  const providerEventIdentity = readProviderEventIdentity(params, policy);
-
-  // ---- THE SAFETY BOUNDARY ----
+  // ---- THE IDENTITY BOUNDARY, UNDER THE ACCEPTED BUSINESS CONTRACT ----
   //
-  // No provider event identity means ATA cannot distinguish a retry from a new
-  // deposit. The evidence is complete and durable, the amount is exact, the
-  // linkage is recorded — and no canonical event is emitted. An operator sees
-  // this in the ingress-health surface as `identity_unresolved`, and the
-  // analytics layer reports redeposits as UNAVAILABLE rather than as zero.
-  if (providerEventIdentity === null) {
+  // WHAT CHANGED HERE. This used to require an operator to name a
+  // provider-issued unique event parameter, and to record every delivery as
+  // `identity_unresolved` until one existed. The product owner has decided
+  // otherwise: an authenticated `goal=redep` delivery is authoritative evidence
+  // that a redeposit occurred, and ATA derives its OWN deterministic identity
+  // from the authenticated attributes. See
+  // BUSINESS_ACCEPTED_RDEP_DEDUP_ASSUMPTION in redeposit-identity.ts for the
+  // residual collision risk, which is accepted rather than argued away.
+  //
+  // DATE_TIME IS REQUIRED. Without it there is no derivable identity, and a
+  // receive time, now(), firstReceivedAt or a payload hash must NEVER be
+  // substituted — each of those makes a retry look like new money. So a missing
+  // or malformed event time is a fail-closed terminal state with durable
+  // evidence, exactly as the old missing-parameter case was.
+  const rawEventTime = readProviderEventTimeRaw(params);
+  const derived = deriveRedepositEventKey({
+    pocketPlayerId: fields.playerId,
+    rawEventTime,
+    rawAmount: fields.sum,
+  });
+
+  if (!derived.ok) {
     const evidence = await recordProviderIngress(db, {
       goal: "redep",
       params,
@@ -207,6 +196,23 @@ export async function ingestPocketRedeposit(
     });
     return { kind: "identity_unresolved", ingressEventId: evidence.id };
   }
+
+  const providerEventIdentity = derived.key;
+
+  // THE ABSOLUTE INSTANT IS A SEPARATE QUESTION FROM THE IDENTITY, AND AN
+  // UNKNOWN ONE IS NOT A REJECTION.
+  //
+  // Pocket renders DATE_TIME in a zone that varies by user, account and
+  // registration GEO, so there is no single zone ATA could apply without
+  // fabricating one. The provider still told us four authoritative things —
+  // provider, player, exact amount, provider-local wall clock — and those
+  // identify and describe the redeposit completely. An unknown zone makes none
+  // of them untrue.
+  //
+  // So the event is created either way, and the temporal record says exactly
+  // what is known: raw bytes, normalised local wall clock, and an absolute
+  // instant ONLY when the delivery stated its own offset.
+  const temporal = resolveRedepositTemporal(derived.eventTime);
 
   // ---- past the boundary: an operator has asserted a provider contract ----
 
@@ -229,7 +235,14 @@ export async function ingestPocketRedeposit(
       playerIdNormalized: fields.playerId,
       clickId: fields.clickId,
       amount: amount.normalized,
-      providerEventIdentity,
+      // DELIBERATELY NOT providerEventIdentity. That column means "the
+      // PROVIDER's own unique event id", and it carries
+      // UNIQUE(provider, goal, providerEventIdentity) — one identity, one
+      // delivery. ATA's derived key is the opposite by design: STABLE ACROSS
+      // RETRIES, so writing it there would make the second delivery of one
+      // redeposit collide and be refused as evidence. §11 requires the opposite
+      // — evidence per delivery, never deduplicated away. The derived key lives
+      // on PocketProviderEvent.providerEventKey, which is the canonical row.
     });
     return { kind: "identity_unresolved", ingressEventId: evidence.id };
   }
@@ -237,15 +250,16 @@ export async function ingestPocketRedeposit(
   // A redeposit before any first deposit is an ordering ATA will not silently
   // repair: promoting it to a first deposit would fabricate the DEP that a CPA
   // conversion is computed from.
-  const firstDeposit = await db.pocketProviderEvent.findUnique({
+  // findFirst, not findUnique: migration 49 made first-deposit uniqueness a
+  // PARTIAL index so redeposits are not capped at one per player. The database
+  // still guarantees at most one row matches.
+  const firstDeposit = await db.pocketProviderEvent.findFirst({
     where: {
-      provider_eventType_pocketPlayerId: {
-        provider: "pocket",
-        eventType: "first_deposit",
-        pocketPlayerId: fields.playerId,
-      },
+      provider: "pocket",
+      eventType: "first_deposit",
+      pocketPlayerId: fields.playerId,
     },
-    select: { id: true },
+    select: { id: true, currencyCode: true, currencyStatus: true, matchedUserId: true },
   });
 
   if (firstDeposit === null) {
@@ -258,7 +272,14 @@ export async function ingestPocketRedeposit(
       playerIdNormalized: fields.playerId,
       clickId: fields.clickId,
       amount: amount.normalized,
-      providerEventIdentity,
+      // DELIBERATELY NOT providerEventIdentity. That column means "the
+      // PROVIDER's own unique event id", and it carries
+      // UNIQUE(provider, goal, providerEventIdentity) — one identity, one
+      // delivery. ATA's derived key is the opposite by design: STABLE ACROSS
+      // RETRIES, so writing it there would make the second delivery of one
+      // redeposit collide and be refused as evidence. §11 requires the opposite
+      // — evidence per delivery, never deduplicated away. The derived key lives
+      // on PocketProviderEvent.providerEventKey, which is the canonical row.
     });
     return { kind: "rejected", reason: "ordering_unresolved", ingressEventId: evidence.id };
   }
@@ -267,6 +288,11 @@ export async function ingestPocketRedeposit(
 
   // Evidence and canonical event commit together. A canonical redeposit whose
   // evidence rolled back would be money with no provenance.
+  //
+  // DELIVERY EVIDENCE IS NOT THE BUSINESS EVENT. One canonical redeposit may
+  // have many ProviderIngressEvent rows behind it — one per delivery, including
+  // retries — and that is deliberate. The canonical row is PocketProviderEvent,
+  // deduplicated on the derived key by a partial UNIQUE index in migration 49.
   return db.$transaction(async (tx) => {
     const evidence = await recordProviderIngress(tx, {
       goal: "redep",
@@ -276,14 +302,111 @@ export async function ingestPocketRedeposit(
       playerIdNormalized: fields.playerId,
       clickId: fields.clickId,
       amount: amount.normalized,
-      providerEventIdentity,
+      // DELIBERATELY NOT providerEventIdentity. That column means "the
+      // PROVIDER's own unique event id", and it carries
+      // UNIQUE(provider, goal, providerEventIdentity) — one identity, one
+      // delivery. ATA's derived key is the opposite by design: STABLE ACROSS
+      // RETRIES, so writing it there would make the second delivery of one
+      // redeposit collide and be refused as evidence. §11 requires the opposite
+      // — evidence per delivery, never deduplicated away. The derived key lives
+      // on PocketProviderEvent.providerEventKey, which is the canonical row.
     });
+
+    // THE CANONICAL FINANCIAL ROW.
+    //
+    // A redeposit lands in the same table as a first deposit, because they are
+    // the same KIND of fact — money a provider reported — and a second financial
+    // ledger is exactly what the accepted design forbids. The two families are
+    // kept apart by their identity, not by living in different tables:
+    // a first deposit is unique per player, a redeposit is unique per derived
+    // key, and migration 49 enforces both with separate partial indexes.
+    //
+    // `providerEventAt` is the provider's own instant. `firstReceivedAt` is when
+    // ATA saw it. They are different facts and both are kept.
+    let canonical: { id: number } | null = null;
+    let alreadyExisted = false;
+
+    try {
+      canonical = await tx.pocketProviderEvent.create({
+        data: {
+          provider: "pocket",
+          eventType: "redeposit",
+          pocketClickId: fields.clickId,
+          pocketPlayerId: fields.playerId,
+          matchedUserId: identity.userId,
+          matchedAt: now,
+          status: "matched",
+          normalizedAmount: amount.normalized,
+          currencyCode: currency.code,
+          currencyStatus: currency.status,
+          providerEventKey: providerEventIdentity,
+          // The three temporal facts, kept apart because they ARE different
+          // facts. `providerEventLocal` is what Pocket's clock read;
+          // `providerEventAt` is a real instant and stays NULL unless the
+          // delivery stated its own offset; `providerEventAtStatus` says which
+          // of those is true so a reader can never mistake one for the other.
+          providerEventLocal: temporal.local,
+          providerEventAt: temporal.absolute,
+          providerEventAtRaw: temporal.raw,
+          providerEventAtStatus: temporal.authority,
+          firstReceivedAt: now,
+          lastReceivedAt: now,
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      // A duplicate derived key is the RETRY case, and it is the whole point of
+      // the key. Re-read the canonical row and record the delivery against it
+      // rather than creating a second one.
+      if (!isRedepositKeyCollision(error)) throw error;
+      alreadyExisted = true;
+      canonical = await tx.pocketProviderEvent.findFirst({
+        where: { provider: "pocket", eventType: "redeposit", providerEventKey: providerEventIdentity },
+        select: { id: true },
+      });
+      if (canonical === null) throw error;
+      const existing = await tx.pocketProviderEvent.findUnique({
+        where: { id: canonical.id },
+        select: { replayCount: true },
+      });
+      await tx.pocketProviderEvent.update({
+        where: { id: canonical.id },
+        data: {
+          lastReceivedAt: now,
+          // Bounded transport metadata, mirroring the first-deposit contract.
+          // It never implies more than one redeposit.
+          ...((existing?.replayCount ?? 0) < MAX_REDELIVERY_COUNT
+            ? { replayCount: { increment: 1 } }
+            : {}),
+        },
+      });
+    }
 
     const emitted = await emitGrowthEvent(tx, {
       eventType: "rdep",
-      occurredAt: now,
+      // THE NARROWEST TRUTHFUL ORDERING TIMESTAMP.
+      //
+      // GrowthEvent.occurredAt is a real absolute instant used for ordering and
+      // period filtering, so it cannot hold a zone-less wall clock. When the
+      // provider's own instant IS authoritative — the delivery stated its offset
+      // — that is what goes here. When it is not, converting the local wall
+      // clock with a guessed zone would put a fabricated instant into the ledger
+      // a CPA calculation reads, so the fallback is ATA's own receipt time,
+      // which is a fact ATA can actually vouch for.
+      //
+      // THE FALLBACK IS LABELLED, NOT HIDDEN. `occurredAtAuthority` records
+      // whether this is the provider's instant or ATA's receipt, so no surface
+      // can present receipt time as Pocket's event time. The provider's original
+      // local reading is preserved on PocketProviderEvent either way and is
+      // never overwritten by this choice.
+      occurredAt: temporal.absolute ?? now,
+      metadata: {
+        ingressGoal: "redep",
+        occurredAtAuthority:
+          temporal.absolute === null ? "ata_receipt_time" : "provider_event_instant",
+      },
       sourceEventId: redepositSourceEventId(providerEventIdentity),
-      sourceEntityId: evidence.id,
+      sourceEntityId: canonical.id,
       userId: identity.userId,
       pocketTraderIdentityId: identity.id,
       providerIngressEventId: evidence.id,
@@ -291,7 +414,6 @@ export async function ingestPocketRedeposit(
       amount: amount.normalized,
       currencyCode: currency.code,
       currencyStatus: currency.status,
-      metadata: { ingressGoal: "redep" },
     });
 
     if (emitted.outcome === "failed") {
@@ -333,4 +455,19 @@ async function resolveRedepositCurrency(
   }
 
   return { code: row.currencyCode, status: "configured" };
+}
+
+
+/**
+ * Is this the "another delivery created this redeposit first" collision?
+ *
+ * Matched on the constraint target rather than the code alone, so an unrelated
+ * uniqueness failure in the same transaction is not mistaken for a retry.
+ */
+function isRedepositKeyCollision(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; meta?: unknown };
+  if (candidate.code !== "P2002") return false;
+  const target = JSON.stringify(candidate.meta ?? {});
+  return target.includes("providerEventKey") || target.includes("PocketProviderEvent");
 }

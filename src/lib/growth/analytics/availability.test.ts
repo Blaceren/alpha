@@ -103,9 +103,11 @@ describe("buildGrowthAvailability — registration origin coverage", () => {
       amountUnavailableReason: "no_deposits_in_period",
     });
 
+    // RDEP-AVAIL-1. A caller that has not resolved the capability says exactly
+    // that, rather than repeating the superseded provider-contract reason.
     expect(availability.redeposits).toEqual({
       available: false,
-      reason: "provider_event_identity_contract_absent",
+      reason: "redeposit_capability_not_resolved",
     });
     expect(availability.firstDepositAmountAggregation).toEqual({
       available: false,

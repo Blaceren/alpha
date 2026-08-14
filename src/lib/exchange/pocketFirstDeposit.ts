@@ -162,13 +162,17 @@ async function applyDelivery(
   input: FirstDepositInput,
   clickUserId: number,
 ): Promise<FirstDepositResult> {
-  const existing = await tx.pocketProviderEvent.findUnique({
+  // POCKET-DEP-RDEP-1. Migration 49 replaced the compound unique index with a
+  // PARTIAL one — UNIQUE(provider, pocketPlayerId) WHERE eventType =
+  // 'first_deposit' — so that one player may hold many redeposits while still
+  // holding exactly one first deposit. Prisma cannot express a partial index, so
+  // this is a findFirst on the same three columns. The DATABASE still enforces
+  // uniqueness; only the client-side lookup shape changed.
+  const existing = await tx.pocketProviderEvent.findFirst({
     where: {
-      provider_eventType_pocketPlayerId: {
-        provider: "pocket",
-        eventType: "first_deposit",
-        pocketPlayerId: input.pocketPlayerId,
-      },
+      provider: "pocket",
+      eventType: "first_deposit",
+      pocketPlayerId: input.pocketPlayerId,
     },
   });
 
@@ -354,6 +358,10 @@ export async function convergePendingEvent(
       normalizedAmount: true,
       currencyCode: true,
       currencyStatus: true,
+      // DEP-TIME-1. The deposit's OWN instant, which is the one the canonical
+      // event must carry. It was not selected here at all, which is how the
+      // reconciliation clock came to stand in for it.
+      firstReceivedAt: true,
     },
   });
 
@@ -420,6 +428,28 @@ export async function convergePendingEvent(
   // The currency recorded on the ROW is the one captured when the deposit was
   // first received, not whatever is configured now. Re-reading configuration
   // here would let a currency change silently re-denominate an old deposit.
+  //
+  // DEP-TIME-1 — AND THE SAME SENTENCE APPLIES TO TIME.
+  //
+  // This used to pass `occurredAt: now`, the RECONCILIATION instant. On the
+  // ordinary path — a deposit arriving after registration — `occurredAt` is
+  // `input.now`, which is also the row's `firstReceivedAt`, so the canonical
+  // event carries the moment the deposit was reported. On THIS path the deposit
+  // arrived first and waited, sometimes for days, and the event was being
+  // stamped with the moment the learner happened to register instead.
+  //
+  // That gave one event family two different meanings depending purely on
+  // delivery ORDER, and it is money: `AffiliateConversionEvent.occurredAt` is
+  // what a commission period is computed from, and a deposit reconciled after a
+  // period boundary would be counted in the wrong period.
+  //
+  // `GROWTH_SOURCE_ENTITY_TYPES` declares `dep -> "PocketProviderEvent"`, so the
+  // row owns the fact and the row's own `firstReceivedAt` is the instant. This
+  // is the same correction `pocket_reg` has always had (`identity.boundAt`) and
+  // that `ata_reg` received as LEDGER-1 (`created.createdAt`).
+  //
+  // `matchedAt` still records when the deposit became attributable — that is a
+  // different fact and it keeps its own column.
   await emitFirstDepositConversion(tx, {
     providerEventId: event.id,
     pocketPlayerId: event.pocketPlayerId,
@@ -429,7 +459,7 @@ export async function convergePendingEvent(
       event.currencyStatus === "configured" && event.currencyCode !== null
         ? { status: "configured", code: event.currencyCode }
         : { status: "unspecified", code: null },
-    occurredAt: now,
+    occurredAt: event.firstReceivedAt,
   });
 
   return { outcome: "reconciled", providerEventId: event.id };

@@ -168,7 +168,13 @@ export const GROWTH_SOURCE_ENTITY_TYPES = {
   mentor_review_approved: "UserLevelProgress",
   pocket_reg: "PocketTraderIdentity",
   dep: "PocketProviderEvent",
-  rdep: "ProviderIngressEvent",
+  // POCKET-DEP-RDEP-1. A canonical redeposit now lives in PocketProviderEvent
+  // beside the first deposit, so the OWNER of the fact moved with it. It used to
+  // name ProviderIngressEvent because, without an identity, the only durable
+  // artefact was the delivery record — evidence standing in for an event that
+  // could not be written. Now that the event exists, evidence and event are
+  // different rows again, and this names the event.
+  rdep: "PocketProviderEvent",
 } as const satisfies Record<GrowthEventType, string>;
 
 /** The owner namespace each family declares. */

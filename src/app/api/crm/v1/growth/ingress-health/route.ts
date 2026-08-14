@@ -64,10 +64,17 @@ export async function GET(request: Request) {
           regIngestEnabled: switches.regEnabled,
           depIngestEnabled: switches.depEnabled,
           rdepIngestEnabled: switches.rdepEnabled,
-          redepositIdentityContract: switches.redepositIdentity.kind,
-          redepositIdentityReason:
-            switches.redepositIdentity.kind === "unavailable"
-              ? switches.redepositIdentity.reason
+          // RDEP-AVAIL-1. This was `redepositIdentityContract`, reporting
+          // whether an operator had named a PROVIDER-issued event-id parameter.
+          // ATA derives its own deterministic identity, so that contract is not
+          // something an operator can be missing, and reporting it as absent
+          // sent them looking for a switch that no longer exists. This reports
+          // the capability that actually gates counting, with a truthful reason
+          // whenever it is off.
+          redepositCapability: switches.redepositCapability.kind,
+          redepositCapabilityReason:
+            switches.redepositCapability.kind === "unavailable"
+              ? switches.redepositCapability.reason
               : null,
         },
         deliveries: {
@@ -94,9 +101,18 @@ export async function GET(request: Request) {
           orderingUnresolved: (rejection.ordering_unresolved ?? 0),
         },
         notes: {
+          // RDEP-AVAIL-1. This note used to read: "Redeposit deliveries received
+          // and validated, deliberately not counted as money because Pocket
+          // supplies no unique event identifier." That is operator-facing text
+          // stating a superseded premise — ATA now derives its own deterministic
+          // redeposit identity, so Pocket supplying no identifier is not the
+          // reason anything goes uncounted. Leaving it would have told an
+          // operator the platform was refusing to count redeposits at the moment
+          // it began counting them.
           identityUnresolved:
-            "Redeposit deliveries received and validated, deliberately not counted " +
-            "as money because Pocket supplies no unique event identifier.",
+            "Redeposit deliveries whose canonical identity could not be derived — " +
+            "typically a missing or malformed provider event time. Deliveries are " +
+            "kept as evidence and are deliberately not counted as money.",
           authRejected:
             "Authentication failures are refused BEFORE any ingress row is written, " +
             "so this counter reflects only failures recorded past that boundary. " +

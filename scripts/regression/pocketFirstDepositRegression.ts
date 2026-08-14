@@ -517,7 +517,14 @@ async function main() {
     );
     const names = indexes.map((i) => i.name);
     for (const required of [
-      "PocketProviderEvent_provider_eventType_pocketPlayerId_key",
+      // POCKET-DEP-RDEP-1. The compound unique
+      // (provider, eventType, pocketPlayerId) is deliberately GONE. It could
+      // only express "one row per player per type", which is right for a first
+      // deposit and wrong for redeposits — a player has many. Migration 49
+      // replaces it with two PARTIAL uniques, so the FTD guarantee is unchanged
+      // while redeposits are keyed on their derived identity instead.
+      "PocketProviderEvent_first_deposit_player_key",
+      "PocketProviderEvent_provider_eventType_providerEventKey_key",
       "PocketProviderEvent_pocketClickId_idx",
       "PocketProviderEvent_matchedUserId_idx",
       "PocketProviderEvent_status_firstReceivedAt_idx",
@@ -590,7 +597,14 @@ async function main() {
       // migration, which is the discipline the three comments above exist to
       // enforce — this suite going red when a migration appears is the guard
       // working, not a failure to accommodate.
-      assert.equal(prior.length, expectedPriorMigrationCount(10));
+      //
+      // POCKET-DEP-RDEP-FINANCIAL-INGRESS-1: migration 49 rebuilds
+      // PocketProviderEvent for redeposits and lands after this one, so the
+      // offset is 10 -> 11 and EXPECTED_MIGRATION_COUNT is 48 -> 49. Unlike the
+      // five bumps above, this one DOES change the Pocket schema — but not the
+      // property under test here: the rebuild preserves every existing row, and
+      // academy_registration conversion rows live in a different table entirely.
+      assert.equal(prior.length, expectedPriorMigrationCount(11));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,
@@ -1635,12 +1649,47 @@ async function main() {
     assert.equal(body, JSON.stringify({ ok: true }));
   });
 
-  await check("I3 no redeposit event type exists anywhere", async () => {
-    const types = await prisma.$queryRawUnsafe<Array<{ sql: string }>>(
-      "SELECT sql FROM sqlite_master WHERE name IN ('AffiliateConversionEvent','PocketProviderEvent')",
+  await check("I3 redeposit exists as its own type and can never become an FTD", async () => {
+    // WHAT THIS ASSERTION USED TO SAY, AND WHY IT CHANGED. It asserted that the
+    // string "redeposit" appeared nowhere in the schema — a correct guard while
+    // the redeposit family was unbuilt, because anything resembling one would
+    // have been fabricated money. POCKET-DEP-RDEP-1 built the family
+    // deliberately, so asserting its ABSENCE now guards nothing and would fail
+    // permanently. What still needs guarding is the boundary between the two:
+    // a redeposit must never be counted as, or promoted into, a first deposit.
+    const rows = await prisma.$queryRawUnsafe<Array<{ sql: string }>>(
+      "SELECT sql FROM sqlite_master WHERE name = 'PocketProviderEvent'",
     );
-    for (const { sql } of types) {
-      assert.ok(!/redeposit/i.test(sql), "no redeposit in the schema");
+    const ddl = rows.map((r) => r.sql).join("\n");
+    assert.match(ddl, /'first_deposit'\s*,\s*'redeposit'/, "eventType admits exactly these two");
+
+    // The FTD guarantee survives the widening: still exactly one first_deposit
+    // per (provider, player), now expressed as a PARTIAL unique so a player may
+    // hold many redeposits.
+    const indexes = await prisma.$queryRawUnsafe<Array<{ name: string; sql: string | null }>>(
+      "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='PocketProviderEvent'",
+    );
+    const ftd = indexes.find((i) => i.name === "PocketProviderEvent_first_deposit_player_key");
+    assert.ok(ftd, "the first-deposit partial unique must exist");
+    assert.match(ftd!.sql ?? "", /WHERE\s+"?eventType"?\s*=\s*'first_deposit'/i);
+
+    // And the source refuses to promote a redeposit into a first deposit, which
+    // is the behaviour the schema alone cannot express.
+    //
+    // ASSERT ON THE WRITES, NOT ON THE FILE. A first draft of this check
+    // searched the whole file for `eventType: "first_deposit"` and failed on a
+    // findFirst WHERE clause — the redeposit path legitimately READS whether an
+    // FTD already exists for the player. Matching a query filter as though it
+    // were a write is a false positive, so only `create` arguments are examined.
+    const redeposit = fs.readFileSync(
+      path.join(process.cwd(), "src", "lib", "growth", "pocket", "redeposit.ts"),
+      "utf8",
+    );
+    const creates = [...redeposit.matchAll(/pocketProviderEvent\.create\(\{([\s\S]*?)\n {4}\}\)/g)];
+    assert.ok(creates.length > 0, "the redeposit path must create a provider event");
+    for (const [, body] of creates) {
+      const eventType = /eventType:\s*"([a-z_]+)"/.exec(body)?.[1];
+      assert.equal(eventType, "redeposit", "a redeposit write must never be typed as a first deposit");
     }
   });
 

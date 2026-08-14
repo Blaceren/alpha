@@ -165,63 +165,63 @@ model User {
   // PHASE-G0 — the authoring-foundation attribution axes. Back-references only:
   // User gains no column. Every one of these names a STAFF actor acting on
   // curriculum authoring, never a learner acting on their own progress.
-  contentVersionsLastAuthored     ContentVersion[]             @relation("ContentVersionLastAuthor")
-  contentVersionsSubmitted        ContentVersion[]             @relation("ContentVersionSubmitter")
-  contentVersionsChangeRequested  ContentVersion[]             @relation("ContentVersionChangeRequester")
-  contentVersionsApproved         ContentVersion[]             @relation("ContentVersionApprover")
-  assessmentVersionsLastAuthored  AssessmentVersion[]          @relation("AssessmentVersionLastAuthor")
-  assessmentVersionsSubmitted     AssessmentVersion[]          @relation("AssessmentVersionSubmitter")
-  assessmentVersionsChangeRequested AssessmentVersion[]        @relation("AssessmentVersionChangeRequester")
-  assessmentVersionsApproved      AssessmentVersion[]          @relation("AssessmentVersionApprover")
-  videoProductionVersionsCreated  VideoProductionVersion[]     @relation("VideoProductionVersionCreator")
-  videoProductionVersionsLastAuthored VideoProductionVersion[] @relation("VideoProductionVersionLastAuthor")
-  videoProductionVersionsSubmitted VideoProductionVersion[]    @relation("VideoProductionVersionSubmitter")
-  videoProductionVersionsChangeRequested VideoProductionVersion[] @relation("VideoProductionVersionChangeRequester")
-  videoProductionVersionsApproved VideoProductionVersion[]     @relation("VideoProductionVersionApprover")
-  editorialReviewNotesAuthored    EditorialReviewNote[]        @relation("EditorialReviewNoteAuthor")
-  editorialReviewNotesResolved    EditorialReviewNote[]        @relation("EditorialReviewNoteResolver")
-  authoringPreviewSnapshotsCreated AuthoringPreviewSnapshot[]  @relation("AuthoringPreviewSnapshotCreator")
-  videoProductionAssessmentLinks VideoProductionAssessmentLink[] @relation("VideoProductionAssessmentLinker")
-  sourceAuthorityDecisions       SourceAuthorityResolution[]  @relation("SourceAuthorityResolutionDecider")
-  sourceAuthoritySupersessions   SourceAuthorityResolution[]  @relation("SourceAuthorityResolutionSuperseder")
+  contentVersionsLastAuthored            ContentVersion[]                @relation("ContentVersionLastAuthor")
+  contentVersionsSubmitted               ContentVersion[]                @relation("ContentVersionSubmitter")
+  contentVersionsChangeRequested         ContentVersion[]                @relation("ContentVersionChangeRequester")
+  contentVersionsApproved                ContentVersion[]                @relation("ContentVersionApprover")
+  assessmentVersionsLastAuthored         AssessmentVersion[]             @relation("AssessmentVersionLastAuthor")
+  assessmentVersionsSubmitted            AssessmentVersion[]             @relation("AssessmentVersionSubmitter")
+  assessmentVersionsChangeRequested      AssessmentVersion[]             @relation("AssessmentVersionChangeRequester")
+  assessmentVersionsApproved             AssessmentVersion[]             @relation("AssessmentVersionApprover")
+  videoProductionVersionsCreated         VideoProductionVersion[]        @relation("VideoProductionVersionCreator")
+  videoProductionVersionsLastAuthored    VideoProductionVersion[]        @relation("VideoProductionVersionLastAuthor")
+  videoProductionVersionsSubmitted       VideoProductionVersion[]        @relation("VideoProductionVersionSubmitter")
+  videoProductionVersionsChangeRequested VideoProductionVersion[]        @relation("VideoProductionVersionChangeRequester")
+  videoProductionVersionsApproved        VideoProductionVersion[]        @relation("VideoProductionVersionApprover")
+  editorialReviewNotesAuthored           EditorialReviewNote[]           @relation("EditorialReviewNoteAuthor")
+  editorialReviewNotesResolved           EditorialReviewNote[]           @relation("EditorialReviewNoteResolver")
+  authoringPreviewSnapshotsCreated       AuthoringPreviewSnapshot[]      @relation("AuthoringPreviewSnapshotCreator")
+  videoProductionAssessmentLinks         VideoProductionAssessmentLink[] @relation("VideoProductionAssessmentLinker")
+  sourceAuthorityDecisions               SourceAuthorityResolution[]     @relation("SourceAuthorityResolutionDecider")
+  sourceAuthoritySupersessions           SourceAuthorityResolution[]     @relation("SourceAuthorityResolutionSuperseder")
 
-  assessmentAttempts              AssessmentAttempt[]          @relation("AssessmentAttemptUser")
-  lessonProgress                  UserLessonProgress[]         @relation("UserLessonProgressUser")
-  reportAssignmentsCreated        ReportAssignmentVersion[]    @relation("ReportAssignmentCreator")
-  reportRubricsCreated            ReportRubricVersion[]        @relation("ReportRubricCreator")
-  reportBindingsCreated           LevelReportBinding[]         @relation("LevelReportBindingCreator")
-  reportSubmissions               ReportSubmission[]           @relation("ReportSubmissionOwner")
-  claimedReportSubmissions        ReportSubmission[]           @relation("ReportSubmissionClaimedBy")
-  reportRevisionsCreated          ReportRevision[]             @relation("ReportRevisionCreator")
-  reportReviews                   ReportReview[]               @relation("ReportReviewer")
-  reportAttachments               ReportAttachment[]           @relation("ReportAttachmentOwner")
-  reportCommandReceipts           ReportCommandReceipt[]       @relation("ReportCommandActor")
-  staffProfile                    StaffProfile?
-  crmUserNotes                    CrmUserNote[]                @relation("CrmUserNoteTarget")
-  crmOwnerState                   CrmUserOwner?                @relation("CrmUserOwnerLearner")
-  crmOwnerHistory                 CrmUserOwnerHistory[]        @relation("CrmUserOwnerHistoryLearner")
-  pocketTraderIdentity            PocketTraderIdentity?        @relation("PocketTraderIdentityLearner")
-  affiliatePartnersCreated        AffiliatePartner[]           @relation("AffiliatePartnerCreator")
-  affiliateCampaignsCreated       AffiliateCampaign[]          @relation("AffiliateCampaignCreator")
-  affiliateTrackingLinksCreated   AffiliateTrackingLink[]      @relation("AffiliateTrackingLinkCreator")
+  assessmentAttempts            AssessmentAttempt[]        @relation("AssessmentAttemptUser")
+  lessonProgress                UserLessonProgress[]       @relation("UserLessonProgressUser")
+  reportAssignmentsCreated      ReportAssignmentVersion[]  @relation("ReportAssignmentCreator")
+  reportRubricsCreated          ReportRubricVersion[]      @relation("ReportRubricCreator")
+  reportBindingsCreated         LevelReportBinding[]       @relation("LevelReportBindingCreator")
+  reportSubmissions             ReportSubmission[]         @relation("ReportSubmissionOwner")
+  claimedReportSubmissions      ReportSubmission[]         @relation("ReportSubmissionClaimedBy")
+  reportRevisionsCreated        ReportRevision[]           @relation("ReportRevisionCreator")
+  reportReviews                 ReportReview[]             @relation("ReportReviewer")
+  reportAttachments             ReportAttachment[]         @relation("ReportAttachmentOwner")
+  reportCommandReceipts         ReportCommandReceipt[]     @relation("ReportCommandActor")
+  staffProfile                  StaffProfile?
+  crmUserNotes                  CrmUserNote[]              @relation("CrmUserNoteTarget")
+  crmOwnerState                 CrmUserOwner?              @relation("CrmUserOwnerLearner")
+  crmOwnerHistory               CrmUserOwnerHistory[]      @relation("CrmUserOwnerHistoryLearner")
+  pocketTraderIdentity          PocketTraderIdentity?      @relation("PocketTraderIdentityLearner")
+  affiliatePartnersCreated      AffiliatePartner[]         @relation("AffiliatePartnerCreator")
+  affiliateCampaignsCreated     AffiliateCampaign[]        @relation("AffiliateCampaignCreator")
+  affiliateTrackingLinksCreated AffiliateTrackingLink[]    @relation("AffiliateTrackingLinkCreator")
   /// AFD-3B2. Optional and at most one: a learner either was acquired through an
   /// affiliate or was not, and the answer is frozen at registration.
-  affiliateAttribution            AffiliateAttribution?        @relation("UserAffiliateAttribution")
-  affiliateConversionEvents       AffiliateConversionEvent[]   @relation("UserAffiliateConversionEvents")
+  affiliateAttribution          AffiliateAttribution?      @relation("UserAffiliateAttribution")
+  affiliateConversionEvents     AffiliateConversionEvent[] @relation("UserAffiliateConversionEvents")
   /// AFD-4. The Pocket provider events this learner was matched to. A list, not
   /// an optional single row, because the owner is keyed by Pocket player and a
   /// learner could in principle be matched by more than one event type later.
-  pocketProviderEvents            PocketProviderEvent[]        @relation("PocketProviderEventLearner")
+  pocketProviderEvents          PocketProviderEvent[]      @relation("PocketProviderEventLearner")
   /// A8. QA attestations this operator made on a PREPROD deployment. There is
   /// deliberately no learner-side back-relation: an attestation is a fact about
   /// an ENROLLMENT, made by an operator, and is never presented as something
   /// the learner did.
-  stagingAttestationsMade         StagingAttestation[]         @relation("StagingAttestationOperator")
+  stagingAttestationsMade       StagingAttestation[]       @relation("StagingAttestationOperator")
   /// G4-GROWTH. Every canonical growth fact about this learner, in one
   /// vocabulary and one time basis. `onDelete: Restrict` on the far side: a
   /// learner who produced a conversion cannot be deleted out from under the
   /// ledger that a payout may later be computed from.
-  growthEvents                    GrowthEvent[]                @relation("GrowthEventLearner")
+  growthEvents                  GrowthEvent[]              @relation("GrowthEventLearner")
 }
 
 model XpEvent {
@@ -865,12 +865,10 @@ enum UserLevelProgressStatus {
 
 /**
  * L4VC-1 — the durable outcome vocabulary for a checkpoint verification attempt.
- *
  * Every member is either a verdict about a THRESHOLD (met / not_met) or an
  * operational fact. None of them can describe an amount, so an attempt row can
  * never record how much money a learner has — only whether a gate the platform
  * already published was reached, or why the question could not be answered.
- *
  * `in_progress` is the claim state written before the provider is called; it is
  * what makes "exactly one provider call for concurrent identical requests"
  * enforceable by a unique index rather than by a lock.
@@ -909,7 +907,6 @@ enum ContentResourceStatus {
 
 /**
  * PHASE-G0 — the EDITORIAL axis, which is not the runtime axis.
- *
  * `ContentResourceStatus` above answers "is this version the one the runtime
  * serves?". This enum answers "has a human editorial process accepted it?".
  * They are deliberately independent, and `published` is deliberately NOT
@@ -917,7 +914,6 @@ enum ContentResourceStatus {
  * bound to learners (the normal case, because approval must not publish), and a
  * historical version can be published without anyone ever having reviewed it
  * (every row that existed before this migration).
- *
  * WHAT THE MIGRATION DOES WITH HISTORY. Every pre-existing row — published or
  * not — is defaulted to `draft`. That is the only honest option available:
  * there is no reviewer, no submission and no approval timestamp anywhere in the
@@ -1059,42 +1055,42 @@ model ModuleDefinition {
 }
 
 model LevelDefinition {
-  id                      Int                        @id @default(autoincrement())
-  curriculumVersionId     Int
-  moduleId                Int
-  levelNumber             Int
-  stableCode              String
-  type                    LevelDefinitionType
-  title                   String
-  shortDescription        String                     @default("")
-  learningObjective       String                     @default("")
-  completionMethod        String
-  xpReward                Int                        @default(0)
-  requiredXp              Int                        @default(0)
-  requiredPreviousLevel   Int?
-  requiredCheckpointLevel Int?
-  featureUnlockCode       String?
-  visibilityRule          Json?
-  status                  CurriculumDefinitionStatus @default(active)
-  curriculumVersion       CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
-  module                  ModuleDefinition           @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
-  userProgress            UserLevelProgress[]
-  xpTransactions          XPTransaction[]
-  contentVersions         ContentVersion[]
-  assessmentVersions      AssessmentVersion[]
-  resourceBinding         LevelResourceBinding?
-  assessmentAttempts      AssessmentAttempt[]
-  lessonProgress          UserLessonProgress[]
-  reportAssignments       ReportAssignmentVersion[]
-  reportBinding           LevelReportBinding?
-  reportSubmissions       ReportSubmission[]
-  growthEvents            GrowthEvent[]              @relation("GrowthEventLevel")
-  checkpointRequirement   LevelCheckpointRequirement?
-  checkpointAttempts      CheckpointVerificationAttempt[]
-  stagingAttestations     StagingAttestation[]
+  id                         Int                             @id @default(autoincrement())
+  curriculumVersionId        Int
+  moduleId                   Int
+  levelNumber                Int
+  stableCode                 String
+  type                       LevelDefinitionType
+  title                      String
+  shortDescription           String                          @default("")
+  learningObjective          String                          @default("")
+  completionMethod           String
+  xpReward                   Int                             @default(0)
+  requiredXp                 Int                             @default(0)
+  requiredPreviousLevel      Int?
+  requiredCheckpointLevel    Int?
+  featureUnlockCode          String?
+  visibilityRule             Json?
+  status                     CurriculumDefinitionStatus      @default(active)
+  curriculumVersion          CurriculumVersion               @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  module                     ModuleDefinition                @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
+  userProgress               UserLevelProgress[]
+  xpTransactions             XPTransaction[]
+  contentVersions            ContentVersion[]
+  assessmentVersions         AssessmentVersion[]
+  resourceBinding            LevelResourceBinding?
+  assessmentAttempts         AssessmentAttempt[]
+  lessonProgress             UserLessonProgress[]
+  reportAssignments          ReportAssignmentVersion[]
+  reportBinding              LevelReportBinding?
+  reportSubmissions          ReportSubmission[]
+  growthEvents               GrowthEvent[]                   @relation("GrowthEventLevel")
+  checkpointRequirement      LevelCheckpointRequirement?
+  checkpointAttempts         CheckpointVerificationAttempt[]
+  stagingAttestations        StagingAttestation[]
   // PHASE-G0 — authoring foundation. Back-references only.
-  videoProductionVersions VideoProductionVersion[]
-  previewSnapshots        AuthoringPreviewSnapshot[]
+  videoProductionVersions    VideoProductionVersion[]
+  previewSnapshots           AuthoringPreviewSnapshot[]
   // PHASE-G2 FOUNDATION — back-reference only.
   sourceAuthorityResolutions SourceAuthorityResolution[]
 
@@ -1107,12 +1103,10 @@ model LevelDefinition {
 
 /**
  * L4VC-1 — the configured threshold for one financial-checkpoint level.
- *
  * One requirement per level (`levelDefinitionId` is unique). The threshold is an
  * INTEGER in minor units so $50.00 is 5000 and no float rounding can ever move
  * a gate. `integrationCode` names which provider integration answers for this
  * level; it is a code, not a URL and not a credential.
- *
  * A level with no row here is `requirement_unconfigured` and is never verified —
  * the platform will not invent a threshold.
  */
@@ -1131,13 +1125,11 @@ model LevelCheckpointRequirement {
 
 /**
  * L4VC-1 — one verification attempt, and the durable receipt that replays it.
- *
  * WHAT IT DELIBERATELY DOES NOT HAVE: a balance column, a demo balance column,
  * a remaining-amount column, an account identifier, a token, or a `Json` bag a
  * provider payload could be poured into. The privacy contract is enforced by
  * the ABSENCE of columns, so no future code path can persist an observed
  * amount without a schema change and a migration review.
- *
  * `observedAt` is a timestamp, not a measurement: it records how fresh the
  * provider's answer was, which is what makes `stale` meaningful.
  */
@@ -1176,14 +1168,12 @@ enum StagingAttestationEventClass {
 /**
  * A8 — a PREPROD operator's attestation that a QA gate should be considered
  * satisfied.
- *
  * WHAT ONE ROW MEANS, EXACTLY
  * "An authorized operator, on a deployment authoritatively classified
  * `staging`, attested that this enrollment's gate at this level should be
  * treated as satisfied for QA." It does NOT mean the learner deposited money,
  * and it does NOT mean Pocket witnessed a registration. Production is
  * unaffected: it remains Pocket-authoritative for both.
- *
  * WHAT THIS TABLE CANNOT REPRESENT, STRUCTURALLY
  * There is no amount column, no currency column, no balance column, no Pocket
  * user id, no click id and no provider payload. A staging attestation therefore
@@ -1192,14 +1182,12 @@ enum StagingAttestationEventClass {
  * `CheckpointVerificationAttempt`: that table means "the platform asked a
  * balance provider", and writing a fake `met` row into it would corrupt both
  * the cooldown window and the meaning of every honest row.
- *
  * WHY `environment` IS STORED ON THE ROW
  * The runtime gate already refuses outside staging. Recording the
  * classification the row was MADE under means a database copied from PREPROD to
  * anywhere else still carries rows that identify themselves as staging-only,
  * and the completion primitive re-checks it. A CHECK constraint pins the column
  * to the single legal value.
- *
  * IDEMPOTENCY AND EXACTNESS
  * `(enrollmentId, levelDefinitionId, requestId)` is unique, so an identical
  * retry resolves to the one row instead of a second attestation.
@@ -1233,7 +1221,6 @@ model StagingAttestation {
 
 /**
  * L4PA-1 — the authoritative binding between an ATA learner and a Pocket trader.
- *
  * WHY THIS EXISTS RATHER THAN `ExchangeAccount.traderId`
  * `traderId` looks like the same fact and is not. It is nullable, it is NOT
  * unique, it is written by EVERY authenticated postback goal (deposit,
@@ -1243,34 +1230,33 @@ model StagingAttestation {
  * lookup itself searches, so it is an attribution hint, not an identity claim.
  * Using it to authorise a $50 financial gate would mean the gate could be moved
  * onto someone else's funded account without anyone noticing.
- *
  * This table states the fact once, immutably in practice, with the uniqueness
  * the gate actually requires:
- *   - `userId` UNIQUE  — one learner has at most one authoritative Pocket ID;
- *   - `pocketUserId` UNIQUE — one Pocket trader backs at most one learner.
+ * - `userId` UNIQUE  — one learner has at most one authoritative Pocket ID;
+ * - `pocketUserId` UNIQUE — one Pocket trader backs at most one learner.
  * Both constraints are enforced by the DATABASE, so two concurrent registration
  * postbacks cannot both win and a conflict cannot be resolved by overwriting.
- *
  * `pocketUserId` is TEXT holding a canonical decimal integer, not INTEGER: it
  * is a foreign system's identifier that must round-trip exactly, and comparing
  * canonical strings avoids ever depending on float behaviour for an identity.
- *
  * PRIVACY BY ABSENCE. There is no balance column, no demo balance, no deposit
  * total, no FTD, no raw postback, no raw provider response, no free-form JSON,
  * no API token and no generated hash. Storing a learner's money here would
  * require a new migration and a review, which is the point.
  */
 model PocketTraderIdentity {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @unique
-  pocketUserId String   @unique
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  pocketUserId String        @unique
   clickId      String
-  /** Provenance of the binding. Only `registration_postback` is written today. */
-  source       String   @default("registration_postback")
-  boundAt      DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /**
+   * Provenance of the binding. Only `registration_postback` is written today.
+   */
+  source       String        @default("registration_postback")
+  boundAt      DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation("PocketTraderIdentityLearner", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   /// G4-GROWTH. The `pocket_reg` event this binding produced.
   growthEvents GrowthEvent[] @relation("GrowthEventPocketIdentity")
 
@@ -1295,6 +1281,17 @@ enum PocketProviderEventProvider {
 /// here would be claiming a distinction the provider does not supply.
 enum PocketProviderEventType {
   first_deposit
+  redeposit
+}
+
+/// How much is truthfully known about a provider event's time.
+enum PocketProviderEventTimeStatus {
+  /// No usable provider event time arrived.
+  absent
+  /// A provider-local wall clock, with no zone anybody can vouch for.
+  local_only
+  /// The delivery stated its own offset, so the instant is the provider's claim.
+  absolute_from_sender
 }
 
 /// AFD-4 — how far an event has got towards being a countable conversion.
@@ -1375,11 +1372,36 @@ model PocketProviderEvent {
   conflictCode       PocketProviderEventConflictCode?
   conflictDetectedAt DateTime?
   matchedAt          DateTime?
+  /// POCKET-DEP-RDEP-1. ATA's own deterministic redeposit identity, derived from
+  /// provider + player + normalised DATE_TIME + exact amount. NULL for a first
+  /// deposit, which is identified by its player. NOT a provider-issued id: the
+  /// residual collision risk is BUSINESS_ACCEPTED_RDEP_DEDUP_ASSUMPTION.
+  providerEventKey   String?
+  /// The provider's local wall clock, normalised. ZONE-INDEPENDENT and always
+  /// present for a redeposit: this is what Pocket's own clock read, and what the
+  /// deterministic key is built from.
+  providerEventLocal String?
+  /// The ABSOLUTE provider instant. NULL unless the delivery stated its own
+  /// offset — Pocket renders DATE_TIME in a zone that varies by user, account
+  /// and registration GEO, so there is no global zone ATA could apply without
+  /// fabricating one. Never a receive time, never now().
+  providerEventAt    DateTime?
+  /// Which of the two above is true, so nothing can mistake "we do not know the
+  /// instant" for "it happened then".
+  providerEventAtStatus PocketProviderEventTimeStatus @default(absent)
+  /// The exact DATE_TIME bytes the provider sent, kept so a zone declared later
+  /// can be applied without re-deriving anything.
+  providerEventAtRaw String?
   createdAt          DateTime                          @default(now())
   updatedAt          DateTime                          @updatedAt
   matchedUser        User?                             @relation("PocketProviderEventLearner", fields: [matchedUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@unique([provider, eventType, pocketPlayerId])
+  /// One canonical FIRST DEPOSIT per provider/player, and one canonical
+  /// REDEPOSIT per derived key. Both are PARTIAL indexes in migration 49, which
+  /// Prisma cannot express — see that migration for the authoritative shape.
+  @@unique([provider, eventType, providerEventKey])
+  @@index([provider, pocketPlayerId, eventType])
+  @@index([eventType, pocketPlayerId, providerEventAt])
   @@index([pocketClickId])
   @@index([matchedUserId])
   @@index([status, firstReceivedAt])
@@ -1471,19 +1493,19 @@ enum AffiliateLandingKey {
 }
 
 model AffiliatePartner {
-  id                           Int                     @id @default(autoincrement())
+  id                           Int                        @id @default(autoincrement())
   /// Immutable, lowercase, globally unique operator-facing handle.
-  code                         String                  @unique
+  code                         String                     @unique
   displayName                  String
   description                  String?
-  status                       AffiliateEntityStatus   @default(active)
+  status                       AffiliateEntityStatus      @default(active)
   /// Inherited by links that set no window of their own. Bounded 1..365.
-  defaultAttributionWindowDays Int                     @default(30)
+  defaultAttributionWindowDays Int                        @default(30)
   createdByUserId              Int
-  createdAt                    DateTime                @default(now())
-  updatedAt                    DateTime                @updatedAt
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
   archivedAt                   DateTime?
-  createdBy                    User                    @relation("AffiliatePartnerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy                    User                       @relation("AffiliatePartnerCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   campaigns                    AffiliateCampaign[]
   trackingLinks                AffiliateTrackingLink[]
   conversionEvents             AffiliateConversionEvent[]
@@ -1494,20 +1516,20 @@ model AffiliatePartner {
 }
 
 model AffiliateCampaign {
-  id                 Int                     @id @default(autoincrement())
+  id                 Int                        @id @default(autoincrement())
   affiliatePartnerId Int
   /// Immutable and lowercase. Unique WITHIN one partner, so two affiliates may
   /// each run a campaign called `summer`.
   code               String
   displayName        String
   notes              String?
-  status             AffiliateEntityStatus   @default(active)
+  status             AffiliateEntityStatus      @default(active)
   createdByUserId    Int
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
   archivedAt         DateTime?
-  partner            AffiliatePartner        @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdBy          User                    @relation("AffiliateCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner            AffiliatePartner           @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy          User                       @relation("AffiliateCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   trackingLinks      AffiliateTrackingLink[]
   conversionEvents   AffiliateConversionEvent[]
 
@@ -1649,8 +1671,8 @@ model AffiliateAttribution {
 /// not know". The snapshots are denormalised so a payout report still reads the
 /// code an affiliate had at conversion time after a rename or an archive.
 model AffiliateConversionEvent {
-  id                             Int                            @id @default(autoincrement())
-  eventId                        String                         @unique
+  id                             Int                                @id @default(autoincrement())
+  eventId                        String                             @unique
   eventType                      AffiliateConversionEventType
   userId                         Int
   attributionId                  Int?
@@ -1679,13 +1701,13 @@ model AffiliateConversionEvent {
   /// never be misread as "this row has not been backfilled yet".
   currencyStatus                 AffiliateConversionCurrencyStatus?
   occurredAt                     DateTime
-  createdAt                      DateTime                       @default(now())
-  user                           User                           @relation("UserAffiliateConversionEvents", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  attribution                    AffiliateAttribution?          @relation(fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  selectedClick                  AffiliateClick?                @relation(fields: [selectedClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  partner                        AffiliatePartner?              @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  campaign                       AffiliateCampaign?             @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  trackingLink                   AffiliateTrackingLink?         @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt                      DateTime                           @default(now())
+  user                           User                               @relation("UserAffiliateConversionEvents", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attribution                    AffiliateAttribution?              @relation(fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  selectedClick                  AffiliateClick?                    @relation(fields: [selectedClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner                        AffiliatePartner?                  @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  campaign                       AffiliateCampaign?                 @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trackingLink                   AffiliateTrackingLink?             @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([eventType, sourceOwner, sourceEventId])
   @@index([eventType, occurredAt])
@@ -1696,21 +1718,21 @@ model AffiliateConversionEvent {
 }
 
 model UserCurriculumEnrollment {
-  id                     Int                        @id @default(autoincrement())
+  id                     Int                             @id @default(autoincrement())
   userId                 Int
   curriculumVersionId    Int
   curriculumCode         String
-  status                 CurriculumEnrollmentStatus @default(active)
-  enrolledAt             DateTime                   @default(now())
-  highestCompletedLevel  Int                        @default(0)
-  currentLevel           Int                        @default(1)
+  status                 CurriculumEnrollmentStatus      @default(active)
+  enrolledAt             DateTime                        @default(now())
+  highestCompletedLevel  Int                             @default(0)
+  currentLevel           Int                             @default(1)
   lastMeaningfulActionAt DateTime?
   completedAt            DateTime?
   migrationSource        String?
-  createdAt              DateTime                   @default(now())
-  updatedAt              DateTime                   @updatedAt
-  user                   User                       @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  curriculumVersion      CurriculumVersion          @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+  user                   User                            @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  curriculumVersion      CurriculumVersion               @relation(fields: [curriculumVersionId, curriculumCode], references: [id, code], onDelete: Restrict, onUpdate: Cascade)
   levelProgress          UserLevelProgress[]
   xpTransactions         XPTransaction[]
   assessmentAttempts     AssessmentAttempt[]
@@ -1720,7 +1742,7 @@ model UserCurriculumEnrollment {
   stagingAttestations    StagingAttestation[]
   /// G4-GROWTH. The enrollment's progression events, which is what makes a CRO
   /// funnel a per-enrollment question rather than a per-user one.
-  growthEvents           GrowthEvent[]                  @relation("GrowthEventEnrollment")
+  growthEvents           GrowthEvent[]                   @relation("GrowthEventEnrollment")
 
   @@unique([id, curriculumVersionId])
   @@unique([id, userId, curriculumVersionId])
@@ -1754,15 +1776,15 @@ model UserLevelProgress {
 }
 
 model ContentVersion {
-  id                   Int                    @id @default(autoincrement())
+  id                   Int                   @id @default(autoincrement())
   levelDefinitionId    Int
   curriculumVersionId  Int
   versionNumber        Int
-  status               ContentResourceStatus  @default(draft)
+  status               ContentResourceStatus @default(draft)
   videoDurationSeconds Int?
   createdById          Int?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   publishedAt          DateTime?
   archivedAt           DateTime?
   changeNotes          String?
@@ -1782,8 +1804,8 @@ model ContentVersion {
   // mutation that bumps `revision`, so it always names the actor whose work is
   // being approved. `createdById` above cannot serve this purpose — it is fixed
   // at creation and says nothing about who wrote the text under review.
-  revision             Int                    @default(1)
-  editorialState       EditorialState         @default(draft)
+  revision             Int            @default(1)
+  editorialState       EditorialState @default(draft)
   lastAuthoredById     Int?
   lastAuthoredAt       DateTime?
   submittedById        Int?
@@ -1793,18 +1815,18 @@ model ContentVersion {
   approvedById         Int?
   approvedAt           DateTime?
 
-  levelDefinition      LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  createdBy            User?                  @relation("ContentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  lastAuthoredBy       User?                  @relation("ContentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  submittedBy          User?                  @relation("ContentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  changesRequestedBy   User?                  @relation("ContentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedBy           User?                  @relation("ContentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  localizations        ContentLocalization[]
-  assets               ContentAsset[]
-  resourceBindings     LevelResourceBinding[]
-  lessonProgress       UserLessonProgress[]
-  reviewNotes          EditorialReviewNote[]  @relation("EditorialReviewNoteContent")
-  previewSnapshots     AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotContent")
+  levelDefinition    LevelDefinition            @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy          User?                      @relation("ContentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy     User?                      @relation("ContentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy        User?                      @relation("ContentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy User?                      @relation("ContentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy         User?                      @relation("ContentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  localizations      ContentLocalization[]
+  assets             ContentAsset[]
+  resourceBindings   LevelResourceBinding[]
+  lessonProgress     UserLessonProgress[]
+  reviewNotes        EditorialReviewNote[]      @relation("EditorialReviewNoteContent")
+  previewSnapshots   AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotContent")
 
   @@unique([id, levelDefinitionId])
   @@unique([levelDefinitionId, versionNumber])
@@ -1856,17 +1878,17 @@ model ContentAsset {
 }
 
 model AssessmentVersion {
-  id                  Int                    @id @default(autoincrement())
+  id                  Int                   @id @default(autoincrement())
   levelDefinitionId   Int
   curriculumVersionId Int
   versionNumber       Int
-  status              ContentResourceStatus  @default(draft)
+  status              ContentResourceStatus @default(draft)
   passPercent         Int
   maxAttempts         Int?
-  showExplanation     Boolean                @default(false)
+  showExplanation     Boolean               @default(false)
   createdById         Int?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   publishedAt         DateTime?
   archivedAt          DateTime?
   changeNotes         String?
@@ -1876,8 +1898,8 @@ model AssessmentVersion {
   // localizations, the option set and the answer key, because a bank is only
   // meaningful as a whole: approving question 3 while question 1's answer key
   // moved underneath is exactly the failure this guards.
-  revision             Int                   @default(1)
-  editorialState       EditorialState        @default(draft)
+  revision             Int            @default(1)
+  editorialState       EditorialState @default(draft)
   lastAuthoredById     Int?
   lastAuthoredAt       DateTime?
   submittedById        Int?
@@ -1905,21 +1927,21 @@ model AssessmentVersion {
   /// authority is inherited into one that appears to have none.
   predecessorVersionId Int?
 
-  levelDefinition     LevelDefinition        @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  predecessorVersion  AssessmentVersion?     @relation("AssessmentVersionLineage", fields: [predecessorVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  successorVersions   AssessmentVersion[]    @relation("AssessmentVersionLineage")
-  createdBy           User?                  @relation("AssessmentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  lastAuthoredBy      User?                  @relation("AssessmentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  submittedBy         User?                  @relation("AssessmentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  changesRequestedBy  User?                  @relation("AssessmentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedBy          User?                  @relation("AssessmentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  questions           QuestionDefinition[]
-  resourceBindings    LevelResourceBinding[]
-  attempts            AssessmentAttempt[]
-  reviewNotes         EditorialReviewNote[]  @relation("EditorialReviewNoteAssessment")
-  previewSnapshots    AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotAssessment")
+  levelDefinition            LevelDefinition                 @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  predecessorVersion         AssessmentVersion?              @relation("AssessmentVersionLineage", fields: [predecessorVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  successorVersions          AssessmentVersion[]             @relation("AssessmentVersionLineage")
+  createdBy                  User?                           @relation("AssessmentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy             User?                           @relation("AssessmentVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy                User?                           @relation("AssessmentVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy         User?                           @relation("AssessmentVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy                 User?                           @relation("AssessmentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  questions                  QuestionDefinition[]
+  resourceBindings           LevelResourceBinding[]
+  attempts                   AssessmentAttempt[]
+  reviewNotes                EditorialReviewNote[]           @relation("EditorialReviewNoteAssessment")
+  previewSnapshots           AuthoringPreviewSnapshot[]      @relation("AuthoringPreviewSnapshotAssessment")
   /// PHASE-G0 CORRECTION — video contracts whose evidence is bound to this bank.
-  videoProductionLinks VideoProductionAssessmentLink[]
+  videoProductionLinks       VideoProductionAssessmentLink[]
   /// PHASE-G2 FOUNDATION — adjudicated source-authority decisions for this bank.
   sourceAuthorityResolutions SourceAuthorityResolution[]
 
@@ -1991,20 +2013,17 @@ model LevelResourceBinding {
 
 /**
  * PHASE-G0 — the durable, editable video-production contract.
- *
  * WHY IT EXISTS. Until now the 58 ATA video contracts lived only in
  * `curriculum/canonical/ata-video-production-contracts.v1.json`. A source file
  * is the right home for provenance and for the bootstrap, and the wrong home
  * for an authoring workflow: moving a lesson from SCRIPT_PENDING to
  * SCRIPT_READY would have meant an engineering commit per editorial action.
- *
  * ONE WRITABLE FIELD. `contractPayload` holds the EXACT accepted contract shape
  * — the same object `videoProductionContractSchema` parses out of the canonical
  * file, no field invented, none dropped. Everything else on this row is either
  * identity, lifecycle, or a SERVER-DERIVED projection of that payload. There is
  * deliberately no second place to write a take, a question or a QA verdict, so
  * the payload and the columns cannot disagree.
- *
  * THE DERIVED COLUMNS. `contractFingerprint`, `assessmentFingerprint` and
  * `productionEvidenceStale` are computed on every write by
  * `calculateContractFingerprint`, `calculateAssessmentFingerprint` and
@@ -2013,59 +2032,58 @@ model LevelResourceBinding {
  * `levelNumber` and `contractVersion` are likewise copied out of the payload in
  * the same transaction, purely so the readiness view can filter without
  * deserialising 58 JSON documents. A caller may never supply any of them.
- *
  * WHAT IT DOES NOT DECIDE. `sourceProvenance` (SOURCE_BACKED / PROPOSED_CANON)
  * is provenance and `editorialState` is approval. L18 is SOURCE_BACKED and NOT
  * approved, and this row keeps those two facts in two columns precisely so they
  * can never be conflated.
  */
 model VideoProductionVersion {
-  id                    Int             @id @default(autoincrement())
-  levelDefinitionId     Int
-  curriculumVersionId   Int
-  versionNumber         Int
-  revision              Int             @default(1)
-  editorialState        EditorialState  @default(draft)
+  id                  Int            @id @default(autoincrement())
+  levelDefinitionId   Int
+  curriculumVersionId Int
+  versionNumber       Int
+  revision            Int            @default(1)
+  editorialState      EditorialState @default(draft)
 
   /// Denormalised from the payload for querying. Server-written, never accepted.
-  levelNumber           Int
-  contractVersion       Int
-  sourceProvenance      String
-  scriptState           String
-  videoState            String
-  qaState               String
+  levelNumber      Int
+  contractVersion  Int
+  sourceProvenance String
+  scriptState      String
+  videoState       String
+  qaState          String
 
   /// The exact accepted contract object. The ONLY writable authoring surface here.
-  contractPayload       Json
+  contractPayload Json
 
   /// Server-computed. `calculateContractFingerprint` / `calculateAssessmentFingerprint`.
-  contractFingerprint   String
-  assessmentFingerprint String
+  contractFingerprint     String
+  assessmentFingerprint   String
   /// Server-computed. `isProductionEvidenceStale` at write time.
-  productionEvidenceStale Boolean       @default(false)
+  productionEvidenceStale Boolean @default(false)
 
-  createdById           Int?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  lastAuthoredById      Int?
-  lastAuthoredAt        DateTime?
-  submittedById         Int?
-  submittedAt           DateTime?
-  changesRequestedById  Int?
-  changesRequestedAt    DateTime?
-  approvedById          Int?
-  approvedAt            DateTime?
+  createdById          Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  lastAuthoredById     Int?
+  lastAuthoredAt       DateTime?
+  submittedById        Int?
+  submittedAt          DateTime?
+  changesRequestedById Int?
+  changesRequestedAt   DateTime?
+  approvedById         Int?
+  approvedAt           DateTime?
 
-  levelDefinition       LevelDefinition @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  createdBy             User?           @relation("VideoProductionVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  lastAuthoredBy        User?           @relation("VideoProductionVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  submittedBy           User?           @relation("VideoProductionVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  changesRequestedBy    User?           @relation("VideoProductionVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedBy            User?           @relation("VideoProductionVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  reviewNotes           EditorialReviewNote[] @relation("EditorialReviewNoteVideoProduction")
+  levelDefinition            LevelDefinition                @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy                  User?                          @relation("VideoProductionVersionCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastAuthoredBy             User?                          @relation("VideoProductionVersionLastAuthor", fields: [lastAuthoredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submittedBy                User?                          @relation("VideoProductionVersionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  changesRequestedBy         User?                          @relation("VideoProductionVersionChangeRequester", fields: [changesRequestedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy                 User?                          @relation("VideoProductionVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reviewNotes                EditorialReviewNote[]          @relation("EditorialReviewNoteVideoProduction")
   /// PHASE-G0 CORRECTION — the durable bridge to the real question bank.
-  assessmentLink        VideoProductionAssessmentLink?
-  previewSnapshots      AuthoringPreviewSnapshot[] @relation("AuthoringPreviewSnapshotVideoProduction")
+  assessmentLink             VideoProductionAssessmentLink?
+  previewSnapshots           AuthoringPreviewSnapshot[]     @relation("AuthoringPreviewSnapshotVideoProduction")
   /// PHASE-G2 FOUNDATION — adjudications whose Blueprint side came from this contract.
   sourceAuthorityResolutions SourceAuthorityResolution[]
 
@@ -2081,35 +2099,30 @@ model VideoProductionVersion {
 
 /**
  * PHASE-G0 — append-only editorial review commentary.
- *
  * NOT `ReportReview`. That model reviews a LEARNER's submitted report, is keyed
  * to a `ReportSubmission`, carries rubric scores and rejection reasons, and its
  * rows are learner-visible evidence. This one reviews STAFF authoring work, is
  * keyed to an authoring version, and is never shown to a learner. Reusing the
  * learner model would have put staff commentary one join away from a learner
  * surface, which is exactly the leak this domain must not have.
- *
  * THREE NULLABLE TARGETS, EXACTLY ONE SET. Prisma cannot express a tagged union
  * across three foreign keys, so the constraint is enforced in the DATABASE by a
  * CHECK in the migration and re-asserted by the domain before every insert. The
  * alternative — one untyped integer plus a discriminator string — was rejected:
  * it has no referential integrity at all, so a note could outlive its target or
  * point at a row of the wrong kind and nothing would notice.
- *
  * `targetRevision` records the aggregate revision the note was written against,
  * so a reviewer's "fix the third block" is still readable after the author
  * bumped the aggregate, and the UI can mark it as possibly stale rather than
  * silently reattributing it to new text.
- *
  * NO HARD DELETE IN THE NORMAL WORKFLOW. There is no `deletedAt` and the domain
  * exposes no delete operation. A note is closed by `resolvedAt`/`resolvedById`,
  * which preserves what was asked and who accepted it.
- *
  * NO LEARNER PII. There is no learner relation, no email, no name column. The
  * body is bounded staff prose about a lesson.
  */
 model EditorialReviewNote {
-  id                       Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   /// Exactly one of the three is non-null. Enforced by a CHECK constraint.
   contentVersionId         Int?
@@ -2117,21 +2130,21 @@ model EditorialReviewNote {
   videoProductionVersionId Int?
 
   /// Aggregate revision of the target at the moment the note was written.
-  targetRevision           Int
+  targetRevision Int
   /// Optional bounded field/block path, e.g. `sections[2].blocks[0].alt`.
-  path                     String?
-  body                     String
+  path           String?
+  body           String
   /// The staff actor, as a canonical User id. Derived server-side, never accepted.
-  authorId                 Int
-  createdAt                DateTime  @default(now())
-  resolvedAt               DateTime?
-  resolvedById             Int?
+  authorId       Int
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedById   Int?
 
-  contentVersion           ContentVersion?         @relation("EditorialReviewNoteContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  assessmentVersion        AssessmentVersion?      @relation("EditorialReviewNoteAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  videoProductionVersion   VideoProductionVersion? @relation("EditorialReviewNoteVideoProduction", fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  author                   User                    @relation("EditorialReviewNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  resolvedBy               User?                   @relation("EditorialReviewNoteResolver", fields: [resolvedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion         ContentVersion?         @relation("EditorialReviewNoteContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion      AssessmentVersion?      @relation("EditorialReviewNoteAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  videoProductionVersion VideoProductionVersion? @relation("EditorialReviewNoteVideoProduction", fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author                 User                    @relation("EditorialReviewNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  resolvedBy             User?                   @relation("EditorialReviewNoteResolver", fields: [resolvedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([contentVersionId, resolvedAt])
   @@index([assessmentVersionId, resolvedAt])
@@ -2142,7 +2155,6 @@ model EditorialReviewNote {
 
 /**
  * PHASE-G0 — the immutable staff preview snapshot.
- *
  * WHY THE EXISTING VERSION IDS ARE NOT ENOUGH. A preview must render an EXACT
  * draft state. Draft rows are mutable by design — that is what `revision` is
  * for — and the previous state is not retained anywhere. So "preview
@@ -2150,33 +2162,30 @@ model EditorialReviewNote {
  * revision N may already be N+1, and staff would review text that no longer
  * exists while believing they reviewed what they clicked. Freezing the render
  * payload is the only way to make the preview exact, so the table is required.
- *
  * `snapshotCode` IS AN IDENTIFIER, NOT A CREDENTIAL. It is opaque and unique so
  * it can appear in a URL path, and it grants nothing: the preview route must
  * still resolve the caller's session and re-check curriculum_read exactly as
  * every other authoring surface does. No bearer secret is ever placed in a
  * preview URL, and this column must never be treated as one.
- *
  * WHAT IS FROZEN. `payload` holds the already-normalised learner-facing render
  * input, plus the asset table it references. It carries no internal production
  * metadata, no correct answers and no learner data — a snapshot is what a
  * learner would see, which is the whole point of previewing it.
- *
  * G0 SCOPE. The table and its integrity land here so the migration is done
  * once. The creation domain and the Academy render route are G1.
  */
 model AuthoringPreviewSnapshot {
-  id                  Int       @id @default(autoincrement())
+  id                  Int    @id @default(autoincrement())
   /// Opaque, unique, URL-safe. NOT a credential — authorization is checked separately.
-  snapshotCode        String    @unique
+  snapshotCode        String @unique
   levelDefinitionId   Int
   curriculumVersionId Int
 
-  contentVersionId    Int?
+  contentVersionId         Int?
   /// Aggregate revision frozen into `payload`. Proves what was rendered.
-  contentRevision     Int?
-  assessmentVersionId Int?
-  assessmentRevision  Int?
+  contentRevision          Int?
+  assessmentVersionId      Int?
+  assessmentRevision       Int?
   /// PHASE-G0 CORRECTION — the third pinnable authoring target. Paired with its
   /// revision exactly like the two above: a version id without a revision cannot
   /// prove what was rendered, and a revision without its version names nothing.
@@ -2184,17 +2193,17 @@ model AuthoringPreviewSnapshot {
   videoProductionRevision  Int?
 
   /// Frozen learner-facing render input. No internal metadata, no answer keys.
-  payload             Json
+  payload Json
 
-  createdById         Int
-  createdAt           DateTime  @default(now())
-  expiresAt           DateTime?
+  createdById Int
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
 
-  levelDefinition     LevelDefinition    @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
-  contentVersion      ContentVersion?    @relation("AuthoringPreviewSnapshotContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  assessmentVersion   AssessmentVersion? @relation("AuthoringPreviewSnapshotAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition        LevelDefinition         @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
+  contentVersion         ContentVersion?         @relation("AuthoringPreviewSnapshotContent", fields: [contentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assessmentVersion      AssessmentVersion?      @relation("AuthoringPreviewSnapshotAssessment", fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   videoProductionVersion VideoProductionVersion? @relation("AuthoringPreviewSnapshotVideoProduction", fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdBy           User               @relation("AuthoringPreviewSnapshotCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy              User                    @relation("AuthoringPreviewSnapshotCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([videoProductionVersionId])
   @@index([levelDefinitionId, createdAt])
@@ -2205,7 +2214,6 @@ model AuthoringPreviewSnapshot {
 /**
  * PHASE-G0 CORRECTION — the durable bridge between a video production contract
  * and the REAL question bank it was reviewed against.
- *
  * WHY IT IS A TABLE AND NOT THREE NULLABLE COLUMNS. The link is meaningful only
  * as a whole: an AssessmentVersion without the revision it was fingerprinted at,
  * or a fingerprint without the bank it describes, is not a weaker link — it is a
@@ -2215,11 +2223,9 @@ model AuthoringPreviewSnapshot {
  * CAN declare its constraints inline, so "linked" is a row that exists with
  * every column NOT NULL and "unlinked" is the absence of a row. There is no
  * half-linked state for a reader to reason about.
- *
  * ONE BANK PER CONTRACT. `videoProductionVersionId` is unique: a production
  * contract is coherent with exactly one bank, and a level whose candidate bank
  * is ambiguous gets NO row rather than a guess.
- *
  * `assessmentBankFingerprint` IS SERVER-COMPUTED, ALWAYS. It is
  * `calculateAssessmentFingerprint` — the accepted Phase-C function — applied to
  * `projectAssessmentBank`, which reads QuestionDefinition and its canonical
@@ -2260,46 +2266,46 @@ model VideoProductionAssessmentLink {
 /// why both sides are pinned by hash. If either side moves afterwards the
 /// projection reports the decision as stale and the conflict blocks again.
 model SourceAuthorityResolution {
-  id                            Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  assessmentVersionId           Int
-  videoProductionVersionId      Int
-  levelDefinitionId             Int
-  curriculumVersionId           Int
+  assessmentVersionId      Int
+  videoProductionVersionId Int
+  levelDefinitionId        Int
+  curriculumVersionId      Int
   /// Zero-based question ordinal, matching the accepted `questions[N]` grammar.
-  questionIndex                 Int
+  questionIndex            Int
   /// `prompt` or `correctAnswerText` — the accepted conflict fields.
-  field                         String
+  field                    String
   /// The accepted path, verbatim, e.g. `questions[0].prompt`.
-  conflictPath                  String
+  conflictPath             String
 
   /// `CURRENT` or `BLUEPRINT`.
-  decision                      String
+  decision String
 
   /// The exact two values compared, by sha256. Server-computed.
-  currentValueHash              String
-  blueprintValueHash            String
+  currentValueHash   String
+  blueprintValueHash String
 
   blueprintSourceDocumentSha256 String
   contractFingerprintAtDecision String
   bankFingerprintAtDecision     String
   assessmentRevisionAtDecision  Int
 
-  rationale                     String
+  rationale      String
   /// Durable evidence identity, e.g. the adjudication artifact's filename.
-  evidenceRef                   String
-  evidenceSha256                String
+  evidenceRef    String
+  evidenceSha256 String
 
   /// Groups one atomic adjudication request.
-  batchId                       String
+  batchId String
 
-  decidedById                   Int
-  decidedAt                     DateTime  @default(now())
-  createdAt                     DateTime  @default(now())
+  decidedById Int
+  decidedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   /// Supersession rather than deletion — history is never removed.
-  supersededAt                  DateTime?
-  supersededById                Int?
+  supersededAt   DateTime?
+  supersededById Int?
 
   assessmentVersion      AssessmentVersion      @relation(fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   videoProductionVersion VideoProductionVersion @relation(fields: [videoProductionVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -2856,8 +2862,8 @@ model StaffProfile {
   // back-reference only: StaffProfile gains no column and remains the single
   // canonical staff identity, because the Agent Core does not introduce a
   // second staff model.
-  initiatedAgentRuns      AgentRun[]            @relation("AgentRunInitiator")
-  agentActionDecisions    AgentActionDecision[] @relation("AgentActionDecisionStaff")
+  initiatedAgentRuns   AgentRun[]            @relation("AgentRunInitiator")
+  agentActionDecisions AgentActionDecision[] @relation("AgentActionDecisionStaff")
 
   @@index([staffRole])
 }
@@ -3250,11 +3256,11 @@ model AgentRun {
 
   initiatedByStaff StaffProfile? @relation("AgentRunInitiator", fields: [initiatedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  findings          AgentFinding[]        @relation("AgentFindingRun")
-  handoffs          AgentHandoff[]        @relation("AgentHandoffSource")
-  acceptedHandoffs  AgentHandoff[]        @relation("AgentHandoffAccepted")
-  actionProposals   AgentActionProposal[] @relation("AgentActionProposalRun")
-  modelInvocations  ModelInvocation[]     @relation("ModelInvocationRun")
+  findings         AgentFinding[]        @relation("AgentFindingRun")
+  handoffs         AgentHandoff[]        @relation("AgentHandoffSource")
+  acceptedHandoffs AgentHandoff[]        @relation("AgentHandoffAccepted")
+  actionProposals  AgentActionProposal[] @relation("AgentActionProposalRun")
+  modelInvocations ModelInvocation[]     @relation("ModelInvocationRun")
 
   /// THE IDEMPOTENCY CONTRACT: the same logical question, asked twice under one
   /// agent, returns the first run instead of doing the work again.
@@ -3300,7 +3306,7 @@ model AgentFinding {
   /// A bounded, flat map of scalars validated against the versioned schema
   /// registered for `code`. Unknown keys, PII-shaped keys, nested values and
   /// oversized payloads are all rejected at write time.
-  operandsJson         Json
+  operandsJson          Json
   operandsSchemaVersion Int  @default(1)
 
   supportTier AgentSupportTier
@@ -3308,9 +3314,9 @@ model AgentFinding {
   expiresAt   DateTime?
   createdAt   DateTime           @default(now())
 
-  run      AgentRun                 @relation("AgentFindingRun", fields: [runId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  evidence AgentEvidenceReference[] @relation("AgentEvidenceFinding")
-  proposals AgentActionProposal[]   @relation("AgentActionProposalFinding")
+  run       AgentRun                 @relation("AgentFindingRun", fields: [runId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  evidence  AgentEvidenceReference[] @relation("AgentEvidenceFinding")
+  proposals AgentActionProposal[]    @relation("AgentActionProposalFinding")
 
   /// A finding key is claimed once per run.
   @@unique([runId, findingKey])
@@ -3334,11 +3340,11 @@ model AgentEvidenceReference {
 
   sourceDomain AgentEvidenceDomain
   /// The kind of thing within the domain — an aggregate name, never a table.
-  sourceType String
+  sourceType   String
   /// An internal opaque reference to the authoritative record.
-  sourceRef String
+  sourceRef    String
   /// Which field of it, in the owner's own spelling.
-  fieldPath String
+  fieldPath    String
 
   /// How to tell whether the value has moved since it was observed, without
   /// storing the value's history.
@@ -3444,8 +3450,8 @@ model AgentActionProposal {
   sourceRun     AgentRun      @relation("AgentActionProposalRun", fields: [sourceRunId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   sourceFinding AgentFinding? @relation("AgentActionProposalFinding", fields: [sourceFindingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  decision   AgentActionDecision?    @relation("AgentActionDecisionProposal")
-  executions AgentActionExecution[]  @relation("AgentActionExecutionProposal")
+  decision   AgentActionDecision?   @relation("AgentActionDecisionProposal")
+  executions AgentActionExecution[] @relation("AgentActionExecutionProposal")
 
   @@unique([deduplicationKey])
   /// "What is proposed about this subject" — the review queue, per subject.
@@ -3477,8 +3483,8 @@ model AgentActionDecision {
 
   createdAt DateTime @default(now())
 
-  proposal      AgentActionProposal @relation("AgentActionDecisionProposal", fields: [proposalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  decidedByStaff StaffProfile       @relation("AgentActionDecisionStaff", fields: [decidedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  proposal       AgentActionProposal @relation("AgentActionDecisionProposal", fields: [proposalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  decidedByStaff StaffProfile        @relation("AgentActionDecisionStaff", fields: [decidedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   /// Supports the Restrict deletion lookup on the staff axis.
   @@index([decidedByStaffId])
@@ -3747,8 +3753,8 @@ model GrowthEvent {
   /// and `json_extract` cannot use an index. `levelNumber` is denormalised from
   /// `LevelDefinition` so a funnel can be built without joining the curriculum
   /// on every read, and it is the level's ordinal AT THE TIME OF THE EVENT.
-  levelDefinitionId      Int?
-  levelNumber            Int?
+  levelDefinitionId Int?
+  levelNumber       Int?
 
   /// Canonical decimal TEXT with exactly two fractional digits, copied from the
   /// owner row. Never a float, never a balance, never a running total, and never
@@ -3770,14 +3776,14 @@ model GrowthEvent {
   /// query string, never PII, never authentication material.
   metadata Json?
 
-  user            User?                     @relation("GrowthEventLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  enrollment      UserCurriculumEnrollment? @relation("GrowthEventEnrollment", fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  acquisitionClick AffiliateClick?          @relation("GrowthEventAcquisitionClick", fields: [acquisitionClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  attribution     AffiliateAttribution?     @relation("GrowthEventAttribution", fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  pocketIdentity  PocketTraderIdentity?     @relation("GrowthEventPocketIdentity", fields: [pocketTraderIdentityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  ingressEvent    ProviderIngressEvent?     @relation("GrowthEventIngress", fields: [providerIngressEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  levelDefinition LevelDefinition?          @relation("GrowthEventLevel", fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  outboxItem      GrowthEventOutbox?
+  user             User?                     @relation("GrowthEventLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollment       UserCurriculumEnrollment? @relation("GrowthEventEnrollment", fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  acquisitionClick AffiliateClick?           @relation("GrowthEventAcquisitionClick", fields: [acquisitionClickId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attribution      AffiliateAttribution?     @relation("GrowthEventAttribution", fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  pocketIdentity   PocketTraderIdentity?     @relation("GrowthEventPocketIdentity", fields: [pocketTraderIdentityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ingressEvent     ProviderIngressEvent?     @relation("GrowthEventIngress", fields: [providerIngressEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  levelDefinition  LevelDefinition?          @relation("GrowthEventLevel", fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  outboxItem       GrowthEventOutbox?
 
   @@unique([eventType, sourceOwner, sourceEventId])
   /// "Every DEP in August" — the primary analytics read.
@@ -3915,13 +3921,13 @@ model ProviderIngressEvent {
   provider String              @default("pocket")
   goal     ProviderIngressGoal
 
-  receivedAt         DateTime
+  receivedAt            DateTime
   /// The provider's own event time, parsed. Null unless `providerEventAtStatus`
   /// is `parsed`.
-  providerEventAt    DateTime?
+  providerEventAt       DateTime?
   /// The raw provider string, kept when it could not be parsed rather than
   /// discarded or guessed at.
-  providerEventAtRaw String?
+  providerEventAtRaw    String?
   providerEventAtStatus ProviderIngressTimeStatus @default(absent)
 
   /// The Pocket player id, digits only, as delivered.
@@ -3950,8 +3956,14 @@ model ProviderIngressEvent {
   rawPayloadHash   String
 
   /// The provider's own unique event id, when a contract proves one exists.
-  /// Null for every Pocket delivery today — which is precisely why a canonical
-  /// `rdep` cannot be emitted.
+  /// Null for every Pocket delivery today: Pocket issues none.
+  ///
+  /// POCKET-DEP-RDEP-1 — this is NOT where ATA's derived redeposit key goes, and
+  /// the distinction is load-bearing. A provider-issued id identifies ONE
+  /// DELIVERY, which is why the unique index below is correct for it. ATA's
+  /// derived key identifies one DEPOSIT and is deliberately stable across
+  /// retries, so it would collide here on exactly the redeliveries the design
+  /// depends on. It lives on `PocketProviderEvent.providerEventKey` instead.
   providerEventIdentity String?
 
   processingStatus ProviderIngressStatus

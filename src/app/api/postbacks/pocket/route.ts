@@ -566,10 +566,17 @@ async function handleDirectFirstDeposit(params: URLSearchParams, request: Reques
  * or modifies a FIRST deposit. `goal=reg` owns identity and `goal=dep` owns the
  * first deposit, and neither is reachable from here.
  *
- * WHAT IT USUALLY DOES. Records durable, sanitized evidence and stops, because
- * Pocket supplies no unique event identifier and ATA therefore cannot tell a
- * retried delivery from a genuinely new deposit. That outcome is
- * `identity_unresolved` — an honest terminal state, not an error.
+ * WHAT IT DOES. Records durable, sanitized evidence AND emits a canonical
+ * redeposit, keyed on the identity ATA derives from the authenticated provider
+ * attributes. It no longer stops at evidence: this text used to say it did,
+ * "because Pocket supplies no unique event identifier and ATA therefore cannot
+ * tell a retried delivery from a genuinely new deposit", which was the
+ * superseded design. A retry now reproduces the same derived key and is
+ * recognised rather than double-counted.
+ *
+ * `identity_unresolved` survives as a NARROWER terminal state: a delivery whose
+ * identity could not be DERIVED, typically for want of a usable provider event
+ * time. Still an honest outcome, not an error.
  *
  * ONE RESPONSE FOR EVERY BUSINESS OUTCOME. Emitted, unresolved, pending linkage
  * and quarantined all return the same bounded `{ ok: true }`, for exactly the

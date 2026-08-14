@@ -39,6 +39,8 @@ export type GrowthAvailabilityScope = {
   readonly basis: "positive_registration_authority";
 };
 
+import type { RedepositCapability } from "@/lib/growth/ingress-config";
+
 export type GrowthAvailabilityState =
   | { readonly available: true }
   | { readonly available: true; readonly scope: GrowthAvailabilityScope }
@@ -76,6 +78,16 @@ export function buildGrowthAvailability(input: {
     readonly unprovableStaff: number;
     readonly unprovableOther: number;
   };
+  /**
+   * RDEP-AVAIL-1. The accepted redeposit capability, resolved by the caller from
+   * `resolveRedepositCapability`.
+   *
+   * OPTIONAL, BUT OMITTING IT NEVER PRODUCES A CLAIM. A caller that has not
+   * resolved it yields `redeposit_capability_not_resolved` — "this surface did
+   * not determine it" — which is true. What it can never yield is the superseded
+   * provider-contract reason, or a false `available`.
+   */
+  readonly redepositCapability?: RedepositCapability;
 }): GrowthDataAvailability {
   const coverage = input.registrationOriginCoverage;
 
@@ -124,11 +136,28 @@ export function buildGrowthAvailability(input: {
       ? available
       : unavailable(input.amountUnavailableReason ?? "currency_unspecified_or_mixed"),
 
-    // The G4 safety boundary. Typed ingress, evidence and amounts are all
-    // implemented — what is missing is a PROVIDER contract, not ATA code. The
-    // unresolved deliveries are reported as their own operational count so the
-    // absence is visible rather than merely stated.
-    redeposits: unavailable("provider_event_identity_contract_absent"),
+    // RDEP-AVAIL-1 — DERIVED FROM THE ACCEPTED CAPABILITY, NEVER HARD-CODED.
+    //
+    // This line used to read
+    //   unavailable("provider_event_identity_contract_absent")
+    // unconditionally, on the reasoning that "what is missing is a PROVIDER
+    // contract, not ATA code". That reasoning is superseded: ATA derives its own
+    // deterministic redeposit identity from the authenticated provider
+    // attributes, so nothing is missing from the provider. Shipping the old
+    // sentence into RDEP activation would have told operators the platform
+    // cannot count redeposits at the moment it started counting them — an
+    // availability surface exists to be believed, so a stale reason there is
+    // worse than silence.
+    //
+    // It is equally NOT hard-coded to `available`: with RDEP switched off, or
+    // the master gate closed, the honest answer is that it is off, and that is
+    // what the resolver returns.
+    redeposits:
+      input.redepositCapability === undefined
+        ? unavailable("redeposit_capability_not_resolved")
+        : input.redepositCapability.kind === "available"
+          ? available
+          : unavailable(input.redepositCapability.reason),
 
     // Never collected. Pocket exposes no official balance API and
     // `ExchangeAccount.balance` carries no trading P&L.

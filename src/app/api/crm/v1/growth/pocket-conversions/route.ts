@@ -19,6 +19,7 @@ import {
   loadRegistrationOriginCoverage,
 } from "@/lib/growth/analytics/queries";
 import { buildGrowthAvailability } from "@/lib/growth/analytics/availability";
+import { resolveRedepositCapability } from "@/lib/growth/ingress-config";
 import {
   GROWTH_COMMON_KEYS,
   assertGrowthFilterHierarchy,
@@ -107,10 +108,17 @@ export async function GET(request: Request) {
         // the same row as a confirmed conversion by accident.
         operational: {
           unresolvedRedeposits,
+          // RDEP-AVAIL-1. This used to say redeposits were not counted "because
+          // Pocket supplies no unique event identifier, so a retry cannot be told
+          // apart from a genuine second deposit". ATA now derives its own
+          // deterministic identity, so that is no longer why anything is
+          // unresolved — what remains unresolved is a delivery whose identity
+          // could not be DERIVED, a different and much smaller set.
           unresolvedRedepositsMeaning:
-            "Deliveries received and validated. NOT counted as money because Pocket " +
-            "supplies no unique event identifier, so a retry cannot be told apart " +
-            "from a genuine second deposit. This is not a count of zero redeposits.",
+            "Deliveries received and validated whose canonical redeposit identity " +
+            "could not be derived — typically a missing or malformed provider event " +
+            "time. Kept as evidence and NOT counted as money. This is not a count " +
+            "of zero redeposits.",
           // G4-M3. ProviderIngressEvent carries no acquisition linkage, so this
           // count cannot be narrowed to a campaign or a coverage scope. Saying so
           // is the honest alternative to silently reporting a platform-wide
@@ -128,6 +136,7 @@ export async function GET(request: Request) {
           commission: "not_in_scope_for_growth_v1",
         },
         dataAvailability: buildGrowthAvailability({
+          redepositCapability: resolveRedepositCapability(),
           amountAggregationAvailable: amounts.amountAggregationAvailable,
           amountUnavailableReason: amounts.unavailableReason,
           registrationOriginCoverage,

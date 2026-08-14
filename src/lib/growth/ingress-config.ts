@@ -32,42 +32,6 @@ export const POCKET_REG_INGEST_ENABLED_KEY = "POCKET_REG_INGEST_ENABLED";
 export const POCKET_DEP_INGEST_ENABLED_KEY = "POCKET_DEP_INGEST_ENABLED";
 export const POCKET_RDEP_INGEST_ENABLED_KEY = "POCKET_RDEP_INGEST_ENABLED";
 
-/**
- * The query parameter that carries a provider-generated, retry-stable unique
- * event identifier for a redeposit.
- *
- * UNSET BY DEFAULT, AND THAT IS THE POINT. Pocket's documented macro set carries
- * no such field. Naming one here is an operator asserting that a provider
- * contract now supplies it — a deliberate, auditable act, not something the
- * platform may infer from a parameter happening to be present in a payload.
- * Until it is set, no canonical redeposit can be emitted by any code path.
- */
-export const POCKET_RDEP_EVENT_ID_PARAM_KEY = "POCKET_RDEP_EVENT_ID_PARAM";
-
-/** Parameter names an operator may NOT nominate as the redeposit event identity. */
-const FORBIDDEN_EVENT_ID_PARAMS = new Set([
-  // Authentication material. Naming any of these would route the secret into a
-  // stored identity column and into a unique index.
-  "ow",
-  "secret",
-  "token",
-  // Fields that are not event identities, however tempting. A player repeats
-  // across every one of their deposits, a click repeats across a whole journey,
-  // an amount and a timestamp are the exact pair this platform has already
-  // refused to synthesise a key from.
-  "playerid",
-  "clickid",
-  "click_id",
-  "sum",
-  "sumdep",
-  "date_time",
-  "datetime",
-  "date",
-  "goal",
-]);
-
-const PARAM_NAME_SHAPE = /^[a-z][a-z0-9_]{0,39}$/;
-
 function readsTrue(env: NodeJS.ProcessEnv, key: string): boolean {
   return env[key] === "true";
 }
@@ -104,64 +68,68 @@ export function isPocketDepIngestEnabled(env: NodeJS.ProcessEnv = process.env): 
 /**
  * Pocket REDEPOSIT ingestion.
  *
- * Note carefully what this switch does and does not do. ON, deliveries are
- * parsed, authenticated, validated and recorded as durable evidence. It does
- * NOT by itself permit a canonical `rdep` event — that additionally requires a
- * provider event identity, which requires `POCKET_RDEP_EVENT_ID_PARAM`. The two
- * are separate because capturing evidence is safe and counting money is not.
+ * ON, deliveries are parsed, authenticated, validated, recorded as durable
+ * evidence AND counted as canonical redeposits.
+ *
+ * THIS COMMENT USED TO SAY THE OPPOSITE. It said the switch did "NOT by itself
+ * permit a canonical `rdep` event" because that "additionally requires a
+ * provider event identity, which requires POCKET_RDEP_EVENT_ID_PARAM". That
+ * second gate is gone: ATA derives its own deterministic identity from the
+ * authenticated provider attributes, so a valid authenticated delivery is
+ * countable on its own. Leaving the old sentence in place would tell the next
+ * operator to go looking for a switch that no longer exists.
  */
 export function isPocketRdepIngestEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return masterGateEnabled(env) && readsTrue(env, POCKET_RDEP_INGEST_ENABLED_KEY);
 }
 
-export type RedepositIdentityPolicy =
+/**
+ * POCKET-DEP-RDEP-1 (RDEP-AVAIL-1) — whether this deployment can count canonical
+ * redeposits, and if not, WHY NOT truthfully.
+ *
+ * WHAT CHANGED AND WHY. This used to be `RedepositIdentityPolicy`, which asked a
+ * different question: "has an operator named a parameter carrying a
+ * PROVIDER-ISSUED unique event id?" When none was named it answered
+ * `provider_event_identity_contract_absent`, and every surface downstream
+ * repeated that as the reason redeposits could not be counted.
+ *
+ * THAT PREMISE IS SUPERSEDED. The accepted product decision is that a valid
+ * authenticated `goal=redep` callback is itself authoritative evidence that a
+ * redeposit occurred, and that ATA derives its OWN deterministic business
+ * identity from the authenticated attributes
+ * (`v1:pocket:redeposit:<player>:<local time>:<amount>`). Pocket issues no event
+ * id and is not required to. Continuing to report "the provider supplies no
+ * identity" would state a missing capability that ATA no longer needs and does
+ * not lack.
+ *
+ * WHAT THIS ANSWERS INSTEAD is the question that actually gates counting:
+ * is the ingest family switched on. It stays truthful when it is not, and it
+ * NEVER reports the superseded reason.
+ */
+export type RedepositCapability =
+  | { readonly kind: "available" }
   | {
-      /** No operator has asserted a provider event-identity contract. */
       readonly kind: "unavailable";
-      readonly reason: "provider_event_identity_contract_absent" | "configured_param_rejected";
-    }
-  | { readonly kind: "available"; readonly parameterName: string };
+      readonly reason: "master_gate_disabled" | "redeposit_ingest_disabled";
+    };
 
 /**
- * Whether this deployment may derive a canonical redeposit identity, and from
- * which parameter.
+ * The accepted authority, read from configuration.
  *
- * A MALFORMED OR FORBIDDEN VALUE RESOLVES TO `unavailable`, NEVER TO A DEFAULT.
- * The failure mode being avoided is an operator typo silently selecting a field
- * that repeats across deposits — which would make two real redeposits collide on
- * one key and disappear.
+ * DELIBERATELY NOT A CONSTANT `available`. A surface that claims a capability it
+ * does not have is the same defect in the opposite direction, and an operator
+ * who has switched RDEP off must be told exactly that.
  */
-export function resolveRedepositIdentityPolicy(
+export function resolveRedepositCapability(
   env: NodeJS.ProcessEnv = process.env,
-): RedepositIdentityPolicy {
-  const raw = env[POCKET_RDEP_EVENT_ID_PARAM_KEY];
-
-  if (raw === undefined || raw.trim() === "") {
-    return { kind: "unavailable", reason: "provider_event_identity_contract_absent" };
+): RedepositCapability {
+  if (!masterGateEnabled(env)) {
+    return { kind: "unavailable", reason: "master_gate_disabled" };
   }
-
-  const trimmed = raw.trim();
-
-  // G4-L2 — REFUSE a name that is not already lower-case, rather than quietly
-  // lower-casing it.
-  //
-  // The policy used to accept `UPPER` and resolve it to `upper`, while
-  // `readProviderEventIdentity` reads `params.getAll("upper")` case-sensitively
-  // — so a provider sending `UPPER=...` never matched. RDEP then stayed
-  // `identity_unresolved` forever, which is fail-closed and therefore produced
-  // no wrong money, but an operator who believed they had enabled RDEP saw
-  // nothing happen and no reason why. A misconfiguration must be LOUD.
-  if (trimmed !== trimmed.toLowerCase()) {
-    return { kind: "unavailable", reason: "configured_param_rejected" };
+  if (!isPocketRdepIngestEnabled(env)) {
+    return { kind: "unavailable", reason: "redeposit_ingest_disabled" };
   }
-
-  const name = trimmed;
-
-  if (!PARAM_NAME_SHAPE.test(name) || FORBIDDEN_EVENT_ID_PARAMS.has(name)) {
-    return { kind: "unavailable", reason: "configured_param_rejected" };
-  }
-
-  return { kind: "available", parameterName: name };
+  return { kind: "available" };
 }
 
 /** A single snapshot for the ingress-health surface and for tests. */
@@ -170,7 +138,7 @@ export type PocketIngressSwitches = {
   readonly regEnabled: boolean;
   readonly depEnabled: boolean;
   readonly rdepEnabled: boolean;
-  readonly redepositIdentity: RedepositIdentityPolicy;
+  readonly redepositCapability: RedepositCapability;
 };
 
 export function readPocketIngressSwitches(
@@ -181,6 +149,6 @@ export function readPocketIngressSwitches(
     regEnabled: isPocketRegIngestEnabled(env),
     depEnabled: isPocketDepIngestEnabled(env),
     rdepEnabled: isPocketRdepIngestEnabled(env),
-    redepositIdentity: resolveRedepositIdentityPolicy(env),
+    redepositCapability: resolveRedepositCapability(env),
   };
 }

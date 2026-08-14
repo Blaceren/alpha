@@ -51,6 +51,12 @@ const ALLOWED_METADATA_KEYS = [
   "moduleId",
   "reviewDecision",
   "ingressGoal",
+  // POCKET-DEP-RDEP-1. Which clock `occurredAt` came from, for events whose
+  // provider does not always supply an absolute instant. Added to the CLOSED
+  // vocabulary deliberately: without it a surface could present ATA's receipt
+  // time as the provider's event time, and nothing in the row would contradict
+  // it. Carries no learner data — it names a clock, not a person.
+  "occurredAtAuthority",
 ] as const;
 
 const MAX_METADATA_STRING_LENGTH = 128;

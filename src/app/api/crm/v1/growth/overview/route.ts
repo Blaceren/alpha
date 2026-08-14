@@ -33,6 +33,7 @@ import {
   GROWTH_RATE_MODE_EXPLANATION,
   buildGrowthAvailability,
 } from "@/lib/growth/analytics/availability";
+import { resolveRedepositCapability } from "@/lib/growth/ingress-config";
 import {
   GROWTH_COMMON_KEYS,
   assertGrowthFilterHierarchy,
@@ -191,6 +192,7 @@ export async function GET(request: Request) {
         }),
         firstDepositAmount: amounts,
         dataAvailability: buildGrowthAvailability({
+          redepositCapability: resolveRedepositCapability(),
           amountAggregationAvailable: amounts.amountAggregationAvailable,
           amountUnavailableReason: amounts.unavailableReason,
           registrationOriginCoverage,

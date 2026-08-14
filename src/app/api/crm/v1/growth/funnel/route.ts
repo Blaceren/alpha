@@ -30,6 +30,7 @@ import {
   GROWTH_ATTRIBUTION_EXPLANATION,
   buildGrowthAvailability,
 } from "@/lib/growth/analytics/availability";
+import { resolveRedepositCapability } from "@/lib/growth/ingress-config";
 import {
   GROWTH_COMMON_KEYS,
   assertGrowthFilterHierarchy,
@@ -249,6 +250,7 @@ export async function GET(request: Request) {
           mentorReviewsApproved: counts.mentorReviewsApproved,
         },
         dataAvailability: buildGrowthAvailability({
+          redepositCapability: resolveRedepositCapability(),
           amountAggregationAvailable: false,
           amountUnavailableReason: "not_requested_on_this_surface",
           registrationOriginCoverage,

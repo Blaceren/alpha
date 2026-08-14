@@ -8,7 +8,7 @@ import {
   isPocketRdepIngestEnabled,
   isPocketRegIngestEnabled,
   readPocketIngressSwitches,
-  resolveRedepositIdentityPolicy,
+  resolveRedepositCapability,
 } from "./ingress-config";
 
 /**
@@ -98,129 +98,71 @@ describe("Pocket ingest switches", () => {
     expect(switches.regEnabled).toBe(true);
     expect(switches.depEnabled).toBe(false);
     expect(switches.rdepEnabled).toBe(false);
+    // RDEP-AVAIL-1. The snapshot carries the CAPABILITY now, not the superseded
+    // provider-event-id contract, and it must say why it is off.
+    expect(switches.redepositCapability).toEqual({
+      kind: "unavailable",
+      reason: "redeposit_ingest_disabled",
+    });
   });
 });
 
-describe("redeposit identity policy", () => {
-  it("is unavailable by default, which is why no canonical rdep can be emitted", () => {
-    expect(resolveRedepositIdentityPolicy(env())).toEqual({
+/**
+ * RDEP-AVAIL-1 — the redeposit CAPABILITY, which replaced the redeposit
+ * IDENTITY POLICY.
+ *
+ * WHAT WAS HERE BEFORE. Two describe blocks, seventeen assertions, all about
+ * `resolveRedepositIdentityPolicy`: that it was "unavailable by default, which
+ * is why no canonical rdep can be emitted", that it "becomes available only
+ * when an operator names a parameter", that forbidden names were refused, and
+ * that a mixed-case name was rejected loudly rather than lower-cased.
+ *
+ * Every one of those guarded a nomination mechanism for a PROVIDER-ISSUED event
+ * id. The accepted product decision removed the mechanism: ATA derives its own
+ * deterministic identity, so there is no parameter to name, no forbidden list
+ * to enforce, and no casing rule to get wrong. Keeping the tests would have
+ * required keeping dead code to satisfy them.
+ *
+ * WHAT REPLACES THEM is the question that now actually gates counting, tested
+ * in both directions — because an availability surface that claims a capability
+ * the deployment lacks is the same defect as one that denies a capability it
+ * has.
+ */
+describe("redeposit capability", () => {
+  it("is unavailable when Pocket is not integrated at all", () => {
+    expect(resolveRedepositCapability(env())).toEqual({
       kind: "unavailable",
-      reason: "provider_event_identity_contract_absent",
+      reason: "master_gate_disabled",
     });
   });
 
-  it("becomes available only when an operator names a parameter", () => {
-    expect(
-      resolveRedepositIdentityPolicy(env({
-        POCKET_RDEP_EVENT_ID_PARAM: "transaction_id",
-      })),
-    ).toEqual({ kind: "available", parameterName: "transaction_id" });
+  it("is unavailable, and says why, when the master gate is on but RDEP is off", () => {
+    expect(resolveRedepositCapability(MASTER_ON)).toEqual({
+      kind: "unavailable",
+      reason: "redeposit_ingest_disabled",
+    });
   });
 
-  /**
-   * The important refusals. Each of these would produce a key that REPEATS
-   * across a player's deposits, silently collapsing real money into one row.
-   */
-  it.each(["playerid", "clickid", "click_id", "sum", "sumdep", "date_time", "datetime", "date", "goal"])(
-    "refuses %s, which is not an event identity",
-    (param) => {
-      expect(
-        resolveRedepositIdentityPolicy(env({
-          POCKET_RDEP_EVENT_ID_PARAM: param,
-      })).kind,
-      ).toBe("unavailable");
-    },
-  );
-
-  it.each(["ow", "secret", "token"])(
-    "refuses %s, which would route the credential into a stored column and a unique index",
-    (param) => {
-      expect(
-        resolveRedepositIdentityPolicy(env({
-          POCKET_RDEP_EVENT_ID_PARAM: param,
-      })).kind,
-      ).toBe("unavailable");
-    },
-  );
-
-  it.each(["", "   ", "9lives", "has space", "a".repeat(80), "x;y", "-lead", "_lead"])(
-    "resolves the malformed value %s to unavailable rather than to a default",
-    (param) => {
-      expect(
-        resolveRedepositIdentityPolicy(env({
-          POCKET_RDEP_EVENT_ID_PARAM: param,
-      })).kind,
-      ).toBe("unavailable");
-    },
-  );
-
-  /**
-   * The configured name is TRIMMED but no longer silently lower-cased.
-   *
-   * G4-L2 CHANGED THIS DELIBERATELY, and this test changed with it. The old
-   * behaviour accepted `Transaction_ID` and resolved it to `transaction_id`,
-   * while `readProviderEventIdentity` reads the resolved name back from the
-   * query CASE-SENSITIVELY — so a provider sending `Transaction_ID=…` never
-   * matched, RDEP stayed `identity_unresolved`, and the operator who had just
-   * configured it saw nothing happen and no reason why. Fail-closed, yes, but
-   * silently: the configuration said "available" while nothing could ever
-   * resolve. A misconfiguration must be loud, so a name that is not already
-   * lower-case is now REFUSED with a named reason.
-   */
-  it("trims surrounding whitespace", () => {
+  it("is available when the master gate and the RDEP family are both on", () => {
     expect(
-      resolveRedepositIdentityPolicy(env({
-        POCKET_RDEP_EVENT_ID_PARAM: "  transaction_id  ",
-      })),
-    ).toEqual({ kind: "available", parameterName: "transaction_id" });
+      resolveRedepositCapability({ ...MASTER_ON, POCKET_RDEP_INGEST_ENABLED: "true" }),
+    ).toEqual({ kind: "available" });
   });
 
-  it("REFUSES a mixed-case name rather than resolving it to something else", () => {
-    expect(
-      resolveRedepositIdentityPolicy(env({
-        POCKET_RDEP_EVENT_ID_PARAM: "  Transaction_ID  ",
-      })),
-    ).toEqual({ kind: "unavailable", reason: "configured_param_rejected" });
-  });
-
-  it("refuses a forbidden name however it is cased", () => {
-    for (const raw of ["OW", "Ow", "SUM", "PlayerId"]) {
-      expect(
-        resolveRedepositIdentityPolicy(env({
-          POCKET_RDEP_EVENT_ID_PARAM: raw,
-      })).kind,
-      ).toBe("unavailable");
+  it("never reports the superseded provider-contract reason", () => {
+    // The RDEP-AVAIL-1 lock. Pocket issuing no unique deposit id is not a
+    // missing capability, and must never again be reported as one.
+    for (const e of [env(), MASTER_ON, { ...MASTER_ON, POCKET_RDEP_INGEST_ENABLED: "true" }]) {
+      const r = resolveRedepositCapability(e);
+      if (r.kind === "unavailable") {
+        expect(r.reason as string).not.toBe("provider_event_identity_contract_absent");
+      }
     }
   });
-});
 
-describe("G4-L2 — a mixed-case event-id parameter is refused, loudly", () => {
-  it("REFUSES rather than silently lower-casing", () => {
-    // It used to resolve to `upper`, while the reader matched case-sensitively,
-    // so a provider sending `UPPER=...` never matched and RDEP stayed
-    // identity_unresolved with no reason an operator could see.
-    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: "UPPER" }));
-
-    expect(policy.kind).toBe("unavailable");
-    if (policy.kind !== "unavailable") return;
-    expect(policy.reason).toBe("configured_param_rejected");
-  });
-
-  it.each(["Trx_Id", "eventID", "EVENT_ID"])("refuses %s", (name) => {
-    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: name }));
-
-    expect(policy.kind).toBe("unavailable");
-  });
-
-  it("still accepts an already-lower-case name", () => {
-    const policy = resolveRedepositIdentityPolicy(env({ POCKET_RDEP_EVENT_ID_PARAM: "trx_id" }));
-
-    expect(policy.kind).toBe("available");
-    if (policy.kind !== "available") return;
-    expect(policy.parameterName).toBe("trx_id");
-  });
-
-  it("is still absent-means-unavailable, which is the fail-closed default", () => {
-    expect(resolveRedepositIdentityPolicy(env()).kind).toBe("unavailable");
+  it("cannot be switched on by the RDEP family alone", () => {
+    expect(resolveRedepositCapability(env({ POCKET_RDEP_INGEST_ENABLED: "true" })).kind).toBe(
+      "unavailable",
+    );
   });
 });

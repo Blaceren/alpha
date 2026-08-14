@@ -22,6 +22,7 @@ import {
   GROWTH_ATTRIBUTION_EXPLANATION,
   buildGrowthAvailability,
 } from "@/lib/growth/analytics/availability";
+import { resolveRedepositCapability } from "@/lib/growth/ingress-config";
 import {
   GROWTH_COMMON_KEYS,
   parseGrowthLimit,
@@ -132,6 +133,7 @@ export async function GET(request: Request) {
           ...computeClickCohortRatios(row),
         })),
         dataAvailability: buildGrowthAvailability({
+          redepositCapability: resolveRedepositCapability(),
           amountAggregationAvailable: false,
           amountUnavailableReason: "per_row_amounts_not_published_on_this_surface",
           registrationOriginCoverage,
