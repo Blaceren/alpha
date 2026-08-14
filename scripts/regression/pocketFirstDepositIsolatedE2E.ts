@@ -230,6 +230,11 @@ async function main() {
     AFFILIATE_GO_LINK_LIMIT: "5000",
     AFFILIATE_GO_IP_LIMIT: "5000",
     POCKET_POSTBACK_ENABLED: "true",
+    // POCKET-REG-SECURITY-CLOSURE-1 (§14): the spawned server owns its
+    // fixture flags; G4 made ingest granular and the master gate alone
+    // admits nothing. RDEP is deliberately absent.
+    POCKET_REG_INGEST_ENABLED: "true",
+    POCKET_DEP_INGEST_ENABLED: "true",
     POCKET_FIRST_DEPOSIT_ENABLED: "true",
   };
 

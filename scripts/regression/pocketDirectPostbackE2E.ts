@@ -94,6 +94,15 @@ async function main() {
   process.env.DATABASE_URL = dbUrl;
   process.env.POSTBACK_SECRET = SECRET;
   process.env.POCKET_POSTBACK_ENABLED = "true";
+  // POCKET-REG-SECURITY-CLOSURE-1 (§14): this suite OWNS its fixture flags.
+  // It set only the master gate, so after G4 made ingest granular it was green
+  // solely because an operator exported the family switches — and red for
+  // anyone who ran it plainly. Families this suite does not exercise are
+  // DELETED rather than left inherited, so an exported flag cannot turn one of
+  // its refusal assertions into an acceptance.
+  process.env.POCKET_REG_INGEST_ENABLED = "true";
+  delete process.env.POCKET_DEP_INGEST_ENABLED;
+  delete process.env.POCKET_RDEP_INGEST_ENABLED;
   process.env.CURRICULUM_V2_READ_ENABLED = "true";
   process.env.CURRICULUM_V2_ENROLLMENT_ENABLED = "true";
   process.env.CURRICULUM_V2_CONTENT_ENABLED = "true";
