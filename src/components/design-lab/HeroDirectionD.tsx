@@ -1,12 +1,6 @@
+import { labDisplayC } from "./lab-display-font";
 import Link from "next/link";
-import { Golos_Text } from "next/font/google";
 
-const displayD = Golos_Text({
-  subsets: ["cyrillic", "latin"],
-  weight: ["600", "800"],
-  variable: "--font-lab-c",
-  display: "swap",
-});
 
 type PathState = "done" | "active" | "next" | "goal";
 
@@ -35,7 +29,7 @@ const bgChart = "0,190 120,170 240,182 360,150 480,162 600,128 720,140 840,104 9
 
 export function HeroDirectionD() {
   return (
-    <section className={`hero-lab hero-lab-d ${displayD.variable}`}>
+    <section className={`hero-lab hero-lab-d ${labDisplayC.variable}`}>
       <div className="hero-lab-d-bg" aria-hidden="true">
         <svg viewBox="0 0 1440 260" preserveAspectRatio="none">
           <polyline points={bgChart} />

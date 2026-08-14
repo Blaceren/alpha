@@ -1,12 +1,6 @@
+import { labDisplayC } from "./lab-display-font";
 import Link from "next/link";
-import { Golos_Text } from "next/font/google";
 
-const displayC = Golos_Text({
-  subsets: ["cyrillic", "latin"],
-  weight: ["600", "800"],
-  variable: "--font-lab-c",
-  display: "swap",
-});
 
 const fieldWaves = [
   "0,150 120,120 240,160 360,110 480,150 600,95 720,140 840,90 960,130 1080,80 1200,115 1320,70 1440,100",
@@ -30,7 +24,7 @@ const slabDots = ["done", "done", "done", "active", "next", "next"] as const;
 
 export function HeroDirectionC() {
   return (
-    <section className={`hero-lab hero-lab-c ${displayC.variable}`}>
+    <section className={`hero-lab hero-lab-c ${labDisplayC.variable}`}>
       <div className="hero-lab-c-field" aria-hidden="true">
         <WaveLayer className="hero-lab-c-layer--far" />
         <WaveLayer className="hero-lab-c-layer--mid" />

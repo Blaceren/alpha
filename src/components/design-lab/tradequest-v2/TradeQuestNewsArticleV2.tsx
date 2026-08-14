@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element -- news media URLs are runtime-configurable */
 
+import { labDisplayTqv2 } from "../lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -13,12 +13,6 @@ import { mockNews } from "@/data/mockNews";
 import { getNews, getNewsItem } from "@/lib/api";
 import styles from "./tradequest-v2.module.css";
 
-const display = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600", "700"],
-  variable: "--tqv2-display",
-  display: "swap",
-});
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -80,19 +74,19 @@ export function TradeQuestNewsArticleV2({ slug }: { slug: string }) {
   }, { scope: root, dependencies: [item?.id], revertOnUpdate: true });
 
   if (loading && !item) {
-    return <div className={`${styles.lab} ${styles.articleLab} ${display.variable}`}><div className={styles.articleLoading}>Загрузка публикации…</div></div>;
+    return <div className={`${styles.lab} ${styles.articleLab} ${labDisplayTqv2.variable}`}><div className={styles.articleLoading}>Загрузка публикации…</div></div>;
   }
 
   if (!item) {
     return (
-      <div className={`${styles.lab} ${styles.articleLab} ${display.variable}`}>
+      <div className={`${styles.lab} ${styles.articleLab} ${labDisplayTqv2.variable}`}>
         <section className={styles.articleMissing}><p className={styles.kicker}>Market Orbit</p><h1>Новость не найдена</h1><Link href="/design-lab/tradequest-news-v2">Вернуться к ленте</Link></section>
       </div>
     );
   }
 
   return (
-    <div ref={root} className={`${styles.lab} ${styles.articleLab} ${display.variable}`}>
+    <div ref={root} className={`${styles.lab} ${styles.articleLab} ${labDisplayTqv2.variable}`}>
       <span ref={progress} className={styles.readingProgress} aria-hidden="true" />
       <nav className={styles.articleNav} data-article-intro>
         <Link href="/design-lab/tradequest-news-v2">← Market Orbit</Link>

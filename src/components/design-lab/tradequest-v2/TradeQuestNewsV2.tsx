@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element -- news cover URLs are runtime-configurable */
 
+import { labDisplayTqv2 } from "../lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -13,12 +13,6 @@ import { mockNews } from "@/data/mockNews";
 import { getNews } from "@/lib/api";
 import styles from "./tradequest-v2.module.css";
 
-const display = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600", "700"],
-  variable: "--tqv2-display",
-  display: "swap",
-});
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -168,7 +162,7 @@ export function TradeQuestNewsV2() {
   };
 
   return (
-    <div ref={root} className={`${styles.lab} ${styles.newsLab} ${display.variable}`}>
+    <div ref={root} className={`${styles.lab} ${styles.newsLab} ${labDisplayTqv2.variable}`}>
       <header className={styles.newsHeader}>
         <div className={styles.newsHeaderCopy}>
           <p className={styles.kicker}>Alpha Academy / Newsroom</p>

@@ -12,23 +12,45 @@
  * G4-R9 that has nothing to do with Pocket and nothing to do with any provider.
  * This tool is that missing half: it does not repair, it REPORTS.
  *
- * WHAT IT DOES. For every backfilled family it recomputes, from the owner
+ * WHAT IT DOES. For every verifiable family it recomputes, from the owner
  * tables, the projection the migration would produce, and compares it with the
- * ledger on three axes:
+ * ledger on four axes:
  *
- *   MISSING    an owner row that should have produced an event and did not
- *   ORPHANED   a backfilled event with no owner row behind it any more
- *   DIVERGENT  an event that exists by key while a projected column disagrees
- *              with its owner — the case the guards skip
+ *   MISSING       an owner row that should have produced an event and did not
+ *   ORPHANED      an event with no owner row behind it any more
+ *   DIVERGENT     an event that exists by key while a projected column disagrees
+ *                 with its owner — the case the guards skip
+ *   DUPLICATEKEYS two events claiming one key, which the unique index should
+ *                 make impossible
+ *
+ * POCKET-REG-SECURITY-CLOSURE-1 (F2/P4) — BOTH ORIGINS ARE VERIFIED.
+ *
+ * This tool originally compared the owner tables against `origin='backfill'`
+ * rows only, and said so deliberately: when it was written the ledger held
+ * nothing else. The first real Pocket registration made that scope a defect.
+ * The owner row existed, its canonical event existed as `origin='runtime'`, and
+ * the comparison could not see the event — so a perfectly healthy ledger
+ * reported `missing`, on every family with live activity. A verifier that fails
+ * on correct data is worse than no verifier, because the next REAL divergence
+ * arrives inside a report everybody has learned to ignore.
+ *
+ * So the ledger side now reads every origin, and:
+ *
+ *   * a runtime event satisfies its owner row exactly as a backfilled one does;
+ *   * every event is column-checked regardless of origin, so this change
+ *     WIDENS divergence detection rather than relaxing it;
+ *   * provenance is preserved and printed per family (`[backfill=N runtime=N]`),
+ *     so "projected from history" and "emitted by a live transaction" remain
+ *     distinguishable at a glance.
  *
  * WHAT IT DELIBERATELY DOES NOT DO.
  *
  *   * It does not write. No INSERT, no UPDATE, no DELETE, no migration, no
  *     PRAGMA. Discovering a missing event is not licence to create one: the
  *     repair decision belongs to a human with the failure in front of them.
- *   * It does not read `origin='runtime'` rows for MISSING, because a runtime
- *     event is emitted by a product transaction rather than projected from a
- *     row, and its absence is a different investigation.
+ *   * It does not treat a runtime event as self-justifying: if a runtime event
+ *     has no owner row it is ORPHANED, and if its columns disagree with the
+ *     owner it is DIVERGENT, exactly as a backfilled one would be.
  *   * It prints no payload, no email, no secret and no free text from any row —
  *     ids, counts and column NAMES only.
  *
@@ -55,6 +77,8 @@ type Row = {
   userId: number | null;
   sourceEntityType: string | null;
   sourceOwner: string | null;
+  /** POCKET-REG-SECURITY-CLOSURE-1 (F2): provenance, reported never collapsed. */
+  origin?: string | null;
 };
 
 type FamilySpec = {
@@ -211,17 +235,39 @@ async function main(): Promise<number> {
         // arrives as a Date object and would differ from the owner projection's
         // integer for every single row — a checker that reports 100% divergence
         // is indistinguishable from one that is broken.
+        //
+        // POCKET-REG-SECURITY-CLOSURE-1 (F2/P4): BOTH origins are read now.
+        //
+        // This query used to say `AND "origin" = 'backfill'`. That was correct
+        // while the ledger held nothing else, and it became a defect the moment
+        // the first real provider registration was accepted: the owner row
+        // existed, its event existed as `origin='runtime'`, and the comparison
+        // below could not see the event — so a healthy ledger reported
+        // `missing`. A verifier that fails on correct data is worse than none,
+        // because the next real divergence arrives in a report nobody trusts.
+        //
+        // Provenance is NOT collapsed: `origin` is selected and reported per
+        // family, so "12 backfilled + 1 runtime" stays legible and a runtime
+        // row can never be mistaken for a historical one.
         `SELECT "sourceEventId",
                 CAST("occurredAt" AS INTEGER) AS "occurredAt",
-                "userId", "sourceEntityType", "sourceOwner"
+                "userId", "sourceEntityType", "sourceOwner", "origin"
          FROM "GrowthEvent"
-         WHERE "eventType" = ? AND "origin" = 'backfill'`,
+         WHERE "eventType" = ?`,
         family.eventType,
       );
       const owner = await prisma.$queryRawUnsafe<Row[]>(family.ownerSql);
 
       const ledgerByKey = new Map(ledger.map((row) => [row.sourceEventId, row]));
       const ownerByKey = new Map(owner.map((row) => [row.sourceEventId, row]));
+      const backfilled = ledger.filter((row) => row.origin === "backfill").length;
+      const runtime = ledger.filter((row) => row.origin === "runtime").length;
+
+      // A key must not be claimed by two events. The unique index on
+      // (eventType, sourceOwner, sourceEventId) makes this impossible in the
+      // database, and asserting it here means a future index change cannot
+      // silently turn a duplicate into a passing comparison.
+      const duplicateKeys = ledger.length - ledgerByKey.size;
 
       const missing: string[] = [];
       const orphaned: string[] = [];
@@ -253,13 +299,15 @@ async function main(): Promise<number> {
         if (!ownerByKey.has(key)) orphaned.push(key);
       }
 
-      const bad = missing.length + orphaned.length + divergent.length;
+      const bad = missing.length + orphaned.length + divergent.length + duplicateKeys;
       divergences += bad;
 
       console.log(
         `${bad === 0 ? "OK  " : "FAIL"} ${family.eventType.padEnd(24)} ` +
           `ledger=${String(ledger.length).padStart(5)} owner=${String(owner.length).padStart(5)} ` +
-          `missing=${missing.length} orphaned=${orphaned.length} divergent=${divergent.length}`,
+          `missing=${missing.length} orphaned=${orphaned.length} divergent=${divergent.length}` +
+          (duplicateKeys > 0 ? ` duplicateKeys=${duplicateKeys}` : "") +
+          `  [backfill=${backfilled} runtime=${runtime}]`,
       );
 
       // Bounded detail. Enough to act on, never enough to be a data export.

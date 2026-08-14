@@ -2055,3 +2055,6 @@ textarea {
     transform: none !important;
   }
 }
+
+/* POCKET-REG-SECURITY-CLOSURE-1 (F3/P2): design-lab display variables, no remote fonts. */
+@import "../components/design-lab/lab-display-font.css";

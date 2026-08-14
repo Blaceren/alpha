@@ -1,12 +1,6 @@
+import { labDisplayA } from "./lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 
-const displayB2 = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600"],
-  variable: "--font-lab-a",
-  display: "swap",
-});
 
 type StepState = "done" | "active" | "next" | "goal";
 
@@ -57,7 +51,7 @@ function SignalLayer({ className }: { className: string }) {
 
 export function HeroDirectionB2() {
   return (
-    <section className={`hero-lab hero-lab-b2 ${displayB2.variable}`}>
+    <section className={`hero-lab hero-lab-b2 ${labDisplayA.variable}`}>
       <div className="hero-lab-b2-field" aria-hidden="true">
         <SignalLayer className="hero-lab-b2-layer--far" />
         <SignalLayer className="hero-lab-b2-layer--near" />

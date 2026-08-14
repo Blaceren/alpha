@@ -1,19 +1,13 @@
 "use client";
 
+import { labDisplayV3 } from "../lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 import { useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import styles from "./tradequest-hero-v3.module.css";
 
-const display = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600", "700"],
-  variable: "--tqv3-display",
-  display: "swap",
-});
 
 if (typeof window !== "undefined") gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -182,7 +176,7 @@ export function TradeQuestHeroV3() {
   }, { scope: root, dependencies: [variant], revertOnUpdate: true });
 
   return (
-    <div ref={root} className={`${styles.lab} ${display.variable}`} data-variant={variant}>
+    <div ref={root} className={`${styles.lab} ${labDisplayV3.variable}`} data-variant={variant}>
       <nav className={styles.variantNav} data-variant-nav aria-label="Варианты Hero v3">
         <div>
           <span>HERO V3 / ВЫБОР НАПРАВЛЕНИЯ</span>

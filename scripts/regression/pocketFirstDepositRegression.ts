@@ -132,6 +132,11 @@ async function main() {
   // file, and changes nothing about the live PREPROD flags, which stay OFF.
   process.env.POCKET_REG_INGEST_ENABLED = "true";
   process.env.POCKET_DEP_INGEST_ENABLED = "true";
+  // POCKET-REG-SECURITY-CLOSURE-1 (§14): RDEP is deliberately NOT enabled here,
+  // and is DELETED rather than merely left unset — several cases below assert
+  // that a redeposit is refused, and an operator shell exporting the flag would
+  // silently convert those refusals into acceptances.
+  delete process.env.POCKET_RDEP_INGEST_ENABLED;
   process.env.POCKET_FIRST_DEPOSIT_ENABLED = "true";
   delete process.env.POCKET_DEPOSIT_CURRENCY;
 

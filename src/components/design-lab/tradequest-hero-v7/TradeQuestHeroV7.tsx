@@ -1,7 +1,7 @@
 "use client";
 
+import { labDisplayV7 } from "../lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -9,12 +9,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "./tradequest-hero-v7.module.css";
 
-const display = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600", "700"],
-  variable: "--v7-display",
-  display: "swap",
-});
 
 if (typeof window !== "undefined") gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -102,7 +96,7 @@ export function TradeQuestHeroV7() {
   }, { scope: root });
 
   return (
-    <div ref={root} className={`${styles.lab} ${display.variable}`} data-hero-v7>
+    <div ref={root} className={`${styles.lab} ${labDisplayV7.variable}`} data-hero-v7>
       <header className={styles.header} data-header-v7>
         <Link href="/" className={styles.brand} aria-label="TradeQuest — главная">
           <span>TQ</span><strong>TradeQuest</strong>

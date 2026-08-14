@@ -1,12 +1,6 @@
+import { labDisplayC } from "./lab-display-font";
 import Link from "next/link";
-import { Golos_Text } from "next/font/google";
 
-const displayC2 = Golos_Text({
-  subsets: ["cyrillic", "latin"],
-  weight: ["600", "800"],
-  variable: "--font-lab-c",
-  display: "swap",
-});
 
 type C2State = "done" | "active" | "next" | "goal";
 
@@ -43,7 +37,7 @@ const structureWaves = [
 
 export function HeroDirectionC2() {
   return (
-    <section className={`hero-lab hero-lab-c2 ${displayC2.variable}`}>
+    <section className={`hero-lab hero-lab-c2 ${labDisplayC.variable}`}>
       <div className="hero-lab-c2-field" aria-hidden="true">
         <div className="hero-lab-c2-layer hero-lab-c2-layer--far">
           <svg viewBox="0 0 1200 480" preserveAspectRatio="none">

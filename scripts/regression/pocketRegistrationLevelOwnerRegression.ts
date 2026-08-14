@@ -44,6 +44,17 @@ async function main() {
   process.env.DATABASE_URL = dbUrl;
   process.env.POSTBACK_SECRET = SECRET;
   process.env.POCKET_POSTBACK_ENABLED = "true";
+  // POCKET-REG-SECURITY-CLOSURE-1 (§14): this suite OWNS its fixture flags.
+  // It previously set only the master gate and depended on the operator's shell
+  // exporting POCKET_REG_INGEST_ENABLED — so it was green in CI only by
+  // accident of the environment, and red for anyone who ran it plainly. G4 made
+  // ingest granular; a suite about the REG owner must state that it wants REG.
+  // DEP and RDEP are deleted rather than left inherited, so an exported flag
+  // cannot turn one of the refusal assertions below into an acceptance.
+  process.env.POCKET_REG_INGEST_ENABLED = "true";
+  delete process.env.POCKET_DEP_INGEST_ENABLED;
+  delete process.env.POCKET_RDEP_INGEST_ENABLED;
+  delete process.env.POCKET_FIRST_DEPOSIT_ENABLED;
   process.env.CURRICULUM_V2_READ_ENABLED = "true";
   process.env.CURRICULUM_V2_ENROLLMENT_ENABLED = "true";
 

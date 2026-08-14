@@ -1,12 +1,6 @@
+import { labDisplayA } from "./lab-display-font";
 import Link from "next/link";
-import { Unbounded } from "next/font/google";
 
-const displayA = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["500", "600"],
-  variable: "--font-lab-a",
-  display: "swap",
-});
 
 const proofsA = [
   ["12 400+", "учеников в системе"],
@@ -16,7 +10,7 @@ const proofsA = [
 
 export function HeroDirectionA() {
   return (
-    <section className={`hero-lab hero-lab-a ${displayA.variable}`}>
+    <section className={`hero-lab hero-lab-a ${labDisplayA.variable}`}>
       <header className="hero-lab-a-top">
         <span className="hero-lab-a-mark">TradeQuest</span>
         <nav>
