@@ -119,12 +119,21 @@ describe("api mode — /users is the one mountable route", () => {
     expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
   });
 
-  it("shows the bounded shell with only the Users navigation item", async () => {
+  it("shows the bounded shell with exactly the permissionless navigation set", async () => {
     renderAt("/users", "api");
     await screen.findByRole("heading", { name: "Пользователи", level: 1 });
 
+    // OPS-NAV-REVIEW-QUEUES (POCKET-REG-INGRESS-1): the two review queues are
+    // offered to every authenticated employee — the reviewer boundary is the
+    // Backend's user-role rule, which the session cannot express — so the
+    // permissionless census is exactly these three. Permission-gated sections
+    // (Аффилейты, Growth) stay hidden without their grants.
     const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(1);
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/users", "/report-review", "/mentor"]);
 
     const html = document.body.innerHTML;
     for (const section of ["Сегодня", "Аудит", "Финанс", "Задачи", "Кейсы", "Настройки", "Ментор", "Аналитика"]) {
@@ -252,7 +261,13 @@ describe("api mode — the affiliate section", () => {
     await screen.findByRole("heading", { name: "Пользователи", level: 1 });
     const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
     expect(within(nav).queryByRole("link", { name: "Аффилейты" })).not.toBeInTheDocument();
-    expect(within(nav).getAllByRole("link")).toHaveLength(1);
+    // The permissionless census: Users plus the two review queues
+    // (OPS-NAV-REVIEW-QUEUES) — and nothing permission-gated.
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/users", "/report-review", "/mentor"]);
   });
 
   it("renders the analytics denial for a session granted neither", async () => {
