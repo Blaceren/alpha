@@ -32,6 +32,19 @@
  * deferred-work closure, which found it by running the suites and attributing
  * every failure rather than accepting a red suite as normal.
  *
+ * POCKET-REG-FINAL-INTERNAL-CORRECTION-1: 47 -> 48. One migration,
+ * `20260814000000_normalize_legacy_timestamp_storage`, which normalises 70
+ * legacy TEXT datetime values in 19 columns to the integer epoch milliseconds
+ * migration 47 established as canonical. It creates and drops one guard table
+ * and performs no other DDL, adds no table, no column and no index, and deletes
+ * nothing. Every UPDATE is guarded by `typeof(col) = 'text'`, so it is a no-op
+ * on a fresh database and on a second run.
+ *
+ * THIS COUNT MOVING IS THE POINT OF THE ASSERTION. Three suites read it, and
+ * they went red the moment migration 48 appeared — which is exactly the guard
+ * working. It is corrected here deliberately, in the same commit as the
+ * migration, rather than by relaxing the assertions.
+ *
  * PHASE-G2 SUCCESSOR: 45 -> 46. One additive migration,
  * `20260811000000_assessment_successor_lineage`, which adds the nullable
  * `AssessmentVersion.predecessorVersionId` self-relation and its index. No
@@ -58,7 +71,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 47;
+export const EXPECTED_MIGRATION_COUNT = 48;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

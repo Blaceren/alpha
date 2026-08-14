@@ -582,7 +582,15 @@ async function main() {
       // documents twice, caught this time by the activation phase that owns the
       // post-G4 contract. 8 -> 9. No Pocket schema changed; both pins move
       // together, and EXPECTED_MIGRATION_COUNT remains 47.
-      assert.equal(prior.length, expectedPriorMigrationCount(9));
+      //
+      // POCKET-REG-FINAL-INTERNAL-CORRECTION-1: migration 48 normalises legacy
+      // TEXT timestamp storage and lands after this one, so the offset is 9 ->
+      // 10 and EXPECTED_MIGRATION_COUNT is 47 -> 48. No Pocket schema changed
+      // and no Pocket row was touched. Bumped in the same commit as the
+      // migration, which is the discipline the three comments above exist to
+      // enforce — this suite going red when a migration appears is the guard
+      // working, not a failure to accommodate.
+      assert.equal(prior.length, expectedPriorMigrationCount(10));
 
       const bookkeeping = `CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id" TEXT NOT NULL PRIMARY KEY, "checksum" TEXT NOT NULL, "finished_at" DATETIME,

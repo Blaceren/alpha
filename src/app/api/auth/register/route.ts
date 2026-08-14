@@ -333,9 +333,29 @@ export async function POST(request: Request) {
     // learner who exists with no growth event is a silent hole nothing
     // downstream can detect, whereas a failed registration is loud and
     // retryable.
+    // THE OWNER OWNS THE INSTANT, NOT THE REQUEST CLOCK.
+    //
+    // This used to be `occurredAt: now` — a `new Date()` read taken at the top
+    // of the handler, before the transaction opened. `created.createdAt` is the
+    // value the database actually persisted, and the two are not the same
+    // instant: on the first runtime registration this family ever saw they were
+    // 3 ms apart, and the ledger verifier reported the divergence.
+    //
+    // WHICH ONE IS CANONICAL IS NOT A PREFERENCE. `GROWTH_SOURCE_ENTITY_TYPES`
+    // declares `ata_reg -> "User"`, and the backfill projection in
+    // scripts/ops/verifyGrowthLedgerProjection.ts derives `occurredAt` from
+    // `User.createdAt` for exactly the users an `AUTH_REGISTER` audit row
+    // qualifies. The audit row is the MEMBERSHIP predicate; the `User` row owns
+    // the fact — "the registration event is the account coming into existence",
+    // as event-keys.ts puts it. So backfill and runtime must read the same
+    // column, and this reads it.
+    //
+    // The Pocket family has always done this (`occurredAt: identity.boundAt`,
+    // never `now()`), which is why `pocket_reg` reconciled at divergent=0 while
+    // this family did not.
     await emitGrowthEvent(tx, {
       eventType: "ata_reg",
-      occurredAt: now,
+      occurredAt: created.createdAt,
       sourceEventId: userSourceEventId(created.id),
       sourceEntityId: created.id,
       userId: created.id,
