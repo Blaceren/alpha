@@ -104,3 +104,132 @@ describe("postback delivery lookup shim", () => {
     expect(answer).toEqual([{ address: "127.0.0.1", family: 4 }]);
   });
 });
+
+/**
+ * REDIRECT REVALIDATION — the second half of the socket contract.
+ *
+ * A partner endpoint that answers 302 to `http://169.254.169.254/` or to a
+ * loopback address is the classic way an allowlisted destination becomes an
+ * SSRF. The client re-runs the FULL destination guard on every hop rather than
+ * trusting that the first one passed, and these lock that.
+ *
+ * The whole HTTP layer is stubbed, so this needs no receiver, no network and no
+ * timing — and it keeps working after the PREPROD receiver is deleted.
+ */
+function stubHttps(responses: Array<{ status: number; location?: string; body?: string }>) {
+  const original = https.request;
+  const seen: string[] = [];
+  let index = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (https as any).request = (options: any, onResponse: (res: any) => void) => {
+    seen.push(`${options.host}:${options.port}${options.path}`);
+    const spec = responses[Math.min(index, responses.length - 1)];
+    index += 1;
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const res = {
+      statusCode: spec.status,
+      headers: spec.location ? { location: spec.location } : {},
+      setEncoding() {},
+      on(event: string, cb: (...args: unknown[]) => void) {
+        // Buffers, not strings: the client does `Buffer.concat(chunks)`, and a
+        // stub that emitted strings would be testing a socket that cannot exist.
+        if (event === "data" && spec.body) cb(Buffer.from(spec.body));
+        if (event === "end") cb();
+        return res;
+      },
+      destroy() {},
+    };
+    queueMicrotask(() => onResponse(res));
+    return {
+      on(event: string, cb: (...args: unknown[]) => void) {
+        handlers[event] = cb;
+        return this;
+      },
+      end() {},
+      destroy() {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  };
+  return {
+    seen,
+    restore: () => {
+      (https as unknown as { request: typeof original }).request = original;
+    },
+  };
+}
+
+const ENV = {
+  ...process.env,
+  ATA_ENVIRONMENT: "staging",
+  AFFILIATE_POSTBACK_TEST_HOST_ALLOW: "preprod.alfatrade.media:9443",
+};
+
+describe("postback redirect revalidation", () => {
+  it("refuses a redirect from an allowed origin to LOOPBACK", async () => {
+    const stub = stubHttps([{ status: 302, location: "https://127.0.0.1/steal" }]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("blocked_destination");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("refuses a redirect to CLOUD METADATA", async () => {
+    const stub = stubHttps([{ status: 302, location: "http://169.254.169.254/latest/meta-data/" }]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("blocked_destination");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("refuses a redirect that DOWNGRADES to http://", async () => {
+    const stub = stubHttps([{ status: 302, location: "http://example.com/cb" }]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("blocked_destination");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("refuses a redirect to a private RFC1918 address", async () => {
+    const stub = stubHttps([{ status: 302, location: "https://10.0.0.5/cb" }]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("blocked_destination");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("caps redirect chains rather than following them forever", async () => {
+    // Every hop redirects to another public URL, so nothing is blocked — only
+    // the hop cap can stop it.
+    const stub = stubHttps([{ status: 302, location: "https://example.com/next" }]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("too_many_redirects");
+      // 1 initial + POSTBACK_MAX_REDIRECTS follow-ups, and not one more.
+      expect(stub.seen.length).toBe(4);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("a redirect to a legitimate public destination IS followed", async () => {
+    const stub = stubHttps([
+      { status: 302, location: "https://www.cloudflare.com/ok" },
+      { status: 200, body: "OK" },
+    ]);
+    try {
+      const r = await deliverPostback("https://example.com/cb", {}, ENV);
+      expect(r.outcome).toBe("delivered");
+      expect(stub.seen.length).toBe(2);
+    } finally {
+      stub.restore();
+    }
+  });
+});
