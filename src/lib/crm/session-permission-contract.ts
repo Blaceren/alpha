@@ -64,6 +64,7 @@
 /**
  * The canonical vocabulary, in the canonical order. Version 2 appends the four
  * PHASE-G0/PHASE-G2 curriculum permissions that the CRM never received.
+ * Version 3 appends the nine LEARNER-OPERATIONS-V1 permissions.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT = [
   "view_exact_financials",
@@ -81,15 +82,40 @@ export const CRM_SESSION_PERMISSION_CONTRACT = [
   "curriculum_author",
   "curriculum_approve",
   "curriculum_source_authority",
+  // LEARNER-OPERATIONS-V1. Nine, appended and never inserted.
+  //
+  // WHY NINE AND NOT ONE. A single `manage_learner_ops` would make every
+  // operator their own reviewer, their own QA and their own configuration
+  // owner. The operating model separates who may HANDLE work from who may
+  // decide EDUCATIONAL outcomes, who may judge QUALITY and who may change the
+  // rules — so the vocabulary separates them too, for the same reason
+  // PHASE-G0 refused to collapse author and approve.
+  //
+  // WHY REVIEW APPEARS HERE AT ALL. Report-review and mentor-review authority
+  // is granted today by `User.role` alone — an axis the CRM can neither
+  // display nor control. These two names do not REPLACE that gate: they are
+  // required IN ADDITION to it, so they can only ever narrow authority. See
+  // LO-AUTH-AXIS-1 and `canPerformReportReview` in roles.ts.
+  "learner_ops_view",
+  "learner_ops_handle",
+  "learner_ops_report_review",
+  "learner_ops_mentor_review",
+  "learner_ops_escalate",
+  "learner_ops_manage_queues",
+  "learner_ops_qa",
+  "learner_ops_analytics",
+  "learner_ops_admin",
 ] as const;
 
 export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[number];
 
 /**
  * Contract version. v1 was the implicit eleven-entry vocabulary that existed
- * before this file; v2 is the first version to be written down and enforced.
+ * before this file; v2 is the first version to be written down and enforced;
+ * v3 appends the nine Learner Operations permissions, bringing the vocabulary
+ * to twenty-four.
  */
-export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 2;
+export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 3;
 
 /**
  * `sha256(CRM_SESSION_PERMISSION_CONTRACT.join("\n"))`, lowercase hex.
@@ -99,4 +125,4 @@ export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 2;
  * contracts and the session boundary is unsafe again.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT_DIGEST =
-  "024a135cd233f97eaae4c800fced6c5c25fb674a0032c660bbb68066d3a96b9f";
+  "bb0efecf1fa43a70cc71a99dad3fa95c8b4ea5e0741e7d45954bcc37eb3cd477";

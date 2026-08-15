@@ -227,6 +227,14 @@ model User {
   /// learner who produced a conversion cannot be deleted out from under the
   /// ledger that a payout may later be computed from.
   growthEvents                  GrowthEvent[]              @relation("GrowthEventLearner")
+  /// LEARNER-OPERATIONS-V1. Back-references only: User gains no column. Both
+  /// axes name a LEARNER, never a staff actor — staff attribution in this
+  /// domain is always StaffProfile, which is why there is no
+  /// `assignedLearnerOpsCases` here. That asymmetry is the point: the
+  /// superseded SupportDialog assigned work to a `User` and that is the defect
+  /// LO-AUTH-AXIS-1 records.
+  learnerOpsCases               LearnerOpsCase[]           @relation("LearnerOpsCaseLearner")
+  learnerOpsMessages            LearnerOpsMessage[]        @relation("LearnerOpsMessageLearnerAuthor")
 }
 
 model XpEvent {
@@ -629,6 +637,11 @@ model SupportDialog {
   user          User                @relation("SupportDialogOwner", fields: [userId], references: [id], onDelete: Cascade)
   assignedTo    User?               @relation("SupportDialogAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages      SupportMessage[]
+  /// LEARNER-OPERATIONS-V1. Back-reference only. This model is SUPERSEDED by
+  /// LearnerOpsCase and is not written by the new domain; the relation exists
+  /// so that any legacy dialog which ever does acquire a case can be found from
+  /// either side. See LO-LEGACY-SUPPORT-1.
+  learnerOpsCases LearnerOpsCase[]  @relation("LearnerOpsCaseSupportDialog")
 
   @@index([userId, status, updatedAt])
   @@index([status, lastMessageAt])
@@ -2176,6 +2189,13 @@ model UserLevelProgress {
   enrollment          UserCurriculumEnrollment @relation(fields: [enrollmentId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   levelDefinition     LevelDefinition          @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict, onUpdate: Cascade)
   reportSubmissions   ReportSubmission[]
+  /// LEARNER-OPERATIONS-V1. Back-reference only, and it is a READ path — this
+  /// is THE progression row, and Learner Operations must never write to it. A
+  /// mentor-review case NAMES the pending progress row so the operational work
+  /// can be found beside it; the canonical mentor-review owner remains the only
+  /// thing that changes its status. SetNull on the far side, so operational
+  /// history can never block progression.
+  learnerOpsCases     LearnerOpsCase[]         @relation("LearnerOpsCaseLevelProgress")
 
   @@unique([enrollmentId, levelDefinitionId])
   @@unique([id, enrollmentId, curriculumVersionId, levelDefinitionId])
@@ -3071,6 +3091,13 @@ model ReportSubmission {
   @@unique([id, userId])
   @@unique([id, enrollmentId, curriculumVersionId, levelDefinitionId])
   @@unique([id, reportRubricVersionId])
+  /// LEARNER-OPERATIONS-V1. Back-reference only, and it is a READ path. A case
+  /// may NAME this submission so an operator can find the operational work
+  /// beside the educational object, but nothing in Learner Operations writes to
+  /// this model, and the far side is SetNull so an operational row can never
+  /// block the report owner from deleting its own record.
+  learnerOpsCases           LearnerOpsCase[]         @relation("LearnerOpsCaseReportSubmission")
+
   @@unique([id, curriculumVersionId, levelDefinitionId, reportAssignmentVersionId, reportRubricVersionId])
   @@index([status, submittedAt])
   @@index([claimedById, status])
@@ -3273,6 +3300,28 @@ model StaffProfile {
   // second staff model.
   initiatedAgentRuns   AgentRun[]            @relation("AgentRunInitiator")
   agentActionDecisions AgentActionDecision[] @relation("AgentActionDecisionStaff")
+
+  // LEARNER-OPERATIONS-V1 — every staff attribution axis in the operational
+  // department. All are Restrict-referenced on the far side, so a staff profile
+  // named as an owner, an actor, an author, an escalation party, a QA reviewer,
+  // a knowledge owner or a VOC linker cannot be deleted out from under the
+  // record that names them. Back-references only: StaffProfile gains no column
+  // and remains the single canonical staff identity. Learner Operations
+  // introduces no second staff model.
+  learnerOpsAssignedCases        LearnerOpsCase[]          @relation("LearnerOpsCaseAssignee")
+  learnerOpsEventsActed          LearnerOpsCaseEvent[]     @relation("LearnerOpsCaseEventActor")
+  learnerOpsEventsPreviousOwner  LearnerOpsCaseEvent[]     @relation("LearnerOpsCaseEventPreviousAssignee")
+  learnerOpsEventsNextOwner      LearnerOpsCaseEvent[]     @relation("LearnerOpsCaseEventNextAssignee")
+  learnerOpsMessagesAuthored     LearnerOpsMessage[]       @relation("LearnerOpsMessageStaffAuthor")
+  learnerOpsNotesAuthored        LearnerOpsNote[]          @relation("LearnerOpsNoteAuthor")
+  learnerOpsEscalationsRaised    LearnerOpsEscalation[]    @relation("LearnerOpsEscalationRaiser")
+  learnerOpsEscalationsTargeted  LearnerOpsEscalation[]    @relation("LearnerOpsEscalationTargetStaff")
+  learnerOpsEscalationsResolved  LearnerOpsEscalation[]    @relation("LearnerOpsEscalationResolver")
+  learnerOpsQaReviews            LearnerOpsQaReview[]      @relation("LearnerOpsQaReviewer")
+  learnerOpsKnowledgeOwned       LearnerOpsKnowledgeArticle[] @relation("LearnerOpsKnowledgeOwner")
+  learnerOpsVocOwned             LearnerOpsVocSignal[]     @relation("LearnerOpsVocOwner")
+  learnerOpsVocCreated           LearnerOpsVocSignal[]     @relation("LearnerOpsVocCreator")
+  learnerOpsVocLinked            LearnerOpsVocSignalCase[] @relation("LearnerOpsVocSignalLinker")
 
   @@index([staffRole])
 }
@@ -4396,4 +4445,566 @@ model ProviderIngressEvent {
   @@index([playerIdNormalized])
   @@index([clickId])
   @@index([rawPayloadHash])
+}
+
+// ===========================================================================
+// LEARNER-OPERATIONS-V1 — the operational department.
+// ===========================================================================
+//
+// Learner Operations runs the DAILY EXECUTION of learner support and mentor /
+// review operations. It is not an educational authority and the schema is
+// arranged so that it cannot become one.
+//
+// THE AUTHORITY RULE, STATED AS A SCHEMA PROPERTY. Nothing below has a write
+// path to UserLevelProgress, UserCurriculumEnrollment, XPTransaction,
+// ReportSubmission, ReportReview, PocketProviderEvent, ProviderIngressEvent,
+// GrowthEvent or CheckpointVerificationAttempt. Where a work item concerns one
+// of those objects it holds a NULLABLE REFERENCE to it and nothing more: the
+// canonical owner still decides what the object's state is, and a consumer
+// re-reads the value from that owner. `LearnerOpsCase.status = resolved`
+// therefore cannot complete a level, because resolving a case writes to exactly
+// one table and that table is this one.
+//
+// NO SHADOW TRUTH. There is deliberately no learnerName, learnerLevel,
+// currentStep, reportStatus, progressStatus, depositState or balance column
+// anywhere below. The superseded SupportDialog carries three such snapshots and
+// they are precisely why it is superseded: a denormalised copy of a canonical
+// fact is a second answer to a question that already had one.
+//
+// INTERNAL AND LEARNER-VISIBLE COMMUNICATION ARE TWO TABLES, NOT ONE COLUMN.
+// LearnerOpsMessage is always learner-visible. LearnerOpsNote is never. There
+// is no `internalNote` boolean anywhere in this domain, because a boolean is
+// one mistaken predicate away from disclosure and the learner-facing read path
+// must not even NAME the internal table. That is the structural difficulty the
+// product contract asks for.
+
+/// The seven kinds of work Learner Operations owns. A case's type fixes which
+/// canonical anchor it may carry, enforced by a CHECK constraint in the
+/// migration rather than by application convention alone.
+enum LearnerOpsCaseType {
+  support_request
+  report_review
+  mentor_review
+  educational_escalation
+  complaint
+  service_recovery
+  operational_followup
+}
+
+/// The operational lifecycle. Note what is NOT here.
+///
+/// `assigned` is not a status: assignment is its own axis
+/// (`assignedStaffId`), so "assigned" is derivable, cannot disagree with the
+/// owner column, and does not have to be re-established after every unrelated
+/// transition.
+///
+/// `reopened` is not a status either: it is `reopenCount > 0`, which SURVIVES
+/// the next transition. As a status it would be erased the moment an operator
+/// picked the case back up, which is exactly when the fact matters most.
+enum LearnerOpsCaseStatus {
+  new
+  open
+  in_progress
+  waiting_learner
+  waiting_internal
+  waiting_external
+  escalated
+  resolved
+  closed
+}
+
+enum LearnerOpsPriority {
+  urgent
+  high
+  normal
+  low
+}
+
+/// Every distinct thing that can happen to a case, recorded immutably. There is
+/// no `updated` catch-all: an event whose meaning has to be reconstructed from
+/// its metadata is not an audit record.
+enum LearnerOpsCaseEventType {
+  created
+  status_changed
+  assigned
+  reassigned
+  unassigned
+  priority_changed
+  reason_code_changed
+  message_sent
+  note_added
+  escalated
+  escalation_resolved
+  first_response_recorded
+  resolved
+  closed
+  reopened
+  qa_reviewed
+  canonical_decision_mirrored
+}
+
+/// Who wrote a learner-visible message. A message has exactly one author and
+/// the two axes are mutually exclusive, enforced by CHECK in the migration.
+enum LearnerOpsMessageAuthorKind {
+  staff
+  learner
+}
+
+enum LearnerOpsEscalationClass {
+  educational_methodology
+  technical_product
+  external_provider
+  security_abuse
+  operational_lead
+}
+
+enum LearnerOpsQaResult {
+  meets
+  needs_improvement
+  does_not_meet
+}
+
+enum LearnerOpsKnowledgeStatus {
+  draft
+  published
+  archived
+}
+
+enum LearnerOpsVocStatus {
+  open
+  under_review
+  accepted
+  rejected
+  resolved
+}
+
+enum LearnerOpsVocSeverity {
+  critical
+  high
+  medium
+  low
+}
+
+/// Where an SLA policy's numbers CAME FROM. The product owner has supplied no
+/// business SLA durations, so every row this phase seeds is stamped
+/// `preprod_acceptance_fixture` and the CRM renders that provenance next to the
+/// number. A fixture presented as policy would be an invented business rule.
+enum LearnerOpsSlaOrigin {
+  preprod_acceptance_fixture
+  product_owner_supplied
+}
+
+/// A team-level work container. Queues are configuration, not code: adding one
+/// is a row, and the CRM resolves names through this table so a renamed queue
+/// renames everywhere at once.
+model LearnerOpsQueue {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cases              LearnerOpsCase[]       @relation("LearnerOpsCaseQueue")
+  escalationTargets  LearnerOpsEscalation[] @relation("LearnerOpsEscalationTargetQueue")
+
+  @@index([isActive, key])
+}
+
+/// SLA policy. Targets are MINUTES and nullable where the product genuinely has
+/// no target, rather than defaulted to a number nobody chose.
+///
+/// The three pause flags are separate because the three waits mean different
+/// things. Waiting on a LEARNER is not our delay. Waiting on an INTERNAL
+/// decision is. Waiting on an EXTERNAL provider is neither, and the product
+/// owner may want it counted either way — so it is configuration, not a
+/// hardcoded belief.
+///
+/// Breach is NEVER stored. It is derived at read time from openedAt, pausedMs
+/// and the live clock, because a stored boolean is wrong from the moment the
+/// deadline passes until something happens to rewrite it.
+model LearnerOpsSlaPolicy {
+  id                          String              @id @default(cuid())
+  key                         String              @unique
+  name                        String
+  priority                    LearnerOpsPriority
+  firstResponseTargetMinutes  Int?
+  resolutionTargetMinutes     Int?
+  pausesOnWaitingLearner      Boolean             @default(true)
+  pausesOnWaitingInternal     Boolean             @default(false)
+  pausesOnWaitingExternal     Boolean             @default(true)
+  origin                      LearnerOpsSlaOrigin
+  isActive                    Boolean             @default(true)
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+
+  cases LearnerOpsCase[] @relation("LearnerOpsCaseSlaPolicy")
+
+  @@unique([priority, isActive, key])
+  @@index([isActive])
+}
+
+/// Structured classification. Deliberately small — a seeded V1 vocabulary with
+/// clear config ownership, not an exhaustive taxonomy invented up front. Free
+/// text is preserved ALONGSIDE this on the case, never replaced by it.
+model LearnerOpsReasonCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  category  String
+  label     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cases LearnerOpsCase[] @relation("LearnerOpsCaseReasonCode")
+
+  @@index([category, isActive])
+}
+
+/// THE WORK ITEM. One row answers every question the operating model asks:
+/// what needs attention, who owns it, why it exists, which learner, which
+/// product object, what priority, when the clock started, what we are waiting
+/// for, when it resolved and whether it came back.
+///
+/// TWO INDEPENDENT VERSION COUNTERS, AND THEY ARE NOT INTERCHANGEABLE.
+///   `version`           guards STATE transitions
+///   `assignmentVersion` guards OWNERSHIP transitions
+/// Two operators may legitimately do different things at once — one replying
+/// while another reassigns — and a single counter would make the second one
+/// fail for no reason. Both are monotonic and never reset, following the
+/// CrmUserOwner precedent.
+///
+/// THE THREE CANONICAL ANCHORS ARE REFERENCES, NEVER COPIES. A case about a
+/// report names the ReportSubmission and reads its state from the report owner.
+/// It does not store the report's status, and it cannot change it. The CHECK
+/// constraint in the migration ties each anchor to the types permitted to hold
+/// it, so a support case cannot acquire a mentor-review anchor.
+model LearnerOpsCase {
+  id        String @id @default(cuid())
+  reference String @unique
+
+  userId Int
+  type   LearnerOpsCaseType
+  status LearnerOpsCaseStatus @default(new)
+
+  priority LearnerOpsPriority @default(normal)
+
+  queueId         String
+  assignedStaffId String?
+
+  /// Monotonic CAS counters. See the note above: state and ownership are
+  /// deliberately guarded separately.
+  version           Int @default(1)
+  assignmentVersion Int @default(0)
+
+  reasonCodeId String?
+
+  /// Structured classification does not replace context. Both are kept.
+  subject String
+  details String
+
+  /// The canonical anchors. Nullable, mutually constrained by type, and never
+  /// a copy of anything the anchored object owns.
+  supportDialogId      Int?
+  reportSubmissionId   Int?
+  userLevelProgressId  Int?
+
+  slaPolicyId        String?
+  firstResponseDueAt DateTime?
+  resolutionDueAt    DateTime?
+  firstRespondedAt   DateTime?
+
+  /// Pause accounting. `pausedMs` accumulates on EXIT from a pausing state, so
+  /// elapsed time is always derivable and never needs a background job.
+  clockPausedAt DateTime?
+  pausedMs      Int       @default(0)
+
+  openedAt       DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+
+  /// Reopen is durable and countable, not a status that the next transition
+  /// would erase.
+  reopenCount Int       @default(0)
+  reopenedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Restrict throughout: a learner with operational history, or a staff member
+  /// named as an owner, cannot be deleted out from under that history.
+  user          User                  @relation("LearnerOpsCaseLearner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  queue         LearnerOpsQueue       @relation("LearnerOpsCaseQueue", fields: [queueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assignedStaff StaffProfile?         @relation("LearnerOpsCaseAssignee", fields: [assignedStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reasonCode    LearnerOpsReasonCode? @relation("LearnerOpsCaseReasonCode", fields: [reasonCodeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  slaPolicy     LearnerOpsSlaPolicy?  @relation("LearnerOpsCaseSlaPolicy", fields: [slaPolicyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// SetNull, not Restrict, on the canonical anchors: Learner Operations must
+  /// never be the reason a canonical educational object cannot be removed by
+  /// its own owner. Losing the anchor degrades the case to "no longer linked",
+  /// which is honest, rather than blocking the owner.
+  supportDialog     SupportDialog?     @relation("LearnerOpsCaseSupportDialog", fields: [supportDialogId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reportSubmission  ReportSubmission?  @relation("LearnerOpsCaseReportSubmission", fields: [reportSubmissionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userLevelProgress UserLevelProgress? @relation("LearnerOpsCaseLevelProgress", fields: [userLevelProgressId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  events      LearnerOpsCaseEvent[]  @relation("LearnerOpsCaseEvents")
+  messages    LearnerOpsMessage[]    @relation("LearnerOpsCaseMessages")
+  notes       LearnerOpsNote[]       @relation("LearnerOpsCaseNotes")
+  escalations LearnerOpsEscalation[] @relation("LearnerOpsEscalationCase")
+  qaReviews   LearnerOpsQaReview[]   @relation("LearnerOpsQaReviewCase")
+  vocLinks    LearnerOpsVocSignalCase[] @relation("LearnerOpsVocSignalCaseCase")
+
+  /// The queue read: open work in one queue, newest activity first.
+  @@index([queueId, status, priority, lastActivityAt])
+  /// The "my work" read.
+  @@index([assignedStaffId, status, lastActivityAt])
+  /// The unassigned-backlog read, which is a different question from "my work".
+  @@index([status, assignedStaffId, openedAt])
+  /// Learner 360 — every case for one learner.
+  @@index([userId, openedAt])
+  /// Type-sliced queues (report review, mentor review) and analytics by type.
+  @@index([type, status, openedAt])
+  /// SLA sweeps.
+  @@index([status, firstResponseDueAt])
+  @@index([status, resolutionDueAt])
+  /// The canonical anchors, so "is there already a case for this object?" is an
+  /// index lookup rather than a scan. NOT unique: a report can legitimately
+  /// acquire a second case after the first is closed.
+  @@index([reportSubmissionId])
+  @@index([userLevelProgressId])
+  @@index([supportDialogId])
+  @@index([reasonCodeId])
+  @@index([slaPolicyId])
+}
+
+/// Immutable case history. Written in the SAME TRANSACTION as the mutation it
+/// records, so a case and its history can never disagree: if the event cannot
+/// be written the mutation rolls back.
+///
+/// `(caseId, caseVersion)` is UNIQUE and is the concurrency backstop — a
+/// version is claimed by at most one event, so two racing writers cannot both
+/// believe they performed the transition even if application validation is
+/// bypassed.
+model LearnerOpsCaseEvent {
+  id          String                  @id @default(cuid())
+  caseId      String
+  caseVersion Int
+  eventType   LearnerOpsCaseEventType
+
+  /// Null actor means the system did it (an SLA target being set, a canonical
+  /// decision being mirrored). It never means "we do not know who".
+  actorStaffId String?
+
+  previousStatus LearnerOpsCaseStatus?
+  nextStatus     LearnerOpsCaseStatus?
+
+  previousAssignedStaffId String?
+  nextAssignedStaffId     String?
+
+  previousPriority LearnerOpsPriority?
+  nextPriority     LearnerOpsPriority?
+
+  /// Free-form provenance. Never contains a secret, a password or a full
+  /// learner identity — see the audit rules in the phase contract.
+  reason   String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  case                 LearnerOpsCase @relation("LearnerOpsCaseEvents", fields: [caseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  actorStaff           StaffProfile?  @relation("LearnerOpsCaseEventActor", fields: [actorStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  previousAssignedStaff StaffProfile? @relation("LearnerOpsCaseEventPreviousAssignee", fields: [previousAssignedStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  nextAssignedStaff     StaffProfile? @relation("LearnerOpsCaseEventNextAssignee", fields: [nextAssignedStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([caseId, caseVersion])
+  @@index([caseId, createdAt])
+  @@index([actorStaffId])
+  @@index([previousAssignedStaffId])
+  @@index([nextAssignedStaffId])
+  @@index([eventType, createdAt])
+}
+
+/// LEARNER-VISIBLE COMMUNICATION. Every row in this table is visible to the
+/// learner the case belongs to. There is no visibility column and no way to
+/// mark a row private — a private thought belongs in LearnerOpsNote, which is a
+/// different table with a different name that the learner-facing read path does
+/// not import.
+model LearnerOpsMessage {
+  id         String                     @id @default(cuid())
+  caseId     String
+  authorKind LearnerOpsMessageAuthorKind
+
+  /// Exactly one of these is set, enforced by CHECK in the migration.
+  authorStaffId String?
+  authorUserId  Int?
+
+  body String
+
+  /// Delivery facts the platform actually knows. `readByLearnerAt` is set by
+  /// the learner's own read, never inferred.
+  readByLearnerAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  case        LearnerOpsCase @relation("LearnerOpsCaseMessages", fields: [caseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  authorStaff StaffProfile?  @relation("LearnerOpsMessageStaffAuthor", fields: [authorStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  authorUser  User?          @relation("LearnerOpsMessageLearnerAuthor", fields: [authorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([caseId, createdAt])
+  @@index([authorStaffId])
+  @@index([authorUserId])
+}
+
+/// INTERNAL OPERATIONAL NOTE. Never learner-visible, under any circumstance.
+///
+/// This is a SEPARATE TABLE from LearnerOpsMessage on purpose. The learner-
+/// facing API selects from LearnerOpsMessage and never joins this table, so
+/// disclosure would require adding a table to a query rather than getting one
+/// boolean predicate wrong. Append-only: no updatedAt, no deletedAt, no
+/// visibility column — following the CrmUserNote precedent exactly.
+model LearnerOpsNote {
+  id            String   @id @default(cuid())
+  caseId        String
+  authorStaffId String
+  body          String
+  createdAt     DateTime @default(now())
+
+  case        LearnerOpsCase @relation("LearnerOpsCaseNotes", fields: [caseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  authorStaff StaffProfile   @relation("LearnerOpsNoteAuthor", fields: [authorStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([caseId, createdAt])
+  @@index([authorStaffId])
+}
+
+/// An escalation does not move the case. The case keeps its owner, its queue
+/// and its timeline; this row records that a second party was pulled in, why,
+/// and what came back. `returnedToOwnerAt` is what closes the loop.
+model LearnerOpsEscalation {
+  id     String                    @id @default(cuid())
+  caseId String
+  class  LearnerOpsEscalationClass
+
+  raisedByStaffId String
+  targetQueueId   String?
+  targetStaffId   String?
+
+  reason String
+
+  raisedAt          DateTime  @default(now())
+  resolvedAt        DateTime?
+  resolution        String?
+  resolvedByStaffId String?
+  returnedToOwnerAt DateTime?
+
+  case            LearnerOpsCase   @relation("LearnerOpsEscalationCase", fields: [caseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  raisedByStaff   StaffProfile     @relation("LearnerOpsEscalationRaiser", fields: [raisedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  targetQueue     LearnerOpsQueue? @relation("LearnerOpsEscalationTargetQueue", fields: [targetQueueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  targetStaff     StaffProfile?    @relation("LearnerOpsEscalationTargetStaff", fields: [targetStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  resolvedByStaff StaffProfile?    @relation("LearnerOpsEscalationResolver", fields: [resolvedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([caseId, raisedAt])
+  @@index([class, resolvedAt])
+  @@index([targetQueueId, resolvedAt])
+  @@index([raisedByStaffId])
+  @@index([targetStaffId])
+  @@index([resolvedByStaffId])
+}
+
+/// Quality review of completed operational work. IMMUTABLE, and it writes only
+/// to itself — QA can never edit the interaction it reviews, which is what
+/// keeps historical learner communication auditable.
+///
+/// `dimensions` is Json rather than columns because no scoring policy has been
+/// supplied. A rubric invented here would be a business rule nobody chose. The
+/// shape is validated at the API boundary and the architecture admits a
+/// configurable rubric later without a migration.
+model LearnerOpsQaReview {
+  id              String             @id @default(cuid())
+  caseId          String
+  reviewerStaffId String
+  result          LearnerOpsQaResult
+  dimensions      Json?
+  feedback        String?
+  coachingRequired Boolean           @default(false)
+  createdAt       DateTime           @default(now())
+
+  case          LearnerOpsCase @relation("LearnerOpsQaReviewCase", fields: [caseId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewerStaff StaffProfile   @relation("LearnerOpsQaReviewer", fields: [reviewerStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([caseId, createdAt])
+  @@index([reviewerStaffId, createdAt])
+  @@index([result, createdAt])
+}
+
+/// Internal staff knowledge. Staff-visible only, and explicitly NOT an
+/// authority: an article can describe how the product behaves and can never
+/// decide what a learner's progression is.
+model LearnerOpsKnowledgeArticle {
+  id           String                    @id @default(cuid())
+  slug         String                    @unique
+  title        String
+  body         String
+  status       LearnerOpsKnowledgeStatus @default(draft)
+  version      Int                       @default(1)
+  ownerStaffId String
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  ownerStaff StaffProfile @relation("LearnerOpsKnowledgeOwner", fields: [ownerStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, updatedAt])
+  @@index([ownerStaffId])
+}
+
+/// A recurring theme turned into structured product evidence. Frequency is
+/// DERIVED from the join table below and never stored, so it cannot drift from
+/// the cases that justify it.
+model LearnerOpsVocSignal {
+  id       String                @id @default(cuid())
+  theme    String
+  category String
+  severity LearnerOpsVocSeverity
+  status   LearnerOpsVocStatus   @default(open)
+
+  ownerStaffId    String?
+  createdByStaffId String
+  /// Where the product took it — an issue key, a commit, a decision note. Free
+  /// text because this is deliberately NOT an issue tracker.
+  resolutionReference String?
+  resolutionNote      String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  ownerStaff     StaffProfile? @relation("LearnerOpsVocOwner", fields: [ownerStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdByStaff StaffProfile  @relation("LearnerOpsVocCreator", fields: [createdByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  cases LearnerOpsVocSignalCase[] @relation("LearnerOpsVocSignalCaseSignal")
+
+  @@index([status, severity, updatedAt])
+  @@index([category, status])
+  @@index([ownerStaffId])
+  @@index([createdByStaffId])
+}
+
+/// The evidence link. One case may support several signals and one signal is
+/// justified by several cases, so this is a real many-to-many with its own
+/// attribution.
+model LearnerOpsVocSignalCase {
+  id            String   @id @default(cuid())
+  signalId      String
+  caseId        String
+  linkedByStaffId String
+  createdAt     DateTime @default(now())
+
+  signal       LearnerOpsVocSignal @relation("LearnerOpsVocSignalCaseSignal", fields: [signalId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  case         LearnerOpsCase      @relation("LearnerOpsVocSignalCaseCase", fields: [caseId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  linkedByStaff StaffProfile       @relation("LearnerOpsVocSignalLinker", fields: [linkedByStaffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([signalId, caseId])
+  @@index([caseId])
+  @@index([linkedByStaffId])
 }

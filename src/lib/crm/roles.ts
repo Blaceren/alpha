@@ -75,6 +75,39 @@ export const CRM_PERMISSIONS = [
   // decide what the product's source of truth IS, or would make adjudication
   // count as the editorial approval that §13 requires stay separate.
   "curriculum_source_authority",
+  // LEARNER-OPERATIONS-V1 — the nine operational permissions. APPENDED, never
+  // inserted, so the existing canonical order is untouched.
+  //
+  // The split follows the same principle as the curriculum three: a permission
+  // exists per DECISION KIND, not per screen.
+  //
+  //   learner_ops_view           may look at operational work and learner context
+  //   learner_ops_handle         may take work, reply, note and resolve
+  //   learner_ops_report_review  may decide a canonical REPORT outcome
+  //   learner_ops_mentor_review  may decide a canonical MENTOR-REVIEW outcome
+  //   learner_ops_escalate       may raise an escalation to another authority
+  //   learner_ops_manage_queues  may direct OTHER people's work
+  //   learner_ops_qa             may judge completed work
+  //   learner_ops_analytics      may read operational aggregates
+  //   learner_ops_admin          may change the rules (SLA, taxonomy, knowledge)
+  //
+  // HANDLE AND REVIEW ARE SEPARATE, AND THAT IS THE WHOLE POINT. A frontline
+  // operator who may answer a learner must not thereby acquire the power to
+  // approve educational work, because approval completes a level. Collapsing
+  // them would make every support agent a progression authority.
+  //
+  // MANAGE_QUEUES IS SEPARATE FROM HANDLE for the same reason `assign_owner` is
+  // separate from note access: acting on your own work and directing someone
+  // else's are different powers.
+  "learner_ops_view",
+  "learner_ops_handle",
+  "learner_ops_report_review",
+  "learner_ops_mentor_review",
+  "learner_ops_escalate",
+  "learner_ops_manage_queues",
+  "learner_ops_qa",
+  "learner_ops_analytics",
+  "learner_ops_admin",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -177,6 +210,54 @@ void _permissionVocabularyParity;
 // is the analytics role — `view_affiliate_analytics` is about affiliate traffic,
 // not about teaching material, so it implies nothing here. No role gains
 // `manage_settings`, and no existing grant is modified.
+// LEARNER-OPERATIONS-V1 GRANT RULES. Every grant below is derived from a marker
+// this matrix ALREADY carries, never from what a role name sounds like.
+//
+//   • `crm_admin` receives all nine. It is the only role holding
+//     `manage_settings`, this matrix's established marker for "owns
+//     configuration rather than merely reads it", and `learner_ops_admin`
+//     changes SLA policy and taxonomy — configuration by definition.
+//
+//   • `crm_manager` receives view, handle, escalate, manage_queues, qa and
+//     analytics, derived from `view_audit` — the marker AFD-5A established for
+//     broad supervisory scope. It is DELIBERATELY EXCLUDED from the two review
+//     permissions: supervising operations is not the same as holding
+//     educational authority, and a supervisory marker must not become the route
+//     to completing a learner's level. It is also excluded from
+//     `learner_ops_admin` because it does not hold `manage_settings`.
+//
+//   • `retention_manager` receives view and handle only. It holds
+//     `assign_owner` and the note permissions, so it is already a
+//     learner-facing operational role — but it holds neither `view_audit` nor
+//     `manage_settings`, so it supervises nothing and configures nothing.
+//
+//   • `mentor` receives view, handle, report_review and mentor_review. These
+//     are its FIRST permissions, and that is the LO-AUTH-AXIS-1 fix: a mentor
+//     has held report-review and mentor-review authority on the `User.role`
+//     axis all along, where the CRM could neither show it nor withhold it.
+//     Granting it here does not widen anything — the `User.role` check still
+//     runs and both are now required — it makes the authority VISIBLE and
+//     REVOCABLE. A mentor still receives no `manage_queues`, no `qa` and no
+//     `admin`: it reviews learners, it does not run the department.
+//
+//   • `support` receives view, handle and escalate. It already holds the note
+//     permissions, so it is a frontline operational role. It receives NEITHER
+//     review permission, which is the concrete meaning of "generic support
+//     staff may not approve educational work".
+//
+//   • `analyst` receives analytics only, consistent with AFD-5A giving it read
+//     access and nothing else.
+//
+//   • `read_only` receives view only. A read-only role receiving a read
+//     permission cannot widen anything, exactly as PHASE-G0 argued for
+//     `curriculum_read`.
+//
+//   • `moderator` and `content_manager` receive NOTHING. Community moderation
+//     and curriculum authoring are not learner operations. `moderator` is the
+//     role that matters here: live PREPROD data shows one `moderator`
+//     StaffProfile whose `User.role` is `admin`, which today grants it silent
+//     report-review and level-completion authority. Withholding the permission
+//     is what removes that, and it is asserted by regression.
 export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials",
@@ -194,6 +275,15 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "curriculum_author",
     "curriculum_approve",
     "curriculum_source_authority",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_report_review",
+    "learner_ops_mentor_review",
+    "learner_ops_escalate",
+    "learner_ops_manage_queues",
+    "learner_ops_qa",
+    "learner_ops_analytics",
+    "learner_ops_admin",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -207,6 +297,12 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "create_user_notes",
     "view_affiliate_analytics",
     "curriculum_read",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_escalate",
+    "learner_ops_manage_queues",
+    "learner_ops_qa",
+    "learner_ops_analytics",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -217,22 +313,42 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "edit_user_notes",
     "view_user_notes",
     "create_user_notes",
+    "learner_ops_view",
+    "learner_ops_handle",
   ],
   // mentor holds nothing: an accepted product decision for Notes v1. Mentors
   // have no CRM permission today, so granting note access here would be a new
   // expansion rather than a port of an existing grant. PHASE-G0 keeps it that
   // way — a mentor reviews LEARNERS, never the curriculum.
-  mentor: [],
-  support: ["edit_user_notes", "view_user_notes", "create_user_notes"],
+  mentor: [
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_report_review",
+    "learner_ops_mentor_review",
+  ],
+  support: [
+    "edit_user_notes",
+    "view_user_notes",
+    "create_user_notes",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_escalate",
+  ],
   moderator: [],
   // AFD-5A gives analyst its first permission — read-only affiliate inventory.
   // Deliberately NOT `manage_settings`: an analyst may inspect configuration and
   // must not be able to change it.
-  analyst: ["view_affiliate_analytics"],
+  analyst: [
+    "view_affiliate_analytics",
+    "learner_ops_analytics",
+  ],
   // PHASE-G0 — the content role's first permissions. Author, never approve.
   content_manager: ["curriculum_read", "curriculum_author"],
   // PHASE-G0 — read_only's first permission, and the only kind it may ever hold.
-  read_only: ["curriculum_read"],
+  read_only: [
+    "curriculum_read",
+    "learner_ops_view",
+  ],
 };
 
 // Server-side resolver — the only place effectivePermissions are computed.
@@ -379,4 +495,79 @@ export function canAdjudicateCurriculumSourceAuthority(
   permissions: readonly CrmPermission[],
 ): boolean {
   return permissions.includes("curriculum_source_authority");
+}
+
+/* ------------------------------------------ Learner Operations LEARNER-OPS-V1 */
+
+// The nine Learner Operations gates. Each requires EXACTLY its own permission,
+// with no fallback and no implication chain — the rule the curriculum gates
+// established and the rule `canViewAffiliates` deliberately departed from.
+//
+// `manage_settings` is NOT an alternative for any of them, and neither is
+// `learner_ops_admin`. An administrator who may change SLA policy has not
+// thereby been made a report reviewer, because those are different decisions
+// and the whole reason there are nine names rather than one.
+//
+// Authorization is purely permission-based. No StaffRole name, no email, no
+// `User.role` and no client-supplied permission list is consulted here — the
+// permission set always comes from `resolveEffectivePermissions` applied to the
+// STORED staff role.
+
+export function canViewLearnerOps(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_view");
+}
+
+export function canHandleLearnerOps(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_handle");
+}
+
+export function canEscalateLearnerOps(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_escalate");
+}
+
+export function canManageLearnerOpsQueues(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_manage_queues");
+}
+
+export function canPerformLearnerOpsQa(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_qa");
+}
+
+export function canViewLearnerOpsAnalytics(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_analytics");
+}
+
+export function canAdministerLearnerOps(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_admin");
+}
+
+/* --------------------------------------------------------- LO-AUTH-AXIS-1 */
+
+// THE TWO REVIEW GATES, AND WHY THEY ARE SHAPED THE WAY THEY ARE.
+//
+// Report-review and mentor-review authority has been granted since G3 by
+// `User.role IN (admin, mentor)` and by nothing else. That axis is invisible to
+// the CRM: the session response cannot show it, no permission withholds it, and
+// no CRM screen can tell an operator who holds it. Live PREPROD data showed what
+// that costs — a `moderator` StaffProfile whose `User.role` is `admin` held
+// silent level-completion authority while holding zero CRM permissions, and two
+// `crm_admin` StaffProfiles whose `User.role` is `user` could not review at all.
+//
+// THESE FUNCTIONS ARE ADDITIONAL, NEVER ALTERNATIVE. They express only the CRM
+// half of the answer. Every caller must ALSO satisfy the existing `User.role`
+// check, which is unchanged and still runs first. A permission granted here can
+// therefore never widen review authority beyond what `User.role` already
+// allowed — it can only narrow it, which is exactly what the fix requires. This
+// is the same "additional, never alternative" shape `canRevealLeadPii` uses.
+//
+// They are TWO functions, not one, because report review and mentor review are
+// two different educational decisions with two different canonical owners, and
+// a future product decision may well grant one without the other.
+
+export function canPerformReportReview(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_report_review");
+}
+
+export function canPerformMentorReview(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_mentor_review");
 }
