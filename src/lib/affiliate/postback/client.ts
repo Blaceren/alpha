@@ -113,16 +113,40 @@ async function performHop(
         protocol: "https:",
         // CONNECT TO THE APPROVED ADDRESS. `lookup` never consults DNS: it
         // returns the one value the guard already validated.
+        //
+        // PBDELIV-1 — IT MUST ANSWER IN THE SHAPE `net` ASKED FOR.
+        //
+        // Node's `net.Socket.connect` calls this shim with `{ all: true }` (Node
+        // 20+; measured as `{"hints":32,"all":true}` on the Node 22.14 this
+        // deployment runs). With `all` set, Node reads `addresses[0].address`
+        // from the second argument. The previous implementation always called
+        // back with a bare string, so Node read `undefined` and every single
+        // delivery died with `ERR_INVALID_IP_ADDRESS` — classified as
+        // `connect_error`, retried six times, and then marked terminal.
+        //
+        // THE EFFECT WAS TOTAL AND SILENT: no partner postback could reach ANY
+        // destination, while the ledger recorded plausible-looking transport
+        // failures. It survived because the destination guard has thorough tests
+        // and the socket layer had none — the guard was proving the right
+        // address was chosen, and nothing was proving it was ever dialled.
+        //
+        // Both shapes are honoured, so this does not depend on a Node version
+        // continuing to behave one way. The SECURITY PROPERTY IS UNCHANGED:
+        // exactly one address is ever returned, and it is the approved one.
         host: approved.hostname,
         lookup: (
           _hostname: string,
-          _options: unknown,
+          options: { all?: boolean } | undefined,
           callback: (
             err: NodeJS.ErrnoException | null,
             address: string | LookupAddress[],
             family?: number,
           ) => void,
         ) => {
+          if (options?.all === true) {
+            callback(null, [{ address: approved.address, family: approved.family }]);
+            return;
+          }
           callback(null, approved.address, approved.family);
         },
         // TLS still validates the certificate against the real hostname.
