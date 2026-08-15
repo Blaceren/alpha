@@ -191,3 +191,24 @@ describe("password policy delegation", () => {
     expect(validateAgainstProductPolicy("")).not.toHaveLength(0);
   });
 });
+
+describe("the enrolment actor — LO-FIXTURE-ENROL-1", () => {
+  it("does NOT use any staff fixture as the enrolment actor", () => {
+    // The canonical enrolment owner requires an active `admin` on the platform
+    // axis. None of the three fixtures is one, and that is the point: the
+    // `admin` fixture is `userRole: "user"` precisely so it can prove the CRM
+    // review permission is not sufficient for canonical authority. If a future
+    // edit made it a platform admin to satisfy the enrolment command, this test
+    // is what should stop it.
+    for (const fixture of STAFF_FIXTURES) {
+      expect(fixture.userRole, `${fixture.key} must not be a platform admin`).not.toBe("admin");
+    }
+  });
+
+  it("keeps the reviewer on `mentor`, not `admin`", () => {
+    // `mentor` satisfies requireTaskReportReviewer without granting the broad
+    // platform-admin authority that would make the fixture a progression bypass.
+    const reviewer = STAFF_FIXTURES.find((f) => f.key === "reviewer")!;
+    expect(reviewer.userRole).toBe("mentor");
+  });
+});

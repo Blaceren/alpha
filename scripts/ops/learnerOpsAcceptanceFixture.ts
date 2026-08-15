@@ -77,7 +77,7 @@ import { enrollUserInPublishedCurriculum } from "@/lib/curriculum/enrollment";
 export const FIXTURE_CONFIRM_KEY = "ATA_LEARNER_OPS_FIXTURE_CONFIRM";
 export const FIXTURE_CONFIRM_VALUE = "PROVISION_LEARNER_OPS_ACCEPTANCE_FIXTURES";
 
-type Verb = "provision" | "inspect";
+type Verb = "provision" | "inspect" | "enroll";
 
 function note(line: string): void {
   process.stderr.write(`${line}\n`);
@@ -89,7 +89,8 @@ export type FixtureRefusal =
   | "missing_confirmation"
   | "no_controlling_tty"
   | "not_allowlisted"
-  | "password_rejected";
+  | "password_rejected"
+  | "no_enrolment_actor";
 
 /**
  * The full gate. Environment checks run BEFORE the acknowledgement, so on a
@@ -130,6 +131,87 @@ export function checkAcknowledgement(
     };
   }
   return { ok: true };
+}
+
+/**
+ * THE ENROLMENT ACTOR, and why it is not one of the fixtures.
+ *
+ * `enrollUserInPublishedCurriculum` requires an ACTIVE `admin` on the platform
+ * axis, resolved from the database inside its own transaction. None of the three
+ * staff fixtures qualifies, and that is deliberate rather than an oversight: the
+ * `admin` fixture is `userRole: "user"` precisely so it can prove that holding
+ * the CRM review permission is not sufficient for canonical authority. Making it
+ * a platform admin to satisfy the enrolment command would destroy the assertion
+ * the fixture exists for.
+ *
+ * So the actor is the EXISTING sanctioned synthetic operator,
+ * `preprod-qa-operator@ata.invalid`. Naming it as an actor READS it and does not
+ * modify it — its StaffRole stays `moderator` and its Learner Operations
+ * permission set stays empty, so it remains the negative RBAC control. The
+ * enrolment audit then records, truthfully, that a synthetic operator enrolled
+ * these synthetic learners.
+ *
+ * If that principal is absent or not an active admin, this REFUSES rather than
+ * falling back to any other admin it happens to find. A fixture tool that picks
+ * an arbitrary real administrator to attribute writes to is exactly the kind of
+ * convenience that makes an audit trail untrustworthy.
+ */
+const ENROLMENT_ACTOR_EMAIL = "preprod-qa-operator@ata.invalid";
+
+async function resolveEnrolmentActor(prisma: PrismaClient): Promise<number | null> {
+  const actor = await prisma.user.findUnique({
+    where: { email: ENROLMENT_ACTOR_EMAIL },
+    select: { id: true, role: true, status: true },
+  });
+  if (!actor || actor.role !== "admin" || actor.status !== "active") return null;
+  return actor.id;
+}
+
+/**
+ * Enrol the allowlisted learners that exist and have no active enrolment.
+ *
+ * A SEPARATE, PASSWORD-FREE VERB. Enrolment mints no credential, so demanding a
+ * terminal and two hidden prompts to run it would be friction with no security
+ * value — and would mean re-entering passwords to correct an enrolment. It
+ * carries the same environment and acknowledgement gate as `provision`, because
+ * it still writes to the database.
+ *
+ * It is idempotent: the canonical owner returns the existing enrolment for a
+ * learner that already has one, so re-running changes nothing.
+ */
+async function enrolLearners(
+  prisma: PrismaClient,
+  actorId: number,
+): Promise<{ key: string; userId: number | null; enrolled: boolean; detail: string }[]> {
+  const results: { key: string; userId: number | null; enrolled: boolean; detail: string }[] = [];
+
+  for (const fixture of LEARNER_FIXTURES) {
+    const user = await prisma.user.findUnique({
+      where: { email: fixture.email },
+      select: { id: true },
+    });
+    if (!user) {
+      results.push({ key: fixture.key, userId: null, enrolled: false, detail: "not provisioned" });
+      continue;
+    }
+    try {
+      const result = await enrollUserInPublishedCurriculum({ userId: user.id, actorId });
+      results.push({
+        key: fixture.key,
+        userId: user.id,
+        enrolled: result.kind === "enrolled",
+        detail: result.created ? "created" : "already enrolled",
+      });
+    } catch (error) {
+      results.push({
+        key: fixture.key,
+        userId: user.id,
+        enrolled: false,
+        detail: (error as Error).message,
+      });
+    }
+  }
+  return results;
 }
 
 /* --------------------------------------------------------------- provision */
@@ -267,15 +349,17 @@ async function provisionLearner(
     },
   });
 
-  // THE CANONICAL ENROLLMENT OWNER. Not an insert — this is the same function
-  // registration itself calls, so the enrollment, its curriculum version and its
-  // level-progress rows are created by the authority that owns them.
+  // THE CANONICAL ENROLMENT OWNER. Not an insert — the enrolment, its curriculum
+  // version and its level-progress rows are created by the authority that owns
+  // them, and a refusal from that authority is reported rather than worked
+  // around.
   let enrolled = false;
   try {
     const result = await enrollUserInPublishedCurriculum({ userId: user.id, actorId });
     enrolled = result.kind === "enrolled";
   } catch (error) {
-    note(`  ! enrollment for ${fixture.key} refused by the canonical owner: ${(error as Error).message}`);
+    note(`  ! enrolment for ${fixture.key} refused by the canonical owner: ${(error as Error).message}`);
+    note(`    run the \`enroll\` verb once the refusal is understood — it needs no password`);
   }
 
   return { userId: user.id, created: existing === null, enrolled };
@@ -287,8 +371,8 @@ async function main(): Promise<number> {
   const verb = (process.argv[2] ?? "") as Verb;
   const apply = process.argv.includes("--apply");
 
-  if (verb !== "provision" && verb !== "inspect") {
-    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect> [--apply]");
+  if (verb !== "provision" && verb !== "inspect" && verb !== "enroll") {
+    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect|enroll> [--apply]");
     process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_verb" }, null, 2) + "\n");
     return 2;
   }
@@ -321,6 +405,39 @@ async function main(): Promise<number> {
       }
       process.stdout.write(JSON.stringify({ ok: true, verb, fixtures: rows }, null, 2) + "\n");
       return 0;
+    }
+
+    /* --------------------------------------------------------------- enroll */
+
+    if (verb === "enroll") {
+      const gate = checkFixtureAllowed();
+      if (!gate.ok) {
+        note(`REFUSED: ${gate.reason} — ${gate.detail}`);
+        process.stdout.write(JSON.stringify({ ok: false, refusal: gate.reason }, null, 2) + "\n");
+        return 3;
+      }
+
+      const actorId = await resolveEnrolmentActor(prisma);
+      if (actorId === null) {
+        note(`REFUSED: ${ENROLMENT_ACTOR_EMAIL} is absent or not an active admin.`);
+        note("         This tool will not attribute enrolments to an arbitrary administrator.");
+        process.stdout.write(JSON.stringify({ ok: false, refusal: "no_enrolment_actor" }, null, 2) + "\n");
+        return 6;
+      }
+
+      if (!apply) {
+        note("DRY RUN — nothing is written. Add --apply.");
+        note(`would enrol the six learner fixtures, attributed to ${ENROLMENT_ACTOR_EMAIL}`);
+        process.stdout.write(JSON.stringify({ ok: true, verb, applied: false }, null, 2) + "\n");
+        return 0;
+      }
+
+      const enrolled = await enrolLearners(prisma, actorId);
+      for (const row of enrolled) {
+        note(`  learner ${row.key.padEnd(11)} userId=${row.userId ?? "-"} enrolled=${row.enrolled} (${row.detail})`);
+      }
+      process.stdout.write(JSON.stringify({ ok: true, verb, applied: true, learners: enrolled }, null, 2) + "\n");
+      return enrolled.every((row) => row.enrolled) ? 0 : 7;
     }
 
     /* ------------------------------------------------------------ provision */
@@ -383,15 +500,21 @@ async function main(): Promise<number> {
       return 5;
     }
 
+    // The enrolment actor is resolved BEFORE any learner is written, so a
+    // missing actor is a refusal rather than six half-provisioned learners.
+    const actorId = await resolveEnrolmentActor(prisma);
+    if (actorId === null) {
+      note(`REFUSED: ${ENROLMENT_ACTOR_EMAIL} is absent or not an active admin.`);
+      process.stdout.write(JSON.stringify({ ok: false, refusal: "no_enrolment_actor" }, null, 2) + "\n");
+      return 6;
+    }
+
     const staffResults: unknown[] = [];
-    let actorId: number | null = null;
     for (const fixture of STAFF_FIXTURES) {
       const result = await provisionStaff(prisma, fixture, staffPassword.password);
-      if (fixture.key === "admin") actorId = result.userId;
       note(`  staff   ${fixture.key.padEnd(9)} userId=${result.userId} staffId=${result.staffId} ${result.created ? "created" : "updated"}`);
       staffResults.push({ key: fixture.key, email: fixture.email, userId: result.userId, staffId: result.staffId, staffRole: fixture.staffRole, userRole: fixture.userRole, created: result.created });
     }
-    if (actorId === null) throw new Error("the admin fixture must exist before learners are enrolled");
 
     const learnerResults: unknown[] = [];
     for (const fixture of LEARNER_FIXTURES) {
