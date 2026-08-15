@@ -94,7 +94,16 @@ async function readError(response: Response): Promise<{ messageKey: string; requ
  * Status mapping is exhaustive and closed: an unmapped status becomes
  * `upstream_unavailable` rather than being treated as success.
  */
-async function request<T>(
+/**
+ * EXPORTED FOR THE COMMERCIAL CLIENT (AFFILIATE-PLATFORM-V1).
+ *
+ * The commercial staff surfaces speak the same closed error envelope and need
+ * the same exhaustive status mapping, the same timeout and the same
+ * "never render an unvalidated body" rule. A second copy of this function would
+ * be a second place for that mapping to drift, and the mapping is what decides
+ * whether a 403 renders as "forbidden" or as data.
+ */
+export async function request<T>(
   path: string,
   schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
   init: RequestInit,
@@ -155,7 +164,13 @@ function get<T>(
  * than sent without it. There is no fallback path that mutates without a token,
  * and the backend independently refuses one anyway.
  */
-async function mutate<T>(
+/**
+ * EXPORTED FOR THE COMMERCIAL CLIENT, for the same reason `request` is: the
+ * hard-fail-on-missing-CSRF rule must have exactly one implementation. A second
+ * copy is a second chance for somebody to add a fallback that mutates without a
+ * token.
+ */
+export async function mutate<T>(
   path: string,
   schema: Parameters<typeof request<T>>[1],
   method: "POST" | "PATCH",

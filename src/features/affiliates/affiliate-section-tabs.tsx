@@ -21,7 +21,13 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export type AffiliateSection = "management" | "analytics" | "atlas" | "leads";
+export type AffiliateSection =
+  | "management"
+  | "analytics"
+  | "atlas"
+  | "leads"
+  | "commercial"
+  | "postbacks";
 
 /**
  * AFD-5D2 adds Curie Atlas, immediately after Аналитика.
@@ -41,6 +47,15 @@ const TABS: readonly { key: AffiliateSection; label: string; href: string }[] = 
   { key: "analytics", label: "Аналитика", href: "/affiliates/analytics" },
   { key: "atlas", label: "Curie Atlas", href: "/affiliates/analytics/atlas" },
   { key: "leads", label: "Лиды", href: "/affiliates/leads" },
+  // AFFILIATE-PLATFORM-V1. Two tabs, not one: "CPA и комиссии" is the money
+  // ledger and "Постбэки" is the delivery ledger. They are different questions
+  // with different owners, and an operator debugging a partner's receiver is
+  // not reconciling a payout.
+  //
+  // NEITHER CARRIES A BADGE OR A COUNT, for the same reason Лиды does not: a
+  // number here would have to come from a request this component does not make.
+  { key: "commercial", label: "CPA и комиссии", href: "/affiliates/commercial" },
+  { key: "postbacks", label: "Постбэки", href: "/affiliates/postbacks" },
 ];
 
 export function AffiliateSectionTabs({ active }: { active: AffiliateSection }) {

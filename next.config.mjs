@@ -170,6 +170,24 @@ export const AFFILIATE_LINK_DETAIL_PATH = "/api/crm/v1/affiliates/tracking-links
  * Next rewrites are method-agnostic, and these backend routes export only `GET`.
  * A POST reaching one of them finds no handler and fails there.
  */
+/* ------------------------------- AFFILIATE-PLATFORM-V1: commercial control
+ *
+ * FOUR EXACT, TERMINAL PATHS. No parameter, no catch-all: every partner-user,
+ * terms, qualification and delivery request is a query on a flat path, so no
+ * child route can be reached through these entries.
+ *
+ * `partner-users` and `campaign-terms` are the only two that are ever mutated,
+ * and only with POST/PATCH — there is no DELETE anywhere in this platform's
+ * staff surface, because nothing about a partner principal or a commercial
+ * price is deletable. Superseding is how a price changes; disabling is how
+ * access ends.
+ */
+export const AFFILIATE_PARTNER_USERS_PATH = "/api/crm/v1/affiliates/partner-users";
+export const AFFILIATE_CAMPAIGN_TERMS_PATH = "/api/crm/v1/affiliates/campaign-terms";
+export const AFFILIATE_COMMISSIONS_PATH = "/api/crm/v1/affiliates/commissions";
+export const AFFILIATE_POSTBACK_DELIVERIES_PATH =
+  "/api/crm/v1/affiliates/postback-deliveries";
+
 export const ANALYTICS_FILTERS_PATH = "/api/crm/v1/affiliates/analytics/filters";
 export const ANALYTICS_SUMMARY_PATH = "/api/crm/v1/affiliates/analytics/summary";
 export const ANALYTICS_TIMESERIES_PATH = "/api/crm/v1/affiliates/analytics/timeseries";
@@ -266,6 +284,10 @@ export const PROXIED_PATHS = [
   AFFILIATE_CAMPAIGN_DETAIL_PATH,
   AFFILIATE_LINKS_PATH,
   AFFILIATE_LINK_DETAIL_PATH,
+  AFFILIATE_PARTNER_USERS_PATH,
+  AFFILIATE_CAMPAIGN_TERMS_PATH,
+  AFFILIATE_COMMISSIONS_PATH,
+  AFFILIATE_POSTBACK_DELIVERIES_PATH,
   ANALYTICS_FILTERS_PATH,
   ANALYTICS_SUMMARY_PATH,
   ANALYTICS_TIMESERIES_PATH,

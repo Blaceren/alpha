@@ -35,6 +35,7 @@ import { PartnerFormDialog } from "./partner-form";
 import { CampaignFormDialog } from "./campaign-form";
 import { TrackingLinkFormDialog } from "./tracking-link-form";
 import { StatusAction, type StatusActionResult } from "./status-actions";
+import { PartnerCommercialPanel } from "@/features/affiliate-commercial/partner-commercial-panel";
 
 /**
  * AFD-5A — affiliate partner detail: the partner's own configuration, its
@@ -314,6 +315,20 @@ export function AffiliateDetailWorkspace({ partnerId }: { partnerId: string }) {
         onCreate={() => setCampaignCreateOpen(true)}
         onEdit={setCampaignEdit}
         onReload={reload}
+      />
+
+      {/* ------------------------- AFFILIATE-PLATFORM-V1: commercial control
+        *
+        * PARTNER ACCESS and CPA TERMS live on the partner they belong to,
+        * between the campaigns they are priced on and the links that carry the
+        * traffic. Both are staff-owned; neither is editable in place, because
+        * a price is superseded and a login is disabled — nothing here rewrites
+        * a value a past commission was computed from.
+        */}
+      <PartnerCommercialPanel
+        affiliatePartnerId={partner.id}
+        campaigns={campaigns}
+        canManage={canManage}
       />
 
       {/* ------------------------------------------------------------ links */}

@@ -24,14 +24,16 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly thirty-six rewrite definitions", () => {
+  it("produces exactly forty rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
     // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
     // + three affiliate lead paths (AFD-5C2) + five read-only Growth paths
-    // (G4-GROWTH). Pinning the count is the point: a new proxied path must be a
-    // deliberate change to this number, never a side effect.
-    expect(buildRewrites(env)).toHaveLength(36);
+    // (G4-GROWTH) + FOUR commercial control paths (AFFILIATE-PLATFORM-V1).
+    // Pinning the count is the point: a new proxied path must be a deliberate
+    // change to this number, never a side effect. It fired on the four added
+    // below, which is the guard working, and it is updated in the same commit.
+    expect(buildRewrites(env)).toHaveLength(40);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -55,7 +57,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the thirty-six reviewed paths", () => {
+  it("exposes exactly the forty reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -80,6 +82,10 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/affiliates/campaigns/:campaignId",
       "/api/crm/v1/affiliates/tracking-links",
       "/api/crm/v1/affiliates/tracking-links/:linkId",
+      "/api/crm/v1/affiliates/partner-users",
+      "/api/crm/v1/affiliates/campaign-terms",
+      "/api/crm/v1/affiliates/commissions",
+      "/api/crm/v1/affiliates/postback-deliveries",
       "/api/crm/v1/affiliates/analytics/filters",
       "/api/crm/v1/affiliates/analytics/summary",
       "/api/crm/v1/affiliates/analytics/timeseries",
@@ -283,6 +289,10 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/affiliates/campaigns/:campaignId",
       "/api/crm/v1/affiliates/tracking-links",
       "/api/crm/v1/affiliates/tracking-links/:linkId",
+      "/api/crm/v1/affiliates/partner-users",
+      "/api/crm/v1/affiliates/campaign-terms",
+      "/api/crm/v1/affiliates/commissions",
+      "/api/crm/v1/affiliates/postback-deliveries",
       "/api/crm/v1/affiliates/analytics/filters",
       "/api/crm/v1/affiliates/analytics/summary",
       "/api/crm/v1/affiliates/analytics/timeseries",

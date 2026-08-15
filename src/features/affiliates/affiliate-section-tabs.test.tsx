@@ -8,6 +8,10 @@
  * AFD-5D2 adds Curie Atlas between Аналитика and Лиды. The tab list is a
  * deliberate tripwire: a new sub-section must be a visible change to this
  * assertion, never a side effect of editing the component.
+ *
+ * AFFILIATE-PLATFORM-V1 appends "CPA и комиссии" and "Постбэки". THE TRIPWIRE
+ * FIRED, WHICH IS WHY IT EXISTS, and it is updated here in the same commit as
+ * the component rather than relaxed into a length check.
  */
 import * as React from "react";
 import { describe, expect, it } from "vitest";
@@ -15,7 +19,7 @@ import { render, screen, within } from "@testing-library/react";
 import { AffiliateSectionTabs } from "./affiliate-section-tabs";
 
 describe("affiliate section tabs", () => {
-  it("offers exactly Управление, Аналитика, Curie Atlas and Лиды", () => {
+  it("offers exactly Управление, Аналитика, Curie Atlas, Лиды, CPA и комиссии, Постбэки", () => {
     render(<AffiliateSectionTabs active="management" />);
     const nav = screen.getByRole("navigation", { name: "Разделы аффилейтов" });
     const links = within(nav).getAllByRole("link");
@@ -24,6 +28,8 @@ describe("affiliate section tabs", () => {
       "Аналитика",
       "Curie Atlas",
       "Лиды",
+      "CPA и комиссии",
+      "Постбэки",
     ]);
   });
 
@@ -53,12 +59,29 @@ describe("affiliate section tabs", () => {
   });
 
   it("does not advertise Atlas as AI, a forecast or a recommendation engine", () => {
+    // THIS ASSERTION WAS A SUBSTRING CHECK AND IT WAS WRONG, in a way that only
+    // showed when a legitimate label finally collided with it: "CPA и комиссии"
+    // contains the substring "ии", and Russian puts that ending on thousands of
+    // ordinary words (комиссии, аналитики, сессии, категории…). A guard that
+    // fails on correct copy is a guard somebody eventually deletes.
+    //
+    // "ИИ" is a WORD — the Russian abbreviation for AI — so it is matched as
+    // one, with boundaries. That is STRICTLY STRONGER than the old check for
+    // its actual purpose: it still catches a standalone "ИИ" tab, and it no
+    // longer fires on a noun that happens to end in those two letters. The
+    // other five terms are unambiguous as substrings and are unchanged.
     render(<AffiliateSectionTabs active="atlas" />);
     const nav = screen.getByRole("navigation", { name: "Разделы аффилейтов" });
     const text = (nav.textContent ?? "").toLowerCase();
-    for (const forbidden of ["ai", "ии", "нейро", "прогноз", "рекоменд", "gpt"]) {
+
+    for (const forbidden of ["ai", "нейро", "прогноз", "рекоменд", "gpt"]) {
       expect(text).not.toContain(forbidden);
     }
+    expect(text).not.toMatch(/(^|[^\p{L}])ии([^\p{L}]|$)/u);
+
+    // …and the word-boundary form is proved to still catch what it is for.
+    expect("аналитика ии".match(/(^|[^\p{L}])ии([^\p{L}]|$)/u)).not.toBeNull();
+    expect("cpa и комиссии".match(/(^|[^\p{L}])ии([^\p{L}]|$)/u)).toBeNull();
   });
 
   it("points leads at /affiliates/leads", () => {
