@@ -53,6 +53,20 @@ export const AFFILIATE_ATLAS_PATH = "/affiliates/analytics/atlas";
 export const AFFILIATE_LEADS_PATH = "/affiliates/leads";
 
 /**
+ * AFFILIATE-PLATFORM-V1 — two more EXACT siblings of `/affiliates/{partnerId}`.
+ *
+ * THEY MUST BE MATCHED BEFORE THE PARTNER PATTERN, for exactly the reason the
+ * three above must be, and this file's header already warned about it. They
+ * were added as pages without being registered here, and the shell read
+ * "commercial" as a partner id: it fetched `/affiliates/partners/commercial`,
+ * the backend answered its canonical `id_invalid`, and the whole screen
+ * rendered "Некорректный идентификатор" instead of the workspace. The Next
+ * route existed and was correct; the SHELL is what decides what renders.
+ */
+export const AFFILIATE_COMMERCIAL_PATH = "/affiliates/commercial";
+export const AFFILIATE_POSTBACKS_PATH = "/affiliates/postbacks";
+
+/**
  * G4-R1 — the api-mode topbar, as DATA rather than as markup.
  *
  * This nav used to be two hand-written `<li>` blocks, and `ApiModeLanding` used

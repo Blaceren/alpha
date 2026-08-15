@@ -233,6 +233,32 @@ describe("api mode — the affiliate section", () => {
     expect(screen.queryByText("Некорректный идентификатор")).not.toBeInTheDocument();
   });
 
+  /* --------------------------------------------- AFFILIATE-PLATFORM-V1
+   *
+   * THESE TWO CASES EXIST BECAUSE THE DEFECT ACTUALLY HAPPENED. Both pages were
+   * added as real Next routes, both built correctly, and both rendered
+   * "Некорректный идентификатор" in a real browser — because the SHELL, not the
+   * Next router, decides what composes here, and neither path was registered
+   * before the `/affiliates/{partnerId}` pattern. The shell fetched
+   * `/affiliates/partners/commercial`, the backend answered its canonical
+   * `id_invalid`, and the workspace was unreachable.
+   *
+   * The two assertions below are the exact pair that would have caught it.
+   */
+  it("does not read `commercial` as a partner id", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/commercial", "api");
+    await screen.findByRole("heading", { name: "CPA и комиссии", level: 1 });
+    expect(screen.queryByText("Некорректный идентификатор")).not.toBeInTheDocument();
+  });
+
+  it("does not read `postbacks` as a partner id", async () => {
+    stubPermissions = ["view_affiliate_analytics"];
+    renderAt("/affiliates/postbacks", "api");
+    await screen.findByRole("heading", { name: "Постбэки партнёрам", level: 1 });
+    expect(screen.queryByText("Некорректный идентификатор")).not.toBeInTheDocument();
+  });
+
   it("keeps an unbuilt nested affiliate route deferred", async () => {
     stubPermissions = ["view_affiliate_analytics"];
     renderAt("/affiliates/analytics/leads", "api");

@@ -13,7 +13,9 @@ import {
   AFFILIATES_PATH,
   AFFILIATE_ANALYTICS_PATH,
   AFFILIATE_ATLAS_PATH,
+  AFFILIATE_COMMERCIAL_PATH,
   AFFILIATE_LEADS_PATH,
+  AFFILIATE_POSTBACKS_PATH,
 } from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { MentorReviewWorkspace, MENTOR_REVIEW_PATH } from "@/features/mentor-review/mentor-review-workspace";
@@ -24,6 +26,8 @@ import { AffiliateDetailWorkspace } from "@/features/affiliates/affiliate-detail
 import { TrackingLinkDetailWorkspace } from "@/features/affiliates/tracking-link-detail-workspace";
 import { AffiliateAnalyticsWorkspace } from "@/features/affiliate-analytics/analytics-workspace";
 import { CurieAtlasWorkspace } from "@/features/curie-atlas/atlas-workspace";
+import { CommissionsWorkspace } from "@/features/affiliate-commercial/commissions-workspace";
+import { PostbackDeliveriesWorkspace } from "@/features/affiliate-commercial/postbacks-workspace";
 import { AffiliateLeadsWorkspace } from "@/features/affiliate-leads/leads-workspace";
 import { AffiliateLeadDetailWorkspace } from "@/features/affiliate-leads/lead-detail-workspace";
 import { GrowthWorkspace } from "@/features/growth/growth-workspace";
@@ -222,6 +226,29 @@ function ApiModeLanding() {
         <React.Suspense fallback={null}>
           <AffiliateLeadsWorkspace />
         </React.Suspense>
+      </ApiShell>
+    );
+  }
+
+  /* ------------------------------- AFFILIATE-PLATFORM-V1: commercial + postbacks
+   *
+   * TWO MORE EXACT SIBLINGS, matched BEFORE `/affiliates/{partnerId}` for the
+   * same reason analytics, leads and links are. Registering the Next route is
+   * not enough: THIS component decides what renders, and an unregistered
+   * sibling is read as a partner id.
+   */
+  if (pathname === AFFILIATE_COMMERCIAL_PATH) {
+    return (
+      <ApiShell session={session}>
+        <CommissionsWorkspace />
+      </ApiShell>
+    );
+  }
+
+  if (pathname === AFFILIATE_POSTBACKS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <PostbackDeliveriesWorkspace />
       </ApiShell>
     );
   }
