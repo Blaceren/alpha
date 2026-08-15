@@ -10,6 +10,10 @@ import {
 } from "@/features/growth/growth-routes";
 import { REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { MENTOR_REVIEW_PATH } from "@/features/mentor-review/mentor-review-workspace";
+import {
+  LEARNER_OPS_PATH,
+  LEARNER_OPS_SUPPORT_PATH,
+} from "@/features/learner-ops/inbox-workspace";
 import type { EmployeeSession } from "@/domain/identity/session";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
@@ -107,21 +111,36 @@ export const API_NAV_ITEMS: readonly ApiNavItem[] = [
   // the URL. The third occurrence of exactly the defect `growth-routes.ts`
   // exists to prevent.
   //
-  // WHY THE PERMISSION LIST IS EMPTY, STATED SO IT IS NOT "FIXED" LATER. The
-  // reviewer boundary these workspaces enforce is the Backend's, and it is a
-  // USER-ROLE rule (`admin`/`mentor` on the account), not a CRM session
-  // permission — no `CrmPermission` expresses "reviewer", and the live staff
-  // population proves the two vocabularies genuinely diverge (a `crm_admin`
-  // staff profile does not imply an `admin` user role). Deriving visibility
-  // from the session role here would therefore HIDE the queue from real
-  // reviewers and SHOW it to non-reviewers, each for a different minority of
-  // staff. So navigation mirrors the ROUTING rule, which is the accepted one:
-  // any authenticated employee may open the workspace, and the Backend queue
-  // response decides reviewership — a non-reviewer gets the designed bounded
-  // forbidden panel, never a dead link and never an authentication loop.
+  // THE PERMISSION LIST USED TO BE EMPTY, AND LEARNER-OPERATIONS-V1 IS WHY IT
+  // IS NOT ANY MORE.
+  //
+  // The previous note here recorded, correctly at the time, that "no
+  // `CrmPermission` expresses reviewer" — the reviewer boundary was a USER-ROLE
+  // rule (`admin`/`mentor` on the account) that the CRM session vocabulary could
+  // not name. Deriving visibility from the session would then have hidden the
+  // queue from real reviewers and shown it to non-reviewers, so an empty list
+  // was the honest choice.
+  //
+  // LO-AUTH-AXIS-1 removed that premise. `learner_ops_report_review` and
+  // `learner_ops_mentor_review` now exist, and the canonical Backend gates
+  // REQUIRE them in addition to the user-role check. The permission is
+  // therefore NECESSARY for reviewership — so hiding the entry from somebody who
+  // lacks it hides a queue they genuinely can no longer act on, which is exactly
+  // what navigation should do.
+  //
+  // It is necessary but NOT SUFFICIENT: a staff member holding the permission
+  // whose account role is not `admin`/`mentor` still sees the entry and still
+  // meets the designed bounded forbidden panel from the Backend queue response.
+  // That residual case is the accepted one — a bounded panel, never a dead link
+  // and never an authentication loop.
   // `review-queue-navigation.test.tsx` pins navigation and routing together.
-  { href: REPORT_REVIEW_PATH, label: "Проверка отчётов", permissions: [] },
-  { href: MENTOR_REVIEW_PATH, label: "Проверка практики", permissions: [] },
+  { href: REPORT_REVIEW_PATH, label: "Проверка отчётов", permissions: ["learner_ops_report_review"] },
+  { href: MENTOR_REVIEW_PATH, label: "Проверка практики", permissions: ["learner_ops_mentor_review"] },
+  // LEARNER-OPERATIONS-V1 — the department itself. `learner_ops_view` is the
+  // same permission every read route behind it enforces, so navigation canon
+  // and the real gate cannot drift into showing a section that answers 403.
+  { href: LEARNER_OPS_PATH, label: "Операции с учениками", permissions: ["learner_ops_view"] },
+  { href: LEARNER_OPS_SUPPORT_PATH, label: "Поддержка", permissions: ["learner_ops_view"] },
 ];
 
 /** An entry with no permissions is open to every authenticated employee. */

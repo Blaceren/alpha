@@ -19,6 +19,7 @@ import * as React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
+import { grants } from "@/domain/identity/access";
 import { API_NAV_ITEMS } from "./api-shell";
 import { REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { MENTOR_REVIEW_PATH } from "@/features/mentor-review/mentor-review-workspace";
@@ -44,7 +45,15 @@ const session = {
   employeeId: "cmtestemployee0000000000",
   displayName: "Support",
   role: "support" as const,
-  effectivePermissions: ["view_user_notes"] as const,
+  // LEARNER-OPERATIONS-V1: the review queues became permission-gated
+  // (LO-AUTH-AXIS-1), so the stub employee now holds the two review
+  // permissions. Without them this file would be asserting that a
+  // non-reviewer sees the queues, which is the opposite of the rule.
+  effectivePermissions: [
+    "view_user_notes",
+    "learner_ops_report_review",
+    "learner_ops_mentor_review",
+  ] as const,
   permissionVersion: 1,
   expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
 };
@@ -96,7 +105,7 @@ describe("OPS-NAV-REVIEW-QUEUES — review queues in CRM_MODE=api", () => {
     expect(screen.queryByText(DEFERRED)).not.toBeInTheDocument();
   });
 
-  it("lists BOTH review queues in the api-mode navigation for every employee", () => {
+  it("lists BOTH review queues in the api-mode navigation for a reviewer", () => {
     pathname = REPORT_REVIEW_PATH;
     render(
       <AppShell mode="api">
@@ -119,12 +128,25 @@ describe("OPS-NAV-REVIEW-QUEUES — review queues in CRM_MODE=api", () => {
     const hrefs = API_NAV_ITEMS.map((item) => item.href);
     expect(hrefs).toContain(REPORT_REVIEW_PATH);
     expect(hrefs).toContain(MENTOR_REVIEW_PATH);
-    // And their visibility rule is the routing rule: open to every
-    // authenticated employee, reviewer-ship decided by the Backend.
-    for (const href of [REPORT_REVIEW_PATH, MENTOR_REVIEW_PATH]) {
-      const item = API_NAV_ITEMS.find((entry) => entry.href === href);
-      expect(item).toBeDefined();
-      expect(item!.permissions).toEqual([]);
-    }
+    // Their visibility rule USED to be "open to every authenticated employee,
+    // reviewer-ship decided by the Backend", because no CRM permission could
+    // express reviewer. LO-AUTH-AXIS-1 created one, and the canonical Backend
+    // gates now REQUIRE it — so the menu entry is gated on the same permission
+    // the route enforces, which is this file's actual invariant: navigation
+    // canon and the real gate must not drift.
+    expect(
+      API_NAV_ITEMS.find((entry) => entry.href === REPORT_REVIEW_PATH)!.permissions,
+    ).toEqual(["learner_ops_report_review"]);
+    expect(
+      API_NAV_ITEMS.find((entry) => entry.href === MENTOR_REVIEW_PATH)!.permissions,
+    ).toEqual(["learner_ops_mentor_review"]);
+  });
+
+  it("hides a review queue from an employee who cannot act on it", () => {
+    // The point of the gate: a menu entry to a queue you can no longer act on
+    // is exactly the dead link OPS-NAV-REVIEW-QUEUES was written to avoid.
+    const reportItem = API_NAV_ITEMS.find((entry) => entry.href === REPORT_REVIEW_PATH)!;
+    expect(grants(["view_user_notes"], reportItem.permissions[0]!)).toBe(false);
+    expect(grants(["learner_ops_report_review"], reportItem.permissions[0]!)).toBe(true);
   });
 });

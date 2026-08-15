@@ -262,6 +262,37 @@ export const AFFILIATE_LEADS_PATH = "/api/crm/v1/affiliates/leads";
 export const AFFILIATE_LEAD_DETAIL_PATH = "/api/crm/v1/affiliates/leads/:leadId";
 export const AFFILIATE_LEAD_REVEAL_PATH = "/api/crm/v1/affiliates/leads/:leadId/reveal";
 
+/**
+ * LEARNER-OPERATIONS-V1 — the operational department's backend surface.
+ *
+ * Every path is explicit. The allowlist is deliberately NOT a prefix wildcard
+ * like `/api/crm/v1/learner-ops/:path*`: a wildcard forwards routes that do not
+ * exist yet, including any a future backend adds without this repository
+ * reviewing them, and this file's whole purpose is that forwarding is a
+ * reviewed decision per path.
+ */
+export const LEARNER_OPS_CASES_PATH = "/api/crm/v1/learner-ops/cases";
+export const LEARNER_OPS_CASE_PATH = "/api/crm/v1/learner-ops/cases/:caseId";
+export const LEARNER_OPS_CASE_STATUS_PATH = "/api/crm/v1/learner-ops/cases/:caseId/status";
+export const LEARNER_OPS_CASE_ASSIGN_PATH = "/api/crm/v1/learner-ops/cases/:caseId/assign";
+export const LEARNER_OPS_CASE_PRIORITY_PATH = "/api/crm/v1/learner-ops/cases/:caseId/priority";
+export const LEARNER_OPS_CASE_MESSAGES_PATH = "/api/crm/v1/learner-ops/cases/:caseId/messages";
+export const LEARNER_OPS_CASE_NOTES_PATH = "/api/crm/v1/learner-ops/cases/:caseId/notes";
+export const LEARNER_OPS_CASE_EVENTS_PATH = "/api/crm/v1/learner-ops/cases/:caseId/events";
+export const LEARNER_OPS_CASE_ESCALATIONS_PATH = "/api/crm/v1/learner-ops/cases/:caseId/escalations";
+export const LEARNER_OPS_CASE_QA_PATH = "/api/crm/v1/learner-ops/cases/:caseId/qa";
+export const LEARNER_OPS_ESCALATION_RESOLVE_PATH =
+  "/api/crm/v1/learner-ops/escalations/:escalationId/resolve";
+export const LEARNER_OPS_LEARNER_PATH = "/api/crm/v1/learner-ops/learners/:userId";
+export const LEARNER_OPS_CONFIG_PATH = "/api/crm/v1/learner-ops/config";
+export const LEARNER_OPS_ANALYTICS_PATH = "/api/crm/v1/learner-ops/analytics";
+export const LEARNER_OPS_QA_PATH = "/api/crm/v1/learner-ops/qa";
+export const LEARNER_OPS_KNOWLEDGE_PATH = "/api/crm/v1/learner-ops/knowledge";
+export const LEARNER_OPS_KNOWLEDGE_DETAIL_PATH = "/api/crm/v1/learner-ops/knowledge/:slug";
+export const LEARNER_OPS_VOC_PATH = "/api/crm/v1/learner-ops/voc";
+export const LEARNER_OPS_VOC_DETAIL_PATH = "/api/crm/v1/learner-ops/voc/:signalId";
+export const LEARNER_OPS_VOC_CASES_PATH = "/api/crm/v1/learner-ops/voc/:signalId/cases";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -304,6 +335,26 @@ export const PROXIED_PATHS = [
   GROWTH_ACQUISITION_PATH,
   GROWTH_POCKET_CONVERSIONS_PATH,
   GROWTH_INGRESS_HEALTH_PATH,
+  LEARNER_OPS_CASES_PATH,
+  LEARNER_OPS_CASE_PATH,
+  LEARNER_OPS_CASE_STATUS_PATH,
+  LEARNER_OPS_CASE_ASSIGN_PATH,
+  LEARNER_OPS_CASE_PRIORITY_PATH,
+  LEARNER_OPS_CASE_MESSAGES_PATH,
+  LEARNER_OPS_CASE_NOTES_PATH,
+  LEARNER_OPS_CASE_EVENTS_PATH,
+  LEARNER_OPS_CASE_ESCALATIONS_PATH,
+  LEARNER_OPS_CASE_QA_PATH,
+  LEARNER_OPS_ESCALATION_RESOLVE_PATH,
+  LEARNER_OPS_LEARNER_PATH,
+  LEARNER_OPS_CONFIG_PATH,
+  LEARNER_OPS_ANALYTICS_PATH,
+  LEARNER_OPS_QA_PATH,
+  LEARNER_OPS_KNOWLEDGE_PATH,
+  LEARNER_OPS_KNOWLEDGE_DETAIL_PATH,
+  LEARNER_OPS_VOC_PATH,
+  LEARNER_OPS_VOC_DETAIL_PATH,
+  LEARNER_OPS_VOC_CASES_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

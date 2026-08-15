@@ -123,17 +123,25 @@ describe("api mode — /users is the one mountable route", () => {
     renderAt("/users", "api");
     await screen.findByRole("heading", { name: "Пользователи", level: 1 });
 
-    // OPS-NAV-REVIEW-QUEUES (POCKET-REG-INGRESS-1): the two review queues are
-    // offered to every authenticated employee — the reviewer boundary is the
-    // Backend's user-role rule, which the session cannot express — so the
-    // permissionless census is exactly these three. Permission-gated sections
-    // (Аффилейты, Growth) stay hidden without their grants.
+    // LEARNER-OPERATIONS-V1 narrowed this census from three entries to one.
+    //
+    // OPS-NAV-REVIEW-QUEUES offered both review queues to every authenticated
+    // employee because the reviewer boundary was a Backend user-role rule the
+    // session could not express. LO-AUTH-AXIS-1 gave it a name: the canonical
+    // gates now REQUIRE `learner_ops_report_review` / `learner_ops_mentor_review`
+    // in addition to the role check, so a session holding neither can no longer
+    // act on either queue — and a menu entry to a queue you cannot act on is
+    // the dead link that rule was written to avoid.
+    //
+    // So the permissionless census is exactly Пользователи. Everything else,
+    // including the review queues and the Learner Operations department, is now
+    // permission-gated.
     const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
     expect(
       within(nav)
         .getAllByRole("link")
         .map((link) => link.getAttribute("href")),
-    ).toEqual(["/users", "/report-review", "/mentor"]);
+    ).toEqual(["/users"]);
 
     const html = document.body.innerHTML;
     for (const section of ["Сегодня", "Аудит", "Финанс", "Задачи", "Кейсы", "Настройки", "Ментор", "Аналитика"]) {
@@ -161,13 +169,35 @@ describe("api mode — /users is the one mountable route", () => {
 });
 
 describe("api mode — every other route stays deferred", () => {
-  it.each(["/today", "/audit", "/financial", "/settings", "/support", "/tasks", "/cases", "/"])(
+  // `/support` and `/cases` LEFT this list in LEARNER-OPERATIONS-V1: they are
+  // now the department's real, backend-connected surfaces. Everything still
+  // named here has no backend and must continue to look like exactly that.
+  it.each(["/today", "/audit", "/financial", "/settings", "/tasks", "/"])(
     "%s renders the deferred state and no feature child",
     async (path) => {
       renderAt(path, "api");
       expect(await screen.findByText("Раздел ещё не подключён")).toBeInTheDocument();
       expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
       expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(["/cases", "/support"])(
+    "%s mounts the Learner Operations workspace, never the mock child",
+    async (path) => {
+      renderAt(path, "api");
+      // The workspace renders its own heading. The stub session in this suite
+      // carries no permissions, so it correctly shows the bounded
+      // permission-denied panel rather than an empty page — which is itself the
+      // §29 state this route must have.
+      // The stub session in this suite carries no permissions, so the workspace
+      // correctly renders its bounded permission-denied panel — which is itself
+      // the §29 state this route must have, and is proof the workspace mounted
+      // rather than the mock placeholder.
+      expect(await screen.findByText("Недоступно для вашей роли")).toBeInTheDocument();
+      expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+      // It must never fall through to the mock section placeholder.
+      expect(screen.queryByText("Раздел ещё не подключён")).not.toBeInTheDocument();
     },
   );
 
@@ -287,13 +317,13 @@ describe("api mode — the affiliate section", () => {
     await screen.findByRole("heading", { name: "Пользователи", level: 1 });
     const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
     expect(within(nav).queryByRole("link", { name: "Аффилейты" })).not.toBeInTheDocument();
-    // The permissionless census: Users plus the two review queues
-    // (OPS-NAV-REVIEW-QUEUES) — and nothing permission-gated.
+    // The permissionless census is now exactly Пользователи — see the note on
+    // the census assertion above for why the two review queues left it.
     expect(
       within(nav)
         .getAllByRole("link")
         .map((link) => link.getAttribute("href")),
-    ).toEqual(["/users", "/report-review", "/mentor"]);
+    ).toEqual(["/users"]);
   });
 
   it("renders the analytics denial for a session granted neither", async () => {

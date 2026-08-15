@@ -46,9 +46,11 @@ describe("effectivePermissions is the UI authority", () => {
     const session = sessionFromDto(ADMIN_ROLE_NO_PERMISSIONS);
     expect(session.role).toBe("crm_admin");
 
-    // The role-based matrix would grant all nine (AFD-5A appended
-    // view_affiliate_analytics). The session grants none.
-    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(9);
+    // The role-based matrix would grant all eighteen (AFD-5A appended
+    // view_affiliate_analytics, LEARNER-OPERATIONS-V1 appended its nine). The
+    // session grants none — which is the whole point: the count is incidental,
+    // the assertion below is the invariant.
+    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(18);
     for (const permission of ROLE_PERMISSIONS.crm_admin) {
       expect(sessionGrants(session, permission)).toBe(false);
     }

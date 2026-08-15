@@ -112,6 +112,15 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "manage_settings",
     "edit_user_notes",
     "view_affiliate_analytics",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_report_review",
+    "learner_ops_mentor_review",
+    "learner_ops_escalate",
+    "learner_ops_manage_queues",
+    "learner_ops_qa",
+    "learner_ops_analytics",
+    "learner_ops_admin",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -122,6 +131,12 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "view_audit",
     "edit_user_notes",
     "view_affiliate_analytics",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_escalate",
+    "learner_ops_manage_queues",
+    "learner_ops_qa",
+    "learner_ops_analytics",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -130,13 +145,30 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "assign_owner",
     "export",
     "edit_user_notes",
+    "learner_ops_view",
+    "learner_ops_handle",
   ],
-  mentor: [],
-  support: ["edit_user_notes"],
+  mentor: [
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_report_review",
+    "learner_ops_mentor_review",
+  ],
+  support: [
+    "edit_user_notes",
+    "learner_ops_view",
+    "learner_ops_handle",
+    "learner_ops_escalate",
+  ],
   moderator: [],
   // AFD-5A — analyst's first permission, mirroring the backend matrix. Read
   // only: no `manage_settings`, so every affiliate mutation is refused.
-  analyst: ["view_affiliate_analytics"],
+  analyst: [
+    "view_affiliate_analytics",
+    "learner_ops_analytics",
+  ],
   content_manager: [],
-  read_only: [],
+  read_only: [
+    "learner_ops_view",
+  ],
 };

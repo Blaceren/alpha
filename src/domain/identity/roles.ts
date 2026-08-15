@@ -153,7 +153,33 @@ export type Permission =
   | "curriculum_read"
   | "curriculum_author"
   | "curriculum_approve"
-  | "curriculum_source_authority";
+  | "curriculum_source_authority"
+  /**
+   * LEARNER-OPERATIONS-V1. The nine operational permissions.
+   *
+   * Unlike the four curriculum entries above, the CRM DOES read these for
+   * affordances — the Learner Operations workspace is a real client of this
+   * vocabulary. Every affordance they gate is still only an affordance: the
+   * backend re-checks the identical permission on every route, and hiding a
+   * button has never been a gate in this codebase.
+   *
+   * `learner_ops_report_review` and `learner_ops_mentor_review` are the two
+   * that matter most. They are the CRM half of LO-AUTH-AXIS-1: report-review
+   * and mentor-review authority used to live entirely on the backend's
+   * `User.role` axis, where no CRM screen could show who held it and no CRM
+   * administrator could take it away. They are required IN ADDITION to that
+   * role check, never instead of it, so naming them here narrows authority and
+   * can never widen it.
+   */
+  | "learner_ops_view"
+  | "learner_ops_handle"
+  | "learner_ops_report_review"
+  | "learner_ops_mentor_review"
+  | "learner_ops_escalate"
+  | "learner_ops_manage_queues"
+  | "learner_ops_qa"
+  | "learner_ops_analytics"
+  | "learner_ops_admin";
 
 /**
  * Compile-time proof that this union and the canonical cross-repository session

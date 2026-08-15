@@ -24,7 +24,7 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly forty rewrite definitions", () => {
+  it("produces exactly sixty rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
     // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
@@ -33,7 +33,7 @@ describe("rewrites — api mode", () => {
     // Pinning the count is the point: a new proxied path must be a deliberate
     // change to this number, never a side effect. It fired on the four added
     // below, which is the guard working, and it is updated in the same commit.
-    expect(buildRewrites(env)).toHaveLength(40);
+    expect(buildRewrites(env)).toHaveLength(60);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -57,7 +57,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the forty reviewed paths", () => {
+  it("exposes exactly the sixty reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -106,6 +106,30 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/growth/acquisition",
       "/api/crm/v1/growth/pocket-conversions",
       "/api/crm/v1/growth/ingress-health",
+      // LEARNER-OPERATIONS-V1 — twenty explicit paths, no prefix wildcard.
+      // A wildcard would forward routes that do not exist yet, including any a
+      // future backend adds without this repository reviewing them, which is
+      // the exact thing this allowlist exists to prevent.
+      "/api/crm/v1/learner-ops/cases",
+      "/api/crm/v1/learner-ops/cases/:caseId",
+      "/api/crm/v1/learner-ops/cases/:caseId/status",
+      "/api/crm/v1/learner-ops/cases/:caseId/assign",
+      "/api/crm/v1/learner-ops/cases/:caseId/priority",
+      "/api/crm/v1/learner-ops/cases/:caseId/messages",
+      "/api/crm/v1/learner-ops/cases/:caseId/notes",
+      "/api/crm/v1/learner-ops/cases/:caseId/events",
+      "/api/crm/v1/learner-ops/cases/:caseId/escalations",
+      "/api/crm/v1/learner-ops/cases/:caseId/qa",
+      "/api/crm/v1/learner-ops/escalations/:escalationId/resolve",
+      "/api/crm/v1/learner-ops/learners/:userId",
+      "/api/crm/v1/learner-ops/config",
+      "/api/crm/v1/learner-ops/analytics",
+      "/api/crm/v1/learner-ops/qa",
+      "/api/crm/v1/learner-ops/knowledge",
+      "/api/crm/v1/learner-ops/knowledge/:slug",
+      "/api/crm/v1/learner-ops/voc",
+      "/api/crm/v1/learner-ops/voc/:signalId",
+      "/api/crm/v1/learner-ops/voc/:signalId/cases",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -175,7 +199,21 @@ describe("rewrites — api mode", () => {
   it("uses one method-agnostic notes rewrite for GET and POST", () => {
     // Next rewrites do not vary by method; a method-specific variant would only
     // create two definitions to keep in sync.
-    expect(buildRewrites(env).filter((r) => r.source.endsWith("/notes"))).toHaveLength(1);
+    //
+    // The filter names the USER-notes path exactly rather than matching every
+    // source ending in `/notes`. LEARNER-OPERATIONS-V1 added a second,
+    // unrelated notes resource (`.../learner-ops/cases/:caseId/notes`), and a
+    // suffix match would have quietly turned this assertion into "how many
+    // notes-shaped resources exist" — a different question that happens to have
+    // had the same answer until now.
+    const rules = buildRewrites(env);
+    expect(rules.filter((r) => r.source === USER_NOTES_PATH)).toHaveLength(1);
+
+    // The same property, asserted separately for the Learner Operations
+    // resource: one definition, not one per method.
+    expect(
+      rules.filter((r) => r.source === "/api/crm/v1/learner-ops/cases/:caseId/notes"),
+    ).toHaveLength(1);
   });
 
   it("keeps the notes path terminal — exactly one userId segment and no child", () => {
@@ -310,6 +348,30 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/growth/acquisition",
       "/api/crm/v1/growth/pocket-conversions",
       "/api/crm/v1/growth/ingress-health",
+      // LEARNER-OPERATIONS-V1 — twenty explicit paths, no prefix wildcard.
+      // A wildcard would forward routes that do not exist yet, including any a
+      // future backend adds without this repository reviewing them, which is
+      // the exact thing this allowlist exists to prevent.
+      "/api/crm/v1/learner-ops/cases",
+      "/api/crm/v1/learner-ops/cases/:caseId",
+      "/api/crm/v1/learner-ops/cases/:caseId/status",
+      "/api/crm/v1/learner-ops/cases/:caseId/assign",
+      "/api/crm/v1/learner-ops/cases/:caseId/priority",
+      "/api/crm/v1/learner-ops/cases/:caseId/messages",
+      "/api/crm/v1/learner-ops/cases/:caseId/notes",
+      "/api/crm/v1/learner-ops/cases/:caseId/events",
+      "/api/crm/v1/learner-ops/cases/:caseId/escalations",
+      "/api/crm/v1/learner-ops/cases/:caseId/qa",
+      "/api/crm/v1/learner-ops/escalations/:escalationId/resolve",
+      "/api/crm/v1/learner-ops/learners/:userId",
+      "/api/crm/v1/learner-ops/config",
+      "/api/crm/v1/learner-ops/analytics",
+      "/api/crm/v1/learner-ops/qa",
+      "/api/crm/v1/learner-ops/knowledge",
+      "/api/crm/v1/learner-ops/knowledge/:slug",
+      "/api/crm/v1/learner-ops/voc",
+      "/api/crm/v1/learner-ops/voc/:signalId",
+      "/api/crm/v1/learner-ops/voc/:signalId/cases",
     ]);
     for (const forbidden of [
       "/api/:path*",

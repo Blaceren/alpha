@@ -188,11 +188,24 @@ describe("§11 — identity is by NAME, order is a separate protocol property", 
     // change any permission's meaning.
     expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("view_exact_financials")).toBe(0);
     expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("view_affiliate_analytics")).toBe(10);
-    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(11)).toEqual([
+    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(11, 15)).toEqual([
       "curriculum_read",
       "curriculum_author",
       "curriculum_approve",
       "curriculum_source_authority",
+    ]);
+    // LEARNER-OPERATIONS-V1 — appended at 15, after every historical entry, so
+    // no client that pinned the first fifteen positions changes meaning.
+    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15)).toEqual([
+      "learner_ops_view",
+      "learner_ops_handle",
+      "learner_ops_report_review",
+      "learner_ops_mentor_review",
+      "learner_ops_escalate",
+      "learner_ops_manage_queues",
+      "learner_ops_qa",
+      "learner_ops_analytics",
+      "learner_ops_admin",
     ]);
   });
 });

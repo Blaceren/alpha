@@ -19,6 +19,12 @@ import {
 } from "./api-shell";
 import { ReportReviewWorkspace, REPORT_REVIEW_PATH } from "@/features/report-review/report-review-workspace";
 import { MentorReviewWorkspace, MENTOR_REVIEW_PATH } from "@/features/mentor-review/mentor-review-workspace";
+import {
+  LearnerOpsWorkspace,
+  LEARNER_OPS_PATH,
+  LEARNER_OPS_SUPPORT_PATH,
+} from "@/features/learner-ops/inbox-workspace";
+import { CaseDetailWorkspace } from "@/features/learner-ops/case-detail-workspace";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
 import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace";
@@ -115,6 +121,46 @@ function ApiModeLanding() {
   // employee, and the REVIEWER boundary is decided by the Backend queue response
   // inside the workspace — a valid staff member who is not a reviewer gets a
   // bounded forbidden panel here, never an authentication loop.
+  // LEARNER-OPERATIONS-V1 — the department's own routes.
+  //
+  // The CASE DETAIL is matched BEFORE the queue, because `/cases` is a strict
+  // prefix of `/cases/{id}`. Testing the list first with a prefix match would
+  // swallow every detail route; testing it first with an exact match would work
+  // but leaves the ordering load-bearing for a reason nobody could see later,
+  // so the detail is simply matched first — the same discipline the affiliate
+  // lead/detail routes already follow.
+  const learnerOpsCase = pathname.match(/^\/cases\/([^/]+)$/);
+  if (learnerOpsCase) {
+    return (
+      <ApiShell session={session}>
+        <CaseDetailWorkspace caseId={decodeURIComponent(learnerOpsCase[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
+  // The unified operational inbox. It renders for any authenticated CRM
+  // employee and decides its own tabs from the session's permissions; every
+  // route behind those tabs is independently re-checked by the backend, so a
+  // staff member without the department's permissions gets a bounded panel
+  // rather than an authentication loop.
+  if (pathname === LEARNER_OPS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <LearnerOpsWorkspace />
+      </ApiShell>
+    );
+  }
+
+  // `/support` is the SAME queue filtered to learner requests, not a second
+  // product. Keeping the existing route meaningful beats minting a new one.
+  if (pathname === LEARNER_OPS_SUPPORT_PATH) {
+    return (
+      <ApiShell session={session}>
+        <LearnerOpsWorkspace surface="support" />
+      </ApiShell>
+    );
+  }
+
   if (pathname === REPORT_REVIEW_PATH) {
     return (
       <ApiShell session={session}>
