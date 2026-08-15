@@ -37,6 +37,7 @@
     "test:regression:pocket-security": "tsx scripts/regression/pocketPostbackSecurityRegression.ts",
     "ops:affiliate-fixture": "tsx scripts/ops/affiliateAcceptanceFixture.ts",
     "ops:affiliate-postback-worker": "tsx scripts/ops/runAffiliatePostbackWorker.ts",
+    "test:regression:affiliate-reg-no-commission": "tsx scripts/regression/affiliateRegNoCommissionRegression.ts",
     "test:regression:affiliate-commercial": "tsx scripts/regression/affiliatePlatformCommercialRegression.ts",
     "test:regression:affiliate-postback-security": "tsx scripts/regression/affiliatePostbackSecurityRegression.ts",
     "test:regression:affiliate-partner-auth": "tsx scripts/regression/affiliatePartnerAuthRegression.ts",
