@@ -63,6 +63,7 @@ import {
   StatusChip,
   TypeChip,
 } from "./primitives";
+import { CreateCaseForm } from "./create-case-form";
 
 export const LEARNER_OPS_PATH = "/cases";
 export const LEARNER_OPS_SUPPORT_PATH = "/support";
@@ -118,19 +119,47 @@ function useOutcome<T>(loader: () => Promise<Outcome<T>>, deps: React.Dependency
 /* ------------------------------------------------------------------ queue */
 
 function QueueSurface({ fixedType }: { fixedType?: string }) {
+  const { session } = useSession();
   const [filters, setFilters] = React.useState<QueueFilters>({
     assignment: "any",
     breached: "any",
     ...(fixedType ? { type: fixedType } : {}),
   });
+  const [creating, setCreating] = React.useState(false);
 
   const config = useOutcome(() => fetchConfig(), []);
   const queue = useOutcome(() => fetchQueue(filters), [JSON.stringify(filters)]);
 
   const cfg = config.state.kind === "ready" ? (config.state.data as LearnerOpsConfig) : null;
 
+  // The affordance is offered only to a principal that may actually create.
+  // The backend enforces the same permission on POST — hiding the button is a
+  // convenience, never the gate.
+  const canCreate = grants(session.effectivePermissions, "learner_ops_handle");
+
   return (
     <div className="space-y-4">
+      {canCreate ? (
+        creating ? (
+          <CreateCaseForm
+            config={cfg}
+            onCreated={() => {
+              setCreating(false);
+              queue.reload();
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            Создать кейс
+          </button>
+        )
+      ) : null}
+
       <Section
         title="Фильтры"
         action={

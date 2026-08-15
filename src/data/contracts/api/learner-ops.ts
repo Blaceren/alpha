@@ -248,12 +248,16 @@ export const learner360Schema = z.object({
       status: z.string(),
       curriculumCode: z.string(),
       curriculumStatus: z.string(),
+      curriculumVersionNumber: z.number(),
     }),
   ).nullable(),
   progression: sourced(
     z.object({
       completedLevels: z.number(),
+      /** The curriculum's level count — NOT the number of progress rows. */
       totalLevels: z.number(),
+      /** How many levels this learner has actually started. */
+      startedLevels: z.number(),
       currentLevel: z
         .object({ levelNumber: z.number(), title: z.string(), type: z.string() })
         .nullable(),

@@ -617,6 +617,12 @@ function Learner360Panel({ learner }: { learner: Learner360 }) {
             {learner.progression.value.completedLevels} из {learner.progression.value.totalLevels}{" "}
             уровней
           </div>
+          {/* Started is shown separately so "0 из 100" never has to double as
+              "has not begun" — they are different facts and an operator needs
+              both. */}
+          <div className="text-xs text-slate-500">
+            начато: {learner.progression.value.startedLevels}
+          </div>
           {learner.progression.value.currentLevel ? (
             <div className="text-xs text-slate-500">
               текущий: L{learner.progression.value.currentLevel.levelNumber}{" "}
