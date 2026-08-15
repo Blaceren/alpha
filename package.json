@@ -35,6 +35,7 @@
     "smoke:pocket-progression": "tsx scripts/smoke/pocketProgressionRegression.ts",
     "test:regression:withdrawal": "tsx scripts/regression/withdrawalSemanticsRegression.ts",
     "test:regression:pocket-security": "tsx scripts/regression/pocketPostbackSecurityRegression.ts",
+    "ops:affiliate-fixture": "tsx scripts/ops/affiliateAcceptanceFixture.ts",
     "ops:affiliate-postback-worker": "tsx scripts/ops/runAffiliatePostbackWorker.ts",
     "test:regression:affiliate-commercial": "tsx scripts/regression/affiliatePlatformCommercialRegression.ts",
     "test:regression:affiliate-postback-security": "tsx scripts/regression/affiliatePostbackSecurityRegression.ts",
