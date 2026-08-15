@@ -126,10 +126,19 @@ export async function GET(request: Request) {
           unresolvedRedepositsScope: "platform_wide_not_filtered",
         },
         firstDepositAmount: amounts,
+        // RDEP-AVAIL-2. This note used to say confirmed redeposits were
+        // "structurally zero until a provider event-identity contract exists" —
+        // a sentence that shipped in the SAME payload as a non-zero
+        // confirmedRedeposits count, because ATA now derives its own
+        // deterministic redeposit identity and counts them. It was the seventh
+        // and last home of that superseded premise, and the one that had become
+        // self-contradicting rather than merely stale. The clause about
+        // quarantined and identity-unresolved deliveries was and remains true,
+        // so it survives; only the false premise is removed.
         totalDepositAmountNote:
-          "Covers FIRST deposits only. Confirmed redeposits are structurally zero " +
-          "until a provider event-identity contract exists, and quarantined or " +
-          "identity-unresolved deliveries are never included in any monetary total.",
+          "Covers FIRST deposits only; redeposit amounts are reported separately " +
+          "and are never added to this total. Quarantined and identity-unresolved " +
+          "deliveries are never included in any monetary total.",
         prohibited: {
           currentBalance: "not_collected",
           profitAndLoss: "not_collected",

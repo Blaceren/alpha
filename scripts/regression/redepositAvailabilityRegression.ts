@@ -147,4 +147,53 @@ check("RDEP still requires DATE_TIME — the fix widened nothing else", () => {
   assert.match(source, /event_time_\$\{eventTime\.reason\}/, "no event time means no key");
 });
 
+check("RDEP-AVAIL-2 — no operator text may deny a capability the payload reports", () => {
+  // The seventh home of the superseded premise, and the only one that became
+  // SELF-CONTRADICTING: totalDepositAmountNote asserted "confirmed redeposits
+  // are structurally zero until a provider event-identity contract exists" in a
+  // response body that reported confirmedRedeposits: 4.
+  // COMMENTS STRIPPED FIRST. The file legitimately QUOTES the sentence it
+  // removed, inside the comment explaining the removal — a naive scan over the
+  // raw text finds that quotation and reports the opposite of the truth. This
+  // is the same false positive that bit the leak scanner and two earlier
+  // assertions in this phase, so it is designed out rather than rediscovered.
+  const route = readFileSync(
+    resolve(__dirname, "../../src/app/api/crm/v1/growth/pocket-conversions/route.ts"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const strings = [...route.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map((m) => m[1]).join(" ");
+  for (const banned of [
+    "structurally zero",
+    "provider event-identity contract",
+    "unique event identifier",
+    SUPERSEDED,
+  ]) {
+    assert.ok(
+      !strings.includes(banned),
+      `operator-facing text must not contain "${banned}"`,
+    );
+  }
+  // The clause that was TRUE must survive the rewrite.
+  assert.ok(
+    strings.includes("Quarantined and identity-unresolved"),
+    "the true clause about excluded deliveries must be retained",
+  );
+});
+
+check("INGRESS-TIME-1 — the coarse ingress label is documented, not silently wrong", () => {
+  const src = readFileSync(
+    resolve(__dirname, "../../src/lib/growth/pocket/ingress-payload.ts"),
+    "utf8",
+  );
+  assert.match(src, /INGRESS-TIME-1/, "the semantics must be documented at the call site");
+  assert.match(src, /no ABSOLUTE INSTANT could be derived/);
+  // And the canonical layer must keep its correct three-state model.
+  const canon = readFileSync(
+    resolve(__dirname, "../../src/lib/growth/pocket/redeposit-identity.ts"),
+    "utf8",
+  );
+  assert.match(canon, /local_only/);
+  assert.match(canon, /absolute_from_sender/);
+});
+
 console.log(`\n${passed}/${passed} assertions passed`);

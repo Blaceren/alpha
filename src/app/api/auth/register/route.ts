@@ -309,7 +309,17 @@ export async function POST(request: Request) {
         userId: created.id,
         attributionId,
         selection: attributionCandidate,
-        occurredAt: now,
+        // CONV-TIME-1. This was `now` — a clock read taken at the top of the
+        // handler, before the transaction opened. The row it writes declares
+        // sourceOwner=auth_register and sourceEventId=user:<id>, i.e. it names
+        // the User row as its source entity, so its instant must come from the
+        // value the database actually persisted. Measured on the first real
+        // attributed registration, the two were 11 ms apart, and this is the
+        // table a commission period is computed from.
+        //
+        // Same rule, same transaction, as the ata_reg emit below: the owner owns
+        // the instant, not the request clock.
+        occurredAt: created.createdAt,
       });
     }
 

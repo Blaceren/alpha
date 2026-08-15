@@ -206,6 +206,25 @@ export function parseProviderEventTime(raw: string | undefined | null): Provider
 
   const bounded = trimmed.slice(0, 64);
 
+  // INGRESS-TIME-1 — WHAT `unparseable` MEANS HERE, PRECISELY.
+  //
+  // It means "no ABSOLUTE INSTANT could be derived", NOT "these bytes are
+  // malformed". Pocket's real DATE_TIME is `YYYY-MM-DD HH:MM:SS` with no zone,
+  // so every genuine provider delivery lands here — 22 of them at the time of
+  // writing, all perfectly well-formed.
+  //
+  // THE STORED DATA IS CORRECT AND COMPLETE: the raw value is preserved verbatim
+  // in providerEventAtRaw and no instant is invented. Only the LABEL is coarse,
+  // and this enum has no third state available: the column is CHECK-constrained
+  // to ('absent','parsed','unparseable'), so widening it would cost a migration
+  // for a status that NO route and NO analytics query selects.
+  //
+  // THE CANONICAL LAYER IS THE ONE THAT DECIDES MONEY, AND IT IS RIGHT.
+  // PocketProviderEvent carries the full three-state model
+  // (absent / local_only / absolute_from_sender) through
+  // redeposit-identity.normaliseProviderEventTime, and records `local_only` for
+  // exactly the value this function calls unparseable. Do NOT reconcile the two
+  // by making this one claim an instant it does not have.
   if (!ISO_WITH_ZONE.test(bounded)) {
     return { status: "unparseable", at: null, raw: bounded };
   }
