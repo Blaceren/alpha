@@ -23,6 +23,8 @@
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { randomBase32Id } from "@/lib/affiliate/random-id";
+import { qualifyFirstDepositSafely } from "@/lib/affiliate/cpa/qualification";
+import { enqueueConversionPostbackSafely } from "@/lib/affiliate/postback/enqueue";
 import { emitGrowthEvent } from "@/lib/growth/emit";
 import { pocketPlayerSourceEventId } from "@/lib/growth/event-keys";
 import {
@@ -78,6 +80,20 @@ export type FirstDepositResult = {
   /** Present for every outcome that has a canonical row. */
   readonly providerEventId?: number;
   readonly conflictCode?: PocketConflictCode;
+  /**
+   * AFFILIATE-PLATFORM-V1. The conversion row a NEWLY RECORDED first deposit
+   * produced, and the only input the CPA qualifier takes.
+   *
+   * ABSENT ON A REPLAY, deliberately. A replayed delivery creates no conversion,
+   * so there is nothing new to qualify — and the qualifier is idempotent
+   * anyway, so this is a second guard rather than the only one.
+   */
+  readonly conversionEventId?: number;
+  /**
+   * What the CPA owner decided, when it was consulted. Recorded so that "this
+   * deposit produced no commission" is always answerable with a reason.
+   */
+  readonly cpaOutcome?: string;
 };
 
 export type PocketConflictCode =
@@ -140,7 +156,10 @@ export async function ingestPocketFirstDeposit(
   // aborted on SQLite while this code believed it had recovered.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await db.$transaction((tx) => applyDelivery(tx, input, account.userId));
+      const settled = await db.$transaction((tx) => applyDelivery(tx, input, account.userId));
+      // AFFILIATE-PLATFORM-V1 — the CPA question, asked only once the deposit
+      // itself is durable. See `qualifyDepositAfterCommit`.
+      return await qualifyDepositAfterCommit(settled, db, input.now);
     } catch (error) {
       if (attempt === 0 && isProviderEventCollision(error)) continue;
       throw error;
@@ -241,7 +260,7 @@ async function applyDelivery(
     select: { id: true },
   });
 
-  await emitFirstDepositConversion(tx, {
+  const conversion = await emitFirstDepositConversion(tx, {
     providerEventId: created.id,
     pocketPlayerId: input.pocketPlayerId,
     userId: clickUserId,
@@ -250,7 +269,11 @@ async function applyDelivery(
     occurredAt: input.now,
   });
 
-  return { outcome: "matched", providerEventId: created.id };
+  return {
+    outcome: "matched",
+    providerEventId: created.id,
+    conversionEventId: conversion.conversionEventId,
+  };
 }
 
 type ExistingEvent = {
@@ -450,7 +473,7 @@ export async function convergePendingEvent(
   //
   // `matchedAt` still records when the deposit became attributable — that is a
   // different fact and it keeps its own column.
-  await emitFirstDepositConversion(tx, {
+  const conversion = await emitFirstDepositConversion(tx, {
     providerEventId: event.id,
     pocketPlayerId: event.pocketPlayerId,
     userId: account.userId,
@@ -462,7 +485,11 @@ export async function convergePendingEvent(
     occurredAt: event.firstReceivedAt,
   });
 
-  return { outcome: "reconciled", providerEventId: event.id };
+  return {
+    outcome: "reconciled",
+    providerEventId: event.id,
+    conversionEventId: conversion.conversionEventId,
+  };
 }
 
 /**
@@ -496,7 +523,7 @@ export async function emitFirstDepositConversion(
     currency: PocketDepositCurrency;
     occurredAt: Date;
   },
-): Promise<void> {
+): Promise<{ conversionEventId: number }> {
   const attribution = await tx.affiliateAttribution.findUnique({
     where: { userId: input.userId },
     select: {
@@ -521,7 +548,7 @@ export async function emitFirstDepositConversion(
 
   const link = attribution?.selectedClick.trackingLink ?? null;
 
-  await tx.affiliateConversionEvent.create({
+  const conversion = await tx.affiliateConversionEvent.create({
     data: {
       eventId: randomBase32Id(),
       eventType: "first_deposit",
@@ -568,6 +595,47 @@ export async function emitFirstDepositConversion(
     currencyCode: input.currency.code,
     currencyStatus: input.currency.status,
   });
+
+  // AFFILIATE-PLATFORM-V1. The conversion row id, handed back so the CPA owner
+  // can be asked about it AFTER this transaction commits. It is deliberately
+  // not qualified here: see `qualifyDepositAfterCommit`.
+  return { conversionEventId: conversion.id };
+}
+
+/**
+ * AFFILIATE-PLATFORM-V1 §6/§40 — ask the CPA owner about a newly recorded first
+ * deposit, AFTER the deposit has committed.
+ *
+ * WHY IT IS NOT IN THE DEPOSIT TRANSACTION. A deposit is a fact about a
+ * learner's money. A CPA qualification is a fact about ATA's contract with a
+ * third party. Enrolling the second in the first's transaction would mean a
+ * misconfigured campaign, an exhausted connection or a bug in commercial
+ * arithmetic could roll back a real deposit — turning an accounting problem
+ * into a customer-facing one. That is the same reasoning the growth projection
+ * and the registration reconciler already follow.
+ *
+ * WHY LOSING IT IS RECOVERABLE. `qualifyFirstDeposit` re-reads every fact from
+ * durable state and is keyed on UNIQUE(conversionEventId), so running it late,
+ * twice, or from an operator command reaches exactly the same answer. Nothing
+ * is lost by a failure here, only deferred.
+ *
+ * A REPLAY PASSES THROUGH UNCHANGED, because a replay produced no new
+ * conversion and therefore has no `conversionEventId` to qualify.
+ */
+export async function qualifyDepositAfterCommit(
+  result: FirstDepositResult,
+  db: Db,
+  now: Date = new Date(),
+): Promise<FirstDepositResult> {
+  if (result.conversionEventId === undefined) return result;
+  const cpa = await qualifyFirstDepositSafely(result.conversionEventId, now, db);
+  // AFFILIATE-PLATFORM-V1 §25 — and the partner's outbound notification, which
+  // is a THIRD independent concern. It is enqueued whether or not the CPA
+  // qualified: a partner is told about every attributed deposit, and whether
+  // ATA owes them a commission for it is a separate question with a separate
+  // owner. Its failures are swallowed for the same reason the CPA's are.
+  await enqueueConversionPostbackSafely(result.conversionEventId, now, db);
+  return { ...result, cpaOutcome: cpa.outcome };
 }
 
 /**
@@ -600,7 +668,10 @@ export async function reconcilePendingDepositsForPlayer(
 
   if (!pending) return { outcome: "unchanged_pending" };
 
-  return db.$transaction((tx) => convergePendingEvent(tx, pending.id, currency, now));
+  const settled = await db.$transaction((tx) =>
+    convergePendingEvent(tx, pending.id, currency, now),
+  );
+  return qualifyDepositAfterCommit(settled, db, now);
 }
 
 /**

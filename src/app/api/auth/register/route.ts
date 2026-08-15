@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { enqueueConversionPostbackSafely } from "@/lib/affiliate/postback/enqueue";
 import { NextResponse } from "next/server";
 import { toPublicUser } from "@/lib/auth";
 import {
@@ -304,8 +305,9 @@ export async function POST(request: Request) {
       attributionId = await freezeAttribution(tx, created.id, attributionCandidate, now);
     }
 
+    let regConversionEventId: number | null = null;
     if (attributionEnabled) {
-      await recordRegistrationConversion(tx, {
+      const regConversion = await recordRegistrationConversion(tx, {
         userId: created.id,
         attributionId,
         selection: attributionCandidate,
@@ -321,6 +323,7 @@ export async function POST(request: Request) {
         // the instant, not the request clock.
         occurredAt: created.createdAt,
       });
+      regConversionEventId = regConversion.conversionEventId;
     }
 
     // G4-GROWTH — the canonical ATA_REG event, for EVERY successful registration.
@@ -395,7 +398,7 @@ export async function POST(request: Request) {
       asOf: now,
     });
 
-    return { created, reward, bonus, attributionId, enrollment };
+    return { created, reward, bonus, attributionId, enrollment, regConversionEventId };
   });
 
   // THE REPLAY AND CONCURRENCY BOUNDARY.
@@ -433,6 +436,20 @@ export async function POST(request: Request) {
       if (isEnrollmentDomainError(retryError)) return enrollmentUnavailable(retryError, request);
       throw retryError;
     }
+  }
+
+  // AFFILIATE-PLATFORM-V1 §25/§39 — the partner's outbound REG notification.
+  //
+  // AFTER THE COMMIT, AND IT CANNOT FAIL THE REGISTRATION. A learner creating an
+  // account must never depend on a third party's HTTP endpoint, and enqueueing
+  // is idempotent per (conversion, endpoint, version), so a failure here is
+  // deferred rather than lost.
+  //
+  // ONLY FOR AN ATTRIBUTED REGISTRATION, because an unattributed one has no
+  // partner to tell. The enqueue owner reaches the same conclusion on its own
+  // and answers `unattributed`; this branch simply avoids asking.
+  if (committed.regConversionEventId !== null) {
+    await enqueueConversionPostbackSafely(committed.regConversionEventId, now, prisma);
   }
 
   const user = committed.created;

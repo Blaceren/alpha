@@ -32,6 +32,26 @@
  * deferred-work closure, which found it by running the suites and attributing
  * every failure rather than accepting a red suite as normal.
  *
+ * AFFILIATE-PLATFORM-V1: 49 -> 50. ONE migration for the whole platform wave,
+ * `20260815000000_affiliate_platform_v1`, deliberately not four: the five
+ * capabilities it adds are not independent — a partner human must exist before
+ * a tracking link can name one as its author, a terms version before a
+ * qualification can point at one, a qualification before a commission can be
+ * what it produced. Splitting them would create intermediate states in which a
+ * foreign key names a table that is not there yet.
+ *
+ * It creates seven tables (AffiliatePartnerUser, AffiliateCampaignTerms,
+ * AffiliateCpaQualification, AffiliateCommission, AffiliatePostbackEndpoint,
+ * AffiliatePostbackDelivery, AffiliatePostbackAttempt) and rebuilds two:
+ * AffiliateTrackingLink, so `createdByUserId` may be NULL when a PARTNER
+ * created the link and a CHECK requires exactly one of the two creator axes;
+ * and AffiliateConversionEvent, so `redeposit`/`pocket_redeposit` join the
+ * vocabulary and the money CHECK covers both deposit families.
+ *
+ * IT CREATES NO MONEY. Not one commission, not one qualification, no backfill
+ * of any kind for the conversions that already exist — §34 of the brief, obeyed
+ * literally. Both rebuilds copy every existing row column-for-column.
+ *
  * POCKET-DEP-RDEP-FINANCIAL-INGRESS-1: 48 -> 49. One migration,
  * `20260814120000_pocket_redeposit_financial_event`, which rebuilds
  * PocketProviderEvent to carry redeposits: it widens `eventType` to
@@ -86,7 +106,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 49;
+export const EXPECTED_MIGRATION_COUNT = 50;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

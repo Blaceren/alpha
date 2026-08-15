@@ -261,10 +261,10 @@ export async function recordRegistrationConversion(
     selection: AcquisitionSelection | null;
     occurredAt: Date;
   },
-): Promise<void> {
+): Promise<{ conversionEventId: number }> {
   const attributed = input.attributionId !== null && input.selection !== null;
 
-  await tx.affiliateConversionEvent.create({
+  const created = await tx.affiliateConversionEvent.create({
     data: {
       eventId: randomBase32Id(),
       eventType: "academy_registration",
@@ -285,6 +285,12 @@ export async function recordRegistrationConversion(
     },
     select: { id: true },
   });
+
+  // AFFILIATE-PLATFORM-V1 §25/§39. The conversion row id, handed back so the
+  // partner's outbound REG notification can be enqueued AFTER this transaction
+  // commits. It is deliberately not enqueued here: an outbound delivery must
+  // never be able to roll back a registration.
+  return { conversionEventId: created.id };
 }
 
 /**

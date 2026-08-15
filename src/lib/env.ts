@@ -29,6 +29,15 @@ import {
   resolveAttributionConfig,
 } from "@/lib/affiliate/attribution-config";
 import {
+  AFFILIATE_CPA_QUALIFICATION_ENABLED_KEY,
+  AFFILIATE_PLATFORM_ENABLED_KEY,
+  AFFILIATE_POSTBACK_DELIVERY_ENABLED_KEY,
+  PARTNER_SESSION_SECRET_KEY,
+  describePartnerSessionSecretRejection,
+  resolvePartnerPlatformConfig,
+} from "@/lib/affiliate/platform-config";
+import { AFFILIATE_POSTBACK_TEST_HOST_ALLOW_KEY } from "@/lib/affiliate/postback/destination";
+import {
   AFFILIATE_GO_IP_LIMIT_KEY,
   AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY,
   AFFILIATE_GO_LINK_LIMIT_KEY,
@@ -114,6 +123,16 @@ const OPTIONAL_ENV = [
   AFFILIATE_GO_IP_LIMIT_KEY,
   AFFILIATE_GO_LINK_LIMIT_KEY,
   AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY,
+  // AFFILIATE-PLATFORM-V1 §36 — three switches, each absent-means-off, and the
+  // partner session secret they oblige. Absence is the safe default for all
+  // four: a deployment that has not been given a partner signing secret must
+  // not be minting partner sessions, and one that has not been asked to create
+  // commercial money must not create any.
+  AFFILIATE_PLATFORM_ENABLED_KEY,
+  AFFILIATE_CPA_QUALIFICATION_ENABLED_KEY,
+  AFFILIATE_POSTBACK_DELIVERY_ENABLED_KEY,
+  PARTNER_SESSION_SECRET_KEY,
+  AFFILIATE_POSTBACK_TEST_HOST_ALLOW_KEY,
 ] as const;
 
 const envSchema = z.object({
@@ -207,6 +226,13 @@ const envSchema = z.object({
   [AFFILIATE_GO_IP_LIMIT_KEY]: z.string().regex(/^\d+$/).optional(),
   [AFFILIATE_GO_LINK_LIMIT_KEY]: z.string().regex(/^\d+$/).optional(),
   [AFFILIATE_GO_LIMIT_WINDOW_SECONDS_KEY]: z.string().regex(/^\d+$/).optional(),
+  [AFFILIATE_PLATFORM_ENABLED_KEY]: z.enum(["true", "false"]).optional(),
+  [AFFILIATE_CPA_QUALIFICATION_ENABLED_KEY]: z.enum(["true", "false"]).optional(),
+  [AFFILIATE_POSTBACK_DELIVERY_ENABLED_KEY]: z.enum(["true", "false"]).optional(),
+  // `z.string()` only. Its CONTENT is judged by `resolvePartnerPlatformConfig`,
+  // which never quotes the value in a message.
+  [PARTNER_SESSION_SECRET_KEY]: z.string().optional(),
+  [AFFILIATE_POSTBACK_TEST_HOST_ALLOW_KEY]: z.string().optional(),
 });
 
 export type RuntimeEnvCheck = {
@@ -307,6 +333,23 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     const resolution = resolveAttributionConfig(env);
     if (resolution.kind === "invalid") {
       errors.push(describeAttributionConfigRejection(resolution.reason));
+    }
+  }
+
+  // AFFILIATE-PLATFORM-V1 §36 — the same rule, for the same reason, applied to
+  // the partner platform: asking for it obliges the deployment to be able to
+  // sign a partner session, and a half-enabled platform — a console that
+  // answers and a session cookie anyone can forge — is not a state worth
+  // booting into.
+  //
+  // THE SECRET MUST ALSO NOT BE ANY OTHER SECRET. §30 forbids reusing
+  // POSTBACK_SECRET, SESSION_SECRET or ATTRIBUTION_TOKEN_SECRET for partner
+  // signing, and the resolver refuses each of them by constant-time comparison
+  // rather than by asking an operator to remember.
+  {
+    const resolution = resolvePartnerPlatformConfig(env);
+    if (resolution.kind === "invalid") {
+      errors.push(describePartnerSessionSecretRejection(resolution.reason));
     }
   }
 

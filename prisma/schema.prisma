@@ -204,6 +204,11 @@ model User {
   affiliatePartnersCreated      AffiliatePartner[]         @relation("AffiliatePartnerCreator")
   affiliateCampaignsCreated     AffiliateCampaign[]        @relation("AffiliateCampaignCreator")
   affiliateTrackingLinksCreated AffiliateTrackingLink[]    @relation("AffiliateTrackingLinkCreator")
+  /// AFFILIATE-PLATFORM-V1. Back-references only. A staff `User` can CREATE a
+  /// partner login and PRICE a campaign; it never becomes one and never gains a
+  /// partner session — the partner principal is a physically separate table.
+  affiliatePartnerUsersCreated  AffiliatePartnerUser[]     @relation("AffiliatePartnerUserCreator")
+  affiliateCampaignTermsCreated AffiliateCampaignTerms[]   @relation("AffiliateCampaignTermsCreator")
   /// AFD-3B2. Optional and at most one: a learner either was acquired through an
   /// affiliate or was not, and the answer is frozen at registration.
   affiliateAttribution          AffiliateAttribution?      @relation("UserAffiliateAttribution")
@@ -1463,6 +1468,19 @@ enum AffiliateConversionEventType {
   /// AFD-4. At most one per Pocket player, emitted only once the deposit's
   /// Pocket identity has been legally bound by a trusted `goal=reg`.
   first_deposit
+  /// AFFILIATE-PLATFORM-V1 §41. Every canonical redeposit after the FTD.
+  ///
+  /// IT IS A STATISTIC AND A POSTBACK, AND IT IS NOT A CPA EVENT. The
+  /// qualification owner accepts `first_deposit` and nothing else, so this
+  /// value cannot reach a commission however it is produced. It exists because
+  /// a partner is owed the truth about redeposit volume, not because a
+  /// redeposit earns anything.
+  ///
+  /// WHY IT WAS ABSENT UNTIL NOW. The financial phase closed with redeposits as
+  /// canonical PocketProviderEvent rows and Growth `rdep` events, and refused to
+  /// invent an affiliate conversion type it had no partner-facing consumer for.
+  /// This phase builds that consumer, so the type is added WITH its reader.
+  redeposit
 }
 
 /// AFD-4 — whether a money-bearing conversion knows its unit.
@@ -1483,6 +1501,13 @@ enum AffiliateConversionSourceOwner {
   /// AFD-4. Its `sourceEventId` names a PocketProviderEvent ROW, never a Pocket
   /// player or click id, so no provider identifier reaches the ledger's key.
   pocket_first_deposit
+  /// AFFILIATE-PLATFORM-V1. Same rule as `pocket_first_deposit`: the
+  /// `sourceEventId` names the canonical PocketProviderEvent ROW for the
+  /// redeposit, never the ATA-derived provider key and never a Pocket player.
+  /// A redeposit's canonical row is already unique per derived key (migration
+  /// 49's partial index), so keying on the row id inherits that uniqueness
+  /// without republishing a provider identifier into the affiliate ledger.
+  pocket_redeposit
 }
 
 /// The server-owned logical destination of a tracking link. A KEY, never a URL:
@@ -1509,6 +1534,13 @@ model AffiliatePartner {
   campaigns                    AffiliateCampaign[]
   trackingLinks                AffiliateTrackingLink[]
   conversionEvents             AffiliateConversionEvent[]
+  /// AFFILIATE-PLATFORM-V1 — the humans who may sign in for this partner, the
+  /// money it has earned, and where its conversions are delivered.
+  partnerUsers                 AffiliatePartnerUser[]
+  cpaQualifications            AffiliateCpaQualification[]
+  commissions                  AffiliateCommission[]
+  postbackEndpoints            AffiliatePostbackEndpoint[]
+  postbackDeliveries           AffiliatePostbackDelivery[]
 
   @@index([status, createdAt])
   @@index([createdAt])
@@ -1532,6 +1564,10 @@ model AffiliateCampaign {
   createdBy          User                       @relation("AffiliateCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   trackingLinks      AffiliateTrackingLink[]
   conversionEvents   AffiliateConversionEvent[]
+  /// AFFILIATE-PLATFORM-V1 §9/§10 — this campaign IS the commercial owner, and
+  /// these are its priced versions. Append-only; at most one is `active`.
+  commercialTerms    AffiliateCampaignTerms[]
+  cpaQualifications  AffiliateCpaQualification[]
 
   @@unique([affiliatePartnerId, code])
   /// Composite target for the tracking-link FK that proves a link and its
@@ -1562,16 +1598,32 @@ model AffiliateTrackingLink {
   sub5Parameter          String?
   /// Null inherits AffiliatePartner.defaultAttributionWindowDays.
   attributionWindowDays  Int?
-  createdByUserId        Int
+  /// The STAFF `User` who created this link, when staff created it.
+  ///
+  /// NULLABLE SINCE AFFILIATE-PLATFORM-V1, and the change is deliberate. A link
+  /// a partner created for itself has no accountable ATA employee, and naming
+  /// one — the staff member who happened to create the partner login, say —
+  /// would be a false authorship claim in the table an operator consults when
+  /// asking who published a public acquisition URL. Exactly one of the two
+  /// creator columns is non-null, enforced by a CHECK constraint.
+  createdByUserId        Int?
   createdAt              DateTime                    @default(now())
   updatedAt              DateTime                    @updatedAt
   archivedAt             DateTime?
   partner                AffiliatePartner            @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   campaign               AffiliateCampaign?          @relation(fields: [affiliateCampaignId, affiliatePartnerId], references: [id, affiliatePartnerId], onDelete: Restrict, onUpdate: Cascade)
-  createdBy              User                        @relation("AffiliateTrackingLinkCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy              User?                       @relation("AffiliateTrackingLinkCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   clicks                 AffiliateClick[]
   conversionEvents       AffiliateConversionEvent[]
+  /// AFFILIATE-PLATFORM-V1 §20 — a link may now be created by a PARTNER human
+  /// rather than by staff. Exactly one of the two creator axes is set, enforced
+  /// by a CHECK constraint in migration50: a link with neither creator has no
+  /// accountable author, and a link with both is a contradiction.
+  createdByPartnerUserId Int?
+  createdByPartnerUser   AffiliatePartnerUser?       @relation("AffiliateTrackingLinkPartnerCreator", fields: [createdByPartnerUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cpaQualifications      AffiliateCpaQualification[]
 
+  @@index([createdByPartnerUserId])
   @@index([affiliatePartnerId, status, createdAt])
   @@index([affiliateCampaignId, status, createdAt])
   @@index([status, createdAt])
@@ -1657,6 +1709,10 @@ model AffiliateAttribution {
   conversionEvents   AffiliateConversionEvent[]
   /// G4-GROWTH. Growth events carrying the frozen acquisition answer.
   growthEvents       GrowthEvent[]                       @relation("GrowthEventAttribution")
+  /// AFFILIATE-PLATFORM-V1 §15 — the qualifications that READ this frozen
+  /// answer. They never write it: attribution is decided at registration and a
+  /// deposit resolves it, so this relation only ever grows.
+  cpaQualifications  AffiliateCpaQualification[]
 
   @@index([selectedClickId])
   @@index([selectedAt])
@@ -1708,6 +1764,10 @@ model AffiliateConversionEvent {
   partner                        AffiliatePartner?                  @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   campaign                       AffiliateCampaign?                 @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   trackingLink                   AffiliateTrackingLink?             @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// AFFILIATE-PLATFORM-V1. At most one qualification (first_deposit only), and
+  /// any number of outbound deliveries — one per endpoint version.
+  cpaQualification               AffiliateCpaQualification?
+  postbackDeliveries             AffiliatePostbackDelivery[]
 
   @@unique([eventType, sourceOwner, sourceEventId])
   @@index([eventType, occurredAt])
@@ -1715,6 +1775,355 @@ model AffiliateConversionEvent {
   @@index([affiliateCampaignId, occurredAt])
   @@index([trackingLinkId, occurredAt])
   @@index([userId, occurredAt])
+}
+
+// ============================================================================
+// AFFILIATE PLATFORM V1 — partner principal, commercial terms, CPA, outbound
+// ============================================================================
+
+/// Whether a partner human may sign in. Two values, because V1 owns exactly two
+/// facts: staff created this login, and staff can stop it. There is no
+/// `invited`, no `pending` and no `locked` — none of them has an owner yet, and
+/// a state nothing can leave is worse than a state that does not exist.
+enum AffiliatePartnerUserStatus {
+  active
+  disabled
+}
+
+/// The lifecycle of one COMMERCIAL TERMS VERSION.
+///
+/// A version is never edited. Changing the CPA supersedes the current row and
+/// writes a new one, which is what makes §11 structural rather than a promise:
+/// there is no UPDATE path that could reach the amount a past commission was
+/// computed from.
+enum AffiliateCommercialTermsStatus {
+  active
+  superseded
+}
+
+/// Whether a partner's outbound destination may be delivered to. `disabled`
+/// stops future delivery and terminates pending ones; it never erases the
+/// deliveries that already happened.
+enum AffiliatePostbackEndpointStatus {
+  active
+  disabled
+}
+
+/// The state of ONE LOGICAL DELIVERY — one conversion to one endpoint version.
+///
+/// `failed_retryable` and `failed_terminal` are separate because the difference
+/// decides whether a worker will ever touch the row again, and an operator
+/// looking at a failure needs to know that without reading retry arithmetic.
+enum AffiliatePostbackDeliveryStatus {
+  pending
+  delivered
+  failed_retryable
+  failed_terminal
+}
+
+/// What happened on ONE ATTEMPT. Bounded vocabulary: an attempt records a
+/// CLASS, never a provider message, because an arbitrary remote string is
+/// exactly what should not be persisted or rendered.
+enum AffiliatePostbackAttemptOutcome {
+  delivered
+  http_4xx
+  http_5xx
+  http_other
+  timeout
+  connect_error
+  dns_error
+  blocked_destination
+  too_many_redirects
+  response_too_large
+  endpoint_disabled
+}
+
+/// AFFILIATE-PLATFORM-V1 §17 — a HUMAN who may sign in on behalf of one partner.
+///
+/// THIS IS NOT THE PARTNER. `AffiliatePartner` is a commercial counterparty;
+/// this is a login. Fusing them is the mistake that makes "disable the partner"
+/// and "revoke this person's access" the same button, and makes a second person
+/// at the same partner impossible to represent.
+///
+/// IT IS ALSO NOT A `User`. The learner/staff `User` table carries the Academy
+/// session, the CRM StaffProfile axis, XP, enrolments and progression. A partner
+/// principal that lived there would inherit every one of those relations and
+/// would be one `role` column away from reaching the Academy. The separation is
+/// physical.
+///
+/// MEMBERSHIP IS THE FK. V1 is one principal, one partner. `affiliatePartnerId`
+/// IS the membership, and every partner-scoped query derives its tenant from
+/// the SESSION's principal — never from a request parameter.
+model AffiliatePartnerUser {
+  id                 Int                        @id @default(autoincrement())
+  /// Server-generated, 160-bit, URL-safe. The API never exposes the integer id.
+  publicId           String                     @unique
+  affiliatePartnerId Int
+  /// Lowercased and trimmed by the only writer. Globally unique, not unique per
+  /// partner: an email addresses one human, and the same address signing in to
+  /// two partners would make "which tenant am I" a question the login cannot
+  /// answer.
+  email              String                     @unique
+  /// bcrypt, cost 10 — the same construction and cost the learner credential
+  /// uses. Never selected by any read path that reaches a response.
+  passwordHash       String
+  displayName        String
+  status             AffiliatePartnerUserStatus @default(active)
+  /// Bumped by a password change or a forced sign-out, and carried inside the
+  /// session token. A stale token then fails signature-independent validation,
+  /// so "log everyone out" does not need a session table.
+  sessionEpoch       Int                        @default(1)
+  /// The staff `User` who created this login. Restrict, so the human who
+  /// granted partner access cannot be deleted out from under the record.
+  createdByUserId    Int
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  lastLoginAt        DateTime?
+  passwordUpdatedAt  DateTime?
+  disabledAt         DateTime?
+  partner            AffiliatePartner           @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy          User                       @relation("AffiliatePartnerUserCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdTrackingLinks AffiliateTrackingLink[]  @relation("AffiliateTrackingLinkPartnerCreator")
+  createdEndpoints   AffiliatePostbackEndpoint[] @relation("AffiliatePostbackEndpointCreator")
+
+  @@index([affiliatePartnerId, status])
+  @@index([createdByUserId])
+}
+
+/// AFFILIATE-PLATFORM-V1 §10 — the CPA configuration, as an APPEND-ONLY VERSION.
+///
+/// ONE ACTIVE VERSION PER CAMPAIGN, enforced by a PARTIAL UNIQUE INDEX created
+/// in migration50 (Prisma cannot express `WHERE status = 'active'`). Application
+/// code that forgot to supersede would therefore fail the write rather than
+/// leave a campaign with two live prices.
+///
+/// THE AMOUNT IS TEXT. `500` and `500.00` are the same money and different
+/// strings, so the writer canonicalises before storing, exactly as the deposit
+/// amount owner does. It is never a float: this column is multiplied by nothing
+/// and summed only by callers that group by currency.
+model AffiliateCampaignTerms {
+  id                  Int                            @id @default(autoincrement())
+  publicId            String                         @unique
+  affiliateCampaignId Int
+  /// Monotonic per campaign, starting at 1. It is the human-legible name of a
+  /// price, and a qualification records it so an operator never has to date-join
+  /// to answer "which price was this".
+  version             Int
+  /// Canonical decimal TEXT. The CPA ATA pays, and NEVER the provider deposit
+  /// amount — see AffiliateCommission.
+  cpaAmount           String
+  /// ISO-4217, uppercase, REQUIRED. Deliberately not nullable and never
+  /// defaulted: the provider's deposit currency is `unspecified` in every live
+  /// row, and a commission whose unit was also unknown would be unpayable.
+  /// ATA chooses what it pays in, so ATA always knows.
+  cpaCurrency         String
+  status              AffiliateCommercialTermsStatus  @default(active)
+  effectiveFrom       DateTime
+  createdByUserId     Int
+  createdAt           DateTime                       @default(now())
+  supersededAt        DateTime?
+  campaign            AffiliateCampaign              @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User                           @relation("AffiliateCampaignTermsCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  qualifications      AffiliateCpaQualification[]
+
+  @@unique([affiliateCampaignId, version])
+  @@index([affiliateCampaignId, status])
+  @@index([createdByUserId])
+}
+
+/// AFFILIATE-PLATFORM-V1 §14 — WHY a conversion earned a commission.
+///
+/// Distinct from the FTD on purpose. The FTD is a fact about a learner's money;
+/// this is a fact about a commercial agreement, and it answers questions the
+/// deposit cannot: which partner, under which terms version, at what rate, at
+/// what moment the rule fired.
+///
+/// UNIQUE(conversionEventId) IS THE WHOLE INVARIANT. Retry, concurrency, a
+/// replayed provider delivery and a second worker all collide on it, in the
+/// database, and no application path can talk its way past it.
+///
+/// A ROW EXISTS ONLY WHEN EVERY COMMERCIAL PRECONDITION HELD: an attributed
+/// first_deposit, a partner, a campaign and an ACTIVE terms version. An
+/// unattributed deposit produces NO row — not a row with nulls — because §6
+/// says the financial event stays valid and no partner may be guessed.
+model AffiliateCpaQualification {
+  id                     Int                      @id @default(autoincrement())
+  publicId               String                   @unique
+  /// The qualifying conversion. UNIQUE — one FTD, one qualification, forever.
+  conversionEventId      Int                      @unique
+  affiliatePartnerId     Int
+  affiliateCampaignId    Int
+  attributionId          Int
+  trackingLinkId         Int?
+  /// The terms VERSION ROW that applied. Restrict: a price a commission was
+  /// computed from cannot be deleted.
+  termsId                Int
+  /// …and the values it carried, copied. Two independent guarantees against a
+  /// retroactive rewrite: the version cannot change, and this copy is not a join.
+  termsVersionSnapshot   Int
+  cpaAmountSnapshot      String
+  cpaCurrencySnapshot    String
+  affiliateCodeSnapshot  String
+  campaignCodeSnapshot   String
+  /// When the COMMERCIAL RULE fired. Not when the deposit happened — the
+  /// conversion owns that — and not a period boundary either surface may assume.
+  qualifiedAt            DateTime
+  createdAt              DateTime                 @default(now())
+  conversionEvent        AffiliateConversionEvent @relation(fields: [conversionEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner                AffiliatePartner         @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  campaign               AffiliateCampaign        @relation(fields: [affiliateCampaignId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attribution            AffiliateAttribution     @relation(fields: [attributionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trackingLink           AffiliateTrackingLink?   @relation(fields: [trackingLinkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  terms                  AffiliateCampaignTerms   @relation(fields: [termsId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  commission             AffiliateCommission?
+
+  @@index([affiliatePartnerId, qualifiedAt])
+  @@index([affiliateCampaignId, qualifiedAt])
+  @@index([termsId])
+}
+
+/// AFFILIATE-PLATFORM-V1 §13 — ONE EARNED PARTNER LIABILITY.
+///
+/// THE NARROWEST DURABLE V1, AND NOTHING MORE. There is no status column, no
+/// approval, no reversal, no hold, no payout reference and no settlement date,
+/// because no owner in this product has authority over any of them. §13 is
+/// explicit that inventing an approval workflow without authority is worse than
+/// leaving the concept out. A row here means exactly: ATA owes this partner this
+/// amount, for this qualification.
+///
+/// `amount` IS A COPY OF THE CPA SNAPSHOT, NOT THE DEPOSIT. A 500 deposit under
+/// 120 CPA terms produces 120 here. The deposit amount lives on the conversion,
+/// two joins away, and no query in this platform substitutes one for the other.
+model AffiliateCommission {
+  id                 Int                       @id @default(autoincrement())
+  publicId           String                    @unique
+  /// UNIQUE — one qualification can be the source of at most one liability.
+  qualificationId    Int                       @unique
+  affiliatePartnerId Int
+  amount             String
+  currencyCode       String
+  createdAt          DateTime                  @default(now())
+  qualification      AffiliateCpaQualification @relation(fields: [qualificationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner            AffiliatePartner          @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([affiliatePartnerId, createdAt])
+}
+
+/// AFFILIATE-PLATFORM-V1 §26 — where a partner wants its conversions delivered.
+///
+/// ONE ENDPOINT PER PARTNER PER EVENT TYPE. A partner that wanted two consumers
+/// of the same event would need a fan-out owner, retry semantics per consumer
+/// and a way to say which one failed; none of that exists, so V1 represents one.
+///
+/// `urlTemplate` IS UNTRUSTED INPUT and is validated twice: at configuration
+/// time (shape, scheme, macro vocabulary) and again at delivery time (DNS and
+/// address family, on every attempt and after every redirect). Storing a
+/// validated string is not a safety property — the address it resolves to can
+/// change between the two moments.
+///
+/// `signingSecret` IS REVEALED EXACTLY ONCE, at creation or rotation, and by no
+/// read path afterwards. It is generated server-side; a partner cannot choose
+/// it, so it cannot be a password they reused.
+model AffiliatePostbackEndpoint {
+  id                     Int                             @id @default(autoincrement())
+  publicId               String                          @unique
+  affiliatePartnerId     Int
+  eventType              AffiliateConversionEventType
+  /// The macro template. Only names in the closed vocabulary are accepted, and
+  /// an unknown `{macro}` is a CONFIGURATION REJECTION, never a literal that
+  /// silently ships to the partner's server.
+  urlTemplate            String
+  /// Bumped whenever `urlTemplate` changes. It is half the delivery idempotency
+  /// key: re-pointing an endpoint legitimately produces a NEW logical delivery
+  /// for a conversion already delivered to the OLD address, and neither
+  /// duplicates the other.
+  version                Int                             @default(1)
+  status                 AffiliatePostbackEndpointStatus @default(active)
+  /// 256 CSPRNG bits. Never returned by any endpoint after the one-time reveal,
+  /// never written to a log, never included in an audit payload.
+  signingSecret          String
+  secretVersion          Int                             @default(1)
+  secretRotatedAt        DateTime?
+  createdByPartnerUserId Int
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+  disabledAt             DateTime?
+  partner                AffiliatePartner                @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy              AffiliatePartnerUser            @relation("AffiliatePostbackEndpointCreator", fields: [createdByPartnerUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  deliveries             AffiliatePostbackDelivery[]
+
+  @@unique([affiliatePartnerId, eventType])
+  @@index([status])
+  @@index([createdByPartnerUserId])
+}
+
+/// AFFILIATE-PLATFORM-V1 §27 — ONE LOGICAL DELIVERY.
+///
+/// UNIQUE(conversionEventId, endpointId, endpointVersion) is the idempotency
+/// §27 asks for, stated in the only place that can enforce it. A duplicated
+/// worker, a concurrent worker and a manual re-run all collide here. Retries
+/// add ATTEMPT rows; they never add delivery rows.
+///
+/// IT IS WRITTEN OUTSIDE THE CONVERSION TRANSACTION, DELIBERATELY. §28 requires
+/// conversion truth to commit independently of delivery, so the enqueue is a
+/// separate, idempotent, failure-swallowing step. A conversion that committed
+/// with no delivery row is recoverable — a reconciler can see it — whereas a
+/// conversion rolled back because a partner's URL was slow is not.
+model AffiliatePostbackDelivery {
+  id                 Int                             @id @default(autoincrement())
+  publicId           String                          @unique
+  conversionEventId  Int
+  endpointId         Int
+  /// The endpoint version this delivery is FOR, copied so the key stays stable
+  /// even after the endpoint is re-pointed.
+  endpointVersion    Int
+  affiliatePartnerId Int
+  eventType          AffiliateConversionEventType
+  status             AffiliatePostbackDeliveryStatus @default(pending)
+  attemptCount       Int                             @default(0)
+  maxAttempts        Int
+  nextAttemptAt      DateTime?
+  lastAttemptAt      DateTime?
+  lastOutcome        AffiliatePostbackAttemptOutcome?
+  lastHttpStatus     Int?
+  deliveredAt        DateTime?
+  /// The resolved request URL, macros substituted. It carries the partner's own
+  /// tracking context and no ATA secret — the signature travels in a header, so
+  /// nothing here is a credential. Bounded by the template validator.
+  requestUrl         String
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  conversionEvent    AffiliateConversionEvent        @relation(fields: [conversionEventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  endpoint           AffiliatePostbackEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner            AffiliatePartner                @relation(fields: [affiliatePartnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attempts           AffiliatePostbackAttempt[]
+
+  @@unique([conversionEventId, endpointId, endpointVersion])
+  @@index([status, nextAttemptAt])
+  @@index([affiliatePartnerId, createdAt])
+  @@index([endpointId, createdAt])
+}
+
+/// AFFILIATE-PLATFORM-V1 §27 — ONE ATTEMPT against one logical delivery.
+///
+/// `responseSnippet` is bounded and it is the ONLY thing a remote server can put
+/// into this database. It is never rendered as HTML by any surface, and the
+/// reader that shows it escapes it as text.
+model AffiliatePostbackAttempt {
+  id             Int                             @id @default(autoincrement())
+  deliveryId     Int
+  attemptNumber  Int
+  startedAt      DateTime
+  finishedAt     DateTime
+  outcome        AffiliatePostbackAttemptOutcome
+  httpStatus     Int?
+  durationMs     Int
+  /// At most 256 characters of the response body, control characters stripped.
+  responseSnippet String?
+  delivery       AffiliatePostbackDelivery       @relation(fields: [deliveryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([deliveryId, startedAt])
 }
 
 model UserCurriculumEnrollment {

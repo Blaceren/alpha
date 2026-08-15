@@ -43,6 +43,8 @@ import {
   resolveRedepositTemporal,
 } from "@/lib/growth/pocket/redeposit-identity";
 import { readProviderEventTimeRaw } from "@/lib/growth/pocket/ingress-payload";
+import { emitRedepositConversion } from "@/lib/affiliate/redeposit-conversion";
+import { enqueueConversionPostbackSafely } from "@/lib/affiliate/postback/enqueue";
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const POCKET_REFERRAL_CLICK_ID =
@@ -112,9 +114,24 @@ export type RedepositOutcome =
    */
   | { readonly kind: "identity_unresolved"; readonly ingressEventId: number | null }
   /** A provider identity was supplied and this is the first delivery of it. */
-  | { readonly kind: "emitted"; readonly ingressEventId: number; readonly growthEventId: number }
+  | {
+      readonly kind: "emitted";
+      readonly ingressEventId: number;
+      readonly growthEventId: number;
+      /**
+       * AFFILIATE-PLATFORM-V1 §41. The affiliate conversion this redeposit
+       * produced, so the partner's outbound notification can be enqueued after
+       * the transaction commits. NULL on a redelivery, which created none.
+       */
+      readonly conversionEventId?: number | null;
+    }
   /** A provider identity was supplied and ATA already holds that exact event. */
-  | { readonly kind: "duplicate"; readonly ingressEventId: number; readonly growthEventId: number };
+  | {
+      readonly kind: "duplicate";
+      readonly ingressEventId: number;
+      readonly growthEventId: number;
+      readonly conversionEventId?: number | null;
+    };
 
 /**
  * Ingest one redeposit delivery.
@@ -293,7 +310,7 @@ export async function ingestPocketRedeposit(
   // have many ProviderIngressEvent rows behind it — one per delivery, including
   // retries — and that is deliberate. The canonical row is PocketProviderEvent,
   // deduplicated on the derived key by a partial UNIQUE index in migration 49.
-  return db.$transaction(async (tx) => {
+  const settled = await db.$transaction(async (tx) => {
     const evidence = await recordProviderIngress(tx, {
       goal: "redep",
       params,
@@ -420,6 +437,35 @@ export async function ingestPocketRedeposit(
       throw new Error("growth_event_emission_failed");
     }
 
+    // AFFILIATE-PLATFORM-V1 §25/§41 — the affiliate ledger's view of the same
+    // fact, in the SAME TRANSACTION as the canonical financial row and the
+    // growth event above.
+    //
+    // ONLY WHEN THE CANONICAL ROW IS NEW. `alreadyExisted` means this delivery
+    // was a redelivery of a redeposit ATA has already counted, so its
+    // conversion already exists. The emitter also refuses the duplicate on its
+    // own unique key, so this guard is the fast path and not the guarantee.
+    //
+    // IT CREATES NO CPA AND NO COMMISSION, and cannot: the qualification owner
+    // accepts `first_deposit` and nothing else. §41 in one line.
+    let redepositConversionId: number | null = null;
+    if (!alreadyExisted) {
+      const conversion = await emitRedepositConversion(tx, {
+        providerEventId: canonical.id,
+        userId: identity.userId,
+        normalizedAmount: amount.normalized,
+        currency:
+          currency.status === "configured" && currency.code !== null
+            ? { status: "configured", code: currency.code }
+            : { status: "unspecified", code: null },
+        // The instant the growth event uses, for the reason stated there: a
+        // conversion whose time disagreed with the event it projects would put
+        // the same money in two reporting periods.
+        occurredAt: temporal.absolute ?? now,
+      });
+      redepositConversionId = conversion.conversionEventId;
+    }
+
     await tx.providerIngressEvent.update({
       where: { id: evidence.id },
       data: {
@@ -429,9 +475,30 @@ export async function ingestPocketRedeposit(
     });
 
     return emitted.outcome === "created"
-      ? { kind: "emitted" as const, ingressEventId: evidence.id, growthEventId: emitted.growthEventId }
-      : { kind: "duplicate" as const, ingressEventId: evidence.id, growthEventId: emitted.growthEventId };
+      ? {
+          kind: "emitted" as const,
+          ingressEventId: evidence.id,
+          growthEventId: emitted.growthEventId,
+          conversionEventId: redepositConversionId,
+        }
+      : {
+          kind: "duplicate" as const,
+          ingressEventId: evidence.id,
+          growthEventId: emitted.growthEventId,
+          conversionEventId: redepositConversionId,
+        };
   });
+
+  // AFFILIATE-PLATFORM-V1 §25/§28 — the partner's outbound notification, AFTER
+  // the financial transaction has committed and never inside it. A partner
+  // endpoint that is slow, wrong or hostile must not be able to roll back a
+  // recorded redeposit, and enqueueing is idempotent so nothing is lost if this
+  // never runs.
+  if (settled.conversionEventId != null) {
+    await enqueueConversionPostbackSafely(settled.conversionEventId, now, db);
+  }
+
+  return settled;
 }
 
 /**
