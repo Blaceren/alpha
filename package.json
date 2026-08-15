@@ -43,6 +43,7 @@
     "test:regression:affiliate-postback-security": "tsx scripts/regression/affiliatePostbackSecurityRegression.ts",
     "test:regression:affiliate-partner-auth": "tsx scripts/regression/affiliatePartnerAuthRegression.ts",
     "test:regression:curriculum-schema": "tsx scripts/regression/curriculumSchemaRegression.ts",
+    "test:regression:learner-operations": "tsx scripts/regression/learnerOperationsRegression.ts",
     "test:regression:curriculum-domain": "tsx scripts/regression/curriculumDomainRegression.ts",
     "test:regression:curriculum-authoring": "tsx scripts/regression/curriculumAuthoringRegression.ts",
     "test:regression:curriculum-admin-api": "tsx scripts/regression/curriculumAdminApiRegression.ts",

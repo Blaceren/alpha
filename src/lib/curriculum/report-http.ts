@@ -9,6 +9,7 @@ import {
   requireTaskReportReviewer,
   requireUser,
 } from "@/lib/apiAuth";
+import { hasCrmReviewAuthority } from "@/lib/learner-ops/review-authority";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { CurriculumDomainError } from "@/lib/curriculum/errors";
 import { ReportDomainError } from "@/lib/curriculum/report-errors";
@@ -312,6 +313,23 @@ export async function gateReportReviewer(
   }
   const gate = await activePrincipal(request, requireTaskReportReviewer);
   if (!gate.ok) return gate;
+  // LO-AUTH-AXIS-1 — the SECOND axis, intersected with the role check above.
+  //
+  // The `admin`/`mentor` check has already passed. This additionally requires
+  // the caller's CRM StaffProfile to hold `learner_ops_report_review`, so
+  // report-review authority is finally something the CRM can display, grant and
+  // revoke. It is ADDITIONAL, never alternative: no caller gains review here
+  // that `requireTaskReportReviewer` would have refused, so this can only
+  // narrow. A caller without a StaffProfile, or whose staff role lacks the
+  // permission, gets the SAME 403 shape the role check produces.
+  if (!(await hasCrmReviewAuthority(gate.actorId, "report"))) {
+    return {
+      ok: false,
+      response: withNoStore(
+        await apiAuthErrorResponse(new ApiAuthError(403, gate.actorId), request),
+      ),
+    };
+  }
   if (write) {
     const limit = rateLimit(`report:review:${gate.actorId}`, REVIEW_MUTATION_LIMIT);
     if (!limit.allowed) return { ok: false, response: withNoStore(rateLimitedResponse()) };

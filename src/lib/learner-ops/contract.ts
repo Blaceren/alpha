@@ -88,7 +88,23 @@ export function isActiveStatus(status: LearnerOpsCaseStatus): boolean {
 export const LEARNER_OPS_TRANSITIONS: Readonly<
   Record<LearnerOpsCaseStatus, readonly LearnerOpsCaseStatus[]>
 > = {
-  new: ["open", "in_progress", "resolved", "closed"],
+  // `new` is untriaged, not inert. An operator who opens an untriaged case and
+  // immediately needs more information from the learner, or who sees at once
+  // that it needs a methodologist, must be able to act — so `new` reaches the
+  // same set `open` does. Forcing a pointless hop through `open` first would
+  // have made the timeline record a triage step that never happened, and it
+  // made `raiseEscalation` fail outright on exactly the cases most likely to
+  // need escalating. Found by the domain regression, not by reading.
+  new: [
+    "open",
+    "in_progress",
+    "waiting_learner",
+    "waiting_internal",
+    "waiting_external",
+    "escalated",
+    "resolved",
+    "closed",
+  ],
   open: ["in_progress", "waiting_learner", "waiting_internal", "waiting_external", "escalated", "resolved", "closed"],
   in_progress: ["open", "waiting_learner", "waiting_internal", "waiting_external", "escalated", "resolved", "closed"],
   waiting_learner: ["in_progress", "open", "waiting_internal", "waiting_external", "escalated", "resolved", "closed"],

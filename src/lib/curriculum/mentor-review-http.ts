@@ -35,6 +35,7 @@ import {
   isCurriculumV2ReadEnabled,
 } from "@/lib/env";
 import { rateLimit } from "@/lib/rateLimit";
+import { hasCrmReviewAuthority } from "@/lib/learner-ops/review-authority";
 import { isMentorReviewError, type MentorReviewErrorCode } from "./mentor-review";
 
 export const MENTOR_REVIEW_NO_STORE = { "Cache-Control": "no-store" } as const;
@@ -132,10 +133,29 @@ export function gateMentorReviewSelf(request: Request) {
   return gate(request, requireUser, "curriculum:mentor-review:self", SELF_MUTATION_LIMIT);
 }
 
+/**
+ * LO-AUTH-AXIS-1 — the reviewer gate now requires BOTH axes.
+ *
+ * `requireTaskReportReviewer` is unchanged and still runs first: the caller must
+ * be an active `admin` or `mentor`. The second assertion is INTERSECTED with
+ * it, so this can only ever narrow who may approve a mentor review, never
+ * widen it. A reviewer with no CRM StaffProfile, or whose staff role does not
+ * hold `learner_ops_mentor_review`, is refused with the SAME 403 the role check
+ * produces — the client cannot tell the two apart, so the response does not
+ * become a map of the permission model.
+ */
+async function requireMentorReviewAuthority() {
+  const user = await requireTaskReportReviewer();
+  if (!(await hasCrmReviewAuthority(user.id, "mentor"))) {
+    throw new ApiAuthError(403, user.id, user.role);
+  }
+  return user;
+}
+
 export function gateMentorReviewReviewer(request: Request) {
   return gate(
     request,
-    requireTaskReportReviewer,
+    requireMentorReviewAuthority,
     "curriculum:mentor-review:reviewer",
     REVIEWER_MUTATION_LIMIT,
   );

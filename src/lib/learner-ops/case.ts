@@ -40,6 +40,7 @@ import {
   LEARNER_OPS_REQUIRED_ANCHOR,
 } from "@/lib/learner-ops/contract";
 import { LearnerOpsError, learnerOpsFail } from "@/lib/learner-ops/errors";
+import { createNotification } from "@/lib/notifications";
 import { computeTargets, pauseTransition, type SlaPolicyInput } from "@/lib/learner-ops/sla";
 import { prisma } from "@/lib/prisma";
 
@@ -626,7 +627,16 @@ export async function addMessage(
     author: { kind: "staff"; staffId: string; userId: number } | { kind: "learner"; userId: number };
     db?: Db;
   },
-): Promise<{ id: string; firstResponseRecorded: boolean }> {
+): Promise<{
+  id: string;
+  firstResponseRecorded: boolean;
+  /**
+   * The learner to notify, or null when the author WAS the learner. Returned
+   * rather than notified inline so the notification happens after the
+   * transaction commits — see `notifyLearnerOfReply`.
+   */
+  notify: number | null;
+}> {
   const db = input.db ?? prisma;
   return db.$transaction(async (tx) => {
     const current = await tx.learnerOpsCase.findUnique({
@@ -689,7 +699,45 @@ export async function addMessage(
       );
     }
 
-    return { id: message.id, firstResponseRecorded: recordFirstResponse };
+    return {
+      id: message.id,
+      firstResponseRecorded: recordFirstResponse,
+      notify: input.author.kind === "staff" ? current.userId : null,
+    };
+  });
+}
+
+/**
+ * Notify the learner that staff replied.
+ *
+ * IT USES THE EXISTING NOTIFICATION OWNER. `createNotification` and
+ * `NotificationType.support_reply` both already exist and already carry the
+ * learner's delivery preferences and audit trail — building a second notifier
+ * for this domain would give one concept two owners that could later disagree.
+ *
+ * IT RUNS AFTER THE TRANSACTION COMMITS, DELIBERATELY. A notification is a
+ * side effect, not part of the operational fact. Inside the transaction a
+ * notification failure would roll back the reply the learner is waiting for;
+ * outside it, the reply is durable and `createNotification` already swallows
+ * and logs its own failures. The message is the truth, the notification is the
+ * nudge.
+ *
+ * NO BODY IS COPIED INTO IT. The notification says a reply exists and names the
+ * case reference. The text lives in exactly one table, which is also what keeps
+ * a notification from becoming a second place a message could be read from
+ * after the case's own visibility rules changed.
+ */
+export async function notifyLearnerOfReply(input: {
+  userId: number;
+  caseId: string;
+  reference: string;
+}): Promise<void> {
+  await createNotification({
+    userId: input.userId,
+    type: "support_reply",
+    title: "Ответ поддержки",
+    message: `По вашему обращению ${input.reference} есть новый ответ.`,
+    metadata: { learnerOpsCaseId: input.caseId, reference: input.reference },
   });
 }
 
