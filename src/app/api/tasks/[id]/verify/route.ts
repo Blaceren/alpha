@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { getBalanceProvider } from "@/lib/exchange/balanceProvider";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 import { prisma } from "@/lib/prisma";
 import { completeProgressionTask } from "@/lib/taskProgression";
 import { notFoundResponse, validateNumericParam } from "@/lib/validation";
@@ -43,11 +44,19 @@ export async function POST(request: Request, { params }: Props) {
       );
       message = verified ? "Регистрация Pocket подтверждена" : "Ожидаем Registration postback от Pocket";
     } else if (task.completionMethod === "deposit_postback") {
-      verified = Boolean(
-        account?.firstDepositConfirmed ||
-        (account?.depositAmount ?? 0) > 0 ||
-        (account?.totalDeposits ?? 0) > 0,
-      );
+      // FDCONF-1 — THIS WAS THE FORBIDDEN INFERENCE, IN A TASK GATE.
+      //
+      // It read `firstDepositConfirmed || depositAmount > 0 || totalDeposits > 0`,
+      // so a learner completed a first-deposit task because a CUMULATIVE TOTAL
+      // was non-zero — a total that a redeposit, a legacy simulation or an admin
+      // edit can move without any first deposit ever having happened. And it
+      // could not see a canonical first deposit at all, so the learners who
+      // genuinely deposited through the Pocket ingress failed the very task that
+      // deposit was supposed to complete.
+      //
+      // One question, one authority, no arithmetic.
+      const firstDeposit = await resolveFirstDepositConfirmation(prisma, user.id);
+      verified = firstDeposit.confirmed;
       message = verified ? "Первый депозит подтверждён" : "Ожидаем депозитный postback от Pocket";
     } else if (task.completionMethod === "balance_check" && task.balanceThreshold) {
       if (!account?.traderId) {

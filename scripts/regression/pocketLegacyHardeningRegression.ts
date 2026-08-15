@@ -376,7 +376,15 @@ async function main() {
     // Hostile: the row itself carries a balance; the serializer must drop it.
     await prisma.exchangeAccount.update({ where: { id: account.id }, data: { balance: HOSTILE_BALANCE } });
     const fresh = await prisma.exchangeAccount.findUniqueOrThrow({ where: { id: account.id } });
-    const serialised = serializeExchangeAccount(fresh);
+    // FDCONF-1: the serializer no longer has a first-deposit answer of its own —
+    // it must be handed the resolved one. Passing an explicit value here also
+    // keeps this test about BALANCE PRIVACY rather than about the read model,
+    // which has its own suite (src/lib/exchange/first-deposit-truth.test.ts).
+    const serialised = serializeExchangeAccount(fresh, {
+      confirmed: false,
+      source: "none",
+      occurredAt: null,
+    });
     const keys = Object.keys(serialised);
     for (const forbidden of FORBIDDEN_KEYS) {
       assert.ok(!keys.includes(forbidden), `serializer exposed ${forbidden}`);

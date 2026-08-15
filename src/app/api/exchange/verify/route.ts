@@ -18,6 +18,7 @@ import {
   notFoundResponse,
   validateJsonBody,
 } from "@/lib/validation";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 
 export async function POST(request: Request) {
   if (!validateCsrfToken(request)) {
@@ -83,7 +84,11 @@ export async function POST(request: Request) {
       depositAmount: result.depositAmount ?? account.depositAmount,
       totalDeposits: result.depositAmount ?? account.totalDeposits,
       tradesCount: result.tradesCount ?? account.tradesCount,
-      firstDepositConfirmed: account.firstDepositConfirmed,
+      // FDCONF-1: the redundant self-write of the legacy column is removed. It
+      // wrote the value back unchanged, so it changed nothing — but it kept this
+      // route in the set of places that read it, and an edit that turned it into
+      // `result.something ?? account.firstDepositConfirmed` would have handed a
+      // remote provider response authority over a learner's first deposit.
       lastVerifiedAt: now,
       verifiedAt: result.status === "connected" ? now : account.verifiedAt,
       rejectionReason: result.status === "rejected" ? result.message ?? null : null,
@@ -114,6 +119,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
-    account: serializeExchangeAccount(updatedAccount),
+    account: serializeExchangeAccount(
+      updatedAccount,
+      await resolveFirstDepositConfirmation(prisma, user.id),
+    ),
   });
 }

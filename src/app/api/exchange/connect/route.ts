@@ -11,6 +11,7 @@ import { serializeExchangeAccount } from "@/lib/exchange/account";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import { exchangeConnectSchema, validateJsonBody } from "@/lib/validation";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 
 export async function POST(request: Request) {
   if (!validateCsrfToken(request)) {
@@ -100,6 +101,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
-    account: serializeExchangeAccount(account),
+    account: serializeExchangeAccount(
+      account,
+      await resolveFirstDepositConfirmation(prisma, account.userId),
+    ),
   });
 }

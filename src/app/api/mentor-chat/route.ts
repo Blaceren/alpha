@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, forbiddenResponse, requireUser } from "@/lib/apiAuth";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 import { prisma } from "@/lib/prisma";
 
+/**
+ * FDCONF-1 — mentor access is an ENTITLEMENT, and it was gated on the stale
+ * legacy column.
+ *
+ * A learner who made a canonical first deposit — provider event, conversion, CPA
+ * qualification, commission paid to a partner — was refused mentor chat, because
+ * the boolean this read is only written by the legacy processor. The learner had
+ * paid for access the product then denied them. The step-4 alternative masked
+ * how often it mattered, which is why it survived so long.
+ */
 async function userHasMentorAccess(userId: number) {
-  const [account, step] = await Promise.all([
-    prisma.exchangeAccount.findUnique({ where: { userId } }),
+  const [firstDeposit, step] = await Promise.all([
+    resolveFirstDepositConfirmation(prisma, userId),
     prisma.userTaskProgress.findFirst({ where: { userId, task: { stepNumber: 4 }, status: "completed" } }),
   ]);
-  return Boolean(account?.firstDepositConfirmed || step);
+  return Boolean(firstDeposit.confirmed || step);
 }
 
 export async function GET(request: Request) {

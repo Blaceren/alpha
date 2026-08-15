@@ -2,6 +2,7 @@ import type { Prisma, UserStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, requireAdmin } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
+import { resolveFirstDepositConfirmations } from "@/lib/exchange/first-deposit-truth";
 import { prisma } from "@/lib/prisma";
 
 type Attribution = Record<string, string>;
@@ -31,18 +32,31 @@ const COHORT_FILTERS = new Set([
   "active",
 ]);
 
-function cohortFor(user: {
-  level: number;
-  updatedAt: Date;
-  checkpoint: { status: string } | null;
-  exchangeAccount: { registrationStatus: boolean; firstDepositConfirmed: boolean } | null;
-}) {
+/**
+ * FDCONF-1 — the cohort classifier took the first-deposit fact as an ARGUMENT
+ * rather than reading it off the account row.
+ *
+ * `first_deposit_no_checkpoint` and `registered_no_deposit` are the two cohorts
+ * staff work from when they chase learners, and both were computed from the
+ * stale legacy column. Every learner who deposited through the canonical Pocket
+ * ingress was filed as `registered_no_deposit` — so the operational list of
+ * "people who have not deposited yet" contained precisely the people who had.
+ */
+function cohortFor(
+  user: {
+    level: number;
+    updatedAt: Date;
+    checkpoint: { status: string } | null;
+    exchangeAccount: { registrationStatus: boolean } | null;
+  },
+  firstDepositConfirmed: boolean,
+) {
   const inactiveBefore = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   if (user.updatedAt < inactiveBefore) return "inactive";
   if (user.level >= 5) return "high_level";
   if (user.checkpoint?.status === "frozen") return "stuck_checkpoint";
-  if (user.exchangeAccount?.firstDepositConfirmed && user.checkpoint?.status !== "completed") return "first_deposit_no_checkpoint";
-  if (user.exchangeAccount?.registrationStatus && !user.exchangeAccount.firstDepositConfirmed) return "registered_no_deposit";
+  if (firstDepositConfirmed && user.checkpoint?.status !== "completed") return "first_deposit_no_checkpoint";
+  if (user.exchangeAccount?.registrationStatus && !firstDepositConfirmed) return "registered_no_deposit";
   return "active";
 }
 
@@ -154,12 +168,21 @@ export async function GET(request: Request) {
       orderBy: { updatedAt: "desc" },
     });
 
+    // FDCONF-1: one batched resolve for the page, then every row reads the
+    // canonical answer. The legacy column is not consulted here any more.
+    const firstDeposits = await resolveFirstDepositConfirmations(
+      prisma,
+      users.map((user) => user.id),
+    );
+
     const items = users
       .map((user) => {
         const account = user.exchangeAccount;
+        const firstDeposit = firstDeposits.get(user.id);
+        const firstDepositConfirmed = firstDeposit?.confirmed ?? false;
         const attribution = (account?.attribution as Attribution | null) ?? {};
         const postbackEvents = account?.postbackEvents ?? [];
-        const computedCohort = cohortFor(user);
+        const computedCohort = cohortFor(user, firstDepositConfirmed);
         return {
           id: user.id,
           name: user.name,
@@ -171,8 +194,9 @@ export async function GET(request: Request) {
           exchangeStatus: account?.status ?? "not_connected",
           registrationStatus: account?.registrationStatus ?? false,
           emailConfirmed: account?.emailConfirmed ?? false,
-          firstDepositConfirmed: account?.firstDepositConfirmed ?? false,
-          depositStatus: account?.firstDepositConfirmed ? "confirmed" : "pending",
+          firstDepositConfirmed,
+          firstDepositConfirmedSource: firstDeposit?.source ?? "none",
+          depositStatus: firstDepositConfirmed ? "confirmed" : "pending",
           // DEVMECH-1: CRM never receives a current trading balance.
           traderId: account?.traderId ?? null,
           clickId: account?.clickId ?? null,

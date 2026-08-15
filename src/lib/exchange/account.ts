@@ -1,10 +1,23 @@
 import type { ExchangeAccount } from "@prisma/client";
 import { createNotification } from "@/lib/notifications";
+import type { FirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 
+/**
+ * FDCONF-1 — the resolved confirmation is a REQUIRED ARGUMENT, not an optional
+ * one, and that is the whole enforcement mechanism.
+ *
+ * The serializer no longer has access to an answer of its own: it cannot read
+ * `account.firstDepositConfirmed` into the response because doing so is what
+ * produced the drift. Making the parameter required means a call site that has
+ * not consulted `resolveFirstDepositConfirmation` FAILS TO COMPILE rather than
+ * silently serving the legacy column — the same "unrepresentable rather than
+ * unlikely" bar the commercial owners are held to.
+ */
 export function serializeExchangeAccount(
   account: ExchangeAccount & {
     user?: { id: number; name: string; email: string } | null;
   },
+  firstDeposit: FirstDepositConfirmation,
 ) {
   return {
     id: account.id,
@@ -26,7 +39,11 @@ export function serializeExchangeAccount(
     status: account.status,
     registrationStatus: account.registrationStatus,
     emailConfirmed: account.emailConfirmed,
-    firstDepositConfirmed: account.firstDepositConfirmed,
+    // FDCONF-1: the PRODUCT answer, from the canonical ledger where it has one.
+    // The raw legacy column is deliberately not serialised anywhere.
+    firstDepositConfirmed: firstDeposit.confirmed,
+    firstDepositConfirmedSource: firstDeposit.source,
+    firstDepositConfirmedAt: firstDeposit.occurredAt,
     // DEVMECH-1: `balance` is a CURRENT TRADING BALANCE and is never
     // serialised. `totalDeposits` below is historical transaction
     // accounting, which is a different fact and is intentionally kept.

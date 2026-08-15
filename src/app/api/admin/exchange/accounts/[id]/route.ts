@@ -13,6 +13,7 @@ import {
   validateJsonBody,
   validateNumericParam,
 } from "@/lib/validation";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 
 type AdminExchangeAccountRouteProps = {
   params: Promise<{
@@ -55,7 +56,10 @@ export async function GET(
   }
 
   return NextResponse.json({
-    account: serializeExchangeAccount(account),
+    account: serializeExchangeAccount(
+      account,
+      await resolveFirstDepositConfirmation(prisma, account.userId),
+    ),
     postbackEvents: account.postbackEvents,
   });
 }
@@ -102,10 +106,20 @@ export async function PATCH(
     where: { id: accountId.id },
     data: {
       ...parsed.data,
-      firstDepositConfirmed:
-        parsed.data.depositAmount !== undefined
-          ? parsed.data.depositAmount > 0
-          : undefined,
+      // FDCONF-1 — THE INFERENCE THAT WAS HERE IS REMOVED.
+      //
+      // This route previously wrote
+      //     firstDepositConfirmed: parsed.data.depositAmount > 0
+      // so an administrator correcting a deposit TOTAL silently asserted that a
+      // first deposit had been confirmed. That is inference from cumulative
+      // deposits without canonical event authority — the precise thing the
+      // first-deposit truth contract forbids, and a staff-reachable way to grow
+      // the legacy set behind the canonical ledger's back.
+      //
+      // Nothing replaces it. Whether a learner has a first deposit is answered
+      // by `resolveFirstDepositConfirmation` from the canonical conversion
+      // ledger; it is not an editable field, and an admin form is not an
+      // authority on whether money arrived.
       verifiedAt:
         status === "connected" && existingAccount.verifiedAt === null
           ? new Date()
@@ -160,6 +174,9 @@ export async function PATCH(
   }
 
   return NextResponse.json({
-    account: serializeExchangeAccount(updatedAccount),
+    account: serializeExchangeAccount(
+      updatedAccount,
+      await resolveFirstDepositConfirmation(prisma, updatedAccount.userId),
+    ),
   });
 }

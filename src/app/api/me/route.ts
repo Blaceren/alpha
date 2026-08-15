@@ -7,6 +7,7 @@ import { validateJsonBody } from "@/lib/validation";
 import { getTrainingLevelFromProgress } from "@/lib/trainingLevel";
 import { z } from "zod";
 import { buildReferralInviteLink } from "@/lib/publicUrl";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -59,6 +60,7 @@ export async function GET() {
     }
 
     const trainingLevel = getTrainingLevelFromProgress(user.taskProgress);
+    const firstDeposit = await resolveFirstDepositConfirmation(prisma, user.id);
 
     return NextResponse.json({
       user: {
@@ -127,8 +129,10 @@ export async function GET() {
               traderId: user.exchangeAccount.traderId,
               registrationStatus: user.exchangeAccount.registrationStatus,
               emailConfirmed: user.exchangeAccount.emailConfirmed,
-              firstDepositConfirmed:
-                user.exchangeAccount.firstDepositConfirmed,
+              // FDCONF-1: the canonical ledger's answer, never the legacy
+              // column. This is the payload the learner's own dashboard reads.
+              firstDepositConfirmed: firstDeposit.confirmed,
+              firstDepositConfirmedSource: firstDeposit.source,
               // DEVMECH-1: no current trading balance is returned to a
               // learner. Historical deposit totals remain.
               totalDeposits: user.exchangeAccount.totalDeposits,

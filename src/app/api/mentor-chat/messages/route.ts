@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiAuthErrorResponse, forbiddenResponse, requireUser } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
+import { resolveFirstDepositConfirmation } from "@/lib/exchange/first-deposit-truth";
 import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { validateJsonBody } from "@/lib/validation";
@@ -25,9 +26,12 @@ export async function POST(request: Request) {
     if (isStaff) {
       if (!dialog || (user.role === "mentor" && dialog.mentorId !== null && dialog.mentorId !== user.id)) return forbiddenResponse();
     } else {
-      const account = await prisma.exchangeAccount.findUnique({ where: { userId: user.id } });
+      // FDCONF-1: the same entitlement as `userHasMentorAccess`, from the same
+      // canonical resolver. Two copies of a gate that disagree is how a learner
+      // gets listed as having access and is then refused when they use it.
+      const firstDeposit = await resolveFirstDepositConfirmation(prisma, user.id);
       const step = await prisma.userTaskProgress.findFirst({ where: { userId: user.id, task: { stepNumber: 4 }, status: "completed" } });
-      if (!account?.firstDepositConfirmed && !step) return NextResponse.json({ error: "MENTOR_CHAT_LOCKED", message: "Чат с ментором пока закрыт" }, { status: 403 });
+      if (!firstDeposit.confirmed && !step) return NextResponse.json({ error: "MENTOR_CHAT_LOCKED", message: "Чат с ментором пока закрыт" }, { status: 403 });
     }
 
     if (!dialog && !isStaff) dialog = await prisma.mentorChatDialog.create({ data: { userId: user.id, status: "open" } });

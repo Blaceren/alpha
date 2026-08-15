@@ -9,6 +9,7 @@ import { apiAuthErrorResponse, requireAdmin } from "@/lib/apiAuth";
 import { serializeExchangeAccount } from "@/lib/exchange/account";
 import { prisma } from "@/lib/prisma";
 import { validationErrorResponse, type ValidationDetail } from "@/lib/validation";
+import { resolveFirstDepositConfirmations } from "@/lib/exchange/first-deposit-truth";
 
 export async function GET(request: Request) {
   try {
@@ -78,9 +79,25 @@ export async function GET(request: Request) {
       prisma.exchangeAccount.count({ where }),
     ]);
 
+    // FDCONF-1: one batched resolve for the whole page, so the correct answer
+    // is also the cheap one and no future edit is tempted back to the column.
+    const confirmations = await resolveFirstDepositConfirmations(
+      prisma,
+      accounts.map((account) => account.userId),
+    );
+
     return NextResponse.json(
       paginatedResponse(
-        accounts.map((account) => serializeExchangeAccount(account)),
+        accounts.map((account) =>
+          serializeExchangeAccount(
+            account,
+            confirmations.get(account.userId) ?? {
+              confirmed: false,
+              source: "none" as const,
+              occurredAt: null,
+            },
+          ),
+        ),
         total,
         parsed.query.page,
         parsed.query.pageSize,
