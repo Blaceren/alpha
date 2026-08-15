@@ -3,14 +3,20 @@ import { render, screen } from "@testing-library/react";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 
 /**
- * The bottom bar is the mobile primary navigation. Built destinations are real
- * links; everything not built yet must be focusable-disabled (no 404) — verified
- * structurally. Built as of D4-B: Главная, Путь, Уроки, Инструменты.
+ * The bottom bar is the mobile primary navigation. It renders the BUILT
+ * sections of the canonical `PRIMARY_NAV`, all of them real links.
+ *
+ * LEARNER-OPERATIONS-V1 changed two things here, and both were defects rather
+ * than preferences. `/support` shipped and the hardcoded built-list still said
+ * it had not, so the surface was unreachable. And «Ещё» was rendered as a
+ * DISABLED button because its own id was not in that list — an overflow control
+ * that could never open the menu it existed for, hiding every section inside it.
+ * Built as of LEARNER-OPERATIONS-V1: Главная, Путь, Уроки, Инструменты, Поддержка.
  */
 describe("MobileBottomNavigation", () => {
   it("renders 5 items with the canonical RU labels", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    for (const label of ["Главная", "Путь", "Уроки", "Инструменты", "Ещё"]) {
+    for (const label of ["Главная", "Путь", "Уроки", "Инструменты", "Поддержка"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
@@ -22,18 +28,18 @@ describe("MobileBottomNavigation", () => {
     expect(home).toHaveAttribute("href", "/");
   });
 
-  it("keeps unbuilt destinations as focusable-disabled controls (no dead links)", () => {
+  it("offers only real links, and no unbuilt destination at all", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    // Four real links (Главная + Путь + Уроки + Инструменты since D4-B); only
-    // «Ещё» remains a disabled button.
+    // Five real links. The previous shape kept «Ещё» as a disabled button; that
+    // control opened nothing and was what hid Поддержка, so an unbuilt section
+    // is now simply absent rather than advertised.
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(screen.getByRole("link", { name: /Путь/ })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: /Уроки/ })).toHaveAttribute("href", "/lessons");
     expect(screen.getByRole("link", { name: /Инструменты/ })).toHaveAttribute("href", "/tools");
-    const disabled = screen.getAllByRole("button");
-    expect(disabled).toHaveLength(1);
-    for (const b of disabled) expect(b).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("link", { name: /Поддержка/ })).toHaveAttribute("href", "/support");
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
   it("marks Инструменты active with aria-current on the tools page", () => {

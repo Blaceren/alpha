@@ -333,12 +333,16 @@ describe("navigation", () => {
     expect(lessons).not.toHaveAttribute("aria-disabled");
   });
 
-  it("leaves the unbuilt destinations alone", () => {
+  it("offers every built destination and advertises no unbuilt one", () => {
     render(<DesktopRouteNavigation activeId="lessons" />);
-    // Since D4-B «Инструменты» is a real link; only «Ещё» stays disabled.
-    expect(screen.getByRole("button", { name: "Ещё" })).toHaveAttribute("aria-disabled", "true");
+    // LEARNER-OPERATIONS-V1: «Ещё» was a DISABLED button whose own id was not in
+    // the built list, so it could never open the menu it existed for — and that
+    // is what hid Поддержка after it shipped. Unbuilt sections are now absent
+    // rather than advertised, and Поддержка is a real link.
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByRole("link", { name: "Главная" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Путь" })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: "Инструменты" })).toHaveAttribute("href", "/tools");
+    expect(screen.getByRole("link", { name: "Поддержка" })).toHaveAttribute("href", "/support");
   });
 });
