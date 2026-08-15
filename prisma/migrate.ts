@@ -37,7 +37,29 @@ import fs from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+/**
+ * ONE CONNECTION, DELIBERATELY.
+ *
+ * A `PRAGMA` in SQLite is CONNECTION-SCOPED, and `foreign_keys` in particular is
+ * a no-op inside an open transaction. So a migration that needs foreign keys
+ * disabled needs the pragma executed OUTSIDE the transaction and on the SAME
+ * connection the transaction will use. Prisma's default pool is
+ * `num_cpus * 2 + 1`, which would let the pragma land on a connection the
+ * migration never touches — the pragma would appear to succeed and change
+ * nothing.
+ *
+ * `connection_limit=1` removes the question. A migration runs once, offline, in
+ * a maintenance window, so there is nothing to gain from a pool here anyway.
+ */
+function singleConnectionUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw === "") return raw;
+  if (raw.includes("connection_limit=")) return raw;
+  return raw.includes("?") ? `${raw}&connection_limit=1` : `${raw}?connection_limit=1`;
+}
+
+const prisma = new PrismaClient({
+  datasources: { db: { url: singleConnectionUrl(process.env.DATABASE_URL) ?? "" } },
+});
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 
 /**
@@ -66,6 +88,32 @@ function splitSqlStatements(sql: string) {
     .split(";")
     .map((statement) => statement.trim())
     .filter(Boolean);
+}
+
+/**
+ * The SQL of a statement with its LEADING COMMENT LINES REMOVED.
+ *
+ * WHY THIS EXISTS, AND WHAT IT COST TO LEARN. `splitSqlStatements` splits on
+ * `;` and keeps everything before it, so the first "statement" of a
+ * well-documented migration is its entire header comment block followed by the
+ * first real line. A test like `/^\s*PRAGMA/` against that string matches
+ * NOTHING — the string starts with `-- ====`.
+ *
+ * That is exactly how migration 50's `PRAGMA foreign_keys=OFF` was silently
+ * left inside the transaction on the first attempt at hoisting it: the hoisting
+ * code was correct and the predicate never fired. Recognising a statement by
+ * its first REAL line is the difference between a rule and a rule that happens
+ * to be unreachable.
+ */
+function effectiveSql(statement: string): string {
+  return statement
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed !== "" && !trimmed.startsWith("--");
+    })
+    .join("\n")
+    .trim();
 }
 
 async function main() {
@@ -107,7 +155,47 @@ async function main() {
     }
 
     const migrationId = crypto.randomUUID();
-    const statements = splitSqlStatements(migrationSql);
+
+    // ---------------------------------------------------------------------
+    // MAKING `PRAGMA foreign_keys=OFF` IN A MIGRATION FILE ACTUALLY MEAN
+    // SOMETHING.
+    //
+    // THIS WAS A LATENT DEFECT AND IT WAS FOUND THE HARD WAY. Migration 49
+    // already contained `PRAGMA foreign_keys=OFF`, and this runner executed it
+    // as the first statement INSIDE the interactive transaction, where SQLite
+    // documents it as a silent no-op. It appeared to work only because nothing
+    // referenced the table 49 rebuilt, so foreign keys never needed disabling.
+    //
+    // Migration 50 rebuilds `AffiliateTrackingLink`, which `AffiliateClick` and
+    // `AffiliateConversionEvent` both reference with RESTRICT. Its `DROP TABLE`
+    // failed with `FOREIGN KEY constraint failed`, the whole transaction rolled
+    // back, and the database was left byte-identical — the atomicity guarantee
+    // working exactly as intended, on a defect that had been sitting there for
+    // one migration.
+    //
+    // THE MECHANISM THAT ACTUALLY WORKS IS `defer_foreign_keys`, not
+    // `foreign_keys`. It is settable INSIDE a transaction, it postpones every
+    // foreign-key check to COMMIT, and it resets itself at the end of the
+    // transaction. By commit time the 12-step rebuild has put a table of the
+    // same name back with the same rows, so every child reference resolves and
+    // the deferred check passes. Disabling enforcement outright is neither
+    // necessary nor, through a pooled client, reliable.
+    //
+    // The file's own `PRAGMA foreign_keys` lines are still hoisted out of the
+    // transaction — they are harmless there and they are what a reader of the
+    // migration expects to see honoured — but they are NOT what this depends on.
+    // ---------------------------------------------------------------------
+    const allStatements = splitSqlStatements(migrationSql);
+    const isPragma = (statement: string) => /^PRAGMA\b/i.test(effectiveSql(statement));
+    const pragmas = allStatements.filter(isPragma);
+    const statements = allStatements.filter((statement) => !isPragma(statement));
+    const wantsForeignKeysOff = pragmas.some((statement) =>
+      /^PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(effectiveSql(statement)),
+    );
+
+    if (wantsForeignKeysOff) {
+      await prisma.$executeRawUnsafe("PRAGMA foreign_keys=OFF");
+    }
 
     const startedAt = Date.now();
 
@@ -120,6 +208,12 @@ async function main() {
           migrationName,
           0,
         );
+
+        // The real mechanism, issued INSIDE the transaction where it is legal
+        // and effective. See the block above for why this and not the other one.
+        if (wantsForeignKeysOff) {
+          await tx.$executeRawUnsafe("PRAGMA defer_foreign_keys=ON");
+        }
 
         for (const statement of statements) {
           await tx.$executeRawUnsafe(statement);
@@ -137,6 +231,21 @@ async function main() {
         maxWait: MIGRATION_TRANSACTION_MAX_WAIT_MS,
       },
     );
+
+    if (wantsForeignKeysOff) {
+      // RESTORE, THEN PROVE. Turning enforcement back on is not the same as
+      // proving nothing was broken while it was off, so the runner runs SQLite's
+      // own checker and refuses to report success if it finds anything. A
+      // migration that left a dangling reference must be visible immediately,
+      // not at the next write that happens to touch the row.
+      await prisma.$executeRawUnsafe("PRAGMA foreign_keys=ON");
+      const violations = await prisma.$queryRawUnsafe<Array<unknown>>("PRAGMA foreign_key_check");
+      if (violations.length > 0) {
+        throw new Error(
+          `${migrationName} left ${violations.length} foreign key violation(s) — investigate before using this database`,
+        );
+      }
+    }
 
     // Recorded so a cutover has a measured duration to plan a window around,
     // rather than an assumption. Statement count and elapsed time only — no SQL,
