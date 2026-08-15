@@ -1,0 +1,213 @@
+/**
+ * Поддержка — the learner support surface.
+ *
+ * EXISTING TOKENS ONLY, and no `var()` fallbacks. The system is DARK-ONLY, so a
+ * light fallback would render a white card on a navy field the moment a token
+ * name changed — which is exactly what an invented fallback buys you.
+ *
+ * There is ONE local hex: `--result-negative`, scoped to `.support-hub` below,
+ * copied from the value `tools.css` already uses because the global token set
+ * carries no negative colour.
+ *
+ * Same surface treatment as `.lvl-mentor`, `.lvl-start` and the checkpoint
+ * gate: `--surface-subtle` on `--divider`, 14px radius, display font for
+ * headings.
+ */
+
+.support-hub {
+  /* The token set carries no global "negative" colour, so this scopes the same
+     desaturated rose `tools.css` already defines for a negative result rather
+     than inventing a second red or reaching for a token that is not global.
+     Used ONLY as a restrained error sign, never as a whole-panel colour. */
+  --result-negative: #d7a3a8;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 56rem;
+  color: var(--text-primary);
+}
+
+.support-hub__header h1 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.support-hub__header p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.support-hub__muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.support-hub__new,
+.support-hub__list,
+.support-hub__thread {
+  padding: 20px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+}
+
+.support-hub__new h2,
+.support-hub__list h2,
+.support-hub__thread h2 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+}
+
+.support-hub form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.support-hub label {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.support-hub input,
+.support-hub textarea {
+  width: 100%;
+  padding: 10px;
+  font: inherit;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--background-field);
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+}
+
+.support-hub input:focus-visible,
+.support-hub textarea:focus-visible,
+.support-hub button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.support-hub button {
+  align-self: flex-start;
+  padding: 10px 18px;
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--background-base);
+  background: var(--route-current);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.support-hub button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.support-hub__list ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.support-hub__list li button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: stretch;
+  text-align: left;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--divider);
+  padding: 12px 14px;
+}
+
+.support-hub__back {
+  align-self: flex-start;
+  margin-bottom: 14px;
+  padding: 0;
+  color: var(--route-upcoming);
+  background: transparent;
+  text-decoration: underline;
+}
+
+.support-hub__subject {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.support-hub__meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.support-hub__original {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-context);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.support-hub__messages {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 0;
+}
+
+.support-hub__message {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--divider);
+}
+
+.support-hub__message p {
+  margin: 6px 0 0;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* A staff reply carries the "current route" accent so the learner can see at a
+   glance which side of the conversation answered. */
+.support-hub__message--staff {
+  background: var(--surface-context);
+  border-color: var(--gate-boundary);
+}
+
+.support-hub__message--mine {
+  background: var(--surface-subtle);
+}
+
+.support-hub__error {
+  color: var(--result-negative);
+  font-size: 0.9rem;
+}
+
+.support-hub__error button {
+  margin-top: 8px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+}
