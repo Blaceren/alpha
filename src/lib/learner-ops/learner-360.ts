@@ -83,7 +83,8 @@ export async function getLearner360(input: {
     select: {
       id: true,
       status: true,
-      curriculumVersion: { select: { code: true, status: true } },
+      curriculumVersionId: true,
+      curriculumVersion: { select: { code: true, status: true, versionNumber: true } },
     },
   });
 
@@ -105,6 +106,26 @@ export async function getLearner360(input: {
   const completed = progress.filter((row) => row.status === "completed");
   const pendingReview = progress.filter((row) => row.status === "pending_review");
   const inProgress = progress.filter((row) => row.status === "in_progress");
+
+  // THE DENOMINATOR COMES FROM THE CURRICULUM, NOT FROM PROGRESS ROWS.
+  //
+  // LO-360-PROGRESS-DENOMINATOR-1. This used to be `progress.length`, which is
+  // the number of `UserLevelProgress` rows that have been MATERIALISED — and
+  // those are created as a learner starts each level. A freshly enrolled
+  // learner therefore has none, and the panel read `0 из 0 уровней`: not false,
+  // but it says "this curriculum has no levels" when it means "this learner has
+  // started none of them".
+  //
+  // The canonical total is the count of `LevelDefinition` rows belonging to the
+  // curriculum version the ENROLMENT names. It is per-version and must stay
+  // that way: `ata-v2` v1 and v2 carry 4 levels each and v4 carries 100, so a
+  // global constant would be wrong for any learner on an older version. Nothing
+  // is hardcoded and no progress row is created to obtain a number.
+  const totalLevels = enrollment
+    ? await prisma.levelDefinition.count({
+        where: { curriculumVersionId: enrollment.curriculumVersionId },
+      })
+    : 0;
 
   // ---------------------------------------------------------- reports
   const reportSubmissions = await prisma.reportSubmission.findMany({
@@ -204,6 +225,7 @@ export async function getLearner360(input: {
             status: enrollment.status,
             curriculumCode: enrollment.curriculumVersion.code,
             curriculumStatus: enrollment.curriculumVersion.status,
+            curriculumVersionNumber: enrollment.curriculumVersion.versionNumber,
           },
           "curriculum.enrollment",
         )
@@ -211,7 +233,14 @@ export async function getLearner360(input: {
     progression: sourced(
       {
         completedLevels: completed.length,
-        totalLevels: progress.length,
+        totalLevels,
+        /**
+         * How many progress rows exist. Kept as its own field rather than
+         * being confused with the total: it is a useful operational fact
+         * ("has this learner started anything?") and it is NOT the size of the
+         * curriculum.
+         */
+        startedLevels: progress.length,
         currentLevel:
           inProgress[0]?.levelDefinition
             ? {

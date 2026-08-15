@@ -35,6 +35,8 @@ import { isLearnerOpsError } from "../../src/lib/learner-ops/errors";
 import { raiseEscalation, resolveEscalation } from "../../src/lib/learner-ops/escalation";
 import { recordQaReview } from "../../src/lib/learner-ops/quality";
 import { hasCrmReviewAuthority } from "../../src/lib/learner-ops/review-authority";
+import { getLearner360 } from "../../src/lib/learner-ops/learner-360";
+import { resolveEffectivePermissions } from "../../src/lib/crm/roles";
 
 const REPO = path.resolve(__dirname, "..", "..");
 const DB_PATH = path.join(os.tmpdir(), `ata-learner-ops-${process.pid}.db`);
@@ -916,6 +918,119 @@ async function main() {
         row._count._all,
         1,
         `case ${row.caseId} has ${row._count._all} events claiming version ${row.caseVersion}`,
+      );
+    }
+  });
+
+  /* ------------------------------- 11 · LO-360 denominator + create gate */
+
+  await check("LO-360-DENOM-1 · a FRESH learner reads 0 / canonical total, never 0 / 0", async () => {
+    // The pre-fix implementation used `progress.length` as the denominator, so
+    // a learner with no materialised progress rows read "0 из 0 уровней". This
+    // assertion goes RED against that implementation.
+    const version = await prisma.curriculumVersion.create({
+      data: { code: `denom-${process.pid}`, name: "Denominator", versionNumber: 1, status: "published" },
+    });
+    const mod = await prisma.moduleDefinition.create({
+      data: { curriculumVersionId: version.id, moduleNumber: 1, code: `dm-${process.pid}`, title: "M", firstLevel: 1, lastLevel: 7 },
+    });
+    for (let n = 1; n <= 7; n += 1) {
+      await prisma.levelDefinition.create({
+        data: {
+          curriculumVersionId: version.id, moduleId: mod.id, levelNumber: n,
+          stableCode: `dl-${process.pid}-${n}`, type: "lesson", title: `L${n}`,
+          completionMethod: "assessment_pass",
+        },
+      });
+    }
+    const fresh = await prisma.user.create({
+      data: { email: `denom-fresh-${process.pid}@learner.invalid`, name: "Fresh", passwordHash: BCRYPT_SHAPED },
+    });
+    await prisma.userCurriculumEnrollment.create({
+      data: { userId: fresh.id, curriculumVersionId: version.id, curriculumCode: version.code, status: "active" },
+    });
+
+    const view = await getLearner360({ userId: fresh.id, permissions: [] });
+    assert.equal(view.progression.value.totalLevels, 7, "denominator must be the curriculum level count");
+    assert.equal(view.progression.value.completedLevels, 0);
+    assert.equal(view.progression.value.startedLevels, 0, "no progress row has been materialised");
+    assert.notEqual(view.progression.value.totalLevels, 0, "0 / 0 is the defect this closes");
+  });
+
+  await check("LO-360-DENOM-1 · the denominator is independent of materialised rows", async () => {
+    // Same curriculum, a learner who has STARTED two levels. The denominator
+    // must not move; only the numerator and startedLevels may.
+    const version = await prisma.curriculumVersion.findFirstOrThrow({
+      where: { code: `denom-${process.pid}` },
+    });
+    const levels = await prisma.levelDefinition.findMany({
+      where: { curriculumVersionId: version.id }, orderBy: { levelNumber: "asc" }, take: 2,
+    });
+    const partial = await prisma.user.create({
+      data: { email: `denom-partial-${process.pid}@learner.invalid`, name: "Partial", passwordHash: BCRYPT_SHAPED },
+    });
+    const enrollment = await prisma.userCurriculumEnrollment.create({
+      data: { userId: partial.id, curriculumVersionId: version.id, curriculumCode: version.code, status: "active" },
+    });
+    await prisma.userLevelProgress.create({
+      data: { enrollmentId: enrollment.id, curriculumVersionId: version.id, levelDefinitionId: levels[0]!.id, status: "completed" },
+    });
+    await prisma.userLevelProgress.create({
+      data: { enrollmentId: enrollment.id, curriculumVersionId: version.id, levelDefinitionId: levels[1]!.id, status: "in_progress" },
+    });
+
+    const view = await getLearner360({ userId: partial.id, permissions: [] });
+    assert.equal(view.progression.value.totalLevels, 7, "denominator must still be the curriculum total");
+    assert.equal(view.progression.value.completedLevels, 1);
+    assert.equal(view.progression.value.startedLevels, 2);
+  });
+
+  await check("LO-360-DENOM-1 · the denominator follows the learner's OWN curriculum version", async () => {
+    // A second version with a different level count. A global constant would
+    // fail here, which is why the fix reads per-enrolment.
+    const other = await prisma.curriculumVersion.create({
+      data: { code: `denom2-${process.pid}`, name: "Other", versionNumber: 1, status: "published" },
+    });
+    const mod = await prisma.moduleDefinition.create({
+      data: { curriculumVersionId: other.id, moduleNumber: 1, code: `dm2-${process.pid}`, title: "M", firstLevel: 1, lastLevel: 3 },
+    });
+    for (let n = 1; n <= 3; n += 1) {
+      await prisma.levelDefinition.create({
+        data: {
+          curriculumVersionId: other.id, moduleId: mod.id, levelNumber: n,
+          stableCode: `dl2-${process.pid}-${n}`, type: "lesson", title: `L${n}`,
+          completionMethod: "assessment_pass",
+        },
+      });
+    }
+    const learner = await prisma.user.create({
+      data: { email: `denom-other-${process.pid}@learner.invalid`, name: "Other", passwordHash: BCRYPT_SHAPED },
+    });
+    await prisma.userCurriculumEnrollment.create({
+      data: { userId: learner.id, curriculumVersionId: other.id, curriculumCode: other.code, status: "active" },
+    });
+
+    const view = await getLearner360({ userId: learner.id, permissions: [] });
+    assert.equal(view.progression.value.totalLevels, 3, "must follow this learner's curriculum, not a constant");
+  });
+
+  await check("LO-UI-CASE-CREATE-1 · creating a case requires learner_ops_handle server-side", () => {
+    // The UI hides the control without the permission; this asserts the
+    // AUTHORITY, which is the permission matrix the POST route gates on. A role
+    // that may only look must not be able to create by knowing the route.
+    for (const role of ["read_only", "analyst", "moderator", "content_manager"]) {
+      const held = resolveEffectivePermissions(role);
+      assert.equal(
+        held.includes("learner_ops_handle"),
+        false,
+        `${role} must not hold learner_ops_handle`,
+      );
+    }
+    for (const role of ["support", "mentor", "retention_manager", "crm_manager", "crm_admin"]) {
+      assert.equal(
+        resolveEffectivePermissions(role).includes("learner_ops_handle"),
+        true,
+        `${role} must hold learner_ops_handle`,
       );
     }
   });
