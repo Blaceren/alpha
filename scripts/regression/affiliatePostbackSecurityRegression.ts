@@ -136,7 +136,7 @@ async function main() {
       "data:text/plain,hello",
       "ws://receiver.example.com/",
     ]) {
-      const result = await resolveDestination(url, {}, noResolve);
+      const result = await resolveDestination(url, {} as unknown as NodeJS.ProcessEnv, noResolve);
       assert.equal(result.ok, false, `${url} must be refused`);
     }
   });
@@ -149,7 +149,7 @@ async function main() {
       ["https://receiver.example.com:3100/cb", "non_standard_port"],
     ];
     for (const [url, reason] of cases) {
-      const result = await resolveDestination(url, {}, noResolve);
+      const result = await resolveDestination(url, {} as unknown as NodeJS.ProcessEnv, noResolve);
       assert.equal(result.ok, false, url);
       assert.equal((result as { reason: string }).reason, reason, url);
     }
@@ -168,14 +168,14 @@ async function main() {
       ["https://intranet/cb", "single_label_host"],
     ];
     for (const [url, reason] of cases) {
-      const result = await resolveDestination(url, {}, noResolve);
+      const result = await resolveDestination(url, {} as unknown as NodeJS.ProcessEnv, noResolve);
       assert.equal(result.ok, false, url);
       assert.equal((result as { reason: string }).reason, reason, url);
     }
   });
 
   await check("§29 · a legitimate public destination IS accepted", async () => {
-    const result = await resolveDestination("https://receiver.example.com/cb?a=1", {}, noResolve);
+    const result = await resolveDestination("https://receiver.example.com/cb?a=1", {} as unknown as NodeJS.ProcessEnv, noResolve);
     assert.equal(result.ok, true);
     assert.equal(result.ok && result.destination.address, "93.184.216.34");
     assert.equal(result.ok && result.destination.port, 443);
@@ -187,7 +187,7 @@ async function main() {
     // THE CASE A STRING CHECK CANNOT SEE. `evil.example.com` looks perfect.
     const result = await resolveDestination(
       "https://evil.example.com/cb",
-      {},
+      {} as unknown as NodeJS.ProcessEnv,
       fixedResolver(["127.0.0.1"]),
     );
     assert.equal(result.ok, false);
@@ -197,7 +197,7 @@ async function main() {
   await check("§29 · a name resolving to metadata is refused", async () => {
     const result = await resolveDestination(
       "https://harmless.example.com/cb",
-      {},
+      {} as unknown as NodeJS.ProcessEnv,
       fixedResolver(["169.254.169.254"]),
     );
     assert.equal(result.ok, false);
@@ -209,7 +209,7 @@ async function main() {
     // a private address and hope the checker picks the public one.
     const result = await resolveDestination(
       "https://mixed.example.com/cb",
-      {},
+      {} as unknown as NodeJS.ProcessEnv,
       fixedResolver(["93.184.216.34", "10.0.0.5"]),
     );
     assert.equal(result.ok, false);
@@ -217,7 +217,7 @@ async function main() {
   });
 
   await check("§29 · an unresolvable name is refused, not defaulted", async () => {
-    const result = await resolveDestination("https://nowhere.example.com/cb", {}, fixedResolver([]));
+    const result = await resolveDestination("https://nowhere.example.com/cb", {} as unknown as NodeJS.ProcessEnv, fixedResolver([]));
     assert.equal(result.ok, false);
     assert.equal((result as { reason: string }).reason, "unresolvable");
   });
@@ -228,7 +228,7 @@ async function main() {
     // than merely unlikely.
     const result = await resolveDestination(
       "https://receiver.example.com/cb",
-      {},
+      {} as unknown as NodeJS.ProcessEnv,
       fixedResolver(["93.184.216.34"]),
     );
     assert.equal(result.ok, true);
@@ -239,21 +239,21 @@ async function main() {
   // ------------------------------------------- the PREPROD test exception
   await check("§29 · the PREPROD host exception is EMPTY outside preprod", () => {
     const allowRule = { AFFILIATE_POSTBACK_TEST_HOST_ALLOW: "localhost:9443" };
-    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "production" }).size, 0);
-    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "dev" }).size, 0);
+    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "production" } as unknown as NodeJS.ProcessEnv).size, 0);
+    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "dev" } as unknown as NodeJS.ProcessEnv).size, 0);
     // ABSENT OR UNRECOGNISED IS ALSO EMPTY. Forgetting to classify a host
     // DENIES the exception, which is the safe direction.
-    assert.equal(testHostAllowlist({ ...allowRule }).size, 0);
-    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "preprod" }).size, 0);
+    assert.equal(testHostAllowlist({ ...allowRule } as unknown as NodeJS.ProcessEnv).size, 0);
+    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "preprod" } as unknown as NodeJS.ProcessEnv).size, 0);
     // …and only `staging`, this product's token for PREPROD, enables it.
-    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "staging" }).size, 1);
+    assert.equal(testHostAllowlist({ ...allowRule, ATA_ENVIRONMENT: "staging" } as unknown as NodeJS.ProcessEnv).size, 1);
   });
 
   await check("§29 · the exception admits no wildcard and no bare host", () => {
     const list = testHostAllowlist({
       ATA_ENVIRONMENT: "staging",
       AFFILIATE_POSTBACK_TEST_HOST_ALLOW: "*.example.com,evil.example.com,localhost:9443, ,x*:1",
-    });
+    } as unknown as NodeJS.ProcessEnv);
     assert.equal(list.has("localhost:9443"), true);
     assert.equal(list.has("*.example.com"), false, "no wildcard entry survives");
     assert.equal(list.has("evil.example.com"), false, "a bare host with no port is not an entry");
@@ -264,7 +264,7 @@ async function main() {
     const env = {
       ATA_ENVIRONMENT: "staging",
       AFFILIATE_POSTBACK_TEST_HOST_ALLOW: "localhost:9443",
-    } as NodeJS.ProcessEnv;
+    } as unknown as NodeJS.ProcessEnv;
     const allowed = await resolveDestination("https://localhost:9443/cb", env, noResolve);
     assert.equal(allowed.ok, true, "the named host:port is admitted");
     assert.equal(allowed.ok && allowed.destination.viaTestAllowlist, true);

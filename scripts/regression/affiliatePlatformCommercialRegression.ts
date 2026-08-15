@@ -251,7 +251,7 @@ async function createConversion(
   return row.id;
 }
 
-const QUALIFY_ON = { AFFILIATE_CPA_QUALIFICATION_ENABLED: "true" } as NodeJS.ProcessEnv;
+const QUALIFY_ON = { AFFILIATE_CPA_QUALIFICATION_ENABLED: "true" } as unknown as NodeJS.ProcessEnv;
 
 async function main() {
   console.log("AFFILIATE-PLATFORM-V1 — commercial invariant regression\n");
@@ -292,8 +292,10 @@ async function main() {
   });
 
   await check("money shape · a CPA amount is canonical decimal TEXT, never rounded", () => {
-    assert.equal(parseCpaAmount("120").ok && parseCpaAmount("120").normalized, "120.00");
-    assert.equal(parseCpaAmount("120.5").ok && parseCpaAmount("120.5").normalized, "120.50");
+    const whole = parseCpaAmount("120");
+    assert.equal(whole.ok && whole.normalized, "120.00");
+    const oneDecimal = parseCpaAmount("120.5");
+    assert.equal(oneDecimal.ok && oneDecimal.normalized, "120.50");
     assert.equal(parseCpaAmount("120.555").ok, false, "a third decimal is refused, not rounded");
     assert.equal(parseCpaAmount("0.00").ok, false, "a zero CPA is not representable");
     assert.equal(parseCpaAmount("-5.00").ok, false);
@@ -409,7 +411,7 @@ async function main() {
 
   await check("§36 · with the switch OFF, a perfect deposit still mints nothing", async () => {
     const id = await createConversion(f, "first_deposit", { attributed: true });
-    const result = await qualifyFirstDeposit(prisma, id, new Date(), {} as NodeJS.ProcessEnv);
+    const result = await qualifyFirstDeposit(prisma, id, new Date(), {} as unknown as NodeJS.ProcessEnv);
     assert.equal(result.outcome, "not_qualified");
     assert.equal((result as { reason: string }).reason, "qualification_disabled");
     assert.equal(await prisma.affiliateCpaQualification.count({ where: { conversionEventId: id } }), 0);

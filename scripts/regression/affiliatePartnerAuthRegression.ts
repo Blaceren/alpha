@@ -47,10 +47,13 @@ const DB_PATH = path.join(os.tmpdir(), `ata-partner-auth-${process.pid}.db`);
 
 /** A well-formed secret that is not any other secret in the deployment. */
 const PARTNER_SECRET = "kQ7vX2mR9tLpZ4wY8nB3cF6hJ1dS5gA0eU7iO2rT4yM";
-const ENV: NodeJS.ProcessEnv = {
+// `as NodeJS.ProcessEnv` throughout: this repository's ProcessEnv type declares
+// NODE_ENV as required, and a test env deliberately carries only the keys under
+// test — supplying NODE_ENV would be adding a variable the assertion is not about.
+const ENV = {
   AFFILIATE_PLATFORM_ENABLED: "true",
   PARTNER_SESSION_SECRET: PARTNER_SECRET,
-};
+} as unknown as NodeJS.ProcessEnv;
 
 const PASSWORD_A = "correct-horse-battery-staple-A1";
 const PASSWORD_B = "correct-horse-battery-staple-B2";
@@ -287,7 +290,7 @@ async function main() {
     const { token } = createPartnerSessionToken({ partnerUserId: a.partnerUserId, sessionEpoch: 1 }, new Date(), {
       ...ENV,
       PARTNER_SESSION_SECRET: "zZ9yX8wV7uT6sR5qP4oN3mL2kJ1iH0gF9eD8cB7aA6b",
-    });
+    } as NodeJS.ProcessEnv);
     assert.equal(verifyPartnerSessionToken(token, new Date(), ENV), null);
   });
 
@@ -317,18 +320,18 @@ async function main() {
 
   await check("§36 · with the platform OFF, NO token verifies and NO principal resolves", async () => {
     const { token } = createPartnerSessionToken({ partnerUserId: a.partnerUserId, sessionEpoch: 1 }, new Date(), ENV);
-    assert.equal(verifyPartnerSessionToken(token, new Date(), {}), null);
-    const result = await resolvePartnerPrincipal(token, prisma, new Date(), {});
+    assert.equal(verifyPartnerSessionToken(token, new Date(), {} as NodeJS.ProcessEnv), null);
+    const result = await resolvePartnerPrincipal(token, prisma, new Date(), {} as NodeJS.ProcessEnv);
     assert.equal(result.ok, false);
     assert.equal(result.ok === false && result.refusal.kind, "platform_unavailable");
   });
 
   await check("§30 · the partner secret may not BE any other secret", () => {
     assert.equal(describeSecretRejection(PARTNER_SECRET, ENV), null);
-    assert.equal(describeSecretRejection(PARTNER_SECRET, { ...ENV, SESSION_SECRET: PARTNER_SECRET }), "reused_session_secret");
-    assert.equal(describeSecretRejection(PARTNER_SECRET, { ...ENV, POSTBACK_SECRET: PARTNER_SECRET }), "reused_postback_secret");
+    assert.equal(describeSecretRejection(PARTNER_SECRET, { ...ENV, SESSION_SECRET: PARTNER_SECRET } as NodeJS.ProcessEnv), "reused_session_secret");
+    assert.equal(describeSecretRejection(PARTNER_SECRET, { ...ENV, POSTBACK_SECRET: PARTNER_SECRET } as NodeJS.ProcessEnv), "reused_postback_secret");
     assert.equal(
-      describeSecretRejection(PARTNER_SECRET, { ...ENV, ATTRIBUTION_TOKEN_SECRET: PARTNER_SECRET }),
+      describeSecretRejection(PARTNER_SECRET, { ...ENV, ATTRIBUTION_TOKEN_SECRET: PARTNER_SECRET } as NodeJS.ProcessEnv),
       "reused_attribution_secret",
     );
     assert.equal(describeSecretRejection("short", ENV), "too_short");

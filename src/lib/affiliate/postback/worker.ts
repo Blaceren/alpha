@@ -39,7 +39,7 @@
  * and no error message from the socket layer — which can quote a hostname — is
  * ever written to a row or a log.
  */
-import type { PrismaClient } from "@prisma/client";
+import type { AffiliatePostbackAttemptOutcome, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deliverPostback } from "@/lib/affiliate/postback/client";
 import { postbackHeaders } from "@/lib/affiliate/postback/signature";
@@ -233,7 +233,12 @@ async function recordAttempt(
     attemptNumber: number;
     startedAt: Date;
     finishedAt: Date;
-    outcome: string;
+    // THE PRISMA ENUM ITSELF, not a widened `string`. The client outcome union
+    // and this enum are the same eleven values pinned to the same CHECK
+    // constraint in migration 50, so taking the enum here means a value the
+    // database would refuse cannot reach this function — and no `any` cast is
+    // needed at the write.
+    outcome: AffiliatePostbackAttemptOutcome;
     httpStatus: number | null;
     responseSnippet: string | null;
     durationMs: number;
@@ -253,10 +258,7 @@ async function recordAttempt(
         attemptNumber: attempt.attemptNumber,
         startedAt: attempt.startedAt,
         finishedAt: attempt.finishedAt,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the
-        // outcome vocabulary is identical to the Prisma enum, and both are
-        // pinned to the same CHECK constraint in migration 50.
-        outcome: attempt.outcome as any,
+        outcome: attempt.outcome,
         httpStatus: attempt.httpStatus,
         durationMs: attempt.durationMs,
         responseSnippet: attempt.responseSnippet,
@@ -269,8 +271,7 @@ async function recordAttempt(
         status,
         attemptCount: { increment: 1 },
         lastAttemptAt: attempt.finishedAt,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above.
-        lastOutcome: attempt.outcome as any,
+        lastOutcome: attempt.outcome,
         lastHttpStatus: attempt.httpStatus,
         deliveredAt: delivered ? attempt.finishedAt : null,
         // A TERMINAL ROW IS NEVER SCHEDULED AGAIN. The CHECK constraint in
