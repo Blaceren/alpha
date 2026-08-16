@@ -50,6 +50,7 @@ const CASE = {
   reopenedAt: null,
   firstRespondedAt: "2026-08-16T09:20:00.000Z",
   anchor: null,
+  allowedTransitions: ["open", "waiting_learner", "waiting_internal", "waiting_external", "escalated", "resolved", "closed"],
 };
 
 vi.mock("@/application/api/learner-ops-client", () => ({
@@ -218,5 +219,45 @@ describe("case detail — internal notes and learner replies are separate contro
     render(<CaseDetailWorkspace caseId="case_1" />);
     const thread = await screen.findByText(/ВИДНО-УЧЕНИКУ здравствуйте/);
     expect(within(thread.closest("li")!).getByText(/сотрудник/)).toBeInTheDocument();
+  });
+});
+
+describe("LO-UI-TRANSITION-CHOICES-1 — the dropdown is the server's list", () => {
+  it("offers exactly what the server said is allowed, and nothing else", async () => {
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    await screen.findByRole("heading", { name: "Переписка с учеником — ВИДНО УЧЕНИКУ" });
+    const values = within(screen.getByLabelText("Статус"))
+      .getAllByRole("option")
+      .map((o) => (o as HTMLOptionElement).value)
+      .filter(Boolean);
+    expect(values.sort()).toEqual([...CASE.allowedTransitions].sort());
+  });
+
+  it("offers NOTHING illegal for a resolved case", async () => {
+    // The exact defect: a resolved case used to offer in_progress and the three
+    // waits, every one of which the server answered 400 to.
+    const resolved = { ...CASE, status: "resolved" as const, allowedTransitions: ["open", "closed"] };
+    const client = await import("@/application/api/learner-ops-client");
+    vi.mocked(client.fetchCase).mockResolvedValueOnce({ status: "success", data: resolved } as never);
+
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    await screen.findByRole("heading", { name: "Переписка с учеником — ВИДНО УЧЕНИКУ" });
+    const values = within(screen.getByLabelText("Статус"))
+      .getAllByRole("option")
+      .map((o) => (o as HTMLOptionElement).value)
+      .filter(Boolean);
+    expect(values.sort()).toEqual(["closed", "open"]);
+    for (const forbidden of ["in_progress", "waiting_learner", "waiting_internal", "waiting_external"]) {
+      expect(values, `${forbidden} must not be offered`).not.toContain(forbidden);
+    }
+  });
+
+  it("never renders the case's OWN status as a choice", async () => {
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    await screen.findByRole("heading", { name: "Переписка с учеником — ВИДНО УЧЕНИКУ" });
+    const values = within(screen.getByLabelText("Статус"))
+      .getAllByRole("option")
+      .map((o) => (o as HTMLOptionElement).value);
+    expect(values).not.toContain(CASE.status);
   });
 });

@@ -78,8 +78,19 @@ import {
 } from "./primitives";
 import { LEARNER_OPS_PATH } from "./inbox-workspace";
 
-/** The transitions an operator can pick, in the order they are usually needed. */
-const TRANSITION_CHOICES = [
+/**
+ * The preferred ORDER in which to offer transitions. It is a presentation
+ * concern only — WHICH transitions exist comes from the server.
+ *
+ * LO-UI-TRANSITION-CHOICES-1. This used to BE the list, so a resolved case
+ * offered `in_progress`, `waiting_learner` and the rest and the server answered
+ * 400 ILLEGAL_TRANSITION to every one of them. The domain's own table is now
+ * projected onto the case as `allowedTransitions`, and this array only decides
+ * the sequence they appear in; anything the server allows that is missing here
+ * is still offered, appended at the end, so a new transition can never become
+ * invisible because a UI constant was not updated.
+ */
+const TRANSITION_ORDER = [
   "in_progress",
   "waiting_learner",
   "waiting_internal",
@@ -88,6 +99,12 @@ const TRANSITION_CHOICES = [
   "closed",
   "open",
 ] as const;
+
+function orderTransitions(allowed: readonly string[]): readonly string[] {
+  const preferred = TRANSITION_ORDER.filter((s) => allowed.includes(s));
+  const rest = allowed.filter((s) => !TRANSITION_ORDER.includes(s as never));
+  return [...preferred, ...rest];
+}
 
 type Banner = { tone: "ok" | "bad"; text: string } | null;
 
@@ -488,7 +505,7 @@ export function CaseDetailWorkspace({ caseId }: { caseId: string }) {
                     }}
                   >
                     <option value="">— выбрать —</option>
-                    {TRANSITION_CHOICES.filter((s) => s !== c.status).map((status) => (
+                    {orderTransitions(c.allowedTransitions).map((status) => (
                       <option key={status} value={status}>
                         {label(STATUS_LABEL, status)}
                       </option>

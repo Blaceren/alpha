@@ -115,6 +115,12 @@ export const anchorSchema = z
   .nullable();
 
 export const caseDetailSchema = queueItemSchema.extend({
+  /**
+   * Server-projected from the canonical transition table. The CRM renders these
+   * and nothing else, so the choices an operator is offered and the transitions
+   * the domain accepts are the same list read once, not two tables that drift.
+   */
+  allowedTransitions: z.array(learnerOpsStatusSchema),
   details: z.string(),
   reasonCode: z
     .object({ code: z.string(), category: z.string(), label: z.string() })
