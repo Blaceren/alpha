@@ -115,6 +115,28 @@ export function publicRoleLabel(staffRole: StaffRole | null | undefined): string
   return PUBLIC_ROLE_LABELS[staffRole] ?? null;
 }
 
+/**
+ * The author projection used for REMOVED content.
+ *
+ * A removed discussion keeps its place so a thread never loses its shape, but
+ * it must not keep naming the person whose words were taken down. Attributing
+ * removed content in a public list is a small, durable act of shaming: every
+ * learner who scrolls past reads who was moderated. The row still says
+ * something happened; it no longer says to whom.
+ *
+ * `isViewer` is preserved, because the author still needs to recognise their
+ * own withdrawn post, and telling them so leaks nothing they do not know.
+ */
+export function toRemovedAuthor(source: AuthorSource, viewerId: number): CommunityAuthor {
+  return {
+    id: 0,
+    displayName: "Участник",
+    roleLabel: null,
+    moduleNumber: null,
+    isViewer: source.id === viewerId,
+  };
+}
+
 export type CommunityAuthor = {
   readonly id: number;
   readonly displayName: string;

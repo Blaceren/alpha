@@ -53,8 +53,15 @@ export async function GET(request: Request) {
     // locked space would be a disclosure dressed as a teaser.
     const spaces = await Promise.all(
       access.spaces.map(async (space) => {
+        // Removed discussions are excluded from the PREVIEW only. In the space
+        // itself the tombstone stays, because a list that silently loses a row
+        // is a list that hides moderation. Home has three slots and its job is
+        // to show what is live, so a tombstone there is pure noise that crowds
+        // out the discussion a learner could actually answer.
         const preview = space.canRead
-          ? (await listSpaceDiscussions(space.spaceId, viewer)).slice(0, PLATE_PREVIEW_LIMIT)
+          ? (await listSpaceDiscussions(space.spaceId, viewer))
+              .filter((discussion) => !discussion.isRemoved)
+              .slice(0, PLATE_PREVIEW_LIMIT)
           : [];
         return {
           code: space.code,

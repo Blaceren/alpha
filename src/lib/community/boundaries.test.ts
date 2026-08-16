@@ -156,6 +156,49 @@ describe("Community emits no financial or performance vocabulary", () => {
   });
 });
 
+describe("every write route resolves access before it writes", () => {
+  /**
+   * The progression gate lives in the ROUTE, not in the service — the service
+   * documents that authority is resolved before it is called, matching the
+   * Learner Operations shape. That is a real property and it needs a real
+   * guard, because a future write route that forgot the check would compile,
+   * pass its own tests, and quietly let a learner post into a space their
+   * progression has not opened.
+   *
+   * Ownership is the other half and it IS enforced inside the service, where a
+   * caller cannot skip it.
+   */
+  const WRITE_ROUTES = SOURCES.filter(
+    (s) => s.file.startsWith("src/app/api/community/") && /export async function POST/.test(s.text),
+  );
+
+  it("finds the write routes at all", () => {
+    expect(WRITE_ROUTES.length).toBeGreaterThanOrEqual(4);
+  });
+
+  for (const route of [
+    "src/app/api/community/spaces/[spaceCode]/discussions/route.ts",
+    "src/app/api/community/discussions/[discussionId]/replies/route.ts",
+  ]) {
+    it(`${route} checks canWrite before writing`, () => {
+      const source = SOURCES.find((s) => s.file === route);
+      expect(source, `${route} not found`).toBeDefined();
+      expect(source!.text).toContain("resolveCommunityAccess");
+      expect(source!.text).toContain("canWrite");
+    });
+  }
+
+  it("every learner write route resolves access", () => {
+    for (const route of WRITE_ROUTES) {
+      // The removal route is the exception and is allowed to be: it authorizes
+      // on OWNERSHIP, which the service enforces, and a learner may withdraw
+      // their own words from a space that has since closed to them.
+      if (route.file.endsWith("content/remove/route.ts")) continue;
+      expect(route.text, route.file).toContain("resolveCommunityAccess");
+    }
+  });
+});
+
 describe("the staff surface is unreachable from the learner origin", () => {
   it("keeps every learner route out of the CRM namespace", () => {
     const learnerRoutes = collect(API_DIR);

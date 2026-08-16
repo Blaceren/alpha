@@ -28,6 +28,7 @@ import {
   REPLY_MAX,
   toCommunityAuthor,
   toCommunityBody,
+  toRemovedAuthor,
   type CommunityAuthor,
   type CommunityBody,
   type ReportReason,
@@ -168,12 +169,16 @@ export async function listSpaceDiscussions(
 
   return discussions.map((discussion) => ({
     id: discussion.id,
-    // A removed discussion keeps its position in the list but not its words.
+    // A removed discussion keeps its position in the list but not its words,
+    // and not its author either.
     title: discussion.status === "visible" ? discussion.title : "Обсуждение удалено",
-    author: toCommunityAuthor(discussion.author, {
-      viewerId: viewer.viewerId,
-      moduleNumber: modules.get(discussion.author.id) ?? null,
-    }),
+    author:
+      discussion.status === "visible"
+        ? toCommunityAuthor(discussion.author, {
+            viewerId: viewer.viewerId,
+            moduleNumber: modules.get(discussion.author.id) ?? null,
+          })
+        : toRemovedAuthor(discussion.author, viewer.viewerId),
     createdAt: discussion.createdAt.toISOString(),
     lastActivityAt: discussion.lastActivityAt.toISOString(),
     replyCount: discussion._count.replies,
@@ -231,14 +236,17 @@ export async function getThread(
     spaceId: discussion.spaceId,
     spaceCode: discussion.space.code,
     title: visible ? discussion.title : "Обсуждение удалено",
-    author: author(discussion.author),
+    author: visible ? author(discussion.author) : toRemovedAuthor(discussion.author, viewer.viewerId),
     body: toCommunityBody(discussion),
     createdAt: discussion.createdAt.toISOString(),
     canRemove: visible && (viewer.viewerIsModerator || discussion.author.id === viewer.viewerId),
     canReport: visible && discussion.author.id !== viewer.viewerId,
     replies: discussion.replies.map((reply) => ({
       id: reply.id,
-      author: author(reply.author),
+      author:
+        reply.status === "visible"
+          ? author(reply.author)
+          : toRemovedAuthor(reply.author, viewer.viewerId),
       body: toCommunityBody(reply),
       createdAt: reply.createdAt.toISOString(),
       canRemove:
