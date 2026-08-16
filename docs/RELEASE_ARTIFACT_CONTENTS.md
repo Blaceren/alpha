@@ -159,6 +159,54 @@ tools/publish-release.sh <component> <commit> <tree>
 tools/cutover.sh         <component> <commit> <build-id>
 ```
 
+### Where that tooling lives, and who owns it
+
+**Canonical source:** `/home/ubuntu/ata-release-tooling` (its README is the full
+contract).
+**Active execution path:** `/home/ubuntu/learner-ops-v1/tools` — unchanged, and
+deliberately a different directory from the source.
+
+This document lives in Backend because Backend owns the release *documentation*.
+It does **not** own the release *tooling*, and should not: the publisher publishes
+Backend, so a Backend release would contain the publisher that produced it, and
+under the provenance contract above a tooling edit committed here would force a
+Backend rebuild, publish and cutover — or leave Backend HEAD drifting ahead of its
+release. The tooling serves all four components and belongs to none of them
+(RELEASE-TOOLING-SOURCE-OWNERSHIP-1).
+
+```
+VERSION-CONTROLLED SOURCE          →  install  →  ACTIVE TOOLING PATH
+/home/ubuntu/ata-release-tooling                  /home/ubuntu/learner-ops-v1/tools
+```
+
+**Direct manual edits to the active path are not the canonical workflow.** Edit the
+source, prove it, commit it, then:
+
+```bash
+/home/ubuntu/ata-release-tooling/install-release-tooling.sh --install
+/home/ubuntu/ata-release-tooling/install-release-tooling.sh --check
+```
+
+The active path carries `ATA_TOOLING_INSTALLED.json`, naming the source repository,
+commit, tree and a sha256 per installed file — so "which revision is running?" is
+answerable without trusting a modification time. `--check` reports `ok`, `DIFFERS`
+or `MISSING` per file and never repairs drift silently.
+
+**Regressions** (all must be green before an install):
+
+```bash
+bash tools/tests/build-provenance.test.sh
+bash tools/tests/release-packaging.test.sh
+bash /home/ubuntu/ata-release-tooling/tests/install-contract.test.sh
+```
+
+**Rollback** is by revision, not by memory: `git checkout <good>` in the source
+repository, `--install`, `--check`, then re-run the regressions. There is no second
+live copy kept as a fallback — two sources of truth where one is silently stale is
+the failure `/srv/ata/previous/` already demonstrated.
+
+A verified git bundle lives at `/srv/ata/source-bundles/release-tooling-<short>.bundle`.
+
 A `.next` without a matching record is refused with the exact rebuild command.
 Building is a separate step rather than something the publisher does, so the
 publisher stays free of every component's runtime configuration — the Academy
