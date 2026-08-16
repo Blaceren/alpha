@@ -148,9 +148,21 @@ export function CommunitySpace({ spaceCode }: { spaceCode: string }) {
   >({ kind: "loading" });
 
   React.useEffect(() => {
+    // NO AbortController, and that is the fix rather than an omission.
+    //
+    // COMMUNITY-V1 aborted the in-flight read on cleanup. When React runs an
+    // effect, cleans it up and settles — which the App Router does — the abort
+    // lands on the read whose `.then` is then skipped because `cancelled` is
+    // true, and the surface stays on its skeleton forever with no error and no
+    // request in the network panel. Reproduced in a real browser at mobile
+    // width: `/support`, which uses the pattern below, loaded its list in the
+    // same tab seconds before `/community` failed to load its own.
+    //
+    // The stale-response guard is the `cancelled` flag alone, exactly as
+    // `support-hub.tsx` does it. Aborting a short JSON GET saves nothing worth
+    // a permanently stuck surface.
     let cancelled = false;
-    const controller = new AbortController();
-    void fetchCommunitySpace(spaceCode, controller.signal).then((result) => {
+    void fetchCommunitySpace(spaceCode).then((result) => {
       if (cancelled) return;
       setState(
         result.ok
@@ -160,7 +172,6 @@ export function CommunitySpace({ spaceCode }: { spaceCode: string }) {
     });
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [spaceCode]);
 
