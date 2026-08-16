@@ -27,6 +27,8 @@ type Notification = {
   /** Where this event happened, when the payload names somewhere real. */
   link?: string | null;
   url?: string | null;
+  /** Structured context written by the Backend owner of the event. */
+  metadata?: unknown;
 };
 
 type Load =
@@ -42,7 +44,37 @@ type Load =
  * they did not write. Anything that is not a plain internal path is rendered as
  * text with no link at all.
  */
-function safeHref(n: Notification): string | null {
+/**
+ * A cuid-shaped id, and nothing that could leave the path segment.
+ *
+ * `metadata` is written by the Backend, never by a learner, but it is still
+ * data arriving over the wire and it is validated like data: this admits an id
+ * and refuses a traversal, a query string, an absolute URL and anything with a
+ * slash. A value that does not match produces no link at all.
+ */
+const DISCUSSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
+
+/**
+ * COMMUNITY-V1. The two Community events carry
+ * `metadata: { spaceCode, discussionId }` precisely so the ONE canonical
+ * notification surface can reach the thread. Without this they were rows that
+ * told a learner something had happened and gave them no way to go and read it.
+ *
+ * Only these two types are mapped. A future event type gets no link until
+ * somebody decides where it should lead.
+ */
+function communityHref(n: Notification): string | null {
+  if (n.type !== "community_reply" && n.type !== "community_moderation") return null;
+  const meta = n.metadata;
+  if (typeof meta !== "object" || meta === null) return null;
+  const id = (meta as { discussionId?: unknown }).discussionId;
+  if (typeof id !== "string" || !DISCUSSION_ID_RE.test(id)) return null;
+  return `/community/d/${id}`;
+}
+
+export function deriveNotificationHref(n: Notification): string | null {
+  const derived = communityHref(n);
+  if (derived) return derived;
   const raw = n.link ?? n.url ?? null;
   if (!raw || typeof raw !== "string") return null;
   if (!raw.startsWith("/") || raw.startsWith("//")) return null;
@@ -117,7 +149,7 @@ export function NotificationsScreen() {
       </p>
       <ul className="ax-levels">
         {load.items.map((n) => {
-          const href = safeHref(n);
+          const href = deriveNotificationHref(n);
           const text = n.body ?? n.message ?? "";
           const unread = !n.readAt;
           return (
