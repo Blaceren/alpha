@@ -48,3 +48,51 @@ bytes that were never going to be written. The 2 GiB safety margin is unchanged.
 
 The exclusions are declared once, in `RELEASE_EXCLUDE_PATHS`, and asserted on the
 STAGED copy — the promise is verified on the artifact, not trusted from a flag.
+
+## Where a release comes from
+
+`publish-release.sh` resolves the candidate workspace per component, because they
+do not all live in one place:
+
+| component | source workspace |
+|---|---|
+| backend, crm, academy | `/home/ubuntu/learner-ops-v1/<component>` |
+| partner | `/home/ubuntu/affiliate-work/partner` |
+
+That mapping used to be a single hardcoded `learner-ops-v1/<component>`, which
+was right for three components and had never been right for the partner console.
+The effect was not a wrong release but no release: the publisher refused with
+"candidate workspace does not exist", so Partner sat outside the canonical flow
+while every other partner-specific branch in the publisher — the compiled-pages
+artifact gate, the `/login` readiness probe — was already written and waiting.
+
+`ATA_RELEASE_MANIFEST.json` records the workspace the artifact was actually built
+from. It used to record a fixed string that had stopped being true for three of
+the four components; provenance a reader cannot trust is worse than none.
+
+## Rollback authority — one owner, no second opinion
+
+**The canonical rollback anchor for every component is:**
+
+```
+/srv/ata-data/access-control/.cutover-rollback-<component>
+```
+
+`cutover.sh` writes it, and nothing else does. It is written before the symlink
+swap, from the link's own current target, so it always names a release that was
+serving traffic a moment earlier. It advances on every cutover.
+
+Read it, and confirm the directory it names still exists, before planning any
+rollback or any release deletion. A release named by a receipt is live rollback
+state, not history.
+
+**`/srv/ata/previous/` is retired.** It was an earlier rollback pointer that the
+receipt mechanism superseded. Nothing read or wrote it — not systemd, not nginx,
+not the publisher, not the cutover tool, not any timer — and because nothing
+maintained it, it drifted: `previous/backend` still named `4208e719` across seven
+subsequent cutovers, and it never had entries for academy or partner at all. Two
+rollback pointers where one is silently stale is worse than one, which is why the
+stale one is gone rather than repaired (ROLLBACK-ANCHOR-DRIFT-1).
+
+If you find a `previous/` reference in an older phase report, it is historical
+text describing this problem, not an instruction.
