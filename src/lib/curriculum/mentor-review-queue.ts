@@ -79,6 +79,17 @@ export type MentorReviewQueueItem = {
   requestedAt: string | null;
   curriculumCode: string;
   curriculumVersionNumber: number;
+  /**
+   * LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the operational half of the same
+   * work. A pointer for navigation and ownership, never authority: approval is
+   * the canonical command, and nothing read from here can change one.
+   */
+  operationalWorkItem: {
+    caseId: string;
+    reference: string;
+    status: string;
+    assignedStaffDisplayName: string | null;
+  } | null;
 };
 
 export type MentorReviewQueueResult = {
@@ -140,6 +151,17 @@ export async function listMentorReviewQueue({
           curriculumVersion: { select: { versionNumber: true } },
         },
       },
+      // LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the operational half, so this
+      // specialized surface and the unified Learner Operations queue reconcile
+      // to ONE object. The report-review surface already carries this; without
+      // it here the two review families would document their boundary
+      // differently, which is how two truth sets start.
+      learnerOpsCases: {
+        select: {
+          id: true, reference: true, status: true,
+          assignedStaff: { select: { displayName: true } },
+        },
+      },
     },
   });
 
@@ -158,6 +180,16 @@ export async function listMentorReviewQueue({
       requestedAt: row.lastProgressAt?.toISOString() ?? null,
       curriculumCode: row.enrollment.curriculumCode,
       curriculumVersionNumber: row.enrollment.curriculumVersion.versionNumber,
+      // A POINTER, never authority: the educational decision is made by the
+      // canonical command on this page, not by anything in the operational case.
+      operationalWorkItem: row.learnerOpsCases[0]
+        ? {
+            caseId: row.learnerOpsCases[0].id,
+            reference: row.learnerOpsCases[0].reference,
+            status: row.learnerOpsCases[0].status,
+            assignedStaffDisplayName: row.learnerOpsCases[0].assignedStaff?.displayName ?? null,
+          }
+        : null,
     })),
     nextCursor,
   };
