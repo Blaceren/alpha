@@ -63,7 +63,7 @@ const DISCUSSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
  * Only these two types are mapped. A future event type gets no link until
  * somebody decides where it should lead.
  */
-function communityHref(n: Notification): string | null {
+function communityHref(n: HrefSource): string | null {
   if (n.type !== "community_reply" && n.type !== "community_moderation") return null;
   const meta = n.metadata;
   if (typeof meta !== "object" || meta === null) return null;
@@ -72,7 +72,15 @@ function communityHref(n: Notification): string | null {
   return `/community/d/${id}`;
 }
 
-export function deriveNotificationHref(n: Notification): string | null {
+/**
+ * The fields a link is derived FROM, and no others. Narrower than
+ * `Notification` on purpose: the id, the body and the read state have nothing
+ * to do with where a row leads, and a function that cannot see them cannot
+ * start depending on them.
+ */
+export type HrefSource = Pick<Notification, "type" | "metadata" | "link" | "url">;
+
+export function deriveNotificationHref(n: HrefSource): string | null {
   const derived = communityHref(n);
   if (derived) return derived;
   const raw = n.link ?? n.url ?? null;
