@@ -309,9 +309,11 @@ describe("Learner Operations permission matrix", () => {
   it("appends the Learner Operations permissions to the contract without reordering it", () => {
     // v3 added nine; v4 added the tenth, `learner_ops_escalation_resolve`,
     // after LO-ESCALATION-RESOLVE-AUTHORITY-1 showed that raising an escalation
-    // and answering one had been fused into a single permission.
-    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(4);
-    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(25);
+    // and answering one had been fused into a single permission. v5 appends
+    // `community_moderate`, which belongs to no `learner_ops_*` family — the
+    // assertions below are unchanged because nothing before position 25 moved.
+    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(5);
+    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(26);
     // The first fifteen keep their exact accepted positions.
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15)).toEqual([
       "view_exact_financials",
@@ -330,7 +332,17 @@ describe("Learner Operations permission matrix", () => {
       "curriculum_approve",
       "curriculum_source_authority",
     ]);
-    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15)).toEqual(NEW_PERMISSIONS);
+    // The Learner Operations block occupies exactly its own span. It is no
+    // longer the tail of the contract — COMMUNITY-V1 appended after it — so the
+    // slice is bounded by the block's own length rather than by "everything
+    // from 15 on", which was only ever true while LO happened to be last.
+    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15, 15 + NEW_PERMISSIONS.length)).toEqual(
+      NEW_PERMISSIONS,
+    );
+    // And what follows it is not a learner-operations permission.
+    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15 + NEW_PERMISSIONS.length)).toEqual([
+      "community_moderate",
+    ]);
   });
 
   it("gives mentor RESOLVE and withholds RAISE — LO-ESCALATION-RESOLVE-AUTHORITY-1", () => {
@@ -364,10 +376,34 @@ describe("Learner Operations permission matrix", () => {
 
   it("withholds review authority from moderator — the principal that had it silently", () => {
     const moderator = resolveEffectivePermissions("moderator");
-    expect(moderator).toEqual([]);
+    // COMMUNITY-V1 gave `moderator` its first permission, so this is no longer
+    // the empty set. The property this test exists for is unchanged and is now
+    // stated directly rather than as a side effect of holding nothing: the role
+    // holds Community moderation and NOT ONE Learner Operations permission.
+    expect(moderator).toEqual(["community_moderate"]);
+    expect(moderator.filter((p) => p.startsWith("learner_ops_"))).toEqual([]);
     expect(canPerformReportReview(moderator)).toBe(false);
     expect(canPerformMentorReview(moderator)).toBe(false);
     expect(canViewLearnerOps(moderator)).toBe(false);
+  });
+
+  it("gives Community moderation to exactly moderator and crm_admin", () => {
+    for (const role of Object.keys(STAFF_ROLE_PERMISSIONS)) {
+      const held = resolveEffectivePermissions(role);
+      expect(held.includes("community_moderate")).toBe(role === "moderator" || role === "crm_admin");
+    }
+  });
+
+  it("does not let Community moderation carry any learner-operations authority", () => {
+    // The negative control for the role matrix: a principal whose ONLY
+    // permission is Community moderation can moderate a discussion and can do
+    // nothing in the operational department.
+    const moderator = resolveEffectivePermissions("moderator");
+    expect(canViewLearnerOps(moderator)).toBe(false);
+    expect(canHandleLearnerOps(moderator)).toBe(false);
+    expect(moderator).not.toContain("view_user_notes");
+    expect(moderator).not.toContain("reveal_pii");
+    expect(moderator).not.toContain("view_exact_financials");
   });
 
   it("never lets a frontline support role approve educational work", () => {

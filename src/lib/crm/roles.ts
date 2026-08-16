@@ -118,6 +118,20 @@ export const CRM_PERMISSIONS = [
   "learner_ops_analytics",
   "learner_ops_admin",
   "learner_ops_escalation_resolve",
+  // COMMUNITY-V1 — the permission this file already said was missing.
+  //
+  // The LEARNER-OPERATIONS-V1 grant table records that `moderator` and
+  // `content_manager` receive NOTHING because "Community moderation and
+  // curriculum authoring are not learner operations". This is the other half of
+  // that sentence: Community moderation is its own axis and now has its own
+  // permission, so `moderator` stops being a role that holds nothing and
+  // reaches Community through `User.role = admin` instead.
+  //
+  // ONE PERMISSION, NOT A FAMILY. Hiding a discussion, restoring it and
+  // resolving a report are the same responsibility exercised by the same person
+  // in the same sitting. Splitting them would produce a moderator who can
+  // remove but not restore, which is worse than either.
+  "community_moderate",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -295,6 +309,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_analytics",
     "learner_ops_admin",
     "learner_ops_escalation_resolve",
+    "community_moderate",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -352,7 +367,14 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_handle",
     "learner_ops_escalate",
   ],
-  moderator: [],
+  // COMMUNITY-V1 — `moderator` receives its FIRST permission, and exactly one.
+  //
+  // It receives no `learner_ops_*`: moderating a public discussion is not
+  // handling a support case, and the LO grant table's reasoning is unchanged.
+  // It receives no `view_user_notes`, no `reveal_pii` and no financial
+  // permission: a moderator decides whether a POST belongs, which needs the
+  // post, not the person's file.
+  moderator: ["community_moderate"],
   // AFD-5A gives analyst its first permission — read-only affiliate inventory.
   // Deliberately NOT `manage_settings`: an analyst may inspect configuration and
   // must not be able to change it.

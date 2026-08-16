@@ -146,7 +146,10 @@ describe("§11 — identity is by NAME; order is a separate, deliberate protocol
     ]);
     // LEARNER-OPERATIONS-V1 — appended at 15, after every historical entry.
     // v4 appends `learner_ops_escalation_resolve` at 24 by the same rule: the
-    // twenty-four entries before it do not move.
+    // twenty-four entries before it do not move. COMMUNITY-V1 appends
+    // `community_moderate` at 25, and the twenty-five before it do not move
+    // either — including the whole `learner_ops_*` block, which is the point:
+    // Community moderation is a NEW axis and displaces nothing.
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15)).toEqual([
       "learner_ops_view",
       "learner_ops_handle",
@@ -158,6 +161,7 @@ describe("§11 — identity is by NAME; order is a separate, deliberate protocol
       "learner_ops_analytics",
       "learner_ops_admin",
       "learner_ops_escalation_resolve",
+      "community_moderate",
     ]);
   });
 });
