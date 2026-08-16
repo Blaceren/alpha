@@ -400,3 +400,104 @@ a.ax-lvl__t:hover { color: var(--ax-signal); }
   .ax-lvl > .ax-mark { grid-column: 2; justify-self: start; }
   .ax-trace__bar { height: 20px; }
 }
+
+/* ---------------------------------------------------------- level detail -- */
+
+/*
+ * LEVEL DETAIL inherits the Home/Path language but not Home's composition.
+ * Home owns the programme-wide next action; this page owns one level and hosts
+ * its canonical task surface. Same materials, same state language, same signal
+ * semantics — different shape, because cloning the Action Field here would give
+ * the learner two competing primary objects on the same journey.
+ */
+.ax-lvlhead { margin: 0 0 30px; }
+.ax-lvlhead__title {
+  font-size: clamp(26px, 3.8vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.ax-lvlhead__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.ax-lvlhead__why { font-size: 16px; line-height: 1.55; color: var(--ax-ink-muted); margin: 0 0 18px; max-width: 62ch; }
+.ax-lvlhead__obj { font-size: 16px; line-height: 1.6; color: var(--ax-ink); margin: 0; max-width: 66ch; }
+
+/* The state strip: one line that says what the level is and where it stands.
+   Material follows posture exactly as the Action Field does. */
+.ax-statestrip {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 18px; margin: 0 0 26px;
+  border-radius: var(--ax-radius-tight);
+  border-left: 2px solid var(--ax-line-strong);
+  background: var(--ax-unlit-bg);
+}
+.ax-statestrip[data-posture="act"] { background: var(--ax-lit-bg); border-left-color: var(--ax-signal); }
+.ax-statestrip[data-posture="waiting"] { background: var(--ax-cold-bg); border-left-color: rgba(157, 176, 207, 0.55); }
+.ax-statestrip[data-posture="done"] { background: var(--ax-lit-bg); border-left-color: var(--ax-signal-deep); }
+.ax-statestrip__dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: rgba(111, 131, 163, 0.5);
+}
+.ax-statestrip[data-posture="act"] .ax-statestrip__dot { background: var(--ax-signal); box-shadow: 0 0 0 4px rgba(79, 224, 192, 0.14); }
+.ax-statestrip[data-posture="done"] .ax-statestrip__dot { background: var(--ax-signal-deep); }
+.ax-statestrip__text { font-size: 15px; color: var(--ax-ink); margin: 0; }
+
+/* Section rhythm shared by content and the hosted task surfaces. */
+.ax-lvlsec { margin: 0 0 30px; }
+.ax-lvlsec > h2 {
+  font-size: 13px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ax-ink-faint); margin: 0 0 14px; font-weight: 600;
+}
+.ax-lvlsec__note { font-size: 15px; color: var(--ax-ink-muted); line-height: 1.6; margin: 0; max-width: 62ch; }
+
+/*
+ * TASK SURFACE HOST.
+ *
+ * The canonical task components (assessment, report, checkpoint, manual, mentor,
+ * registration) keep their own markup and their own owners — they are correct
+ * and this phase does not rewire them. What made them read as fixture-era
+ * islands was sitting on their own background inside a page with a different
+ * one. Hosting them on a shared surface and normalising only type colour, links
+ * and control shape is enough to make them part of the same product without a
+ * design-system rewrite.
+ */
+.ax-task {
+  padding: 26px 24px;
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid var(--ax-line-strong);
+  border-radius: var(--ax-radius-field);
+  background: var(--ax-cold-bg);
+}
+.ax-task[data-posture="act"] { border-left-color: var(--ax-signal); background: var(--ax-lit-bg); }
+.ax-task[data-posture="done"] { border-left-color: var(--ax-signal-deep); }
+.ax-task h2, .ax-task h3 { color: var(--ax-ink); }
+.ax-task p, .ax-task li, .ax-task dd, .ax-task label { color: var(--ax-ink-muted); }
+.ax-task strong, .ax-task dt { color: var(--ax-ink); }
+.ax-task a { color: var(--ax-signal); }
+.ax-task button:focus-visible, .ax-task a:focus-visible, .ax-task input:focus-visible,
+.ax-task textarea:focus-visible, .ax-task select:focus-visible {
+  outline: 2px solid var(--ax-signal); outline-offset: 2px;
+}
+
+/* Level parameters — a metadata rail, not a card grid. */
+.ax-lvlmeta { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border-top: 1px solid var(--ax-line); margin: 0 0 30px; }
+.ax-lvlmeta > div { padding: 16px 20px 16px 0; }
+.ax-lvlmeta > div + div { padding-left: 20px; border-left: 1px solid var(--ax-line); }
+.ax-lvlmeta dt { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ax-ink-faint); margin: 0 0 6px; }
+.ax-lvlmeta dd { margin: 0; font-size: 16px; color: var(--ax-ink); }
+
+/* Prev/next. A return path is part of the level's job, so it is not decoration. */
+.ax-lvlnav {
+  display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding-top: 22px; border-top: 1px solid var(--ax-line);
+}
+.ax-lvlnav a { color: var(--ax-ink-muted); text-decoration: none; font-size: 15px; }
+.ax-lvlnav a:hover { color: var(--ax-signal); }
+
+@media (max-width: 860px) {
+  .ax-lvlmeta { grid-template-columns: 1fr; }
+  .ax-lvlmeta > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--ax-line); }
+  .ax-lvlmeta > div { padding-right: 0; }
+  .ax-task { padding: 20px 16px; }
+  .ax-lvlnav { flex-direction: column; gap: 10px; }
+}

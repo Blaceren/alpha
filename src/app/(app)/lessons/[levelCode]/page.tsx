@@ -18,7 +18,7 @@ import { ReportWorkspace } from "@/features/report-level/components/report-works
 import { resolveReportVerdictAdapter } from "@/features/report-level/model/report-review";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
-import { ApiLevelDetail } from "@/features/curriculum-api/api-level-detail";
+import { ExperienceLevelDetail } from "@/features/academy-experience/level-detail-screen";
 import "@/features/lesson/lesson.css";
 import "@/features/report-level/report-level.css";
 
@@ -55,7 +55,7 @@ export default async function LessonPage({
 
   // API mode: the [levelCode] is the Backend stable code; render server data.
   if (getAcademyConfig().mode === "api") {
-    return <ApiLevelDetail levelCode={levelCode} />;
+    return <ExperienceLevelDetail levelCode={levelCode} />;
   }
 
   const { scenario: rawScenario, verdict: rawVerdict } = await searchParams;
