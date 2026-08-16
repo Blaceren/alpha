@@ -1,4 +1,11 @@
 node_modules/
 .next/
+# Generated build cache. `.next/` above does NOT cover this sibling path, which is
+# how 447 MiB of webpack packs — plus rotating Next preview/RSC signing keys —
+# reached the Backend repository and then every immutable Backend release
+# (ATA-CACHE-SEED-IN-GIT-1). The console has not produced one yet; the rule is
+# here so it cannot, because the release publisher may only exclude paths that
+# git does not track.
+.next-cache-seed/
 *.tsbuildinfo
 .env*
