@@ -10,7 +10,9 @@ A release is the artifact that SERVES. It is not a copy of the workspace.
 * `node_modules` — a real directory, never a symlink, because the deployment
   model runs the release in place;
 * `src`, `scripts`, `prisma` and the other tracked sources, which the tree
-  verification checks byte-for-byte against the published commit.
+  verification checks byte-for-byte against the published commit;
+* `.next/ATA_BUILD_PROVENANCE.json` — the record binding the compiled artifact to
+  the commit it was built from (see "Source verification alone is not enough").
 
 ## What a release deliberately omits
 
@@ -69,6 +71,81 @@ artifact gate, the `/login` readiness probe — was already written and waiting.
 `ATA_RELEASE_MANIFEST.json` records the workspace the artifact was actually built
 from. It used to record a fixed string that had stopped being true for three of
 the four components; provenance a reader cannot trust is worse than none.
+
+## Source verification alone is not enough (RELEASE-BUILD-PROVENANCE-1)
+
+**Tree verification proves the SOURCE in a release matches git. It proves nothing
+about the compiled artifact beside it.**
+
+The reason is structural, not a bug in any one line: tree verification iterates
+`git ls-tree -r --name-only <commit>`, which enumerates TRACKED files only.
+`.next` is gitignored in all four components, so the generated artifact was never
+enumerated and never compared against anything. The production artifact gate
+proves `.next` IS a production build and SERVES — but every one of those checks
+is satisfied by any valid production build of any revision.
+
+Neither system crossed the gap, and a real release fell through it. Backend
+`03f981a1` shipped correct source, a truthful manifest naming the correct commit
+and tree, a passing artifact gate and a running service — and a compiled route
+that did not contain the code its own source declared, because `.next` had been
+built before the source edit. It was found by querying the live API, not by any
+gate.
+
+### The invariant now enforced
+
+```
+the artifact in .next was produced by tools/build-release.sh
+FROM EXACTLY the commit and tree being published
+```
+
+### How it works
+
+`tools/build-release.sh <component>` is the only supported way to produce a
+publishable artifact. It refuses a dirty workspace, captures the commit and tree
+before building, builds under the component's canonical environment, re-checks
+that the source did not move during the build, and writes
+`.next/ATA_BUILD_PROVENANCE.json` binding what it produced to what it built from.
+
+`tools/verify-build-provenance.sh` is the single implementation of the rule.
+`publish-release.sh` calls it, and so does the regression — one implementation,
+and it is the one that runs in production.
+
+**Two bindings, because there are two ways to drift:**
+
+| binding | catches |
+|---|---|
+| `source_commit` / `source_tree` | a STALE ARTIFACT — the source moved on after the build. This is the incident. |
+| `build_id` vs `.next/BUILD_ID` | a STALE RECORD — `.next` was rebuilt by other means (a bare `npm run build`, an IDE, a dev server), so the record no longer describes what is there. |
+
+The record also names its `component`, so another app's record cannot satisfy
+this one, and a `build_env_identity` digest over the exact non-secret build
+variables used, so two artifacts can be compared for build-contract equality.
+
+**Not accepted as proof:** mtimes, "the build directory is newer than the
+source", a clean workspace, or an operator's recollection. The workspace was
+clean throughout the incident.
+
+### Publishing, end to end
+
+```
+tools/build-release.sh   <component>
+tools/publish-release.sh <component> <commit> <tree>
+tools/cutover.sh         <component> <commit> <build-id>
+```
+
+A `.next` without a matching record is refused with the exact rebuild command.
+Building is a separate step rather than something the publisher does, so the
+publisher stays free of every component's runtime configuration — the Academy
+needs `ACADEMY_MODE`, the CRM its mode and origin, the Backend a `DATABASE_URL`
+for Prisma, and those live in root-owned files the publisher has no business
+reading. The build script owns that knowledge in one place; the publisher
+verifies only the result.
+
+The build environment is never sourced from a runtime env file. Each component
+declares an explicit allowlist of non-secret, compile-relevant keys, read
+line-anchored, so a secret cannot be picked up even if one is added to those
+files later. The Backend builds against a throwaway `DATABASE_URL`, never the
+live database.
 
 ## Rollback authority — one owner, no second opinion
 
