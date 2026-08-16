@@ -63,11 +63,17 @@ import {
   LEARNER_OPS_FIXTURE_AUDIT_ACTION,
   STAFF_FIXTURES,
   isAllowlisted,
+  learnerFixture,
   type LearnerFixture,
   type StaffFixture,
 } from "./learner-ops-fixture/identities";
 import { hasControllingTty, intakeFixturePassword } from "./learner-ops-fixture/tty-password";
 import { enrollUserInPublishedCurriculum } from "@/lib/curriculum/enrollment";
+import {
+  attestStagingGate,
+  isStagingAttestationError,
+} from "@/lib/curriculum/staging-attestation";
+import { POCKET_REGISTRATION_STABLE_CODE } from "@/lib/curriculum/pocket-registration-completion";
 
 /**
  * This tool's OWN acknowledgement, deliberately distinct from the QA operator's.
@@ -77,7 +83,7 @@ import { enrollUserInPublishedCurriculum } from "@/lib/curriculum/enrollment";
 export const FIXTURE_CONFIRM_KEY = "ATA_LEARNER_OPS_FIXTURE_CONFIRM";
 export const FIXTURE_CONFIRM_VALUE = "PROVISION_LEARNER_OPS_ACCEPTANCE_FIXTURES";
 
-type Verb = "provision" | "inspect" | "enroll";
+type Verb = "provision" | "inspect" | "enroll" | "attest";
 
 function note(line: string): void {
   process.stderr.write(`${line}\n`);
@@ -90,7 +96,9 @@ export type FixtureRefusal =
   | "no_controlling_tty"
   | "not_allowlisted"
   | "password_rejected"
-  | "no_enrolment_actor";
+  | "no_enrolment_actor"
+  | "unknown_learner"
+  | "attestation_refused";
 
 /**
  * The full gate. Environment checks run BEFORE the acknowledgement, so on a
@@ -365,14 +373,63 @@ async function provisionLearner(
   return { userId: user.id, created: existing === null, enrolled };
 }
 
+/**
+ * ATTEST THE POCKET-REGISTRATION GATE for ONE allowlisted learner fixture.
+ *
+ * WHY THIS EXISTS. Journeys B and C need a learner standing at a canonical
+ * report or mentor-review level. Level 1 is `external_event:pocket_postback`,
+ * and the only honest witness of a real registration is a postback ATA itself
+ * authenticated. This phase must not fabricate one — no `PocketTraderIdentity`,
+ * no synthetic postback, no DEP/RDEP.
+ *
+ * WHAT IT DOES INSTEAD. It calls `attestStagingGate`, the platform's OWN
+ * staging-attestation owner, which is the mechanism PREPROD already used for
+ * learner 56. That owner starts and completes the level through the shipped
+ * completion authority, records a durable `StagingAttestation` row, and stamps
+ * the completion `staging_attested_registration` — a provenance that says, in
+ * the database, "a QA operator attested this in staging", NOT "Pocket confirmed
+ * this". Nothing here writes `UserLevelProgress`, and nothing pretends the
+ * learner has a Pocket account. They do not, and the record says so.
+ *
+ * It refuses outright on any deployment that is not `staging` with the flag on,
+ * and the operator must be an active platform admin — both decided inside the
+ * owner, from the database, not from anything this tool asserts.
+ *
+ * IDEMPOTENT BY CONSTRUCTION. The request id is derived from the fixture key,
+ * so re-running replays the same attestation (`created: false`) instead of
+ * recording a second one.
+ */
+async function attestPocketRegistration(
+  fixture: LearnerFixture,
+  operatorUserId: number,
+  learnerUserId: number,
+): Promise<{ ok: true; receipt: unknown } | { ok: false; code: string; detail: string }> {
+  try {
+    const receipt = await attestStagingGate({
+      operatorUserId,
+      learnerUserId,
+      eventClass: "pocket_registration",
+      stableCode: POCKET_REGISTRATION_STABLE_CODE,
+      // Deterministic, so a replay is a replay and not a second gate.
+      requestId: `learner-ops-v1:attest:${fixture.key}:pocket-registration`,
+    });
+    return { ok: true, receipt };
+  } catch (error) {
+    if (isStagingAttestationError(error)) {
+      return { ok: false, code: error.code, detail: error.message };
+    }
+    throw error;
+  }
+}
+
 /* -------------------------------------------------------------------- main */
 
 async function main(): Promise<number> {
   const verb = (process.argv[2] ?? "") as Verb;
   const apply = process.argv.includes("--apply");
 
-  if (verb !== "provision" && verb !== "inspect" && verb !== "enroll") {
-    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect|enroll> [--apply]");
+  if (verb !== "provision" && verb !== "inspect" && verb !== "enroll" && verb !== "attest") {
+    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect|enroll|attest> [--learner <key>] [--apply]");
     process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_verb" }, null, 2) + "\n");
     return 2;
   }
@@ -438,6 +495,66 @@ async function main(): Promise<number> {
       }
       process.stdout.write(JSON.stringify({ ok: true, verb, applied: true, learners: enrolled }, null, 2) + "\n");
       return enrolled.every((row) => row.enrolled) ? 0 : 7;
+    }
+
+    /* --------------------------------------------------------------- attest */
+
+    if (verb === "attest") {
+      const gate = checkFixtureAllowed();
+      if (!gate.ok) {
+        note(`REFUSED: ${gate.reason} — ${gate.detail}`);
+        process.stdout.write(JSON.stringify({ ok: false, refusal: gate.reason }, null, 2) + "\n");
+        return 3;
+      }
+
+      // A KEY FROM THE ALLOWLIST, never an email and never an id. The same
+      // containment property `provision` has: a shell on this host cannot point
+      // this at a real learner.
+      const keyIndex = process.argv.indexOf("--learner");
+      const key = keyIndex >= 0 ? (process.argv[keyIndex + 1] ?? "") : "";
+      const fixture = learnerFixture(key);
+      if (!fixture || !isAllowlisted(fixture.email)) {
+        note("REFUSED: --learner must name one of the allowlisted learner fixture keys");
+        process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_learner" }, null, 2) + "\n");
+        return 4;
+      }
+
+      const operatorUserId = await resolveEnrolmentActor(prisma);
+      if (operatorUserId === null) {
+        note(`REFUSED: ${ENROLMENT_ACTOR_EMAIL} is absent or not an active admin.`);
+        process.stdout.write(JSON.stringify({ ok: false, refusal: "no_enrolment_actor" }, null, 2) + "\n");
+        return 6;
+      }
+
+      const learner = await prisma.user.findUnique({
+        where: { email: fixture.email },
+        select: { id: true },
+      });
+      if (!learner) {
+        note(`REFUSED: fixture ${fixture.key} has not been provisioned`);
+        process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_learner" }, null, 2) + "\n");
+        return 4;
+      }
+
+      if (!apply) {
+        note("DRY RUN — nothing is written. Add --apply.");
+        note(`would attest ${POCKET_REGISTRATION_STABLE_CODE} for ${fixture.key}, attributed to ${ENROLMENT_ACTOR_EMAIL}`);
+        process.stdout.write(JSON.stringify({ ok: true, verb, applied: false, learner: fixture.key }, null, 2) + "\n");
+        return 0;
+      }
+
+      const result = await attestPocketRegistration(fixture, operatorUserId, learner.id);
+      if (!result.ok) {
+        note(`REFUSED by the canonical attestation owner: ${result.code} — ${result.detail}`);
+        process.stdout.write(
+          JSON.stringify({ ok: false, refusal: "attestation_refused", code: result.code }, null, 2) + "\n",
+        );
+        return 8;
+      }
+      process.stdout.write(
+        JSON.stringify({ ok: true, verb, applied: true, learner: fixture.key, receipt: result.receipt }, null, 2) + "\n",
+      );
+      return 0;
     }
 
     /* ------------------------------------------------------------ provision */

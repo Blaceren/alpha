@@ -35,6 +35,7 @@ import { isLearnerOpsError } from "../../src/lib/learner-ops/errors";
 import { raiseEscalation, resolveEscalation } from "../../src/lib/learner-ops/escalation";
 import { recordQaReview } from "../../src/lib/learner-ops/quality";
 import { hasCrmReviewAuthority } from "../../src/lib/learner-ops/review-authority";
+import { hasRole } from "../../src/lib/auth";
 import { getLearner360 } from "../../src/lib/learner-ops/learner-360";
 import { LEARNER_OPS_TRANSITIONS, isLegalTransition } from "../../src/lib/learner-ops/contract";
 import { resolveEffectivePermissions } from "../../src/lib/crm/roles";
@@ -118,6 +119,22 @@ async function main() {
       passwordHash: BCRYPT_SHAPED,
       role: "admin",
     },
+  });
+
+  // The `lo-admin` fixture shape: every Learner Operations permission INCLUDING
+  // both review ones, and `user` on the canonical Academy axis. It is the
+  // negative control that proves the CRM permission is additional, never
+  // alternative.
+  const crmAdminOnlyUser = await prisma.user.create({
+    data: {
+      email: `ca-${process.pid}@staff.invalid`,
+      name: "CRM Admin Only",
+      passwordHash: BCRYPT_SHAPED,
+      role: "user",
+    },
+  });
+  await prisma.staffProfile.create({
+    data: { userId: crmAdminOnlyUser.id, displayName: "CRM Admin Only", staffRole: "crm_admin" },
   });
 
   const supportStaff = await prisma.staffProfile.create({
@@ -673,6 +690,24 @@ async function main() {
       },
     });
     assert.equal(await hasCrmReviewAuthority(orphan.id, "report"), false);
+  });
+
+  await check("LO-AUTH-AXIS-1 · a crm_admin holds the CRM axis and STILL cannot review", async () => {
+    // Journey B1 negative control 2. This principal passes the CRM half — it
+    // holds both review permissions — and is refused anyway, because the
+    // canonical Academy axis is the other half of the intersection and `user`
+    // is not in `["admin","mentor"]`. A CRM grant is not a progression
+    // authority, and this is where that claim is decided rather than asserted.
+    assert.equal(await hasCrmReviewAuthority(crmAdminOnlyUser.id, "report"), true);
+    assert.equal(await hasCrmReviewAuthority(crmAdminOnlyUser.id, "mentor"), true);
+
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: crmAdminOnlyUser.id } });
+    assert.equal(row.role, "user", "the fixture must keep the non-reviewer platform role");
+    assert.equal(
+      hasRole(row.role, ["admin", "mentor"]),
+      false,
+      "the canonical gate must refuse this principal on its own axis",
+    );
   });
 
   await check("LO-AUTH-AXIS-1 · support staff hold no review authority", async () => {
