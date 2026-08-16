@@ -48,16 +48,26 @@ DEST_ROOT="${ATA_TOOLING_DEST:-$DEST_ROOT_DEFAULT}"
 # THE ENUMERATED FILE SET. This list IS the contract: a file not named here is
 # neither installed nor verified, and adding one is a reviewable edit.
 #
-# Relative paths only, and each is resolved under both roots. A path containing
-# `..` or starting with `/` is refused below, so this list cannot be made to
-# write outside the destination scope.
+# THESE ARE DESTINATION-RELATIVE NAMES. The repository keeps the tools in a
+# `tools/` subdirectory so it can also hold a README, the installer and the
+# install regression; the ACTIVE path is itself the tools directory. So the source
+# is `$SRC_ROOT/$SRC_SUBDIR/<name>` and the destination is `$DEST_ROOT/<name>`,
+# stated as two explicit expressions rather than one path reused for both.
+#
+# Writing the list destination-relative is deliberate: the first version of this
+# installer listed `tools/publish-release.sh` and used it under BOTH roots, which
+# quietly produced `<active>/tools/publish-release.sh` — a whole parallel tree
+# beside the real tooling. Nothing was damaged, because the installer only writes
+# files it names, but the active tooling was not updated either. Assertion 13 in
+# the regression now fails if that mapping ever comes back.
+SRC_SUBDIR="tools"
 TOOLING_FILES=(
-  "tools/publish-release.sh"
-  "tools/build-release.sh"
-  "tools/verify-build-provenance.sh"
-  "tools/cutover.sh"
-  "tools/tests/build-provenance.test.sh"
-  "tools/tests/release-packaging.test.sh"
+  "publish-release.sh"
+  "build-release.sh"
+  "verify-build-provenance.sh"
+  "cutover.sh"
+  "tests/build-provenance.test.sh"
+  "tests/release-packaging.test.sh"
 )
 
 INSTALLED_MANIFEST="ATA_TOOLING_INSTALLED.json"
@@ -114,7 +124,7 @@ for rel in "${TOOLING_FILES[@]}"; do
     /*|*..*) die "tooling file '$rel' is not a safe relative path" ;;
   esac
 
-  src="$SRC_ROOT/$rel"
+  src="$SRC_ROOT/$SRC_SUBDIR/$rel"
   [ -f "$src" ] || die "source file missing: $rel
   The manifest names a file this revision does not contain. Refusing to install a
   partial tooling set — a publisher without its verifier is worse than neither."
@@ -132,7 +142,7 @@ done
 # — `git status` above catches tracked edits, and this catches the rest.
 i=0
 for rel in "${TOOLING_FILES[@]}"; do
-  git_hash="$(git -C "$SRC_ROOT" cat-file blob "${SRC_COMMIT}:${rel}" 2>/dev/null | sha256sum | cut -d' ' -f1)" \
+  git_hash="$(git -C "$SRC_ROOT" cat-file blob "${SRC_COMMIT}:${SRC_SUBDIR}/${rel}" 2>/dev/null | sha256sum | cut -d' ' -f1)" \
     || die "source file '$rel' is not tracked at $SRC_COMMIT"
   [ "$git_hash" = "${SRC_HASHES[$i]}" ] \
     || die "source file '$rel' differs from its committed content — refusing"
@@ -181,7 +191,7 @@ fi
 
 i=0
 for rel in "${TOOLING_FILES[@]}"; do
-  src="$SRC_ROOT/$rel"
+  src="$SRC_ROOT/$SRC_SUBDIR/$rel"
   dest="$DEST_ROOT/$rel"
   destdir="$(dirname "$dest")"
 

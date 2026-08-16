@@ -177,5 +177,24 @@ SHIPPED="$(cd "$SRC_ROOT" && find tools -type f -name '*.sh' | sort)"
 grep -q '\*\.\.\*' "$INSTALLER" && ok "the installer refuses relative paths containing .." \
   || no "the installer refuses relative paths containing .."
 
+# 13. THE SOURCE→DESTINATION MAPPING. The first installer reused one relative
+# path under both roots, which silently produced <active>/tools/publish-release.sh
+# — a parallel tree beside the real tooling, with the active tooling left
+# untouched. Nothing was damaged (it only writes files it names) but nothing was
+# updated either, and --check happily reported the parallel copy as correct.
+D13="$WORK/d13"; mkdir -p "$D13"
+R13="$WORK/r13"; clone "$R13"
+run "$R13" "$D13" --install
+[ -f "$D13/publish-release.sh" ] && ok "tools install at the TOP of the destination" \
+  || no "tools install at the top of the destination" "$OUT"
+[ -f "$D13/tests/build-provenance.test.sh" ] && ok "test suites install under destination/tests" \
+  || no "test suites install under destination/tests"
+[ ! -e "$D13/tools" ] && ok "no parallel tools/ tree is created inside the destination" \
+  || no "no parallel tools/ tree is created" "found $D13/tools"
+# The publisher finds its verifier as a SIBLING, so the flat layout is load-bearing.
+[ -f "$D13/verify-build-provenance.sh" ] && [ -f "$D13/publish-release.sh" ] \
+  && ok "publisher and verifier land as siblings, as the publisher resolves them" \
+  || no "publisher and verifier land as siblings"
+
 printf '\ninstall contract regression: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1
