@@ -31,6 +31,9 @@ const QUEUE_ITEM = {
   requestedAt: "2026-08-12T10:00:00.000Z",
   curriculumCode: "ata-v2",
   curriculumVersionNumber: 4,
+  // §15 — part of the contract at every tier, and the schema is strict, so an
+  // omitted field is a contract violation rather than a tolerated default.
+  operationalWorkItem: null,
 };
 
 function json(body: unknown, status = 200) {

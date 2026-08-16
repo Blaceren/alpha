@@ -111,6 +111,22 @@ function MentorQueueRow({
           {item.learnerName ?? `Ученик #${item.learnerUserId}`} · ждёт {waitingLabel(item.requestedAt)} ·{" "}
           {item.curriculumCode} v{item.curriculumVersionNumber}
         </p>
+        {/* LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the operational half. Same
+            treatment the report-review surface already has, so both review
+            families document the boundary identically instead of one of them
+            looking like an independent truth set. */}
+        {item.operationalWorkItem ? (
+          <p className="mentor-queue__meta">
+            <a href={`/cases/${item.operationalWorkItem.caseId}`}>
+              {item.operationalWorkItem.reference}
+            </a>
+            {" · "}
+            {item.operationalWorkItem.assignedStaffDisplayName
+              ? `исполнитель: ${item.operationalWorkItem.assignedStaffDisplayName}`
+              : "исполнитель не назначен"}
+            {" · очередь и SLA — в «Операциях с учениками»"}
+          </p>
+        ) : null}
       </div>
 
       <div className="mentor-queue__action">

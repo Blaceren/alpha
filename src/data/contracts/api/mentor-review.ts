@@ -38,6 +38,19 @@ export const MentorQueueItemSchema = z
     requestedAt: z.string().nullable(),
     curriculumCode: z.string().min(1),
     curriculumVersionNumber: z.number().int().positive(),
+    /**
+     * §15 — the operational half of the same work. A pointer, never authority:
+     * the educational decision stays with the canonical approve command below.
+     */
+    operationalWorkItem: z
+      .object({
+        caseId: z.string().min(1),
+        reference: z.string().min(1),
+        status: z.string().min(1),
+        assignedStaffDisplayName: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
