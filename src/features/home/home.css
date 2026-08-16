@@ -57,6 +57,19 @@
 .bottomnav [aria-current="page"] { color: var(--signal-active); }
 .bottomnav [aria-current="page"] .lbl { position: relative; }
 .bottomnav [aria-current="page"] .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; border-radius: 2px; background: var(--signal-active); }
+/* "Ещё" marks itself when the open section lives inside it, so the bar never
+   shows every slot inactive while the learner is plainly somewhere. */
+.bottomnav button.is-active { color: var(--signal-active); }
+/* The overflow sheet. It sits ABOVE the bar and is bounded by the viewport, so
+   it can never become the thing that overflows. */
+.bottomnav__sheet { position: absolute; left: 0; right: 0; bottom: 100%;
+  background: var(--surface-context); border-top: 1px solid var(--divider-strong);
+  box-shadow: 0 -18px 40px -24px rgba(0,0,0,.9); max-height: 60vh; overflow-y: auto; }
+.bottomnav__sheet ul { display: block; padding: 6px 0; }
+.bottomnav__sheet li + li { border-top: 1px solid var(--divider); }
+.bottomnav__sheet a { flex-direction: row; justify-content: flex-start; gap: 12px;
+  min-height: 52px; padding: 0 18px; font-size: 15px; color: var(--text-primary); width: 100%; }
+.bottomnav__sheet a[aria-current="page"] { color: var(--signal-active); }
 
 /* ---------- main / stage ----------
    overflow-x: clip contains the decorative route SVG horizontally WITHOUT turning

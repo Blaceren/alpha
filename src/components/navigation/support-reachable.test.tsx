@@ -8,6 +8,7 @@
  */
 import * as React from "react";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { DesktopRouteNavigation } from "./desktop-route-navigation";
 import { MobileBottomNavigation } from "./mobile-bottom-navigation";
@@ -22,21 +23,35 @@ describe("support is reachable from the learner navigation", () => {
     expect(link).toHaveAttribute("href", "/support");
   });
 
-  it("mobile bar offers Поддержка as a real link to /support", () => {
+  it("mobile bar reaches Поддержка — in the bar or one tap inside «Ещё»", async () => {
+    // COMMUNITY-V1 made this a six-section product, and six flat slots clipped
+    // Поддержка off a 320px screen. It now lives behind a REAL «Ещё», so the
+    // property this test protects — Поддержка is reachable from the mobile
+    // navigation — is unchanged while the shape that delivers it is not.
+    const user = userEvent.setup();
     render(<MobileBottomNavigation activeId="home" />);
     const nav = screen.getByRole("navigation", { name: "Мобильная навигация" });
-    const link = within(nav).getByRole("link", { name: /Поддержка/ });
-    expect(link).toHaveAttribute("href", "/support");
+    await user.click(within(nav).getByRole("button", { name: /Ещё/ }));
+    expect(within(nav).getByRole("link", { name: /Поддержка/ })).toHaveAttribute(
+      "href",
+      "/support",
+    );
   });
 
-  it("renders NO disabled section buttons in either bar", () => {
+  it("renders NO disabled section control in either bar", () => {
     // A control that advertises a section which does not exist is a promise the
-    // product cannot keep — and it is what hid /support after it shipped.
+    // product cannot keep — and it is what hid /support after it shipped. The
+    // assertion is about DISABLED, not about the absence of buttons: «Ещё» is a
+    // button now, and an enabled one that opens a real menu is the fix, not the
+    // defect.
     const { unmount } = render(<DesktopRouteNavigation />);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     unmount();
     render(<MobileBottomNavigation />);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    for (const button of screen.queryAllByRole("button")) {
+      expect(button).not.toBeDisabled();
+      expect(button).not.toHaveAttribute("aria-disabled", "true");
+    }
   });
 
   it("marks the active section with aria-current, not colour alone", () => {
