@@ -32,6 +32,15 @@ import { SignOutButton } from "@/features/auth/sign-out-button";
 export const API_USERS_PATH = "/users";
 
 /**
+ * COMMUNITY-V1 — the Community moderation workspace.
+ *
+ * A constant here, beside the other section paths, because in api mode BOTH the
+ * navigation entry and the route composition read it. Two hand-written copies
+ * of a pathname is the defect this file's own history is a record of.
+ */
+export const COMMUNITY_MODERATION_PATH = "/community-moderation";
+
+/**
  * The affiliate section (AFD-5A inventory, AFD-5C1 analytics, AFD-5C2 leads).
  *
  * The first three are exact, terminal paths and each must be matched BEFORE the
@@ -141,6 +150,21 @@ export const API_NAV_ITEMS: readonly ApiNavItem[] = [
   // and the real gate cannot drift into showing a section that answers 403.
   { href: LEARNER_OPS_PATH, label: "Операции с учениками", permissions: ["learner_ops_view"] },
   { href: LEARNER_OPS_SUPPORT_PATH, label: "Поддержка", permissions: ["learner_ops_view"] },
+  // COMMUNITY-V1 — the fourth occurrence of the defect the comment above
+  // records, and it was made by the phase that added this line late rather than
+  // with the workspace. The CRM has TWO navigation models: `SECTION_VISIBILITY`
+  // drives the MOCK shell, and this array drives the API shell PREPROD actually
+  // runs. Updating only the first left the moderation workspace routed,
+  // authorised, working — and in no menu.
+  //
+  // `community_moderate` is the same permission `requireCommunityModerator`
+  // asserts on every moderation route, so the entry cannot appear for somebody
+  // who would only meet a 403 behind it.
+  {
+    href: COMMUNITY_MODERATION_PATH,
+    label: "Сообщество",
+    permissions: ["community_moderate"],
+  },
 ];
 
 /** An entry with no permissions is open to every authenticated employee. */

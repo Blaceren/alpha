@@ -127,6 +127,12 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_analytics",
     "learner_ops_admin",
     "learner_ops_escalation_resolve",
+    // COMMUNITY-V1. Mirrors the backend grant. This map is the MOCK shell's
+    // view; api mode reads `session.effectivePermissions` from the backend, so
+    // PREPROD never depended on this line — but two role maps that disagree is
+    // the same trap as two navigation lists, and one of those already cost this
+    // repository a section nobody could reach.
+    "community_moderate",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -169,7 +175,9 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_handle",
     "learner_ops_escalate",
   ],
-  moderator: [],
+  // COMMUNITY-V1 — `moderator` receives its first permission here too, matching
+  // the backend's grant exactly: Community moderation and nothing else.
+  moderator: ["community_moderate"],
   // AFD-5A — analyst's first permission, mirroring the backend matrix. Read
   // only: no `manage_settings`, so every affiliate mutation is refused.
   analyst: [

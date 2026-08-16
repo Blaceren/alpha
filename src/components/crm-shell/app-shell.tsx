@@ -25,6 +25,8 @@ import {
   LEARNER_OPS_SUPPORT_PATH,
 } from "@/features/learner-ops/inbox-workspace";
 import { CaseDetailWorkspace } from "@/features/learner-ops/case-detail-workspace";
+import { CommunityModerationWorkspace } from "@/features/community-moderation/moderation-workspace";
+import { COMMUNITY_MODERATION_PATH } from "./api-shell";
 import { ApiUsersWorkspace } from "@/features/users-api/api-users-workspace";
 import { ApiUserDetailWorkspace } from "@/features/users-api/api-user-detail-workspace";
 import { AffiliatesWorkspace } from "@/features/affiliates/affiliates-workspace";
@@ -157,6 +159,27 @@ function ApiModeLanding() {
     return (
       <ApiShell session={session}>
         <LearnerOpsWorkspace surface="support" />
+      </ApiShell>
+    );
+  }
+
+  // COMMUNITY-V1 — the Community moderation workspace.
+  //
+  // In api mode `children` are never rendered, so an App Router page under
+  // `(crm)/community-moderation/` is not enough on its own: without this the
+  // section answered the truthful deferred placeholder and the workspace was
+  // unreachable in the only mode PREPROD runs. A 200 from that path is not
+  // evidence the surface exists, which is how this survived a curl check.
+  //
+  // Exact match, like every staff route above it: a nested path nobody has
+  // built stays deferred rather than appearing to exist. Authorization is NOT
+  // decided here — `requireCommunityModerator` re-checks `community_moderate`
+  // on every request behind this, and a staff member without it meets the
+  // workspace's own bounded permission-denied state, never a blank screen.
+  if (pathname === COMMUNITY_MODERATION_PATH) {
+    return (
+      <ApiShell session={session}>
+        <CommunityModerationWorkspace />
       </ApiShell>
     );
   }
