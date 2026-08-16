@@ -25,10 +25,20 @@
 }
 
 .lr-back {
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   font-size: 14px;
 }
+/*
+ * The way back is a PRIMARY affordance on a long reading page, and on a phone
+ * it is the one a thumb reaches for. Set as an inline run of text it measured
+ * 17px tall — under the 24px minimum target size — so it carries its own
+ * padding rather than inheriting the line box of a paragraph.
+ */
 .lr-back a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 0;
   color: var(--ax-ink-muted);
   text-decoration: none;
 }
@@ -531,7 +541,16 @@
   border-top: 1px solid var(--ax-line);
   font-size: 15px;
 }
-.lr-foot a { color: var(--ax-ink-muted); text-decoration: none; }
+/* Same reason as `.lr-back a`: these are the end-of-lesson exits, and at 23px
+   they sat just under the minimum target size. */
+.lr-foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 0;
+  color: var(--ax-ink-muted);
+  text-decoration: none;
+}
 .lr-foot a:hover { color: var(--ax-ink); }
 .lr-foot a:focus-visible { outline: 2px solid var(--ax-signal); outline-offset: 3px; }
 
