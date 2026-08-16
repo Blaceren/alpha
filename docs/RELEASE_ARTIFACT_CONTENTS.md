@@ -16,13 +16,18 @@ A release is the artifact that SERVES. It is not a copy of the workspace.
 
 * `.git`
 * `.next/cache`
-* `.next-cache-seed`
 
 `.next/cache` holds the webpack, swc and eslint caches that make the NEXT build
 faster. Nothing serves from it. Measured on the PREPROD host before this rule
-existed: a backend release was 1306 MiB, of which 650 MiB was `.next/cache` and
-447 MiB a stray `.next-cache-seed` — 84% of an immutable artifact in which the
-running service held zero open file descriptors.
+existed: a backend release was 1306 MiB, of which 650 MiB was `.next/cache` — half
+an immutable artifact in which the running service held zero open file descriptors.
+
+`.next-cache-seed` is not listed here because it no longer exists in the
+repository. It was 447 MiB of committed webpack packs that `.gitignore` never
+covered (`.next/` does not match the sibling path), so the publisher was correct
+to ship it: excluding TRACKED files would break the release-matches-git guarantee.
+It was untracked at the repository level instead, and
+`scripts/regression/repositoryHygieneRegression.ts` keeps it out.
 
 Shipping them cost three ways: the releases themselves, the headroom the publish
 gate demanded before each publish, and the DISK-HEADROOM stops that followed.
