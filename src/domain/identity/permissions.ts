@@ -121,6 +121,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_qa",
     "learner_ops_analytics",
     "learner_ops_admin",
+    "learner_ops_escalation_resolve",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -137,6 +138,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_manage_queues",
     "learner_ops_qa",
     "learner_ops_analytics",
+    "learner_ops_escalation_resolve",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -153,6 +155,8 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_handle",
     "learner_ops_report_review",
     "learner_ops_mentor_review",
+    // Resolve, never raise — mirroring the backend matrix exactly.
+    "learner_ops_escalation_resolve",
   ],
   support: [
     "edit_user_notes",

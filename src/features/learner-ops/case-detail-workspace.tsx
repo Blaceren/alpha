@@ -112,6 +112,13 @@ export function CaseDetailWorkspace({ caseId }: { caseId: string }) {
   const { session } = useSession();
   const canHandle = grants(session.effectivePermissions, "learner_ops_handle");
   const canEscalate = grants(session.effectivePermissions, "learner_ops_escalate");
+  // Two controls, two permissions. A support operator raises and never sees a
+  // resolve form; a mentor answers and never sees an escalate form. Hiding is
+  // presentation only — the server refuses either way (403).
+  const canResolveEscalation = grants(
+    session.effectivePermissions,
+    "learner_ops_escalation_resolve",
+  );
   const canQa = grants(session.effectivePermissions, "learner_ops_qa");
   const canManageQueues = grants(session.effectivePermissions, "learner_ops_manage_queues");
 
@@ -340,7 +347,7 @@ export function CaseDetailWorkspace({ caseId }: { caseId: string }) {
                         Решено {dateTime(row.resolvedAt)} ({row.resolvedBy}): {row.resolution}
                         {row.returnedToOwnerAt ? " · возвращено владельцу" : ""}
                       </p>
-                    ) : canEscalate ? (
+                    ) : canResolveEscalation ? (
                       <ResolveEscalationForm
                         onSubmit={(text, back) =>
                           run(

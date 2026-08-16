@@ -261,3 +261,63 @@ describe("LO-UI-TRANSITION-CHOICES-1 — the dropdown is the server's list", () 
     expect(values).not.toContain(CASE.status);
   });
 });
+
+describe("LO-ESCALATION-RESOLVE-AUTHORITY-1 — raise and resolve are different controls", () => {
+  const OPEN_ESCALATION = {
+    items: [
+      {
+        id: "esc_1",
+        class: "educational_methodology",
+        reason: "Нужна оценка методиста",
+        raisedBy: "LO Оператор",
+        raisedAt: "2026-08-16T01:26:00.000Z",
+        targetQueue: { key: "escalation", name: "Эскалации" },
+        targetStaff: null,
+        resolvedAt: null,
+        resolution: null,
+        resolvedBy: null,
+        returnedToOwnerAt: null,
+      },
+    ],
+  };
+
+  async function renderWith(perms: readonly string[]) {
+    permissions = perms;
+    const client = await import("@/application/api/learner-ops-client");
+    vi.mocked(client.fetchEscalations).mockResolvedValue({
+      status: "success",
+      data: OPEN_ESCALATION,
+    } as never);
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    await screen.findByText("Нужна оценка методиста");
+  }
+
+  it("shows the frontline NO resolve control — raising is not answering", async () => {
+    // The exact pre-fix defect, inverted: `learner_ops_escalate` used to gate
+    // the resolve form, so the party that raised the escalation could close it.
+    await renderWith(["learner_ops_view", "learner_ops_handle", "learner_ops_escalate"]);
+    expect(screen.queryByRole("button", { name: /Закрыть эскалацию/i })).toBeNull();
+  });
+
+  it("gives the mentor a resolve control", async () => {
+    // The other half of the same defect: the authority the question was routed
+    // to had no way to answer it.
+    await renderWith([
+      "learner_ops_view",
+      "learner_ops_handle",
+      "learner_ops_report_review",
+      "learner_ops_mentor_review",
+      "learner_ops_escalation_resolve",
+    ]);
+    expect(screen.getByRole("button", { name: /Закрыть эскалацию/i })).toBeTruthy();
+  });
+
+  it("does not give the mentor an escalate control either — the split cuts both ways", async () => {
+    await renderWith([
+      "learner_ops_view",
+      "learner_ops_handle",
+      "learner_ops_escalation_resolve",
+    ]);
+    expect(screen.queryByRole("button", { name: /^Эскалировать$/i })).toBeNull();
+  });
+});

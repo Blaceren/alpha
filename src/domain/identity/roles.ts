@@ -179,7 +179,11 @@ export type Permission =
   | "learner_ops_manage_queues"
   | "learner_ops_qa"
   | "learner_ops_analytics"
-  | "learner_ops_admin";
+  | "learner_ops_admin"
+  // v4 — raising an escalation and answering one are different
+  // responsibilities held by different people. See
+  // LO-ESCALATION-RESOLVE-AUTHORITY-1.
+  | "learner_ops_escalation_resolve";
 
 /**
  * Compile-time proof that this union and the canonical cross-repository session
