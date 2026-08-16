@@ -1035,6 +1035,59 @@ async function main() {
     }
   });
 
+  await check("LO-SLA-WAITING-RESUME-1 · a learner reply ends waiting_learner and resumes the clock", async () => {
+    // Found in the browser: the learner answered, lastActivityAt moved, and the
+    // case stayed waiting_learner with the resolution clock PAUSED — so ATA's
+    // own delay stopped being counted, in the flattering direction.
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Возобновление таймера", details: "Проверка", actor: null,
+    });
+    await addMessage({
+      caseId: target.id, body: "Первый ответ",
+      author: { kind: "staff", staffId: actorA.staffId, userId: actorA.userId },
+    });
+    let v = (await getCaseDetail(target.id)).version;
+    await transitionCase({ caseId: target.id, expectedVersion: v, nextStatus: "waiting_learner", actor: actorA });
+
+    const paused = await getCaseDetail(target.id);
+    assert.equal(paused.status, "waiting_learner");
+    assert.equal(paused.sla.resolution.state, "paused", "the pause must be real before the learner answers");
+
+    await addMessage({
+      caseId: target.id, body: "Отвечаю как просили",
+      author: { kind: "learner", userId: learnerA.id },
+    });
+
+    const resumed = await getCaseDetail(target.id);
+    assert.equal(resumed.status, "in_progress", "a learner reply ends waiting_learner");
+    assert.notEqual(resumed.sla.resolution.state, "paused", "the clock must resume once the ball is ours");
+    assert.equal(resumed.sla.resolution.state, "running");
+
+    const events = await listEvents(target.id, 20);
+    const resume = events.items.find((e) => e.previousStatus === "waiting_learner" && e.nextStatus === "in_progress");
+    assert.ok(resume, "the resumption must be recorded in the timeline, not applied silently");
+  });
+
+  await check("LO-SLA-WAITING-RESUME-1 · a learner reply does NOT disturb the other two waits", async () => {
+    // Neither waiting_internal nor waiting_external was ever waiting on the
+    // learner, so a learner message must leave both exactly as they are.
+    for (const wait of ["waiting_internal", "waiting_external"] as const) {
+      const target = await createCase({
+        userId: learnerA.id, type: "support_request", queueKey: "support",
+        subject: `Не трогать ${wait}`, details: "Проверка", actor: null,
+      });
+      const v = (await getCaseDetail(target.id)).version;
+      await transitionCase({ caseId: target.id, expectedVersion: v, nextStatus: wait, actor: actorA });
+      await addMessage({
+        caseId: target.id, body: "Сообщение ученика",
+        author: { kind: "learner", userId: learnerA.id },
+      });
+      const after = await getCaseDetail(target.id);
+      assert.equal(after.status, wait, `${wait} must be untouched by a learner reply`);
+    }
+  });
+
   await check("§24 · no audit row carries a message or note body", async () => {
     const logs = await prisma.auditLog.findMany({ where: { action: { startsWith: "learner_ops." } } });
     assert.ok(logs.length > 0, "the domain must write audit rows at all");

@@ -641,7 +641,27 @@ export async function addMessage(
   return db.$transaction(async (tx) => {
     const current = await tx.learnerOpsCase.findUnique({
       where: { id: input.caseId },
-      select: { id: true, version: true, status: true, firstRespondedAt: true, userId: true },
+      select: {
+        id: true,
+        version: true,
+        status: true,
+        firstRespondedAt: true,
+        userId: true,
+        pausedMs: true,
+        clockPausedAt: true,
+        slaPolicy: {
+          select: {
+            key: true,
+            priority: true,
+            firstResponseTargetMinutes: true,
+            resolutionTargetMinutes: true,
+            pausesOnWaitingLearner: true,
+            pausesOnWaitingInternal: true,
+            pausesOnWaitingExternal: true,
+            origin: true,
+          },
+        },
+      },
     });
     if (!current) learnerOpsFail("LEARNER_OPS_CASE_NOT_FOUND");
 
@@ -667,12 +687,47 @@ export async function addMessage(
     const recordFirstResponse = input.author.kind === "staff" && current.firstRespondedAt === null;
     const nextVersion = current.version + 1;
 
+    /**
+     * LO-SLA-WAITING-RESUME-1 — a learner reply ENDS "waiting on learner".
+     *
+     * The resolution clock pauses in `waiting_learner` because that delay is
+     * the learner's. The moment they answer it is ours again — but the status
+     * used to stay put until an operator noticed, so the clock stayed paused
+     * while the ball was back in our court. That understates ATA's own delay,
+     * and it understates it in the flattering direction, which is the kind of
+     * SLA error that never gets questioned.
+     *
+     * It also left the case parked in a bucket nobody rechecks: "waiting on
+     * learner" is exactly where an operator stops looking.
+     *
+     * So a learner message on a `waiting_learner` case moves it back to
+     * `in_progress`, in the SAME transaction, with the pause folded into
+     * `pausedMs` by the same helper every other transition uses and its own
+     * timeline event. No other status is touched: a learner replying to a case
+     * that is `waiting_internal` or `waiting_external` changes nothing, because
+     * neither of those was ever waiting on them.
+     */
+    const resumesFromLearnerWait =
+      input.author.kind === "learner" && current.status === "waiting_learner";
+
+    const pause = resumesFromLearnerWait
+      ? pauseTransition(
+          { status: current.status, pausedMs: current.pausedMs, clockPausedAt: current.clockPausedAt },
+          "in_progress",
+          current.slaPolicy,
+          now,
+        )
+      : null;
+
     await tx.learnerOpsCase.update({
       where: { id: input.caseId },
       data: {
         lastActivityAt: now,
         version: nextVersion,
         ...(recordFirstResponse ? { firstRespondedAt: now } : {}),
+        ...(pause
+          ? { status: "in_progress" as const, pausedMs: pause.pausedMs, clockPausedAt: pause.clockPausedAt }
+          : {}),
       },
     });
 
@@ -681,11 +736,15 @@ export async function addMessage(
       caseVersion: nextVersion,
       eventType: recordFirstResponse ? "first_response_recorded" : "message_sent",
       actorStaffId: input.author.kind === "staff" ? input.author.staffId : null,
+      ...(resumesFromLearnerWait
+        ? { previousStatus: "waiting_learner" as const, nextStatus: "in_progress" as const }
+        : {}),
       metadata: {
         authorKind: input.author.kind,
         messageId: message.id,
         // The BODY is deliberately absent. It lives in exactly one table.
         length: input.body.length,
+        ...(resumesFromLearnerWait ? { resumedFromWaitingLearner: true } : {}),
       },
     });
 
