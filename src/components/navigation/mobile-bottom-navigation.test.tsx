@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
+import { PRIMARY_NAV } from "@/config/navigation";
+import { isBuiltRoute } from "@/config/built-routes";
 
 /**
  * The bottom bar is the mobile primary navigation. It renders the BUILT
@@ -30,11 +32,14 @@ describe("MobileBottomNavigation", () => {
 
   it("offers only real links, and no unbuilt destination at all", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    // Five real links. The previous shape kept «Ещё» as a disabled button; that
-    // control opened nothing and was what hid Поддержка, so an unbuilt section
-    // is now simply absent rather than advertised.
+    // Six real links since COMMUNITY-V1 built Сообщество. The previous shape
+    // kept «Ещё» as a disabled button; that control opened nothing and was what
+    // hid Поддержка, so an unbuilt section is simply absent rather than
+    // advertised. The count is derived from the built list rather than typed as
+    // a literal, so the next section to ship moves it without editing a number.
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(PRIMARY_NAV.filter((i) => isBuiltRoute(i.id)).length);
+    expect(screen.getByRole("link", { name: /Сообщество/ })).toHaveAttribute("href", "/community");
     expect(screen.getByRole("link", { name: /Путь/ })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: /Уроки/ })).toHaveAttribute("href", "/lessons");
     expect(screen.getByRole("link", { name: /Инструменты/ })).toHaveAttribute("href", "/tools");

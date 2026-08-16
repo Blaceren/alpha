@@ -17,11 +17,17 @@
  * failure this file was created to stop — a page that renders perfectly and that
  * nothing in the product can reach.
  */
+/**
+ * COMMUNITY-V1 adds `community`. The route existed in `navigation.ts` from the
+ * beginning and on disk from nowhere, so the nav filtered it out and the learner
+ * was shown no Community at all. It answers now.
+ */
 export const BUILT_ROUTE_IDS = new Set([
   "home",
   "path",
   "lessons",
   "tools",
+  "community",
   "support",
   "notifications",
   "profile",

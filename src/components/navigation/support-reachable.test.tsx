@@ -55,8 +55,11 @@ describe("support is reachable from the learner navigation", () => {
       .map((a) => a.getAttribute("href"));
     const expected = PRIMARY_NAV.filter((i) => isBuiltRoute(i.id)).map((i) => i.href);
     expect(rendered).toEqual(expected);
-    // And an unbuilt section is genuinely absent rather than disabled.
-    expect(rendered).not.toContain("/community");
+    // COMMUNITY-V1 built /community, so it is now expected to be PRESENT — the
+    // property this guards is "the advertised list matches reality", and
+    // reality moved. /news is still unbuilt and still carries the assertion:
+    // an unbuilt section is genuinely absent rather than disabled.
+    expect(rendered).toContain("/community");
     expect(rendered).not.toContain("/news");
   });
 
@@ -71,7 +74,11 @@ describe("support is reachable from the learner navigation", () => {
       for (const id of ["notifications", "profile"]) {
         expect(BUILT_ROUTE_IDS.has(id), `${id} is built and must be reachable`).toBe(true);
       }
-      for (const id of ["community", "news", "referrals", "mentor", "settings"]) {
+      // COMMUNITY-V1. The route was advertised in the navigation model from the
+      // start and existed nowhere, which is the exact failure this file was
+      // created for. It answers now.
+      expect(BUILT_ROUTE_IDS.has("community"), "community is built and must be reachable").toBe(true);
+      for (const id of ["news", "referrals", "mentor", "settings"]) {
       expect(BUILT_ROUTE_IDS.has(id), `${id} is not a built route`).toBe(false);
     }
   });

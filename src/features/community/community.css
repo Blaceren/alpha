@@ -1,0 +1,647 @@
+/**
+ * Сообщество — Community.
+ *
+ * ART DIRECTION: D5 selected merge (see docs/D5_COMMUNITY_ART_DIRECTION.md).
+ *   HOME  = Direction B «Порог» — five UNEQUAL plates whose MATERIAL carries
+ *           open / readable / locked. The state is the surface, never a badge
+ *           on identical grey, which is the same rule Home's Action Field uses.
+ *   SPACE
+ *   THREAD = Direction A «Открытый вопрос» — one question at display size with
+ *           its answer beside it as the dominant content object.
+ *
+ * EXISTING TOKENS ONLY, and no `var()` fallbacks. The system is DARK-ONLY, so
+ * an invented light fallback renders a white plate on a navy field the moment a
+ * token name changes.
+ *
+ * WHY THERE IS NO GRID. `DESIGN_QUALITY_CONSTITUTION` §8 forbids a dashboard
+ * card grid as the base, equal radius on every surface, a border around every
+ * block and more than six identical cards in the first viewport. The plates
+ * below are a VERTICAL STACK of deliberately unequal bands: one tall and
+ * detailed, one flat, three compressed to a line. Nothing here is repeated at
+ * equal weight.
+ */
+
+.cm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 60rem;
+  color: var(--text-primary);
+  /* The bottom-nav clearance contract (DD-313): the last interactive control
+     must scroll clear of the fixed mobile navigation. */
+  padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 44px);
+}
+
+@media (min-width: 900px) {
+  .cm {
+    padding-bottom: 48px;
+  }
+}
+
+.cm__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.cm__head h1 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cm__position {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.cm__lede {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  max-width: 44rem;
+}
+
+/* ======================================================== THE THRESHOLD RAIL
+ * One continuous line down the left of the plates a learner holds, breaking at
+ * the first they do not. It is the progression instrument, and it draws only
+ * where there is something to say — never as decoration.
+ */
+.cm__rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 18px;
+}
+
+.cm__rail::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  /* Bright through what is held, fading through what is not. The stop is set
+     per-render from the number of open plates. */
+  background: linear-gradient(
+    to bottom,
+    var(--route-current) 0%,
+    var(--route-current) var(--cm-rail-stop, 0%),
+    var(--route-locked) calc(var(--cm-rail-stop, 0%) + 2%),
+    transparent 100%
+  );
+  opacity: 0.7;
+}
+
+/* ============================================================ PLATE: OPEN
+ * Raised, lit along its leading edge, and it CONTAINS CONTENT. The open plate
+ * is the only plate with discussions inside it, which is what keeps Community
+ * Home from being a channel list.
+ */
+.cm-plate {
+  position: relative;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.cm-plate--open {
+  background: var(--surface-context);
+  border: 1px solid var(--divider-strong);
+  box-shadow: 0 0 0 1px rgba(92, 240, 198, 0.06), 0 18px 40px -30px var(--glow-current);
+}
+
+.cm-plate--open::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--route-current);
+}
+
+/* PLATE: READABLE — flat, full ink, no light. The learner may read here and
+ * not post, so it must look available and not lit. */
+.cm-plate--readable {
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider);
+}
+
+/* PLATE: LOCKED — recessed, reduced ink, no edge and no border. It is not a
+ * link and does not pretend to be one. */
+.cm-plate--locked {
+  background: transparent;
+  border: 1px dashed var(--divider);
+  padding: 12px 20px;
+  opacity: 0.85;
+}
+
+.cm-plate__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+
+.cm-plate__title {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.cm-plate--locked .cm-plate__title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.cm-plate__state {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--route-current);
+}
+
+.cm-plate--readable .cm-plate__state {
+  color: var(--gate-boundary);
+}
+
+/* The unlock requirement. Stated as a MODULE, from the server's own reason —
+ * never as "недостаточный уровень". */
+.cm-plate__requirement {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--route-locked);
+}
+
+.cm-plate__purpose {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.cm-plate__enter {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--divider-strong);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.cm-plate__enter:hover {
+  border-color: var(--route-current);
+}
+
+/* ================================================ PREVIEW INSIDE OPEN PLATE
+ * The binding constraint from the art-direction decision: the open plate must
+ * carry enough real context to feel alive with sparse data. So it lists real
+ * discussions at a size LARGER than the space titles below it — content
+ * outranks architecture — and when there are none it says so in a way that
+ * invites the first one rather than reporting an absence.
+ */
+.cm-preview {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-preview__item {
+  border-top: 1px solid var(--divider);
+}
+
+.cm-preview__link {
+  display: block;
+  padding: 12px 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cm-preview__link:hover .cm-preview__title {
+  color: var(--route-current);
+}
+
+.cm-preview__title {
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  font-weight: 500;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.cm-preview__meta {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.cm-empty-invite {
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px dashed var(--divider-strong);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* ==================================================== DIRECTION A — QUESTION
+ * The discussion atom: the question at display size, its answer beneath in a
+ * lighter material, joined by a short signal tick.
+ */
+.cm-question {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cm-question__title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 900px) {
+  .cm-question__title {
+    font-size: 1.75rem;
+  }
+}
+
+.cm-coords {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.cm-coords__role {
+  color: var(--route-current);
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+.cm-body {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  /* Learner-authored text: preserved newlines, and long unbroken strings wrap
+     instead of widening the page. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.cm-body--removed {
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: normal;
+}
+
+/* An answer: raised one step, with the signal tick on its leading edge. */
+.cm-answer {
+  position: relative;
+  padding: 14px 16px 14px 18px;
+  border-radius: 12px;
+  background: var(--surface-context);
+  border: 1px solid var(--divider);
+}
+
+.cm-answer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--signal-soft);
+}
+
+.cm-answer--staff::before {
+  background: var(--route-current);
+}
+
+.cm-answer--own {
+  border-color: var(--divider-strong);
+}
+
+.cm-answers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cm-answers__heading {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* ====================================================== LIST OF DISCUSSIONS */
+.cm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-list__item {
+  border-top: 1px solid var(--divider);
+}
+
+.cm-list__item:last-child {
+  border-bottom: 1px solid var(--divider);
+}
+
+.cm-list__link {
+  display: block;
+  padding: 16px 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cm-list__link:hover .cm-list__title {
+  color: var(--route-current);
+}
+
+.cm-list__title {
+  font-size: 1.125rem;
+  line-height: 1.4;
+  font-weight: 500;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.cm-list__title--removed {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ============================================================== COMPOSER */
+.cm-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider);
+}
+
+.cm-composer__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.cm-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--divider-strong);
+  background: var(--background-field);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.cm-field:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-color: var(--focus-ring);
+}
+
+textarea.cm-field {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.cm-hint {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.cm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--divider-strong);
+  background: var(--surface-context);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.cm-btn--primary {
+  border-color: var(--route-current);
+  color: var(--route-current);
+}
+
+.cm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cm-btn:focus-visible,
+.cm-plate__enter:focus-visible,
+.cm-list__link:focus-visible,
+.cm-preview__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Small inline control: report / delete on a piece of content. */
+.cm-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cm-linkbtn {
+  min-height: 44px;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cm-linkbtn:hover {
+  color: var(--text-secondary);
+}
+
+/* ================================================================= STATES */
+.cm-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.cm-note--error {
+  border: 1px solid var(--divider-strong);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.cm-note--ok {
+  border: 1px solid var(--signal-soft);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+}
+
+.cm-note--muted {
+  color: var(--text-muted);
+}
+
+.cm-skeleton {
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider);
+}
+
+/* The skeleton carries NO numbers and no titles, so a slow load cannot appear
+   to state a position the learner does not hold. */
+.cm-skeleton--plate {
+  height: 148px;
+}
+
+.cm-skeleton--line {
+  height: 56px;
+}
+
+/* ================================================================ DIALOG */
+.cm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.cm-dialog {
+  width: min(30rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--surface-context);
+  border: 1px solid var(--divider-strong);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cm-dialog h2 {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cm-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.cm-radio input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--route-current);
+}
+
+.cm-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.cm-breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.cm-breadcrumb a:hover {
+  color: var(--route-current);
+}
+
+.cm-breadcrumb a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
