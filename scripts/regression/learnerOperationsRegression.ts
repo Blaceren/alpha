@@ -947,6 +947,45 @@ async function main() {
     void closeOutcome;
   });
 
+  await check("the projection withholds terminal states while an escalation is open", async () => {
+    // LO-UI-TRANSITION-CHOICES-1 applied to the new invariant: whatever the
+    // domain will refuse, the screen must not offer. Otherwise the fix for one
+    // reconciliation gap reintroduces the promise-what-you-cannot-keep defect.
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Проекция при эскалации", details: "Методический вопрос", actor: null,
+    });
+    const raised = await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+
+    const blocked = await getCaseDetail(target.id);
+    for (const terminal of LEARNER_OPS_TERMINAL_STATUSES) {
+      assert.ok(
+        !blocked.allowedTransitions.includes(terminal),
+        `${terminal} must not be offered while an escalation is unanswered`,
+      );
+    }
+    assert.ok(blocked.allowedTransitions.includes("in_progress"), "ordinary work must stay offered");
+
+    // And every remaining offer is still one the domain accepts.
+    for (const next of blocked.allowedTransitions) {
+      assert.ok(isLegalTransition(blocked.status, next));
+    }
+
+    await resolveEscalation({
+      escalationId: raised.id, resolution: "Ответ методиста.", returnToOwner: true, actor: actorMentor,
+    });
+    const freed = await getCaseDetail(target.id);
+    for (const terminal of LEARNER_OPS_TERMINAL_STATUSES) {
+      assert.ok(
+        freed.allowedTransitions.includes(terminal),
+        `${terminal} must return once the escalation is answered`,
+      );
+    }
+  });
+
   await check("the terminal set is exactly the complement of the active set", () => {
     const all = [...LEARNER_OPS_STATUSES].sort();
     const union = [...LEARNER_OPS_ACTIVE_STATUSES, ...LEARNER_OPS_TERMINAL_STATUSES].sort();

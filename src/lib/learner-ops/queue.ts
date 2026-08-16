@@ -19,7 +19,11 @@ import type {
   LearnerOpsCaseType,
   LearnerOpsPriority,
 } from "@prisma/client";
-import { LEARNER_OPS_ACTIVE_STATUSES, LEARNER_OPS_TRANSITIONS } from "@/lib/learner-ops/contract";
+import {
+  LEARNER_OPS_ACTIVE_STATUSES,
+  LEARNER_OPS_TERMINAL_STATUSES,
+  LEARNER_OPS_TRANSITIONS,
+} from "@/lib/learner-ops/contract";
 import { learnerOpsFail } from "@/lib/learner-ops/errors";
 import { computeSlaView, type SlaView } from "@/lib/learner-ops/sla";
 import { prisma } from "@/lib/prisma";
@@ -217,6 +221,13 @@ export type CaseDetail = QueueItem & {
    * client. A duplicated state machine is one that drifts, and the whole point
    * of this field is that the list an operator sees and the list the domain
    * enforces cannot disagree — they are the same object, read once.
+   *
+   * IT PROJECTS EVERY REFUSAL, NOT ONLY THE TABLE. The state machine is not the
+   * only thing `transitionCase` refuses on: while an escalation is unanswered a
+   * case may not become terminal (LO-ESCALATION-RESOLVE-AUTHORITY-1 §4). A
+   * projection that showed the table alone would again promise what the domain
+   * declines — the same defect in a new place — so the terminal pair is
+   * withheld exactly when the transition would be refused.
    */
   readonly allowedTransitions: readonly LearnerOpsCaseStatus[];
   readonly details: string;
@@ -268,14 +279,41 @@ async function loadAnchor(row: CaseRow): Promise<CanonicalAnchorView> {
   return null;
 }
 
+/**
+ * Every transition the domain would actually accept right now.
+ *
+ * The table first, then each additional refusal `transitionCase` enforces. Kept
+ * beside the projection it feeds so a future invariant added to the transition
+ * has one obvious place to be mirrored.
+ */
+function allowedTransitionsFor(
+  status: LearnerOpsCaseStatus,
+  openEscalations: number,
+): readonly LearnerOpsCaseStatus[] {
+  const fromTable = LEARNER_OPS_TRANSITIONS[status];
+  if (openEscalations === 0) return fromTable;
+  return fromTable.filter(
+    (next) => !(LEARNER_OPS_TERMINAL_STATUSES as readonly string[]).includes(next),
+  );
+}
+
 export async function getCaseDetail(caseId: string): Promise<CaseDetail> {
   const row = await prisma.learnerOpsCase.findUnique({ where: { id: caseId }, select: caseSelect });
   if (!row) learnerOpsFail("LEARNER_OPS_CASE_NOT_FOUND");
 
+  // Asked as a count rather than a boolean column, because there is exactly one
+  // escalation truth and this reads it. It is a separate statement from the
+  // transition's own check by design: this one informs a screen, that one
+  // decides an outcome inside the write transaction, and only the second is
+  // authority.
+  const openEscalations = await prisma.learnerOpsEscalation.count({
+    where: { caseId, resolvedAt: null },
+  });
+
   const now = new Date();
   return {
     ...toQueueItem(row, now),
-    allowedTransitions: LEARNER_OPS_TRANSITIONS[row.status],
+    allowedTransitions: allowedTransitionsFor(row.status, openEscalations),
     details: row.details,
     reasonCode: row.reasonCode,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
