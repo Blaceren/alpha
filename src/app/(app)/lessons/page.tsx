@@ -4,7 +4,7 @@ import { LessonsLibraryWorkspace } from "@/features/lessons-library/components/l
 import { MODULE_QUERY_PARAM } from "@/features/lessons-library/model/lessons-library-model";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
-import { ApiLessons } from "@/features/curriculum-api/api-screens";
+import { ExperienceLessons } from "@/features/academy-experience/lessons-screen";
 import "@/features/lessons-library/lessons-library.css";
 
 export const metadata: Metadata = {
@@ -45,7 +45,7 @@ export default async function LessonsLibraryPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (getAcademyConfig().mode === "api") {
-    return <ApiLessons />;
+    return <ExperienceLessons />;
   }
   const params = await searchParams;
   const raw = params[MODULE_QUERY_PARAM];

@@ -10,6 +10,10 @@ Thumbs.db
 # Node / build
 node_modules/
 .next/
+# Generated build cache. `.next/` above never covered this sibling path — that is how
+# 447 MiB of webpack packs plus rotating Next preview/RSC signing keys reached the
+# Backend repository and then every immutable Backend release (ATA-CACHE-SEED-IN-GIT-1).
+.next-cache-seed/
 out/
 dist/
 build/

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { PathWorkspace } from "@/features/path/components/path-workspace";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
-import { ApiPath } from "@/features/curriculum-api/api-screens";
+import { ExperiencePath } from "@/features/academy-experience/path-screen";
 import "@/features/path/path.css";
 
 export const metadata: Metadata = {
@@ -19,12 +19,13 @@ export const metadata: Metadata = {
 export default async function PathPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scenario?: string }>;
+  searchParams: Promise<{ scenario?: string; module?: string }>;
 }) {
+  const params = await searchParams;
   if (getAcademyConfig().mode === "api") {
-    return <ApiPath />;
+    return <ExperiencePath moduleParam={params.module} />;
   }
-  const { scenario } = await searchParams;
+  const { scenario } = params;
   return (
     <AppShell userName="Артём" activeId="path">
       <PathWorkspace scenario={resolvePathScenario(scenario)} />

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { HomeScreen } from "@/features/home/home-screen";
 import { resolveScenario } from "@/domain/home";
 import { getAcademyConfig } from "@/config/academy-config";
-import { ApiHome } from "@/features/curriculum-api/api-screens";
+import { ExperienceHome } from "@/features/academy-experience/home-screen";
 
 export const metadata: Metadata = {
   title: "Главная — Alfa Trade Academy",
@@ -24,7 +24,7 @@ export default async function HomePage({
   // API mode renders server-authoritative curriculum/progression; fixture mode
   // keeps the existing local prototype behaviour unchanged.
   if (getAcademyConfig().mode === "api") {
-    return <ApiHome />;
+    return <ExperienceHome />;
   }
   const { scenario } = await searchParams;
   return (
