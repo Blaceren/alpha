@@ -164,7 +164,7 @@ export function CommunitySpace({ spaceCode }: { spaceCode: string }) {
     };
   }, [spaceCode]);
 
-  if (state.kind === "loading") return <CommunitySkeleton plates={0} lines={4} />;
+  if (state.kind === "loading") return <CommunitySkeleton heading="Сообщество" plates={0} lines={4} />;
 
   if (state.kind === "error") {
     return (

@@ -206,7 +206,7 @@ export function CommunityThread({ discussionId }: { discussionId: string }) {
     reload();
   };
 
-  if (state.kind === "loading") return <CommunitySkeleton plates={0} lines={4} />;
+  if (state.kind === "loading") return <CommunitySkeleton heading="Обсуждение" plates={0} lines={4} />;
 
   if (state.kind === "error") {
     return (

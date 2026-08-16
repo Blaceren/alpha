@@ -138,9 +138,24 @@ export function errorText(
  * It carries no titles and no numbers, so a slow load cannot appear to state a
  * position or an activity level the learner does not have.
  */
-export function CommunitySkeleton({ plates = 1, lines = 3 }: { plates?: number; lines?: number }) {
+export function CommunitySkeleton({
+  heading = "Сообщество",
+  plates = 1,
+  lines = 3,
+}: {
+  heading?: string;
+  plates?: number;
+  lines?: number;
+}) {
   return (
     <div className="cm" aria-busy="true" aria-live="polite">
+      {/* The heading is present from the first paint. Every other Academy
+          surface has one while it loads, and a page whose h1 appears only after
+          a fetch has no accessible name for a screen reader in the meantime and
+          visibly reflows for everyone else. */}
+      <div className="cm__head">
+        <h1>{heading}</h1>
+      </div>
       <p className="cm-note cm-note--muted">Загружаем сообщество…</p>
       {Array.from({ length: plates }, (_, i) => (
         <div key={`p${i}`} className="cm-skeleton cm-skeleton--plate" />
