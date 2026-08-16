@@ -36,6 +36,11 @@
 import { PrismaClient, type UserRole } from "@prisma/client";
 import { hasRole } from "@/lib/auth";
 import { hasCrmReviewAuthority } from "@/lib/learner-ops/review-authority";
+import {
+  canEscalateLearnerOps,
+  canResolveLearnerOpsEscalation,
+  resolveEffectivePermissions,
+} from "@/lib/crm/roles";
 import { STAFF_FIXTURES } from "./learner-ops-fixture/identities";
 
 /** Exactly the set `requireTaskReportReviewer` allows. Imported semantics, restated set. */
@@ -64,6 +69,16 @@ type Verdict = {
   /** The intersection each canonical owner actually enforces. */
   mayDecideReportReview: boolean;
   mayDecideMentorReview: boolean;
+  /**
+   * The escalation split, contract v4. These are exactly the sets
+   * `requireLearnerOpsStaff` compares against: it resolves the session's
+   * permissions from the STORED staff role and refuses 403 when a required name
+   * is absent. Reporting them here answers "what would the route do?" for
+   * principals whose browser sessions do not exist, which is where UI evidence
+   * runs out.
+   */
+  mayRaiseEscalation: boolean;
+  mayResolveEscalation: boolean;
   /** Which axis refused, so a reader learns WHY and not merely THAT. */
   refusedBy: "none" | "canonical_axis" | "crm_axis" | "both_axes" | "absent";
 };
@@ -88,7 +103,8 @@ async function main(): Promise<number> {
         verdicts.push({
           email, exists: false, userRole: null, staffRole: null, active: false,
           canonicalAxis: false, crmReportAxis: false, crmMentorAxis: false,
-          mayDecideReportReview: false, mayDecideMentorReview: false, refusedBy: "absent",
+          mayDecideReportReview: false, mayDecideMentorReview: false,
+          mayRaiseEscalation: false, mayResolveEscalation: false, refusedBy: "absent",
         });
         continue;
       }
@@ -99,6 +115,12 @@ async function main(): Promise<number> {
       const canonicalAxis = active && hasRole(user.role, CANONICAL_REVIEW_ROLES);
       const crmReportAxis = await hasCrmReviewAuthority(user.id, "report");
       const crmMentorAxis = await hasCrmReviewAuthority(user.id, "mentor");
+
+      // The escalation axes come from the stored StaffRole through the one
+      // resolver, exactly as the HTTP gate does. A principal with no
+      // StaffProfile resolves to the empty set and is refused both.
+      const staffRole = user.staffProfile?.staffRole ?? null;
+      const permissions = staffRole === null ? [] : resolveEffectivePermissions(staffRole);
 
       verdicts.push({
         email,
@@ -111,6 +133,8 @@ async function main(): Promise<number> {
         crmMentorAxis,
         mayDecideReportReview: canonicalAxis && crmReportAxis,
         mayDecideMentorReview: canonicalAxis && crmMentorAxis,
+        mayRaiseEscalation: canEscalateLearnerOps(permissions),
+        mayResolveEscalation: canResolveLearnerOpsEscalation(permissions),
         refusedBy: refusalOf(canonicalAxis, crmReportAxis, true),
       });
     }
@@ -121,7 +145,8 @@ async function main(): Promise<number> {
   for (const v of verdicts) {
     process.stderr.write(
       `  ${v.email.padEnd(38)} user=${String(v.userRole).padEnd(8)} staff=${String(v.staffRole).padEnd(10)} ` +
-        `report=${v.mayDecideReportReview ? "ALLOW" : "REFUSE"} mentor=${v.mayDecideMentorReview ? "ALLOW" : "REFUSE"} (${v.refusedBy})\n`,
+        `report=${v.mayDecideReportReview ? "ALLOW" : "REFUSE"} mentor=${v.mayDecideMentorReview ? "ALLOW" : "REFUSE"} ` +
+        `raise=${v.mayRaiseEscalation ? "ALLOW" : "REFUSE"} resolve=${v.mayResolveEscalation ? "ALLOW" : "REFUSE"} (${v.refusedBy})\n`,
     );
   }
   process.stdout.write(JSON.stringify({ ok: true, verdicts }, null, 2) + "\n");
