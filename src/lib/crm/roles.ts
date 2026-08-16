@@ -85,7 +85,8 @@ export const CRM_PERMISSIONS = [
   //   learner_ops_handle         may take work, reply, note and resolve
   //   learner_ops_report_review  may decide a canonical REPORT outcome
   //   learner_ops_mentor_review  may decide a canonical MENTOR-REVIEW outcome
-  //   learner_ops_escalate       may raise an escalation to another authority
+  //   learner_ops_escalate       may RAISE an escalation to another authority
+  //   learner_ops_escalation_resolve  may ANSWER and close one
   //   learner_ops_manage_queues  may direct OTHER people's work
   //   learner_ops_qa             may judge completed work
   //   learner_ops_analytics      may read operational aggregates
@@ -99,6 +100,14 @@ export const CRM_PERMISSIONS = [
   // MANAGE_QUEUES IS SEPARATE FROM HANDLE for the same reason `assign_owner` is
   // separate from note access: acting on your own work and directing someone
   // else's are different powers.
+  //
+  // RAISE AND RESOLVE ARE SEPARATE for the sharpest version of that reason:
+  // they are held by DIFFERENT PEOPLE ON PURPOSE. An escalation routes a
+  // question from whoever cannot answer it to whoever can. If one permission
+  // covered both, the frontline that raised an educational escalation could
+  // close it themselves — self-certification, which is the single thing
+  // escalating exists to prevent — while the mentor it was addressed to could
+  // not answer at all. That was LO-ESCALATION-RESOLVE-AUTHORITY-1.
   "learner_ops_view",
   "learner_ops_handle",
   "learner_ops_report_review",
@@ -108,6 +117,7 @@ export const CRM_PERMISSIONS = [
   "learner_ops_qa",
   "learner_ops_analytics",
   "learner_ops_admin",
+  "learner_ops_escalation_resolve",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -284,6 +294,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_qa",
     "learner_ops_analytics",
     "learner_ops_admin",
+    "learner_ops_escalation_resolve",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -303,6 +314,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_manage_queues",
     "learner_ops_qa",
     "learner_ops_analytics",
+    "learner_ops_escalation_resolve",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -325,6 +337,12 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_handle",
     "learner_ops_report_review",
     "learner_ops_mentor_review",
+    // RESOLVE, NOT RAISE. A mentor is the authority an educational escalation
+    // is addressed to, so they must be able to answer and close one. They are
+    // deliberately NOT given `learner_ops_escalate`: routing work to another
+    // authority is a frontline and management act, and widening the raise
+    // permission was the shortcut this fix exists to refuse.
+    "learner_ops_escalation_resolve",
   ],
   support: [
     "edit_user_notes",
@@ -499,7 +517,7 @@ export function canAdjudicateCurriculumSourceAuthority(
 
 /* ------------------------------------------ Learner Operations LEARNER-OPS-V1 */
 
-// The nine Learner Operations gates. Each requires EXACTLY its own permission,
+// The ten Learner Operations gates. Each requires EXACTLY its own permission,
 // with no fallback and no implication chain — the rule the curriculum gates
 // established and the rule `canViewAffiliates` deliberately departed from.
 //
@@ -523,6 +541,18 @@ export function canHandleLearnerOps(permissions: readonly CrmPermission[]): bool
 
 export function canEscalateLearnerOps(permissions: readonly CrmPermission[]): boolean {
   return permissions.includes("learner_ops_escalate");
+}
+
+/**
+ * MAY ANSWER AND CLOSE AN ESCALATION.
+ *
+ * Deliberately NOT `canEscalateLearnerOps(...) || ...`. There is no implication
+ * either way: raising does not confer answering, and answering does not confer
+ * raising. `mentor` holds this and not the raise permission; `support` holds
+ * the raise permission and not this. That asymmetry IS the control.
+ */
+export function canResolveLearnerOpsEscalation(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("learner_ops_escalation_resolve");
 }
 
 export function canManageLearnerOpsQueues(permissions: readonly CrmPermission[]): boolean {

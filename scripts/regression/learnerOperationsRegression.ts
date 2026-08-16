@@ -38,7 +38,16 @@ import { hasCrmReviewAuthority } from "../../src/lib/learner-ops/review-authorit
 import { hasRole } from "../../src/lib/auth";
 import { getLearner360 } from "../../src/lib/learner-ops/learner-360";
 import { LEARNER_OPS_TRANSITIONS, isLegalTransition } from "../../src/lib/learner-ops/contract";
-import { resolveEffectivePermissions } from "../../src/lib/crm/roles";
+import {
+  canEscalateLearnerOps,
+  canResolveLearnerOpsEscalation,
+  resolveEffectivePermissions,
+} from "../../src/lib/crm/roles";
+import {
+  CRM_SESSION_PERMISSION_CONTRACT,
+  CRM_SESSION_PERMISSION_CONTRACT_VERSION,
+} from "../../src/lib/crm/session-permission-contract";
+import { LEARNER_OPS_TERMINAL_STATUSES, LEARNER_OPS_ACTIVE_STATUSES, LEARNER_OPS_STATUSES } from "../../src/lib/learner-ops/contract";
 
 const REPO = path.resolve(__dirname, "..", "..");
 const DB_PATH = path.join(os.tmpdir(), `ata-learner-ops-${process.pid}.db`);
@@ -713,6 +722,235 @@ async function main() {
   await check("LO-AUTH-AXIS-1 · support staff hold no review authority", async () => {
     assert.equal(await hasCrmReviewAuthority(supportUser.id, "report"), false);
     assert.equal(await hasCrmReviewAuthority(supportUser.id, "mentor"), false);
+  });
+
+  /* ------------------------------ 6b · LO-ESCALATION-RESOLVE-AUTHORITY-1 */
+
+  await check("v4 · the contract carries 25 permissions and the resolve name is LAST", () => {
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT_VERSION, 4);
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT.length, 25);
+    assert.equal(
+      CRM_SESSION_PERMISSION_CONTRACT[CRM_SESSION_PERMISSION_CONTRACT.length - 1],
+      "learner_ops_escalation_resolve",
+      "appended, never inserted — order is part of the protocol",
+    );
+    // The other twenty-four are untouched, in their original order.
+    assert.deepEqual(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15), [
+      "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
+      "export", "view_audit", "manage_settings", "edit_user_notes", "view_user_notes",
+      "create_user_notes", "view_affiliate_analytics", "curriculum_read",
+      "curriculum_author", "curriculum_approve", "curriculum_source_authority",
+    ]);
+  });
+
+  await check("A/B · support may RAISE an escalation and may NOT resolve one", () => {
+    const support = resolveEffectivePermissions("support");
+    assert.equal(canEscalateLearnerOps(support), true, "the frontline must still be able to escalate");
+    assert.equal(
+      canResolveLearnerOpsEscalation(support),
+      false,
+      "the party that raises must not be able to self-certify the answer",
+    );
+  });
+
+  await check("C · a mentor may RESOLVE and is deliberately not given raise", () => {
+    const mentor = resolveEffectivePermissions("mentor");
+    assert.equal(canResolveLearnerOpsEscalation(mentor), true);
+    assert.equal(
+      canEscalateLearnerOps(mentor),
+      false,
+      "resolve was split OUT of escalate; it must not smuggle raise back in",
+    );
+  });
+
+  await check("D · crm_admin and crm_manager may resolve", () => {
+    assert.equal(canResolveLearnerOpsEscalation(resolveEffectivePermissions("crm_admin")), true);
+    assert.equal(canResolveLearnerOpsEscalation(resolveEffectivePermissions("crm_manager")), true);
+  });
+
+  await check("E · the moderator negative control gains nothing from v4", () => {
+    // preprod-qa-operator's shape: StaffRole `moderator`, User.role `admin`.
+    // A platform admin role is not a CRM permission and never becomes one.
+    const moderator = resolveEffectivePermissions("moderator");
+    assert.deepEqual([...moderator], [], "moderator must still hold zero permissions");
+    assert.equal(canResolveLearnerOpsEscalation(moderator), false);
+  });
+
+  await check("v4 · no OTHER role's permission set changed", () => {
+    // Every role except the three that gained resolve must be byte-identical to
+    // its v3 set. This is what stops a contract bump quietly widening authority.
+    for (const role of ["retention_manager", "support", "moderator", "analyst", "content_manager", "read_only"] as const) {
+      const permissions = resolveEffectivePermissions(role);
+      assert.ok(
+        !permissions.includes("learner_ops_escalation_resolve"),
+        `${role} must not have gained the resolve permission`,
+      );
+    }
+    // And the three that gained it gained ONLY it.
+    for (const role of ["mentor", "crm_admin", "crm_manager"] as const) {
+      assert.equal(canResolveLearnerOpsEscalation(resolveEffectivePermissions(role)), true);
+    }
+  });
+
+  await check("G · a case cannot become terminal while an escalation is open", async () => {
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Открытая эскалация", details: "Методический вопрос", actor: null,
+    });
+    await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+    const escalated = await getCaseDetail(target.id);
+    assert.equal(escalated.status, "escalated");
+
+    for (const terminal of LEARNER_OPS_TERMINAL_STATUSES) {
+      await expectDomainError("LEARNER_OPS_ESCALATION_OPEN", () =>
+        transitionCase({
+          caseId: target.id, expectedVersion: escalated.version,
+          nextStatus: terminal, actor: actorA,
+        }),
+      );
+    }
+
+    // Non-terminal movement stays legal: still being worked while a second
+    // authority thinks is true, not a lie.
+    const back = await transitionCase({
+      caseId: target.id, expectedVersion: escalated.version,
+      nextStatus: "in_progress", actor: actorA,
+    });
+    assert.equal((back as { status: string }).status, "in_progress");
+
+    // And it is STILL refused from the non-escalated state — the invariant is
+    // about the open escalation, not about the case's current status.
+    const working = await getCaseDetail(target.id);
+    await expectDomainError("LEARNER_OPS_ESCALATION_OPEN", () =>
+      transitionCase({
+        caseId: target.id, expectedVersion: working.version,
+        nextStatus: "resolved", actor: actorA,
+      }),
+    );
+  });
+
+  await check("F · a learner-visible message does NOT resolve the escalation", async () => {
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Ответ без закрытия", details: "Методический вопрос", actor: null,
+    });
+    const raised = await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+    await addMessage({
+      caseId: target.id,
+      body: "Разбираю ваш вопрос по методике — вот подробный ответ.",
+      author: { kind: "staff", staffId: actorMentor.staffId, userId: actorMentor.userId },
+    });
+    const row = await prisma.learnerOpsEscalation.findUniqueOrThrow({ where: { id: raised.id } });
+    assert.equal(row.resolvedAt, null, "answering in the thread must not close the record");
+    assert.equal(row.resolution, null);
+    assert.equal(row.resolvedByStaffId, null);
+  });
+
+  await check("H · a resolution records who, when, what and a timeline entry", async () => {
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Провенанс решения", details: "Методический вопрос", actor: null,
+    });
+    const raised = await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+    await resolveEscalation({
+      escalationId: raised.id,
+      resolution: "Методист подтверждает: разбор соответствует программе L2.",
+      returnToOwner: true,
+      actor: actorMentor,
+    });
+
+    const row = await prisma.learnerOpsEscalation.findUniqueOrThrow({ where: { id: raised.id } });
+    assert.ok(row.resolvedAt instanceof Date, "resolvedAt must be stamped");
+    assert.equal(row.resolvedByStaffId, actorMentor.staffId, "the RESOLVER, not the raiser");
+    assert.notEqual(row.raisedByStaffId, row.resolvedByStaffId, "raise and resolve are different people here");
+    assert.match(row.resolution ?? "", /Методист подтверждает/);
+    assert.ok(row.returnedToOwnerAt instanceof Date);
+
+    // Reconciled in the same act: the case is back with its owner.
+    const detail = await getCaseDetail(target.id);
+    assert.equal(detail.status, "in_progress");
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { entityType: "LearnerOpsEscalation", entityId: raised.id },
+      orderBy: { id: "desc" },
+    });
+    assert.ok(audit, "the resolution must be audited");
+    assert.equal(audit.userId, actorMentor.userId);
+
+    // ...and now that nothing is open, the case may finally become terminal.
+    const ready = await getCaseDetail(target.id);
+    const done = await transitionCase({
+      caseId: target.id, expectedVersion: ready.version, nextStatus: "resolved", actor: actorA,
+    });
+    assert.equal((done as { status: string }).status, "resolved");
+  });
+
+  await check("I · resolving twice is refused, not silently repeated", async () => {
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Двойное закрытие", details: "Методический вопрос", actor: null,
+    });
+    const raised = await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+    await resolveEscalation({
+      escalationId: raised.id, resolution: "Первый ответ.", returnToOwner: false, actor: actorMentor,
+    });
+    await expectDomainError("LEARNER_OPS_ESCALATION_ALREADY_RESOLVED", () =>
+      resolveEscalation({
+        escalationId: raised.id, resolution: "Второй ответ.", returnToOwner: false, actor: actorMentor,
+      }),
+    );
+    const row = await prisma.learnerOpsEscalation.findUniqueOrThrow({ where: { id: raised.id } });
+    assert.match(row.resolution ?? "", /Первый ответ/, "the first answer must survive");
+  });
+
+  await check("J · resolve racing a terminal transition leaves one coherent truth", async () => {
+    const target = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Гонка", details: "Методический вопрос", actor: null,
+    });
+    const raised = await raiseEscalation({
+      caseId: target.id, class: "educational_methodology",
+      reason: "Нужна оценка методиста", targetQueueKey: "escalation", actor: actorA,
+    });
+    const before = await getCaseDetail(target.id);
+
+    const [resolveOutcome, closeOutcome] = await Promise.allSettled([
+      resolveEscalation({
+        escalationId: raised.id, resolution: "Ответ методиста.", returnToOwner: true, actor: actorMentor,
+      }),
+      transitionCase({
+        caseId: target.id, expectedVersion: before.version, nextStatus: "resolved", actor: actorA,
+      }),
+    ]);
+
+    const row = await prisma.learnerOpsEscalation.findUniqueOrThrow({ where: { id: raised.id } });
+    const detail = await getCaseDetail(target.id);
+
+    // Whatever the interleaving, the two truths must agree: a terminal case
+    // NEVER coexists with an open escalation.
+    if ((LEARNER_OPS_TERMINAL_STATUSES as readonly string[]).includes(detail.status)) {
+      assert.ok(row.resolvedAt !== null, "a terminal case may not carry an open escalation");
+    }
+    assert.equal(resolveOutcome.status, "fulfilled", "the escalation answer must not be lost to a race");
+    void closeOutcome;
+  });
+
+  await check("the terminal set is exactly the complement of the active set", () => {
+    const all = [...LEARNER_OPS_STATUSES].sort();
+    const union = [...LEARNER_OPS_ACTIVE_STATUSES, ...LEARNER_OPS_TERMINAL_STATUSES].sort();
+    assert.deepEqual(union, all, "no status may be in both, and none may be in neither");
   });
 
   /* ---------------------------------------------------- 7 · escalation */

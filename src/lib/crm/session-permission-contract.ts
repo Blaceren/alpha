@@ -64,7 +64,9 @@
 /**
  * The canonical vocabulary, in the canonical order. Version 2 appends the four
  * PHASE-G0/PHASE-G2 curriculum permissions that the CRM never received.
- * Version 3 appends the nine LEARNER-OPERATIONS-V1 permissions.
+ * Version 3 appends the nine LEARNER-OPERATIONS-V1 permissions. Version 4
+ * appends one more, `learner_ops_escalation_resolve`, splitting an act that was
+ * wrongly fused to another.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT = [
   "view_exact_financials",
@@ -105,6 +107,21 @@ export const CRM_SESSION_PERMISSION_CONTRACT = [
   "learner_ops_qa",
   "learner_ops_analytics",
   "learner_ops_admin",
+  // LO-ESCALATION-RESOLVE-AUTHORITY-1, v4. Appended, never inserted.
+  //
+  // RAISING AN ESCALATION AND ANSWERING ONE ARE DIFFERENT RESPONSIBILITIES.
+  // `learner_ops_escalate` gated both, and the grant matrix gave it to the
+  // frontline that raises and to the administrators, but not to `mentor` — the
+  // role an `educational_methodology` escalation is addressed TO. The authority
+  // the question was routed to was the one authority that could not answer it,
+  // while the frontline that raised it could close its own escalation. That is
+  // self-certification, and it is what escalating exists to prevent.
+  //
+  // So resolution gets its own name. `learner_ops_escalate` keeps its stated
+  // meaning — may raise an escalation to another authority — and every current
+  // holder keeps it unchanged. Nobody gains resolution by holding the old
+  // permission, and nobody loses the ability to raise.
+  "learner_ops_escalation_resolve",
 ] as const;
 
 export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[number];
@@ -113,9 +130,10 @@ export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[numb
  * Contract version. v1 was the implicit eleven-entry vocabulary that existed
  * before this file; v2 is the first version to be written down and enforced;
  * v3 appends the nine Learner Operations permissions, bringing the vocabulary
- * to twenty-four.
+ * to twenty-four; v4 appends `learner_ops_escalation_resolve`, bringing it to
+ * twenty-five.
  */
-export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 3;
+export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 4;
 
 /**
  * `sha256(CRM_SESSION_PERMISSION_CONTRACT.join("\n"))`, lowercase hex.
@@ -125,4 +143,4 @@ export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 3;
  * contracts and the session boundary is unsafe again.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT_DIGEST =
-  "bb0efecf1fa43a70cc71a99dad3fa95c8b4ea5e0741e7d45954bcc37eb3cd477";
+  "1514e85f02224b31082bac7e596e96a5dec5682df73855224a2e072e53590110";

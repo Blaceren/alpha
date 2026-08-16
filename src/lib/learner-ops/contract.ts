@@ -51,6 +51,20 @@ export const LEARNER_OPS_ACTIVE_STATUSES = [
   "escalated",
 ] as const satisfies readonly LearnerOpsCaseStatus[];
 
+/**
+ * The two statuses that assert the operational work is FINISHED.
+ *
+ * Named here rather than inlined because more than one invariant needs to ask
+ * "is this state a claim of completion?" — LO-ESCALATION-RESOLVE-AUTHORITY-1
+ * refuses to enter either while an escalation is unanswered. It is the exact
+ * complement of `LEARNER_OPS_ACTIVE_STATUSES` and is asserted to be by the
+ * regression, so the two can never drift into overlapping or leaving a gap.
+ */
+export const LEARNER_OPS_TERMINAL_STATUSES = [
+  "resolved",
+  "closed",
+] as const satisfies readonly LearnerOpsCaseStatus[];
+
 /** The three waits, named once so no caller re-derives the list. */
 export const LEARNER_OPS_WAITING_STATUSES = [
   "waiting_learner",

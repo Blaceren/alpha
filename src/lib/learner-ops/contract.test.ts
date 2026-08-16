@@ -303,11 +303,15 @@ describe("Learner Operations permission matrix", () => {
     "learner_ops_qa",
     "learner_ops_analytics",
     "learner_ops_admin",
+    "learner_ops_escalation_resolve",
   ] as const;
 
-  it("appends the nine permissions to the contract without reordering it", () => {
-    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(3);
-    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(24);
+  it("appends the Learner Operations permissions to the contract without reordering it", () => {
+    // v3 added nine; v4 added the tenth, `learner_ops_escalation_resolve`,
+    // after LO-ESCALATION-RESOLVE-AUTHORITY-1 showed that raising an escalation
+    // and answering one had been fused into a single permission.
+    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(4);
+    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(25);
     // The first fifteen keep their exact accepted positions.
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15)).toEqual([
       "view_exact_financials",
@@ -327,6 +331,20 @@ describe("Learner Operations permission matrix", () => {
       "curriculum_source_authority",
     ]);
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15)).toEqual(NEW_PERMISSIONS);
+  });
+
+  it("gives mentor RESOLVE and withholds RAISE — LO-ESCALATION-RESOLVE-AUTHORITY-1", () => {
+    // The asymmetry is the control. A mentor answers escalations addressed to
+    // them; routing work to another authority stays a frontline and management
+    // act. Support is the mirror image and is asserted alongside so a future
+    // edit cannot quietly collapse the two back into one permission.
+    const mentor = resolveEffectivePermissions("mentor");
+    expect(mentor).toContain("learner_ops_escalation_resolve");
+    expect(mentor).not.toContain("learner_ops_escalate");
+
+    const support = resolveEffectivePermissions("support");
+    expect(support).toContain("learner_ops_escalate");
+    expect(support).not.toContain("learner_ops_escalation_resolve");
   });
 
   it("keeps the backend vocabulary identical to the shared contract", () => {

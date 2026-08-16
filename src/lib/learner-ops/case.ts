@@ -38,6 +38,7 @@ import {
   isWaitingStatus,
   LEARNER_OPS_AUDIT_ACTIONS,
   LEARNER_OPS_REQUIRED_ANCHOR,
+  LEARNER_OPS_TERMINAL_STATUSES,
 } from "@/lib/learner-ops/contract";
 import { LearnerOpsError, learnerOpsFail } from "@/lib/learner-ops/errors";
 import { createNotification } from "@/lib/notifications";
@@ -354,6 +355,36 @@ export async function transitionCase(input: TransitionInput, db: Db = prisma) {
         "LEARNER_OPS_ILLEGAL_TRANSITION",
         `${current.status} -> ${input.nextStatus} is not a transition this domain defines`,
       );
+    }
+
+    // LO-ESCALATION-RESOLVE-AUTHORITY-1 §4 — A CASE WITH AN UNANSWERED
+    // ESCALATION IS NOT FINISHED.
+    //
+    // The escalation record and the case status were two independent truths, so
+    // the product could show a `resolved` case whose educational question had
+    // never been answered by anybody. This is the smallest invariant that makes
+    // the two agree, and it is deliberately narrow:
+    //
+    //   * only TERMINAL states are refused. `escalated -> in_progress`,
+    //     `waiting_*` and the rest stay legal, because "still being worked
+    //     while a second authority thinks" is true, not a lie;
+    //   * it reads inside the SAME transaction as the status write, so an
+    //     escalation opened concurrently cannot slip past the check;
+    //   * it is not a second escalation truth. There is one row, one
+    //     `resolvedAt`, and this asks that row.
+    //
+    // The escalation's own resolution transitions the case afterwards, and by
+    // then `resolvedAt` is set, so the ordinary path is unaffected.
+    if ((LEARNER_OPS_TERMINAL_STATUSES as readonly string[]).includes(input.nextStatus)) {
+      const openEscalations = await tx.learnerOpsEscalation.count({
+        where: { caseId: input.caseId, resolvedAt: null },
+      });
+      if (openEscalations > 0) {
+        learnerOpsFail(
+          "LEARNER_OPS_ESCALATION_OPEN",
+          `case has ${openEscalations} unresolved escalation(s) and cannot become ${input.nextStatus}`,
+        );
+      }
     }
 
     const now = new Date();
