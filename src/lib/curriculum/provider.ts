@@ -32,8 +32,21 @@ export type CurriculumViewResult =
   | { ok: true; view: AcademyCurriculumView }
   | { ok: false; error: CurriculumReadError };
 
+/**
+ * The level read, and the programme it sits in.
+ *
+ * `view` is carried alongside the detail because the level page has to answer
+ * two questions a level alone cannot: how far through the programme this level
+ * is, and what the learner should do next once it is finished. Both already have
+ * exactly one owner — `deriveNextAction` and the progress summary — and handing
+ * the same view to the page is what lets it reuse them instead of deriving a
+ * second, disagreeing answer.
+ *
+ * It costs nothing: the view is the read this function already performed to find
+ * the level at all.
+ */
 export type LevelDetailResult =
-  | { ok: true; detail: AcademyLevelDetail }
+  | { ok: true; detail: AcademyLevelDetail; view: AcademyCurriculumView }
   | { ok: false; error: CurriculumReadError };
 
 const DEFAULT_LOCALE = "ru";
@@ -68,7 +81,7 @@ async function apiLevelDetail(levelCode: string, locale: string): Promise<LevelD
 
   const detail = buildLevelDetail(view, levelCode, content);
   if (!detail) return { ok: false, error: makeReadError("LEVEL_NOT_FOUND") };
-  return { ok: true, detail };
+  return { ok: true, detail, view };
 }
 
 /* ----------------------------- fixture mode ----------------------------- */
@@ -142,7 +155,7 @@ function fixtureLevelDetail(levelCode: string): LevelDetailResult {
   const content = mapLevelContent(null, "not_configured");
   const detail = buildLevelDetail(view, levelCode, content);
   if (!detail) return { ok: false, error: makeReadError("LEVEL_NOT_FOUND") };
-  return { ok: true, detail };
+  return { ok: true, detail, view };
 }
 
 /* ------------------------------- selection ------------------------------ */

@@ -151,10 +151,27 @@ function lockExplanation(level: AcademyLevelSummary): string {
   }
 }
 
+/**
+ * A canonical fact a level's own owner knows that the progression engine does
+ * not. Optional everywhere: the derivation is complete without it and only ever
+ * becomes MORE specific when one is supplied.
+ *
+ * Today there is exactly one member. A report that a reviewer returned for
+ * corrections is `in_progress` to the progression engine — deliberately, so the
+ * learner can act on it again — which makes it indistinguishable from a report
+ * that was never written. `reportState` is the report owner's own answer, read
+ * separately, and it is the difference between "подготовьте отчёт" and "внесите
+ * правки". See server/curriculum/report-state-read.ts.
+ */
+export type NextActionDetail = {
+  readonly reportState?: "available" | "draft" | "pending_review" | "rejected" | "approved" | null;
+};
+
 /** The action for a level the learner may work on right now. */
 function actionableLevel(
   level: AcademyLevelSummary,
   module: AcademyModuleSummary | null,
+  detail: NextActionDetail = {},
 ): AcademyNextAction {
   const base = { level, module, href: level.href } as const;
   const inProgress = level.state === "in_progress";
@@ -186,7 +203,31 @@ function actionableLevel(
         ctaLabel: inProgress ? "Продолжить" : "Открыть уровень",
       };
 
-    case "report":
+    case "report": {
+      // THE §16 DISTINCTION. A returned report and an unwritten one are the
+      // same progression state; only the report owner can tell them apart, and
+      // when it has told us, we say the specific thing.
+      if (detail.reportState === "rejected") {
+        return {
+          ...base,
+          kind: "revise-report",
+          posture: "act",
+          title: "Внесите правки в отчёт",
+          explanation:
+            "Наставник вернул отчёт с замечаниями. Исправьте их и отправьте отчёт снова — уровень пока не завершён.",
+          ctaLabel: "Открыть отчёт",
+        };
+      }
+      if (detail.reportState === "draft") {
+        return {
+          ...base,
+          kind: "submit-report",
+          posture: "act",
+          title: "Допишите и отправьте отчёт",
+          explanation: "Черновик отчёта сохранён. Закончите его и отправьте на проверку наставнику.",
+          ctaLabel: "Продолжить отчёт",
+        };
+      }
       return {
         ...base,
         kind: "submit-report",
@@ -195,6 +236,7 @@ function actionableLevel(
         explanation: "Отчёт проверяет наставник. После одобрения уровень будет завершён.",
         ctaLabel: "Открыть отчёт",
       };
+    }
 
     case "mentor-review":
       return {
@@ -320,7 +362,15 @@ type Enrolled = Extract<AcademyCurriculumView, { state: "enrolled" | "completed"
  * that is not completed, in curriculum order, and if every level is complete the
  * answer is that the programme is finished.
  */
-export function deriveNextAction(view: AcademyCurriculumView): AcademyNextAction {
+export function deriveNextAction(
+  view: AcademyCurriculumView,
+  /**
+   * Optional canonical detail the progression read cannot carry. Absent by
+   * default, so every existing caller keeps its exact behaviour and the
+   * derivation stays a pure function of canonical facts.
+   */
+  detail: NextActionDetail = {},
+): AcademyNextAction {
   if (view.state === "unavailable" || view.state === "candidate") {
     return {
       kind: "not-enrolled",
@@ -372,7 +422,7 @@ export function deriveNextAction(view: AcademyCurriculumView): AcademyNextAction
 
     case "available":
     case "in_progress":
-      return actionableLevel(target, levelModule);
+      return actionableLevel(target, levelModule, detail);
 
     case "checkpoint_unverified":
       return {
@@ -394,7 +444,7 @@ export function deriveNextAction(view: AcademyCurriculumView): AcademyNextAction
       const nextOpen = levels.find(
         (l) => l.order > target.order && (l.state === "available" || l.state === "in_progress"),
       );
-      if (nextOpen) return actionableLevel(nextOpen, moduleOf.get(nextOpen.levelCode) ?? null);
+      if (nextOpen) return actionableLevel(nextOpen, moduleOf.get(nextOpen.levelCode) ?? null, detail);
       return {
         kind: "continue-next-level",
         posture: "waiting",

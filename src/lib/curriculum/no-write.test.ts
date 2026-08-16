@@ -17,11 +17,33 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
  * with NO body at all — the Backend takes the actor from the session and the
  * stable code only tells it which level this page believes is current).
  *
+ * ACADEMY-EXPERIENCE-COMPLETION-1 adds the SEVENTH and last: the lesson READING
+ * POSITION (a single PATCH carrying a revision, a playback position and the list
+ * of sections the learner has marked read).
+ *
+ * WHY LESSON PROGRESS IS NOW SANCTIONED, HAVING BEEN FORBIDDEN.
+ * It was forbidden because at the time the only thing that could have written it
+ * was the video player, and a player that quietly records progress becomes a
+ * second progression owner. That reasoning is unchanged and still enforced — see
+ * the lesson-media test below, which remains unsanctioned and asserts the player
+ * performs no I/O at all.
+ *
+ * What changed is that the rich lesson now renders the canonical published body,
+ * and the learner's position IN THAT TEXT has to live somewhere. The alternative
+ * was the fixture era's answer: a browser store, which made the client the
+ * authority on how far somebody had read. `UserLessonProgress` is a different
+ * row from `UserLevelProgress`, written by a command that refuses to run unless
+ * the level is ALREADY `in_progress` and refuses again the moment it completes,
+ * and which never touches the progression row. So this write cannot finish a
+ * level, unlock one, award XP or change a verdict — and the tests below pin that
+ * down on what the surface SENDS rather than trusting the description.
+ *
  * This test therefore allows the assessment attempt surface, the report learner
- * surface, the checkpoint verification surface and the level-start surface, and
- * NOTHING else — no reviewer/mentor review, no admin publish/archive/authoring,
- * no lesson-progress, no attachment, no other mutation — anywhere in the
- * curriculum/assessment/report/checkpoint/level-start code.
+ * surface, the checkpoint verification surface, the level-start surface, the
+ * manual-completion surface, the mentor-review REQUEST surface and the lesson
+ * reading-position surface, and NOTHING else — no reviewer/mentor approval, no
+ * admin publish/archive/authoring, no attachment, no other mutation — anywhere
+ * in the scanned code.
  *
  * The lesson MEDIA surface is scanned too, and is deliberately NOT sanctioned:
  * the video player must never become a hidden progress owner, so any write it
@@ -62,6 +84,8 @@ const SCAN_DIRS = [
   "src/server/proxy/mentor-review-proxy.ts",
   "src/lib/mentor-review",
   "src/features/mentor-review",
+  "src/server/proxy/lesson-progress-proxy.ts",
+  "src/features/lesson-reader",
 ].map((p) => path.join(REPO_ROOT, p));
 
 /** The sanctioned CI-3 assessment write surface (start + submit attempt). */
@@ -94,6 +118,17 @@ const MANUAL_COMPLETION_WRITE =
  */
 const MENTOR_REVIEW_WRITE =
   /mentor-review-proxy|mentor-review-client|[\\/]mentor-review[\\/]/;
+/**
+ * The sanctioned ACADEMY-EXPERIENCE-COMPLETION-1 learner READING POSITION
+ * surface (lesson-progress).
+ *
+ * The seventh learner write, and the only one that is not about progression at
+ * all. Deliberately narrow: the proxy, its route and its client. The reader
+ * FEATURE is scanned but not sanctioned — the rendering code must go through
+ * this client, and cannot grow a request of its own.
+ */
+const LESSON_PROGRESS_WRITE =
+  /lesson-progress-proxy|lesson-progress-client|[\\/]lesson-progress[\\/]route\.tsx?$/;
 
 function sanctionedWrite(file: string): boolean {
   return (
@@ -102,7 +137,8 @@ function sanctionedWrite(file: string): boolean {
     CHECKPOINT_WRITE.test(file) ||
     LEVEL_START_WRITE.test(file) ||
     MANUAL_COMPLETION_WRITE.test(file) ||
-    MENTOR_REVIEW_WRITE.test(file)
+    MENTOR_REVIEW_WRITE.test(file) ||
+    LESSON_PROGRESS_WRITE.test(file)
   );
 }
 
@@ -141,11 +177,80 @@ describe("curriculum write contract (CI-4: read-only + bounded assessment & repo
     }
   });
 
-  it("never references a reviewer/admin/attachment/lesson-progress mutation path", () => {
-    // These remain forbidden EVERYWHERE (no mentor UI, no admin, no attachments).
+  it("never references a reviewer/admin/attachment mutation path", () => {
+    // These remain forbidden EVERYWHERE (no mentor approval UI, no admin, no
+    // attachments). `lesson-progress` moved out of this list and into its own
+    // sanctioned surface with its own tests below — it is not merely allowed,
+    // it is pinned.
     for (const { f, src } of sources) {
       expect(src, `${f} references a forbidden mutation path`).not.toMatch(
-        /lesson-progress|\/publish\b|\/archive\b|report-submissions|report-reviews|report\/attachments|report-attachments/,
+        /\/publish\b|\/archive\b|report-submissions|report-reviews|report\/attachments|report-attachments/,
+      );
+    }
+  });
+
+  it("lesson-progress API paths are only ever the single reading-position path", () => {
+    // One URL, in one surface. A second lesson-progress path anywhere would
+    // mean a second thing claiming to know how far a learner has read.
+    const apiPath = /(?:\/api\/|curriculum\/levels\/)[A-Za-z0-9_${}().\\/[\]-]*lesson-progress[A-Za-z0-9_${}().\\/[\]-]*/g;
+    for (const { f, src } of sources) {
+      for (const m of src.match(apiPath) ?? []) {
+        expect(m.includes("lesson-progress"), `${f}: unexpected lesson-progress path ${m}`).toBe(true);
+        expect(
+          LESSON_PROGRESS_WRITE.test(f),
+          `${f} may only use a lesson-progress path in the reading-position surface`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("the reading-position surface SENDS only a reading position", () => {
+    // THE STRUCTURAL GUARANTEE that this write cannot become a progression one.
+    // Checked on the outgoing body literal, so the response shape — which
+    // legitimately reports back an accepted revision — is not mistaken for what
+    // is sent.
+    const stripComments = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    const bodyLiteral = /body:\s*JSON\.stringify\(\{([\s\S]*?)\}\s*\)/g;
+    let bodiesSeen = 0;
+
+    for (const { f, src } of sources) {
+      if (!LESSON_PROGRESS_WRITE.test(f)) continue;
+      const clean = stripComments(src);
+      for (const [, payload] of clean.matchAll(bodyLiteral)) {
+        bodiesSeen += 1;
+        // Exactly the four canonical reading fields, and nothing that could
+        // name a level state, a completion, a reward or another person.
+        const keys = (payload ?? "")
+          .split("\n")
+          .map((line) => /^\s*([A-Za-z0-9_]+)\s*:/.exec(line)?.[1])
+          .filter((key): key is string => typeof key === "string")
+          .sort();
+        expect(keys, `${f} sends more than a reading position`).toEqual([
+          "completedSections",
+          "expectedRevision",
+          "playbackPositionSeconds",
+          "progressData",
+        ]);
+      }
+      expect(clean, `${f} builds a request body some other way`).not.toMatch(
+        /body:\s*(new FormData|new URLSearchParams|["'])/,
+      );
+      expect(clean, `${f} names a progression fact`).not.toMatch(
+        /\buserId\b|\blearnerId\b|\bxp\b|\bxpAwarded\b|\bcompletionMethod\b|\btargetStatus\b|\bapprove\b|\bverdict\b/i,
+      );
+    }
+    // The assertion above is vacuous if no body was found at all.
+    expect(bodiesSeen, "no reading-position request body was scanned").toBe(1);
+  });
+
+  it("the lesson reader renders but never issues a request of its own", () => {
+    // The reading surface must go through the sanctioned client. If it ever
+    // grew its own fetch, it would be a write owner nobody had reviewed.
+    for (const { f, src } of sources) {
+      if (!f.includes(`${path.sep}lesson-reader${path.sep}`)) continue;
+      expect(src, `${f} performs I/O directly`).not.toMatch(
+        /\bfetch\(|XMLHttpRequest|navigator\.sendBeacon/,
       );
     }
   });

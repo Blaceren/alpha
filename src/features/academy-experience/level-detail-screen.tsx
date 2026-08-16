@@ -25,13 +25,16 @@ import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent, AcademyLevelSummary } from "@/lib/curriculum/academy-view";
-import { explainLevelState } from "@/lib/curriculum/next-action";
+import { deriveNextAction, explainLevelState } from "@/lib/curriculum/next-action";
+import { LevelCompletion } from "@/features/academy-experience/level-completion";
 import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
 import { LevelAssessment } from "@/features/assessment/level-assessment";
 import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
 import { LevelManualCompletion } from "@/features/manual-completion/level-manual-completion";
 import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
+import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
+import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
 import { isManualCompletionMethod } from "@/lib/curriculum/completion-method";
 import { LevelStart } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
@@ -55,6 +58,29 @@ const CONTENT_NOTE: Record<NonNullable<AcademyLevelContent["unavailableReason"]>
   unsupported_type: "Этот тип уровня пока не отображается.",
   unavailable: "Материал сейчас недоступен.",
 };
+
+/** Russian plural for "раздел". Grammar, not a product decision. */
+function sectionWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "раздел";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "раздела";
+  return "разделов";
+}
+
+/**
+ * How many of THIS lesson's sections the learner has marked read.
+ *
+ * Intersected with the body's own section codes rather than trusting the stored
+ * list length: a published body can lose a section between versions, and a count
+ * of "прочитано 7 из 5" is the kind of small lie that costs a learner's trust in
+ * everything else on the page.
+ */
+function readSectionCount(content: AcademyLevelContent): number {
+  if (!content.body || !content.reading) return 0;
+  const read = new Set(content.reading.completedSections);
+  return content.body.sections.filter((section) => read.has(section.code)).length;
+}
 
 /**
  * The level's posture, in the same four-value vocabulary the Action Field uses.
@@ -102,6 +128,33 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
   const { summary, content, prerequisites, navigation } = result.detail;
   const posture = levelPosture(summary.state);
 
+  /**
+   * The completion moment's inputs, all canonical, all already read.
+   *
+   * `deriveNextAction` is the SAME call Home makes on the SAME view, so the
+   * sentence a learner reads after finishing a level is the sentence Home will
+   * show them when they go back to it.
+   */
+  const enrolled = result.view.state === "enrolled" || result.view.state === "completed" ? result.view : null;
+  const nextAction = enrolled ? deriveNextAction(result.view) : null;
+  const moduleTitle =
+    enrolled?.modules.find((module) => module.moduleCode === result.detail.moduleCode)?.title ?? null;
+
+  /**
+   * The reviewer's own words, when there are any (§1).
+   *
+   * Read only for the two level families that HAVE a canonical review — asking
+   * Learner Operations about an assessment level would be a round trip that can
+   * only ever answer null. Failure is not propagated: `readLevelMentorFeedback`
+   * degrades to null, and the page renders exactly as it did before this
+   * feature existed. Feedback is context beside a canonical task; it must never
+   * be able to take the task's page down with it.
+   */
+  const feedback =
+    summary.completionMethod === "mentor-review" || summary.completionMethod === "report"
+      ? await readLevelMentorFeedback(summary.levelCode)
+      : null;
+
   // A financial checkpoint is a module boundary, not a lesson. It has no
   // material by definition, so the "Материал" section is suppressed rather than
   // shown with a note about a type that "is not displayed yet".
@@ -116,14 +169,27 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
     contentUnavailableReason: content.unavailableReason,
   });
 
-  /** Host for a canonical task component. Presentation only. */
-  const task = (node: React.ReactNode, key: string) => (
-    <section className="ax-lvlsec" key={key}>
-      <div className="ax-task" data-posture={posture}>
-        {node}
-      </div>
-    </section>
-  );
+  /**
+   * Host for a canonical task component. Presentation only.
+   *
+   * `id="task"` is the anchor the lesson's own CTA links to, so "Перейти к
+   * тесту" at the end of the reading lands on the canonical control rather than
+   * at the top of a page the learner then has to scan. Only the FIRST task host
+   * takes the id — the blocks below are mutually exclusive in practice, and two
+   * elements sharing an id would make the anchor ambiguous.
+   */
+  let taskAnchorUsed = false;
+  const task = (node: React.ReactNode, key: string) => {
+    const id = taskAnchorUsed ? undefined : "task";
+    taskAnchorUsed = true;
+    return (
+      <section className="ax-lvlsec" key={key} id={id}>
+        <div className="ax-task" data-posture={posture}>
+          {node}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <AppShell userName={name} activeId="lessons">
@@ -164,12 +230,42 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                     <p className="cur-content__subtitle">{content.metadata.subtitle}</p>
                   ) : null}
                   <p className="cur-content__summary">{content.metadata.summary}</p>
-                  <ul className="cur-content__facts">
-                    {content.metadata.videoDurationSeconds !== null ? (
-                      <li>Видео: {Math.round(content.metadata.videoDurationSeconds / 60)} мин</li>
-                    ) : null}
-                    <li>Материал: {content.metadata.hasTranscript ? "есть расшифровка" : "без расшифровки"}</li>
-                  </ul>
+                  {/* THE HANDOFF TO THE READING SURFACE.
+                      This page owns state and the canonical task; the written
+                      lesson lives on its own surface, so the two are not two
+                      copies of one another (§9). What is offered here is the
+                      lesson's real SHAPE — how many sections, and how far the
+                      learner has read — both facts the Backend owns. Nothing is
+                      estimated: there is no invented reading time, because the
+                      canonical curriculum does not own one. */}
+                  {content.body ? (
+                    <div className="cur-content__material">
+                      <p className="cur-content__shape">
+                        {content.body.sections.length} {sectionWord(content.body.sections.length)}
+                        {content.reading && content.reading.completedSections.length > 0 ? (
+                          <> · прочитано {readSectionCount(content)}</>
+                        ) : null}
+                        {content.metadata.hasTranscript ? <> · есть расшифровка</> : null}
+                      </p>
+                      <a
+                        className="cur-content__open"
+                        href={`/lessons/${encodeURIComponent(summary.levelCode)}/material`}
+                      >
+                        {content.reading && content.reading.completedSections.length > 0
+                          ? "Продолжить материал"
+                          : "Открыть материал урока"}
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="ax-lvlsec__note">
+                      Учебный текст для этого уровня пока не опубликован.
+                    </p>
+                  )}
+                  {content.metadata.videoDurationSeconds !== null ? (
+                    <p className="ax-lvlsec__note">
+                      Видео: {Math.round(content.metadata.videoDurationSeconds / 60)} мин
+                    </p>
+                  ) : null}
                   {content.media === null ? (
                     <p className="cur-content__media-pending" data-media="pending">
                       Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас.
@@ -184,6 +280,31 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
               </p>
             </section>
           )}
+
+          {/* THE COMPLETION MOMENT. Rendered only when the canonical state is
+              `completed`, above the task surface — which for a finished level
+              only ever states that it is finished. */}
+          {summary.state === "completed" && enrolled && nextAction ? (
+            <section className="ax-lvlsec" key="done">
+              <LevelCompletion
+                level={summary}
+                progress={enrolled.progress}
+                nextAction={nextAction}
+                moduleTitle={moduleTitle}
+              />
+            </section>
+          ) : null}
+
+          {/* The reviewer's reply, immediately above the control it is about.
+              Order matters: read the reply, read what it does and does not
+              decide, THEN meet the canonical task surface. Putting it below the
+              control would let a learner press something before learning that a
+              decision is still outstanding. */}
+          {feedback ? (
+            <section className="ax-lvlsec" key="feedback">
+              <MentorFeedbackPanel feedback={feedback} levelState={summary.state} />
+            </section>
+          ) : null}
 
           {/* Every block below is the SAME condition and the SAME component as
               before; only the surface they sit on changed. */}

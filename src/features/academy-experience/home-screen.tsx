@@ -28,6 +28,8 @@ import {
   ProgressTrace,
 } from "@/features/academy-experience/primitives";
 import { CurriculumErrorState } from "@/features/curriculum-api/curriculum-states";
+import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
+import { readReportState } from "@/server/curriculum/report-state-read";
 import "@/features/academy-experience/experience.css";
 
 type Enrolled = Extract<AcademyCurriculumView, { state: "enrolled" | "completed" }>;
@@ -67,7 +69,24 @@ export async function ExperienceHome() {
     );
   }
 
-  const action = deriveNextAction(result.view);
+  /**
+   * The next action, derived once — with one extra canonical read where, and
+   * only where, the progression state is genuinely ambiguous (§16).
+   *
+   * A report level that is `in_progress` is either "not written yet" or "came
+   * back with corrections", and the progression engine calls both the same
+   * thing. So the report owner is asked, but ONLY for that level and only while
+   * the learner is standing on it: one extra request on one of a hundred levels,
+   * never on an ordinary Home.
+   */
+  const provisional = deriveNextAction(result.view);
+  const ambiguousReport =
+    provisional.level !== null &&
+    provisional.level.completionMethod === "report" &&
+    provisional.level.state === "in_progress";
+  const action = ambiguousReport
+    ? deriveNextAction(result.view, { reportState: await readReportState(provisional.level!.levelCode) })
+    : provisional;
 
   // Not enrolled / no published programme: the Action Field still carries the
   // answer, because "there is nothing to do yet, and here is why" is also an
@@ -85,6 +104,18 @@ export async function ExperienceHome() {
   const view = result.view as Enrolled;
   const level = action.level;
   const levelModule = action.module;
+
+  /**
+   * "Наставник ответил" as ONE LINE of context, and only where it changes what
+   * the learner should do (§4).
+   *
+   * Read only when the derived action is already a waiting review — that is the
+   * single situation in which a reply is news, and it keeps this off the round
+   * trip on every other Home. The BODY of the reply is deliberately not here:
+   * the complete feedback lives with the task, and Home is not a message inbox.
+   */
+  const awaitingReview = action.kind === "wait-mentor-review" || action.kind === "wait-report-review";
+  const feedback = awaitingReview && level ? await readLevelMentorFeedback(level.levelCode) : null;
 
   const coordinate =
     levelModule && level ? (
@@ -122,7 +153,14 @@ export async function ExperienceHome() {
   return (
     <AppShell userName={name} activeId="home">
       <div className="ax">
-        <ActionField action={action} coordinate={coordinate} />
+        <ActionField action={action} coordinate={coordinate}>
+          {feedback ? (
+            <p className="ax-field__aside" data-kind="mentor-feedback">
+              Наставник ответил по этому уровню. Решение ещё не принято — ответ можно прочитать на
+              странице уровня.
+            </p>
+          ) : null}
+        </ActionField>
 
         <ContextRail items={rail} />
 

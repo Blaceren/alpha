@@ -166,6 +166,26 @@ export type AcademyLessonMedia = {
   captions: ReadonlyArray<{ src: string; srcLang: string; label: string }>;
 };
 
+/**
+ * The learner's own reading position in a lesson, as the Backend owns it.
+ *
+ * NOT PROGRESSION. `UserLessonProgress` is a separate row from
+ * `UserLevelProgress`, written by a separate command that refuses to run unless
+ * the level is already `in_progress`, and it cannot complete a level — the
+ * Backend's own save path never touches the progression row. So this says where
+ * the learner got to in the text, and never whether they finished the level.
+ *
+ * `revision` is the optimistic-concurrency token the save command requires. It
+ * is carried through untouched: the Academy never guesses one, and a stale
+ * value is refused by the Backend rather than resolved locally.
+ */
+export type AcademyLessonReadingProgress = {
+  revision: number;
+  completedSections: readonly string[];
+  activeSectionCode: string | null;
+  playbackPositionSeconds: number;
+};
+
 export type AcademyLevelContent = {
   available: boolean;
   /**
@@ -173,6 +193,17 @@ export type AcademyLevelContent = {
    * Null on every text-only lesson.
    */
   media: AcademyLessonMedia | null;
+  /**
+   * The written lesson: sections and blocks, in reading order.
+   *
+   * Null when the published body cannot be read at all (no content configured,
+   * a format this build does not support, or every block dropped by the
+   * fail-closed reader). The Academy has always received this payload and until
+   * now discarded it; see lib/curriculum/lesson-body.ts.
+   */
+  body: import("@/lib/curriculum/lesson-body").LessonBody | null;
+  /** Present only when the learner has a reading position on this lesson. */
+  reading: AcademyLessonReadingProgress | null;
   /** Present when available: safe, display-only content metadata. */
   metadata: {
     versionNumber: number;

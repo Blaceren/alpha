@@ -21,6 +21,7 @@ import type {
   AcademyCheckpointState,
   AcademyCurriculumSummary,
   AcademyCurriculumView,
+  AcademyLessonReadingProgress,
   AcademyLevelContent,
   AcademyLevelDetail,
   AcademyLessonMedia,
@@ -29,6 +30,44 @@ import type {
   AcademyProgressSummary,
 } from "@/lib/curriculum/academy-view";
 import { completionSourceLabel } from "@/lib/curriculum/completion-source";
+import { normalizeLessonBody } from "@/lib/curriculum/lesson-body";
+
+/**
+ * The learner's reading position, read defensively.
+ *
+ * `progress` crosses the wire as `unknown`. Anything missing or malformed
+ * yields null, which the reader treats as "no saved position" — the same thing
+ * a first visit looks like. It is never invented: a fabricated revision would
+ * be refused by the Backend's optimistic-concurrency check anyway, and a
+ * fabricated section list would tell the learner they had read something they
+ * had not.
+ */
+export function mapReadingProgress(raw: unknown): AcademyLessonReadingProgress | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  if (typeof row.revision !== "number" || !Number.isInteger(row.revision) || row.revision < 0) return null;
+
+  const completedSections = Array.isArray(row.completedSections)
+    ? row.completedSections.filter((code): code is string => typeof code === "string" && code.length > 0)
+    : [];
+
+  const progressData = typeof row.progressData === "object" && row.progressData !== null
+    ? (row.progressData as Record<string, unknown>)
+    : null;
+  const activeSectionCode = typeof progressData?.activeSectionCode === "string"
+    ? progressData.activeSectionCode
+    : null;
+
+  return {
+    revision: row.revision,
+    completedSections,
+    activeSectionCode,
+    playbackPositionSeconds:
+      typeof row.playbackPositionSeconds === "number" && row.playbackPositionSeconds >= 0
+        ? Math.floor(row.playbackPositionSeconds)
+        : 0,
+  };
+}
 
 export function levelHref(levelCode: string): string {
   return `/lessons/${encodeURIComponent(levelCode)}`;
@@ -313,6 +352,8 @@ export function mapLevelContent(
     return {
       available: false,
       media: null,
+      body: null,
+      reading: null,
       metadata: null,
       unavailableReason: unavailableReason ?? "unavailable",
     };
@@ -321,6 +362,10 @@ export function mapLevelContent(
   return {
     available: true,
     media: mapLessonMedia(content, loc.locale),
+    // The written lesson, read fail-closed. A body this build cannot parse
+    // yields null and the surface says so; it never yields a half-lesson.
+    body: normalizeLessonBody(loc.body, content.content.assets),
+    reading: mapReadingProgress(content.progress),
     metadata: {
       versionNumber: content.content.versionNumber,
       videoDurationSeconds: content.content.videoDurationSeconds,
