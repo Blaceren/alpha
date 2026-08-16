@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { PathProgress } from "@/features/path/model/path-state";
 import { getPathProgress, type PathScenario } from "@/features/path/model/path-state";
 import { projectTools, type ToolView } from "@/features/tools/model/tools-projection";
 
@@ -18,10 +19,22 @@ import { projectTools, type ToolView } from "@/features/tools/model/tools-projec
  * canonical resolver (`projectTools`), which the server can know. A defensive
  * failure to resolve degrades to an honest fail-closed panel rather than a crash.
  */
-export function ToolsHub({ scenario = "active" }: { scenario?: PathScenario }) {
+export function ToolsHub({
+  scenario = "active",
+  progress,
+}: {
+  scenario?: PathScenario;
+  /**
+   * Canonical curriculum progress. When present it REPLACES the fixture
+   * scenario marker — API mode must never derive a learner's unlocks from a
+   * scenario constant. The resolver below is unchanged either way: it still
+   * owns every lock decision, it is simply given real progress to read.
+   */
+  progress?: PathProgress | null;
+}) {
   let tools: ToolView[] | null;
   try {
-    tools = projectTools(getPathProgress(scenario));
+    tools = projectTools(progress ?? getPathProgress(scenario));
   } catch {
     tools = null;
   }
