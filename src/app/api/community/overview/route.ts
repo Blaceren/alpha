@@ -1,13 +1,20 @@
 /**
  * Community Home, in one read.
  *
- * Answers the four questions Home exists to answer — where may I participate,
- * what is happening there, what relates to where I am, and what should I read
- * first — from the learner's own progression, resolved server-side.
+ * Answers the questions Home exists to answer — where may I participate, what
+ * is being asked there, and what opens next — from the learner's own
+ * progression, resolved server-side.
  *
  * WHY ONE ROUTE AND NOT THREE. Home would otherwise fan out into a spaces read,
- * a recent-activity read and a progression read, and the three could disagree
- * about the learner's position between round trips. One resolution, one answer.
+ * an activity read and a progression read, and the three could disagree about
+ * the learner's position between round trips. One resolution, one answer.
+ *
+ * WHY THE PREVIEW IS PER SPACE AND NOT ONE GLOBAL "RECENT" LIST. The selected
+ * art direction puts real discussions INSIDE each accessible plate. A single
+ * pooled list sorted by time would starve a quieter space of its preview
+ * entirely — the plate would read as empty while its space is not — and in
+ * PREPROD, where most spaces are closed and the open one is quiet, that is the
+ * common case rather than the edge case.
  */
 import {
   assertOnlyQueryParams,
@@ -23,8 +30,8 @@ import { listSpaceDiscussions } from "@/lib/community/service";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/** How many recent discussions Home shows across the readable spaces. */
-const HOME_RECENT_LIMIT = 6;
+/** How many discussions each accessible plate previews. */
+const PLATE_PREVIEW_LIMIT = 3;
 
 export async function GET(request: Request) {
   const gate = await requireCommunityLearner(request, { mutation: false });
@@ -36,43 +43,38 @@ export async function GET(request: Request) {
     const isModerator = await resolveModeratorFlag();
     const access = await resolveCommunityAccess(gate.userId, { moderatorReadsAll: isModerator });
 
-    // Recent activity is drawn ONLY from spaces this learner may read. A
-    // preview of a locked space would be a disclosure dressed as a teaser.
-    const readable = access.spaces.filter((space) => space.canRead);
-    const perSpace = await Promise.all(
-      readable.map(async (space) => {
-        const discussions = await listSpaceDiscussions(space.spaceId, {
-          viewerId: gate.userId,
-          viewerIsModerator: isModerator,
-          viewerModuleNumber: access.currentModuleNumber,
-        });
-        return discussions.map((discussion) => ({ ...discussion, spaceCode: space.code, spaceTitle: space.title }));
+    const viewer = {
+      viewerId: gate.userId,
+      viewerIsModerator: isModerator,
+      viewerModuleNumber: access.currentModuleNumber,
+    };
+
+    // Previews are read ONLY for spaces this learner may read. A preview of a
+    // locked space would be a disclosure dressed as a teaser.
+    const spaces = await Promise.all(
+      access.spaces.map(async (space) => {
+        const preview = space.canRead
+          ? (await listSpaceDiscussions(space.spaceId, viewer)).slice(0, PLATE_PREVIEW_LIMIT)
+          : [];
+        return {
+          code: space.code,
+          title: space.title,
+          purpose: space.purpose,
+          canRead: space.canRead,
+          canWrite: space.canWrite,
+          lockedReason: space.lockedReason,
+          requiredModuleNumber: space.requiredModuleNumber,
+          preview,
+        };
       }),
     );
-
-    const recent = perSpace
-      .flat()
-      .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt))
-      .slice(0, HOME_RECENT_LIMIT);
 
     return communityData({
       enrolled: access.enrolled,
       currentModuleNumber: access.currentModuleNumber,
       completedLevels: access.completedLevels,
       isModerator,
-      spaces: access.spaces.map((space) => ({
-        code: space.code,
-        title: space.title,
-        purpose: space.purpose,
-        canRead: space.canRead,
-        canWrite: space.canWrite,
-        lockedReason: space.lockedReason,
-        requiredModuleNumber: space.requiredModuleNumber,
-        discussionCount: perSpace
-          .flat()
-          .filter((discussion) => discussion.spaceCode === space.code).length,
-      })),
-      recent,
+      spaces,
     });
   } catch (error) {
     return communityErrorResponse(error, "overview");
