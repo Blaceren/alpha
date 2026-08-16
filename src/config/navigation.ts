@@ -40,6 +40,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "mentor", label: "Mentor", href: "/mentor", icon: "GraduationCap" },
       { key: "support", label: "Support", href: "/support", icon: "LifeBuoy" },
+      // COMMUNITY-V1. A backlog somebody works through, like the two above it.
+      {
+        key: "community_moderation",
+        label: "Сообщество",
+        href: "/community-moderation",
+        icon: "MessagesSquare",
+      },
     ],
   },
   {

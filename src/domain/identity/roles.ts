@@ -76,6 +76,15 @@ export type SectionKey =
    * affiliate partner portal, which does not exist and is out of scope.
    */
   | "growth"
+  /**
+   * COMMUNITY-V1 — the Community moderation workspace.
+   *
+   * Its own section rather than a tab under `cases`, because it is not case
+   * work: a case is a private thread with one learner, and this is public
+   * content everyone can already see. It sits under "Очереди" beside Mentor and
+   * Support because, like them, it is a backlog somebody works through.
+   */
+  | "community_moderation"
   | "settings";
 
 /**
@@ -183,7 +192,11 @@ export type Permission =
   // v4 — raising an escalation and answering one are different
   // responsibilities held by different people. See
   // LO-ESCALATION-RESOLVE-AUTHORITY-1.
-  | "learner_ops_escalation_resolve";
+  | "learner_ops_escalation_resolve"
+  // v5 — Community moderation. Its own axis, deliberately not a `learner_ops_*`
+  // permission: moderating a public discussion is not handling a support case.
+  // See COMMUNITY-V1.
+  | "community_moderate";
 
 /**
  * Compile-time proof that this union and the canonical cross-repository session

@@ -197,7 +197,8 @@ describe("§11 — identity is by NAME, order is a separate protocol property", 
     // LEARNER-OPERATIONS-V1 — appended at 15, after every historical entry, so
     // no client that pinned the first fifteen positions changes meaning. v4
     // appends `learner_ops_escalation_resolve` at 24 for the same reason: the
-    // twenty-four before it keep their positions exactly.
+    // twenty-four before it keep their positions exactly. v5 appends
+    // `community_moderate` at 25 — a NEW axis, so it displaces nothing.
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15)).toEqual([
       "learner_ops_view",
       "learner_ops_handle",
@@ -209,6 +210,7 @@ describe("§11 — identity is by NAME, order is a separate protocol property", 
       "learner_ops_analytics",
       "learner_ops_admin",
       "learner_ops_escalation_resolve",
+      "community_moderate",
     ]);
     expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("learner_ops_escalation_resolve")).toBe(24);
   });

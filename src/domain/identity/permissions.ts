@@ -53,6 +53,11 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
   ],
   mentor: ["crm_admin", "crm_manager", "retention_manager", "mentor"],
   support: ["crm_admin", "crm_manager", "retention_manager", "support"],
+  // COMMUNITY-V1. Visible to the two roles that hold `community_moderate` and
+  // to nobody else. Frontend visibility is NOT the security boundary (D-12) —
+  // the backend asserts the permission on every request — but a section a role
+  // cannot act in should not be in its navigation either.
+  community_moderation: ["crm_admin", "moderator"],
   financial: ["crm_admin", "crm_manager", "retention_manager", "support", "analyst"],
   communications: [
     "crm_admin",

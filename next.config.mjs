@@ -293,6 +293,16 @@ export const LEARNER_OPS_VOC_PATH = "/api/crm/v1/learner-ops/voc";
 export const LEARNER_OPS_VOC_DETAIL_PATH = "/api/crm/v1/learner-ops/voc/:signalId";
 export const LEARNER_OPS_VOC_CASES_PATH = "/api/crm/v1/learner-ops/voc/:signalId/cases";
 
+/**
+ * COMMUNITY-V1 — the Community moderation surface.
+ *
+ * ONE path, explicit, for the same reason the Learner Operations block above is
+ * explicit rather than a prefix wildcard: forwarding is a reviewed decision per
+ * path. GET reads the queue, POST applies one moderation action, and both live
+ * at the same URL, so one entry covers the surface.
+ */
+export const COMMUNITY_MODERATION_PATH = "/api/crm/v1/community/moderation";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -355,6 +365,7 @@ export const PROXIED_PATHS = [
   LEARNER_OPS_VOC_PATH,
   LEARNER_OPS_VOC_DETAIL_PATH,
   LEARNER_OPS_VOC_CASES_PATH,
+  COMMUNITY_MODERATION_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

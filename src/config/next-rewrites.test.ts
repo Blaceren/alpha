@@ -24,7 +24,7 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly sixty rewrite definitions", () => {
+  it("produces exactly sixty-one rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
     // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
@@ -33,7 +33,8 @@ describe("rewrites — api mode", () => {
     // Pinning the count is the point: a new proxied path must be a deliberate
     // change to this number, never a side effect. It fired on the four added
     // below, which is the guard working, and it is updated in the same commit.
-    expect(buildRewrites(env)).toHaveLength(60);
+    // COMMUNITY-V1 adds ONE: the Community moderation surface.
+    expect(buildRewrites(env)).toHaveLength(61);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -57,7 +58,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the sixty reviewed paths", () => {
+  it("exposes exactly the sixty-one reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -130,6 +131,9 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/learner-ops/voc",
       "/api/crm/v1/learner-ops/voc/:signalId",
       "/api/crm/v1/learner-ops/voc/:signalId/cases",
+      // COMMUNITY-V1 — one path: GET reads the moderation queue, POST applies
+      // one action. Both live at the same URL.
+      "/api/crm/v1/community/moderation",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -372,6 +376,9 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/learner-ops/voc",
       "/api/crm/v1/learner-ops/voc/:signalId",
       "/api/crm/v1/learner-ops/voc/:signalId/cases",
+      // COMMUNITY-V1 — one path: GET reads the moderation queue, POST applies
+      // one action. Both live at the same URL.
+      "/api/crm/v1/community/moderation",
     ]);
     for (const forbidden of [
       "/api/:path*",

@@ -122,6 +122,25 @@ export const CRM_SESSION_PERMISSION_CONTRACT = [
   // holder keeps it unchanged. Nobody gains resolution by holding the old
   // permission, and nobody loses the ability to raise.
   "learner_ops_escalation_resolve",
+  // COMMUNITY-V1, v5. Appended, never inserted.
+  //
+  // Community moderation is its own authority axis. The LEARNER-OPERATIONS-V1
+  // grant matrix already said so — it withheld every `learner_ops_*` permission
+  // from `moderator` on the grounds that "Community moderation and curriculum
+  // authoring are not learner operations" — and left `moderator` as the one
+  // staff role holding nothing at all. Until now the only thing that actually
+  // let a moderator moderate was the V1 `User.role` column reading `admin` on
+  // the same account, which grants far more than moderation.
+  //
+  // Do not write a double-quoted lowercase word anywhere inside this array,
+  // including in a comment. The cross-repository verifier extracts the
+  // vocabulary by matching quoted strings in the array body, so a quoted word
+  // in a comment is counted as a permission and the digest check fails with a
+  // count nobody can explain. Use backticks, as every comment here does.
+  //
+  // This is the named permission that replaces it. Granted to `moderator` and
+  // `crm_admin` only.
+  "community_moderate",
 ] as const;
 
 export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[number];
@@ -131,9 +150,9 @@ export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[numb
  * before this file; v2 is the first version to be written down and enforced;
  * v3 appends the nine Learner Operations permissions, bringing the vocabulary
  * to twenty-four; v4 appends `learner_ops_escalation_resolve`, bringing it to
- * twenty-five.
+ * twenty-five; v5 appends `community_moderate`, bringing it to twenty-six.
  */
-export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 4;
+export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 5;
 
 /**
  * `sha256(CRM_SESSION_PERMISSION_CONTRACT.join("\n"))`, lowercase hex.
@@ -143,4 +162,4 @@ export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 4;
  * contracts and the session boundary is unsafe again.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT_DIGEST =
-  "1514e85f02224b31082bac7e596e96a5dec5682df73855224a2e072e53590110";
+  "8cbbb160b6cfd5a7dafb5d3559cc288d71a6e8974e65373cfc928175b1050540";
