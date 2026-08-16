@@ -57,7 +57,7 @@ FILE_COUNT="$(node -pe "Object.keys(JSON.parse(require('fs').readFileSync('$MAN'
 
 # Executable modes must survive the install, or the operator cannot run them.
 MODE_OK=1
-for f in tools/publish-release.sh tools/build-release.sh tools/verify-build-provenance.sh tools/cutover.sh; do
+for f in publish-release.sh build-release.sh verify-build-provenance.sh cutover.sh; do
   [ -x "$DEST/$f" ] || MODE_OK=0
 done
 [ "$MODE_OK" = "1" ] && ok "executable modes are preserved" || no "executable modes are preserved"
@@ -79,7 +79,7 @@ D1="$WORK/d1"; mkdir -p "$D1"
 run "$R1" "$D1" --install
 [ "$RC" -ne 0 ] && case "$OUT" in *"source file missing"*) ok "missing source file is REFUSED" ;; *) no "missing source file refusal names the cause" "$OUT" ;; esac \
   || no "missing source file is refused" "$OUT"
-[ ! -e "$D1/tools/publish-release.sh" ] && ok "...and nothing was installed before the refusal" \
+[ ! -e "$D1/publish-release.sh" ] && ok "...and nothing was installed before the refusal" \
   || no "nothing installed before the refusal"
 
 # 2. DIRTY SOURCE — the recorded commit would be a lie.
@@ -131,12 +131,12 @@ OUT="$("$R7/install-release-tooling.sh" 2>&1)"; RC=$?
 R8="$WORK/r8"; clone "$R8"
 D8="$WORK/d8"; mkdir -p "$D8"
 run "$R8" "$D8" --install
-printf '\n# hand edit in the live path\n' >> "$D8/tools/publish-release.sh"
-BEFORE="$(sha256sum "$D8/tools/publish-release.sh" | cut -d' ' -f1)"
+printf '\n# hand edit in the live path\n' >> "$D8/publish-release.sh"
+BEFORE="$(sha256sum "$D8/publish-release.sh" | cut -d' ' -f1)"
 run "$R8" "$D8" --check
 [ "$RC" -ne 0 ] && case "$OUT" in *DIFFERS*) ok "a hand-edited active file is reported as DIFFERS and REFUSED" ;; *) no "drift refusal names the file" "$OUT" ;; esac \
   || no "a hand-edited active file is refused" "$OUT"
-[ "$(sha256sum "$D8/tools/publish-release.sh" | cut -d' ' -f1)" = "$BEFORE" ] \
+[ "$(sha256sum "$D8/publish-release.sh" | cut -d' ' -f1)" = "$BEFORE" ] \
   && ok "--check changed nothing" || no "--check changed nothing"
 
 # 9. UNRELATED FILES IN THE DESTINATION MUST SURVIVE — no broad replacement.
@@ -168,7 +168,7 @@ BAD_RM="$(printf '%s' "$INSTALLER_CODE" | grep -oE 'rm[[:space:]]+[^;&|]*' | gre
 
 # 11. THE FILE SET IS ENUMERATED, and matches what the repository actually ships.
 LISTED="$(sed -n '/^TOOLING_FILES=(/,/^)/p' "$INSTALLER" | grep -oE '"[^"]+"' | tr -d '"' | sort)"
-SHIPPED="$(cd "$SRC_ROOT" && find tools -type f -name '*.sh' | sort)"
+SHIPPED="$(cd "$SRC_ROOT/tools" && find . -type f -name '*.sh' | sed 's|^\./||' | sort)"
 [ "$LISTED" = "$SHIPPED" ] \
   && ok "the enumerated file set matches every shipped tool ($(printf '%s\n' "$LISTED" | wc -l) files)" \
   || no "the enumerated file set matches every shipped tool" "listed=[$LISTED] shipped=[$SHIPPED]"
