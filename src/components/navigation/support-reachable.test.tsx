@@ -65,7 +65,13 @@ describe("support is reachable from the learner navigation", () => {
     for (const id of ["home", "path", "lessons", "tools"]) {
       expect(BUILT_ROUTE_IDS.has(id)).toBe(true);
     }
-    for (const id of ["community", "news", "referrals", "mentor", "profile", "settings"]) {
+    // ACADEMY-EXPERIENCE-COMPLETION-1 built notifications and profile, so the
+      // list has to say so. Updated rather than deleted: what this protects is
+      // "the advertised list matches reality", and reality moved.
+      for (const id of ["notifications", "profile"]) {
+        expect(BUILT_ROUTE_IDS.has(id), `${id} is built and must be reachable`).toBe(true);
+      }
+      for (const id of ["community", "news", "referrals", "mentor", "settings"]) {
       expect(BUILT_ROUTE_IDS.has(id), `${id} is not a built route`).toBe(false);
     }
   });

@@ -83,7 +83,7 @@ export function NotificationsScreen() {
   if (load.phase === "loading") {
     return (
       <section aria-busy="true" aria-label="Уведомления загружаются">
-        <p className="ax-section-title">Уведомления</p>
+        <h1 className="ax-mod__title">Уведомления</h1>
         <div className="ax-skel ax-skel--line" style={{ width: "40%" }} />
         <div className="ax-skel ax-skel--line" style={{ width: "70%" }} />
         <div className="ax-skel ax-skel--line" style={{ width: "55%" }} />
@@ -111,8 +111,9 @@ export function NotificationsScreen() {
 
   return (
     <section>
+      <h1 className="ax-mod__title">Уведомления</h1>
       <p className="ax-coord">
-        Уведомления{load.unread > 0 ? <> · непрочитанных: <b>{load.unread}</b></> : null}
+        {load.unread > 0 ? <>Непрочитанных: <b>{load.unread}</b></> : <>Все уведомления прочитаны</>}
       </p>
       <ul className="ax-levels">
         {load.items.map((n) => {
