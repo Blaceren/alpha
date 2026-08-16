@@ -19,7 +19,7 @@ import type {
   LearnerOpsCaseType,
   LearnerOpsPriority,
 } from "@prisma/client";
-import { LEARNER_OPS_ACTIVE_STATUSES } from "@/lib/learner-ops/contract";
+import { LEARNER_OPS_ACTIVE_STATUSES, LEARNER_OPS_TRANSITIONS } from "@/lib/learner-ops/contract";
 import { learnerOpsFail } from "@/lib/learner-ops/errors";
 import { computeSlaView, type SlaView } from "@/lib/learner-ops/sla";
 import { prisma } from "@/lib/prisma";
@@ -203,6 +203,22 @@ export type CanonicalAnchorView =
   | null;
 
 export type CaseDetail = QueueItem & {
+  /**
+   * The transitions the domain will actually accept from this case's CURRENT
+   * state, projected from `LEARNER_OPS_TRANSITIONS` — the same table
+   * `transitionCase` refuses against.
+   *
+   * LO-UI-TRANSITION-CHOICES-1. The CRM used to render a fixed list of every
+   * status, so a resolved case offered `in_progress`, `waiting_learner` and the
+   * rest; the server correctly answered 400 ILLEGAL_TRANSITION every time, and
+   * the operator was left with controls that could only fail.
+   *
+   * It is a SERVER-PROVIDED PROJECTION rather than a second table shipped to the
+   * client. A duplicated state machine is one that drifts, and the whole point
+   * of this field is that the list an operator sees and the list the domain
+   * enforces cannot disagree — they are the same object, read once.
+   */
+  readonly allowedTransitions: readonly LearnerOpsCaseStatus[];
   readonly details: string;
   readonly reasonCode: { readonly code: string; readonly category: string; readonly label: string } | null;
   readonly resolvedAt: string | null;
@@ -259,6 +275,7 @@ export async function getCaseDetail(caseId: string): Promise<CaseDetail> {
   const now = new Date();
   return {
     ...toQueueItem(row, now),
+    allowedTransitions: LEARNER_OPS_TRANSITIONS[row.status],
     details: row.details,
     reasonCode: row.reasonCode,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,

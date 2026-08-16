@@ -36,6 +36,7 @@ import { raiseEscalation, resolveEscalation } from "../../src/lib/learner-ops/es
 import { recordQaReview } from "../../src/lib/learner-ops/quality";
 import { hasCrmReviewAuthority } from "../../src/lib/learner-ops/review-authority";
 import { getLearner360 } from "../../src/lib/learner-ops/learner-360";
+import { LEARNER_OPS_TRANSITIONS, isLegalTransition } from "../../src/lib/learner-ops/contract";
 import { resolveEffectivePermissions } from "../../src/lib/crm/roles";
 
 const REPO = path.resolve(__dirname, "..", "..");
@@ -1047,7 +1048,7 @@ async function main() {
       caseId: target.id, body: "Первый ответ",
       author: { kind: "staff", staffId: actorA.staffId, userId: actorA.userId },
     });
-    let v = (await getCaseDetail(target.id)).version;
+    const v = (await getCaseDetail(target.id)).version;
     await transitionCase({ caseId: target.id, expectedVersion: v, nextStatus: "waiting_learner", actor: actorA });
 
     const paused = await getCaseDetail(target.id);
@@ -1086,6 +1087,83 @@ async function main() {
       const after = await getCaseDetail(target.id);
       assert.equal(after.status, wait, `${wait} must be untouched by a learner reply`);
     }
+  });
+
+  await check("LO-UI-TRANSITION-CHOICES-1 · allowedTransitions match the canonical table exactly", async () => {
+    // The projection must BE the domain's table, not a copy of it. If these ever
+    // disagree the CRM starts offering controls the server refuses, which is the
+    // defect this closes.
+    const probe = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Проекция переходов", details: "Проверка", actor: null,
+    });
+
+    const fresh = await getCaseDetail(probe.id);
+    assert.deepEqual(
+      [...fresh.allowedTransitions].sort(),
+      [...LEARNER_OPS_TRANSITIONS[fresh.status]].sort(),
+      "a new case must project its own row of the table",
+    );
+
+    // Walk to `resolved` — the state whose dropdown was wrong in the browser.
+    let v = fresh.version;
+    ({ version: v } = (await transitionCase({
+      caseId: probe.id, expectedVersion: v, nextStatus: "resolved", actor: actorA,
+    })) as { version: number });
+
+    const resolved = await getCaseDetail(probe.id);
+    assert.equal(resolved.status, "resolved");
+    assert.deepEqual([...resolved.allowedTransitions].sort(), ["closed", "open"]);
+    // The exact values the UI used to offer and the server refused.
+    for (const forbidden of ["in_progress", "waiting_learner", "waiting_internal", "waiting_external"]) {
+      assert.ok(
+        !resolved.allowedTransitions.includes(forbidden as never),
+        `${forbidden} must not be offered from resolved`,
+      );
+    }
+  });
+
+  await check("LO-UI-TRANSITION-CHOICES-1 · every offered transition is actually accepted", async () => {
+    // For each state reachable here, every transition the projection advertises
+    // must be one `transitionCase` accepts. Advertising is a promise.
+    for (const status of ["new", "open", "in_progress", "waiting_learner", "resolved"] as const) {
+      for (const next of LEARNER_OPS_TRANSITIONS[status]) {
+        assert.ok(
+          isLegalTransition(status, next),
+          `projection offered ${status} -> ${next} but the domain refuses it`,
+        );
+      }
+    }
+  });
+
+  await check("LO-UI-TRANSITION-CHOICES-1 · the server still refuses a forged transition", async () => {
+    // The projection is a convenience. The authority is unchanged: a caller that
+    // ignores it entirely is still refused.
+    const probe = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Подделка перехода", details: "Проверка", actor: null,
+    });
+    const opened = (await getCaseDetail(probe.id)).version;
+    const { version: v } = (await transitionCase({
+      caseId: probe.id, expectedVersion: opened, nextStatus: "resolved", actor: actorA,
+    })) as { version: number };
+
+    await expectDomainError("LEARNER_OPS_ILLEGAL_TRANSITION", () =>
+      transitionCase({ caseId: probe.id, expectedVersion: v, nextStatus: "in_progress", actor: actorA }),
+    );
+  });
+
+  await check("LO-UI-TRANSITION-CHOICES-1 · choices change after the state changes", async () => {
+    const probe = await createCase({
+      userId: learnerA.id, type: "support_request", queueKey: "support",
+      subject: "Смена набора", details: "Проверка", actor: null,
+    });
+    const before = await getCaseDetail(probe.id);
+    const v = before.version;
+    await transitionCase({ caseId: probe.id, expectedVersion: v, nextStatus: "closed", actor: actorA });
+    const after = await getCaseDetail(probe.id);
+    assert.notDeepEqual([...after.allowedTransitions], [...before.allowedTransitions]);
+    assert.deepEqual([...after.allowedTransitions], ["open"], "closed reopens and nothing else");
   });
 
   await check("§24 · no audit row carries a message or note body", async () => {
