@@ -449,6 +449,21 @@
 .lr-cta__link:hover { background: #63e9cc; }
 .lr-cta__link:focus-visible { outline: 2px solid var(--ax-ink); outline-offset: 3px; }
 
+/*
+ * The authored CTA on a level the learner cannot act on.
+ *
+ * A lesson body is static: "Отправить план на проверку" is still in the text
+ * after the mentor approved the level. The link stays — it goes to the task
+ * surface, which is where the real state is — but it stops being the lit
+ * control, because nothing on a finished or waiting level is.
+ */
+.lr-cta__link--quiet {
+  background: transparent;
+  color: var(--ax-ink);
+  border-color: var(--ax-line-strong);
+}
+.lr-cta__link--quiet:hover { background: rgba(148, 178, 224, 0.08); }
+
 .lr-divider {
   border: none;
   border-top: 1px solid var(--ax-line);

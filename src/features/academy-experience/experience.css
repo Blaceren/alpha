@@ -593,6 +593,13 @@ a.ax-lvl__t:hover { color: var(--ax-signal); }
 }
 .ax-done__cta:hover { background: #63e9cc; }
 .ax-done__cta:focus-visible { outline: 2px solid var(--ax-ink); outline-offset: 3px; }
+/* Waiting or blocked: the same quiet control Home uses for the same action. */
+.ax-done__cta--quiet {
+  background: transparent;
+  color: var(--ax-ink);
+  border-color: var(--ax-line-strong);
+}
+.ax-done__cta--quiet:hover { background: rgba(148, 178, 224, 0.08); }
 
 @media (max-width: 640px) {
   .ax-done__facts { gap: 14px 28px; }

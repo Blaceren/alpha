@@ -188,6 +188,7 @@ export async function LessonReaderScreen({ levelCode }: { levelCode: string }) {
             }
             canTrackReading={canTrackReading}
             playbackPositionSeconds={content.reading?.playbackPositionSeconds ?? 0}
+            posture={posture}
           />
 
           {resources.length > 0 ? (
@@ -207,10 +208,10 @@ export async function LessonReaderScreen({ levelCode }: { levelCode: string }) {
 
           {/* Only when the author wrote no CTA of their own. */}
           {transition ? (
-            <div className="lr-cta" data-derived="true">
+            <div className="lr-cta" data-derived="true" data-posture={posture}>
               <p className="lr-cta__body">{transition.body}</p>
               <a
-                className="lr-cta__link"
+                className={`lr-cta__link${posture === "act" ? "" : " lr-cta__link--quiet"}`}
                 href={ctaHref("start_assessment", null, levelHref, nextLevelHref)}
               >
                 {transition.label}

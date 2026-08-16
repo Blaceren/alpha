@@ -53,6 +53,8 @@ export function LessonReading({
    */
   canTrackReading,
   playbackPositionSeconds,
+  /** The level's canonical posture, passed to blocks that carry a control. */
+  posture,
 }: {
   body: LessonBody;
   stableCode: string;
@@ -61,6 +63,7 @@ export function LessonReading({
   initialReading: ReadingState | null;
   canTrackReading: boolean;
   playbackPositionSeconds: number;
+  posture: "act" | "waiting" | "blocked" | "done";
 }) {
   const [reading, setReading] = useState<ReadingState>(
     initialReading ?? { revision: 0, completedSections: [], activeSectionCode: null },
@@ -183,6 +186,7 @@ export function LessonReading({
                 key={blockIndex}
                 levelHref={levelHref}
                 nextLevelHref={nextLevelHref}
+                posture={posture}
               />
             ))}
             {canTrackReading ? (
@@ -207,6 +211,7 @@ export function LessonReading({
               key={index}
               levelHref={levelHref}
               nextLevelHref={nextLevelHref}
+              posture={posture}
             />
           ))}
         </section>

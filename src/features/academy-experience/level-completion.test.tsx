@@ -215,3 +215,39 @@ describe("LevelCompletion — the next step is the shared derivation", () => {
     expect(screen.getByText("Уровень 14 завершён")).toBeInTheDocument();
   });
 });
+
+describe("LevelCompletion — the control follows the derived posture", () => {
+  it("lights the control only when the learner can genuinely act", () => {
+    const { container } = render(
+      <LevelCompletion
+        level={level()}
+        progress={PROGRESS}
+        nextAction={nextAction({ posture: "act" })}
+        moduleTitle={null}
+      />,
+    );
+    const cta = container.querySelector(".ax-done__cta");
+    expect(cta?.getAttribute("data-posture")).toBe("act");
+    expect(cta?.className).not.toContain("ax-done__cta--quiet");
+  });
+
+  it("keeps the control quiet when the next action is waiting or blocked", () => {
+    // Finishing level 14 does not make level 15 actionable. Home renders this
+    // same action with a quiet control; lighting it here would make one screen
+    // promise what the next withholds.
+    for (const posture of ["waiting", "blocked", "done"] as const) {
+      const { container, unmount } = render(
+        <LevelCompletion
+          level={level()}
+          progress={PROGRESS}
+          nextAction={nextAction({ posture })}
+          moduleTitle={null}
+        />,
+      );
+      const cta = container.querySelector(".ax-done__cta");
+      expect(cta?.getAttribute("data-posture")).toBe(posture);
+      expect(cta?.className).toContain("ax-done__cta--quiet");
+      unmount();
+    }
+  });
+});

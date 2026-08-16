@@ -98,12 +98,22 @@ export function LevelCompletion({
         ) : null}
       </dl>
 
+      {/* THE CONTROL FOLLOWS THE DERIVED POSTURE, not the fact that a level was
+          finished. Finishing level 14 does not make level 15 actionable: here it
+          is a checkpoint the platform cannot currently verify, so the learner is
+          WAITING, and Home renders that same action with a quiet control. Lighting
+          it only on this page would make one screen promise something the next
+          screen withholds — the exact inconsistency this phase exists to remove. */}
       {forward ? (
         <div className="ax-done__next">
           <p className="ax-done__nextTitle">{nextAction.title}</p>
           <p className="ax-done__nextWhy">{nextAction.explanation}</p>
           {nextAction.ctaLabel && nextAction.href ? (
-            <a className="ax-done__cta" href={nextAction.href}>
+            <a
+              className={`ax-done__cta${nextAction.posture === "act" ? "" : " ax-done__cta--quiet"}`}
+              href={nextAction.href}
+              data-posture={nextAction.posture}
+            >
               {nextAction.ctaLabel}
             </a>
           ) : null}

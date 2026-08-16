@@ -71,10 +71,26 @@ export function LessonBlockView({
   block,
   levelHref,
   nextLevelHref,
+  /**
+   * The canonical posture of the level this lesson belongs to.
+   *
+   * WHY A BLOCK NEEDS IT. A lesson body is STATIC content: the author wrote
+   * "Отправить план на проверку" once, and it is still in the text after the
+   * mentor has approved the level. Rendered as the page's one lit control it
+   * would invite an action that no longer exists — on a finished level, on a
+   * level whose review is pending, and on a locked one alike.
+   *
+   * The link itself is kept in all cases, because it is navigation to the
+   * canonical task surface and that surface is the honest place to find out
+   * what the level's state actually is. What changes is EMPHASIS: lit only when
+   * the learner can genuinely act, exactly as Home and Path already do.
+   */
+  posture,
 }: {
   block: LessonBlock;
   levelHref: string;
   nextLevelHref: string | null;
+  posture: "act" | "waiting" | "blocked" | "done";
 }) {
   switch (block.type) {
     case "heading":
@@ -220,9 +236,12 @@ export function LessonBlockView({
 
     case "cta":
       return (
-        <div className="lr-cta">
+        <div className="lr-cta" data-posture={posture}>
           {block.body ? <p className="lr-cta__body">{block.body}</p> : null}
-          <a className="lr-cta__link" href={ctaHref(block.action, block.toolCode, levelHref, nextLevelHref)}>
+          <a
+            className={`lr-cta__link${posture === "act" ? "" : " lr-cta__link--quiet"}`}
+            href={ctaHref(block.action, block.toolCode, levelHref, nextLevelHref)}
+          >
             {block.label}
           </a>
         </div>
