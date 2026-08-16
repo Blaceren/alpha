@@ -121,6 +121,32 @@ The record also names its `component`, so another app's record cannot satisfy
 this one, and a `build_env_identity` digest over the exact non-secret build
 variables used, so two artifacts can be compared for build-contract equality.
 
+### What the environment identity covers, and what it deliberately does not
+
+`build_env_identity` is a digest over the build CONTRACT — the compile-relevant
+variables the component declares. `build_env_keys` names exactly the keys that
+digest covers, so the record can never disagree with itself about its own scope.
+
+Host tuning is recorded separately, in `build_host_tuning`, and is **not** in the
+digest. Today that is `NODE_OPTIONS`: this host needs a larger heap or the
+Backend build is killed during static generation. Needing a bigger heap on one
+machine does not make the resulting artifact a different thing, so two artifacts
+built from the same source under the same contract still compare equal.
+
+### Reading the runtime config without reading secrets
+
+The per-component environment comes from `/srv/ata/config/<component>.env`,
+which is `drwx------ ata:ata` — an ordinary build user cannot open it. The build
+script therefore elevates for the read, and that is exactly why the keys it may
+read are a hard allowlist (`READABLE_CONFIG_KEYS`) checked *before* anything
+opens the file. An elevated read of an arbitrary key from a file that also holds
+secrets would be a credential-reading primitive wearing a build script's name;
+the worst this one can fetch is a mode or an origin.
+
+Only the key NAME reaches argv. The value arrives on stdout, is captured into a
+variable, and is never echoed, logged, or written to any manifest. The file is
+never sourced, and no line other than the matched one is read.
+
 **Not accepted as proof:** mtimes, "the build directory is newer than the
 source", a clean workspace, or an operator's recollection. The workspace was
 clean throughout the incident.
