@@ -68,6 +68,11 @@ import type { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { emitMentorReviewSubmittedEvent } from "@/lib/growth/product-events";
 import {
+  ensureMentorReviewWorkItem,
+  reconcileMentorReviewOperationalState,
+  resolveOperationalActor,
+} from "@/lib/learner-ops/review-work-items";
+import {
   completeCurriculumLevelInTransaction,
   isCurriculumLevelCompletionError,
 } from "./completion";
@@ -262,6 +267,25 @@ export async function requestMentorReview({
       occurredAt: now,
     });
 
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — the operational mirror, in this
+    // transaction. Keyed on the progress row, which IS the canonical
+    // mentor-review object, so a replayed request finds the same work item.
+    // The learner is not staff, so the transition is recorded as the system's
+    // rather than attributed to an employee who did nothing.
+    await ensureMentorReviewWorkItem(tx, {
+      userLevelProgressId: progress.id,
+      userId: user.id,
+      levelNumber: level.levelNumber,
+      levelTitle: level.title,
+      actor: null,
+    });
+    await reconcileMentorReviewOperationalState(tx, {
+      userLevelProgressId: progress.id,
+      canonicalState: "pending_review",
+      actor: null,
+      reason: "mentor_review:requested",
+    });
+
     await tx.auditLog.create({
       data: {
         userId: user.id,
@@ -422,6 +446,19 @@ export async function approveMentorReview({
       }
       throw error;
     }
+
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — resolve the operational mirror AFTER
+    // the canonical completion has already happened in this same transaction.
+    // The terminal invariant refuses `resolved` while the progress row is not
+    // `completed`; by this line it is. A replayed approval finds the case
+    // already resolved and the reconcile is a no-op, so there is no second
+    // timeline entry and no second version bump.
+    await reconcileMentorReviewOperationalState(tx, {
+      userLevelProgressId: progress.id,
+      canonicalState: "completed",
+      actor: await resolveOperationalActor(tx, reviewer.id),
+      reason: "mentor_review:approved",
+    });
 
     return {
       created: completion.created,

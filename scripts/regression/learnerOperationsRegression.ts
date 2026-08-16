@@ -622,12 +622,36 @@ async function main() {
       nextStatus: "waiting_learner",
       actor: actorMentor,
     })) as { version: number });
-    await transitionCase({
-      caseId: anchored.id,
-      expectedVersion: v,
-      nextStatus: "resolved",
-      actor: actorMentor,
-    });
+    // M4 / §9 — RESOLVING IS NOW REFUSED OUTRIGHT, which is stronger than what
+    // this check originally asserted.
+    //
+    // It used to resolve the case and then prove the progression row had not
+    // moved. That proved operations could not COMPLETE a level, but still let
+    // the operational record CLAIM the review was finished while the canonical
+    // progress said `pending_review` — two truths disagreeing in the product's
+    // own database. LO-REVIEW-WORKITEM-UNREACHABLE-1 §9 closes that: a generic
+    // status mutation cannot author an educational outcome at all.
+    await expectDomainError("LEARNER_OPS_CANONICAL_REVIEW_OPEN", () =>
+      transitionCase({
+        caseId: anchored.id,
+        expectedVersion: v,
+        nextStatus: "resolved",
+        actor: actorMentor,
+      }),
+    );
+    await expectDomainError("LEARNER_OPS_CANONICAL_REVIEW_OPEN", () =>
+      transitionCase({
+        caseId: anchored.id,
+        expectedVersion: v,
+        nextStatus: "closed",
+        actor: actorMentor,
+      }),
+    );
+
+    // The projection must withhold what the domain refuses.
+    const projected = await getCaseDetail(anchored.id);
+    assert.ok(!projected.allowedTransitions.includes("resolved"));
+    assert.ok(!projected.allowedTransitions.includes("closed"));
 
     const after = await prisma.userLevelProgress.findUniqueOrThrow({
       where: { id: progressRow.id },
@@ -638,7 +662,7 @@ async function main() {
       "an operational case lifecycle mutated the canonical progression row",
     );
     assert.equal(after.status, "pending_review", "the level must still be awaiting its reviewer");
-    assert.equal(after.completedAt, null, "resolving a case must never complete a level");
+    assert.equal(after.completedAt, null, "no operational act may complete a level");
 
     // And no XP was minted by any of it.
     const xp = await prisma.xPTransaction.count({ where: { userId: learnerA.id } });

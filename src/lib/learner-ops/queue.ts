@@ -25,6 +25,7 @@ import {
   LEARNER_OPS_TRANSITIONS,
 } from "@/lib/learner-ops/contract";
 import { learnerOpsFail } from "@/lib/learner-ops/errors";
+import { terminalStatesBlockedByCanonicalReview } from "@/lib/learner-ops/review-work-item-invariants";
 import { computeSlaView, type SlaView } from "@/lib/learner-ops/sla";
 import { prisma } from "@/lib/prisma";
 
@@ -227,7 +228,9 @@ export type CaseDetail = QueueItem & {
    * case may not become terminal (LO-ESCALATION-RESOLVE-AUTHORITY-1 §4). A
    * projection that showed the table alone would again promise what the domain
    * declines — the same defect in a new place — so the terminal pair is
-   * withheld exactly when the transition would be refused.
+   * withheld exactly when the transition would be refused. There are two such
+   * refusals today: an unanswered escalation, and a review work item whose
+   * canonical report or progress row has not reached its own terminal state.
    */
   readonly allowedTransitions: readonly LearnerOpsCaseStatus[];
   readonly details: string;
@@ -288,10 +291,10 @@ async function loadAnchor(row: CaseRow): Promise<CanonicalAnchorView> {
  */
 function allowedTransitionsFor(
   status: LearnerOpsCaseStatus,
-  openEscalations: number,
+  terminalBlocked: boolean,
 ): readonly LearnerOpsCaseStatus[] {
   const fromTable = LEARNER_OPS_TRANSITIONS[status];
-  if (openEscalations === 0) return fromTable;
+  if (!terminalBlocked) return fromTable;
   return fromTable.filter(
     (next) => !(LEARNER_OPS_TERMINAL_STATUSES as readonly string[]).includes(next),
   );
@@ -309,11 +312,18 @@ export async function getCaseDetail(caseId: string): Promise<CaseDetail> {
   const openEscalations = await prisma.learnerOpsEscalation.count({
     where: { caseId, resolvedAt: null },
   });
+  // LO-REVIEW-WORKITEM-UNREACHABLE-1 §6/§9 — the second reason a terminal
+  // transition can be refused. Asked through the same predicate the write path
+  // uses, so the screen and the domain cannot disagree about it.
+  const canonicalReviewOpen = await terminalStatesBlockedByCanonicalReview(prisma, caseId);
 
   const now = new Date();
   return {
     ...toQueueItem(row, now),
-    allowedTransitions: allowedTransitionsFor(row.status, openEscalations),
+    allowedTransitions: allowedTransitionsFor(
+      row.status,
+      openEscalations > 0 || canonicalReviewOpen,
+    ),
     details: row.details,
     reasonCode: row.reasonCode,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,

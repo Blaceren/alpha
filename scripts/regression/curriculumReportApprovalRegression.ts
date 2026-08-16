@@ -231,11 +231,20 @@ async function main() {
     await prepare(ordinaryGraph, "race-two"), await prepare(ordinaryGraph, "audit"), await prepare(ordinaryGraph, "xp-failure"),
     await prepare(ordinaryGraph, "completion-failure"), await prepare(ordinaryGraph, "corrupt"),
     await prepare(ordinaryGraph, "rejected-proof"), await prepare(ordinaryGraph, "wrong-proof"),
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — prepared HERE with every other
+    // fixture, because the suite archives the curriculum immediately below and
+    // `prepare()` cannot run against an archived version afterwards.
+    await prepare(ordinaryGraph, "mirror-resubmit"), await prepare(ordinaryGraph, "mirror-race"),
+    await prepare(ordinaryGraph, "mirror-refuse"), await prepare(ordinaryGraph, "mirror-approve"),
+    await prepare(ordinaryGraph, "mirror-repair"), await prepare(ordinaryGraph, "mirror-decision-race"),
     await prepare(finalGraph, "final", 2),
   ];
   const [flagFixture, mentorFixture, adminFixture, expiredFixture, retryFixture, approveRaceFixture,
     decisionRaceFixture, auditFixture, xpFailureFixture, completionFailureFixture, corruptFixture,
-    rejectedProofFixture, wrongProofFixture, finalFixture] = fixtures;
+    rejectedProofFixture, wrongProofFixture,
+    mirrorResubmitFixture, mirrorRaceFixture, mirrorRefuseFixture, mirrorApproveFixture,
+    mirrorRepairFixture, mirrorDecisionRaceFixture,
+    finalFixture] = fixtures;
 
   await prisma.curriculumVersion.updateMany({ data: { status: "archived" } });
   await prisma.reportAssignmentVersion.updateMany({ data: { status: "archived", archivedAt: new Date("2027-01-01T00:00:00.000Z") } });
@@ -505,6 +514,327 @@ async function main() {
       assert.equal(await prisma.reportAttachment.count(), 0);
       assert.equal(await prisma.auditLog.count({ where: { action: { contains: "CRM" } } }), 0);
     });
+    /* ------------------------------------------------------------------ */
+    /* LO-REVIEW-WORKITEM-UNREACHABLE-1 — the derived operational mirror.   */
+    /*                                                                      */
+    /* These live HERE, beside the canonical fixtures, rather than in a      */
+    /* suite of their own: the whole claim is that the mirror is produced BY */
+    /* the canonical owner, so proving it against anything other than the    */
+    /* real submit/reject/approve commands would prove nothing.              */
+    /* ------------------------------------------------------------------ */
+
+    async function workItems(fixture: typeof flagFixture) {
+      const row = await aggregate(fixture);
+      return prisma.learnerOpsCase.findMany({ where: { reportSubmissionId: row.id } });
+    }
+
+    await check("R1. submitting a report creates exactly one anchored report_review work item", async () => {
+      // `prepare()` above submitted through the real command. If the integration
+      // were absent this is 0, which is the defect as found in PREPROD.
+      const cases = await workItems(auditFixture);
+      assert.equal(cases.length, 1, "exactly one operational mirror per canonical report");
+      const [item] = cases;
+      assert.equal(item.type, "report_review");
+      assert.equal(item.userId, auditFixture.user.id, "anchored to the learner who submitted");
+      assert.ok(item.reportSubmissionId, "the canonical anchor must be present");
+      const queue = await prisma.learnerOpsQueue.findUniqueOrThrow({ where: { id: item.queueId } });
+      assert.equal(queue.key, "report_review", "routed to the seeded report-review queue");
+      assert.ok(item.slaPolicyId, "the operational SLA policy must be applied");
+      assert.ok(item.resolutionDueAt, "a review work item carries a resolution target");
+      const events = await prisma.learnerOpsCaseEvent.findMany({ where: { caseId: item.id } });
+      assert.ok(events.some((e) => e.eventType === "created"), "operational timeline provenance exists");
+    });
+
+    await check("R2. a resubmission reuses the SAME work item — no second case", async () => {
+      const fixture = mirrorResubmitFixture;
+      const first = await workItems(fixture);
+      assert.equal(first.length, 1);
+
+      // Reject through the real command, then resubmit through the real command.
+      await claim(fixture, mentor.id, "mirror-resubmit");
+      const claimed = await aggregate(fixture);
+      const reason = await prisma.reportRejectionReason.findFirstOrThrow({
+        where: { reportRubricVersionId: claimed.reportRubricVersionId },
+      });
+      await review.rejectReportSubmission(mentor.id, {
+        ...command(claimed, "reject-mirror-resubmit-request"),
+        scores, reasonCode: reason.stableKey,
+        humanComment: "Нужно добавить доказательство.", correctiveAction: "Добавьте ссылку.",
+      }, { evaluationTime });
+
+      const afterReject = await workItems(fixture);
+      assert.equal(afterReject.length, 1, "a revision request must not open a second case");
+      assert.equal(
+        afterReject[0].status, "waiting_learner",
+        "R4: the ball is with the learner, and the SLA engine pauses on exactly this state",
+      );
+      assert.ok(afterReject[0].clockPausedAt, "the resolution clock must actually be paused");
+
+      const rejected = await aggregate(fixture);
+      const saved = await submissionRuntime.saveOwnReportDraft(fixture.user.id, {
+        levelNumber: 1, requestId: "save-mirror-resubmit-2", expectedRevision: rejected.workflowVersion,
+        fieldValues: { evidence: "https://example.com/mirror-resubmit-2" },
+      });
+      await submissionRuntime.resubmitOwnReport(fixture.user.id, {
+        levelNumber: 1, requestId: "resubmit-mirror-request", expectedRevision: saved.resultingWorkflowVersion,
+      });
+
+      const afterResubmit = await workItems(fixture);
+      assert.equal(afterResubmit.length, 1, "R5: still one case after the resubmission");
+      assert.equal(afterResubmit[0].id, first[0].id, "and it is the SAME case, not a replacement");
+      assert.equal(afterResubmit[0].status, "in_progress", "operational work is actionable again");
+      assert.equal(afterResubmit[0].clockPausedAt, null, "the clock resumed when the learner answered");
+      assert.ok(afterResubmit[0].pausedMs > 0, "the paused interval was banked, not discarded");
+
+      // The whole history survives.
+      const events = await prisma.learnerOpsCaseEvent.findMany({
+        where: { caseId: first[0].id }, orderBy: { caseVersion: "asc" },
+      });
+      assert.ok(events.length >= 3, "created + revision requested + resubmitted at minimum");
+    });
+
+    await check("R3. a concurrent ensure cannot produce two work items", async () => {
+      const fixture = mirrorRaceFixture;
+      const row = await aggregate(fixture);
+      const workItemModule = await import("../../src/lib/learner-ops/review-work-items");
+      const ensureOnce = () =>
+        prisma.$transaction((tx) =>
+          workItemModule.ensureReportReviewWorkItem(tx, {
+            submissionId: row.id, userId: fixture.user.id,
+            levelNumber: 1, levelTitle: "Report 1",
+          }),
+        );
+      const results = await Promise.allSettled([ensureOnce(), ensureOnce(), ensureOnce()]);
+      const cases = await workItems(fixture);
+      assert.equal(cases.length, 1, "the partial unique index is the backstop and it held");
+      assert.ok(
+        results.some((r) => r.status === "fulfilled"),
+        "at least one ensure must succeed",
+      );
+      for (const settled of results) {
+        if (settled.status === "fulfilled") {
+          assert.equal(settled.value.caseId, cases[0].id, "every winner names the same case");
+        }
+      }
+    });
+
+    await check("R6. a generic resolve is refused while the report is not approved", async () => {
+      const fixture = mirrorRefuseFixture;
+      const [item] = await workItems(fixture);
+      const learnerOps = await import("../../src/lib/learner-ops/case");
+      const staffProfile = await prisma.staffProfile.upsert({
+        where: { userId: mentor.id },
+        create: { userId: mentor.id, displayName: "Approval Mentor", staffRole: "mentor" },
+        update: {},
+      });
+      const actor = { staffId: staffProfile.id, userId: mentor.id };
+      for (const nextStatus of ["resolved", "closed"] as const) {
+        let code: string | null = null;
+        try {
+          await learnerOps.transitionCase({
+            caseId: item.id, expectedVersion: item.version, nextStatus, actor,
+          });
+        } catch (error) {
+          code = (error as { code?: string }).code ?? null;
+        }
+        assert.equal(
+          code, "LEARNER_OPS_CANONICAL_REVIEW_OPEN",
+          `${nextStatus} must be refused while the canonical report is open`,
+        );
+      }
+      // ...and the projection withholds them, so no operator is offered the failure.
+      const queue = await import("../../src/lib/learner-ops/queue");
+      const detail = await queue.getCaseDetail(item.id);
+      assert.ok(!detail.allowedTransitions.includes("resolved"));
+      assert.ok(!detail.allowedTransitions.includes("closed"));
+      // The canonical report is untouched by the refusals.
+      assert.equal((await aggregate(fixture)).status, "pending_review");
+    });
+
+    await check("R7/R8. canonical approval resolves the mirror exactly once", async () => {
+      const fixture = mirrorApproveFixture;
+      const [before] = await workItems(fixture);
+      await claim(fixture, mentor.id, "mirror-approve");
+      const result = await approve(fixture, mentor.id, "mirror-approve");
+      assert.ok(result);
+
+      const [after] = await workItems(fixture);
+      assert.equal(after.id, before.id, "the same case, reconciled — not a new one");
+      assert.equal(after.status, "resolved", "the mirror follows the canonical outcome");
+      assert.ok(after.resolvedAt, "resolvedAt is stamped");
+      assert.equal((await aggregate(fixture)).status, "approved");
+
+      const versionAfterFirst = after.version;
+      const resolvedEvents = await prisma.learnerOpsCaseEvent.count({
+        where: { caseId: after.id, eventType: "resolved" },
+      });
+      assert.equal(resolvedEvents, 1, "exactly one resolution in the timeline");
+
+      // R8 — a retry of the canonical decision changes nothing operational.
+      const retryRow = await aggregate(fixture);
+      await review.approveReportSubmission(mentor.id, {
+        ...command(retryRow, `approve-mirror-approve-request`), scores,
+      }, { evaluationTime }).catch(() => undefined);
+      const [afterRetry] = await workItems(fixture);
+      assert.equal(afterRetry.version, versionAfterFirst, "no second version bump");
+      assert.equal(
+        await prisma.learnerOpsCaseEvent.count({ where: { caseId: after.id, eventType: "resolved" } }),
+        1,
+        "no second resolution event",
+      );
+      assert.equal(
+        await prisma.userLevelProgress.count({
+          where: { enrollmentId: fixture.enrollment.id, levelDefinitionId: fixture.graph.level.id, status: "completed" },
+        }),
+        1,
+        "progression completed exactly once",
+      );
+    });
+
+    await check("R9. a missing mirror can be rebuilt without touching canonical state", async () => {
+      const fixture = mirrorRepairFixture;
+      const row = await aggregate(fixture);
+      const [item] = await workItems(fixture);
+
+      // Simulate the pre-fix world: a canonical pending report with no mirror.
+      await prisma.learnerOpsCaseEvent.deleteMany({ where: { caseId: item.id } });
+      await prisma.learnerOpsCase.delete({ where: { id: item.id } });
+      assert.equal((await workItems(fixture)).length, 0);
+
+      const canonicalBefore = await aggregate(fixture);
+      const progressBefore = await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: fixture.progress.id } });
+
+      const reconciler = await import("../../src/lib/learner-ops/reconcile-review-work-items");
+      const outcome = await reconciler.reconcileReviewWorkItems({ apply: true });
+      assert.ok(outcome.reportsRepaired >= 1, "the reconciler rebuilt the missing mirror");
+
+      const rebuilt = await workItems(fixture);
+      assert.equal(rebuilt.length, 1);
+      assert.equal(rebuilt[0].reportSubmissionId, row.id, "anchored to the same canonical report");
+
+      const canonicalAfter = await aggregate(fixture);
+      assert.equal(canonicalAfter.status, canonicalBefore.status, "canonical report state untouched");
+      assert.equal(canonicalAfter.workflowVersion, canonicalBefore.workflowVersion);
+      assert.deepEqual(
+        await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: fixture.progress.id } }),
+        progressBefore,
+        "progression untouched by repair",
+      );
+
+      // Idempotent: a second run repairs nothing.
+      const second = await reconciler.reconcileReviewWorkItems({ apply: true });
+      assert.equal(second.reportsRepaired, 0);
+      assert.equal((await workItems(fixture)).length, 1);
+    });
+
+    await check("§22. approve vs revision-request: one winner, one operational truth", async () => {
+      // The decision race, run against a sanctioned parallel fixture so the
+      // accepted journey is never destroyed to produce it.
+      // Its OWN fixture: `decisionRaceFixture` is already spent by the
+      // canonical decision race earlier in this suite.
+      const fixture = mirrorDecisionRaceFixture;
+      const [item] = await workItems(fixture);
+      assert.ok(item, "the racing fixture must already carry its mirror");
+
+      await claim(fixture, mentor.id, "decision-race-mirror");
+      const row = await aggregate(fixture);
+      const reason = await prisma.reportRejectionReason.findFirstOrThrow({
+        where: { reportRubricVersionId: row.reportRubricVersionId },
+      });
+
+      const [approveOutcome, rejectOutcome] = await Promise.allSettled([
+        review.approveReportSubmission(mentor.id, {
+          ...command(row, "race-approve-request"), scores,
+        }, { evaluationTime }),
+        review.rejectReportSubmission(mentor.id, {
+          ...command(row, "race-reject-request"), scores, reasonCode: reason.stableKey,
+          humanComment: "Нужны доказательства.", correctiveAction: "Добавьте ссылку.",
+        }, { evaluationTime }),
+      ]);
+
+      const winners = [approveOutcome, rejectOutcome].filter((r) => r.status === "fulfilled");
+      assert.equal(winners.length, 1, "exactly one canonical decision may win");
+
+      const canonical = await aggregate(fixture);
+      assert.ok(["approved", "rejected"].includes(canonical.status));
+
+      const after = await workItems(fixture);
+      assert.equal(after.length, 1, "no duplicate work item survived the race");
+      // The operational state follows the winner and nothing else.
+      assert.equal(
+        after[0].status,
+        canonical.status === "approved" ? "resolved" : "waiting_learner",
+        "the mirror reflects the canonical winner",
+      );
+
+      // No double progression whichever way it went.
+      assert.ok(
+        (await prisma.userLevelProgress.count({
+          where: {
+            enrollmentId: fixture.enrollment.id,
+            levelDefinitionId: fixture.graph.level.id,
+            status: "completed",
+          },
+        })) <= 1,
+        "a level cannot complete twice",
+      );
+      assert.ok(
+        (await prisma.learnerOpsCaseEvent.count({
+          where: { caseId: after[0].id, eventType: "resolved" },
+        })) <= 1,
+        "at most one operational resolution",
+      );
+    });
+
+    await check("§11. every pending canonical review has exactly one work item, both directions", async () => {
+      const reconciler = await import("../../src/lib/learner-ops/reconcile-review-work-items");
+      const outcome = await reconciler.reconcileReviewWorkItems({ apply: false });
+      assert.equal(
+        outcome.reportsMissingWorkItem, 0,
+        "no canonical pending report may lack its operational item",
+      );
+      assert.equal(
+        outcome.mentorReviewsMissingWorkItem, 0,
+        "no canonical pending mentor review may lack its operational item",
+      );
+      assert.equal(outcome.orphanedWorkItems, 0, "and no operational item may lack its canonical object");
+      // Second direction, asked of the database rather than of the reporter.
+      const duplicated = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
+        `SELECT COUNT(*) AS n FROM (
+           SELECT "reportSubmissionId" FROM "LearnerOpsCase"
+           WHERE "reportSubmissionId" IS NOT NULL
+           GROUP BY "reportSubmissionId" HAVING COUNT(*) > 1
+         )`,
+      );
+      assert.equal(Number(duplicated[0].n), 0, "no canonical report carries two work items");
+    });
+
+    await check("R10. an orphan report_review case is impossible", async () => {
+      const learnerOps = await import("../../src/lib/learner-ops/case");
+      let code: string | null = null;
+      try {
+        await learnerOps.createCase({
+          userId: ordinary.id, type: "report_review", queueKey: "report_review",
+          subject: "Без якоря", details: "Не должно существовать", actor: null,
+        });
+      } catch (error) {
+        code = (error as { code?: string }).code ?? null;
+      }
+      assert.equal(code, "LEARNER_OPS_ANCHOR_REQUIRED", "the domain refuses an anchorless review case");
+
+      // And the database refuses it too, independently of the domain.
+      let dbRefused = false;
+      try {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "LearnerOpsCase" ("id","reference","userId","type","queueId","subject","details","updatedAt")
+           VALUES ('orphan-probe','LO-ORPHAN',${ordinary.id},'report_review','loq_report_review','x','y',CURRENT_TIMESTAMP)`,
+        );
+      } catch {
+        dbRefused = true;
+      }
+      assert.ok(dbRefused, "the CHECK constraint refuses it at the storage layer");
+    });
+
   } finally {
     await prisma.$disconnect();
     cleanup();

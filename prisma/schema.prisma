@@ -4707,8 +4707,10 @@ model LearnerOpsCase {
   /// The canonical anchors. Nullable, mutually constrained by type, and never
   /// a copy of anything the anchored object owns.
   supportDialogId      Int?
-  reportSubmissionId   Int?
-  userLevelProgressId  Int?
+  /// Unique where present (migration 52) — one operational mirror per report.
+  reportSubmissionId   Int?                  @unique
+  /// Unique where present (migration 52) — one operational mirror per progress row.
+  userLevelProgressId  Int?                  @unique
 
   slaPolicyId        String?
   firstResponseDueAt DateTime?
@@ -4769,9 +4771,16 @@ model LearnerOpsCase {
   /// SLA sweeps.
   @@index([status, firstResponseDueAt])
   @@index([status, resolutionDueAt])
-  /// The canonical anchors, so "is there already a case for this object?" is an
-  /// index lookup rather than a scan. NOT unique: a report can legitimately
-  /// acquire a second case after the first is closed.
+  /// The canonical anchors, UNIQUE as of migration 52.
+  ///
+  /// The original comment here said "NOT unique: a report can legitimately
+  /// acquire a second case after the first is closed". That was written before
+  /// the integration existed and it is wrong about the product: one canonical
+  /// report is one piece of operational work for its whole life, including
+  /// across revision requests and resubmissions — a second case would split its
+  /// history and its SLA in half. LO-REVIEW-WORKITEM-UNREACHABLE-1 settles it:
+  /// exactly one work item per canonical review object, enforced by a partial
+  /// unique index in the database and not merely by the ensure helper.
   @@index([reportSubmissionId])
   @@index([userLevelProgressId])
   @@index([supportDialogId])

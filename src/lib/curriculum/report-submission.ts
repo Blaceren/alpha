@@ -26,6 +26,11 @@ import { emitReportSubmittedEvent } from "@/lib/growth/product-events";
 import { resolveUserCurriculumLevelStates } from "@/lib/curriculum/level-state";
 import { resolveUserCurriculumContext } from "@/lib/curriculum/resolver";
 import {
+  ensureReportReviewWorkItem,
+  reconcileReportReviewOperationalState,
+  resolveOperationalActor,
+} from "@/lib/learner-ops/review-work-items";
+import {
   isRequiredWhenActive,
   parseRequiredWhen,
   validateRequiredWhen,
@@ -1392,6 +1397,35 @@ async function transitionOwnReport(
     });
     if (progress.count !== 1) fail("REPORT_REVISION_CONFLICT", "report progress changed concurrently");
     scope.progress!.status = "pending_review";
+
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — the operational mirror, IN THIS
+    // TRANSACTION.
+    //
+    // A submitted report that no operations queue knows about is the defect
+    // this closes, so creation is atomic with the submission rather than a
+    // best-effort follow-up: if the work item cannot be created the submission
+    // does not happen either, and the learner is told, instead of the product
+    // claiming a successful review workflow with nobody responsible for it.
+    //
+    // `ensure` on BOTH submit and resubmit, keyed on the submission: the first
+    // submission creates it, a resubmission after a revision request finds the
+    // same one. Reconciling to `pending_review` afterwards is what returns a
+    // resubmitted report's case out of `waiting_learner` and restarts its
+    // resolution clock — with no second case and no second timeline.
+    const learnerActor = await resolveOperationalActor(tx, actorUserId);
+    await ensureReportReviewWorkItem(tx, {
+      submissionId: submission.id,
+      userId: submission.userId,
+      levelNumber: scope.level.levelNumber,
+      levelTitle: scope.level.title,
+      actor: learnerActor,
+    });
+    await reconcileReportReviewOperationalState(tx, {
+      submissionId: submission.id,
+      canonicalState: "pending_review",
+      actor: learnerActor,
+      reason: commandType === "submit" ? "report:submitted" : "report:resubmitted",
+    });
     const resultingWorkflowVersion = command.expectedRevision + 1;
     const resultKindValue = commandType === "submit" ? "submitted" : "resubmitted";
     const safeResult = safeReceiptResult(resultKindValue, revision.revisionNumber, resultingWorkflowVersion);

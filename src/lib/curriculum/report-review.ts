@@ -22,6 +22,10 @@ import {
   isCurriculumV2ReportEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import {
+  reconcileReportReviewOperationalState,
+  resolveOperationalActor,
+} from "@/lib/learner-ops/review-work-items";
 import { emitReportApprovedEvent } from "@/lib/growth/product-events";
 import {
   completeCurriculumLevelInTransaction,
@@ -1082,6 +1086,22 @@ export async function rejectReportSubmission(actorUserId: number, input: unknown
       data: { status: "in_progress", lastProgressAt: evaluationTime },
     });
     if (progress.count !== 1) fail("REPORT_REVISION_CONFLICT", "report progress changed concurrently");
+
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — mirror the revision request.
+    //
+    // `rejected` is this domain's vocabulary for "changes requested": the
+    // decision carries a required reason and corrective action, and the learner
+    // resubmits the SAME submission. Operationally the ball is now with the
+    // learner, so the derived case moves to `waiting_learner` — which is
+    // already the state the SLA engine pauses the resolution clock on, so ATA
+    // stops being charged for time it is not waiting on.
+    await reconcileReportReviewOperationalState(tx, {
+      submissionId: submission.id,
+      canonicalState: "rejected",
+      actor: await resolveOperationalActor(tx, actorUserId),
+      reason: "report:revision_requested",
+    });
+
     const safeResult = safeReceiptResult({
       operation: "reject", submission, workflowVersion, claimVersion,
       claimState: "closed", claimExpiresAt: null, reviewerRole: null, reasonCode: reason.stableKey,
@@ -1220,6 +1240,22 @@ export type SafeReviewerSubmissionDetail = {
     rejectionReasons: Array<{ code: string; title: string; guidance: string | null }>;
     attachments: SafeReviewerDetailAttachment[];
   } | null;
+  /**
+   * LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the OPERATIONAL half of the same
+   * work, so the specialized review view and the unified Learner Operations
+   * queue reconcile to one object instead of being two independent truth sets.
+   *
+   * It is a POINTER, not authority: the reference and the operational status
+   * let a reviewer navigate to the case and see who owns it and what its SLA
+   * says. Nothing about the educational decision is read from here, and nothing
+   * written here can change one.
+   */
+  operationalWorkItem: {
+    caseId: string;
+    reference: string;
+    status: string;
+    assignedStaffDisplayName: string | null;
+  } | null;
 };
 
 export type ReviewerDetailResult =
@@ -1270,8 +1306,31 @@ export async function getReportReviewDetail(
       submittedAt: submission.submittedAt!.toISOString(),
       claim: { state: claimState, expiresAt: submission.claimExpiresAt?.toISOString() ?? null },
     };
+    // The operational pointer is available at BOTH tiers: knowing that a case
+    // exists and who owns it operationally is not privileged review content,
+    // and withholding it from the summary tier would leave the unclaimed queue
+    // unable to show that the work is already tracked.
+    const workItem = await tx.learnerOpsCase.findFirst({
+      where: { reportSubmissionId: submission.id },
+      select: {
+        id: true, reference: true, status: true,
+        assignedStaff: { select: { displayName: true } },
+      },
+    });
+    const operationalWorkItem = workItem
+      ? {
+          caseId: workItem.id,
+          reference: workItem.reference,
+          status: workItem.status,
+          assignedStaffDisplayName: workItem.assignedStaff?.displayName ?? null,
+        }
+      : null;
+
     if (claimState !== "owned_by_you") {
-      return { kind: "resolved", detail: { ...base, access: "summary", reviewStartedAt: null, payload: null } };
+      return {
+        kind: "resolved",
+        detail: { ...base, access: "summary", reviewStartedAt: null, payload: null, operationalWorkItem },
+      };
     }
     const graph = validateDefinitionGraph(submission, parsed.data.locale);
     const assignmentLocale = graph.assignmentLocale!;
@@ -1334,6 +1393,7 @@ export async function getReportReviewDetail(
         ...base,
         access: "full",
         reviewStartedAt: submission.reviewStartedAt?.toISOString() ?? null,
+        operationalWorkItem,
         payload: {
           owner: { displayName: submission.user.name },
           curriculum: { code: submission.curriculumVersion.code, versionNumber: submission.curriculumVersion.versionNumber },
@@ -1457,6 +1517,21 @@ export async function approveReportSubmission(
       },
     });
     if (updated.count !== 1) fail("REPORT_REVISION_CONFLICT", "report approval changed concurrently");
+
+    // LO-REVIEW-WORKITEM-UNREACHABLE-1 — resolve the operational mirror.
+    //
+    // AFTER the canonical row already says `approved`, and inside the same
+    // transaction. That ordering is what lets this pass the terminal invariant
+    // in `review-work-item-invariants.ts`: the invariant refuses `resolved`
+    // while the report is not approved, and by this line it is. No exemption,
+    // no privileged actor, no flag — the canonical decision simply happened
+    // first, which is the whole authority model in one line of ordering.
+    await reconcileReportReviewOperationalState(tx, {
+      submissionId: submission.id,
+      canonicalState: "approved",
+      actor: await resolveOperationalActor(tx, actorUserId),
+      reason: "report:approved",
+    });
 
     // G4-GROWTH — the canonical `report_approved` event.
     //

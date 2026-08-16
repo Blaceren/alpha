@@ -41,6 +41,7 @@ import {
   LEARNER_OPS_TERMINAL_STATUSES,
 } from "@/lib/learner-ops/contract";
 import { LearnerOpsError, learnerOpsFail } from "@/lib/learner-ops/errors";
+import { assertReviewWorkItemMayBecomeTerminal } from "@/lib/learner-ops/review-work-item-invariants";
 import { createNotification } from "@/lib/notifications";
 import { computeTargets, pauseTransition, type SlaPolicyInput } from "@/lib/learner-ops/sla";
 import { prisma } from "@/lib/prisma";
@@ -68,9 +69,31 @@ export type StaffActor = {
  * the real guarantee and the retry loop below is what makes a collision
  * harmless rather than fatal.
  */
+/**
+ * The next operator-facing reference.
+ *
+ * DERIVED FROM THE HIGHEST REFERENCE, NOT FROM THE ROW COUNT. Counting assumes
+ * the sequence has no gaps, and the moment one appears — a case deleted, a
+ * repair that rebuilt a mirror, any archival — the count points at a reference
+ * that already exists and every subsequent create collides. Found by the R9
+ * reconciliation regression, which deletes a work item and rebuilds it: the
+ * count said "LO-000015" while "LO-000015" was already taken.
+ *
+ * Ordering by the string is safe because the format is fixed-width and
+ * zero-padded, so lexical order IS numeric order for the whole `LO-000001` ..
+ * `LO-999999` range.
+ *
+ * `attempt` still offsets the candidate, so the caller's retry loop walks
+ * forward past a reference a concurrent transaction took first.
+ */
 async function nextReference(tx: Tx, attempt: number): Promise<string> {
-  const count = await tx.learnerOpsCase.count();
-  return `LO-${String(count + 1 + attempt).padStart(6, "0")}`;
+  const highest = await tx.learnerOpsCase.findFirst({
+    orderBy: { reference: "desc" },
+    select: { reference: true },
+  });
+  const current = highest ? Number.parseInt(highest.reference.slice(3), 10) : 0;
+  const next = (Number.isFinite(current) ? current : 0) + 1 + attempt;
+  return `LO-${String(next).padStart(6, "0")}`;
 }
 
 /* ----------------------------------------------------------------- events */
@@ -183,7 +206,24 @@ export type CreateCaseInput = {
   readonly actor: StaffActor | null;
 };
 
-export async function createCase(input: CreateCaseInput, db: Db = prisma) {
+/**
+ * The whole of case creation, inside a transaction the CALLER owns.
+ *
+ * SPLIT OUT FOR THE REVIEW INTEGRATION. A canonical educational owner must be
+ * able to open its derived operational work item in the SAME transaction that
+ * moves the report or the progress row — otherwise a crash between the two
+ * leaves a submitted report with no operational owner, which is precisely the
+ * gap LO-REVIEW-WORKITEM-UNREACHABLE-1 is about. Passing `tx` is the only way
+ * to get that atomicity, so the body lives here and `createCase` becomes the
+ * thin standalone wrapper that owns a transaction and the reference retry.
+ *
+ * `attempt` participates in reference allocation and nothing else.
+ */
+export async function createCaseInTransaction(
+  tx: Tx,
+  input: CreateCaseInput,
+  attempt = 0,
+) {
   const requiredAnchor = LEARNER_OPS_REQUIRED_ANCHOR[input.type];
   if (requiredAnchor === "reportSubmission" && input.reportSubmissionId === undefined) {
     learnerOpsFail("LEARNER_OPS_ANCHOR_REQUIRED", "report_review requires reportSubmissionId");
@@ -200,83 +240,92 @@ export async function createCase(input: CreateCaseInput, db: Db = prisma) {
     learnerOpsFail("LEARNER_OPS_ANCHOR_NOT_PERMITTED", "only mentor_review may name a progress row");
   }
 
+  const learner = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true } });
+  if (!learner) learnerOpsFail("LEARNER_OPS_LEARNER_NOT_FOUND");
+
+  const queue = await tx.learnerOpsQueue.findUnique({
+    where: { key: input.queueKey },
+    select: { id: true, isActive: true },
+  });
+  if (!queue || !queue.isActive) learnerOpsFail("LEARNER_OPS_QUEUE_NOT_FOUND");
+
+  let reasonCodeId: string | null = null;
+  if (input.reasonCode !== undefined) {
+    const reason = await tx.learnerOpsReasonCode.findUnique({
+      where: { code: input.reasonCode },
+      select: { id: true, isActive: true },
+    });
+    if (!reason || !reason.isActive) learnerOpsFail("LEARNER_OPS_REASON_CODE_NOT_FOUND");
+    reasonCodeId = reason.id;
+  }
+
+  const priority = input.priority ?? "normal";
+  const policy = await loadPolicy(tx, priority);
+  const now = new Date();
+  const targets = computeTargets(policy, now);
+
+  const created = await tx.learnerOpsCase.create({
+    data: {
+      reference: await nextReference(tx, attempt),
+      userId: input.userId,
+      type: input.type,
+      status: "new",
+      priority,
+      queueId: queue.id,
+      reasonCodeId,
+      subject: input.subject,
+      details: input.details,
+      ...(input.reportSubmissionId !== undefined
+        ? { reportSubmissionId: input.reportSubmissionId }
+        : {}),
+      ...(input.userLevelProgressId !== undefined
+        ? { userLevelProgressId: input.userLevelProgressId }
+        : {}),
+      slaPolicyId: policy?.id ?? null,
+      firstResponseDueAt: targets.firstResponseDueAt,
+      resolutionDueAt: targets.resolutionDueAt,
+      openedAt: now,
+      lastActivityAt: now,
+    },
+  });
+
+  await writeEvent(tx, {
+    caseId: created.id,
+    caseVersion: created.version,
+    eventType: "created",
+    actorStaffId: input.actor?.staffId ?? null,
+    nextStatus: "new",
+    metadata: {
+      type: input.type,
+      queueKey: input.queueKey,
+      priority,
+      origin: input.actor ? "staff" : "learner",
+    },
+  });
+
+  await writeAudit(tx, LEARNER_OPS_AUDIT_ACTIONS.caseCreated, input.actor, created.id, {
+    reference: created.reference,
+    type: input.type,
+    queueKey: input.queueKey,
+    priority,
+    learnerId: input.userId,
+  });
+
+  return created;
+}
+
+/**
+ * Standalone case creation: owns a transaction and the reference retry.
+ *
+ * Unchanged for every existing caller. The retry lives here rather than in the
+ * in-transaction body because a reference collision must roll the whole attempt
+ * back and start again with a fresh count, which requires a new transaction.
+ */
+export async function createCase(input: CreateCaseInput, db: Db = prisma) {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
     try {
-      return await db.$transaction(async (tx) => {
-        const learner = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true } });
-        if (!learner) learnerOpsFail("LEARNER_OPS_LEARNER_NOT_FOUND");
-
-        const queue = await tx.learnerOpsQueue.findUnique({
-          where: { key: input.queueKey },
-          select: { id: true, isActive: true },
-        });
-        if (!queue || !queue.isActive) learnerOpsFail("LEARNER_OPS_QUEUE_NOT_FOUND");
-
-        let reasonCodeId: string | null = null;
-        if (input.reasonCode !== undefined) {
-          const reason = await tx.learnerOpsReasonCode.findUnique({
-            where: { code: input.reasonCode },
-            select: { id: true, isActive: true },
-          });
-          if (!reason || !reason.isActive) learnerOpsFail("LEARNER_OPS_REASON_CODE_NOT_FOUND");
-          reasonCodeId = reason.id;
-        }
-
-        const priority = input.priority ?? "normal";
-        const policy = await loadPolicy(tx, priority);
-        const now = new Date();
-        const targets = computeTargets(policy, now);
-
-        const created = await tx.learnerOpsCase.create({
-          data: {
-            reference: await nextReference(tx, attempt),
-            userId: input.userId,
-            type: input.type,
-            status: "new",
-            priority,
-            queueId: queue.id,
-            reasonCodeId,
-            subject: input.subject,
-            details: input.details,
-            ...(input.reportSubmissionId !== undefined
-              ? { reportSubmissionId: input.reportSubmissionId }
-              : {}),
-            ...(input.userLevelProgressId !== undefined
-              ? { userLevelProgressId: input.userLevelProgressId }
-              : {}),
-            slaPolicyId: policy?.id ?? null,
-            firstResponseDueAt: targets.firstResponseDueAt,
-            resolutionDueAt: targets.resolutionDueAt,
-            openedAt: now,
-            lastActivityAt: now,
-          },
-        });
-
-        await writeEvent(tx, {
-          caseId: created.id,
-          caseVersion: created.version,
-          eventType: "created",
-          actorStaffId: input.actor?.staffId ?? null,
-          nextStatus: "new",
-          metadata: {
-            type: input.type,
-            queueKey: input.queueKey,
-            priority,
-            origin: input.actor ? "staff" : "learner",
-          },
-        });
-
-        await writeAudit(tx, LEARNER_OPS_AUDIT_ACTIONS.caseCreated, input.actor, created.id, {
-          reference: created.reference,
-          type: input.type,
-          queueKey: input.queueKey,
-          priority,
-          learnerId: input.userId,
-        });
-
-        return created;
-      });
+      return await db.$transaction((tx) => createCaseInTransaction(tx, input, attempt));
     } catch (error) {
       if (error instanceof LearnerOpsError) throw error;
       // A reference collision is the one retryable failure here.
@@ -300,7 +349,13 @@ export type TransitionInput = {
   readonly caseId: string;
   readonly expectedVersion: number;
   readonly nextStatus: LearnerOpsCaseStatus;
-  readonly actor: StaffActor;
+  /**
+   * `null` means the platform reconciled this itself — a canonical decision
+   * whose decider holds no StaffProfile, or a learner resubmission moving the
+   * derived work item. Recording it as a named employee would be a lie about
+   * who acted, and `writeEvent`/`writeAudit` already accept a null actor.
+   */
+  readonly actor: StaffActor | null;
   readonly reason?: string;
 };
 
@@ -311,7 +366,20 @@ export type TransitionInput = {
  * counter and the event write can be got wrong.
  */
 export async function transitionCase(input: TransitionInput, db: Db = prisma) {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) => transitionCaseInTransaction(tx, input));
+}
+
+/**
+ * The same transition, inside a transaction the CALLER owns.
+ *
+ * Exists for the review integration, which must reconcile the derived
+ * operational case in the SAME transaction as the canonical decision — see
+ * `createCaseInTransaction` for why that atomicity is not optional. Every rule
+ * below is the one and only copy: legality, the escalation invariant, the CAS,
+ * the pause bookkeeping and the reopen counter are not restated anywhere.
+ */
+export async function transitionCaseInTransaction(tx: Tx, input: TransitionInput) {
+  {
     const current = await tx.learnerOpsCase.findUnique({
       where: { id: input.caseId },
       select: {
@@ -385,6 +453,13 @@ export async function transitionCase(input: TransitionInput, db: Db = prisma) {
           `case has ${openEscalations} unresolved escalation(s) and cannot become ${input.nextStatus}`,
         );
       }
+
+      // LO-REVIEW-WORKITEM-UNREACHABLE-1 §6/§9 — AN OPERATIONAL STATUS MAY NOT
+      // CLAIM AN EDUCATIONAL OUTCOME. `resolved` on a review work item asserts
+      // the review is finished, and Learner Operations does not own that fact.
+      // The canonical owner passes because it reconciles AFTER its own row has
+      // moved, inside the same transaction — the ordering is the authorization.
+      await assertReviewWorkItemMayBecomeTerminal(tx, input.caseId, input.nextStatus);
     }
 
     const now = new Date();
@@ -441,7 +516,7 @@ export async function transitionCase(input: TransitionInput, db: Db = prisma) {
           : input.nextStatus === "closed"
             ? "closed"
             : "status_changed",
-      actorStaffId: input.actor.staffId,
+      actorStaffId: input.actor?.staffId ?? null,
       previousStatus: current.status,
       nextStatus: input.nextStatus,
       reason: input.reason ?? null,
@@ -460,7 +535,7 @@ export async function transitionCase(input: TransitionInput, db: Db = prisma) {
     );
 
     return { changed: true as const, version: nextVersion, status: input.nextStatus };
-  });
+  }
 }
 
 /* ------------------------------------------------------------- assignment */

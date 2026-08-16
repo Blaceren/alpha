@@ -591,6 +591,150 @@ async function main() {
     assert.equal(await xpTotal(enrollment.id), 150);
   });
 
+  await check("M1-M8 LO-REVIEW-WORKITEM-UNREACHABLE-1: the mentor-review operational mirror", async () => {
+    await wipeCurriculum();
+    const graph = await createGraph([
+      { type: "mentor_review", completionMethod: "mentor_review", xpReward: 250 },
+      { type: "lesson", completionMethod: "manual", xpReward: 150 },
+    ]);
+    const learner = await createUser("mirror-mentor-learner");
+    const reviewer = await createUser("mirror-mentor-reviewer", "mentor");
+    const enrollment = await enroll(learner.id, graph, 1);
+    const progress = await startLevel(enrollment.id, graph, 1);
+
+    const workItems = () => prisma.learnerOpsCase.findMany({ where: { userLevelProgressId: progress.id } });
+    assert.equal((await workItems()).length, 0, "nothing exists before the review is requested");
+
+    /* M1 */
+    await mentor.requestMentorReview({
+      actorUserId: learner.id, stableCode: graph.levels[0].stableCode, evaluationTime: AT, db: prisma,
+    });
+    const created = await workItems();
+    assert.equal(created.length, 1, "M1: exactly one anchored mentor_review work item");
+    assert.equal(created[0].type, "mentor_review");
+    assert.equal(created[0].userId, learner.id);
+    assert.equal(created[0].userLevelProgressId, progress.id, "anchored to the canonical progress row");
+    const queue = await prisma.learnerOpsQueue.findUniqueOrThrow({ where: { id: created[0].queueId } });
+    assert.equal(queue.key, "mentor_review", "routed to the seeded mentor-review queue");
+    assert.ok(created[0].slaPolicyId, "the operational SLA policy applies to educational work too");
+
+    /* M2 */
+    const replayed = await mentor.requestMentorReview({
+      actorUserId: learner.id, stableCode: graph.levels[0].stableCode, evaluationTime: AT, db: prisma,
+    });
+    assert.equal(replayed.created, false);
+    assert.equal((await workItems()).length, 1, "M2: a replayed request adds no second work item");
+
+    /* M3 — operational feedback is not an educational decision. */
+    const learnerOps = await import("../../src/lib/learner-ops/case");
+    const staff = await prisma.staffProfile.create({
+      data: { userId: reviewer.id, displayName: "Mirror Mentor", staffRole: "mentor" },
+    });
+    const actor = { staffId: staff.id, userId: reviewer.id };
+    await learnerOps.addMessage({
+      caseId: created[0].id,
+      body: "Практику посмотрел, обратите внимание на риск-план — это операционный ответ.",
+      author: { kind: "staff", staffId: actor.staffId, userId: actor.userId },
+    });
+    await learnerOps.addNote({ caseId: created[0].id, body: "ВНУТРЕННЕЕ: слабый раздел 3", actor });
+    assert.equal(
+      (await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: progress.id } })).status,
+      "pending_review",
+      "M3: learner-visible feedback must not advance canonical progression",
+    );
+    assert.equal((await workItems())[0].status, "in_progress", "and it does not resolve the work item");
+
+    /* M4 — a generic terminal transition is refused outright. */
+    const current = await workItems();
+    for (const nextStatus of ["resolved", "closed"] as const) {
+      let code: string | null = null;
+      try {
+        await learnerOps.transitionCase({
+          caseId: current[0].id, expectedVersion: current[0].version, nextStatus, actor,
+        });
+      } catch (error) {
+        code = (error as { code?: string }).code ?? null;
+      }
+      assert.equal(code, "LEARNER_OPS_CANONICAL_REVIEW_OPEN", `M4: ${nextStatus} must be refused`);
+    }
+    const queueRead = await import("../../src/lib/learner-ops/queue");
+    const projected = await queueRead.getCaseDetail(current[0].id);
+    assert.ok(!projected.allowedTransitions.includes("resolved"), "M4: and it is not even offered");
+    assert.ok(!projected.allowedTransitions.includes("closed"));
+
+    /* M5 */
+    const approved = await mentor.approveMentorReview({
+      reviewerUserId: reviewer.id, progressId: progress.id, evaluationTime: AT, db: prisma,
+    });
+    assert.equal(approved.created, true);
+    assert.equal(approved.xpAwarded, 250);
+    const resolved = await workItems();
+    assert.equal(resolved.length, 1, "M5: still exactly one work item");
+    assert.equal(resolved[0].status, "resolved", "M5: reconciled by the canonical approval");
+    assert.ok(resolved[0].resolvedAt);
+    assert.equal(
+      (await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: progress.id } })).status,
+      "completed",
+    );
+
+    /* M6 */
+    const replayApproval = await mentor.approveMentorReview({
+      reviewerUserId: reviewer.id, progressId: progress.id, evaluationTime: AT, db: prisma,
+    });
+    assert.equal(replayApproval.created, false);
+    const afterReplay = await workItems();
+    assert.equal(afterReplay[0].version, resolved[0].version, "M6: no second version bump");
+    assert.equal(
+      await prisma.learnerOpsCaseEvent.count({ where: { caseId: resolved[0].id, eventType: "resolved" } }),
+      1,
+      "M6: exactly one resolution in the timeline",
+    );
+    assert.equal(await xpTotal(enrollment.id), 250, "M6: XP awarded exactly once");
+
+    /* M7 — repair of a missing mirror changes no canonical state. */
+    const secondLearner = await createUser("mirror-mentor-learner-2");
+    const secondEnrollment = await enroll(secondLearner.id, graph, 1);
+    const secondProgress = await startLevel(secondEnrollment.id, graph, 1);
+    await mentor.requestMentorReview({
+      actorUserId: secondLearner.id, stableCode: graph.levels[0].stableCode, evaluationTime: AT, db: prisma,
+    });
+    const orphaned = await prisma.learnerOpsCase.findFirstOrThrow({
+      where: { userLevelProgressId: secondProgress.id },
+    });
+    await prisma.learnerOpsCaseEvent.deleteMany({ where: { caseId: orphaned.id } });
+    await prisma.learnerOpsCase.delete({ where: { id: orphaned.id } });
+
+    const progressBefore = await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: secondProgress.id } });
+    const reconciler = await import("../../src/lib/learner-ops/reconcile-review-work-items");
+    const outcome = await reconciler.reconcileReviewWorkItems({ apply: true });
+    assert.ok(outcome.mentorReviewsRepaired >= 1, "M7: the reconciler rebuilt it");
+    assert.deepEqual(
+      await prisma.userLevelProgress.findUniqueOrThrow({ where: { id: secondProgress.id } }),
+      progressBefore,
+      "M7: canonical progression untouched by repair",
+    );
+    assert.equal(
+      (await prisma.learnerOpsCase.count({ where: { userLevelProgressId: secondProgress.id } })),
+      1,
+    );
+    const secondRun = await reconciler.reconcileReviewWorkItems({ apply: true });
+    assert.equal(secondRun.mentorReviewsRepaired, 0, "M7: idempotent");
+    assert.equal(secondRun.orphanedWorkItems, 0, "no operational case lacks its canonical object");
+
+    /* M8 */
+    const learnerOpsCase = await import("../../src/lib/learner-ops/case");
+    let anchorCode: string | null = null;
+    try {
+      await learnerOpsCase.createCase({
+        userId: learner.id, type: "mentor_review", queueKey: "mentor_review",
+        subject: "Без якоря", details: "Не должно существовать", actor: null,
+      });
+    } catch (error) {
+      anchorCode = (error as { code?: string }).code ?? null;
+    }
+    assert.equal(anchorCode, "LEARNER_OPS_ANCHOR_REQUIRED", "M8: an anchorless mentor case is refused");
+  });
+
   await check("3.2 MENTOR: request 0, pending 0, approval +250 once, re-approval 0", async () => {
     await wipeCurriculum();
     const graph = await createGraph([
