@@ -24,6 +24,7 @@ import {
 } from "@/lib/learner-ops/http";
 import { LearnerOpsError } from "@/lib/learner-ops/errors";
 import { createCase } from "@/lib/learner-ops/case";
+import { learnerOpsCaseLevel } from "@/lib/learner-ops/learner-projection";
 import { learnerCreateCaseSchema } from "@/lib/learner-ops/schemas";
 import { LEARNER_OPS_ACTIVE_STATUSES } from "@/lib/learner-ops/contract";
 import { prisma } from "@/lib/prisma";
@@ -50,6 +51,28 @@ export async function GET(request: Request) {
         openedAt: true,
         lastActivityAt: true,
         resolvedAt: true,
+        // THE CANONICAL ANCHOR, PROJECTED AS A COORDINATE — never as an id.
+        //
+        // A `mentor_review` case names the learner's own progress row and a
+        // `report_review` case names their own report; both resolve to one
+        // level of the programme they are enrolled on. Without the coordinate a
+        // client holding this list can tell that SOME review has a reply but
+        // not WHICH level it belongs to, and the only remaining way to find out
+        // would be to parse the subject prose. So the level is projected here.
+        //
+        // Nothing new is disclosed. The learner already sees every one of these
+        // fields on the level itself, and the subject line beside them already
+        // names the level in words. What is deliberately NOT projected is the
+        // anchor's identity: no `userLevelProgressId`, no `reportSubmissionId`,
+        // no status of the canonical object — a progression verdict must be
+        // read from the progression owner, never inferred from an operational
+        // mirror of it.
+        userLevelProgress: {
+          select: { levelDefinition: { select: { levelNumber: true, stableCode: true, title: true } } },
+        },
+        reportSubmission: {
+          select: { levelDefinition: { select: { levelNumber: true, stableCode: true, title: true } } },
+        },
       },
       orderBy: [{ lastActivityAt: "desc" }],
       take: 50,
@@ -69,6 +92,7 @@ export async function GET(request: Request) {
         openedAt: row.openedAt.toISOString(),
         lastActivityAt: row.lastActivityAt.toISOString(),
         resolvedAt: row.resolvedAt?.toISOString() ?? null,
+        level: learnerOpsCaseLevel(row),
       })),
     });
   } catch (error) {

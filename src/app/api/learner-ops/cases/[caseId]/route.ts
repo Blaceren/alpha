@@ -11,6 +11,7 @@ import {
   requireLearnerOpsLearner,
 } from "@/lib/learner-ops/http";
 import { LearnerOpsError } from "@/lib/learner-ops/errors";
+import { learnerOpsCaseLevel } from "@/lib/learner-ops/learner-projection";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ case
         resolvedAt: true,
         // `notes` is NOT selected. It is not selectable here: this module does
         // not name that relation anywhere.
+        //
+        // The anchor is selected for its LEVEL COORDINATE only — see
+        // learner-projection.ts for what that may and may not carry.
+        userLevelProgress: {
+          select: { levelDefinition: { select: { levelNumber: true, stableCode: true, title: true } } },
+        },
+        reportSubmission: {
+          select: { levelDefinition: { select: { levelNumber: true, stableCode: true, title: true } } },
+        },
         messages: {
           select: {
             id: true,
@@ -63,6 +73,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ case
       openedAt: row.openedAt.toISOString(),
       lastActivityAt: row.lastActivityAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
+      level: learnerOpsCaseLevel(row),
       messages: row.messages.map((message) => ({
         id: message.id,
         authorKind: message.authorKind,
