@@ -72,6 +72,8 @@ import { enrollUserInPublishedCurriculum } from "@/lib/curriculum/enrollment";
 import {
   attestStagingGate,
   isStagingAttestationError,
+  STAGING_ATTESTATION_EVENT_CLASS_TARGET,
+  type StagingAttestationEventClassName,
 } from "@/lib/curriculum/staging-attestation";
 import { POCKET_REGISTRATION_STABLE_CODE } from "@/lib/curriculum/pocket-registration-completion";
 
@@ -98,6 +100,7 @@ export type FixtureRefusal =
   | "password_rejected"
   | "no_enrolment_actor"
   | "unknown_learner"
+  | "unknown_gate"
   | "attestation_refused";
 
 /**
@@ -399,19 +402,23 @@ async function provisionLearner(
  * so re-running replays the same attestation (`created: false`) instead of
  * recording a second one.
  */
-async function attestPocketRegistration(
+async function attestGate(
   fixture: LearnerFixture,
   operatorUserId: number,
   learnerUserId: number,
+  eventClass: StagingAttestationEventClassName,
+  stableCode: string,
 ): Promise<{ ok: true; receipt: unknown } | { ok: false; code: string; detail: string }> {
   try {
     const receipt = await attestStagingGate({
       operatorUserId,
       learnerUserId,
-      eventClass: "pocket_registration",
-      stableCode: POCKET_REGISTRATION_STABLE_CODE,
-      // Deterministic, so a replay is a replay and not a second gate.
-      requestId: `learner-ops-v1:attest:${fixture.key}:pocket-registration`,
+      eventClass,
+      stableCode,
+      // Deterministic, so a replay is a replay and not a second gate. The level
+      // is part of the identity because a curriculum has more than one
+      // financial checkpoint, and each is its own gate.
+      requestId: `learner-ops-v1:attest:${fixture.key}:${eventClass}:${stableCode}`,
     });
     return { ok: true, receipt };
   } catch (error) {
@@ -429,7 +436,7 @@ async function main(): Promise<number> {
   const apply = process.argv.includes("--apply");
 
   if (verb !== "provision" && verb !== "inspect" && verb !== "enroll" && verb !== "attest") {
-    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect|enroll|attest> [--learner <key>] [--apply]");
+    note("usage: learnerOpsAcceptanceFixture.ts <provision|inspect|enroll|attest> [--learner <key>] [--level <stableCode>] [--apply]");
     process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_verb" }, null, 2) + "\n");
     return 2;
   }
@@ -519,6 +526,32 @@ async function main(): Promise<number> {
         return 4;
       }
 
+      // WHICH GATE. `pocket_registration` stays the default so every existing
+      // invocation is unchanged. `--level <stableCode>` names a financial
+      // checkpoint, and the level's OWN definition decides whether that is
+      // legitimate — this tool does not get to assert it. The event class is
+      // then derived from the level rather than supplied, so a caller cannot
+      // pair a checkpoint level with the registration class or vice versa.
+      const levelIndex = process.argv.indexOf("--level");
+      const requestedLevel = levelIndex >= 0 ? (process.argv[levelIndex + 1] ?? "") : "";
+      let gateChoice: { eventClass: StagingAttestationEventClassName; stableCode: string };
+      if (requestedLevel === "" || requestedLevel === POCKET_REGISTRATION_STABLE_CODE) {
+        gateChoice = { eventClass: "pocket_registration", stableCode: POCKET_REGISTRATION_STABLE_CODE };
+      } else {
+        const level = await prisma.levelDefinition.findFirst({
+          where: { stableCode: requestedLevel },
+          select: { type: true, completionMethod: true, stableCode: true },
+        });
+        const target = STAGING_ATTESTATION_EVENT_CLASS_TARGET.financial_checkpoint;
+        if (!level || level.type !== target.type || level.completionMethod !== target.completionMethod) {
+          note(`REFUSED: --level must name a ${target.type}:${target.completionMethod} level`);
+          note("         The level definition decides, not this tool.");
+          process.stdout.write(JSON.stringify({ ok: false, refusal: "unknown_gate" }, null, 2) + "\n");
+          return 5;
+        }
+        gateChoice = { eventClass: "financial_checkpoint", stableCode: level.stableCode };
+      }
+
       const operatorUserId = await resolveEnrolmentActor(prisma);
       if (operatorUserId === null) {
         note(`REFUSED: ${ENROLMENT_ACTOR_EMAIL} is absent or not an active admin.`);
@@ -538,12 +571,14 @@ async function main(): Promise<number> {
 
       if (!apply) {
         note("DRY RUN — nothing is written. Add --apply.");
-        note(`would attest ${POCKET_REGISTRATION_STABLE_CODE} for ${fixture.key}, attributed to ${ENROLMENT_ACTOR_EMAIL}`);
+        note(`would attest ${gateChoice.stableCode} (${gateChoice.eventClass}) for ${fixture.key}, attributed to ${ENROLMENT_ACTOR_EMAIL}`);
         process.stdout.write(JSON.stringify({ ok: true, verb, applied: false, learner: fixture.key }, null, 2) + "\n");
         return 0;
       }
 
-      const result = await attestPocketRegistration(fixture, operatorUserId, learner.id);
+      const result = await attestGate(
+        fixture, operatorUserId, learner.id, gateChoice.eventClass, gateChoice.stableCode,
+      );
       if (!result.ok) {
         note(`REFUSED by the canonical attestation owner: ${result.code} — ${result.detail}`);
         process.stdout.write(
@@ -552,7 +587,11 @@ async function main(): Promise<number> {
         return 8;
       }
       process.stdout.write(
-        JSON.stringify({ ok: true, verb, applied: true, learner: fixture.key, receipt: result.receipt }, null, 2) + "\n",
+        JSON.stringify({
+          ok: true, verb, applied: true, learner: fixture.key,
+          eventClass: gateChoice.eventClass, stableCode: gateChoice.stableCode,
+          receipt: result.receipt,
+        }, null, 2) + "\n",
       );
       return 0;
     }

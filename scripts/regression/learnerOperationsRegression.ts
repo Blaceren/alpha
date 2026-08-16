@@ -1010,6 +1010,31 @@ async function main() {
     }
   });
 
+  await check("the fixture attest gate is chosen by the LEVEL, not by the caller", async () => {
+    // Journey C crosses two financial checkpoints, and the sanctioned staging
+    // attestation is the only honest way past them — the alternative is
+    // inventing a Pocket balance, which this phase forbids outright.
+    //
+    // The containment property that matters: the tool derives the event class
+    // from the level definition, so a caller cannot pair an arbitrary level
+    // with `financial_checkpoint` and cannot attest a lesson at all. This
+    // asserts the mapping the tool reads, from the same exported table.
+    const { STAGING_ATTESTATION_EVENT_CLASS_TARGET } = await import(
+      "../../src/lib/curriculum/staging-attestation"
+    );
+    assert.deepEqual(STAGING_ATTESTATION_EVENT_CLASS_TARGET.financial_checkpoint, {
+      type: "financial_checkpoint",
+      completionMethod: "balance_check",
+    });
+    assert.deepEqual(STAGING_ATTESTATION_EVENT_CLASS_TARGET.pocket_registration, {
+      type: "external_event",
+      completionMethod: "pocket_postback",
+    });
+    // Exactly two classes exist. A third would be a new bypass and must be a
+    // deliberate, reviewed change rather than something this test tolerates.
+    assert.equal(Object.keys(STAGING_ATTESTATION_EVENT_CLASS_TARGET).length, 2);
+  });
+
   await check("the terminal set is exactly the complement of the active set", () => {
     const all = [...LEARNER_OPS_STATUSES].sort();
     const union = [...LEARNER_OPS_ACTIVE_STATUSES, ...LEARNER_OPS_TERMINAL_STATUSES].sort();
