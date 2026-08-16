@@ -212,6 +212,22 @@ export const ReviewDetailSchema = z
     claim: ClaimSchema,
     reviewStartedAt: z.string().nullable(),
     payload: DetailPayloadSchema.nullable(),
+    /**
+     * LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the operational half of the same
+     * work. A POINTER, never authority: it lets a reviewer see that the work is
+     * tracked in the unified queue, who owns it operationally, and navigate to
+     * it. The educational decision is still made here, by the canonical
+     * commands below.
+     */
+    operationalWorkItem: z
+      .object({
+        caseId: z.string().min(1),
+        reference: z.string().min(1),
+        status: z.string().min(1),
+        assignedStaffDisplayName: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 

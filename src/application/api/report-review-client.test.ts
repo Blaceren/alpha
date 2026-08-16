@@ -95,6 +95,10 @@ describe("fetchReviewDetail", () => {
     submittedRevision: 2, workflowVersion: 3, claimVersion: 1,
     submittedAt: "2026-07-26T00:00:00.000Z",
     claim: { state: "unclaimed", expiresAt: null }, reviewStartedAt: null, payload: null,
+    // §15 — the operational pointer is part of the contract at BOTH tiers. The
+    // schema is strict, so an omitted field is a contract violation and this
+    // fixture must carry it.
+    operationalWorkItem: null,
   };
 
   it("accepts the summary tier with a null payload", async () => {

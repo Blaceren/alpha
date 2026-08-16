@@ -478,6 +478,34 @@ export function ReportDetail({
         {backButton}
       </header>
 
+      {/* LO-REVIEW-WORKITEM-UNREACHABLE-1 §15 — the operational half.
+          The specialized review view and the unified Learner Operations queue
+          are two views of ONE piece of work, so this names the case, shows who
+          owns it operationally and links to it. It carries no decision control:
+          the educational outcome is decided below, by the canonical commands. */}
+      {d.operationalWorkItem ? (
+        <section
+          aria-labelledby="operational-work-item"
+          className="rounded-lg border border-border bg-surface p-4"
+        >
+          <h2 id="operational-work-item" className="text-sm font-semibold text-text-primary">
+            Операционная карточка
+          </h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            <a className="underline" href={`/cases/${d.operationalWorkItem.caseId}`}>
+              {d.operationalWorkItem.reference}
+            </a>
+            {" · "}
+            {d.operationalWorkItem.assignedStaffDisplayName
+              ? `исполнитель: ${d.operationalWorkItem.assignedStaffDisplayName}`
+              : "исполнитель не назначен"}
+          </p>
+          <p className="mt-1 text-xs text-text-secondary">
+            Очередь и SLA ведутся в «Операциях с учениками». Учебное решение принимается здесь.
+          </p>
+        </section>
+      ) : null}
+
       {/* Revision timeline. Honest about what the contract exposes: the current
           submitted revision number and its timestamps. The reviewer API does not
           expose prior revision CONTENT or earlier mentor feedback, so none is

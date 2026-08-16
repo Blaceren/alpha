@@ -48,7 +48,7 @@ function detail(over: Partial<ReviewDetail> = {}): ReviewDetail {
     submittedRevision: 2, workflowVersion: 3, claimVersion: 1,
     submittedAt: "2026-07-26T10:00:00.000Z",
     claim: { state: "owned_by_you", expiresAt: "2026-07-26T11:00:00.000Z" },
-    reviewStartedAt: null, payload: payload(), ...over,
+    reviewStartedAt: null, payload: payload(), operationalWorkItem: null, ...over,
   };
 }
 
@@ -337,5 +337,33 @@ describe("ReportDetail — confirmation dialog accessibility", () => {
     await user.click(await screen.findByRole("button", { name: /отмена/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(props.approveImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("LO-REVIEW-WORKITEM-UNREACHABLE-1 — the specialized view reconciles to the operational case", () => {
+  it("links the canonical review to its Learner Operations work item", async () => {
+    mount({
+      fetchDetailImpl: detailOk(
+        detail({
+          operationalWorkItem: {
+            caseId: "case_abc",
+            reference: "LO-000007",
+            status: "in_progress",
+            assignedStaffDisplayName: "LO Наставник (synthetic)",
+          },
+        }),
+      ),
+    });
+    const link = await screen.findByRole("link", { name: "LO-000007" });
+    expect(link.getAttribute("href")).toBe("/cases/case_abc");
+    expect(screen.getByText(/исполнитель: LO Наставник \(synthetic\)/)).toBeTruthy();
+  });
+
+  it("says nothing at all when there is no operational case", async () => {
+    // Before the reconciler runs, a pre-integration report has no mirror. The
+    // view must stay silent rather than inventing a placeholder reference.
+    mount();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("Операционная карточка")).toBeNull();
   });
 });
