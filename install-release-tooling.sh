@@ -68,6 +68,7 @@ TOOLING_FILES=(
   "cutover.sh"
   "tests/build-provenance.test.sh"
   "tests/release-packaging.test.sh"
+  "tests/partner-rewrite-gate.test.sh"
 )
 
 INSTALLED_MANIFEST="ATA_TOOLING_INSTALLED.json"

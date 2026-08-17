@@ -194,10 +194,32 @@ case "$REPO" in
     require_from_config crm CRM_BACKEND_ORIGIN
     ;;
   partner)
-    # The partner console holds no secret of its own and its backend origin is
-    # optional: with it absent the rewrite list is empty and the app still
-    # builds and renders. Optional here mirrors that contract exactly.
-    optional_from_config partner PARTNER_BACKEND_ORIGIN
+    # FE-8 — REQUIRED, not optional, and the distinction is the whole console.
+    #
+    # WHAT "OPTIONAL" COST. This read used to be `optional_from_config`, on the
+    # reasoning that "with it absent the rewrite list is empty and the app still
+    # builds and renders". Both halves are true and the conclusion was wrong: the
+    # partner console reaches the Backend ONLY through the Next rewrites in
+    # next.config.mjs, and `rewrites()` is evaluated at BUILD time and frozen
+    # into .next/routes-manifest.json. An artifact built without this value has
+    # ZERO rewrite rules for the rest of its life, so every one of the ten
+    # partner API paths 404s at the partner origin and no partner can sign in.
+    # The runtime env cannot repair it: `next start` never calls rewrites().
+    #
+    # That artifact shipped. PREPROD ran a console on which `POST
+    # /api/partner/v1/session` answered 404 — not 401 — and the release record
+    # said "passed: 8 compiled pages, next start served, critical route
+    # answered", because /login renders perfectly with no rewrites at all.
+    #
+    # WHY IT WENT MISSING AT ALL. `read_env_key` elevates with `sudo -n`, which
+    # yields empty output whenever no sudo credential happens to be cached.
+    # Under `optional_from_config` that empty result was indistinguishable from
+    # "the operator did not set it", and both were silently accepted — so
+    # whether the console worked depended on the operator's sudo timestamp.
+    # `require_from_config` collapses that ambiguity the way academy and crm
+    # already do: a value that cannot be read is a refused build, not a quiet
+    # change of semantics.
+    require_from_config partner PARTNER_BACKEND_ORIGIN
     ;;
 esac
 

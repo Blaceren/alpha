@@ -240,6 +240,34 @@ case "$REPO" in
   partner)
     PAGE_COUNT="$(find "$NEXT_DIR/server/app" -name 'page.js' 2>/dev/null | wc -l)"
     [ "$PAGE_COUNT" -ge 1 ] || die "no compiled pages under .next/server/app"
+
+    # FE-8 — THE REWRITE MANIFEST IS PART OF THE ARTIFACT, so it is gated here.
+    #
+    # Counting pages proved the console RENDERS. It cannot prove the console
+    # WORKS, because the partner app talks to the Backend exclusively through
+    # Next rewrites that are resolved at build time and frozen into
+    # routes-manifest.json. A build that lost PARTNER_BACKEND_ORIGIN produces a
+    # manifest with zero rewrites, renders /login flawlessly, satisfies every
+    # other check in this gate — and 404s every partner API path forever.
+    # That artifact reached PREPROD and no partner could sign in.
+    #
+    # So the gate asserts the thing that actually distinguishes a working
+    # console from a dead one: the manifest must carry a rewrite for the session
+    # endpoint, which is the path every other partner path depends on reaching.
+    PARTNER_MANIFEST="$NEXT_DIR/routes-manifest.json"
+    [ -f "$PARTNER_MANIFEST" ] || die "partner artifact has no .next/routes-manifest.json"
+    REWRITE_COUNT="$(node -e '
+      const m = require(process.argv[1]);
+      const r = m.rewrites || [];
+      const all = Array.isArray(r) ? r : [].concat(r.beforeFiles || [], r.afterFiles || [], r.fallback || []);
+      process.stdout.write(String(all.filter((x) => typeof x.source === "string"
+        && x.source.startsWith("/api/partner/v1/")).length));
+    ' "$PARTNER_MANIFEST" 2>/dev/null || echo 0)"
+    [ "${REWRITE_COUNT:-0}" -ge 1 ] || die "partner artifact has NO /api/partner/v1/* rewrites in routes-manifest.json
+  The console would render and then 404 every Backend call, which is how a
+  sign-in-impossible build shipped before. This almost always means the build
+  ran without PARTNER_BACKEND_ORIGIN; rebuild with tools/build-release.sh."
+    printf 'partner rewrite gate: %s /api/partner/v1/* rules\n' "$REWRITE_COUNT"
     ;;
   *)
     ROUTE_COUNT="$(find "$NEXT_DIR/server/app" -name 'route.js' 2>/dev/null | wc -l)"
@@ -276,10 +304,15 @@ case "$REPO" in
   backend) SMOKE_ENV=(); SMOKE_READY_PATH="/api/health" ;;
   academy) SMOKE_ENV=(ACADEMY_MODE=fixture); SMOKE_READY_PATH="/" ;;
   crm)     SMOKE_ENV=(); SMOKE_READY_PATH="/" ;;
-  # The partner console needs no Backend to SERVE: with PARTNER_BACKEND_ORIGIN
-  # absent the rewrite list is empty and the app still renders. `/login` is the
-  # right probe because it is the only page that does not first ask the Backend
-  # who the caller is — again, the gate proves the artifact, not the wiring.
+  # The partner console needs no Backend to SERVE, so `/login` is the right
+  # probe: it is the only page that does not first ask the Backend who the
+  # caller is, and this gate proves the artifact, not the wiring.
+  #
+  # FE-8 — AND THAT IS EXACTLY WHY THIS PROBE IS NOT SUFFICIENT ON ITS OWN.
+  # `/login` renders identically whether the rewrite manifest is complete or
+  # empty, so a console nobody can sign in to passes this smoke unchanged. The
+  # rewrite assertion in B3 above is the half of the contract this probe cannot
+  # see; neither check replaces the other.
   partner) SMOKE_ENV=(); SMOKE_READY_PATH="/login" ;;
 esac
 printf 'readiness probe: %s\n' "$SMOKE_READY_PATH"
