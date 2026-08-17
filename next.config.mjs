@@ -57,7 +57,33 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   async rewrites() {
-    if (BACKEND_ORIGIN === null) return [];
+    // FE-8 — A BUILD WITHOUT AN ORIGIN IS A DEAD CONSOLE, so it fails here
+    // rather than producing one.
+    //
+    // `rewrites()` runs at BUILD time and its result is frozen into
+    // .next/routes-manifest.json; `next start` never calls it again. Returning
+    // [] therefore did not mean "no rewrites configured yet" — it meant "this
+    // artifact can never reach the Backend", permanently, and no runtime
+    // configuration could repair it. The app still compiled, still rendered,
+    // and still passed a readiness probe on /login, because /login is the one
+    // page that asks the Backend nothing.
+    //
+    // That artifact shipped to PREPROD. Every one of the ten paths below
+    // answered 404 at the partner origin, `POST /api/partner/v1/session`
+    // included, so no partner could sign in at all.
+    //
+    // The origin is validated fail-closed above; this makes ABSENCE fail closed
+    // too. The release tooling now also refuses such a build and the publisher
+    // refuses such an artifact — but the console is the layer that knows its
+    // own wiring is not optional, so it says so first and on its own behalf.
+    if (BACKEND_ORIGIN === null) {
+      throw new Error(
+        "PARTNER_BACKEND_ORIGIN is missing or invalid. The partner console " +
+          "reaches the Backend only through these build-time rewrites, so an " +
+          "artifact built without it can never serve its API. Set a valid " +
+          "absolute http(s) origin (no credentials, path, query or hash).",
+      );
+    }
     return PROXIED_PATHS.map((source) => ({
       source,
       destination: `${BACKEND_ORIGIN}${source}`,
