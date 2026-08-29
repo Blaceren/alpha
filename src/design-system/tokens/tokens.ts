@@ -40,5 +40,15 @@ export function token(name: SemanticToken): string {
   return `var(--${name})`;
 }
 
-/** Provisional flag — visual values are placeholders until prelanding assets. */
-export const TOKENS_ARE_PROVISIONAL = true;
+/**
+ * The token VALUES are no longer placeholders.
+ *
+ * They now derive from the accepted unified-design brand foundation
+ * (ATA-Integration 560a0f3011c153422575701e846da9c125cd3c79 —
+ * packages/brand/foundations/raw-brand.css and selected-neutral.css), replacing
+ * the provisional Phase D1B navy/teal ramp this flag was guarding.
+ *
+ * The flag is kept rather than deleted because callers may still be reading it;
+ * it now answers `false`, which is the truthful answer.
+ */
+export const TOKENS_ARE_PROVISIONAL = false;

@@ -1,8 +1,18 @@
 import type { Metadata, Viewport } from "next";
-// Self-hosted variable fonts (bundled — no external font fetch).
-import "@fontsource-variable/manrope";
-import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
+/*
+ * Brand faces are bound locally in src/styles/fonts.css over woff2 files
+ * vendored under public/fonts/ata/ from the accepted design authority. They
+ * replace the previous @fontsource-variable imports (Manrope/Inter/JetBrains
+ * Mono), which are no longer referenced by any role.
+ *
+ * The packages stay in package.json deliberately: this phase is not authorised
+ * to change a dependency, and the release manifest binds package-lock.json by
+ * sha256. Removing an import costs nothing; removing a dependency would
+ * invalidate that hash and require an install this phase may not run.
+ *
+ * No external font fetch exists in either arrangement.
+ */
+import "@/styles/fonts.css";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +22,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0d13",
+  // Ink 900 — the accepted deepest ground.
+  themeColor: "#0b0d0a",
   width: "device-width",
   initialScale: 1,
 };

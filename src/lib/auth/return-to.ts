@@ -7,7 +7,34 @@
  * redirect would exploit.
  */
 
-export const DEFAULT_RETURN_TO = "/";
+/**
+ * Where a successful LOGIN lands when the request carried no valid internal
+ * return path.
+ *
+ * UNIFIED-DESIGN-V1 changed this from `/` to `/home`. `/` is now the Public
+ * Home, which is a marketing surface: sending a learner who just authenticated
+ * to a page whose job is to persuade them to sign up would be a regression.
+ * `/home` is the same Authenticated Home component this constant always
+ * resolved to — only its path moved.
+ *
+ * This is a FALLBACK, never an override: `sanitizeReturnTo` returns the user's
+ * validated original destination whenever one exists, exactly as before.
+ */
+export const DEFAULT_RETURN_TO = "/home";
+
+/**
+ * Where a successful REGISTRATION lands, when the Backend created a session.
+ *
+ * DELIBERATELY A SEPARATE CONSTANT FROM `DEFAULT_RETURN_TO`, even though the two
+ * currently share a value. Before this change both flows read one constant, so
+ * moving the login destination would have silently moved the registration
+ * destination too — and the post-registration/onboarding/L1 flow is a product
+ * decision that must not move as a side effect of an unrelated routing change.
+ * Splitting them makes that coupling impossible to reintroduce by accident, and
+ * gives the onboarding destination one obvious place to change if it is ever
+ * routed somewhere more specific than the Academy home.
+ */
+export const POST_REGISTRATION_RETURN_TO = "/home";
 
 /** The login route itself — never a valid return target (would loop). */
 const LOGIN_PATH = "/login";

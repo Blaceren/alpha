@@ -125,7 +125,7 @@ describe("MobileBottomNavigation", () => {
     render(<MobileBottomNavigation activeId="home" />);
     const home = screen.getByRole("link", { name: /Главная/ });
     expect(home).toHaveAttribute("aria-current", "page");
-    expect(home).toHaveAttribute("href", "/");
+    expect(home).toHaveAttribute("href", "/home");
   });
 
   it("marks Инструменты active with aria-current on the tools page", () => {

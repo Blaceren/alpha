@@ -1,14 +1,25 @@
 /**
- * Provisional typographic scale.
+ * Typographic scale.
+ *
  * Families are applied via CSS variables (--font-display / --font-ui /
- * --font-mono) and Tailwind font-{display,ui,mono}. This module documents the
- * scale and role of each family.
+ * --font-mono / --font-public-display) and Tailwind font-{display,ui,mono}.
+ * This module documents the scale and the role of each family.
+ *
+ * UNIFIED-DESIGN-V1 rebound all three roles to the accepted brand faces, which
+ * are vendored locally and bound in src/styles/fonts.css. The scoped "ATA "
+ * prefix is deliberate: the product claims no global right to the installed
+ * family names.
  */
 
 export const FONT_ROLES = {
-  display: "Manrope Variable — заголовки, ranks, milestones",
-  ui: "Inter Variable — основной UI и тексты",
-  mono: "JetBrains Mono Variable — технические значения",
+  display: "ATA Manrope — заголовки, ranks, milestones",
+  ui: "ATA Manrope — основной UI и тексты",
+  mono: "ATA IBM Plex Mono — технические значения и метаданные",
+  /**
+   * Public Home ONLY. The authenticated product never uses this face; it is the
+   * marketing surface's display voice and is bound to --font-public-display.
+   */
+  publicDisplay: "ATA Source Serif 4 — только Public Home",
 } as const;
 
 /** Tailwind class fragments for the provisional type scale. */

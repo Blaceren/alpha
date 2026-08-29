@@ -5,7 +5,7 @@ import "@/features/home/home.css";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
 import { SessionProvider } from "@/features/auth/session-provider";
-import { sanitizeReturnTo } from "@/lib/auth/return-to";
+import { sanitizeReturnTo, DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
 import { PATHNAME_HEADER } from "@/lib/auth/constants";
 import { FIXTURE_VIEWER } from "@/lib/api/viewer";
 import type { SessionState } from "@/features/auth/session-machine";
@@ -34,7 +34,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       const requestHeaders = await headers();
       const pathname = requestHeaders.get(PATHNAME_HEADER);
       const returnTo = sanitizeReturnTo(pathname);
-      redirect(returnTo === "/" ? "/login" : `/login?next=${encodeURIComponent(returnTo)}`);
+      // A `next` that merely repeats the post-login default carries no
+      // information, so it is omitted. The comparison is against the constant
+      // rather than a literal path: UNIFIED-DESIGN-V1 moved that default from
+      // `/` to `/home`, and a hardcoded "/" here would have started emitting a
+      // redundant `?next=%2Fhome` on the most common auth-loss path.
+      redirect(
+        returnTo === DEFAULT_RETURN_TO
+          ? "/login"
+          : `/login?next=${encodeURIComponent(returnTo)}`,
+      );
     }
     initialState = { status: "AUTHENTICATED", viewer };
   } else {

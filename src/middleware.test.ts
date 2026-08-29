@@ -67,3 +67,53 @@ describe("middleware — anonymous routes", () => {
     expect(redirectTarget(middleware(request("/path")))).toBeNull();
   });
 });
+
+/**
+ * UNIFIED-DESIGN-V1 made `/` the Public Home. The middleware must let an
+ * anonymous visitor reach it — and must not, in doing so, let them reach
+ * anything else.
+ */
+describe("public home", () => {
+  it("lets an anonymous visitor reach /", () => {
+    expect(redirectTarget(middleware(request("/")))).toBeNull();
+  });
+
+  it("lets an authenticated visitor reach / without redirecting them away", () => {
+    // Product decision 3: an authenticated user may still view Public Home.
+    // There is deliberately no bounce to /home.
+    expect(redirectTarget(middleware(request("/", { session: true })))).toBeNull();
+  });
+
+  it("does NOT turn every route anonymous", () => {
+    /*
+     * The load-bearing test for this change.
+     *
+     * `ANONYMOUS_ROUTES` is matched exact-or-subpath. Had "/" been added to
+     * that list, its subpath arm would be `pathname.startsWith("/")` — true of
+     * every path in the product — and the entire authenticated Academy would
+     * have become anonymous to this middleware in one line. "/" is therefore
+     * matched as an exact comparison instead, and these guarded routes prove
+     * the blast radius stayed at zero.
+     */
+    for (const path of [
+      "/home",
+      "/path",
+      "/lessons",
+      "/tools",
+      "/notifications",
+      "/profile",
+      "/community",
+      "/support",
+      "/path/L1/workspace",
+    ]) {
+      const response = middleware(request(path));
+      expect(redirectTarget(response), `${path} must stay guarded`).toContain("/login");
+    }
+  });
+
+  it("still guards the new authenticated home at /home", () => {
+    const response = middleware(request("/home"));
+    expect(redirectTarget(response)).toContain("/login");
+    expect(redirectTarget(response)).toContain("next=%2Fhome");
+  });
+});

@@ -1,0 +1,282 @@
+/*
+ * Public Home — scoped surface styles.
+ *
+ * EVERY RULE IS NAMESPACED `.ph-*` (or descends from `.ph`). There is not one
+ * bare element selector, reset or `*` rule in this file, and that is a hard
+ * requirement rather than a style preference: this stylesheet is imported by a
+ * route that shares a document shell with Login, Register, Support, Community
+ * and the nine authenticated surfaces. A single global selector here would
+ * regress all of them at once, which is exactly the class of failure the
+ * regression boundary exists to prevent.
+ *
+ * It consumes the accepted brand tokens from src/styles/tokens.css and adds no
+ * colour of its own beyond composed alpha over those tokens.
+ *
+ * GROUND-USE CONTRACT. Normal informational text on this surface uses primary
+ * or secondary text. The tertiary neutral is used only on Ink 900/800 grounds,
+ * never on Ink 700, and never for the "signal" (light-ground) sections, which
+ * invert to Ink for their text.
+ */
+
+.ph {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ata-ink-900);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+/* ---------- skip link ----------
+   Public Home is outside AppShell, so it owns this. Same contract as the
+   shell's: first focusable element, hidden until focused, moves focus to
+   #main, changes no route and no product state. */
+.ph-skip {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--ata-ink-700);
+  color: var(--text-primary);
+  text-decoration: none;
+  border: 1px solid var(--divider-strong);
+  transform: translateY(-160%);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+.ph-skip:focus {
+  transform: translateY(0);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- header ---------- */
+.ph-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2.5vw, 28px);
+  padding: 12px clamp(16px, 4vw, 48px);
+  background: color-mix(in srgb, var(--ata-ink-900) 92%, transparent);
+  border-bottom: 1px solid var(--divider);
+  backdrop-filter: blur(8px);
+}
+
+.ph-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ph-wordmark__mark {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  background: var(--ata-signal-500);
+}
+
+.ph-nav {
+  display: none;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+.ph-nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.ph-nav a:hover {
+  color: var(--text-primary);
+}
+
+.ph-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+.ph-nav + .ph-header__actions {
+  margin-inline-start: 0;
+}
+
+/* ---------- buttons ----------
+   44x44 effective target on every variant, including the small header one. */
+.ph-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+.ph-button--small {
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.ph-button--signal {
+  background: var(--ata-signal-500);
+  color: var(--ata-ink-900);
+}
+.ph-button--signal:hover {
+  background: var(--ata-signal-300);
+}
+.ph-button--dark {
+  background: var(--ata-ink-900);
+  color: var(--text-primary);
+}
+.ph-button--quiet {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--divider-strong);
+}
+.ph-button--quiet:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- sections ---------- */
+.ph-main {
+  flex: 1 1 auto;
+}
+
+.ph-section {
+  padding: clamp(48px, 9vw, 120px) clamp(16px, 5vw, 64px);
+}
+.ph-section > * {
+  max-width: 68ch;
+  margin-inline: auto;
+}
+
+/* Ink grounds keep the light text ramp. */
+.ph-section--ink {
+  background: var(--ata-ink-900);
+  color: var(--text-primary);
+}
+.ph-section--ink + .ph-section--ink {
+  border-top: 1px solid var(--divider);
+}
+
+/* Signal grounds INVERT: light ground, Ink text. The light text ramp would be
+   unreadable here, so it is never used on these sections. */
+.ph-section--signal {
+  background: var(--ata-signal-500);
+  color: var(--ata-ink-900);
+}
+.ph-section--signal-deep {
+  background: var(--ata-signal-700);
+}
+.ph-section--paper {
+  background: var(--ata-text-primary);
+  color: var(--ata-ink-900);
+}
+
+.ph-display {
+  font-family: var(--font-public-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  font-size: clamp(1.75rem, 1.1rem + 2.6vw, 3rem);
+  margin: 0 0 clamp(16px, 3vw, 28px);
+  text-wrap: balance;
+}
+.ph-display--hero {
+  font-size: clamp(2rem, 1.2rem + 3.6vw, 3.75rem);
+}
+
+.ph-sub {
+  font-family: var(--font-ui);
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.25rem);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.ph-steps {
+  list-style: none;
+  margin: 0 0 clamp(20px, 3vw, 32px);
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.ph-steps li {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid currentColor;
+  /* A hairline of the current ink, not a second colour value. */
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+}
+.ph-steps h3 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ph-hero,
+.ph-final {
+  text-align: left;
+}
+.ph-hero .ph-button,
+.ph-final .ph-button {
+  margin-top: clamp(8px, 2vw, 16px);
+}
+
+.ph-client-entry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-inline-start: 16px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+.ph-client-entry:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- footer ---------- */
+.ph-footer {
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 5vw, 64px);
+  border-top: 1px solid var(--divider);
+  background: var(--ata-ink-900);
+}
+.ph-footer__note {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---------- responsive ----------
+   The nav collapses below the tablet breakpoint rather than wrapping into a
+   second row, which is what produced document-level horizontal overflow in the
+   narrow captures. */
+@media (min-width: 900px) {
+  .ph-nav {
+    display: flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph-skip,
+  .ph-button {
+    transition: none;
+  }
+}

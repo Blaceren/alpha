@@ -12,7 +12,7 @@ import {
 import { readReferralCode, type ReferralCodeResult } from "@/lib/auth/referral-code";
 import { TurnstileWidget } from "@/features/auth/turnstile-widget";
 import { TURNSTILE_REGISTER_ACTION } from "@/lib/auth/turnstile";
-import { DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
+import { POST_REGISTRATION_RETURN_TO } from "@/lib/auth/return-to";
 import {
   mapRegistrationFailure,
   registrationMessage,
@@ -231,7 +231,7 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
               type="button"
               className="register-submit"
               onClick={() => {
-                router.replace(DEFAULT_RETURN_TO);
+                router.replace(POST_REGISTRATION_RETURN_TO);
                 router.refresh();
               }}
             >

@@ -3,6 +3,12 @@
  * order are identical across directions (only composition may differ).
  * Routes follow docs/ROUTE_MAP.md (App Router). iconKey maps to a lucide icon
  * in the component layer, keeping this config pure/testable.
+ *
+ * UNIFIED-DESIGN-V1: `home` points at `/home`, not `/`. `/` is now the Public
+ * Home — a marketing surface outside the authenticated guard — so an
+ * authenticated nav item pointing there would take a signed-in learner OUT of
+ * the Academy. Both the desktop bar and the mobile bottom bar read this one
+ * list, so they cannot disagree about it.
  */
 
 export interface NavItem {
@@ -14,7 +20,7 @@ export interface NavItem {
 
 /** Desktop sidebar navigation (RU labels). */
 export const PRIMARY_NAV: NavItem[] = [
-  { id: "home", label: "Главная", href: "/", iconKey: "home" },
+  { id: "home", label: "Главная", href: "/home", iconKey: "home" },
   { id: "path", label: "Путь", href: "/path", iconKey: "path" },
   { id: "lessons", label: "Уроки", href: "/lessons", iconKey: "lessons" },
   { id: "tools", label: "Инструменты", href: "/tools", iconKey: "tools" },
@@ -27,7 +33,7 @@ export const PRIMARY_NAV: NavItem[] = [
 
 /** Mobile bottom navigation: 5 items, last is "Ещё". */
 export const MOBILE_NAV: NavItem[] = [
-  { id: "home", label: "Главная", href: "/", iconKey: "home" },
+  { id: "home", label: "Главная", href: "/home", iconKey: "home" },
   { id: "path", label: "Путь", href: "/path", iconKey: "path" },
   { id: "lessons", label: "Уроки", href: "/lessons", iconKey: "lessons" },
   { id: "tools", label: "Инструменты", href: "/tools", iconKey: "tools" },

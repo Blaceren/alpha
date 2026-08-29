@@ -33,7 +33,27 @@ function isApiMode(): boolean {
  */
 const ANONYMOUS_ROUTES = ["/login", "/register"] as const;
 
+/**
+ * Public Home, and ONLY Public Home.
+ *
+ * UNIFIED-DESIGN-V1 makes `/` a public marketing surface, so an anonymous
+ * visitor must reach it without being bounced to /login.
+ *
+ * IT IS MATCHED EXACTLY, AND IT IS DELIBERATELY NOT IN `ANONYMOUS_ROUTES`.
+ * That list is an exact-or-subpath match, and the subpath arm of "/" is
+ * `pathname.startsWith("/")` — which is true of every path there is. Adding "/"
+ * to that list would silently make the ENTIRE authenticated product anonymous
+ * to this middleware. Keeping it as its own exact comparison makes that
+ * impossible.
+ *
+ * This is a middleware fast-path only. It does not grant access to anything:
+ * every guarded surface still resolves its session server-side in the `(app)`
+ * layout, and `/` renders no learner data at all.
+ */
+const PUBLIC_HOME_PATH = "/";
+
 function isAnonymousRoute(pathname: string): boolean {
+  if (pathname === PUBLIC_HOME_PATH) return true;
   return ANONYMOUS_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );

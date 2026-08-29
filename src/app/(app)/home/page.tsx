@@ -11,10 +11,18 @@ export const metadata: Metadata = {
 };
 
 /**
- * Главная (Route Field Home). Default scenario is Active Lesson. A deterministic
- * dev/Playwright scenario can be selected with ?scenario=active|checkpoint — this
- * is a mock adapter only: not shown to the user, no debug panel, no domain contract.
- * Unknown values safely fall back to active.
+ * Главная (Route Field Home) — AUTHENTICATED HOME, now served at `/home`.
+ *
+ * UNIFIED-DESIGN-V1 moved this surface from `/` to `/home` so that `/` can
+ * become the Public Home. NOTHING about its data authority changed: it is the
+ * same component, reading the same server-authoritative curriculum/progression
+ * through the same BFF. Only the path it answers on is different, and it stays
+ * inside the `(app)` route group, so it is still guarded by the same layout.
+ *
+ * Default scenario is Active Lesson. A deterministic dev/Playwright scenario can
+ * be selected with ?scenario=active|checkpoint — this is a mock adapter only:
+ * not shown to the user, no debug panel, no domain contract. Unknown values
+ * safely fall back to active. That branch is unreachable while ACADEMY_MODE=api.
  */
 export default async function HomePage({
   searchParams,
