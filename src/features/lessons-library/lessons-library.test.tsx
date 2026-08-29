@@ -340,7 +340,7 @@ describe("navigation", () => {
     // is what hid Поддержка after it shipped. Unbuilt sections are now absent
     // rather than advertised, and Поддержка is a real link.
     expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.getByRole("link", { name: "Главная" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Главная" })).toHaveAttribute("href", "/home");
     expect(screen.getByRole("link", { name: "Путь" })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: "Инструменты" })).toHaveAttribute("href", "/tools");
     expect(screen.getByRole("link", { name: "Поддержка" })).toHaveAttribute("href", "/support");

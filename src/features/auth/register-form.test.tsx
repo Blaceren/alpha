@@ -1,3 +1,4 @@
+import { POST_REGISTRATION_RETURN_TO } from "@/lib/auth/return-to";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -470,7 +471,10 @@ describe("RegisterForm — success", () => {
     await user.click(submitButton());
 
     await user.click(await screen.findByRole("button", { name: "Продолжить" }));
-    expect(replace).toHaveBeenCalledWith("/");
+    // The registration destination has its own constant, deliberately separate
+    // from the login default so a routing change cannot move the onboarding
+    // flow as a side effect.
+    expect(replace).toHaveBeenCalledWith(POST_REGISTRATION_RETURN_TO);
   });
 
   it("does not claim a session when Backend requires email verification", async () => {

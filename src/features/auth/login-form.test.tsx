@@ -1,3 +1,4 @@
+import { DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -89,7 +90,12 @@ describe("LoginForm — the existing contract, preserved", () => {
     await fillAndSolve();
     await submit();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    // Asserted against the CONSTANT, not a literal: the destination moved from
+    // "/" to "/home" when "/" became Public Home, and a literal here would
+    // have to be chased every time that product decision changes. What the
+    // test is actually about — an external returnTo is discarded in favour of
+    // the safe default — is unchanged.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(DEFAULT_RETURN_TO));
   });
 
   it("shows a generic, enumeration-safe error on invalid credentials", async () => {
