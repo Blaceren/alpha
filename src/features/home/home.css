@@ -307,3 +307,21 @@ html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-ar
      min-height, so tall content scrolls instead of being vertically clipped. */
   .content { align-content: start !important; min-height: 0 !important; }
 }
+
+/* ---------- restored frozen surfaces ----------
+   A surface restored from a frozen *ATA design carries its OWN container
+   geometry: in the frozen document `main` held the width, the inline centring
+   and the padding, and the scoping transform collapses that onto the surface
+   root. So the shell must stop supplying its own, or the surface is inset
+   twice and matches nothing that was accepted.
+
+   The field changes with it. The frozen system paints the page ground #0B0D0A
+   — HomeAuthATA's token layer carries it "unchanged from the ATA brand
+   foundation" — which the product already holds as --background-base. The
+   surface paints that ground opaquely inside its container, so the decorative
+   wash below would survive only in the margins and read as a seam around the
+   content. Flattening it to the same ground removes the seam and introduces no
+   new colour. Applied ONLY under .home--frozen, so Community and Support keep
+   the field they were accepted with. */
+.home--frozen { background: var(--background-base); }
+.home-main--frozen { padding: 0; }

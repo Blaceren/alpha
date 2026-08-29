@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { PathWorkspace } from "@/features/path/components/path-workspace";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
-import { ExperiencePath } from "@/features/academy-experience/path-screen";
+import { PathFidelityScreen } from "@/features/path-fidelity/path-fidelity-screen";
 import "@/features/path/path.css";
 
 export const metadata: Metadata = {
@@ -23,7 +23,12 @@ export default async function PathPage({
 }) {
   const params = await searchParams;
   if (getAcademyConfig().mode === "api") {
-    return <ExperiencePath moduleParam={params.module} />;
+    /* API MODE IS THE PRODUCT. `?module=` is gone with `ExperiencePath`: the
+       frozen Path shows the module the learner is actually in, chosen from
+       canonical progress, and a query parameter that moved the focus elsewhere
+       would be a second authority over "where am I". Browsing other modules is
+       the Lessons Index's job. */
+    return <PathFidelityScreen />;
   }
   const { scenario } = params;
   return (

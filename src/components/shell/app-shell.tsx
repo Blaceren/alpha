@@ -27,14 +27,35 @@ import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-na
 export function AppShell({
   userName,
   activeId = "home",
+  frozenSurface = false,
   children,
 }: {
   userName: string;
   activeId?: string;
+  /**
+   * `true` for a surface restored from a frozen *ATA design.
+   *
+   * Such a surface carries its own container geometry — width, inline centring
+   * and padding all come from its own scoped stylesheet, because in the frozen
+   * document those lived on `main`. Two things follow, and only these two:
+   *
+   *   * the shell must not add a second padding box around it, or every
+   *     restored surface is inset twice and none matches its accepted design;
+   *   * the shell's field becomes the brand ground the frozen system paints
+   *     (`--background-base`, #0B0D0A — the same value HomeAuthATA's token
+   *     layer carries "unchanged from the ATA brand foundation"). The surface
+   *     paints that ground opaquely inside its own container, so leaving the
+   *     shell's decorative wash underneath would show it only in the margins,
+   *     as a seam around the content. No new colour is introduced.
+   *
+   * Everything else about the shell is unchanged: same landmark, same skip
+   * link, same navigation, same session controls.
+   */
+  frozenSurface?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="home">
+    <div className={frozenSurface ? "home home--frozen" : "home"}>
       <a href="#main" className="skip">
         Перейти к содержимому
       </a>
@@ -60,7 +81,7 @@ export function AppShell({
         </div>
       </div>
 
-      <main className="home-main" id="main">
+      <main className={frozenSurface ? "home-main home-main--frozen" : "home-main"} id="main">
         {children}
       </main>
 
