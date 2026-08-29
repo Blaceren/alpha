@@ -298,7 +298,10 @@ describe("Public Home — stylesheet is scoped and local", () => {
     const rule = /(^|\})\s*([^{}@]+)\{/g;
     let m: RegExpExecArray | null;
     while ((m = rule.exec(stripped)) !== null) {
-      for (const part of m[2].split(",")) {
+      // tsconfig runs with noUncheckedIndexedAccess, so the capture group is
+      // typed as possibly undefined even though the pattern guarantees it.
+      const selectorList = m[2] ?? "";
+      for (const part of selectorList.split(",")) {
         const s = part.trim();
         if (!s) continue;
         if (!s.startsWith(".ph") && !s.startsWith("html.ph-smooth-scroll")) escaped.push(s);
