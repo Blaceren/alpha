@@ -17,7 +17,7 @@
  *      fetched from a remote host, and the frozen container geometry survived
  *      the collapse of `main` onto the root.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, within } from "@testing-library/react";
@@ -39,6 +39,16 @@ import type {
   AcademyModuleSummary,
 } from "@/lib/curriculum/academy-view";
 import type { AcademyCompletionMethod } from "@/lib/curriculum/completion-method";
+
+/**
+ * The shell's unread indicator is a SERVER component: it reads the session
+ * cookie and asks the Backend whether any unread notification exists. A client
+ * render cannot run that, and the surface under test is not what it is about,
+ * so it is stubbed. Its own behaviour is covered in the Notifications suite.
+ */
+vi.mock("@/components/shell/notification-button", () => ({
+  NotificationButton: () => null,
+}));
 
 /* ------------------------------------------------------------------ fixtures
    Built to the product's contract. Titles are neutral placeholders precisely so
