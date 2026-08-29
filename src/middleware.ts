@@ -81,6 +81,32 @@ export function middleware(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
+/**
+ * `fonts/` and `brand/` join the exclusion list because they are STATIC BRAND
+ * ASSETS served from `public/`, and the matcher does not otherwise exempt
+ * anything under `public/` — only Next's own `_next/static` output and the two
+ * named icons.
+ *
+ * MEASURED, NOT ASSUMED. Without them, a request for
+ * `/fonts/ata/manrope/…​.woff2` from a visitor with no session cookie was
+ * answered `307 → /login?next=%2Ffonts%2F…`, while the same request WITH a
+ * cookie returned `200 font/woff2`. The effect was that Public Home — the one
+ * surface whose whole audience is signed out — rendered in fallback system
+ * fonts, so the brand implementation was invisible to exactly the people it was
+ * built for.
+ *
+ * It grants nothing. These are static files in `public/`: they contain no
+ * learner data, they are identical for every visitor, and they were already
+ * being served to anyone who happened to hold any cookie at all.
+ *
+ * KNOWN, DELIBERATELY UNCHANGED: `public/showcase/` has the same gap, so the
+ * media for the `/showcase/video-player` route is redirected for an anonymous
+ * visitor. That predates this work and is unrelated to the unified design, so
+ * it is reported rather than silently widened into this change. The fix, if
+ * approved separately, is one more token in this same list.
+ */
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|fonts/|brand/).*)",
+  ],
 };

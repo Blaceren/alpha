@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "@/middleware";
+import { middleware, config } from "@/middleware";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
 
 function request(path: string, options: { session?: boolean } = {}): NextRequest {
@@ -115,5 +115,51 @@ describe("public home", () => {
     const response = middleware(request("/home"));
     expect(redirectTarget(response)).toContain("/login");
     expect(redirectTarget(response)).toContain("next=%2Fhome");
+  });
+});
+
+/**
+ * The matcher decides what the guard is even asked about. These lock the
+ * static-asset exclusions, because a brand asset that redirects to /login is
+ * invisible on exactly the surface that needs it most.
+ */
+describe("matcher — static brand assets", () => {
+  const matcher = (config.matcher as string[])[0];
+  const pattern = new RegExp(`^${matcher}$`);
+
+  it("does not run the guard on vendored font assets", () => {
+    // Regression: these 307'd to /login for any visitor without a cookie, so
+    // Public Home rendered in fallback system fonts for its entire audience.
+    expect(pattern.test("/fonts/ata/manrope/manrope-latin-wght-normal.woff2")).toBe(false);
+    expect(pattern.test("/fonts/ata/ibm-plex-mono/ibm-plex-mono-400-latin.woff2")).toBe(false);
+    expect(pattern.test("/fonts/ata/source-serif-4/source-serif-4-variable-latin.woff2")).toBe(false);
+  });
+
+  it("does not run the guard on brand assets", () => {
+    expect(pattern.test("/brand/ata-logo.svg")).toBe(false);
+  });
+
+  it("still runs the guard on every product route", () => {
+    for (const path of [
+      "/",
+      "/home",
+      "/path",
+      "/lessons",
+      "/tools",
+      "/notifications",
+      "/profile",
+      "/community",
+      "/support",
+      "/path/L1/workspace",
+    ]) {
+      expect(pattern.test(path), `${path} must still be matched`).toBe(true);
+    }
+  });
+
+  it("does not exempt a route that merely begins with the same letters", () => {
+    // `fonts/` and `brand/` carry a trailing slash for this reason: a product
+    // route named /fonts-and-colours or /branding must NOT fall out of the guard.
+    expect(pattern.test("/fonts-and-colours")).toBe(true);
+    expect(pattern.test("/branding")).toBe(true);
   });
 });
