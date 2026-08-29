@@ -281,9 +281,15 @@ describe("Public Home — stylesheet is scoped and local", () => {
     "utf8",
   );
 
+  // Comments are stripped first: the header of this stylesheet documents that
+  // the Google Fonts @import was deleted, and an assertion that reads prose
+  // fails on the very sentence proving the property holds.
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
   it("makes no remote request — the Google Fonts import is gone", () => {
-    expect(css).not.toMatch(/@import/);
-    expect(css).not.toMatch(/https?:\/\//);
+    expect(rules).not.toMatch(/@import/);
+    expect(rules).not.toMatch(/https?:\/\//);
+    expect(rules).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
   });
 
   it("binds the three families to the product's local faces", () => {
