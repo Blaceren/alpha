@@ -270,6 +270,46 @@
   color: var(--text-primary);
 }
 
+/* ---------- effective target extension ----------
+ *
+ * The accepted platform target contract measures an interactive target as "the
+ * rendered box PLUS any deliberate absolute pseudo hit-area extension", and the
+ * accepted Public Home carries exactly this rule for its wordmark, nav links and
+ * client-entry link. Reproduced here against the namespaced classes.
+ *
+ * WHY IT IS NEEDED. Measured on the candidate: the wordmark renders 170 x 23 —
+ * a real sub-44 target — because it is a text link sized by its own line box.
+ * Growing the visible box would change the header's composition; extending the
+ * POINTER box does not change a single rendered pixel.
+ *
+ * WHY THE calc()/min() FORM, AND NOT A FLAT INSET. The offsets turn
+ * non-negative on any control already 44px or taller, so the extension inerts
+ * itself there rather than inflating controls that are already compliant — the
+ * `Войти` and `Начать путь` buttons keep their own 44/49px boxes untouched. The
+ * min() on the horizontal axis keeps the offsets at 0 for wide controls and
+ * turns negative only for a link narrower than 45px, so a short nav item like
+ * «Путь» reaches 44px in BOTH dimensions.
+ *
+ * Verified after applying: 13 visible interactive targets at 1024px, zero below
+ * 44px effective; wordmark 170 x 23 rendered -> 170 x 45 effective.
+ */
+.ph-nav a,
+.ph-client-entry,
+.ph-wordmark {
+  position: relative;
+}
+
+.ph-nav a::after,
+.ph-client-entry::after,
+.ph-wordmark::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 22.5px);
+  bottom: calc(50% - 22.5px);
+  left: min(50% - 22.5px, 0px);
+  right: min(50% - 22.5px, 0px);
+}
+
 /* ---------- footer ---------- */
 .ph-footer {
   padding: clamp(24px, 4vw, 48px) clamp(16px, 5vw, 64px);
