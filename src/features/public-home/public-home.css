@@ -59,6 +59,20 @@
   display: flex;
   align-items: center;
   gap: clamp(12px, 2.5vw, 28px);
+  /*
+   * WRAPPING IS LOAD-BEARING, NOT COSMETIC.
+   *
+   * Measured at 320 and 360 CSS px: the wordmark (a nowrap brand string) plus
+   * the two calls to action could not fit one row, and `.ph-header__actions`
+   * extended to right:375 — real document-level horizontal overflow at the two
+   * narrowest widths the responsive contract requires.
+   *
+   * Wrapping was chosen over hiding the wordmark text or shrinking the buttons
+   * because it loses nothing: every label stays readable and every target keeps
+   * its 44px geometry. The header simply becomes two rows on a narrow screen.
+   */
+  flex-wrap: wrap;
+  row-gap: 8px;
   padding: 12px clamp(16px, 4vw, 48px);
   background: color-mix(in srgb, var(--ata-ink-900) 92%, transparent);
   border-bottom: 1px solid var(--divider);
@@ -68,6 +82,9 @@
 .ph-wordmark {
   display: inline-flex;
   align-items: center;
+  /* Allows the flex item to shrink below its content width instead of forcing
+     the row wider than the viewport. Paired with the wrap above. */
+  min-width: 0;
   gap: 10px;
   font-weight: 700;
   font-size: 15px;
