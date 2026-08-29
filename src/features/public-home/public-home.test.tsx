@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
@@ -273,8 +274,10 @@ describe("Public Home — mobile menu", () => {
 });
 
 describe("Public Home — stylesheet is scoped and local", () => {
+  // Resolved from the project root: under the test runner `import.meta.url`
+  // is not a filesystem path, and `.pathname` on it drops the root.
   const css = readFileSync(
-    new URL("./public-home.css", import.meta.url).pathname,
+    join(process.cwd(), "src/features/public-home/public-home.css"),
     "utf8",
   );
 
