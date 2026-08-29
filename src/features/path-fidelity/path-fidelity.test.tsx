@@ -301,11 +301,15 @@ describe("Path — the frozen composition", () => {
   it("marks a checkpoint node and dims what is far beyond reach", () => {
     const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
     expect(container.querySelectorAll(".level-node--cp")).toHaveLength(1);
+    /* The current level is 5. The frozen threshold is three steps out, so
+       order 8 is dimmed and order 7 — two steps out — is still described. */
     const far = container.querySelectorAll(".level-node--far");
-    expect(far).toHaveLength(2); // orders 7 and 8, three and four steps out
-    for (const node of Array.from(far)) {
-      expect(node.querySelector(".level-node__type")).toBeNull();
-    }
+    expect(far).toHaveLength(1);
+    expect(far[0]!.querySelector(".level-node__code")?.textContent).toBe("L08");
+    expect(far[0]!.querySelector(".level-node__type")).toBeNull();
+    const near = container.querySelector('[data-level="v2.l007"]');
+    expect(near?.className).not.toContain("level-node--far");
+    expect(near?.querySelector(".level-node__type")?.textContent).toBe("урок + тест");
   });
 
   it("keeps the Decision Frame whole — leader, both corners, and the focused heading", () => {
