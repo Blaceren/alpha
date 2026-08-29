@@ -102,12 +102,12 @@ function viewOf(modules: AcademyModuleSummary[], currentLevelCode: string | null
   return {
     state: "enrolled",
     curriculum: {
-      code: "v2",
+      curriculumCode: "v2",
+      curriculumVersion: 2,
       title: "Программа",
-      version: 2,
-      totalModules: modules.length,
-      totalLevels: all.length,
-    } as Enrolled["curriculum"],
+      status: "published",
+      publishedAt: null,
+    },
     modules,
     progress: {
       currentLevelCode,

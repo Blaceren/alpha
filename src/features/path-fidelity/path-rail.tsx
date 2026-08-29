@@ -39,7 +39,15 @@ export function PathRail() {
     const returnBtn = root?.querySelector<HTMLButtonElement>("[data-return]");
     if (!root || !scroller || !rail) return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    /* matchMedia guard (jsdom-safe), as elsewhere in the product. The frozen
+       script could assume a browser; this controller also mounts under the test
+       environment, and a missing matchMedia must degrade to "no stated
+       preference" rather than throw and take the surface down. */
+    const reducedQuery =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+    const prefersReduced = () => reducedQuery?.matches ?? false;
     const currentNode = () => root.querySelector<HTMLElement>('[aria-current="step"]');
 
     function positionCurrent(smooth = false) {
@@ -49,7 +57,7 @@ export function PathRail() {
       const left = cur.offsetLeft + cur.offsetWidth / 2 - scroller.clientWidth * 0.42;
       scroller.scrollTo({
         left,
-        behavior: smooth && !reduced.matches ? "smooth" : "instant",
+        behavior: smooth && !prefersReduced() ? "smooth" : "instant",
       });
     }
 
@@ -115,7 +123,7 @@ export function PathRail() {
       positionCurrent(true);
       window.setTimeout(
         () => root.querySelector<HTMLElement>("[data-detail-title]")?.focus({ preventScroll: true }),
-        reduced.matches ? 0 : 380,
+        prefersReduced() ? 0 : 380,
       );
     };
 
