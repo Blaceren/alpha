@@ -454,11 +454,11 @@ describe("Notifications — the stylesheet is scoped and local", () => {
   });
 
   it("keeps the one grid that makes the notation strip continuous", () => {
-    expect(bare).toMatch(/\.nt \.n-grid\{[^}]*grid-template-columns:var\(--note-col\) minmax\(0,1fr\)/);
+    expect(bare).toMatch(/\.nt \.n-grid\s*\{[^}]*grid-template-columns:\s*var\(--note-col\) minmax\(0,\s*1fr\)/);
   });
 
   it("gives the record no border, no background and no container", () => {
-    const record = bare.match(/\.nt \.n-record\{([^}]*)\}/)?.[1] ?? "";
+    const record = bare.match(/\.nt \.n-record\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(record).not.toContain("border");
     expect(record).not.toContain("background");
   });
