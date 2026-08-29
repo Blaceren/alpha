@@ -125,6 +125,41 @@ html.ph-smooth-scroll {
   margin-top: 0;
 }
 
+/*
+ * RESTORES A BROWSER DEFAULT THE FROZEN PAGE RELIED ON.
+ *
+ * HomeATA's reset zeroed margin-TOP only, so every paragraph kept the user-agent
+ * `margin-bottom: 1em`. This product's global stylesheet includes Tailwind's
+ * preflight, which zeroes both — and that silently shortened the one bare <p> on
+ * the page, in the FAQ heading, by 16px.
+ *
+ * Measured: with this rule the candidate matches the frozen reference on every
+ * sampled element at 1440 including total document height (12415px); without it
+ * the FAQ section and the document are 16px short.
+ *
+ * It is scoped to `.ph`, and every class rule in this file outranks it on
+ * specificity, so no paragraph that already declares its own spacing is
+ * affected.
+ */
+.ph p {
+  margin-bottom: 1em;
+}
+
+/*
+ * The definition-list indent, likewise restored.
+ *
+ * HomeATA kept the user-agent `dd { margin-inline-start: 40px }`; Tailwind's
+ * preflight removes it. Without the indent the Path facts are wider, and
+ * «Последовательность обязательна» stops wrapping — one row collapses from two
+ * lines to one and the Path section loses 19px.
+ *
+ * Measured at 390: with this rule `.path` is 1259px, matching the frozen
+ * reference exactly; without it, 1240px.
+ */
+.ph dd {
+  margin-inline-start: 40px;
+}
+
 .ph ::selection {
   background: var(--signal-400);
   color: var(--ink-950);
