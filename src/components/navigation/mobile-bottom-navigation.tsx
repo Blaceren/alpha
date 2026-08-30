@@ -77,19 +77,25 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
    */
   React.useEffect(() => {
     if (!moreOpen) return;
-    const close = () => {
+    const close = (deferFocus: boolean) => {
       setMoreOpen(false);
-      moreRef.current?.focus();
+      /* A press outside is followed by the browser's own focus handling for
+         that press — which, on ordinary page content, blurs to `body`. Putting
+         focus back in the same tick would simply be undone a moment later, so
+         the restore waits for the press to finish. Escape has no such
+         competition and is restored immediately. */
+      if (deferFocus) requestAnimationFrame(() => moreRef.current?.focus());
+      else moreRef.current?.focus();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") close(false);
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
       if (sheetRef.current?.contains(target)) return;
       if (moreRef.current?.contains(target)) return;
-      close();
+      close(true);
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointerDown, true);

@@ -200,7 +200,8 @@ describe("Shell — the mobile disclosure", () => {
     await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).not.toBeNull());
     await userEvent.click(outside);
     await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).toBeNull());
-    expect(document.activeElement).toBe(more);
+    /* The restore waits for the press to finish, so the assertion does too. */
+    await waitFor(() => expect(document.activeElement).toBe(more));
     outside.remove();
     view.unmount();
   });
