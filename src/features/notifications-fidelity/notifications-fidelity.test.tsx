@@ -121,14 +121,23 @@ describe("Notifications — the semantic mapping", () => {
     }
   });
 
-  it("offers a destination only where one really exists", () => {
-    // A Backend-authored link is the remaining source of a real destination
-    // while the Community events are withheld.
-    const linked = toRecord(row({ type: "system", link: "/support" }), NOW);
-    expect(linked?.destination).toBe("AVAILABLE");
-
-    expect(toRecord(row({ type: "system" }), NOW)?.destination).toBe("NO_DESTINATION_NEEDED");
-    expect(toRecord(row({ type: "system" }), NOW)?.handoff).toBeNull();
+  it("offers no destination at all while the only labelled types are withheld", () => {
+    /* A handoff needs BOTH a resolvable href and an approved label, and the two
+       Community events are the only types that have ever carried a label. With
+       the section withheld, every row a learner can see is correctly
+       destination-less — including one that carries a perfectly good link. */
+    for (const type of ENUM) {
+      const rec = toRecord(row({ type, link: "/support" }), NOW);
+      expect(rec, type).not.toBeNull();
+      expect(rec?.destination, type).toBe("NO_DESTINATION_NEEDED");
+      expect(rec?.handoff, type).toBeNull();
+    }
+    /* The machinery is intact, not deleted: the labels are still mapped, so
+       turning the section back on restores the destination with no change
+       here. */
+    for (const type of WITHHELD) {
+      expect(handoffLabel(type), type).toBe("Открыть обсуждение");
+    }
   });
 
   it("refuses a destination the payload cannot support", () => {
@@ -272,7 +281,7 @@ describe("Notifications — the frozen composition", () => {
     expect(container.querySelector(".n-record__statement")?.textContent).toContain("Не прочитано");
   });
 
-  it("makes the handoff an explicit control and never the whole row", async () => {
+  it("never makes the row itself a link, and renders no handoff it cannot justify", async () => {
     vi.stubGlobal(
       "fetch",
       respondWith({
@@ -280,13 +289,32 @@ describe("Notifications — the frozen composition", () => {
       }),
     );
     const { container } = render(<NotificationsFidelity />);
-    await waitFor(() => expect(container.querySelector(".n-action")).not.toBeNull());
+    await waitFor(() => expect(container.querySelector(".n-record")).not.toBeNull());
     const record = container.querySelector(".n-record")!;
-    expect(record.querySelectorAll("a")).toHaveLength(1);
-    expect(record.querySelector("a")!.className).toBe("n-action");
-    expect(record.querySelector("a")!.getAttribute("href")).toBe("/support");
-    /* At most one handoff per record — Notifications hosts no mini-workflows. */
-    expect(record.querySelectorAll(".n-action")).toHaveLength(1);
+    /* The row is never the control - that property is independent of whether a
+       destination exists, and it is the one this test was written for. */
+    expect(record.tagName).not.toBe("A");
+    expect(record.closest("a")).toBeNull();
+    /* And with every labelled type withheld, there is no handoff to render. */
+    expect(record.querySelectorAll(".n-action")).toHaveLength(0);
+    expect(record.querySelectorAll("a")).toHaveLength(0);
+  });
+
+  it("drops a withheld row from the rendered register", async () => {
+    vi.stubGlobal(
+      "fetch",
+      respondWith({
+        items: [
+          row({ id: 1, type: "community_reply", metadata: { discussionId: "abcd1234efgh" } }),
+          row({ id: 2, type: "system" }),
+        ],
+      }),
+    );
+    const { container } = render(<NotificationsFidelity />);
+    await waitFor(() => expect(container.querySelector(".n-record")).not.toBeNull());
+    expect(container.querySelectorAll(".n-record")).toHaveLength(1);
+    expect(container.textContent).not.toContain("Сообщество");
+    expect(container.querySelectorAll('a[href^="/community"]')).toHaveLength(0);
   });
 
   it("says the register is empty without inventing anything to put in it", async () => {
