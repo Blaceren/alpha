@@ -188,7 +188,11 @@ describe("Shell — the mobile disclosure", () => {
   });
 
   it("closes on a press outside it, and gives focus back", async () => {
-    const outside = document.createElement("button");
+    /* Deliberately NOT a focusable control: clicking a button outside would
+       legitimately leave focus on that button, which is the browser doing its
+       job, not the menu failing at its own. The case this protects is a press
+       on ordinary page content. */
+    const outside = document.createElement("div");
     outside.textContent = "снаружи";
     document.body.appendChild(outside);
     const { view, more } = await open();
@@ -219,7 +223,11 @@ describe("Shell — the mobile disclosure", () => {
 
 describe("Shell — the states are precise", () => {
   const css = readFileSync(join(ROOT, "src/features/home/home.css"), "utf8");
-  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  /* home.css is the shell AND the Home surface. These assertions are about the
+     shell, so they read only the shell section — otherwise they answer for a
+     body's animations and say nothing about the bar. */
+  const whole = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const bare = whole.slice(0, whole.indexOf(".home-main {"));
   const rule = (selector: string) => {
     const i = bare.indexOf(selector + " {");
     if (i === -1) return "";
@@ -249,7 +257,10 @@ describe("Shell — the states are precise", () => {
   });
 
   it("all but removes motion under a stated preference, without removing meaning", () => {
-    const reduced = bare.slice(bare.indexOf("@media (prefers-reduced-motion: reduce)"));
+    const from = bare.indexOf("@media (prefers-reduced-motion: reduce)");
+    /* Just that block: slicing to the end of the file would answer for every
+       rule after it. */
+    const reduced = bare.slice(from, bare.indexOf("\n}", bare.indexOf("{", from)) + 2);
     expect(reduced).toContain("transition-duration: 1ms");
     expect(reduced).toContain(".rnav a::after");
     /* The indicator still exists — only its travel is gone. */
