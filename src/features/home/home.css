@@ -3,7 +3,7 @@
    wide/narrow geometry groups toggled by CSS. No page horizontal overflow.
    Values reference semantic tokens in tokens.css. */
 
-.skip { position: absolute; left: 8px; top: 8px; z-index: 100; padding: 10px 14px; border-radius: 8px;
+.skip { position: absolute; left: 8px; top: 8px; z-index: 100; display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 8px;
   background: var(--surface-context); color: var(--text-primary); text-decoration: none;
   border: 1px solid var(--divider-strong); transform: translateY(-160%); transition: transform var(--motion-fast) var(--ease-standard); }
 .skip:focus { transform: translateY(0); }
@@ -153,11 +153,13 @@ a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-of
 .avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
   font-weight: 600; font-size: 13px; color: #06120e; text-decoration: none;
   background: linear-gradient(135deg, var(--gate-boundary), var(--signal-active)); }
-/* The avatar draws at 34px; its target is extended to 44 without redrawing it. */
-a:has(> .avatar), .avatar { position: relative; }
-a:has(> .avatar)::after { content: ""; position: absolute; left: 50%; top: 50%;
-  width: 44px; height: 44px; transform: translate(-50%, -50%); }
-a:has(> .avatar):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 50%; }
+/* The avatar IS the link. It draws at 34px, which is the right size for a
+   34px avatar and the wrong size for a target, so the hit area is extended to
+   44 x 44 around it without redrawing anything. */
+a.avatar { position: relative; }
+a.avatar::after { content: ""; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; }
+a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 
 /* ---------- bottom nav (mobile) ---------- */
 .bottomnav { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; display: block;
