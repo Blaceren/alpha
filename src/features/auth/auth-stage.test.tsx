@@ -181,6 +181,20 @@ describe("the stylesheet's own contract", () => {
     }
   });
 
+  it("never paints an error in Signal", () => {
+    /* auth.css tinted the summary regions with the same green as the submit
+       control. Signal means "this is available to press" and "this has focus";
+       an error is neither. Driving the real states is what showed it. */
+    for (const sel of [".auth .login-error", ".auth .register-error", ".auth .auth-captcha--failed"]) {
+      const at = css.indexOf(sel);
+      expect(at, `${sel} must be restated`).toBeGreaterThan(-1);
+    }
+    const block = css.slice(css.indexOf(".auth .login-error,\n.auth .register-error,\n.auth .auth-captcha--failed"));
+    const rule = block.slice(0, block.indexOf("}"));
+    expect(rule).toContain("var(--surface-subtle)");
+    expect(rule).not.toContain("signal");
+  });
+
   it("keeps the third-party widget from pushing the page sideways", () => {
     /* The Turnstile frame is a fixed-width iframe inside a form that must fit a
        320px viewport. Nothing here styles its contents — what is declared is

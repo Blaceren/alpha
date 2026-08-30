@@ -198,6 +198,28 @@
   color: var(--text-primary);
   margin: 0;
 }
+/*
+ * ERRORS ARE NOT PAINTED IN SIGNAL.
+ *
+ * `auth.css` gave the summary regions a Signal tint — a 12% fill and a 40%
+ * border of the same green as the submit control. Driving the real states put
+ * an error box on screen in the colour the page uses for "this is the thing to
+ * press", which is the opposite of what it means. Signal is reserved here for a
+ * genuinely available action and for focus; an error gets a quiet surface, and
+ * its meaning is carried by the words and by the mark beside them.
+ */
+.auth .login-error,
+.auth .register-error,
+.auth .auth-captcha--failed {
+  background: var(--surface-subtle);
+  border: var(--auth-rule);
+  border-radius: 10px;
+  padding: 11px 12px 11px 32px;
+}
+.auth .login-error::before,
+.auth .register-error::before,
+.auth .auth-captcha--failed::before { left: 12px; margin-top: 4px; }
+
 /* The mark is a second channel beside the words — never the only one. */
 .auth .register-field__error,
 .auth .login-error,
@@ -219,6 +241,10 @@
   text-align: center;
   color: var(--text-secondary);
 }
+.auth .login-error,
+.auth .register-error,
+.auth .auth-captcha--failed { padding-left: 32px; }
+
 .auth .login-error__ref,
 .auth .register-error__ref {
   display: block;
