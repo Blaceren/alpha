@@ -18,6 +18,7 @@ import {
 import { sanitizeReturnTo } from "@/lib/auth/return-to";
 import { TURNSTILE_LOGIN_ACTION } from "@/lib/auth/turnstile";
 import { TurnstileWidget } from "@/features/auth/turnstile-widget";
+import Link from "next/link";
 
 /**
  * AFD-3A3 — the Academy login form, now behind a real challenge.
@@ -216,6 +217,17 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
         {captcha.mode === "provider" && !captchaToken && !submitting
           ? "Пройдите проверку безопасности, чтобы продолжить."
           : ""}
+      </p>
+
+      {/* The way to registration. `/register` has carried the reciprocal link
+          to `/login` since it shipped; this side had none, so a visitor without
+          an account reached a dead end and had to guess the URL. Mirrors the
+          existing pattern exactly — same shape, same place, same treatment. */}
+      <p className="login-alt">
+        Нет аккаунта?{" "}
+        <Link href="/register" className="login-alt__link">
+          Создать аккаунт
+        </Link>
       </p>
     </form>
   );

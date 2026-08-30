@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getAcademyConfig } from "@/config/academy-config";
 import { RegisterForm } from "@/features/auth/register-form";
+import { AuthStage } from "@/features/auth/auth-stage";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
@@ -32,19 +33,14 @@ export default function RegisterPage() {
   const { turnstileSiteKey } = getAcademyConfig();
 
   return (
-    <main className="login">
-      <section className="login-card" aria-labelledby="register-heading">
-        <p className="login-brand">Alfa Trade Academy</p>
-        <h1 id="register-heading" className="login-title">
-          Создать аккаунт
-        </h1>
-        <p className="login-subtitle">
-          Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор.
-        </p>
-        <Suspense fallback={null}>
-          <RegisterForm turnstileSiteKey={turnstileSiteKey} />
-        </Suspense>
-      </section>
-    </main>
+    <AuthStage
+      headingId="register-heading"
+      title="Создать аккаунт"
+      lead="Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор."
+    >
+      <Suspense fallback={null}>
+        <RegisterForm turnstileSiteKey={turnstileSiteKey} />
+      </Suspense>
+    </AuthStage>
   );
 }
