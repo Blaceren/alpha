@@ -957,7 +957,11 @@ html.tls-root-scope,
        long English tool name cannot widen its own row out of alignment. */
     --col-gate:var(--register-gutter);
     --col-state:23ch;
-    --col-action:12ch;
+    /* Wide enough for the longest CTA the catalogue declares — «Открыть
+       калькулятор» — because an action that wraps onto two lines stops looking
+       like one thing to press. The track is fixed rather than content-sized so
+       every row's action starts at the same x. */
+    --col-action:19ch;
   }
   .tls .t-entry {
     grid-template-columns:
@@ -989,6 +993,7 @@ html.tls-root-scope,
     grid-row:1 / span 2;
     justify-self:end;
     align-self:center;
+    white-space:nowrap;
   }
 }
 
