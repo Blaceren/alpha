@@ -1,3 +1,42 @@
+/*
+ * AUTHENTICATED HOME — the frozen Home design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: HomeAuthATA @ a6bfdf5ecc2f361ca36b3eca192890b39afdba30 —
+ * `design/phase3/system/tokens.css`, `design/phase3/system/home.css` and
+ * `design/phase4/page/page-composition.css`, in the order the frozen page links
+ * them. The transform changed NOTHING: 201 declarations in, 201 out, ZERO
+ * removed, ZERO added, zero font rebindings. 40 selectors, 0 escaping the
+ * namespace, 0 remote URLs, no !important on either side.
+ *
+ * WHY EVEN THE FONT BINDING WAS UNCHANGED. The frozen source already names the
+ * family "ATA Manrope" rather than "Manrope", and says why: a Home-scoped
+ * binding must not silently claim the global family name. The product vendors
+ * the same four woff2 faces — the frozen provenance note records them as
+ * byte-identical to the release snapshot, verified by `cmp` — so the binding
+ * already pointed at the right thing.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. Every selector is namespaced under `.ahm`, and `.home-scope` — the frozen
+ *    surface's own root class — IS that namespace: `.home-scope` becomes `.ahm`.
+ *    The class name is not kept because `home` is already taken in this document
+ *    by the shell's own root, and two things called `.home*` on one page is how
+ *    a shell rule and a surface rule start fighting.
+ *
+ * 2. `design/phase3/system/fonts.css` is NOT included. It is four `@font-face`
+ *    declarations for faces the product already loads from its own vendored
+ *    copies — the same files, byte for byte. Including it would declare the same
+ *    family twice from two paths.
+ *
+ * 3. `.ahm :where(.home-field a, .home-field button):focus-visible` survived as
+ *    ONE selector. The transform splits a selector list on top-level commas
+ *    only; splitting inside `:where()` would have produced two broken fragments
+ *    and a parity report that still said 201.
+ *
+ * Adding `.ahm ` raises every rule's specificity by the same amount, so the
+ * cascade order between the three layers is preserved exactly.
+ */
+
 /* --- design/phase3/system/tokens.css --- */
 /* ATA AUTHENTICATED HOME — PHASE 3 — HOME-SCOPED TOKEN LAYER
    =====================================================================
