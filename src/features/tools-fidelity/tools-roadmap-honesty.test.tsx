@@ -164,3 +164,112 @@ describe("the two dimensions never collapse into one", () => {
     for (const row of built) expect(row.querySelector(".t-entry-requirement")).toBeNull();
   });
 });
+
+/**
+ * THE CATALOGUE DESCRIBES ITSELF, AND A WORKSPACE INTRODUCES ITSELF ONCE.
+ *
+ * Three things the frames showed and the assertions above did not cover: a lead
+ * that described nineteen working tools opened by a level number, a roadmap
+ * page that promised the work would continue here, and a workspace that said
+ * everything about itself twice before the first input.
+ */
+import { ToolWorkFrame, ToolNotEnterablePage, TOOLS_COPY } from "@/features/tools-fidelity/tools-fidelity";
+import { RiskCalculatorWorkspace } from "@/features/tools/components/risk-calculator-workspace";
+import { TradingJournalWorkspace } from "@/features/tools/components/trading-journal-workspace";
+
+describe("the catalogue lead", () => {
+  it("describes a catalogue of working AND future tools, gated by progress", () => {
+    expect(TOOLS_COPY.registerLead).toBe(
+      "Каталог рабочих и будущих инструментов. Доступ к готовым инструментам зависит от прогресса.",
+    );
+    // The heading itself is untouched.
+    expect(TOOLS_COPY.registerTitle).toBe("Инструменты");
+  });
+
+  it("no longer claims every entry is a working tool opened by a level", () => {
+    const { container } = render(<ToolsRegister tools={projectTools(at(2))} />);
+    const lead = container.querySelector(".t-lead")?.textContent ?? "";
+    expect(lead).not.toMatch(/остаются доступными после уровня/);
+  });
+});
+
+describe("a roadmap page promises nothing", () => {
+  const FORBIDDEN = [/поверхност/i, /Работа продолжится/i, /Доступ сохраняется/i, /Когда .* появится/i];
+
+  it.each([2, 101])("says only what is true, at level %i", (level) => {
+    const { container } = render(
+      <ToolFidelitySurface toolCode="tool.chart_markup" progress={at(level)} />,
+    );
+    const text = container.textContent ?? "";
+    for (const pattern of FORBIDDEN) expect(text, String(pattern)).not.toMatch(pattern);
+    expect(container.querySelector(".t-state-truth")?.textContent).toBe("В разработке");
+    expect(container.querySelector(".t-state-meaning")?.textContent).toBe("Инструмент ещё не выпущен.");
+    expect(container.querySelector(".p4-state-fact-value")?.textContent).toBe(
+      level === 101 ? "Требование доступа выполнено" : "Требование доступа: уровень 20",
+    );
+  });
+
+  it("carries no full stop on the short status heading", () => {
+    expect(TOOLS_COPY.roadmapLead).toBe("В разработке");
+    expect(TOOLS_COPY.roadmapLead.endsWith(".")).toBe(false);
+  });
+
+  it("keeps the same wording as the register, so the two cannot drift", () => {
+    const row = projectTool("tool.chart_markup", at(2));
+    const { container } = render(<ToolFidelitySurface toolCode="tool.chart_markup" progress={at(2)} />);
+    expect(container.querySelector(".p4-state-fact-value")?.textContent).toBe(row?.requirementLabel);
+    expect(container.querySelector(".t-state-truth")?.textContent).toBe(row?.statusLabel);
+  });
+});
+
+describe("a built workspace introduces itself exactly once", () => {
+  for (const [name, Workspace, title, level] of [
+    ["Risk Calculator", RiskCalculatorWorkspace, "Risk Calculator", "15"],
+    ["Trading Journal", TradingJournalWorkspace, "Trading Journal", "10"],
+  ] as const) {
+    it(`${name}: one return link, one name, one level marker, one h1`, () => {
+      const tool = projectTool(name === "Risk Calculator" ? "tool.risk_calculator" : "tool.trading_journal", at(18))!;
+      const { container } = render(
+        <ToolWorkFrame tool={tool}>
+          <Workspace />
+        </ToolWorkFrame>,
+      );
+      const text = container.textContent ?? "";
+      expect(container.querySelectorAll("h1")).toHaveLength(1);
+      expect(container.querySelector("h1")?.textContent).toBe(title);
+      // The tool's name appears once in the visible text, not twice.
+      expect(text.split(title).length - 1, "visible name count").toBe(1);
+      // One way back, and it is the workspace's own.
+      const back = [...container.querySelectorAll("a")].filter((a) => a.getAttribute("href") === "/tools");
+      expect(back).toHaveLength(1);
+      expect(text.split("Инструменты").length - 1, "back-link count").toBe(1);
+      // One level marker.
+      expect(text.split(level).length - 1).toBeGreaterThanOrEqual(1);
+      expect(container.querySelectorAll(".rc-num, .je-num")).toHaveLength(1);
+    });
+  }
+
+  it("leaves the calculator's own form contract untouched", () => {
+    const tool = projectTool("tool.risk_calculator", at(18))!;
+    const { container } = render(
+      <ToolWorkFrame tool={tool}>
+        <RiskCalculatorWorkspace />
+      </ToolWorkFrame>,
+    );
+    /* Field identity and order are the domain, not the design: the frame change
+       may not have touched a single one of them. */
+    const names = [...container.querySelectorAll("input")].map((i) => i.id || i.getAttribute("name"));
+    expect(names.length).toBeGreaterThan(0);
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector(".rc-disclaimer")).not.toBeNull();
+  });
+
+  it("still frames a state page with its outer header", () => {
+    // Only the workspace branch lost the outer header; the state pages keep it.
+    const { container } = render(
+      <ToolNotEnterablePage tool={projectTool("tool.chart_markup", at(101))!} />,
+    );
+    expect(container.querySelector(".t-return")).not.toBeNull();
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+  });
+});

@@ -153,16 +153,19 @@ describe("Tools — locked and not-enterable are different pages", () => {
     expect(container.querySelector("form")).toBeNull();
   });
 
-  it("not-enterable states an ACCESS FACT that already holds, and looks forward", () => {
+  it("not-enterable says what is true and promises nothing further", () => {
     const { container } = render(
-      <ToolNotEnterablePage tool={view({ available: false, href: null })} />,
+      <ToolNotEnterablePage tool={view({ available: false, implemented: false, href: null, requirementLabel: "Требование доступа выполнено" })} />,
     );
-    /* Readiness leads here too: the gate is passed and the surface still does
-       not exist, so what decides what the learner can do is that it is unbuilt. */
-    expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.roadmapLead);
-    expect(container.querySelector(".p4-state-fact-key")!.textContent).toBe("Требование доступа");
-    expect(container.querySelector(".p4-state-fact-value")!.textContent).toBe("Выполнено");
-    expect(container.querySelector(".p4-state-forward")!.textContent).toBe(TOOLS_COPY.forward);
+    /* Readiness leads here too: the gate is passed and the tool is still
+       unbuilt, so what decides what the learner can do is that it is unbuilt. */
+    expect(container.querySelector(".t-state-truth")!.textContent).toBe("В разработке");
+    expect(container.querySelector(".t-state-meaning")!.textContent).toBe("Инструмент ещё не выпущен.");
+    expect(container.querySelector(".p4-state-fact-value")!.textContent).toBe("Требование доступа выполнено");
+    /* No date, no notification, no guarantee that work resumes here — and no
+       «поверхность», which is our word for it rather than the learner's. */
+    expect(container.querySelector(".p4-state-forward")).toBeNull();
+    expect(container.textContent).not.toMatch(/поверхност/i);
     expect(container.querySelector("input")).toBeNull();
   });
 
@@ -187,14 +190,18 @@ describe("Tools — locked and not-enterable are different pages", () => {
     expect(screen.getByText(TOOLS_COPY.notFoundAction).getAttribute("href")).toBe("/tools");
   });
 
-  it("frames a built tool with the same header the state pages use", () => {
+  it("frames a built tool without introducing it a second time", () => {
+    /* A built workspace opens with its own return link, level marker and h1.
+       The frame adding a second set is what made the page look nested inside
+       itself and pushed the first input off a 390px screen. */
     const { container } = render(
       <ToolWorkFrame tool={view()}>
-        <p data-testid="workspace">рабочая поверхность</p>
+        <p data-testid="workspace">рабочее тело</p>
       </ToolWorkFrame>,
     );
-    expect(container.querySelector(".t-identity h1")!.textContent).toBe("Trading Journal");
-    expect(container.querySelector(".t-return")).not.toBeNull();
+    expect(container.querySelector(".t-identity")).toBeNull();
+    expect(container.querySelector(".t-return")).toBeNull();
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
     expect(screen.getByTestId("workspace")).toBeTruthy();
   });
 });

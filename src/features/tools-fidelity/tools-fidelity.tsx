@@ -38,7 +38,10 @@ import "@/features/tools-fidelity/tools-fidelity-safety.css";
 /** Frozen copy, verbatim. */
 export const TOOLS_COPY = {
   registerTitle: "Инструменты",
-  registerLead: "Рабочие инструменты, которые остаются доступными после уровня, который их открыл.",
+  /* The old lead described nineteen working tools opened by a level number.
+     Seventeen do not work yet, and what opens the other two is a checkpoint
+     rather than a number, so it described neither half of the catalogue. */
+  registerLead: "Каталог рабочих и будущих инструментов. Доступ к готовым инструментам зависит от прогресса.",
   back: "Инструменты",
   lockedLead: "Этот инструмент ещё не открыт.",
   lockedBody: (level: number) => `Он станет доступен на уровне ${level} и останется доступным дальше.`,
@@ -46,13 +49,14 @@ export const TOOLS_COPY = {
   lockedProvenance: (level: number) => `Уровень ${level}`,
   /* An unbuilt tool says the same thing here as it does in the register, and
      for the same reason: a deep link must not make the promise the row no
-     longer makes. */
-  roadmapLead: "В разработке.",
-  roadmapBody: "Инструмент есть в программе, его рабочая поверхность ещё не выпущена.",
-  roadmapRequirementLabel: "Требование доступа",
-  roadmapRequirementMet: "Выполнено",
-  notEnterableLead: "Инструмент открыт. Рабочая поверхность пока недоступна.",
-  notEnterableBody: "Доступ сохраняется. Когда поверхность появится, работа продолжится здесь.",
+     longer makes.
+
+     It also promises nothing beyond that. The earlier copy said the working
+     surface would appear and that work would continue on this page — a date and
+     a guarantee the build cannot give — and «поверхность» is our word for it,
+     not the learner's. Short status headings carry no full stop. */
+  roadmapLead: "В разработке",
+  roadmapBody: "Инструмент ещё не выпущен.",
   accessLabel: "Доступ",
   access: "Открыт и сохраняется",
   forward: "Работа продолжится на этой же странице.",
@@ -220,14 +224,17 @@ export function ToolLockedPage({ tool }: { tool: ToolView }) {
           meaning={roadmap ? TOOLS_COPY.roadmapBody : TOOLS_COPY.lockedBody(tool.unlockLevel)}
         />
         <div className="p4-state-fact">
-          <div className="p4-state-fact-key">
-            {roadmap ? TOOLS_COPY.roadmapRequirementLabel : TOOLS_COPY.lockedProvenanceLabel}
-          </div>
-          <div className="p4-state-fact-value">
-            {roadmap && tool.unlocked
-              ? TOOLS_COPY.roadmapRequirementMet
-              : TOOLS_COPY.lockedProvenance(tool.unlockLevel)}
-          </div>
+          {roadmap ? (
+            /* The same sentence the register uses, so the two never drift. */
+            <div className="p4-state-fact-value">{tool.requirementLabel}</div>
+          ) : (
+            <>
+              <div className="p4-state-fact-key">{TOOLS_COPY.lockedProvenanceLabel}</div>
+              <div className="p4-state-fact-value">
+                {TOOLS_COPY.lockedProvenance(tool.unlockLevel)}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -235,20 +242,18 @@ export function ToolLockedPage({ tool }: { tool: ToolView }) {
 }
 
 export function ToolNotEnterablePage({ tool }: { tool: ToolView }) {
-  /* Reached when the gate IS passed and the surface still does not exist. The
-     readiness line leads, because that is the fact that decides what the
-     learner can do; the met requirement follows it. */
+  /* Reached when the gate IS passed and the surface still does not exist —
+     which is the same two facts as before the gate, with one of them settled.
+     So it is the same page, and says the same thing. */
   return (
     <div className="tls">
       <div className="t-surface t-surface--prose p4">
         <ReturnLink />
         <CapabilityHeader tool={tool} />
-        <StateMessage truth={TOOLS_COPY.roadmapLead} meaning={TOOLS_COPY.notEnterableBody} />
+        <StateMessage truth={TOOLS_COPY.roadmapLead} meaning={TOOLS_COPY.roadmapBody} />
         <div className="p4-state-fact">
-          <div className="p4-state-fact-key">{TOOLS_COPY.roadmapRequirementLabel}</div>
-          <div className="p4-state-fact-value">{TOOLS_COPY.roadmapRequirementMet}</div>
+          <div className="p4-state-fact-value">{tool.requirementLabel}</div>
         </div>
-        <p className="p4-state-forward">{TOOLS_COPY.forward}</p>
       </div>
     </div>
   );
@@ -274,15 +279,26 @@ export function ToolNotFoundPage() {
   );
 }
 
-/** The frozen capability frame around a tool that really is built. */
+/**
+ * The frame around a tool that really is built — and nothing more than a frame.
+ *
+ * IT USED TO ADD A SECOND HEADER. Both built workspaces open with a complete
+ * one of their own: a return link, the level marker, the `h1` and the note. The
+ * frame added its own return link, its own `h1` and the description on top, so
+ * the page said "Инструменты" twice, "Risk Calculator" twice, carried two `h1`s
+ * — and on a 390px screen spent most of the first screen introducing itself
+ * twice before the first input.
+ *
+ * The state pages keep the outer header, because they have no inner one; a
+ * workspace does, so the frame steps back and lets it speak. `tool` stays in
+ * the signature: the frame is the place a per-tool wrapper would belong, and
+ * removing the parameter would make adding one look like new API.
+ */
 export function ToolWorkFrame({ tool, children }: { tool: ToolView; children: React.ReactNode }) {
+  void tool;
   return (
     <div className="tls">
-      <div className="t-surface p4">
-        <ReturnLink />
-        <CapabilityHeader tool={tool} />
-        {children}
-      </div>
+      <div className="t-surface p4">{children}</div>
     </div>
   );
 }
