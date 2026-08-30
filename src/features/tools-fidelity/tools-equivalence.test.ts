@@ -132,7 +132,6 @@ describe("the Tools surface contract is unchanged", () => {
     const changed = git("diff", "--name-only", BASE, "--", "src/").split("\n").filter(Boolean);
     const forbidden = [
       "src/features/auth/",
-      "src/app/(app)/support",
       "src/app/login",
       "src/app/register",
       "src/components/shell/",

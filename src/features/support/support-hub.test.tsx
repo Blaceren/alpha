@@ -186,9 +186,7 @@ describe("opening a case", () => {
     await user.type(screen.getByLabelText("Опишите подробнее"), "Важное описание");
     await user.click(screen.getByRole("button", { name: "Отправить обращение" }));
     const alert = await screen.findByRole("alert");
-    // The generic sentence, not the specific one — see SUPPORT-ERROR-CATEGORY-1
-    // below. Pinned as it actually behaves so the finding cannot go quiet.
-    expect(alert).toHaveTextContent("Что-то пошло не так");
+    expect(alert).toHaveTextContent("Не удалось связаться с поддержкой");
     // Losing the text is the one thing a failed support request must not do.
     expect(screen.getByLabelText("Тема")).toHaveValue("Важная тема");
     expect(screen.getByLabelText("Опишите подробнее")).toHaveValue("Важное описание");
@@ -305,7 +303,7 @@ describe("the case register", () => {
     list.mockResolvedValueOnce({ ok: false, error: makeError("BACKEND_UNAVAILABLE") });
     render(<SupportHub />);
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Что-то пошло не так");
+    expect(alert).toHaveTextContent("Не удалось связаться с поддержкой");
     expect(list).toHaveBeenCalledTimes(1);
     list.mockResolvedValue({ ok: true, data: [summary()] });
     await user.click(within(alert).getByRole("button", { name: "Повторить" }));
@@ -418,7 +416,7 @@ describe("a case thread", () => {
     detail.mockResolvedValue({ ok: false, error: makeError("BACKEND_UNAVAILABLE") });
     render(<SupportHub />);
     await user.click(await screen.findByRole("button", { name: /Не открывается урок/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Что-то пошло не так");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось связаться с поддержкой");
     expect(screen.getByRole("button", { name: /Ко всем обращениям/ })).toBeInTheDocument();
   });
 
@@ -430,40 +428,82 @@ describe("a case thread", () => {
 });
 
 /**
- * SUPPORT-ERROR-CATEGORY-1 — recorded, not fixed in a design pass.
+ * SUPPORT-ERROR-CATEGORY-1 — fixed.
  *
- * `errorText` switches on `error.code`, which is the code the SERVER put in a
- * response body. It is null for every client-generated failure and for most
- * HTTP errors; what actually carries "NETWORK_ERROR" / "BACKEND_UNAVAILABLE" /
- * "MALFORMED_RESPONSE" is `error.category`. So both specific sentences are
- * unreachable in practice and every failure says the generic one.
+ * `errorText` read `error.code`, which is the code the SERVER put in a response
+ * body: null for every client-generated failure and for most HTTP errors. The
+ * field that carries the failure kind is `category`, so both specific sentences
+ * were unreachable and a dropped connection was reported with the sentence
+ * reserved for a failure we cannot name.
  *
- * That is a behaviour change to make, not a presentation one, and this pass may
- * not make it. These cases pin the current behaviour so the finding is visible
- * and cannot drift while it waits for a decision.
+ * These cases hold each branch to its own words, and hold the two fields apart
+ * so the wrong one cannot quietly come back.
  */
 describe("SUPPORT-ERROR-CATEGORY-1", () => {
-  it("routes every failure category to the generic sentence today", async () => {
+  async function submitWith(error: ReturnType<typeof makeError>) {
     const user = userEvent.setup();
-    for (const category of ["NETWORK_ERROR", "BACKEND_UNAVAILABLE", "MALFORMED_RESPONSE"] as const) {
-      open.mockResolvedValue({ ok: false, error: makeError(category) });
-      const view = render(<SupportHub />);
-      await user.type(screen.getByLabelText("Тема"), "Тема");
-      await user.type(screen.getByLabelText("Опишите подробнее"), "Описание");
-      await user.click(screen.getByRole("button", { name: "Отправить обращение" }));
-      expect(await screen.findByRole("alert"), category).toHaveTextContent("Что-то пошло не так");
-      view.unmount();
-    }
-  });
-
-  it("would reach the specific sentence only if the server sent that code", async () => {
-    const user = userEvent.setup();
-    // The one path that still works: a body-supplied code.
-    open.mockResolvedValue({ ok: false, error: makeError("BACKEND_UNAVAILABLE", { code: "BACKEND_UNAVAILABLE" }) });
-    render(<SupportHub />);
+    open.mockResolvedValue({ ok: false, error });
+    const view = render(<SupportHub />);
     await user.type(screen.getByLabelText("Тема"), "Тема");
     await user.type(screen.getByLabelText("Опишите подробнее"), "Описание");
     await user.click(screen.getByRole("button", { name: "Отправить обращение" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось связаться с поддержкой");
+    const alert = await screen.findByRole("alert");
+    return { alert, view };
+  }
+
+  it.each([
+    ["NETWORK_ERROR", "Не удалось связаться с поддержкой"],
+    ["BACKEND_UNAVAILABLE", "Не удалось связаться с поддержкой"],
+    ["MALFORMED_RESPONSE", "Ответ сервера не распознан"],
+  ] as const)("%s reaches its own sentence", async (category, text) => {
+    const { alert, view } = await submitWith(makeError(category));
+    expect(alert).toHaveTextContent(text);
+    view.unmount();
+  });
+
+  it.each(["UNAUTHENTICATED", "FORBIDDEN", "RATE_LIMITED", "VALIDATION_ERROR", "UNKNOWN_ERROR"] as const)(
+    "%s falls to the generic sentence, as it should",
+    async (category) => {
+      const { alert, view } = await submitWith(makeError(category));
+      expect(alert).toHaveTextContent("Что-то пошло не так");
+      view.unmount();
+    },
+  );
+
+  it("reads the category, and a stray code cannot stand in for it", async () => {
+    /* A server body could carry `code: "NETWORK_ERROR"` on an error whose real
+       category is something else. The code must not decide the sentence. */
+    const { alert, view } = await submitWith(
+      makeError("UNKNOWN_ERROR", { code: "NETWORK_ERROR" }),
+    );
+    expect(alert).toHaveTextContent("Что-то пошло не так");
+    view.unmount();
+
+    // And the reverse: the right category wins even with no code at all.
+    const second = await submitWith(makeError("NETWORK_ERROR"));
+    expect(second.alert).toHaveTextContent("Не удалось связаться с поддержкой");
+    second.view.unmount();
+  });
+
+  it("leaves the flood-control sentence to the status, not the category", async () => {
+    const { alert } = await submitWith(makeError("CONFLICT", { status: 409 }));
+    expect(alert).toHaveTextContent("У вас уже есть открытые обращения");
+  });
+
+  it("keeps auth loss on its own behaviour: a message, and no retry of its own", async () => {
+    const user = userEvent.setup();
+    open.mockResolvedValue({ ok: false, error: makeError("UNAUTHENTICATED", { status: 401 }) });
+    const { container } = render(<SupportHub />);
+    await user.type(screen.getByLabelText("Тема"), "Тема сессии");
+    await user.type(screen.getByLabelText("Опишите подробнее"), "Описание сессии");
+    await user.click(screen.getByRole("button", { name: "Отправить обращение" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Что-то пошло не так");
+    // Exactly one announcement, the typed text intact, and no second write.
+    expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
+    expect(screen.getByLabelText("Тема")).toHaveValue("Тема сессии");
+    expect(screen.getByLabelText("Опишите подробнее")).toHaveValue("Описание сессии");
+    await new Promise((r) => setTimeout(r, 60));
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });

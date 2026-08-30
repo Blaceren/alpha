@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { getServerViewer } from "@/server/auth/server-session";
 import { SupportHub } from "@/features/support/components/support-hub";
 import "@/features/support/support.css";
 
@@ -16,10 +17,18 @@ export const metadata: Metadata = {
  * nothing answered it — `PRIMARY_NAV` and `MORE_MENU` both carried a link to a
  * page that did not exist. LEARNER-OPERATIONS-V1 connects it to the real
  * operational department rather than adding a new entry beside the dead one.
+ *
+ * THE SHELL SHOWS WHOEVER IS SIGNED IN. This route passed a hardcoded fixture
+ * name, so the same authenticated learner read their own name on /tools and a
+ * stranger's on /support. The viewer is read the way Tools, Profile and
+ * Notifications already read it — the same server session, no new endpoint, no
+ * change to auth — and the fallback is the same neutral «Ученик» those routes
+ * use when there is no viewer to name.
  */
-export default function SupportPage() {
+export default async function SupportPage() {
+  const viewer = await getServerViewer();
   return (
-    <AppShell userName="Артём" activeId="support">
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="support">
       <SupportHub />
     </AppShell>
   );

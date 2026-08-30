@@ -67,8 +67,22 @@ function when(iso: string): string {
   });
 }
 
+/**
+ * The learner-facing sentence for a failure.
+ *
+ * IT USED TO SWITCH ON `error.code`, AND THAT IS THE WRONG FIELD. `code` is
+ * whatever code the SERVER put in a response body; it is null for every
+ * client-generated failure — a dropped connection, an unparseable reply — and
+ * for most HTTP errors. What actually carries "NETWORK_ERROR",
+ * "BACKEND_UNAVAILABLE" and "MALFORMED_RESPONSE" is `category`.
+ *
+ * So both specific sentences below were unreachable, and a learner whose
+ * connection had failed was told "Что-то пошло не так" — the sentence reserved
+ * for a failure we cannot name. The branches and their words are unchanged;
+ * only the field they read is.
+ */
 function errorText(error: NormalizedError): string {
-  switch (error.code) {
+  switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
       return "Не удалось связаться с поддержкой. Попробуйте позже.";
