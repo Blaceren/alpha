@@ -66,16 +66,48 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
       .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
   }, [built, primary, needsOverflow]);
 
+  /**
+   * Closing the disclosure, and where focus goes when it closes.
+   *
+   * Escape and a press outside both close it, and both put focus back on the
+   * control that opened it — a menu that closes and leaves focus on nothing has
+   * dropped a keyboard user at the top of the document. `pointerdown` rather
+   * than `click`, so the menu is already gone by the time the press completes
+   * and the thing under it does not receive a stray activation.
+   */
   React.useEffect(() => {
     if (!moreOpen) return;
+    const close = () => {
+      setMoreOpen(false);
+      moreRef.current?.focus();
+    };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMoreOpen(false);
-        moreRef.current?.focus();
-      }
+      if (event.key === "Escape") close();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (sheetRef.current?.contains(target)) return;
+      if (moreRef.current?.contains(target)) return;
+      close();
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, [moreOpen]);
+
+  /**
+   * Focus enters the sheet when it opens, so the next Tab is inside the menu
+   * rather than somewhere behind it. It lands on the first destination, not on
+   * the container, because the first destination is what the learner opened it
+   * for.
+   */
+  React.useEffect(() => {
+    if (!moreOpen) return;
+    sheetRef.current?.querySelector<HTMLElement>("a")?.focus();
   }, [moreOpen]);
 
   const moreIsActive = overflow.some((item) => item.id === activeId);
