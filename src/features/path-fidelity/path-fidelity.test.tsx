@@ -20,7 +20,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { PathFidelityView } from "@/features/path-fidelity/path-fidelity-view";
 import {
   focusKind,

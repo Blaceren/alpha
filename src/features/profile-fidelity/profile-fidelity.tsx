@@ -50,7 +50,12 @@ import "@/features/profile-fidelity/profile-fidelity.css";
 export function ProfileFidelity({ canonical }: { canonical: string | null }) {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>(() => initial(canonical));
-  const [focusAfter, setFocusAfter] = useState<FocusRole | null>(null);
+  /* The pending focus destination is a REF, not state: it is an instruction to
+     the DOM, not something the page renders, and holding it in state would mean
+     a second render and a setState inside the effect that consumes it. Every
+     handoff in the focus contract accompanies a mode change, so the effect
+     keyed on the mode is exactly when it should run. */
+  const pendingFocus = useRef<FocusRole | null>(null);
   const caretToEnd = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -72,9 +77,10 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
   /* Focus lands where the frozen contract says, after the DOM has caught up —
      never on a control that has just been removed, never dropped to body. */
   useEffect(() => {
-    if (!focusAfter) return;
-    const el = rootRef.current?.querySelector<HTMLElement>(`[data-role="${focusAfter}"]`);
-    setFocusAfter(null);
+    const role = pendingFocus.current;
+    if (!role) return;
+    pendingFocus.current = null;
+    const el = rootRef.current?.querySelector<HTMLElement>(`[data-role="${role}"]`);
     if (!el) return;
     el.focus();
     if (caretToEnd.current && el instanceof HTMLInputElement) {
@@ -82,7 +88,7 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
       el.scrollLeft = el.scrollWidth;
     }
     caretToEnd.current = false;
-  }, [focusAfter, state.mode]);
+  }, [state.mode]);
 
   const submit = useCallback(async (name: string) => {
     const result = await saveProfileName(name);
@@ -91,14 +97,14 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
       return result.ok ? saveConfirmed(current, result.name) : saveFailed(current);
     });
     caretToEnd.current = !result.ok;
-    setFocusAfter(result.ok ? FOCUS_AFTER.CONFIRMED_SAVE : FOCUS_AFTER.MUTATION_FAIL);
+    pendingFocus.current = result.ok ? FOCUS_AFTER.CONFIRMED_SAVE : FOCUS_AFTER.MUTATION_FAIL;
   }, []);
 
   const onSave = useCallback(() => {
     const outcome = saveTransition(state);
     setState(outcome.next);
     if (!outcome.submit) {
-      if (outcome.next.mode === "INVALID") setFocusAfter(FOCUS_AFTER.VALIDATION_FAIL);
+      if (outcome.next.mode === "INVALID") pendingFocus.current = FOCUS_AFTER.VALIDATION_FAIL;
       return;
     }
     void submit(outcome.name);
@@ -193,8 +199,8 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
               data-role="edit-affordance"
               onClick={() => {
                 caretToEnd.current = true;
+                pendingFocus.current = FOCUS_AFTER.EDIT_OPENED;
                 setState(openEdit);
-                setFocusAfter(FOCUS_AFTER.EDIT_OPENED);
               }}
             >
               {COPY.edit}
@@ -222,8 +228,8 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
                 className="p-cancel"
                 data-role="cancel"
                 onClick={() => {
+                  pendingFocus.current = FOCUS_AFTER.CANCELLED;
                   setState(cancelEdit);
-                  setFocusAfter(FOCUS_AFTER.CANCELLED);
                 }}
               >
                 {COPY.cancel}

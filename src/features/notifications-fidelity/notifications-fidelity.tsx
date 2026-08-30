@@ -86,8 +86,11 @@ const PAGE_TITLE_ID = "notifications-title";
 export function NotificationsFidelity() {
   const [load, setLoad] = useState<Load>({ phase: "loading" });
 
+  /* The mount effect must not set state synchronously — the initial state is
+     already `loading`, so there is nothing to set. The retry path puts the
+     surface back into `loading` from its own click handler, where a synchronous
+     update is exactly right. */
   const request = useCallback(async () => {
-    setLoad({ phase: "loading" });
     try {
       const res = await fetch("/api/backend/notifications", {
         credentials: "include",
@@ -132,7 +135,14 @@ export function NotificationsFidelity() {
               <div className="n-state__body">
                 <p className="n-state__lead">{COPY.failureLead}</p>
                 <p className="n-state__support">{COPY.failureReasonCold}</p>
-                <button type="button" className="n-control n-recover" onClick={() => void request()}>
+                <button
+                  type="button"
+                  className="n-control n-recover"
+                  onClick={() => {
+                    setLoad({ phase: "loading" });
+                    void request();
+                  }}
+                >
                   {COPY.failureRecovery}
                 </button>
               </div>
