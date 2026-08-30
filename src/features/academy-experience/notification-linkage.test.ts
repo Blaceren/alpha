@@ -13,14 +13,23 @@
 import { describe, expect, it } from "vitest";
 import { deriveNotificationHref } from "./notifications-screen";
 
-describe("Community notification linkage", () => {
+/**
+ * COMMUNITY IS WITHHELD FROM THE LEARNER PRODUCT.
+ *
+ * The derivation below is intact and still correct — the type check, the
+ * metadata shape and the id pattern all still run, and turning the section back
+ * on in config/feature-visibility.ts restores the links with no change here.
+ * What changed is the last gate: a link into a withheld section is refused, so
+ * these rows reach the learner with no destination rather than a 404.
+ */
+describe("Community notification linkage — withheld", () => {
   it("links a reply notification to its thread", () => {
     expect(
       deriveNotificationHref({
         type: "community_reply",
         metadata: { spaceCode: "channel.start_questions", discussionId: "cmsw75kw00001t54t3qpe65m3" },
       }),
-    ).toBe("/community/d/cmsw75kw00001t54t3qpe65m3");
+    ).toBeNull();
   });
 
   it("links a moderation notification to its thread", () => {
@@ -29,7 +38,7 @@ describe("Community notification linkage", () => {
         type: "community_moderation",
         metadata: { spaceCode: "channel.start_questions", discussionId: "cmsw75kwf0003t54tc9eee8q2" },
       }),
-    ).toBe("/community/d/cmsw75kwf0003t54tc9eee8q2");
+    ).toBeNull();
   });
 
   it("refuses an id that could leave its path segment", () => {

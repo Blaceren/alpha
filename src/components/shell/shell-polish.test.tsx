@@ -17,6 +17,7 @@ import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-na
 import { DesktopRouteNavigation } from "@/components/navigation/desktop-route-navigation";
 import { PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
+import { isVisibleSection } from "@/config/feature-visibility";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
@@ -29,7 +30,9 @@ const shell = (activeId: string) =>
   );
 
 /** The ten activeIds the authenticated routes actually pass. */
-const ACTIVE_IDS = ["home", "path", "lessons", "tools", "notifications", "profile", "community", "support"];
+/* Community is built and still answers, but is withheld from the learner
+   product, so it is not one of the routes the shell advertises. */
+const ACTIVE_IDS = ["home", "path", "lessons", "tools", "notifications", "profile", "support"];
 
 /* ------------------------------------------------------------------ the mark */
 
@@ -88,7 +91,7 @@ describe("Shell — the mark is the asset of record, once", () => {
 /* ---------------------------------------------------------------- the routes */
 
 describe("Shell — every route survives the polish", () => {
-  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id));
+  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
 
   it("renders every built section on desktop, in canonical order", () => {
     const { container } = render(<DesktopRouteNavigation activeId="home" />);
@@ -107,15 +110,15 @@ describe("Shell — every route survives the polish", () => {
     expect(container.querySelector(".rnav__rule")!.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("puts exactly Сообщество and Поддержка in the secondary group", () => {
+  it("puts exactly Поддержка in the secondary group while Community is withheld", () => {
     const { container } = render(<DesktopRouteNavigation activeId="home" />);
     const secondary = container.querySelector(".rnav__group--secondary")!;
     expect(Array.from(secondary.querySelectorAll("a")).map((a) => a.getAttribute("href")))
-      .toEqual(["/community", "/support"]);
+      .toEqual(["/support"]);
   });
 
   it("marks one current route, and nests the Reader and the Workspace under Уроки", () => {
-    for (const id of ["home", "path", "lessons", "tools", "community", "support"]) {
+    for (const id of ["home", "path", "lessons", "tools", "support"]) {
       const { container, unmount } = render(<DesktopRouteNavigation activeId={id} />);
       const current = container.querySelectorAll('[aria-current="page"]');
       expect(current, id).toHaveLength(1);
@@ -431,8 +434,8 @@ describe("Shell — exactly one current, in every state", () => {
   /** Every element declaring a current — of any value, in this subtree. */
   const declared = (root: HTMLElement) => [...root.querySelectorAll("[aria-current]")];
 
-  it("marks «Ещё» as the current group on /community and /support while it is shut", () => {
-    for (const id of ["community", "support"]) {
+  it("marks «Ещё» as the current group on /support while it is shut", () => {
+    for (const id of ["support"]) {
       const { unmount } = nav(id);
       expect(more()).toHaveAttribute("aria-current", "true");
       // the group, not the page — the button is not a destination
@@ -451,7 +454,7 @@ describe("Shell — exactly one current, in every state", () => {
 
   it("hands the marker to the real link when the menu opens, and takes it back on close", async () => {
     const user = userEvent.setup();
-    for (const [id, label] of [["community", "Сообщество"], ["support", "Поддержка"]] as const) {
+    for (const [id, label] of [["support", "Поддержка"]] as const) {
       const { container, unmount } = nav(id);
       expect(more()).toHaveAttribute("aria-current", "true");
 
@@ -474,7 +477,7 @@ describe("Shell — exactly one current, in every state", () => {
 
   it("never declares more than one current, on any route, open or shut", async () => {
     const user = userEvent.setup();
-    const ids = ["home", "path", "lessons", "tools", "notifications", "profile", "community", "support"];
+    const ids = ["home", "path", "lessons", "tools", "notifications", "profile", "support"];
     for (const id of ids) {
       const { container, unmount } = nav(id);
       expect(declared(container).length).toBeLessThanOrEqual(1);
@@ -491,7 +494,7 @@ describe("Shell — exactly one current, in every state", () => {
     expect(more()).not.toHaveAttribute("aria-current");
     expect(declared(container).map((e) => e.getAttribute("aria-current"))).toEqual(["page"]);
 
-    rerender(<MobileBottomNavigation activeId="community" />);
+    rerender(<MobileBottomNavigation activeId="support" />);
     expect(more()).toHaveAttribute("aria-current", "true");
     expect(declared(container)).toHaveLength(1);
 
@@ -510,7 +513,7 @@ describe("Shell — exactly one current, in every state", () => {
     expect(more().textContent).toContain("Ещё");
     unmount();
 
-    nav("community");
+    nav("support");
     expect(more()).toHaveClass("is-active");
     expect(more().textContent).toContain("Ещё");
   });
@@ -537,7 +540,7 @@ describe("Shell — exactly one current, in every state", () => {
     // The shell renders BOTH bars; a breakpoint hides one. Whatever the CSS
     // hides, the document must never hold two `page` declarations at once.
     const user = userEvent.setup();
-    for (const activeId of ["home", "notifications", "profile", "community", "support"]) {
+    for (const activeId of ["home", "notifications", "profile", "support"]) {
       const { container, unmount } = render(
         <AppShell userName="Мария Ковалёва" activeId={activeId} frozenSurface>
           <div>тело</div>
