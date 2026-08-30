@@ -129,6 +129,9 @@ describe("profile proxy — the boundary", () => {
     fetchMock.mockRejectedValueOnce(new Error("boom"));
     const response = await proxyUpdateProfileName(patch({ name: "Новое Имя" }));
     expect(response.status).toBe(502);
-    expect(await response.json()).toMatchObject({ code: expect.any(String) });
+    expect(await response.json()).toMatchObject({
+      category: "BACKEND_UNAVAILABLE",
+      messageKey: expect.any(String),
+    });
   });
 });

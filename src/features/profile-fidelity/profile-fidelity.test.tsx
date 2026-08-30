@@ -315,9 +315,11 @@ describe("Profile — what the page may never become", () => {
   });
 
   it("shows nothing that belongs to another product", () => {
-    for (const foreign of ["balance", "баланс", "депозит", "deposit", "affiliate", "партнёр", "xp", "Pocket"]) {
+    for (const foreign of ["balance", "баланс", "депозит", "deposit", "affiliate", "партнёр", "Pocket"]) {
       expect(surface, foreign).not.toContain(foreign);
     }
+    /* `xp` as a word, not as the middle of `expect` or `export`. */
+    expect(surface).not.toMatch(/\bxp\b/i);
   });
 
   it("never autosaves, never saves on blur, and never guesses the identity", () => {
