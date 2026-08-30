@@ -143,6 +143,8 @@ describe("G4-R7 — a real role's full grant set must parse", () => {
     analyst: ["view_affiliate_analytics"],
     content_manager: ["curriculum_read", "curriculum_author"],
     read_only: ["curriculum_read"],
+    // PHASE-1 ADMIN. Exactly one permission — the whole point of the role.
+    progression_operator: ["curriculum_progress_override"],
   };
 
   it("covers every canonical role", () => {
@@ -211,8 +213,12 @@ describe("§11 — identity is by NAME, order is a separate protocol property", 
       "learner_ops_admin",
       "learner_ops_escalation_resolve",
       "community_moderate",
+      // v6 appends `curriculum_progress_override` at 26 — again a NEW axis, so
+      // the twenty-six before it keep their positions exactly.
+      "curriculum_progress_override",
     ]);
     expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("learner_ops_escalation_resolve")).toBe(24);
+    expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("curriculum_progress_override")).toBe(26);
   });
 });
 

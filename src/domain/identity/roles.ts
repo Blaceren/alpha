@@ -20,7 +20,10 @@ export type CrmRole =
   | "moderator"
   | "analyst"
   | "content_manager"
-  | "read_only";
+  | "read_only"
+  // PHASE-1 ADMIN — the dedicated administrative progression operator. Holds
+  // exactly one permission, `curriculum_progress_override`.
+  | "progression_operator";
 
 export const CRM_ROLES: readonly CrmRole[] = [
   "crm_admin",
@@ -32,6 +35,7 @@ export const CRM_ROLES: readonly CrmRole[] = [
   "analyst",
   "content_manager",
   "read_only",
+  "progression_operator",
 ] as const;
 
 export const CRM_ROLE_LABEL: Record<CrmRole, string> = {
@@ -44,6 +48,7 @@ export const CRM_ROLE_LABEL: Record<CrmRole, string> = {
   analyst: "Аналитик",
   content_manager: "Контент-менеджер",
   read_only: "Только просмотр",
+  progression_operator: "Оператор прогресса",
 };
 
 /** Navigable sections (docs/CRM_INFORMATION_ARCHITECTURE.md §1). */
@@ -196,7 +201,11 @@ export type Permission =
   // v5 — Community moderation. Its own axis, deliberately not a `learner_ops_*`
   // permission: moderating a public discussion is not handling a support case.
   // See COMMUNITY-V1.
-  | "community_moderate";
+  | "community_moderate"
+  // v6 — administrative forward progression correction. Its own axis: correcting
+  // a learner's record is not handling a case, reviewing work, or changing rules.
+  // See PHASE-1 ADMIN.
+  | "curriculum_progress_override";
 
 /**
  * Compile-time proof that this union and the canonical cross-repository session

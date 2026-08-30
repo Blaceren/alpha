@@ -14,6 +14,7 @@ import { useSession } from "@/components/crm-shell/session-context";
 import { sessionGrants } from "@/domain/identity/access";
 import { useApiUserDetailQuery } from "./use-api-user-detail-query";
 import { ApiUserNotesSection } from "./api-user-notes";
+import { ApiUserProgressionSection } from "./api-user-progression";
 import { ApiUserOwnerSection } from "./api-user-owner";
 import { ApiUserOwnerHistorySection } from "./api-user-owner-history";
 
@@ -90,11 +91,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function DetailView({
   detail,
+  progression,
   owner,
   ownerHistory,
   notes,
 }: {
   detail: CrmApiUserDetail;
+  progression?: React.ReactNode;
   owner?: React.ReactNode;
   ownerHistory?: React.ReactNode;
   notes?: React.ReactNode;
@@ -128,19 +131,16 @@ function DetailView({
         </dl>
       </section>
 
-      <section className="rounded-lg border border-border bg-surface p-4">
-        <h2 className="mb-2 text-2xs font-semibold uppercase tracking-wide text-text-muted">
-          Прогресс
-        </h2>
-        <dl className="text-sm">
-          <Row label="Уровень">
-            <span className="tabular-nums">{detail.level}</span>
-          </Row>
-          <Row label="XP">
-            <span className="tabular-nums">{detail.xp}</span>
-          </Row>
-        </dl>
-      </section>
+      {/*
+        PHASE-1 ADMIN. The section that used to live here rendered `detail.level`
+        and `detail.xp` under the heading «Прогресс». Those are the LEGACY V1
+        columns: in PREPROD they read 1 and 0 for every learner, including ones
+        who have completed fourteen V2 levels, so the number an operator read was
+        not the learner's Academy progress and never had been. It is replaced by
+        the canonical V2 owner, which also carries the legacy pair — clearly
+        labelled as V1 and explicitly marked as not being Academy progression.
+      */}
+      {progression}
 
       {owner}
 
@@ -240,6 +240,18 @@ export function ApiUserDetailWorkspace({
       {detailMatches && !learnerNotFound && !ownerForbidden ? (
         <DetailView
           detail={(q.state as { detail: CrmApiUserDetail }).detail}
+          progression={
+            // Mounted for every StaffProfile: the backend read gate decides
+            // whether it answers, and a section that self-hides on a client-side
+            // permission guess would be a second, weaker authorization model.
+            // The ADJUST control inside mounts only for
+            // `curriculum_progress_override`, and the backend re-checks it.
+            <ApiUserProgressionSection
+              userId={userId}
+              legacyLevel={(q.state as { detail: CrmApiUserDetail }).detail.level}
+              legacyXp={(q.state as { detail: CrmApiUserDetail }).detail.xp}
+            />
+          }
           owner={
             // The Owner section is mounted for every StaffProfile — the current
             // owner is universally visible. Editing controls inside decide

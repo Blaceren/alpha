@@ -20,7 +20,9 @@ const clock = new FixedMockClock();
 const USER_ID = "usr_mock_026";
 
 const DATA_ROLES: readonly CrmRole[] = ["crm_admin", "crm_manager"];
-const NAV_HIDDEN: readonly CrmRole[] = ["content_manager", "read_only"];
+// PHASE-1 ADMIN: `progression_operator` is not in SECTION_VISIBILITY.audit and
+// must not be — correcting a learner's progression grants no audit affordance.
+const NAV_HIDDEN: readonly CrmRole[] = ["content_manager", "read_only", "progression_operator"];
 
 function ctx(role: CrmRole): CrmContext {
   return { actorId: "emp_mock_admin", role, now: MOCK_NOW };

@@ -7,7 +7,7 @@
  * differs from the edit mutations in one load-bearing way — the idempotency replay is
  * resolved BEFORE the entity lookup, so a retry after the note has vanished replays
  * the original result instead of answering `not_found`. Covered here: validation
- * order, permissions across all 9 roles, the authored-only and author-only boundaries
+ * order, permissions across all 10 roles, the authored-only and author-only boundaries
  * (proven with DISTINCT actor ids, NOT the demo's shared `emp_mock_admin`), fixture
  * immutability, hidden-note indistinguishability, `expectedUpdatedAt` concurrency,
  * idempotency (replay after the note disappeared, replay id/timestamp stability,
@@ -45,7 +45,7 @@ const OTHER_ACTOR = "emp_other_2";
 
 /** ROLE_PERMISSION_MATRIX §1 Edit → notes (D-53) — the SAME set that may addNote. */
 const ALLOWED: readonly CrmRole[] = ["crm_admin", "crm_manager", "retention_manager", "support"];
-const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only"];
+const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only", "progression_operator"];
 
 function ctx(role: CrmRole = "crm_admin", actorId = AUTHOR): CrmContext {
   return { actorId, role, now: MOCK_NOW };
@@ -259,7 +259,7 @@ describe("deleteNote — concurrency", () => {
 
 /* -------------------------------------------------- permission across 9 roles */
 
-describe("deleteNote — permission across all nine roles", () => {
+describe("deleteNote — permission across all ten roles", () => {
   it("covers every CRM role exactly once", () => {
     expect([...ALLOWED, ...DENIED].sort()).toEqual([...CRM_ROLES].sort());
   });

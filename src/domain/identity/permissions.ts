@@ -21,6 +21,14 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
     "analyst",
     "content_manager",
     "read_only",
+    // PHASE-1 ADMIN. The progression operator is added to `today` and `users`
+    // and to NO other section: reaching a learner is the whole of what the role
+    // needs, and every other section here (audit, financial, settings, cases,
+    // segments, communications, automations, mentor, support, tasks) is a power
+    // it deliberately does not have. This map drives the MOCK shell only — the
+    // api shell PREPROD runs reads `API_NAV_ITEMS`, where «Пользователи» already
+    // carries no permission requirement.
+    "progression_operator",
   ],
   users: [
     "crm_admin",
@@ -32,6 +40,14 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
     "analyst",
     "content_manager",
     "read_only",
+    // PHASE-1 ADMIN. The progression operator is added to `today` and `users`
+    // and to NO other section: reaching a learner is the whole of what the role
+    // needs, and every other section here (audit, financial, settings, cases,
+    // segments, communications, automations, mentor, support, tasks) is a power
+    // it deliberately does not have. This map drives the MOCK shell only — the
+    // api shell PREPROD runs reads `API_NAV_ITEMS`, where «Пользователи» already
+    // carries no permission requirement.
+    "progression_operator",
   ],
   segments: ["crm_admin", "crm_manager", "retention_manager", "analyst", "read_only"],
   tasks: [
@@ -188,4 +204,9 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
   read_only: [
     "learner_ops_view",
   ],
+  // PHASE-1 ADMIN — mirrors the backend grant exactly: one permission, nothing
+  // else. Notably NOT `learner_ops_view`; the progression read gate accepts the
+  // override permission on its own, so this role can inspect what it corrects
+  // without gaining the Learner Operations workspace.
+  progression_operator: ["curriculum_progress_override"],
 };

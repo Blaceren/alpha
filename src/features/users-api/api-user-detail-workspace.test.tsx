@@ -118,9 +118,21 @@ describe("states", () => {
     expect(screen.getByText("l***@e***.test")).toBeInTheDocument();
     expect(screen.getByText("Активен")).toBeInTheDocument();
     expect(screen.getByText("Подтверждён")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
-    expect(screen.getByText("4242")).toBeInTheDocument();
     expect(screen.getByText("01.01.2026")).toBeInTheDocument();
+  });
+
+  it("no longer presents the legacy level and XP as Academy progress", async () => {
+    // PHASE-1 ADMIN. This detail used to carry a section headed «Прогресс» whose
+    // rows were `detail.level` and `detail.xp` — the V1 columns, which read 1 and
+    // 0 for every PREPROD learner regardless of their Academy progress. The
+    // heading is gone, and the pair now appears only inside «Прогресс Академии»
+    // under an explicit LEGACY label, beside the canonical V2 numbers. That
+    // section owns its own tests (`api-user-progression.test.tsx`); what this one
+    // pins is that the misleading presentation cannot come back.
+    renderDetail(providerFor([ok()]));
+    await screen.findByRole("heading", { name: "Target Learner" });
+    expect(screen.queryByText("Прогресс")).not.toBeInTheDocument();
+    expect(await screen.findByText("Прогресс Академии")).toBeInTheDocument();
   });
 
   it("renders a blocked learner", async () => {
@@ -133,10 +145,13 @@ describe("states", () => {
     expect(await screen.findByText("Не подтверждён")).toBeInTheDocument();
   });
 
-  it("renders zero xp truthfully", async () => {
+  it("does not render the legacy XP outside the labelled progression section", async () => {
+    // The old assertion here was `getByText("0")` against a top-level «Прогресс»
+    // row. Rendering a bare `0` as a learner's progress is precisely the defect
+    // that section replaced, so the truthful assertion is now its absence.
     renderDetail(providerFor([ok({ xp: 0 })]));
     await screen.findByRole("heading", { name: "Target Learner" });
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.queryByText("XP")).not.toBeInTheDocument();
   });
 
   it("formats the date deterministically", () => {

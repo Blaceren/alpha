@@ -1,7 +1,7 @@
 /**
  * setNotePinned (Phase 1B4-D).
  *
- * Validation order, permissions across all 9 roles, fixture + authored notes,
+ * Validation order, permissions across all 10 roles, fixture + authored notes,
  * hidden-note security, `pinned === expectedPinned` rejection, `expectedPinned`
  * concurrency, idempotency (replay, fingerprint conflict, cross-command receipt
  * collisions), storage atomicity, fixture immutability, and the fact that the
@@ -38,6 +38,10 @@ const DENIED: readonly CrmRole[] = [
   "analyst",
   "content_manager",
   "read_only",
+  // PHASE-1 ADMIN: the progression operator holds exactly one permission
+  // (`curriculum_progress_override`) and therefore none of the note or owner
+  // rights this suite classifies. Denied, explicitly.
+  "progression_operator",
 ];
 
 function ctx(role: CrmRole = "crm_admin", actorId = "emp_actor_1"): CrmContext {
@@ -81,7 +85,7 @@ async function pinnedStateOf(provider: MockCrmDataProvider, noteId: string): Pro
 
 /* --------------------------------------------------------------- permissions */
 
-describe("setNotePinned — permissions across all nine roles", () => {
+describe("setNotePinned — permissions across all ten roles", () => {
   it.each(ALLOWED)("%s may pin (same right as addNote — D-75)", async (role) => {
     const { provider } = setup();
     const res = await provider.setNotePinned(ctx(role), pin());

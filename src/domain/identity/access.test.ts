@@ -14,8 +14,9 @@ import { CRM_ROLES } from "./roles";
 import { SECTION_ORDER } from "@/config/navigation";
 
 describe("permission matrix (ROLE_PERMISSION_MATRIX.md)", () => {
-  it("exposes exactly nine canonical roles", () => {
-    expect(CRM_ROLES).toHaveLength(9);
+  it("exposes exactly ten canonical roles", () => {
+    // PHASE-1 ADMIN appended `progression_operator`.
+    expect(CRM_ROLES).toHaveLength(10);
     expect(CRM_ROLES).toContain("crm_admin");
     expect(CRM_ROLES).toContain("read_only");
   });

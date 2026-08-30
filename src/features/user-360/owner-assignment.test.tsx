@@ -39,6 +39,10 @@ const DENIED: readonly CrmRole[] = [
   "analyst",
   "content_manager",
   "read_only",
+  // PHASE-1 ADMIN: the progression operator holds exactly one permission
+  // (`curriculum_progress_override`) and therefore none of the note or owner
+  // rights this suite classifies. Denied, explicitly.
+  "progression_operator",
 ];
 
 beforeEach(() => {
@@ -130,7 +134,7 @@ const assignOk = (ownerId: string | null, replayed = false): Result<AssignPrimar
 
 /* ------------------------------------------------------------- permissions */
 
-describe("owner assignment — permissions across all 9 roles", () => {
+describe("owner assignment — permissions across all 10 roles", () => {
   it.each(ALLOWED)("%s gets the picker and the Save control", async (role) => {
     currentRole = role;
     renderScreen();

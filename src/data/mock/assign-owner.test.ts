@@ -1,7 +1,7 @@
 /**
  * assignPrimaryOwner (Phase 1B4-C).
  *
- * Validation, permissions across all 9 roles, unassign, idempotency, expectedOwnerId
+ * Validation, permissions across all 10 roles, unassign, idempotency, expectedOwnerId
  * concurrency, audit contents, fixture immutability. Storage is always injected: no
  * test touches a real localStorage.
  */
@@ -38,6 +38,10 @@ const DENIED: readonly CrmRole[] = [
   "analyst",
   "content_manager",
   "read_only",
+  // PHASE-1 ADMIN: the progression operator holds exactly one permission
+  // (`curriculum_progress_override`) and therefore none of the note or owner
+  // rights this suite classifies. Denied, explicitly.
+  "progression_operator",
 ];
 
 function ctx(role: CrmRole = "crm_admin", actorId = "emp_actor_1"): CrmContext {

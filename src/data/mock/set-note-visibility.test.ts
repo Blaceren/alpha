@@ -39,7 +39,7 @@ const OTHER_ACTOR = "emp_other_2";
 
 /** ROLE_PERMISSION_MATRIX §1 Edit → notes (D-53) — the SAME set that may addNote. */
 const ALLOWED: readonly CrmRole[] = ["crm_admin", "crm_manager", "retention_manager", "support"];
-const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only"];
+const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only", "progression_operator"];
 
 function ctx(role: CrmRole = "crm_admin", actorId = AUTHOR): CrmContext {
   return { actorId, role, now: MOCK_NOW };
@@ -405,7 +405,7 @@ describe("setNoteVisibility — persistence & atomicity", () => {
 
 /* -------------------------------------------------- permissions × 9 */
 
-describe("setNoteVisibility — permission across all nine roles", () => {
+describe("setNoteVisibility — permission across all ten roles", () => {
   it("covers every CRM role exactly once", () => {
     expect([...ALLOWED, ...DENIED].sort()).toEqual([...CRM_ROLES].sort());
   });

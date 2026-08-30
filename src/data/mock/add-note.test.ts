@@ -1,6 +1,6 @@
 /**
  * addNote — the only mutation in Phase 1B4-A.
- * Validation, permissions across all 9 roles, determinism, idempotency, overlay
+ * Validation, permissions across all 10 roles, determinism, idempotency, overlay
  * persistence. Storage is always injected: no test touches a real localStorage.
  */
 import { describe, expect, it } from "vitest";
@@ -31,6 +31,10 @@ const DENIED: readonly CrmRole[] = [
   "analyst",
   "content_manager",
   "read_only",
+  // PHASE-1 ADMIN: the progression operator holds exactly one permission
+  // (`curriculum_progress_override`) and therefore none of the note or owner
+  // rights this suite classifies. Denied, explicitly.
+  "progression_operator",
 ];
 
 function ctx(role: CrmRole = "crm_admin", actorId = "emp_actor_1"): CrmContext {
@@ -223,7 +227,7 @@ describe("addNote — unknown user", () => {
   });
 });
 
-describe("addNote — permissions across all 9 roles", () => {
+describe("addNote — permissions across all 10 roles", () => {
   it("covers every role in the matrix exactly once", () => {
     expect([...ALLOWED, ...DENIED].sort()).toEqual([...CRM_ROLES].sort());
   });
