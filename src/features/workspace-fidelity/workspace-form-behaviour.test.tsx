@@ -24,7 +24,7 @@ vi.mock("@/lib/report/report-client", () => ({
 
 import * as client from "@/lib/report/report-client";
 import { LevelReport } from "@/features/report/level-report";
-import { buildContext, validValues } from "@/features/report/test-fixtures";
+import { buildContext, buildSubmission, validValues } from "@/features/report/test-fixtures";
 
 const fetchMock = vi.mocked(client.fetchReportContext);
 const submitMock = vi.mocked(client.submitReport);
@@ -38,12 +38,10 @@ const authLost = {
   error: { category: "UNAUTHENTICATED", status: 401, code: null, messageKey: "x", requestId: null, retryable: false },
 };
 
-async function fillValid(container: HTMLElement) {
-  for (const key of Object.keys(validValues())) {
-    const el = container.querySelector<HTMLElement>(`[data-field="${key}"] input[type="text"], [data-field="${key}"] textarea`);
-    if (el) await userEvent.type(el, "ок");
-  }
-}
+/* A server-side draft that is already valid — the same way the form's own suite
+   reaches a submittable state, rather than typing 43 fields. */
+const validDraft = () =>
+  ok(buildContext("draft", buildSubmission({ status: "draft", workflowVersion: 1, fieldValues: validValues() })));
 
 beforeEach(() => {
   refresh.mockClear();
@@ -52,13 +50,13 @@ beforeEach(() => {
 
 describe("Workspace form — auth loss never resubmits by itself", () => {
   it("makes exactly one write, then stops, and never retries on its own", async () => {
-    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    fetchMock.mockResolvedValue(validDraft());
     submitMock.mockResolvedValue(authLost as never);
 
-    const { container } = render(<LevelReport {...props} />);
-    await screen.findByText("Отчёт по первым пяти сделкам");
-    await fillValid(container);
-    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+    render(<LevelReport {...props} />);
+    const submit = await screen.findByRole("button", { name: /Отправить на проверку/ });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await userEvent.click(submit);
 
     await waitFor(() => expect(submitMock).toHaveBeenCalled());
     const callsAfterLoss = submitMock.mock.calls.length;
@@ -74,29 +72,29 @@ describe("Workspace form — auth loss never resubmits by itself", () => {
   });
 
   it("keeps the learner's answers after auth loss, so nothing has to be retyped", async () => {
-    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    fetchMock.mockResolvedValue(validDraft());
     submitMock.mockResolvedValue(authLost as never);
 
     const { container } = render(<LevelReport {...props} />);
-    await screen.findByText("Отчёт по первым пяти сделкам");
-    const first = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input')!;
-    await userEvent.type(first, "EURUSD");
-    await fillValid(container);
-    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+    const submit = await screen.findByRole("button", { name: /Отправить на проверку/ });
+    await waitFor(() => expect(submit).toBeEnabled());
+    const before = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input')!.value;
+    await userEvent.click(submit);
     await waitFor(() => expect(submitMock).toHaveBeenCalled());
 
-    const stillThere = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input');
-    expect(stillThere?.value).toContain("EURUSD");
+    const after = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input');
+    expect(after?.value).toBe(before);
+    expect(before.length).toBeGreaterThan(0);
   });
 
   it("says one thing about it, in the surface's one live region", async () => {
-    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    fetchMock.mockResolvedValue(validDraft());
     submitMock.mockResolvedValue(authLost as never);
 
     const { container } = render(<LevelReport {...props} />);
-    await screen.findByText("Отчёт по первым пяти сделкам");
-    await fillValid(container);
-    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+    const submit = await screen.findByRole("button", { name: /Отправить на проверку/ });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await userEvent.click(submit);
     await waitFor(() => expect(submitMock).toHaveBeenCalled());
 
     /* One status region, and the seam did not add a second copy authority. */
