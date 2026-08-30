@@ -34,6 +34,15 @@ const LEVEL_LINKED_SOURCES = new Set<CurriculumXpSourceType>([
   "assessment_pass",
   "report_approval",
   "mentor_completion",
+  // PHASE-1 ADMIN. An administrative correction always credits ONE specific
+  // level, so its row must name that level exactly as the four learner-driven
+  // sources do. Leaving it out would not have made it optional — the contract is
+  // symmetric, so a non-level-linked source is FORBIDDEN from naming a level,
+  // and the resolver would have classified every administrative award as
+  // `xp_source_level_contract_invalid` and taken the learner's whole enrollment
+  // read down with it. Verified safe to add: no `admin_correction` row exists in
+  // PREPROD, so no stored row is re-classified by this change.
+  "admin_correction",
 ]);
 
 const PROTOTYPE_KEYS = new Set(["__proto__", "prototype", "constructor"]);

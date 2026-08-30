@@ -60,6 +60,7 @@
     "test:regression:curriculum-xp-ledger": "tsx scripts/regression/curriculumXpLedgerRegression.ts",
     "test:regression:curriculum-xp-level-state": "tsx scripts/regression/curriculumXpLevelStateRegression.ts",
     "test:regression:curriculum-level-completion": "tsx scripts/regression/curriculumLevelCompletionRegression.ts",
+    "test:regression:curriculum-progression-adjustment": "tsx scripts/regression/curriculumProgressionAdjustmentRegression.ts",
     "test:regression:curriculum-promocode-xp": "tsx scripts/regression/curriculumPromocodeXpRegression.ts",
     "test:regression:curriculum-xp-api": "tsx scripts/regression/curriculumXpReadApiRegression.ts",
     "test:regression:curriculum-content-schema": "tsx scripts/regression/curriculumContentSchemaRegression.ts",

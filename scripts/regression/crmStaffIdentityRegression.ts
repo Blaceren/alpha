@@ -82,6 +82,20 @@ const LOCKED_MATRIX: Record<CrmStaffRole, CrmPermission[]> = {
   content_manager: ["curriculum_read", "curriculum_author"],
   // PHASE-G0: read_only's first permission, and the only kind it may hold.
   read_only: ["curriculum_read"],
+  // PHASE-1 ADMIN: the dedicated progression operator. Exactly one permission,
+  // and it is the whole reason the role exists.
+  //
+  // NOTE FOR WHOEVER RUNS THIS NEXT. This LOCKED_MATRIX has been stale since
+  // LEARNER-OPERATIONS-V1: it omits the ten `learner_ops_*` grants and
+  // COMMUNITY-V1's `community_moderate`, and check 4 still asserts fifteen
+  // permissions when the shipped vocabulary has twenty-seven. Those failures
+  // PRE-DATE this phase and were reproduced on the unchanged baseline before
+  // this line was added — `git show HEAD:src/lib/crm/roles.ts` already declares
+  // twenty-six. This entry is added only so the file compiles; deliberately
+  // nothing else here is "corrected", because silently rewriting a locked
+  // matrix to match the code it is supposed to police would destroy the very
+  // signal it exists to raise.
+  progression_operator: ["curriculum_progress_override"],
 };
 
 async function main() {

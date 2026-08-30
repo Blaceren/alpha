@@ -360,7 +360,12 @@ async function main() {
       ["mentor_completion", published.level1.id],
       ["promocode", null],
       ["migration_adjustment", null],
-      ["admin_correction", null],
+      // PHASE-1 ADMIN: `admin_correction` became LEVEL-LINKED. An administrative
+      // correction always credits one specific level, so its row names that
+      // level exactly as the four learner-driven sources do — and because the
+      // level contract is symmetric, a non-level-linked source is FORBIDDEN from
+      // naming one, which is why this moved rather than became optional.
+      ["admin_correction", published.level1.id],
     ] as const;
     for (const [sourceType, levelDefinitionId] of cases) {
       const result = await recordCurriculumXp({

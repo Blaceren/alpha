@@ -14,6 +14,21 @@ export const CRM_STAFF_ROLES = [
   "analyst",
   "content_manager",
   "read_only",
+  // PHASE-1 ADMIN — the dedicated progression operator.
+  //
+  // A NEW ROLE RATHER THAN A GRANT TO `crm_admin`, and the difference matters.
+  // `crm_admin` holds `manage_settings`, `reveal_pii`, `export`, `view_audit`
+  // and every note permission; giving progression correction to that role would
+  // mean anyone who may correct a learner's level also owns configuration and
+  // can reveal identities. This role holds ONE permission and therefore grants
+  // exactly one power.
+  //
+  // ADDING IT NEEDS NO MIGRATION, and that was checked rather than assumed:
+  // `StaffProfile.staffRole` is `TEXT NOT NULL` with an index and NO CHECK
+  // constraint (Prisma models enums as bare TEXT on SQLite, and this project
+  // hand-writes CHECKs only where it wants them -- `XPTransaction.sourceType`
+  // has one, this column does not). The physical schema is unchanged.
+  "progression_operator",
 ] as const;
 
 export type CrmStaffRole = (typeof CRM_STAFF_ROLES)[number];
@@ -132,6 +147,12 @@ export const CRM_PERMISSIONS = [
   // in the same sitting. Splitting them would produce a moderator who can
   // remove but not restore, which is worse than either.
   "community_moderate",
+  // PHASE-1 ADMIN — administrative FORWARD progression correction. Appended,
+  // never inserted. The reasoning for the name, and for refusing to reuse any
+  // existing permission, lives in `session-permission-contract.ts`, which is the
+  // cross-repository authority for the vocabulary; this file decides only who
+  // holds it, which is the grant table below.
+  "curriculum_progress_override",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -389,6 +410,18 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "curriculum_read",
     "learner_ops_view",
   ],
+  // PHASE-1 ADMIN. Exactly one permission, and deliberately nothing else.
+  //
+  // It does NOT receive `learner_ops_view`, and that is not an oversight: the
+  // progression READ gate (`canViewProgression` below) accepts either that
+  // permission or this one, precisely so a progression operator can see what
+  // they are correcting without also gaining the Learner Operations case
+  // workspace. It receives no notes, no financial, no export, no PII reveal, no
+  // affiliate, no authoring, no Community moderation and no settings.
+  //
+  // It is also NOT added to `CRM_ELIGIBLE_OWNER_ROLES`: correcting a record is
+  // not owning a learner relationship.
+  progression_operator: ["curriculum_progress_override"],
 };
 
 // Server-side resolver — the only place effectivePermissions are computed.
@@ -622,4 +655,47 @@ export function canPerformReportReview(permissions: readonly CrmPermission[]): b
 
 export function canPerformMentorReview(permissions: readonly CrmPermission[]): boolean {
   return permissions.includes("learner_ops_mentor_review");
+}
+
+/* ------------------------------------------------- Progression override P1 */
+
+/**
+ * PHASE-1 ADMIN — the MUTATION gate for administrative progression correction.
+ *
+ * Exactly one permission satisfies it. There is deliberately no fallback to
+ * `manage_settings`, to `learner_ops_admin` or to any role NAME: several other
+ * capabilities in this file are reachable by holding a broader permission, and
+ * this one must not be, because it is the only capability that changes what a
+ * learner has completed.
+ *
+ * `crm_admin` does NOT hold this. That is the least-privilege decision recorded
+ * in `STAFF_ROLE_PERMISSIONS`: the power belongs to the role created for it, and
+ * widening it later is a deliberate edit to the grant table rather than
+ * something that happens by inheriting an administrator bundle.
+ */
+export function canOverrideProgression(
+  permissions: readonly CrmPermission[],
+): boolean {
+  return permissions.includes("curriculum_progress_override");
+}
+
+/**
+ * PHASE-1 ADMIN — the READ gate for canonical V2 progression in the CRM.
+ *
+ * Either permission satisfies it, and they mean different things:
+ * `learner_ops_view` is "may look at a learner's operational context", which
+ * already includes their progression today; `curriculum_progress_override` is
+ * "may change progression", and an operator who could change a value they were
+ * not allowed to read would be an obviously broken contract.
+ *
+ * This is the same shape as `canViewAffiliates`, and it is what lets
+ * `progression_operator` hold exactly one permission.
+ */
+export function canViewProgression(
+  permissions: readonly CrmPermission[],
+): boolean {
+  return (
+    permissions.includes("learner_ops_view") ||
+    permissions.includes("curriculum_progress_override")
+  );
 }

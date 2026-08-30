@@ -17,11 +17,17 @@ import {
 } from "@/lib/growth/product-events";
 import { isFinancialCheckpointType } from "./checkpoint";
 import {
+  ADMIN_CORRECTABLE_COMPLETION_PAIRS,
+  isProtectedAuthorityPair,
   PRODUCTION_COMPLETION_PAIRS,
   STAGING_ATTESTED_COMPLETION_PAIRS,
   ZERO_REWARD_ONLY_OWNERS,
 } from "./completion-pairs";
-import { CURRICULUM_AUDIT_ACTIONS, DEFAULT_CURRICULUM_CODE } from "./constants";
+import {
+  CURRICULUM_AUDIT_ACTIONS,
+  DEFAULT_CURRICULUM_CODE,
+  isProgressionAdjustmentReasonCode,
+} from "./constants";
 import { isStagingAttestationUsable } from "./staging-attestation-policy";
 import {
   validatePinnedEnrollmentSnapshot,
@@ -100,11 +106,41 @@ export type CurriculumStagingAttestedCompletionSource =
   | "staging_attested_registration"
   | "staging_attested_checkpoint";
 
+/**
+ * PHASE-1 ADMIN — the administrative forward-correction owner.
+ *
+ * WHAT IT SAYS, EXACTLY: "an authorized CRM operator recorded that this level
+ * should count as completed for progression purposes, and here is who, when and
+ * why." It does NOT say the learner passed an assessment, wrote a report, was
+ * approved by a mentor, or did anything at all. That distinction is the entire
+ * reason it is a separate source rather than a second route into
+ * `assessment_pass` / `report_approval` / `mentor_completion`: the progress
+ * row's own `completionMethod`, the completion audit and the XP ledger all name
+ * `admin_correction` permanently, so no later reader can mistake an
+ * administrative correction for educational evidence.
+ *
+ * IT IS A MEMBER OF `CurriculumXpSourceType`. That is deliberate and it is what
+ * makes the XP arithmetic survive a correction: a corrected learner reaches
+ * level 15 with the same total the ordinary path would have given them, so
+ * `requiredXp` gates downstream keep working, while every one of those points
+ * is filterable by source. The alternative — awarding nothing — would leave a
+ * corrected learner permanently unable to pass an XP-gated level, which is a
+ * different corruption wearing an honest face.
+ *
+ * IT CAN NEVER REACH A PROTECTED GATE. `financial_checkpoint:balance_check` and
+ * `external_event:pocket_postback` are absent from its pair set (which is
+ * DERIVED by subtraction in `completion-pairs.ts`, not listed), and
+ * `assertAdminCorrectionBoundary` re-checks that here, inside the transaction,
+ * so calling the primitive directly cannot bypass the HTTP layer.
+ */
+export type CurriculumAdministrativeCompletionSource = "admin_correction";
+
 export type CurriculumLevelCompletionSource =
   | CurriculumXpBearingCompletionSource
   | CurriculumCheckpointCompletionSource
   | CurriculumPocketRegistrationCompletionSource
-  | CurriculumStagingAttestedCompletionSource;
+  | CurriculumStagingAttestedCompletionSource
+  | CurriculumAdministrativeCompletionSource;
 
 const COMPLETION_SOURCES = new Set<string>([
   "level_completion",
@@ -115,6 +151,7 @@ const COMPLETION_SOURCES = new Set<string>([
   "pocket_registration_postback",
   "staging_attested_registration",
   "staging_attested_checkpoint",
+  "admin_correction",
 ]);
 
 /** The subset that may appear in the XP ledger. */
@@ -123,6 +160,21 @@ const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
   "assessment_pass",
   "report_approval",
   "mentor_completion",
+];
+
+/**
+ * Every source that can own a LEVEL'S award row in the ledger.
+ *
+ * `XP_BEARING_SOURCES` answers "which owners may pay?"; this answers "whose
+ * rows are the durable award for this level?". They differed the moment
+ * `admin_correction` arrived, and conflating them would break the completed-retry
+ * verifier in the most confusing possible way: an administratively completed
+ * level would look like a completion with no durable XP award, and the engine
+ * would classify a correct state as corrupt.
+ */
+const LEVEL_AWARD_SOURCES: CurriculumXpSourceType[] = [
+  ...XP_BEARING_SOURCES,
+  "admin_correction",
 ];
 
 /**
@@ -156,10 +208,41 @@ function isStagingAttestedSource(
   );
 }
 
+/** PHASE-1 ADMIN — the administrative owner, as a runtime predicate. */
+function isAdministrativeSource(
+  sourceType: CurriculumLevelCompletionSource,
+): sourceType is CurriculumAdministrativeCompletionSource {
+  return sourceType === "admin_correction";
+}
+
 type OwnerRule = {
+  /**
+   * The progress status this owner normally takes over from, and the one its
+   * CAS claims when nothing else is stated.
+   */
   initialStatus: UserLevelProgressStatus;
+  /**
+   * Additional pre-completion statuses this owner may take over from.
+   *
+   * ONLY the administrative owner has any, and it needs them for a specific,
+   * real case: a learner who submitted a mentor-review level sits at
+   * `pending_review`, and a learner who merely started one sits at
+   * `in_progress`. A correction has to be able to resolve BOTH, or the single
+   * state operators most often need to unstick would be the one state they
+   * could not. Every other owner keeps exactly one takeover status, which is
+   * what makes `pending_review` the authorization boundary for mentor review.
+   */
+  alsoTakesOver?: readonly UserLevelProgressStatus[];
   pairs: ReadonlySet<string>;
 };
+
+/** Every pre-completion status an owner may claim, in CAS order. */
+function takeoverStatuses(
+  sourceType: CurriculumLevelCompletionSource,
+): UserLevelProgressStatus[] {
+  const rule = OWNER_RULES[sourceType];
+  return [rule.initialStatus, ...(rule.alsoTakesOver ?? [])];
+}
 
 // Only mappings already made unambiguous by the V2 definition vocabulary are
 // accepted. Scenario/practice definitions remain unavailable until their owning
@@ -220,6 +303,21 @@ const OWNER_RULES: Record<CurriculumLevelCompletionSource, OwnerRule> = {
     initialStatus: "in_progress",
     pairs: new Set(STAGING_ATTESTED_COMPLETION_PAIRS.staging_attested_checkpoint),
   },
+  // PHASE-1 ADMIN. The pair set is DERIVED by subtracting the protected-authority
+  // owners from the production ones, so this owner cannot be pointed at a
+  // financial checkpoint or the Pocket registration level — not because someone
+  // remembered to exclude them here, but because they were never in the set.
+  //
+  // `alsoTakesOver` is what lets one correction resolve a level the learner
+  // started (`in_progress`) and one they submitted for review
+  // (`pending_review`). It does NOT weaken the mentor boundary: a LEARNER still
+  // cannot reach this owner at all, because reaching it requires
+  // `curriculum_progress_override` on a CRM staff session.
+  admin_correction: {
+    initialStatus: "in_progress",
+    alsoTakesOver: ["pending_review"],
+    pairs: ADMIN_CORRECTABLE_COMPLETION_PAIRS,
+  },
 };
 
 export type CurriculumLevelCompletionErrorCode =
@@ -261,6 +359,25 @@ export function isCurriculumLevelCompletionError(
   return error instanceof CurriculumLevelCompletionError;
 }
 
+/**
+ * PHASE-1 ADMIN — durable provenance for an administrative completion.
+ *
+ * Written to `UserLevelProgress.completionEvidence`, which the engine has never
+ * used and which therefore costs no migration. BOUNDED AND STRUCTURED ON
+ * PURPOSE: four short scalars, no free-form bag, no learner data, no session
+ * material. `reasonText` is deliberately NOT here — operator prose belongs in
+ * the AuditLog envelope, not stamped onto a domain row that every progression
+ * read loads. What lives here is only what a reader of the ROW needs in order
+ * to know this level was corrected and where to go for the rest.
+ */
+export type AdministrativeCompletionProvenance = {
+  reasonCode: string;
+  actorStaffProfileId: string;
+  /** Hashed, never the raw operator identity string. */
+  requestIdHash: string;
+  referenceId?: string | null;
+};
+
 export type CompleteCurriculumLevelInput = {
   enrollmentId: number;
   levelDefinitionId: number;
@@ -268,6 +385,8 @@ export type CompleteCurriculumLevelInput = {
   sourceId: string;
   actorId?: number | null;
   evaluationTime?: Date;
+  /** Required for `admin_correction`; refused for every other source. */
+  administrativeProvenance?: AdministrativeCompletionProvenance | null;
   db?: Pick<PrismaClient, "$transaction">;
 };
 
@@ -395,13 +514,76 @@ function validatedInput(input: CompleteCurriculumLevelInTransactionInput) {
   ) {
     failure("COMPLETION_INPUT_INVALID", "completion time is invalid");
   }
+  const sourceType = input.sourceType as CurriculumLevelCompletionSource;
+  const administrativeProvenance = validatedProvenance(sourceType, input);
   return {
     enrollmentId,
     levelDefinitionId,
-    sourceType: input.sourceType as CurriculumLevelCompletionSource,
+    sourceType,
     sourceId,
     actorId,
     evaluationTime: new Date(evaluationTime.getTime()),
+    administrativeProvenance,
+  };
+}
+
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const REFERENCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const STAFF_PROFILE_ID_PATTERN = /^[a-z0-9]{1,64}$/;
+
+/**
+ * Provenance is REQUIRED for `admin_correction` and REFUSED for everything else.
+ *
+ * Both halves matter. Without the first, an administrative completion could land
+ * with no durable trace of who or why on the row itself. Without the second,
+ * an ordinary assessment completion could be given administrative-looking
+ * provenance — a lie in the opposite direction, and one that would survive in
+ * `completionEvidence` long after the request that told it was forgotten.
+ */
+function validatedProvenance(
+  sourceType: CurriculumLevelCompletionSource,
+  input: CompleteCurriculumLevelInTransactionInput,
+): AdministrativeCompletionProvenance | null {
+  const supplied = input.administrativeProvenance ?? null;
+  if (!isAdministrativeSource(sourceType)) {
+    if (supplied) {
+      failure(
+        "COMPLETION_INPUT_INVALID",
+        "administrative provenance is only valid for an administrative correction",
+      );
+    }
+    return null;
+  }
+  if (!supplied || typeof supplied !== "object") {
+    failure("COMPLETION_INPUT_INVALID", "administrative correction requires provenance");
+  }
+  if (!isProgressionAdjustmentReasonCode(supplied.reasonCode)) {
+    failure("COMPLETION_INPUT_INVALID", "administrative reason code is invalid");
+  }
+  if (
+    typeof supplied.actorStaffProfileId !== "string" ||
+    !STAFF_PROFILE_ID_PATTERN.test(supplied.actorStaffProfileId)
+  ) {
+    failure("COMPLETION_INPUT_INVALID", "administrative actor identity is invalid");
+  }
+  if (
+    typeof supplied.requestIdHash !== "string" ||
+    !SHA256_PATTERN.test(supplied.requestIdHash)
+  ) {
+    failure("COMPLETION_INPUT_INVALID", "administrative request identity is invalid");
+  }
+  const referenceId =
+    supplied.referenceId === undefined || supplied.referenceId === null
+      ? null
+      : supplied.referenceId;
+  if (referenceId !== null && !REFERENCE_ID_PATTERN.test(referenceId)) {
+    failure("COMPLETION_INPUT_INVALID", "administrative reference identity is invalid");
+  }
+  return {
+    reasonCode: supplied.reasonCode,
+    actorStaffProfileId: supplied.actorStaffProfileId,
+    requestIdHash: supplied.requestIdHash,
+    referenceId,
   };
 }
 
@@ -570,7 +752,7 @@ function assertOwnerRule(
   ) {
     failure("COMPLETION_STATUS_INVALID", "curriculum progress status is invalid");
   }
-  if (progress.status !== rule.initialStatus) {
+  if (!takeoverStatuses(sourceType).includes(progress.status)) {
     failure("COMPLETION_OWNER_MISMATCH", "completion owner does not match progress state");
   }
   if (progress.completedAt || progress.completionEvidence !== null) {
@@ -945,6 +1127,29 @@ async function assertStagingAttestationProof(
  *  - `xpReward < 0` is invalid.
  * This is a general platform rule with no per-level special case.
  */
+/**
+ * PHASE-1 ADMIN — the protected-authority boundary, re-checked in-transaction.
+ *
+ * `OWNER_RULES.admin_correction.pairs` already excludes both gates, so this can
+ * only fire if that derivation is ever broken. That is exactly why it exists:
+ * the pair set is computed, and a computed safety boundary deserves a second,
+ * independent assertion that names the rule in plain terms rather than trusting
+ * a set-difference to stay correct forever. It costs one comparison and it is
+ * the difference between a refused request and an invented financial fact.
+ */
+function assertAdminCorrectionBoundary(
+  context: CompletionContext,
+  sourceType: CurriculumLevelCompletionSource,
+) {
+  if (!isAdministrativeSource(sourceType)) return;
+  if (isProtectedAuthorityPair(context.level.type, context.level.completionMethod)) {
+    failure(
+      "COMPLETION_OWNER_UNAVAILABLE",
+      "administrative correction cannot satisfy an external authority gate",
+    );
+  }
+}
+
 function assertReward(
   context: CompletionContext,
   sourceType: CurriculumLevelCompletionSource,
@@ -1022,9 +1227,10 @@ async function levelXpRows(tx: Prisma.TransactionClient, context: CompletionCont
     where: {
       enrollmentId: context.enrollment.id,
       levelDefinitionId: context.level.id,
-      // Only XP-bearing owners can appear in the ledger; `checkpoint_verification`
-      // is not a member of the XP vocabulary at all.
-      sourceType: { in: XP_BEARING_SOURCES },
+      // Only award-bearing owners can appear in the ledger; `checkpoint_verification`
+      // is not a member of the XP vocabulary at all. `admin_correction` IS, and
+      // its row is this level's durable award, so it has to be visible here.
+      sourceType: { in: LEVEL_AWARD_SOURCES },
     },
     orderBy: { id: "asc" },
   });
@@ -1112,6 +1318,7 @@ async function runCompletionTransaction(
   await assertCheckpointVerificationProof(tx, context, input);
   await assertPocketRegistrationProof(tx, context, input);
   await assertStagingAttestationProof(tx, context, input);
+  assertAdminCorrectionBoundary(context, input.sourceType);
   assertReward(context, input.sourceType);
   assertXpFlagForReward(context, input.sourceType);
 
@@ -1128,12 +1335,18 @@ async function runCompletionTransaction(
     failure("COMPLETION_STATE_CORRUPT", "XP exists before progress completion");
   }
 
+  // PHASE-1 ADMIN — durable provenance, written in the SAME claim that completes
+  // the level. Two properties fall out of doing it here rather than in a second
+  // update: an administratively completed row can never exist without its
+  // provenance, and the CAS is unweakened — the `where` still requires the row
+  // to be un-completed with NO evidence, so a concurrent writer still loses.
+  const provenance = input.administrativeProvenance;
   const progressClaim = await tx.userLevelProgress.updateMany({
     where: {
       id: context.progress.id,
       enrollmentId: context.enrollment.id,
       levelDefinitionId: context.level.id,
-      status: OWNER_RULES[input.sourceType].initialStatus,
+      status: { in: takeoverStatuses(input.sourceType) },
       completedAt: null,
       completionEvidence: { equals: Prisma.DbNull },
     },
@@ -1141,6 +1354,18 @@ async function runCompletionTransaction(
       status: "completed",
       completedAt: input.evaluationTime,
       lastProgressAt: input.evaluationTime,
+      ...(provenance
+        ? {
+            completionMethod: input.sourceType,
+            completionEvidence: {
+              kind: "administrative_progression_correction",
+              reasonCode: provenance.reasonCode,
+              actorStaffProfileId: provenance.actorStaffProfileId,
+              requestIdHash: provenance.requestIdHash,
+              referenceId: provenance.referenceId,
+            },
+          }
+        : {}),
     },
   });
   if (progressClaim.count !== 1) {
@@ -1209,6 +1434,19 @@ async function runCompletionTransaction(
         previousCurrentLevel: context.enrollment.currentLevel,
         nextCurrentLevel: terminal ? null : nextCurrentLevel,
         terminal,
+        // PHASE-1 ADMIN. Present only on an administrative correction, so the
+        // ABSENCE of this key is itself the statement that a completion was
+        // ordinary. `reasonText` is not here: it lives once, in the envelope.
+        ...(provenance
+          ? {
+              administrative: {
+                reasonCode: provenance.reasonCode,
+                actorStaffProfileId: provenance.actorStaffProfileId,
+                requestIdHash: provenance.requestIdHash,
+                referenceId: provenance.referenceId,
+              },
+            }
+          : {}),
       },
     },
   });
@@ -1229,19 +1467,46 @@ async function runCompletionTransaction(
   // `academy_activation` is emitted alongside and keyed on the ENROLLMENT, so
   // only the first completion of an enrollment produces one — the unique index
   // decides that, not an ordering assumption here.
-  await emitLevelCompletedEvent(tx, {
-    userLevelProgressId: context.progress.id,
-    enrollmentId: context.enrollment.id,
-    userId: context.enrollment.userId,
-    levelDefinitionId: context.level.id,
-    levelNumber: context.level.levelNumber,
-    occurredAt: input.evaluationTime,
-    completionMethod: input.sourceType,
-  });
+  // PHASE-1 ADMIN — an administrative correction emits NO growth events at all.
+  //
+  // WHY SUPPRESSION AND NOT A DISCRIMINATOR. `GrowthEvent` could carry the
+  // source in `metadata`, and one query already reads a metadata flag
+  // (`countAssessmentsPassed`). But `level_completed` and `academy_activation`
+  // are counted WITHOUT any metadata filter, by several call sites and by the
+  // CRM funnel route, so adding the field would put a truthful marker into rows
+  // that every existing organic query would still count as organic. The funnel
+  // would keep reporting a corrected learner as having activated, and the
+  // marker would be an alibi rather than a fix. Retrofitting every consumer is a
+  // larger and riskier change than this phase should carry, and inventing a
+  // typed column for it would be a migration for analytics — which this phase
+  // is explicitly not permitted to make.
+  //
+  // So the funnel simply does not learn about corrections, and it is TRUE that
+  // it does not: nobody clicked through L3, and `academy_activation` means a
+  // learner finished something. An absent row understates activity that never
+  // happened; a present row would overstate learning that never happened.
+  //
+  // THE ADMINISTRATIVE TRUTH IS NOT LOST — it is in the AuditLog envelope, the
+  // per-level completion audit, the XP ledger's `admin_correction` rows and the
+  // progress row's own `completionMethod`. Four durable places, none of which is
+  // a growth funnel.
+  const emitsGrowthEvents = !isAdministrativeSource(input.sourceType);
+
+  if (emitsGrowthEvents) {
+    await emitLevelCompletedEvent(tx, {
+      userLevelProgressId: context.progress.id,
+      enrollmentId: context.enrollment.id,
+      userId: context.enrollment.userId,
+      levelDefinitionId: context.level.id,
+      levelNumber: context.level.levelNumber,
+      occurredAt: input.evaluationTime,
+      completionMethod: input.sourceType,
+    });
+  }
 
   // A mentor-approved level is a true answer to two different questions, so it
   // produces two different events rather than one that has to be reinterpreted.
-  if (input.sourceType === "mentor_completion") {
+  if (emitsGrowthEvents && input.sourceType === "mentor_completion") {
     await emitMentorReviewApprovedEvent(tx, {
       userLevelProgressId: context.progress.id,
       enrollmentId: context.enrollment.id,

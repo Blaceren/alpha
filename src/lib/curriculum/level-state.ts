@@ -971,6 +971,54 @@ async function recoverConcurrentStart(
   });
 }
 
+/**
+ * PHASE-1 ADMIN — the same start owner, inside a caller's transaction.
+ *
+ * WHY THIS EXISTS. `startCurrentCurriculumLevel` opens its own transaction, so
+ * a coordinator that must complete SEVERAL levels atomically cannot use it: a
+ * Prisma `TransactionClient` has no `$transaction`, and an administrative
+ * multi-level correction is required to be all-or-nothing. The alternative was
+ * for the coordinator to insert its own `UserLevelProgress` row, which is a
+ * second progress implementation and exactly what this domain has spent several
+ * phases removing.
+ *
+ * So the body is shared verbatim — this is the identical `runStartTransaction`
+ * the public command runs, with the identical flag gates — and only the
+ * transaction boundary differs. It follows `completeCurriculumLevelInTransaction`
+ * and `enrollActiveCurriculumForNewUserInTransaction`, which exist for the same
+ * reason.
+ *
+ * NO CONCURRENT-START RECOVERY HERE, deliberately. The public command recovers
+ * from a losing unique conflict because a learner double-clicking should still
+ * end up started. Inside an administrative correction a unique conflict means
+ * the learner acted while the operator was deciding — the operator's view is
+ * stale, and the correct answer is to roll the whole adjustment back and make
+ * them look again, not to absorb the race and carry on.
+ */
+export async function startCurrentCurriculumLevelInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { actorUserId: number; asOf?: Date; expectedStableCode?: string },
+): Promise<StartCurrentCurriculumLevelResult> {
+  if (!isCurriculumV2EnrollmentEnabled()) {
+    throw new LevelStartDomainError(
+      "LEVEL_START_DISABLED",
+      "curriculum level start is disabled",
+    );
+  }
+  if (!isCurriculumV2ReadEnabled()) {
+    throw new LevelStartDomainError(
+      "CURRICULUM_READ_DISABLED",
+      "curriculum read resolver is disabled",
+    );
+  }
+  return runStartTransaction(
+    tx,
+    input.actorUserId,
+    input.asOf ?? new Date(),
+    input.expectedStableCode,
+  );
+}
+
 export async function startCurrentCurriculumLevel({
   actorUserId,
   asOf,

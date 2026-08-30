@@ -3287,6 +3287,12 @@ enum StaffRole {
   analyst
   content_manager
   read_only
+  /// PHASE-1 ADMIN. The dedicated administrative progression operator; holds
+  /// exactly one permission (`curriculum_progress_override`). Adding it is a
+  /// code-only change: Prisma models enums as bare TEXT on SQLite and
+  /// `StaffProfile.staffRole` carries no CHECK constraint, so the physical
+  /// schema is unchanged and no migration accompanies this value.
+  progression_operator
 }
 
 model StaffProfile {

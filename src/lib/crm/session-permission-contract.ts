@@ -141,6 +141,25 @@ export const CRM_SESSION_PERMISSION_CONTRACT = [
   // This is the named permission that replaces it. Granted to `moderator` and
   // `crm_admin` only.
   "community_moderate",
+  // PHASE-1 ADMIN, v6. Appended, never inserted.
+  //
+  // Administrative FORWARD progression correction. It is its own name because it
+  // is its own decision kind, in the same way that authoring, approving and
+  // adjudicating a source were kept apart in PHASE-G0 and PHASE-G2.
+  //
+  // It is deliberately NOT any of the following, each considered and rejected:
+  //   `learner_ops_handle` .......... answering a learner is not deciding their
+  //                                   progression; fusing them would make every
+  //                                   frontline operator a progression authority
+  //   `learner_ops_report_review` ... decides ONE report outcome on real evidence
+  //   `learner_ops_mentor_review` ... decides ONE mentor outcome on real evidence
+  //   `learner_ops_admin` ........... changes the RULES, not one learner state
+  //   `manage_settings` ............. owns configuration, not learner records
+  //
+  // The prefix is `curriculum` rather than `learner_ops` because the fact being
+  // changed is owned by the curriculum domain: Learner Operations reads
+  // progression and computes none of its own.
+  "curriculum_progress_override",
 ] as const;
 
 export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[number];
@@ -150,9 +169,10 @@ export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[numb
  * before this file; v2 is the first version to be written down and enforced;
  * v3 appends the nine Learner Operations permissions, bringing the vocabulary
  * to twenty-four; v4 appends `learner_ops_escalation_resolve`, bringing it to
- * twenty-five; v5 appends `community_moderate`, bringing it to twenty-six.
+ * twenty-five; v5 appends `community_moderate`, bringing it to twenty-six;
+ * v6 appends `curriculum_progress_override`, bringing it to twenty-seven.
  */
-export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 5;
+export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 6;
 
 /**
  * `sha256(CRM_SESSION_PERMISSION_CONTRACT.join("\n"))`, lowercase hex.
@@ -162,4 +182,4 @@ export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 5;
  * contracts and the session boundary is unsafe again.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT_DIGEST =
-  "8cbbb160b6cfd5a7dafb5d3559cc288d71a6e8974e65373cfc928175b1050540";
+  "0390279c448b184725daf5b88fb1febc78c99864b487bd038aed64bca3c6b761";

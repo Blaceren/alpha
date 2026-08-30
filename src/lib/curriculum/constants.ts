@@ -166,4 +166,47 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   // identity and the authority state before and after, so the trail proves what
   // was settled without anyone re-deriving it from a later database state.
   authoringSourceAuthorityResolved: "AUTHORING_SOURCE_AUTHORITY_RESOLVED",
+
+  // PHASE-1 ADMIN — the ENVELOPE event for one administrative progression
+  // correction. Exactly one per accepted request, however many levels it moved.
+  //
+  // It does not replace the per-level `CURRICULUM_LEVEL_COMPLETED` rows the
+  // engine writes anyway; it explains them. Those rows answer "what changed",
+  // this one answers "who decided, why, and under which reference" — which is
+  // the question an auditor actually arrives with, and the one a pile of
+  // per-level rows cannot answer on its own.
+  progressionAdjusted: "CURRICULUM_PROGRESSION_ADJUSTED",
 } as const;
+
+/**
+ * PHASE-1 ADMIN — the closed reason vocabulary for a progression correction.
+ *
+ * CLOSED, because a free-text-only reason is a field that reads as documentation
+ * and aggregates as nothing: six months on, "why do we keep correcting
+ * progression?" has to be answerable by grouping, not by reading. The code says
+ * WHICH KIND of correction this was; `reasonText` (mandatory, and stored only in
+ * the AuditLog envelope) says what actually happened.
+ *
+ * `other` exists so an operator facing a genuinely novel situation is never
+ * pushed into mislabelling it as one of the four — a miscoded reason is worse
+ * than an honest `other` with prose beside it.
+ */
+export const PROGRESSION_ADJUSTMENT_REASON_CODES = [
+  "preprod_qa",
+  "support_correction",
+  "state_recovery",
+  "data_correction",
+  "other",
+] as const;
+
+export type ProgressionAdjustmentReasonCode =
+  (typeof PROGRESSION_ADJUSTMENT_REASON_CODES)[number];
+
+export function isProgressionAdjustmentReasonCode(
+  value: unknown,
+): value is ProgressionAdjustmentReasonCode {
+  return (
+    typeof value === "string" &&
+    (PROGRESSION_ADJUSTMENT_REASON_CODES as readonly string[]).includes(value)
+  );
+}

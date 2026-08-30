@@ -159,3 +159,81 @@ export function isZeroRewardCompletionPair(
 ): boolean {
   return ZERO_REWARD_COMPLETION_PAIRS.has(completionPair(type, completionMethod));
 }
+
+/* ------------------------------------------------------------------------ */
+/* PHASE-1 ADMIN — administrative forward progression correction             */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The owners whose completion asserts a fact about the OUTSIDE WORLD.
+ *
+ * A checkpoint says a balance authority reported a threshold was reached. A
+ * Pocket registration says ATA authenticated a partner event. Neither is a
+ * judgement ATA is entitled to make on its own, so no administrative action may
+ * ever produce one: an operator who "corrects" a learner past one of these has
+ * not corrected a record, they have invented a financial or partner fact.
+ *
+ * DELIBERATELY NOT DERIVED FROM `ZERO_REWARD_ONLY_PRODUCTION_OWNERS`, even
+ * though the two lists hold the same two names today. They answer different
+ * questions — "does this owner pay XP?" and "does this owner speak for an
+ * external authority?" — and a future owner could easily be one without being
+ * the other (a zero-reward internal ceremony, or a paid external certification).
+ * Deriving one from the other would silently move this boundary the first time
+ * that happened, and this boundary is the whole safety property.
+ *
+ * PREPROD's existing `staging_attested_*` owners remain the ONLY way these two
+ * gates may be satisfied without the real authority, they remain staging-only,
+ * and the administrative owner below never calls them.
+ */
+export const PROTECTED_AUTHORITY_OWNERS = [
+  "checkpoint_verification",
+  "pocket_registration_postback",
+] as const satisfies readonly (keyof typeof PRODUCTION_COMPLETION_PAIRS)[];
+
+/** The pairs an administrative correction may never complete. */
+export const PROTECTED_AUTHORITY_COMPLETION_PAIRS: ReadonlySet<CurriculumCompletionPair> =
+  new Set(
+    PROTECTED_AUTHORITY_OWNERS.flatMap(
+      (owner) => PRODUCTION_COMPLETION_PAIRS[owner] as readonly CurriculumCompletionPair[],
+    ),
+  );
+
+export function isProtectedAuthorityPair(
+  type: string,
+  completionMethod: string,
+): boolean {
+  return PROTECTED_AUTHORITY_COMPLETION_PAIRS.has(completionPair(type, completionMethod));
+}
+
+/**
+ * The pairs `admin_correction` may complete.
+ *
+ * DERIVED, NEVER LISTED. It is every production pair MINUS the protected ones,
+ * computed from `PRODUCTION_COMPLETION_PAIRS` itself. Writing the six pairs out
+ * by hand would mean a seventh production pair shipped tomorrow is silently NOT
+ * administratively correctable — or, far worse, that a pair moved into
+ * `PROTECTED_AUTHORITY_OWNERS` stays correctable because someone updated one
+ * list and not the other. There is one list, and subtraction.
+ *
+ * Today this resolves to exactly:
+ *   lesson:lesson · lesson:manual · lesson:assessment_pass ·
+ *   final_exam:assessment_pass · report:report_approval · mentor_review:mentor_review
+ */
+export const ADMIN_CORRECTABLE_COMPLETION_PAIRS: ReadonlySet<CurriculumCompletionPair> =
+  new Set(
+    (
+      Object.keys(PRODUCTION_COMPLETION_PAIRS) as (keyof typeof PRODUCTION_COMPLETION_PAIRS)[]
+    )
+      .filter(
+        (owner) =>
+          !(PROTECTED_AUTHORITY_OWNERS as readonly string[]).includes(owner),
+      )
+      .flatMap((owner) => PRODUCTION_COMPLETION_PAIRS[owner] as readonly CurriculumCompletionPair[]),
+  );
+
+export function isAdminCorrectablePair(
+  type: string,
+  completionMethod: string,
+): boolean {
+  return ADMIN_CORRECTABLE_COMPLETION_PAIRS.has(completionPair(type, completionMethod));
+}

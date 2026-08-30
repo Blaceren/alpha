@@ -300,6 +300,31 @@ async function main() {
     if (code) assert.equal((result as { code?: string }).code, code);
   }
 
+  /**
+   * Nothing was written — asserted WITHOUT touching `rollbackProofs`.
+   *
+   * `assertRolledBack` below records into that array, which check 64 counts to
+   * prove every INJECTED failure rolled back. A plain refusal is not an injected
+   * failure, so counting one there would inflate a number that means something
+   * else.
+   */
+  async function assertUntouched(fixture: Awaited<ReturnType<typeof setup>>) {
+    const storedProgress = await prisma.userLevelProgress.findUniqueOrThrow({
+      where: { id: fixture.levelProgress.id },
+    });
+    const storedEnrollment = await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+      where: { id: fixture.enrollment.id },
+    });
+    assert.equal(storedProgress.status, fixture.levelProgress.status);
+    assert.equal(storedProgress.completedAt, null);
+    assert.equal(storedProgress.completionEvidence, null);
+    assert.equal(storedEnrollment.currentLevel, fixture.enrollment.currentLevel);
+    assert.equal(
+      storedEnrollment.highestCompletedLevel,
+      fixture.enrollment.highestCompletedLevel,
+    );
+  }
+
   async function assertRolledBack(fixture: Awaited<ReturnType<typeof setup>>) {
     const storedProgress = await prisma.userLevelProgress.findUniqueOrThrow({
       where: { id: fixture.levelProgress.id },
@@ -458,7 +483,6 @@ async function main() {
   for (const [number, source] of [
     [18, "promocode"],
     [19, "migration_adjustment"],
-    [20, "admin_correction"],
   ] as const) {
     await check(`${source} cannot complete a level`, async () => {
       void number;
@@ -470,6 +494,79 @@ async function main() {
       );
     });
   }
+
+  // PHASE-1 ADMIN — `admin_correction` USED TO BE IN THE LIST ABOVE.
+  //
+  // It was an XP-ledger source with no completion owner, so the engine refused
+  // it as `COMPLETION_OWNER_MISMATCH` exactly like `promocode` and
+  // `migration_adjustment`. It is now the administrative forward-correction
+  // owner, so that assertion is obsolete — but the property it protected is
+  // not, and these three checks are what replace it: the owner cannot be
+  // reached without provenance, cannot reach a protected gate, and still
+  // refuses a level it does not own.
+  await check("admin_correction is refused without administrative provenance", async () => {
+    const fixture = await setup();
+    expectResult(
+      await run(fixture, { sourceType: "admin_correction" }),
+      "rejected",
+      "COMPLETION_INPUT_INVALID",
+    );
+    await assertUntouched(fixture);
+  });
+
+  await check("admin_correction completes an owned pair when provenance is supplied", async () => {
+    const fixture = await setup();
+    const result = await run(fixture, {
+      sourceType: "admin_correction",
+      sourceId: "admin-correction:probe-00000001:l1",
+      administrativeProvenance: {
+        reasonCode: "preprod_qa",
+        actorStaffProfileId: "stubstaffprofileid",
+        requestIdHash: `sha256:${"a".repeat(64)}`,
+        referenceId: null,
+      },
+    });
+    expectResult(result, "completed");
+    const stored = await prisma.userLevelProgress.findUniqueOrThrow({
+      where: { id: fixture.levelProgress.id },
+    });
+    assert.equal(stored.status, "completed");
+    assert.equal(stored.completionMethod, "admin_correction");
+    assert.ok(stored.completionEvidence, "administrative provenance must be durable");
+  });
+
+  await check("admin_correction cannot complete a protected gate", async () => {
+    const fixture = await setup();
+    await prisma.levelDefinition.update({
+      where: { id: fixture.graph.levels[0].id },
+      data: {
+        type: "financial_checkpoint",
+        completionMethod: "balance_check",
+        xpReward: 0,
+      },
+    });
+    expectResult(
+      await run(fixture, {
+        sourceType: "admin_correction",
+        sourceId: "admin-correction:probe-00000002:l1",
+        administrativeProvenance: {
+          reasonCode: "preprod_qa",
+          actorStaffProfileId: "stubstaffprofileid",
+          requestIdHash: `sha256:${"b".repeat(64)}`,
+          referenceId: null,
+        },
+      }),
+      "rejected",
+      // `assertOwnerRule` refuses it FIRST, because the pair belongs to
+      // `checkpoint_verification` and is absent from the administrative owner's
+      // derived pair set — so the engine can say the precise thing ("this source
+      // does not own this level") rather than the vaguer "no owner exists".
+      // `assertAdminCorrectionBoundary` sits behind that as the second,
+      // independent assertion and only fires if the derivation itself breaks.
+      "COMPLETION_OWNER_MISMATCH",
+    );
+    await assertUntouched(fixture);
+  });
   await check("a financial checkpoint has exactly one owner (L4VC-1)", async () => {
     // Before L4VC-1 `financial_checkpoint:balance_check` had NO owner at all,
     // so every source was refused as OWNER_UNAVAILABLE. It now has exactly one
@@ -914,7 +1011,10 @@ async function main() {
   await prisma.$disconnect();
   // 77 before L4VC-1; +2 for the checkpoint owner split (unmapped type still
   // unowned, and the checkpoint owner refused without a verification proof).
-  assert.equal(passed + failed, 79, "regression scenario count changed");
+  // PHASE-1 ADMIN: -1 (`admin_correction cannot complete a level` is obsolete —
+  // it IS an owner now) +3 (refused without provenance, completes an owned pair
+  // with it, and still cannot reach a protected gate) = 81.
+  assert.equal(passed + failed, 81, "regression scenario count changed");
 }
 
 main()
