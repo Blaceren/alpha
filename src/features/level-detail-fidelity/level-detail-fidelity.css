@@ -64,6 +64,10 @@
   /* ---- measures --------------------------------------------------------- */
   /* Outer rhythm and left edge are the Lessons index's own, so the two pages
      line up when a learner moves between them. */
+  /* border-box, as the Lessons index sets on `.lsn`. Without it the 28px gutter
+     is ADDED to a 100% width and the surface runs 56px past its own column —
+     invisible, because the shell clips overflow-x, which is how it survived. */
+  box-sizing: border-box;
   width: min(100%, 1008px);
   max-width: none;
   margin-inline: auto;
@@ -280,7 +284,7 @@
 
 /* A full row, not a label beside a dot. */
 .ld .asmt__option {
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
   min-height: 44px;
   padding: 7px 12px;
@@ -295,10 +299,13 @@
   border-left-color: var(--signal-active);
 }
 .ld .asmt__option input[type="radio"] {
-  margin: 0; width: 18px; height: 18px;
+  margin: 0; width: 18px; height: 18px; align-self: center;
   accent-color: var(--signal-active);
 }
+/* The label fills the row. A radio is 18px, and a learner presses the words —
+   so the words have to BE the target, not sit inside one. */
 .ld .asmt__option label {
+  display: flex; align-items: center; min-height: 30px;
   font-size: 14.5px; line-height: 1.5; color: var(--text-secondary);
   flex: 1 1 auto;
 }
@@ -419,3 +426,33 @@
 .ld .lvl-start__action:disabled { opacity: 0.5; }
 .ld .lvl-start__action:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
 .ld .lvl-start__status { font-size: 13.5px; color: var(--text-secondary); }
+
+/* --------------------------------------------------------------- player --- */
+
+/*
+ * The lesson player is a shared component with its own stylesheet, and that
+ * sheet says in as many words that this must not restyle it. So nothing here
+ * touches one of its rules: it redefines four of its own custom properties, the
+ * same seam the player already uses to read Academy tokens. Its geometry, its
+ * controls, its behaviour and every other token are untouched, and the override
+ * is scoped to `.ld`, so the player's showcase route keeps exactly what it has.
+ *
+ * These four were the only hardcoded values left in it that belong to the blue
+ * family: everything else already reads `var(--text-…)`, `var(--divider…)` and
+ * `var(--focus-ring)` with a blue-ish literal only as a fallback that never
+ * fires inside the Academy.
+ */
+.ld .avp {
+  --avp-btn-dark: rgba(11, 13, 10, 0.86);
+  --avp-btn-dark-hover: rgba(26, 31, 24, 0.94);
+  --avp-btn-border: rgba(237, 240, 234, 0.28);
+  --avp-btn-ink: var(--text-primary);
+}
+/* The shade exists so white controls stay legible over an arbitrary video
+   frame — it is functional, not decoration, so it stays. What changes is its
+   colour: the same two stops, in ink rather than navy. */
+.ld .avp__shade {
+  background:
+    linear-gradient(180deg, rgba(11, 13, 10, 0.25), transparent 30%),
+    linear-gradient(0deg, rgba(11, 13, 10, 0.93) 0%, rgba(11, 13, 10, 0.5) 19%, transparent 54%);
+}
