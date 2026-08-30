@@ -127,7 +127,12 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
         <div
           className="bottomnav__sheet"
           role="dialog"
-          aria-modal="true"
+          /* DELIBERATELY NOT aria-modal. This is an in-flow disclosure, not a
+             drawer: nothing behind it is inert, the bar underneath stays
+             visible and clickable, and there is no scrim. Declaring it modal
+             told assistive technology to ignore everything outside it — which
+             hid the current-route marker on the bar and left seven routes
+             announcing no current page at all while the sheet was open. */
           aria-label="Ещё"
           ref={sheetRef}
         >

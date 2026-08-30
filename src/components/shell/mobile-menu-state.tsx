@@ -12,12 +12,12 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
  * the current page — two `aria-current="page"` in one document is two answers to
  * a question that has one.
  *
- * WHICH ONE YIELDS, AND WHY IT IS THE AVATAR. The sheet declares
- * `aria-modal="true"`. While it is open it is the exposed navigation, and
- * content outside it is not; marking the avatar there would put the only current
- * marker somewhere assistive technology has been told to ignore. So the sheet's
- * own row carries it while the menu is open, and the avatar carries it the rest
- * of the time.
+ * WHICH ONE YIELDS, AND WHY IT IS THE AVATAR. The sheet is the thing the reader
+ * just opened and is reading; its «Профиль» row is a full labelled row in the
+ * list of destinations, while the avatar is a 44px picture in a bar the sheet is
+ * sitting on top of. The row is the better answer to "where am I", so the row
+ * keeps the marker while the menu is open and the avatar carries it the rest of
+ * the time. Yielding is what keeps the count at one rather than two.
  *
  * THE DESKTOP AVATAR NEVER YIELDS. It is a different instance in a different
  * bar, and the sheet cannot be on screen beside it — the bottom bar is
