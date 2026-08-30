@@ -95,6 +95,30 @@ export const USER_OWNER_PATH = "/api/crm/v1/users/:userId/owner";
  */
 export const USER_OWNER_HISTORY_PATH = "/api/crm/v1/users/:userId/owner/history";
 
+/* ------------------------------------ Administrative progression (PHASE-1 ADMIN)
+ *
+ * Three exact paths, same single-segment `:userId` rule as detail/notes/owner.
+ * There is no catch-all under `/progression`, so `/progression/anything-else` is
+ * NOT proxied and falls through to the CRM app.
+ *
+ * WHY THESE ARE HERE AT ALL, stated plainly because their absence is what broke
+ * the feature on its first PREPROD cutover: the backend routes existed, the CRM
+ * client existed, the section rendered — and every request 404'd at the CRM
+ * origin, because forwarding is an explicit per-path decision and nobody made
+ * it. The section's own tests mocked the client, so the one unproxied layer was
+ * the one layer nothing exercised. Adding a backend route under `/api/crm/v1`
+ * is never enough on its own; it has to be listed here too.
+ *
+ * The READ is GET, PREVIEW and ADJUST are POST. Next rewrites are
+ * method-agnostic, so one entry per path covers each; the backend routes export
+ * exactly one method each and answer 405 for anything else.
+ */
+export const USER_PROGRESSION_PATH = "/api/crm/v1/users/:userId/progression";
+export const USER_PROGRESSION_PREVIEW_PATH =
+  "/api/crm/v1/users/:userId/progression/preview";
+export const USER_PROGRESSION_ADJUST_PATH =
+  "/api/crm/v1/users/:userId/progression/adjust";
+
 /* --------------------------------------------- Mentor report review (MR-1R)
  *
  * Five exact reviewer paths, each a deliberate addition. `:submissionRef` matches
@@ -312,6 +336,9 @@ export const PROXIED_PATHS = [
   OWNER_CANDIDATES_PATH,
   USER_OWNER_PATH,
   USER_OWNER_HISTORY_PATH,
+  USER_PROGRESSION_PATH,
+  USER_PROGRESSION_PREVIEW_PATH,
+  USER_PROGRESSION_ADJUST_PATH,
   REVIEW_QUEUE_PATH,
   REVIEW_DETAIL_PATH,
   REVIEW_CLAIM_PATH,

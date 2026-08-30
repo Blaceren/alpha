@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // The real production config module — not a copy. If next.config.mjs drifts,
 // these tests fail.
-import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH, OWNER_CANDIDATES_PATH, USER_OWNER_PATH, USER_OWNER_HISTORY_PATH, PROXIED_PATHS } from "../../next.config.mjs";
+import { buildRewrites, SESSION_PATH, USERS_PATH, USER_DETAIL_PATH, USER_NOTES_PATH, OWNER_CANDIDATES_PATH, USER_OWNER_PATH, USER_OWNER_HISTORY_PATH, USER_PROGRESSION_PATH, USER_PROGRESSION_PREVIEW_PATH, USER_PROGRESSION_ADJUST_PATH, PROXIED_PATHS } from "../../next.config.mjs";
 
 describe("rewrites — mock mode", () => {
   it("produces zero rewrites", () => {
@@ -24,7 +24,7 @@ describe("rewrites — mock mode", () => {
 describe("rewrites — api mode", () => {
   const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
 
-  it("produces exactly sixty-one rewrite definitions", () => {
+  it("produces exactly sixty-four rewrite definitions", () => {
     // Seven CRM v1 data paths (CRM-AUTH-1) + five exact reviewer paths (MR-1R)
     // + six affiliate management paths (AFD-5A) + seven read-only affiliate
     // analytics paths (AFD-5C1) + one Curie Atlas analysis path (AFD-5D2)
@@ -34,7 +34,7 @@ describe("rewrites — api mode", () => {
     // change to this number, never a side effect. It fired on the four added
     // below, which is the guard working, and it is updated in the same commit.
     // COMMUNITY-V1 adds ONE: the Community moderation surface.
-    expect(buildRewrites(env)).toHaveLength(61);
+    expect(buildRewrites(env)).toHaveLength(64);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -58,7 +58,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the sixty-one reviewed paths", () => {
+  it("exposes exactly the sixty-four reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -67,6 +67,10 @@ describe("rewrites — api mode", () => {
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/owner/history",
+      // PHASE-1 ADMIN — administrative progression correction.
+      "/api/crm/v1/users/:userId/progression",
+      "/api/crm/v1/users/:userId/progression/preview",
+      "/api/crm/v1/users/:userId/progression/adjust",
       "/api/curriculum/v2/report-reviews/queue",
       "/api/curriculum/v2/report-submissions/:submissionRef",
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
@@ -142,6 +146,9 @@ describe("rewrites — api mode", () => {
     expect(OWNER_CANDIDATES_PATH).toBe("/api/crm/v1/owner-candidates");
     expect(USER_OWNER_PATH).toBe("/api/crm/v1/users/:userId/owner");
     expect(USER_OWNER_HISTORY_PATH).toBe("/api/crm/v1/users/:userId/owner/history");
+    expect(USER_PROGRESSION_PATH).toBe("/api/crm/v1/users/:userId/progression");
+    expect(USER_PROGRESSION_PREVIEW_PATH).toBe("/api/crm/v1/users/:userId/progression/preview");
+    expect(USER_PROGRESSION_ADJUST_PATH).toBe("/api/crm/v1/users/:userId/progression/adjust");
   });
 
   it("maps the exact notes path to the backend", () => {
@@ -315,6 +322,10 @@ describe("rewrites — no wildcard exposure", () => {
       "/api/crm/v1/owner-candidates",
       "/api/crm/v1/users/:userId/owner",
       "/api/crm/v1/users/:userId/owner/history",
+      // PHASE-1 ADMIN — administrative progression correction.
+      "/api/crm/v1/users/:userId/progression",
+      "/api/crm/v1/users/:userId/progression/preview",
+      "/api/crm/v1/users/:userId/progression/adjust",
       "/api/curriculum/v2/report-reviews/queue",
       "/api/curriculum/v2/report-submissions/:submissionRef",
       "/api/curriculum/v2/report-submissions/:submissionRef/claim",
@@ -496,5 +507,75 @@ describe("rewrites — fails closed on a bad origin", () => {
     // A throw is the required behaviour: returning [] would start the app in
     // api mode with the session endpoint silently unproxied.
     expect(() => buildRewrites({ CRM_MODE: "api" })).toThrow(/CRM_BACKEND_ORIGIN/);
+  });
+});
+
+/**
+ * PHASE-1 ADMIN — the three administrative progression paths.
+ *
+ * THESE TESTS EXIST BECAUSE THEIR ABSENCE SHIPPED A BROKEN FEATURE. The backend
+ * routes, the CRM client and the «Прогресс Академии» section were all deployed
+ * to PREPROD and every request 404'd at the CRM origin: the paths had never been
+ * added to `PROXIED_PATHS`, and the section's own tests mocked the client, so
+ * the only unproxied layer was the only layer nothing exercised.
+ *
+ * The lesson generalises past this feature: a backend route under
+ * `/api/crm/v1` is not reachable from the CRM until it is listed in
+ * `next.config.mjs`, and a component test that mocks its client will never
+ * notice. That is what the last case below is for.
+ */
+describe("rewrites — administrative progression (PHASE-1 ADMIN)", () => {
+  const env = { CRM_MODE: "api", CRM_BACKEND_ORIGIN: "http://127.0.0.1:3110" };
+
+  it("forwards the progression read", () => {
+    expect(buildRewrites(env)).toContainEqual({
+      source: "/api/crm/v1/users/:userId/progression",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId/progression",
+    });
+  });
+
+  it("forwards the preview", () => {
+    expect(buildRewrites(env)).toContainEqual({
+      source: "/api/crm/v1/users/:userId/progression/preview",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId/progression/preview",
+    });
+  });
+
+  it("forwards the adjust mutation", () => {
+    expect(buildRewrites(env)).toContainEqual({
+      source: "/api/crm/v1/users/:userId/progression/adjust",
+      destination: "http://127.0.0.1:3110/api/crm/v1/users/:userId/progression/adjust",
+    });
+  });
+
+  it("declares all three in PROXIED_PATHS", () => {
+    for (const path of [
+      USER_PROGRESSION_PATH,
+      USER_PROGRESSION_PREVIEW_PATH,
+      USER_PROGRESSION_ADJUST_PATH,
+    ]) {
+      expect(PROXIED_PATHS).toContain(path);
+    }
+  });
+
+  it("does NOT forward an unlisted child of /progression", () => {
+    // No catch-all: a path nobody reviewed must fall through to the CRM app
+    // rather than reaching the backend.
+    const sources = buildRewrites(env).map((rewrite) => rewrite.source);
+    expect(sources).not.toContain("/api/crm/v1/users/:userId/progression/:rest*");
+    expect(sources.filter((source) => source.includes("/progression"))).toHaveLength(3);
+  });
+
+  it("every path the progression client calls is proxied", () => {
+    // THE CROSS-CHECK THAT WOULD HAVE CAUGHT THE ORIGINAL DEFECT. The client
+    // builds its URLs from one helper, so the shapes it can produce are
+    // enumerable — and each must appear in the proxy list with `:userId` in
+    // place of the concrete id.
+    const clientPaths = ["", "/preview", "/adjust"].map(
+      (suffix) => `/api/crm/v1/users/:userId/progression${suffix}`,
+    );
+    for (const path of clientPaths) {
+      expect(PROXIED_PATHS).toContain(path);
+    }
   });
 });
