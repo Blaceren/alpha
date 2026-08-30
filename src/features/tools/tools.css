@@ -1409,3 +1409,12 @@
     animation: none;
   }
 }
+
+/* The gate, stated separately from readiness — same two dimensions the shipped
+   register carries, so the development surface cannot drift away from it. */
+.th-requirement {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary, #7D8779);
+}

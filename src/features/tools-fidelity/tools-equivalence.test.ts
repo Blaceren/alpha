@@ -20,10 +20,15 @@ const ROOT = process.cwd();
 /** The active PREPROD release this branch was cut from. */
 const BASE = "91549bc40dd37c343de31a41223736eb1b41a452";
 
+/**
+ * The files that may not move at all. The status COPY was deliberately changed
+ * in this pass — an unbuilt tool now states its readiness at every level
+ * instead of promising to open — so the two files that carry that copy are held
+ * by explicit assertions below rather than by blanket equivalence. Everything
+ * that decides ACCESS is here, unchanged.
+ */
 const SURFACE = [
-  "src/features/tools-fidelity/tools-fidelity.tsx",
   "src/features/tools-fidelity/tool-fidelity-surface.tsx",
-  "src/features/tools/model/tools-projection.ts",
   "src/features/tools/model/tool-catalog.ts",
   "src/features/tools/model/canonical-progress.ts",
   "src/app/(app)/tools/page.tsx",
@@ -64,7 +69,7 @@ describe("the Tools surface contract is unchanged", () => {
     expect(after).toBe(before);
   });
 
-  it("changed only the two presentation files", () => {
+  it("changed only the Tools presentation files", () => {
     const changed = git("diff", "--name-only", BASE, "--", "src/", "e2e/")
       .split("\n")
       .filter(Boolean)
@@ -72,7 +77,48 @@ describe("the Tools surface contract is unchanged", () => {
     expect(changed.sort()).toEqual([
       "src/features/tools-fidelity/tools-fidelity.css",
       "src/features/tools-fidelity/tools-fidelity.tsx",
+      "src/features/tools/components/tools-hub.tsx",
+      "src/features/tools/model/tools-projection.ts",
+      "src/features/tools/tools.css",
     ]);
+  });
+
+  /**
+   * THE ACCESS DECISION IS NOT PART OF WHAT CHANGED.
+   *
+   * `tools-projection.ts` carries both the unlock rule and the status copy. The
+   * copy was rewritten on purpose; the rule was not, and these hold that line
+   * character-for-character rather than trusting the diff to be read carefully.
+   */
+  it("leaves the unlock rule exactly as it was", () => {
+    const fn = (source: string) => {
+      const at = source.indexOf("export function isToolUnlocked");
+      expect(at).toBeGreaterThan(-1);
+      return contract(source.slice(at, source.indexOf("\n}", at) + 2));
+    };
+    expect(fn(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8")))
+      .toBe(fn(git("show", `${BASE}:src/features/tools/model/tools-projection.ts`)));
+  });
+
+  it("leaves what a row is allowed to open exactly as it was", () => {
+    const decision = (source: string) =>
+      source
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) =>
+          l.startsWith("const unlocked = isToolUnlocked") ||
+          l.startsWith("const available =") ||
+          l.startsWith("href: available"),
+        );
+    const now = decision(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8"));
+    expect(now).toEqual([
+      "const unlocked = isToolUnlocked(tool, progress);",
+      "const available = unlocked && implemented;",
+      "href: available ? toolHref(tool.code) : null,",
+    ]);
+    // `implemented` is the catalogue's own field, read verbatim.
+    expect(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8"))
+      .toContain('const implemented = tool.implementationStatus === "available";');
   });
 
   it("leaves every protected surface untouched", () => {

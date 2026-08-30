@@ -1113,3 +1113,33 @@ html.tls-root-scope,
 /* The return link kept its own bottom spacing from the old inline-block box;
    the flex box is taller, so the gap is restated rather than doubled. */
 .tls .t-return {margin-bottom:calc(var(--space-block) - 12px)}
+
+/*
+ * THE PROGRESSION LINE, BENEATH THE READINESS LINE.
+ *
+ * Two facts that move independently, so they are set as two lines rather than
+ * one sentence with a separator: readiness leads because it decides what the
+ * learner can do at all, and the requirement follows it a step quieter. On
+ * desktop both live in the state column, which keeps the row's four loci intact.
+ */
+.tls .t-entry-requirement {
+  margin:3px 0 0;
+  font-size:var(--type-caveat,11.5px);
+  line-height:1.45;
+  color:var(--text-tertiary);
+  max-width:78ch;
+}
+@media (min-width:900px){
+  .tls .t-entry-requirement {
+    grid-column:3;
+    grid-row:2;
+    align-self:start;
+    margin:2px 0 0;
+    max-width:none;
+  }
+  /* The readiness line gives up the second row of the state column to it. */
+  .tls .t-entry-condition {grid-row:1}
+}
+/* A met requirement is a settled fact, not an achievement: no Signal, no mark
+   of its own — the row's state mark already says which of the three it is. */
+.tls .t-entry--roadmap .t-entry-requirement {color:var(--text-quiet)}

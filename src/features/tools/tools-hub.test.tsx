@@ -32,8 +32,10 @@ describe("Tools Hub — operational ledger", () => {
 
   it("shows locked tools with their exact target level and no CTA", () => {
     render(<ToolsHub scenario="active" />);
-    expect(screen.getByText("Откроется на уровне 20")).toBeInTheDocument();
-    expect(screen.getByText("Откроется на уровне 25")).toBeInTheDocument();
+    // Unbuilt tools state readiness, then the gate, and never promise to open.
+    expect(screen.getAllByText("В разработке").length).toBeGreaterThan(0);
+    expect(screen.getByText("Требование доступа: уровень 20")).toBeInTheDocument();
+    expect(screen.getByText("Требование доступа: уровень 25")).toBeInTheDocument();
   });
 
   it("locked hub (early user) has no working CTA at all", () => {

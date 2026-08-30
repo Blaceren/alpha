@@ -69,8 +69,12 @@ describe("tools projection — resolver-owned unlock", () => {
       expect(v.available).toBe(false);
       expect(v.href).toBeNull();
     }
-    expect(view("tool.chart_markup").statusLabel).toBe("Откроется на уровне 20");
-    expect(view("tool.indicator_checklist").statusLabel).toBe("Откроется на уровне 25");
+    /* Neither is built, so neither promises to open. Readiness leads and the
+       gate is reported separately — the two facts move independently. */
+    expect(view("tool.chart_markup").statusLabel).toBe("В разработке");
+    expect(view("tool.indicator_checklist").statusLabel).toBe("В разработке");
+    expect(view("tool.chart_markup").requirementLabel).toBe("Требование доступа: уровень 20");
+    expect(view("tool.indicator_checklist").requirementLabel).toBe("Требование доступа: уровень 25");
   });
 
   it("earlier progression (L2) locks Trading Journal too", () => {

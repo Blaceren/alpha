@@ -44,6 +44,13 @@ export const TOOLS_COPY = {
   lockedBody: (level: number) => `Он станет доступен на уровне ${level} и останется доступным дальше.`,
   lockedProvenanceLabel: "Условие доступа",
   lockedProvenance: (level: number) => `Уровень ${level}`,
+  /* An unbuilt tool says the same thing here as it does in the register, and
+     for the same reason: a deep link must not make the promise the row no
+     longer makes. */
+  roadmapLead: "В разработке.",
+  roadmapBody: "Инструмент есть в программе, его рабочая поверхность ещё не выпущена.",
+  roadmapRequirementLabel: "Требование доступа",
+  roadmapRequirementMet: "Выполнено",
   notEnterableLead: "Инструмент открыт. Рабочая поверхность пока недоступна.",
   notEnterableBody: "Доступ сохраняется. Когда поверхность появится, работа продолжится здесь.",
   accessLabel: "Доступ",
@@ -133,6 +140,12 @@ function RegisterEntry({ tool }: { tool: ToolView }) {
             locus is what lets a learner read nineteen heterogeneous rows
             without re-learning where to look each time. */}
         <p className="t-entry-condition">{tool.statusLabel}</p>
+        {/* PROGRESS, BENEATH READINESS, AND ONLY WHERE THEY CAN DISAGREE.
+            An unbuilt tool has two facts to report and they move independently:
+            reaching the gate changes this line and nothing else on the row. */}
+        {tool.requirementLabel ? (
+          <p className="t-entry-requirement">{tool.requirementLabel}</p>
+        ) : null}
       </div>
     </article>
   );
@@ -193,18 +206,28 @@ export function CapabilityHeader({ tool, workNote }: { tool: ToolView; workNote?
  * learner has the tool, the surface is what is missing.
  */
 export function ToolLockedPage({ tool }: { tool: ToolView }) {
+  /* An unbuilt tool is not "not open yet" — it is not built, at every level,
+     and saying otherwise here would restore the promise the register dropped.
+     The gate is still reported, as the second and separate fact it is. */
+  const roadmap = !tool.implemented;
   return (
     <div className="tls">
       <div className="t-surface t-surface--prose p4">
         <ReturnLink />
         <CapabilityHeader tool={tool} />
         <StateMessage
-          truth={TOOLS_COPY.lockedLead}
-          meaning={TOOLS_COPY.lockedBody(tool.unlockLevel)}
+          truth={roadmap ? TOOLS_COPY.roadmapLead : TOOLS_COPY.lockedLead}
+          meaning={roadmap ? TOOLS_COPY.roadmapBody : TOOLS_COPY.lockedBody(tool.unlockLevel)}
         />
         <div className="p4-state-fact">
-          <div className="p4-state-fact-key">{TOOLS_COPY.lockedProvenanceLabel}</div>
-          <div className="p4-state-fact-value">{TOOLS_COPY.lockedProvenance(tool.unlockLevel)}</div>
+          <div className="p4-state-fact-key">
+            {roadmap ? TOOLS_COPY.roadmapRequirementLabel : TOOLS_COPY.lockedProvenanceLabel}
+          </div>
+          <div className="p4-state-fact-value">
+            {roadmap && tool.unlocked
+              ? TOOLS_COPY.roadmapRequirementMet
+              : TOOLS_COPY.lockedProvenance(tool.unlockLevel)}
+          </div>
         </div>
       </div>
     </div>
@@ -212,15 +235,18 @@ export function ToolLockedPage({ tool }: { tool: ToolView }) {
 }
 
 export function ToolNotEnterablePage({ tool }: { tool: ToolView }) {
+  /* Reached when the gate IS passed and the surface still does not exist. The
+     readiness line leads, because that is the fact that decides what the
+     learner can do; the met requirement follows it. */
   return (
     <div className="tls">
       <div className="t-surface t-surface--prose p4">
         <ReturnLink />
         <CapabilityHeader tool={tool} />
-        <StateMessage truth={TOOLS_COPY.notEnterableLead} meaning={TOOLS_COPY.notEnterableBody} />
+        <StateMessage truth={TOOLS_COPY.roadmapLead} meaning={TOOLS_COPY.notEnterableBody} />
         <div className="p4-state-fact">
-          <div className="p4-state-fact-key">{TOOLS_COPY.accessLabel}</div>
-          <div className="p4-state-fact-value">{TOOLS_COPY.access}</div>
+          <div className="p4-state-fact-key">{TOOLS_COPY.roadmapRequirementLabel}</div>
+          <div className="p4-state-fact-value">{TOOLS_COPY.roadmapRequirementMet}</div>
         </div>
         <p className="p4-state-forward">{TOOLS_COPY.forward}</p>
       </div>

@@ -47,7 +47,9 @@ const view = (over: Partial<ToolView> = {}): ToolView => ({
   available: true,
   current: true,
   href: "/tools/tool.trading_journal",
+  implemented: true,
   statusLabel: "Открыт · рабочий инструмент",
+  requirementLabel: null,
   ctaLabel: "Открыть журнал",
   ...over,
 });
@@ -85,8 +87,8 @@ describe("Tools — the register", () => {
       <ToolsRegister
         tools={[
           view(),
-          view({ code: "a", unlocked: false, available: false, href: null, statusLabel: "Откроется на уровне 30", unlockLevel: 30 }),
-          view({ code: "b", unlocked: true, available: false, href: null, statusLabel: "Открыт по прогрессу · инструмент готовится" }),
+          view({ code: "a", unlocked: false, available: false, implemented: false, href: null, statusLabel: "В разработке", requirementLabel: "Требование доступа: уровень 30", unlockLevel: 30 }),
+          view({ code: "b", unlocked: true, available: false, implemented: false, href: null, statusLabel: "В разработке", requirementLabel: "Требование доступа выполнено" }),
         ]}
       />,
     );
@@ -155,9 +157,11 @@ describe("Tools — locked and not-enterable are different pages", () => {
     const { container } = render(
       <ToolNotEnterablePage tool={view({ available: false, href: null })} />,
     );
-    expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.notEnterableLead);
-    expect(container.querySelector(".p4-state-fact-key")!.textContent).toBe("Доступ");
-    expect(container.querySelector(".p4-state-fact-value")!.textContent).toBe("Открыт и сохраняется");
+    /* Readiness leads here too: the gate is passed and the surface still does
+       not exist, so what decides what the learner can do is that it is unbuilt. */
+    expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.roadmapLead);
+    expect(container.querySelector(".p4-state-fact-key")!.textContent).toBe("Требование доступа");
+    expect(container.querySelector(".p4-state-fact-value")!.textContent).toBe("Выполнено");
     expect(container.querySelector(".p4-state-forward")!.textContent).toBe(TOOLS_COPY.forward);
     expect(container.querySelector("input")).toBeNull();
   });
@@ -211,9 +215,7 @@ describe("Tools — the surface dispatches on the resolved view", () => {
     const { container } = render(
       <ToolFidelitySurface toolCode={unbuilt.code} progress={progressAt(101)} />,
     );
-    expect(container.querySelector(".t-state-truth")!.textContent).toBe(
-      TOOLS_COPY.notEnterableLead,
-    );
+    expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.roadmapLead);
   });
 
   it("refuses an unknown code outright", () => {

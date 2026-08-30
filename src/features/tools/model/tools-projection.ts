@@ -11,10 +11,10 @@
  * component hardcodes L10/L15, no component reads a URL query to bypass a lock
  * (DD-308). Components receive `ToolView`s and render them.
  *
- * `available` = unlocked AND the tool's surface is actually built. A tool can be
- * unlocked-but-unimplemented: honestly "открыт по прогрессу · инструмент
- * готовится", with NO active CTA into empty functionality. As of D4-C both the
- * Trading Journal (L10) and the Risk Calculator (L15) are available for Артём.
+ * `available` = unlocked AND the tool's surface is actually built. Only the
+ * Trading Journal (L10) and the Risk Calculator (L15) are built in this
+ * release; the other seventeen are catalogue entries and say so at every level,
+ * with NO active CTA into empty functionality.
  */
 
 import {
@@ -40,8 +40,20 @@ export interface ToolView {
   current: boolean;
   /** Working route, or null when there is nothing honest to open. */
   href: string | null;
-  /** Text status — state is never conveyed by colour alone. */
+  /** Whether the tool's working surface exists in this build at all. */
+  implemented: boolean;
+  /**
+   * PRODUCT READINESS. For an unbuilt tool this says so at every level, because
+   * a learner deciding what to work towards is owed that before the gate, not
+   * after it.
+   */
   statusLabel: string;
+  /**
+   * LEARNER PROGRESS — the other, independent dimension. Present only where the
+   * two can disagree: a tool that is built says everything it needs to in
+   * `statusLabel`, and a second line there would just repeat it.
+   */
+  requirementLabel: string | null;
   /** Tool-specific CTA copy, rendered only when the tool is available. */
   ctaLabel: string;
 }
@@ -62,15 +74,28 @@ export function isToolUnlocked(tool: ToolDefinition, progress: PathProgress): bo
   return levelProgressState(tool.unlockLevel, progress) === "completed";
 }
 
-function statusLabelFor(
-  unlocked: boolean,
-  available: boolean,
-  unlockLevel: number,
-): string {
+/**
+ * TWO DIMENSIONS, NOT ONE LADDER.
+ *
+ * A row used to answer only "how far away is this?", so seventeen tools that do
+ * not exist told a learner at level 2 that they would open at level 20. That is
+ * a promise the build cannot keep, and the learner had no way to know until
+ * they arrived.
+ *
+ * Product readiness and learner progress are independent, so they are stated
+ * independently: an unbuilt tool says «В разработке» at every level and never
+ * «Откроется», and its progression requirement — met or not met — is a separate,
+ * secondary line. A built tool has only one thing to say and keeps saying it.
+ */
+function statusLabelFor(implemented: boolean, unlocked: boolean, unlockLevel: number): string {
+  if (!implemented) return "В разработке";
   if (!unlocked) return `Откроется на уровне ${unlockLevel}`;
-  if (available) return "Открыт · рабочий инструмент";
-  // Unlocked, but the surface is not built — honest, and no CTA anywhere.
-  return "Открыт по прогрессу · инструмент готовится";
+  return "Открыт · рабочий инструмент";
+}
+
+function requirementLabelFor(implemented: boolean, unlocked: boolean, unlockLevel: number): string | null {
+  if (implemented) return null;
+  return unlocked ? "Требование доступа выполнено" : `Требование доступа: уровень ${unlockLevel}`;
 }
 
 /**
@@ -82,7 +107,8 @@ function statusLabelFor(
 export function projectTools(progress: PathProgress): ToolView[] {
   const views = TOOL_DEFINITIONS.map((tool): Omit<ToolView, "current"> => {
     const unlocked = isToolUnlocked(tool, progress);
-    const available = unlocked && tool.implementationStatus === "available";
+    const implemented = tool.implementationStatus === "available";
+    const available = unlocked && implemented;
     return {
       id: tool.id,
       code: tool.code,
@@ -91,8 +117,10 @@ export function projectTools(progress: PathProgress): ToolView[] {
       unlockLevel: tool.unlockLevel,
       unlocked,
       available,
+      implemented,
       href: available ? toolHref(tool.code) : null,
-      statusLabel: statusLabelFor(unlocked, available, tool.unlockLevel),
+      statusLabel: statusLabelFor(implemented, unlocked, tool.unlockLevel),
+      requirementLabel: requirementLabelFor(implemented, unlocked, tool.unlockLevel),
       ctaLabel: tool.ctaLabel,
     };
   });

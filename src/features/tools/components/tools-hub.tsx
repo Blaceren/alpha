@@ -100,6 +100,12 @@ function ToolRow({ tool }: { tool: ToolView }) {
           <span className="th-dot" aria-hidden="true" />
           {tool.statusLabel}
         </p>
+        {/* The gate, where it is a separate fact from readiness. Fixture mode
+            renders the same two dimensions as the shipped register, so the two
+            cannot drift apart during development. */}
+        {tool.requirementLabel ? (
+          <p className="th-requirement">{tool.requirementLabel}</p>
+        ) : null}
       </div>
 
       <div className="th-action">
