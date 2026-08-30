@@ -589,3 +589,68 @@
   margin: 0 0 10px;
 }
 .ld .cur-state__message { font-size: 15px; line-height: 1.6; }
+
+/* ===================================================================== */
+/* CORRECTIVE PASS — two findings from the post-cutover verification.    */
+/* ===================================================================== */
+
+/*
+ * ANSWER ROW TARGET.
+ *
+ * WHAT I GOT WRONG THE FIRST TIME. I reported zero targets under 44px. That
+ * scan ran on a harness that inlined the source stylesheets and stripped the
+ * Tailwind preflight, so it had no `*{box-sizing:border-box}`. Without it the
+ * row's `min-height: 44px` applied to the CONTENT box and the stretched label
+ * came out 44px tall. With border-box — which is what ships — the row is 44px
+ * INCLUDING its 14px of padding, so the label is 30px and the padding band
+ * belongs to a `div` that does nothing when clicked.
+ *
+ * THE ROW IS ALREADY BIG ENOUGH. Measured on the served bytes: 44px at 1440,
+ * 58px at 390. So nothing needs to grow — the label's activation area has to
+ * reach the edges of a row that is already the right size. A transparent
+ * ::before stretched to the row's padding box does exactly that and changes no
+ * geometry: same row height, same text position, same radio, same rhythm.
+ *
+ * STACKING. The overlay belongs to the label, which follows the input in the
+ * DOM, so it would paint over the radio and swallow direct clicks on it. The
+ * input is lifted one layer so a click on the radio still lands on the radio.
+ * Neither is focusable, so Tab still reaches the input and `:focus-visible`
+ * still draws on the real control.
+ *
+ * The overlay is `inset: 0` against the row's padding box, so it stops exactly
+ * at the row's own bounds — adjacent options cannot overlap each other.
+ */
+.ld .asmt__option { position: relative; }
+.ld .asmt__option label::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.ld .asmt__option input[type="radio"] {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * TAIL CLEARANCE.
+ *
+ * Below 900px the shell renders a fixed bottom navigation, and this surface
+ * passes `frozenSurface`, so `main` reserves nothing and the surface owns its
+ * own gutter. It reserved 56px against a 60px bar, which put the last 4px of
+ * the level navigation under it at the end of the document.
+ *
+ * The reservation is now the shell's own formula, the one `.home-main` uses
+ * when it is not frozen: the bar's height token, plus the safe-area inset, plus
+ * a 24px visual margin. Same breakpoint as `.bottomnav`'s own, so the padding
+ * exists exactly where the bar does. Desktop geometry is untouched.
+ *
+ * This block is last so it wins the bottom edge from the 860px and 420px blocks
+ * above, which keep everything else they set.
+ */
+@media (max-width: 899.98px) {
+  .ax.ld {
+    padding-bottom: calc(
+      var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px
+    );
+  }
+}
