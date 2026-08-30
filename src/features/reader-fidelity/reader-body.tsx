@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LessonBody } from "@/lib/curriculum/lesson-body";
-import { LessonBlockView } from "@/features/lesson-reader/lesson-blocks";
+import { ReaderBlock } from "@/features/reader-fidelity/reader-blocks";
 import {
   saveLessonReadingProgress,
   newLessonProgressRequestId,
 } from "@/lib/curriculum/lesson-progress-client";
-import type { ReadingState } from "@/features/lesson-reader/lesson-reading";
+
 import {
   BOUNDARY_LABEL,
   BOUNDARY_TEXT,
@@ -18,6 +18,7 @@ import {
   STRIP_BUTTON,
   TOC_LABEL,
   type BoundaryClass,
+  type ReadingState,
 } from "@/features/reader-fidelity/reader-state";
 
 /**
@@ -270,12 +271,12 @@ export function ReaderBody({
               {section.title}
             </h2>
             {section.blocks.map((block, blockIndex) => (
-              <LessonBlockView
+              <ReaderBlock
                 block={block}
                 key={blockIndex}
                 levelHref={levelHref}
                 nextLevelHref={nextLevelHref}
-                posture={posture}
+                actionable={posture === "act"}
               />
             ))}
             {canTrackReading ? (
@@ -294,12 +295,12 @@ export function ReaderBody({
         {body.appendix.length > 0 ? (
           <section className="section" aria-label="Дополнительно">
             {body.appendix.map((block, index) => (
-              <LessonBlockView
+              <ReaderBlock
                 block={block}
                 key={index}
                 levelHref={levelHref}
                 nextLevelHref={nextLevelHref}
-                posture={posture}
+                actionable={posture === "act"}
               />
             ))}
           </section>

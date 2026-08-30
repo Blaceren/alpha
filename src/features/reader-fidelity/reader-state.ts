@@ -108,3 +108,16 @@ export const OBJECTIVE_LABEL = "Чему учит материал";
 export const TOC_LABEL = "Структура материала";
 export const STRIP_BUTTON = "Структура";
 export const SAVE_FAILED_NOTE = "Не удалось сохранить отметку. Материал остаётся доступным.";
+
+/**
+ * The learner's position in the material, as the Backend owns it.
+ *
+ * `revision` is the optimistic-concurrency token: a save carries the revision it
+ * believed it was updating, and the server refuses a stale one rather than
+ * overwriting a newer position from another tab.
+ */
+export type ReadingState = {
+  readonly revision: number;
+  readonly completedSections: readonly string[];
+  readonly activeSectionCode: string | null;
+};

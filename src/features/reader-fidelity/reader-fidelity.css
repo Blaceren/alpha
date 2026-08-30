@@ -1,3 +1,36 @@
+/*
+ * THE READER — the frozen reading stylesheet, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: LessonsATA @ e311a849bcd12b086de68d6cb41f908e8b99f910,
+ * `Reader/hifi/desktop/prototype/styles.css` (680 lines). Every value is
+ * carried across UNCHANGED, and the transform proves it: 243 selectors, 0
+ * escaping the namespace, 0 remote URLs, !important 2/2, and the only two
+ * changed declarations are the font bindings below.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The two families are bound to the product's locally vendored faces —
+ *    "ATA Manrope", "ATA IBM Plex Mono". The frozen document loaded them from
+ *    Google Fonts through a `<link>` in its head; that link is simply not part
+ *    of this surface, so no remote request is made from anywhere.
+ *
+ * 2. Every selector is namespaced under `.rdr`. The prototype was a standalone
+ *    document and styled `body`, `html`, `*`, `a`, `h1`-`h4`, `table`, `td`,
+ *    `th`, `caption`, `::selection` and `:focus-visible` globally.
+ *
+ * 3. `html.rdr-root-scope` and the `.rdr .topbar*`, `.rdr .skip-link` and
+ *    `.rdr .qa` rules are carried across and are dead: the product keeps the
+ *    accepted AppShell, which supplies the one `<main>` landmark and the one
+ *    skip link, and the `&qa=1` instrumentation panel is not part of a product.
+ *
+ * 4. Nothing was added. The three block types the frozen Reader has no
+ *    vocabulary for — image, video and download — keep the product's own
+ *    rendering and its own stylesheet; see `reader-media.tsx`.
+ *
+ * Adding `.rdr ` raises every rule's specificity by the same amount, so the
+ * cascade order inside the surface is preserved exactly.
+ */
+
 /* ============================================================
    ATA ACADEMY — LESSON READER · desktop high-fi (Phase 5)
 
