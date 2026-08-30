@@ -83,35 +83,49 @@ type Load =
 
 const PAGE_TITLE_ID = "notifications-title";
 
+/**
+ * The request, as a plain async function that RETURNS the next state instead of
+ * setting it. Keeping the state update out of here is what lets the mount
+ * effect stay a pure subscription — it awaits, then commits once, and nothing
+ * sets state synchronously inside an effect body.
+ */
+async function requestRegister(): Promise<Load> {
+  try {
+    const res = await fetch("/api/backend/notifications", {
+      credentials: "include",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = (await res.json()) as { items?: NotificationRow[] };
+    const rows = data.items ?? [];
+    const now = new Date();
+    const records = rows
+      .map((row) => toRecord(row, now))
+      .filter((r): r is NotificationRecord => r !== null);
+    return { phase: "ready", records, suppressed: rows.length - records.length };
+  } catch {
+    return { phase: "failed" };
+  }
+}
+
 export function NotificationsFidelity() {
   const [load, setLoad] = useState<Load>({ phase: "loading" });
 
-  /* The mount effect must not set state synchronously — the initial state is
-     already `loading`, so there is nothing to set. The retry path puts the
-     surface back into `loading` from its own click handler, where a synchronous
-     update is exactly right. */
-  const request = useCallback(async () => {
-    try {
-      const res = await fetch("/api/backend/notifications", {
-        credentials: "include",
-        headers: { accept: "application/json" },
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { items?: NotificationRow[] };
-      const rows = data.items ?? [];
-      const now = new Date();
-      const records = rows
-        .map((row) => toRecord(row, now))
-        .filter((r): r is NotificationRecord => r !== null);
-      setLoad({ phase: "ready", records, suppressed: rows.length - records.length });
-    } catch {
-      setLoad({ phase: "failed" });
-    }
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const next = await requestRegister();
+      if (alive) setLoad(next);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  useEffect(() => {
-    void request();
-  }, [request]);
+  const retry = useCallback(() => {
+    setLoad({ phase: "loading" });
+    void requestRegister().then(setLoad);
+  }, []);
 
   const records = load.phase === "ready" ? load.records : null;
   const requestState = load.phase === "ready" ? "SUCCESS" : load.phase === "failed" ? "FAILURE" : "LOADING";
@@ -135,14 +149,7 @@ export function NotificationsFidelity() {
               <div className="n-state__body">
                 <p className="n-state__lead">{COPY.failureLead}</p>
                 <p className="n-state__support">{COPY.failureReasonCold}</p>
-                <button
-                  type="button"
-                  className="n-control n-recover"
-                  onClick={() => {
-                    setLoad({ phase: "loading" });
-                    void request();
-                  }}
-                >
+                <button type="button" className="n-control n-recover" onClick={retry}>
                   {COPY.failureRecovery}
                 </button>
               </div>
