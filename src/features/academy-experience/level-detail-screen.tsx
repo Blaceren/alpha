@@ -47,6 +47,7 @@ import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import { MilestoneMark } from "@/features/academy-experience/primitives";
 import "@/features/curriculum-api/curriculum-api.css";
 import "@/features/academy-experience/experience.css";
+import "@/features/level-detail-fidelity/level-detail-fidelity.css";
 
 const ASSESSMENT_LOCALE = "ru";
 const REPORT_LOCALE = "ru";
@@ -120,7 +121,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
       );
     return (
       <AppShell userName={name} activeId="lessons">
-        <div className="ax">{body}</div>
+        <div className="ax ld">{body}</div>
       </AppShell>
     );
   }
@@ -193,7 +194,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
 
   return (
     <AppShell userName={name} activeId="lessons">
-      <div className="ax">
+      <div className="ax ld">
         <article data-level={summary.levelCode} data-state={summary.state} data-posture={posture}>
           <header className="ax-lvlhead">
             <p className="ax-coord">
