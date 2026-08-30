@@ -89,7 +89,7 @@ export async function ReaderFidelityScreen({ levelCode }: { levelCode: string })
 
   const body = content.body!;
   const meta = content.metadata;
-  const module = moduleOf(curriculum, detail);
+  const owningModule = moduleOf(curriculum, detail);
 
   return (
     <AppShell userName={name} activeId="lessons" frozenSurface>
@@ -103,8 +103,8 @@ export async function ReaderFidelityScreen({ levelCode }: { levelCode: string })
             ? `/lessons/${encodeURIComponent(navigation.nextLevelCode)}`
             : null
         }
-        moduleOrder={module?.order ?? 0}
-        moduleTitle={module?.title ?? ""}
+        moduleOrder={owningModule?.order ?? 0}
+        moduleTitle={owningModule?.title ?? ""}
         /* The localized content title when the published content has one, the
            level title otherwise. Never both — two headings saying nearly the
            same thing is the duplication the composition avoids. */
@@ -142,8 +142,8 @@ function moduleOf(
   if (!curriculum.ok) return null;
   const view = curriculum.view;
   if (view.state !== "enrolled" && view.state !== "completed") return null;
-  const module = view.modules.find((m) => m.moduleCode === detail.moduleCode);
-  return module ? { order: module.order, title: module.title } : null;
+  const found = view.modules.find((m) => m.moduleCode === detail.moduleCode);
+  return found ? { order: found.order, title: found.title } : null;
 }
 
 export { AVAILABILITY };
