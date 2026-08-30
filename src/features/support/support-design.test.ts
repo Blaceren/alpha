@@ -204,11 +204,14 @@ describe("the stylesheet stays inside Support", () => {
  * stylesheet so the content keeps the x position it was accepted with.
  */
 describe("the Support canvas", () => {
-  const ROUTE = readFileSync(join(ROOT, "src/app/(app)/support/page.tsx"), "utf8");
+  const ROUTE_SRC = readFileSync(join(ROOT, "src/app/(app)/support/page.tsx"), "utf8");
+  /* Comments explain the flag by name, so the prop has to be read from the CODE
+     — asserting on the file text passed while the prop was removed. */
+  const ROUTE = ROUTE_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const HOME = readFileSync(join(ROOT, "src/features/home/home.css"), "utf8");
 
   it("asks the shell for the flat Ink ground", () => {
-    expect(ROUTE).toContain("frozenSurface");
+    expect(ROUTE).toMatch(/<AppShell[^>]*\sfrozenSurface[\s/>]/);
     // And it is the existing mechanism, not a new one: no wrapper, no new prop.
     expect(ROUTE).not.toMatch(/background/i);
     expect(ROUTE).not.toMatch(/box-shadow/i);
