@@ -7,7 +7,21 @@ import { RetryButton } from "@/features/curriculum-api/retry-button";
  * request id is shown when present; retry is offered ONLY for retryable
  * network/backend failures. A disabled feature reads as "not activated",
  * never as "no lessons".
+ *
+ * THE HEADING LEVEL IS THE CALLER'S TO DECLARE, AND DEFAULTS TO WHAT IT WAS.
+ * These screens are used two ways. Inside a surface that already has its own
+ * `h1`, the state is a section of that page and `h2` is correct — that is every
+ * existing caller and it is the default, so none of them change. But on a route
+ * where the state IS the whole page, as on the level detail read failures, an
+ * `h2` leaves the document with no `h1` at all and the page announces itself
+ * with no title. Those callers pass `headingLevel="h1"`.
+ *
+ * Only the tag changes. The copy, the role, the live region, the retry rule and
+ * the request id are identical either way, and nothing hidden is added — the
+ * one heading on the page is the one the reader can see.
  */
+
+type HeadingLevel = "h1" | "h2";
 
 const COPY: Record<CurriculumErrorCategory, { title: string; message: string }> = {
   UNAUTHENTICATED: { title: "Требуется вход", message: "Войдите, чтобы продолжить обучение." },
@@ -25,11 +39,18 @@ const COPY: Record<CurriculumErrorCategory, { title: string; message: string }> 
   UNKNOWN_ERROR: { title: "Что-то пошло не так", message: "Не удалось загрузить данные." },
 };
 
-export function CurriculumErrorState({ error }: { error: CurriculumReadError }) {
+export function CurriculumErrorState({
+  error,
+  headingLevel = "h2",
+}: {
+  error: CurriculumReadError;
+  headingLevel?: HeadingLevel;
+}) {
   const copy = COPY[error.category];
+  const Heading = headingLevel;
   return (
     <section className="cur-state" role="status" aria-live="polite">
-      <h2 className="cur-state__title">{copy.title}</h2>
+      <Heading className="cur-state__title">{copy.title}</Heading>
       <p className="cur-state__message">{copy.message}</p>
       {error.retryable ? <RetryButton /> : null}
       {error.requestId ? (
@@ -43,14 +64,17 @@ export function CurriculumInfoState({
   title,
   message,
   children,
+  headingLevel = "h2",
 }: {
   title: string;
   message: string;
   children?: ReactNode;
+  headingLevel?: HeadingLevel;
 }) {
+  const Heading = headingLevel;
   return (
     <section className="cur-state" role="status">
-      <h2 className="cur-state__title">{title}</h2>
+      <Heading className="cur-state__title">{title}</Heading>
       <p className="cur-state__message">{message}</p>
       {children}
     </section>

@@ -113,11 +113,18 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
   const result = await getLevelDetail(levelCode);
 
   if (!result.ok) {
+    /* On this route the bounded state IS the page — there is no level header
+       above it to own the document's heading — so it declares `h1`. Everywhere
+       else these screens stay `h2` inside a surface that already has one. */
     const body =
       result.error.category === "LEVEL_NOT_FOUND" ? (
-        <CurriculumInfoState title="Уровень не найден" message="Такого уровня нет в текущей программе." />
+        <CurriculumInfoState
+          headingLevel="h1"
+          title="Уровень не найден"
+          message="Такого уровня нет в текущей программе."
+        />
       ) : (
-        <CurriculumErrorState error={result.error} />
+        <CurriculumErrorState headingLevel="h1" error={result.error} />
       );
     return (
       <AppShell userName={name} activeId="lessons" frozenSurface>

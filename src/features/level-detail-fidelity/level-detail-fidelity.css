@@ -521,3 +521,71 @@
   background: transparent; color: var(--text-primary); border-color: var(--divider-strong);
 }
 .ld .ax-done__cta--quiet:hover { background: var(--surface-subtle); }
+
+/*
+ * VOLUME — a 44px target with a 3px track.
+ *
+ * MEASURED, NOT ASSUMED. The player draws the volume slider by styling the
+ * `input[type=range]` ELEMENT as the track: `height: 3px`, a rounded background,
+ * and a 12px thumb that overflows it. Raw hit-testing with elementFromPoint puts
+ * the input's real interaction zone at 78x13 — the thumb's overflow, not the
+ * 31px the label around it occupies. The label's 14px vertical padding is not
+ * part of it: above and below the input, elementFromPoint returns the LABEL, and
+ * a click forwarded from a label to a range input focuses it without setting a
+ * value at that position. So the drag zone was 13px tall.
+ *
+ * THE FIX IS THE SHAPE OF THE ELEMENT, NOT ITS PAINT. The input becomes 44px
+ * tall and transparent — that box IS the interaction target, natively, for
+ * pointer and drag alike — and the 3px track it used to be moves to the track
+ * pseudo-elements, one for Blink and one for Gecko, with the same height, the
+ * same radius and the same colour. Nothing about the drawn control changes: the
+ * track stays 3px, the thumb stays 12px, and it is not turned into a pill.
+ *
+ * The label loses its vertical padding because the height now comes from the
+ * input; it keeps `Громкость` and the input keeps its `aria-valuetext`, so the
+ * accessible name and the announced value are untouched.
+ */
+.ld .avp__volume-slider {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+}
+.ld .avp__volume-slider input[type="range"] {
+  height: 44px;
+  background: transparent;
+  border-radius: 0;
+}
+/* Blink/WebKit: the track is a pseudo-element, and the thumb is positioned
+   against it, so it needs centring by hand — (3 - 12) / 2. */
+.ld .avp__volume-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--avp-border-strong);
+}
+.ld .avp__volume-slider input[type="range"]::-webkit-slider-thumb {
+  margin-top: -4.5px;
+}
+/* Gecko: it centres the thumb on the track itself. */
+.ld .avp__volume-slider input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--avp-border-strong);
+}
+
+/* -------------------------------------------------- bounded state screens -- */
+
+/* When the bounded state IS the page it carries the document's `h1`, so it is
+   set at the page's own title size rather than the section size it uses inside
+   a surface that already has one. The copy, the centred layout, the retry rule
+   and the request id are untouched. */
+.ld .cur-state { margin: 56px auto; }
+.ld .cur-state h1.cur-state__title {
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.014em;
+  font-weight: 750;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+.ld .cur-state__message { font-size: 15px; line-height: 1.6; }
