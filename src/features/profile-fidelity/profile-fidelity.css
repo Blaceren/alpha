@@ -1,3 +1,50 @@
+/*
+ * PROFILE — the frozen Profile design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: ProfileATA @ df540ad3aa3fbf212499e931473fa1a9579a15d3 —
+ * `design/phase3/system/layer0-foundation.css`, `layer1-semantic.css`,
+ * `layer2-components.css`, `layer3-behaviour.css` and the Phase-4
+ * `design/phase4/page/page.css`, concatenated in the order the frozen page links
+ * them. Every value is carried across UNCHANGED, and the transform proves it:
+ * 278 declarations in, 278 out, 2 changed, and those two are the font bindings
+ * below. 77 selectors, 0 escaping the namespace, 0 remote URLs, !important 3/3.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The two families are bound to the product's locally vendored faces —
+ *    "ATA Manrope" and "ATA IBM Plex Mono". The stacks are otherwise identical.
+ *
+ * 2. Every selector is namespaced under `.pf`:
+ *      :root                    -> .pf   (the four layers scope to this surface)
+ *      body                     -> .pf   (field, colour and type land on the root)
+ *      html                     -> html.pf-root-scope  (see 3)
+ *      *, a, button, input, h1… -> .pf *, .pf a, …
+ *      :focus-visible           -> .pf :focus-visible
+ *      .p-*, .sr-only, .p4-status -> .pf .p-*, …
+ *
+ *    `.pf .p-profile :is(a, button, input, [tabindex]):focus-visible` is ONE
+ *    selector and survived as one: the transform splits a selector list on
+ *    top-level commas only, because splitting inside `:is()` would have produced
+ *    three broken fragments and a clean-looking declaration count.
+ *
+ * 3. `html.pf-root-scope` carries the frozen document reset, and NOTHING EVER
+ *    ADDS THAT CLASS. It is kept so the declaration count balances; the real
+ *    document reset is the product's own.
+ *
+ * 4. `.pf .p-profile` is the surface container — padding and `max-width` — as it
+ *    was in the frozen document where it was `<main class="p-profile">`. Here the
+ *    shell owns the one `<main>` landmark, so the class lands on a plain element
+ *    inside it. The geometry is unchanged and no second landmark is created.
+ *
+ * 5. `.pf .sr-only` is carried across and unused: this surface's one
+ *    visually-hidden element is the live region, which the Phase-4 layer gives
+ *    its own `.p4-status` rule for exactly the reasons that file records.
+ *
+ * Adding `.pf ` raises every rule's specificity by the same amount, so the
+ * cascade order across the four layers is preserved exactly — which matters
+ * more here than anywhere else, because the layering IS the design system.
+ */
+
 /* --- design/phase3/system/layer0-foundation.css --- */
 /* ATA NOTIFICATIONS — PHASE 2 — SHARED FOUNDATION
    =====================================================================
