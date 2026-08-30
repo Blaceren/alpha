@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LessonBody } from "@/lib/curriculum/lesson-body";
 import { ReaderBlock } from "@/features/reader-fidelity/reader-blocks";
@@ -323,7 +324,7 @@ export function ReaderBody({
           ) : null}
           <nav className="exits" aria-label="Навигация">
             <a href={levelHref}>← Уровень {levelOrder}</a>
-            <a href="/path">Открыть путь</a>
+            <Link href="/path">Открыть путь</Link>
           </nav>
         </footer>
       </article>

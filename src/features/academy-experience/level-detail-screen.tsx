@@ -21,6 +21,7 @@
  * themselves differently — the property Wave 1 established between Home and Path,
  * extended to the third surface.
  */
+import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getLevelDetail } from "@/lib/curriculum/provider";
@@ -421,7 +422,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             ) : (
               <span />
             )}
-            <a href="/path">Вернуться к пути</a>
+            <Link href="/path">Вернуться к пути</Link>
             {navigation.nextLevelCode ? (
               <a href={`/lessons/${encodeURIComponent(navigation.nextLevelCode)}`}>Следующий уровень →</a>
             ) : (

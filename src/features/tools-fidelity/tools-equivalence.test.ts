@@ -25,7 +25,7 @@ const ROOT = process.cwd();
  * is the one every later phase has to answer about it: nothing in the Tools
  * surface has moved since the release.
  */
-const BASE = "ed5d2f81f02925c06359a9b2532698c8d12f1812";
+const BASE = "7c52c387faa6d964b83e2876e9db32f871c37b3e";
 
 /**
  * The files that may not move at all. The status COPY was deliberately changed
@@ -127,8 +127,9 @@ describe("the Tools surface contract is unchanged", () => {
   it("leaves every protected surface untouched", () => {
     /* Support is the surface under design now, so it is expected to change and
        is not on this list; everything else must be exactly as it shipped. */
-    /* Support is the next phase and must not move in this one; the rest are the
-       surfaces this pass has no business in. */
+    /* The surfaces no phase since the Tools release has had business in. Three
+       of them were released from this list when the owner authorised the four
+       `next/link` swaps; those are pinned in navigation-links.test.tsx. */
     const changed = git("diff", "--name-only", BASE, "--", "src/").split("\n").filter(Boolean);
     const forbidden = [
       "src/features/auth/",
@@ -137,11 +138,14 @@ describe("the Tools surface contract is unchanged", () => {
       "src/components/shell/",
       "src/features/home",
       "src/features/path",
-      "src/features/lessons",
+      /* Lessons, Reader and Level Detail each carry one of the four authorised
+         link swaps; they are pinned by navigation-links.test.tsx instead. */
       "src/features/level-detail-fidelity/",
       "src/features/workspace",
       "src/features/notifications",
-      "src/features/profile",
+      /* Profile carries one of the four authorised link swaps
+         (AUTHENTICATED-NAVIGATION-FULL-LOAD-1), so it is pinned by
+         navigation-links.test.tsx rather than frozen here. */
       "src/config/feature-visibility.ts",
       "src/app/layout.tsx",
       "public/brand/",

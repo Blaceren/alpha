@@ -77,23 +77,43 @@ describe("the authenticated route group", () => {
     }
   });
 
-  it("changed nothing but that one boundary", () => {
-    const BASE = "1f0575cbc53dd5f373cf2c6c2f1a64230127c5c4";
+  /**
+   * Re-based on the release the boundary removal shipped in.
+   *
+   * This file was written while that removal was the work in hand and asked
+   * "what did THIS pass change?". It is live now, so the question it answers
+   * from here is the one every later phase must answer about it: the boundary
+   * has not come back, and no surface body has moved except where the owner
+   * authorised it.
+   */
+  const BASE = "7c52c387faa6d964b83e2876e9db32f871c37b3e";
+
+  /* The four bare anchors the owner authorised converting to `next/link`.
+     AUTHENTICATED-NAVIGATION-FULL-LOAD-1; pinned in navigation-links.test.tsx. */
+  const AUTHORISED_LINK_SWAPS = [
+    "src/features/academy-experience/level-detail-screen.tsx",
+    "src/features/lessons-fidelity/lessons-corpus.tsx",
+    "src/features/profile-fidelity/profile-fidelity.tsx",
+    "src/features/reader-fidelity/reader-body.tsx",
+  ];
+
+  it("has brought no loading boundary back since the release", () => {
+    const changed = git("diff", "--name-only", BASE, "--", "src/app")
+      .split("\n").filter(Boolean)
+      .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
+    expect(changed).toEqual([]);
+  });
+
+  it("touches no surface body beyond the authorised link swaps", () => {
     const changed = git("diff", "--name-only", BASE, "--", "src/")
       .split("\n").filter(Boolean)
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
-    expect(changed).toEqual([`${GROUP}/loading.tsx`]);
-  });
-
-  it("leaves every accepted surface body untouched", () => {
-    const BASE = "1f0575cbc53dd5f373cf2c6c2f1a64230127c5c4";
-    const changed = git("diff", "--name-only", BASE, "--", "src/").split("\n").filter(Boolean);
+    expect(changed.sort()).toEqual(AUTHORISED_LINK_SWAPS);
     for (const prefix of [
-      "src/features/home", "src/features/path-fidelity", "src/features/lessons",
-      "src/features/level-detail-fidelity", "src/features/reader-fidelity",
-      "src/features/workspace", "src/features/tools", "src/features/tools-fidelity",
-      "src/features/support", "src/features/notifications", "src/features/profile",
-      "src/features/auth", "src/components/shell", "src/features/academy-experience",
+      "src/features/home", "src/features/path-fidelity",
+      "src/features/level-detail-fidelity", "src/features/workspace",
+      "src/features/tools", "src/features/tools-fidelity", "src/features/support",
+      "src/features/notifications", "src/features/auth", "src/components/shell",
       "src/config/feature-visibility.ts", "src/app/layout.tsx",
     ]) {
       expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);

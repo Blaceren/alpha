@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveProfileName } from "@/lib/profile/profile-client";
@@ -288,9 +289,9 @@ function SupportHandoff() {
   return (
     <p className="p-support" data-role="support">
       {COPY.support_lead}{" "}
-      <a href="/support" data-role="support-link">
+      <Link href="/support" data-role="support-link">
         {COPY.support_link}
-      </a>
+      </Link>
     </p>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { countPhrase, foundPhrase } from "@/features/lessons-fidelity/ru-plural";
 
@@ -213,14 +214,14 @@ function Material({ material, asHit }: { material: CorpusMaterial; asHit: boolea
   const titleId = `m-title-${material.order}`;
   return (
     <li className={className} data-level={material.levelCode}>
-      <a className="material__open" href={material.href} aria-labelledby={titleId}>
+      <Link className="material__open" href={material.href} aria-labelledby={titleId}>
         <span className="material__title" id={titleId}>
           {material.title}
         </span>
         <span className="material__aff" aria-hidden="true">
           →
         </span>
-      </a>
+      </Link>
     </li>
   );
 }
