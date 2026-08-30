@@ -162,7 +162,12 @@ describe("§11 — identity is by NAME; order is a separate, deliberate protocol
       "learner_ops_admin",
       "learner_ops_escalation_resolve",
       "community_moderate",
+      // PHASE-1 ADMIN appends `curriculum_progress_override` at 26 by the same
+      // rule: another new axis, and the twenty-six before it do not move.
+      "curriculum_progress_override",
     ]);
+    expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("community_moderate")).toBe(25);
+    expect(CRM_SESSION_PERMISSION_CONTRACT.indexOf("curriculum_progress_override")).toBe(26);
   });
 });
 

@@ -310,10 +310,15 @@ describe("Learner Operations permission matrix", () => {
     // v3 added nine; v4 added the tenth, `learner_ops_escalation_resolve`,
     // after LO-ESCALATION-RESOLVE-AUTHORITY-1 showed that raising an escalation
     // and answering one had been fused into a single permission. v5 appends
-    // `community_moderate`, which belongs to no `learner_ops_*` family — the
-    // assertions below are unchanged because nothing before position 25 moved.
-    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(5);
-    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(26);
+    // `community_moderate` and v6 appends `curriculum_progress_override`;
+    // neither belongs to a `learner_ops_*` family — the assertions below are
+    // unchanged because nothing before position 25 moved.
+    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(6);
+    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(27);
+    // The Learner Operations block still occupies exactly 15..24 — which is the
+    // property this file owns, and the reason two later appends changed nothing
+    // here.
+    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15, 25)).toEqual([...NEW_PERMISSIONS]);
     // The first fifteen keep their exact accepted positions.
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15)).toEqual([
       "view_exact_financials",
@@ -339,10 +344,12 @@ describe("Learner Operations permission matrix", () => {
     expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15, 15 + NEW_PERMISSIONS.length)).toEqual(
       NEW_PERMISSIONS,
     );
-    // And what follows it is not a learner-operations permission.
-    expect(CRM_SESSION_PERMISSION_CONTRACT.slice(15 + NEW_PERMISSIONS.length)).toEqual([
-      "community_moderate",
-    ]);
+    // And everything that follows it belongs to no learner-operations family —
+    // which is the actual property, so it is asserted as such rather than by
+    // listing whatever happens to have been appended since.
+    const after = CRM_SESSION_PERMISSION_CONTRACT.slice(15 + NEW_PERMISSIONS.length);
+    expect(after).toEqual(["community_moderate", "curriculum_progress_override"]);
+    expect(after.some((permission) => permission.startsWith("learner_ops_"))).toBe(false);
   });
 
   it("gives mentor RESOLVE and withholds RAISE — LO-ESCALATION-RESOLVE-AUTHORITY-1", () => {

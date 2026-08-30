@@ -750,15 +750,27 @@ async function main() {
 
   /* ------------------------------ 6b · LO-ESCALATION-RESOLVE-AUTHORITY-1 */
 
-  await check("v4 · the contract carries 25 permissions and the resolve name is LAST", () => {
-    assert.equal(CRM_SESSION_PERMISSION_CONTRACT_VERSION, 4);
-    assert.equal(CRM_SESSION_PERMISSION_CONTRACT.length, 25);
+  await check("the contract still APPENDS, and v4's resolve name kept its position", () => {
+    // WHAT THIS CHECK IS FOR, restated because the numbers moved twice since it
+    // was written. It is not about the count: it is about the contract only ever
+    // GROWING AT THE END, so no position a client pinned changes meaning.
+    //
+    // v5 appended `community_moderate` (COMMUNITY-V1) and v6 appended
+    // `curriculum_progress_override` (PHASE-1 ADMIN). So v4's entry is no longer
+    // last — it is at index 24, exactly where v4 put it, which is the stronger
+    // statement and the one this check now makes.
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT_VERSION, 6);
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT.length, 27);
     assert.equal(
-      CRM_SESSION_PERMISSION_CONTRACT[CRM_SESSION_PERMISSION_CONTRACT.length - 1],
-      "learner_ops_escalation_resolve",
+      CRM_SESSION_PERMISSION_CONTRACT.indexOf("learner_ops_escalation_resolve"),
+      24,
       "appended, never inserted — order is part of the protocol",
     );
-    // The other twenty-four are untouched, in their original order.
+    assert.deepEqual(CRM_SESSION_PERMISSION_CONTRACT.slice(25), [
+      "community_moderate",
+      "curriculum_progress_override",
+    ]);
+    // The first fifteen are untouched, in their original order.
     assert.deepEqual(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15), [
       "view_exact_financials", "view_identity_full_email", "reveal_pii", "assign_owner",
       "export", "view_audit", "manage_settings", "edit_user_notes", "view_user_notes",
@@ -796,8 +808,19 @@ async function main() {
     // preprod-qa-operator's shape: StaffRole `moderator`, User.role `admin`.
     // A platform admin role is not a CRM permission and never becomes one.
     const moderator = resolveEffectivePermissions("moderator");
-    assert.deepEqual([...moderator], [], "moderator must still hold zero permissions");
+    // COMMUNITY-V1 gave `moderator` exactly one permission — `community_moderate`
+    // — so "zero permissions" is no longer the way to state this control. What
+    // it always meant is that moderator gains nothing from LEARNER OPERATIONS,
+    // and that is asserted directly now rather than via an empty list that a
+    // later, unrelated phase could falsify.
+    assert.deepEqual([...moderator], ["community_moderate"]);
+    assert.equal(
+      moderator.some((permission) => permission.startsWith("learner_ops_")),
+      false,
+      "moderator must hold no learner-operations permission",
+    );
     assert.equal(canResolveLearnerOpsEscalation(moderator), false);
+    assert.equal(moderator.includes("curriculum_progress_override"), false);
   });
 
   await check("v4 · no OTHER role's permission set changed", () => {
