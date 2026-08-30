@@ -6,10 +6,10 @@
  * guess, and the Russian plural forms come from one module rather than from a
  * ternary that gets `2 материала` wrong.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LessonsCorpus, type CorpusMaterial } from "@/features/lessons-fidelity/lessons-corpus";
 import { countPhrase, foundPhrase, select } from "@/features/lessons-fidelity/ru-plural";
