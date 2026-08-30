@@ -78,6 +78,7 @@ describe("the four confirmed transitions use the router", () => {
  * the defect in the browser, so it is the right thing to pin.
  */
 import { render } from "@testing-library/react";
+import Link from "next/link";
 import { LessonsCorpus } from "@/features/lessons-fidelity/lessons-corpus";
 
 /** React's own props for a DOM node — how a Link is told from a bare anchor. */
@@ -122,5 +123,51 @@ describe("the Lessons row renders as a router link", () => {
     const focusable = container.querySelectorAll("a, button, input, [tabindex]");
     expect(focusable).toHaveLength(1);
     expect(focusable[0]!.tagName).toBe("A");
+  });
+});
+
+/* ── WHY THIS LAST BLOCK EXISTS ────────────────────────────────────────────
+   Thirty anchors were converted, and every one of their destinations sits
+   behind authentication, so none of them can be driven in a browser against
+   an inactive candidate. Rendering all nineteen components would mean
+   inventing fixture data for each, and a harness built on guessed props
+   proves the guess, not the product.
+
+   So the proof is a chain instead. The AST gate establishes that every
+   internal-route href in the source is on a Link. This block establishes what
+   a Link IS in this exact Next and React build: an <a> that carries the
+   router's handlers, where a bare anchor carries none. The browser trace
+   establishes that such an <a> transitions on the client. The three together
+   cover all thirty without a single fabricated prop.
+
+   It is deliberately about the framework, not about our screens — that is the
+   one link in the chain the other two cannot supply. */
+describe("what next/link is in this build", () => {
+  it("renders a real <a>, so any test asserting on the DOM element still holds", () => {
+    const { container } = render(<Link href="/path">Вернуться к пути</Link>);
+    const a = container.querySelector("a");
+    expect(a).not.toBeNull();
+    expect(a!.tagName).toBe("A");
+    expect(a!.getAttribute("href")).toBe("/path");
+    expect(a!.textContent).toBe("Вернуться к пути");
+  });
+
+  it("attaches the router handlers a bare anchor does not have", () => {
+    const { container: linked } = render(<Link href="/path">x</Link>);
+    const { container: bare } = render(<a href="/path">x</a>);
+
+    expect(handlersOn(linked.querySelector("a")!).onClick).toBe("function");
+    expect(handlersOn(linked.querySelector("a")!).onMouseEnter).toBe("function");
+
+    // The discriminator, stated from the other side: this is exactly what the
+    // thirty converted anchors looked like before, and why each was a full
+    // document load rather than a client transition.
+    expect(handlersOn(bare.querySelector("a")!).onClick).toBe("undefined");
+    expect(handlersOn(bare.querySelector("a")!).onMouseEnter).toBe("undefined");
+  });
+
+  it("keeps a Link a single tab stop, like the anchor it replaced", () => {
+    const { container } = render(<Link href="/path">x</Link>);
+    expect(container.querySelectorAll("a, button, [tabindex]")).toHaveLength(1);
   });
 });
