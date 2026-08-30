@@ -181,6 +181,19 @@ describe("the stylesheet's own contract", () => {
     }
   });
 
+  it("keeps the third-party widget from pushing the page sideways", () => {
+    /* The Turnstile frame is a fixed-width iframe inside a form that must fit a
+       320px viewport. Nothing here styles its contents — what is declared is
+       that the space around it contains its own overflow instead of handing it
+       to the document. Removing this is how /login started scrolling sideways
+       once the widget was added. */
+    const block = css.slice(css.indexOf(".auth .auth-captcha__frame"));
+    const rule = block.slice(0, block.indexOf("}"));
+    expect(rule).toMatch(/overflow-x:\s*auto/);
+    expect(rule).toMatch(/max-width:\s*100%/);
+    expect(rule).toMatch(/min-width:\s*0/);
+  });
+
   it("keeps every control at a real target size", () => {
     expect(css).toMatch(/min-height:\s*48px/);
     expect(css).toMatch(/min-height:\s*44px/);
