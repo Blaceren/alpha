@@ -30,7 +30,6 @@ import {
   UNKNOWN_CONSEQUENCE,
   fieldForAction,
   fieldForError,
-  type HomeField,
 } from "@/features/auth-home-fidelity/auth-home-state";
 import type { AcademyNextAction } from "@/lib/curriculum/next-action";
 import type { AcademyLevelSummary } from "@/lib/curriculum/academy-view";
