@@ -237,6 +237,8 @@ describe("a state page's links are targets too", () => {
     expect(block).toContain(".tls .t-action,");
     expect(block).toMatch(/\.tls \.back \{[\s\S]*?min-height:44px/);
     expect(block).toMatch(/\.tls \.back::after \{[^}]*inset:0 -10px/);
+    // The workspace's own return link reaches this surface as well.
+    expect(block).toMatch(/\.tls \.rc-back \{[\s\S]*?min-height:44px/);
   });
 });
 

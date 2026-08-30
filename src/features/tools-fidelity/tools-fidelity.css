@@ -1097,6 +1097,19 @@ html.tls-root-scope,
   inset:0 -10px;
 }
 .tls .back {margin-bottom:8px}
+/*
+ * `.rc-back` is the Risk Calculator workspace's own return link, styled in the
+ * fixture-mode stylesheet. It reaches this surface too, and measured 20.5px.
+ * Restated here rather than there so the change cannot leak to any other page:
+ * `.tls .rc-back` only matches inside the Tools root.
+ */
+.tls .rc-back {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+}
+.tls .rc-back::after {content:"";position:absolute;inset:0 -10px}
 /* The return link kept its own bottom spacing from the old inline-block box;
    the flex box is taller, so the gap is restated rather than doubled. */
 .tls .t-return {margin-bottom:calc(var(--space-block) - 12px)}
