@@ -119,7 +119,24 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
     sheetRef.current?.querySelector<HTMLElement>("a")?.focus();
   }, [moreOpen]);
 
+  /* The button's LOOK. Unchanged: it marks itself whenever the open section is
+     anywhere behind it, so the bar never shows every slot inactive while the
+     learner is plainly somewhere. */
   const moreIsActive = overflow.some((item) => item.id === activeId);
+
+  /* The button's DECLARATION, which is a narrower thing than its look.
+     `aria-current="true"` means "the current item in this set" — not "this is
+     the current page", which the button is not. It is claimed only while the
+     menu is CLOSED and only for the secondary group, and both halves matter:
+       — closed, because once the menu opens the real «Сообщество» /
+         «Поддержка» row is on screen carrying `aria-current="page"`, and two
+         markers is one more answer than the question has;
+       — secondary only, because «Профиль» also lives behind this button, and on
+         /profile the avatar in the bar above already carries the marker. The
+         button would be the second one.
+     So on every other route the button declares nothing at all. */
+  const moreOwnsCurrent =
+    !moreOpen && overflow.some((item) => item.id === activeId && SECONDARY_IDS.has(item.id));
 
   return (
     <nav className="bottomnav" aria-label="Мобильная навигация">
@@ -171,6 +188,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
               type="button"
               ref={moreRef}
               className={moreIsActive ? "is-active" : undefined}
+              aria-current={moreOwnsCurrent ? "true" : undefined}
               aria-expanded={moreOpen}
               aria-haspopup="dialog"
               onClick={() => setMoreOpen(!moreOpen)}
