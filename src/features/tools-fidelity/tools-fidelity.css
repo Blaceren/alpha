@@ -170,8 +170,22 @@ html.tls-root-scope,
   /* four roles only. A fifth tier would be a hierarchy nobody can read. */
   --text-primary:var(--ata-text-100);    /* the learner's own work, state truth */
   --text-secondary:var(--ata-text-300);  /* condition, action, supporting value */
-  --text-tertiary:var(--ata-text-500);   /* purpose, section label, caveat */
-  --text-quiet:var(--ata-text-700);      /* provenance, trace, placeholder */
+  /*
+   * THE CATALOGUE IS NOT DISABLED, AND MUST NOT READ AS IF IT WERE.
+   *
+   * Seventeen of nineteen rows are locked for almost every learner, so the two
+   * quiet steps of this ramp carry most of the page. Measured on the register's
+   * own canvas they were #6E766A at 4.15:1 and #4C534A at 2.46:1 — the second
+   * of those is below even the large-text floor, at 12.5px. The tool names, the
+   * purposes and the unlock conditions were not recessive; they were unreadable,
+   * which is what made the whole register look switched off.
+   *
+   * Same hue, same role for each step, raised until both clear WCAG AA for body
+   * text: 5.22:1 and 4.63:1. Recession is now carried by weight, position and
+   * the column structure — never by taking the words away from the reader.
+   */
+  --text-tertiary:#7D8779;               /* purpose, section label, caveat — 5.22:1 */
+  --text-quiet:#757E71;                  /* provenance, trace, placeholder — 4.63:1 */
 
   /* ---------------- SEMANTIC — signal --------------------------------- */
   /* Signal means ACTION · FOCUS · SELECTION · CURRENT INTERACTION.
@@ -319,6 +333,10 @@ html.tls-root-scope,
   padding:var(--space-surface) clamp(20px,3vw,var(--space-surface))
           calc(var(--space-surface) * 2.5);
   max-width:var(--width-register);
+  /* The register had a max width and no centring, so on any desktop it sat in a
+     column against the left edge with the rest of the viewport empty. A bounded
+     measure is the point; parking it in one corner was not. */
+  margin-inline:auto;
 }
 .tls .t-surface--prose {max-width:var(--width-prose)}
 
@@ -456,13 +474,15 @@ html.tls-root-scope,
 .tls .t-trace:before {content:"— «"}
 .tls .t-trace:after {content:"»"}
 
-/* locked entries recede; they never become prizes */
+/* Locked entries recede by WEIGHT, not by fading out of legibility: the name
+   drops a step in the ramp and loses its strong weight, and the purpose keeps
+   the same colour it has on an open row. A learner deciding whether a tool is
+   worth working towards has to be able to read what it is. */
 .tls .t-entry--locked .t-entry-name {
-  color:var(--text-tertiary);
+  color:var(--text-secondary);
   font-weight:var(--weight-recessive);
 }
-.tls .t-entry--locked .t-entry-purpose,
-.tls .t-entry--locked .t-entry-condition {color:var(--text-quiet)}
+.tls .t-entry--locked .t-entry-condition {color:var(--text-tertiary)}
 
 /* ============================ records (F1) ============================ */
 .tls .t-record {
@@ -908,5 +928,137 @@ html.tls-root-scope,
 @media (max-width:899px){
   .tls .p4.t-surface {
     padding-bottom:calc(var(--space-surface) + env(safe-area-inset-bottom));
+  }
+}
+
+/* ==================== the register row, as four loci ==================== *
+ *
+ * WHY THE ROW IS RE-LAID AND THE MARKUP IS NOT TOUCHED.
+ *
+ * Every row said the same four things — which gate opens it, what it is, what
+ * state it is in, and whether anything can be done — but three of them were
+ * stacked in one text column, so the state of a tool could only be found by
+ * reading to the end of each row in turn. Nineteen rows of that is not a
+ * register, it is a list you have to parse.
+ *
+ * The four loci become four columns on desktop, and each keeps a fixed x
+ * position down the whole page: gate · identity · state · action. The eye can
+ * then run down ONE column to answer one question about all nineteen tools.
+ *
+ * `display: contents` is what makes this a stylesheet change and nothing more.
+ * The wrappers stay exactly where they are in the DOM — the class-stripped tree
+ * is identical to before — and only their boxes step aside so the elements
+ * inside them can take grid cells directly. No element moved, none was added,
+ * and no text changed.
+ */
+@media (min-width:900px){
+  .tls .t-register {
+    /* The column measures are shared by every row, declared once here, so a
+       long English tool name cannot widen its own row out of alignment. */
+    --col-gate:var(--register-gutter);
+    --col-state:23ch;
+    --col-action:12ch;
+  }
+  .tls .t-entry {
+    grid-template-columns:
+      var(--col-gate)
+      minmax(0,1fr)
+      minmax(0,var(--col-state))
+      minmax(0,var(--col-action));
+    grid-template-rows:auto auto;
+    align-items:start;
+    column-gap:var(--register-gutter-gap);
+    padding:calc(var(--register-row-pad-y) + 3px) 0;
+  }
+  .tls .t-entry-provenance {grid-column:1;grid-row:1 / span 2}
+  /* The two wrappers dissolve as boxes and keep their place in the tree. */
+  .tls .t-entry-body,
+  .tls .t-entry-head {display:contents}
+  .tls .t-entry-name {grid-column:2;grid-row:1;min-width:0}
+  .tls .t-entry-purpose {grid-column:2;grid-row:2;margin-top:3px;max-width:none}
+  .tls .t-entry-condition {
+    grid-column:3;
+    grid-row:1 / span 2;
+    margin:1px 0 0;
+    max-width:none;
+    font-size:var(--type-condition);
+    line-height:var(--leading-normal,1.45);
+  }
+  .tls .t-entry-action {
+    grid-column:4;
+    grid-row:1 / span 2;
+    justify-self:end;
+    align-self:center;
+  }
+}
+
+/*
+ * THREE STATES THAT MUST NOT BE TOLD APART BY COLOUR.
+ *
+ * A tool is one of: waiting on a gate, open and working, or open with the
+ * capability not yet released. The third is the one that was invisible — it
+ * read exactly like the second, so a learner could reach a checkpoint and find
+ * that what they were promised does not open.
+ *
+ * Each state gets a mark in the state column: a mono gate reference for a
+ * locked tool, a filled square for a working one, an open square for a
+ * capability still to come. Shape and text carry it; colour only agrees.
+ */
+.tls .t-entry-condition::before {
+  content:"";
+  display:inline-block;
+  width:7px;
+  height:7px;
+  margin-right:7px;
+  vertical-align:baseline;
+  border:1px solid var(--text-quiet);
+}
+.tls .t-entry--open .t-entry-condition {color:var(--text-secondary)}
+.tls .t-entry--open .t-entry-condition::before {
+  background:var(--signal-current);
+  border-color:var(--signal-current);
+}
+/* Открыт по прогрессу, но поверхности ещё нет: an outline, never a fill —
+   the shape says "reserved", the words say the rest. */
+.tls .t-entry--roadmap .t-entry-condition::before {border-color:var(--text-secondary)}
+.tls .t-entry--locked .t-entry-condition::before {
+  border-style:dashed;
+  border-color:var(--text-tertiary);
+}
+
+/* The action is the only Signal on the page, and only where something opens. */
+.tls .t-entry--open .t-entry-action {color:var(--signal-action)}
+.tls .t-entry--open .t-entry-name {color:var(--text-primary)}
+
+/*
+ * MOBILE — the row becomes a block, and the state keeps its own line.
+ *
+ * The desktop columns are dropped rather than squeezed: at 390px a 23ch state
+ * column would leave the tool name four characters wide. The order of the four
+ * loci is unchanged, so the page reads the same way, just vertically.
+ */
+@media (max-width:899px){
+  .tls .t-entry-body,
+  .tls .t-entry-head {display:block}
+  .tls .t-entry-head {display:flex}
+  .tls .t-entry-name {
+    /* Long English names wrap; they are never truncated and never clipped. */
+    overflow-wrap:anywhere;
+    color:var(--text-primary);
+  }
+  .tls .t-entry--locked .t-entry-name {color:var(--text-secondary)}
+  .tls .t-entry-purpose {max-width:none}
+  .tls .t-entry-condition {margin-top:6px}
+  /* A tapped action must be a real 44px target even though it is set as text. */
+  .tls .t-entry-action {
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    min-height:44px;
+  }
+  .tls .t-entry-action::after {
+    content:"";
+    position:absolute;
+    inset:-6px -8px;
   }
 }

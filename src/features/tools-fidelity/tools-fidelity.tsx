@@ -107,8 +107,19 @@ function RegisterEntry({ tool }: { tool: ToolView }) {
       </Link>
     ) : null;
 
+  /*
+   * THREE STATES, AND THE ROW SAYS WHICH ONE IT IS.
+   *
+   * `unlocked` alone cannot express the register: a tool whose gate is passed
+   * but whose surface does not exist is neither locked nor open, and it used to
+   * render identically to a working one. These are class names only — they add
+   * no text, no attribute the contract cares about and no element, so the
+   * class-stripped tree is byte-for-byte what it was.
+   */
   return (
-    <article className={`t-entry${tool.unlocked ? "" : " t-entry--locked"}`}>
+    <article
+      className={`t-entry t-entry--${!tool.unlocked ? "locked" : tool.available ? "open" : "roadmap"}`}
+    >
       <div className="t-entry-provenance" aria-label={`Уровень ${tool.unlockLevel}`}>
         L{tool.unlockLevel}
       </div>
