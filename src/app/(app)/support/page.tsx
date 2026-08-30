@@ -24,11 +24,19 @@ export const metadata: Metadata = {
  * Notifications already read it — the same server session, no new endpoint, no
  * change to auth — and the fallback is the same neutral «Ученик» those routes
  * use when there is no viewer to name.
+ *
+ * `frozenSurface` FOR THE CANVAS, NOT FOR A NEW MECHANISM. The shell paints two
+ * decorative radial washes behind an ordinary route; over the field ground they
+ * read as a greener canvas than every accepted surface beside it — Support
+ * measured `rgb(17, 20, 15)` where Tools and Lessons measure `rgb(11, 13, 10)`.
+ * The flag that flattens that wash to the flat Ink ground already exists and is
+ * already carried by Tools, Profile and Notifications; Support was simply left
+ * out of it. The shell is not changed, and no wrapper is added.
  */
 export default async function SupportPage() {
   const viewer = await getServerViewer();
   return (
-    <AppShell userName={viewer?.name ?? "Ученик"} activeId="support">
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="support" frozenSurface>
       <SupportHub />
     </AppShell>
   );

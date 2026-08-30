@@ -378,7 +378,18 @@
   .support-hub { gap: 24px; }
   /* The fixed bottom navigation must never sit on the submit control or the
      last case in the register. */
+  /*
+   * THE INSET THE SHELL USED TO GIVE US.
+   *
+   * `frozenSurface` flattens the decorative wash to the flat Ink ground, and it
+   * also zeroes the shell's own padding — which above 900px was already zero,
+   * but below it supplied `20px 16px`. Restated here so the content keeps the
+   * exact x position and top offset it was accepted with: the surface changed
+   * colour, not geometry.
+   */
   .support-hub {
+    padding-top: 20px;
+    padding-inline: 16px;
     padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom) + 24px);
   }
   .support-hub__header { padding-bottom: 16px; }

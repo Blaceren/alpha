@@ -188,3 +188,61 @@ describe("the stylesheet stays inside Support", () => {
     }
   });
 });
+
+/**
+ * SUPPORT-CANVAS-1 — the page sits on the same Ink ground as everything else.
+ *
+ * The shell paints two decorative radial washes behind an ordinary route. Over
+ * the field ground those read as a greener canvas than the accepted surfaces
+ * beside it: Support measured `rgb(17, 20, 15)` where Tools and Lessons measure
+ * `rgb(11, 13, 10)`. The flag that flattens the wash to the flat Ink ground
+ * already exists and is already carried by Tools, Profile and Notifications —
+ * Support was simply left out of it.
+ *
+ * The flag also zeroes the shell's own padding, which above 900px was already
+ * zero and below it supplied `20px 16px`. That inset is restated in this
+ * stylesheet so the content keeps the x position it was accepted with.
+ */
+describe("the Support canvas", () => {
+  const ROUTE = readFileSync(join(ROOT, "src/app/(app)/support/page.tsx"), "utf8");
+  const HOME = readFileSync(join(ROOT, "src/features/home/home.css"), "utf8");
+
+  it("asks the shell for the flat Ink ground", () => {
+    expect(ROUTE).toContain("frozenSurface");
+    // And it is the existing mechanism, not a new one: no wrapper, no new prop.
+    expect(ROUTE).not.toMatch(/background/i);
+    expect(ROUTE).not.toMatch(/box-shadow/i);
+  });
+
+  it("uses the ground the other accepted surfaces use", () => {
+    // `.home--frozen` is what the flag turns on, and it paints --background-base.
+    expect(HOME).toMatch(/\.home--frozen\s*\{\s*background:\s*var\(--background-base\)/);
+    const tokens = readFileSync(join(ROOT, "src/styles/tokens.css"), "utf8");
+    expect(tokens).toMatch(/--background-base:\s*var\(--ata-ink-900\)/);
+    expect(tokens).toMatch(/--ata-ink-900:\s*#0b0d0a/i);
+  });
+
+  it("paints nothing of its own to fake the canvas", () => {
+    // No full-bleed hack, no giant shadow, no fixed backdrop in the stylesheet.
+    expect(CSS).not.toMatch(/100vw/);
+    expect(CSS).not.toMatch(/box-shadow/);
+    expect(CSS).not.toMatch(/position:\s*fixed/);
+    const root = rule(".support-hub {");
+    expect(root).not.toContain("background");
+  });
+
+  it("gives back the inset the shell stops providing below 900px", () => {
+    const mobile = CSS.slice(CSS.indexOf("@media (max-width: 899px)"));
+    expect(mobile).toMatch(/padding-top:\s*20px/);
+    expect(mobile).toMatch(/padding-inline:\s*16px/);
+    // And the bottom-nav clearance is still the same formula.
+    expect(mobile).toMatch(/padding-bottom:\s*calc\(var\(--mobile-bottom-nav-height/);
+  });
+
+  it("leaves the desktop measure and centring exactly as accepted", () => {
+    const root = rule(".support-hub {");
+    expect(root).toContain("max-width: var(--support-measure)");
+    expect(root).toContain("margin-inline: auto");
+    expect(CSS).toContain("--support-measure: 1080px");
+  });
+});
