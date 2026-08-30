@@ -172,3 +172,44 @@
   border-bottom: 0;
   margin: 0 0 24px;
 }
+
+/* ── (C) The duplicated required marker ──────────────────────────────────────
+   A required text field renders its asterisk twice: once inside the `<label>`,
+   and once again as the last child of the field. `.rf` is a column flex
+   container, so the second one lands on a line of its own under the control —
+   visible in the product today and unmissable once the frozen field spacing is
+   applied.
+
+   The trailing one is `aria-hidden`, and the required state is announced from
+   `aria-required` and from the field's own screen-reader sentence, so hiding it
+   removes a duplicate mark and no information. The DOM is untouched: nothing is
+   removed, nothing is reordered, and the label's own asterisk stays. */
+.wsp .ws-host .rf > .rf__req:last-child {
+  display: none;
+}
+
+/* ── (C) The validation summary's jump links ─────────────────────────────────
+   Each error in the summary is a link to the field it belongs to. At the frozen
+   body size they are 17 CSS px tall — the product's own size was 19, so this is
+   a pre-existing shortfall the restoration would otherwise make two pixels
+   worse.
+
+   The frozen source's own `::after` hit-area extension was tried first and is
+   the wrong tool HERE: these links stack, so each extension is clipped by its
+   neighbour's and a hit test showed them reaching 33px, not 44. A real 44px row
+   is honest, measurable, and is the same row-as-target thinking the frozen
+   `.eng-opt` uses for its option rows. */
+.wsp .ws-host .rpt-summary__list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ── (A) The read-only echo shares the form's measure ────────────────────────
+   The submitted answers render outside `.rpt__form`, so they do not inherit the
+   `.sub-body` 860px measure the editable form has. In the frozen source both
+   live inside the same body and read at the same width; without this the
+   read-only view of a report is wider than the form that produced it. */
+.wsp .ws-host .rpt-readonly {
+  max-width: 860px;
+}
