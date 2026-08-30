@@ -456,3 +456,11 @@
     linear-gradient(180deg, rgba(11, 13, 10, 0.25), transparent 30%),
     linear-gradient(0deg, rgba(11, 13, 10, 0.93) 0%, rgba(11, 13, 10, 0.5) 19%, transparent 54%);
 }
+
+/* Its control size token was 42px, so every transport button missed a 44px
+   target by two pixels. Raising the token moves the bar from 88px to 90px and
+   nothing else — measured: same player width, no overflow inside the bar or the
+   page. Still a token, still scoped to this route. */
+.ld .avp { --avp-control-size: 44px; }
+/* The volume slider is a 31px-tall range input. Its own box is the target. */
+.ld .avp__volume input[type="range"] { min-height: 44px; }
