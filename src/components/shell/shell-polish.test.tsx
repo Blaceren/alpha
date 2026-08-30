@@ -544,10 +544,21 @@ describe("Shell — exactly one current, in every state", () => {
         </AppShell>,
       );
       const pages = () => [...container.querySelectorAll('[aria-current="page"]')];
-      // one per bar at most: the desktop copy and the mobile copy of the same route
-      expect(new Set(pages().map((e) => e.closest("nav,.appbar,.mtop")))).toHaveLength(pages().length);
+      /* Both bars are in the document; a media query hides one. So more than one
+         `page` declaration is expected here — what must hold is that they are
+         COPIES: one per bar, all naming the same destination. Two in one bar, or
+         two different destinations, would be two answers at one breakpoint. */
+      const perBar = new Map<Element | null, number>();
+      for (const el of pages()) {
+        const bar = el.closest(".rnav, .bottomnav, .appbar, .mtop");
+        perBar.set(bar, (perBar.get(bar) ?? 0) + 1);
+      }
+      for (const [, n] of perBar) expect(n).toBe(1);
+      expect(new Set(pages().map((e) => e.getAttribute("href"))).size).toBeLessThanOrEqual(1);
+
       await user.click(more());
       await screen.findByRole("dialog", { name: "Ещё" });
+      // once the menu is open the button has let go, on every route
       expect(container.querySelectorAll('[aria-current="true"]')).toHaveLength(0);
       unmount();
     }
