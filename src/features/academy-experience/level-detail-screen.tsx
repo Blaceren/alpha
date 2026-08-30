@@ -120,7 +120,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
         <CurriculumErrorState error={result.error} />
       );
     return (
-      <AppShell userName={name} activeId="lessons">
+      <AppShell userName={name} activeId="lessons" frozenSurface>
         <div className="ax ld">{body}</div>
       </AppShell>
     );
@@ -193,7 +193,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
   };
 
   return (
-    <AppShell userName={name} activeId="lessons">
+    <AppShell userName={name} activeId="lessons" frozenSurface>
       <div className="ax ld">
         <article data-level={summary.levelCode} data-state={summary.state} data-posture={posture}>
           <header className="ax-lvlhead">

@@ -384,3 +384,38 @@
   .ld .asmt__option,
   .ld .ax-lvlnav a { transition-duration: 1ms; }
 }
+
+/* ------------------------------------------------------------ level start -- */
+
+/* The same container language as the assessment, because they are the same kind
+   of object: the one place on the page where an action lives. */
+.ld .lvl-start {
+  margin-top: 0;
+  padding: 20px 22px 22px;
+  border: var(--ld-rule);
+  border-radius: 8px;
+  background: var(--background-field);
+}
+.ld .lvl-start__title {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 650; line-height: 1.3;
+  color: var(--text-primary); margin: 0 0 6px;
+}
+.ld .lvl-start__explain {
+  font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 16px;
+  max-width: 62ch;
+}
+/* On an available level this IS the real action, so it is the lit one — and it
+   was 41px tall, which is not a target. */
+.ld .lvl-start__action {
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding: 11px 20px;
+  border-radius: 8px; border: 1px solid transparent;
+  background: var(--signal-active); color: var(--background-base);
+  font-size: 14.5px; font-weight: 650;
+  transition: background-color 140ms var(--ease-standard);
+}
+.ld .lvl-start__action:hover:not(:disabled) { background: var(--ata-signal-300); border-color: transparent; }
+.ld .lvl-start__action:disabled { opacity: 0.5; }
+.ld .lvl-start__action:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .lvl-start__status { font-size: 13.5px; color: var(--text-secondary); }
