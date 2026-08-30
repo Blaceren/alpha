@@ -1145,3 +1145,16 @@ html.tls-root-scope,
 /* A met requirement is a settled fact, not an achievement: no Signal, no mark
    of its own — the row's state mark already says which of the three it is. */
 .tls .t-entry--roadmap .t-entry-requirement {color:var(--text-quiet)}
+
+/*
+ * A ONE-CELL FACT SPANS THE WHOLE ROW.
+ *
+ * The roadmap page states its requirement as one sentence rather than a
+ * key/value pair, and the block still reserved the 18ch key column for it — so
+ * «Требование доступа: уровень 20» broke across two lines with an empty column
+ * beside it. When there is one cell, it gets the row.
+ */
+.tls .p4-state-fact-value:only-child {
+  grid-column:1 / -1;
+  max-width:none;
+}

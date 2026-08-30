@@ -11,6 +11,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { render, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ToolsRegister, ToolLockedPage } from "@/features/tools-fidelity/tools-fidelity";
 import { ToolFidelitySurface } from "@/features/tools-fidelity/tool-fidelity-surface";
 import { projectTools, projectTool } from "@/features/tools/model/tools-projection";
@@ -207,6 +209,17 @@ describe("a roadmap page promises nothing", () => {
     expect(container.querySelector(".p4-state-fact-value")?.textContent).toBe(
       level === 101 ? "Требование доступа выполнено" : "Требование доступа: уровень 20",
     );
+  });
+
+  it("states the requirement on one line, not broken across a phantom column", () => {
+    /* The fact block is a key/value grid; a roadmap page puts one sentence in
+       it, and the reserved key column was splitting that sentence in two. */
+    const css = readFileSync(
+      join(process.cwd(), "src", "features", "tools-fidelity", "tools-fidelity.css"),
+      "utf8",
+    );
+    const rule = css.slice(css.indexOf(".tls .p4-state-fact-value:only-child"));
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("grid-column:1 / -1");
   });
 
   it("carries no full stop on the short status heading", () => {
