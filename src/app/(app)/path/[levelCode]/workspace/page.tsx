@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { WorkspaceScreen } from "@/features/workspace/workspace-screen";
-import "@/features/workspace/workspace.css";
+import { WorkspaceFidelityScreen } from "@/features/workspace-fidelity/workspace-fidelity-screen";
 
 export const metadata: Metadata = {
   title: "Рабочая область — Alfa Trade Academy",
@@ -27,5 +26,5 @@ export default async function WorkspacePage({
   params: Promise<{ levelCode: string }>;
 }) {
   const { levelCode } = await params;
-  return <WorkspaceScreen levelCode={levelCode} />;
+  return <WorkspaceFidelityScreen levelCode={levelCode} />;
 }
