@@ -54,17 +54,39 @@ import "@/features/notifications-fidelity/notifications-fidelity.css";
  *     page; the product keeps the accepted AppShell, which supplies the one
  *     `<main>` landmark and the one skip link.
  */
+/*
+ * THE LAST-KNOWN REGISTER IS NOT MODELLED, AND THAT IS A FINDING, NOT AN
+ * OMISSION.
+ *
+ * The frozen system has a state for "the refresh failed, so what you are
+ * looking at is the last thing we knew" — `data-confidence="last-known"` on the
+ * register, with the staleness stated in words by the failure block above it.
+ * It is a good state and its rules are carefully drawn.
+ *
+ * It is also unreachable here. This surface issues exactly ONE request per
+ * mount, and the only control that re-requests is the recovery button inside
+ * the failure block — which exists only when there was nothing to keep. A
+ * register can therefore never go stale while it is on screen: either the first
+ * request succeeded and nothing re-requests, or it failed and there is no
+ * register at all. Navigating away and back remounts and asks again.
+ *
+ * So the branch is not implemented. Writing one would be writing a state that
+ * cannot happen and cannot be tested — which is worse than not having it. If a
+ * refresh affordance is ever added (visibility change, polling, a control in the
+ * success state), the frozen semantics come back with it, unchanged: the mark
+ * goes on the CONTAINER, exactly once, and it carries no visual reduction.
+ */
 type Load =
   | { phase: "loading" }
   | { phase: "ready"; records: NotificationRecord[]; suppressed: number }
-  | { phase: "failed"; records: NotificationRecord[] | null };
+  | { phase: "failed" };
 
 const PAGE_TITLE_ID = "notifications-title";
 
 export function NotificationsFidelity() {
   const [load, setLoad] = useState<Load>({ phase: "loading" });
 
-  const request = useCallback(async (previous: NotificationRecord[] | null) => {
+  const request = useCallback(async () => {
     setLoad({ phase: "loading" });
     try {
       const res = await fetch("/api/backend/notifications", {
@@ -80,30 +102,17 @@ export function NotificationsFidelity() {
         .filter((r): r is NotificationRecord => r !== null);
       setLoad({ phase: "ready", records, suppressed: rows.length - records.length });
     } catch {
-      /* A failed refresh does not delete what was already read. The register
-         becomes LAST-KNOWN — stated once, on the container, because it is a
-         property of the whole register and is structurally impossible to
-         express per record. */
-      setLoad({ phase: "failed", records: previous });
+      setLoad({ phase: "failed" });
     }
   }, []);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      const res = await request(null).catch(() => undefined);
-      void res;
-      if (!alive) return;
-    })();
-    return () => {
-      alive = false;
-    };
+    void request();
   }, [request]);
 
-  const records = load.phase === "ready" ? load.records : load.phase === "failed" ? load.records : null;
+  const records = load.phase === "ready" ? load.records : null;
   const requestState = load.phase === "ready" ? "SUCCESS" : load.phase === "failed" ? "FAILURE" : "LOADING";
   const presence: PresenceState = presenceFor(requestState, records?.length ?? 0);
-  const lastKnown = load.phase === "failed" && records !== null && records.length > 0;
 
   return (
     <div className="nt" data-nt-root>
@@ -122,14 +131,8 @@ export function NotificationsFidelity() {
               </span>
               <div className="n-state__body">
                 <p className="n-state__lead">{COPY.failureLead}</p>
-                <p className="n-state__support">
-                  {lastKnown ? COPY.failureReasonStale : COPY.failureReasonCold}
-                </p>
-                <button
-                  type="button"
-                  className="n-control n-recover"
-                  onClick={() => void request(records)}
-                >
+                <p className="n-state__support">{COPY.failureReasonCold}</p>
+                <button type="button" className="n-control n-recover" onClick={() => void request()}>
                   {COPY.failureRecovery}
                 </button>
               </div>
@@ -139,11 +142,7 @@ export function NotificationsFidelity() {
           {load.phase === "loading" ? <Skeleton rows={3} /> : null}
 
           {records && records.length > 0 ? (
-            <ul
-              className="n-register"
-              aria-label={COPY.registerLabel}
-              {...(lastKnown ? { "data-confidence": "last-known" } : {})}
-            >
+            <ul className="n-register" aria-label={COPY.registerLabel}>
               {records.map((record) => (
                 <Record key={record.id} record={record} />
               ))}

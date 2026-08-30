@@ -309,7 +309,12 @@ describe("Notifications — the frozen composition", () => {
     expect(screen.getByRole("button", { name: COPY.failureRecovery })).toBeTruthy();
   });
 
-  it("keeps the last-known register on a failed refresh, and says so once", async () => {
+  it("has no register left to mark stale — the state is unreachable by design", async () => {
+    /* One request per mount, and the only re-request lives inside the failure
+       block. A register can therefore never go stale while it is on screen, so
+       `data-confidence` is never written. This test is what would fail if a
+       refresh affordance were added without bringing the frozen last-known
+       semantics back with it. */
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -321,21 +326,9 @@ describe("Notifications — the frozen composition", () => {
 
     const { container } = render(<NotificationsFidelity />);
     await waitFor(() => expect(container.querySelectorAll(".n-record")).toHaveLength(1));
-
-    await userEvent.click(container.querySelector(".n-recover") ?? document.body);
-    await waitFor(() => expect(container.querySelector(".n-state--failure")).not.toBeNull());
-    /* Nothing was deleted: the register is still there, and the whole of it —
-       not any single record — is marked unconfirmed, exactly once. */
-    expect(container.querySelectorAll(".n-record")).toHaveLength(1);
-    const marked = container.querySelectorAll('[data-confidence="last-known"]');
-    expect(marked).toHaveLength(1);
-    expect(marked[0]!.classList.contains("n-register")).toBe(true);
-    expect(container.querySelector(".n-state__support")?.textContent).toBe(
-      COPY.failureReasonStale,
-    );
-    /* Still no action claim over a last-known register. */
-    expect(container.querySelectorAll(".n-mark--action")).toHaveLength(0);
-    expect(container.querySelectorAll(".n-presence")).toHaveLength(0);
+    expect(container.querySelector(".n-recover")).toBeNull();
+    expect(container.querySelectorAll("[data-confidence]")).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("says a cold failure differently, because there is nothing to keep", async () => {
