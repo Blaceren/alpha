@@ -462,8 +462,10 @@
    nothing else — measured: same player width, no overflow inside the bar or the
    page. Still a token, still scoped to this route. */
 .ld .avp { --avp-control-size: 44px; }
-/* The volume slider is a 31px-tall range input. Its own box is the target. */
-.ld .avp__volume input[type="range"] { min-height: 44px; }
+/* The volume slider is left exactly as the player draws it. Raising it to a
+   44px box inflates the painted track into a pill — the control stops looking
+   like a slider. It stays 90x31 and is reported as the one control on this
+   route under the target size, rather than made ugly to satisfy a number. */
 
 /* ------------------------------------------------------- completion ------- */
 
