@@ -14,35 +14,150 @@
     radial-gradient(90% 120% at 88% 8%, color-mix(in srgb, var(--gate-boundary) 7%, transparent), transparent 60%);
 }
 
+/* =========================================================
+   THE SHARED AUTHENTICATED SHELL
+   =========================================================
+   One authority for every authenticated route — Главная, Путь, Уроки, the
+   Reader, the Workspace, Инструменты, Уведомления, Профиль, Сообщество and
+   Поддержка. There is one bar, one navigation landmark, one mark and one
+   `aria-current`; a surface never styles its own chrome.
+
+   WHAT CHANGED IN THE POLISH PASS, AND WHY:
+
+   * THE MARK IS THE REAL ONE. The brand slot used to hold a hand-drawn chart
+     glyph and the words "Alfa Trade Academy" — two lockups, neither of them the
+     asset of record. It is now `/brand/ata-logo.svg` at its natural ratio.
+
+   * THE ACTIVE INDICATOR IS A LINE, NOT A GLOW. It used to be a gradient that
+     faded to transparent at both ends: soft-edged, wider than the word, and
+     reading as a light leak rather than a mark. It is now a hard 2px Signal
+     line bounded by the item's own inner box.
+
+   * THE BAR IS TWO GROUPS. The learning route and the two support destinations
+     are separated by a hairline instead of sitting in one undifferentiated row.
+
+   * HEIGHT IS UNCHANGED at 60px, deliberately. Every authenticated body sits
+     directly under it, and moving it would move all ten of them for a cosmetic
+     reason.
+   ========================================================= */
+
 /* ---------- app bar (desktop/tablet) ---------- */
-.appbar { display: none; align-items: center; gap: clamp(12px, 2vw, 24px);
+.appbar { display: none; align-items: center; gap: clamp(16px, 2.4vw, 28px);
   height: 60px; padding: 0 clamp(20px, 3vw, 34px); border-bottom: 1px solid var(--divider); }
-.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: var(--text-primary); text-decoration: none; }
-.brand .mark { width: 22px; height: 22px; flex: 0 0 auto; }
-.rnav { display: flex; gap: 2px; }
-.rnav a, .rnav button { position: relative; color: var(--text-muted); text-decoration: none; font-size: 14px; padding: 8px 12px; border-radius: 8px;
-  background: none; border: 0; font-family: inherit; cursor: pointer; }
-.rnav a:hover, .rnav button:not([aria-disabled="true"]):hover { color: var(--text-secondary); }
-.rnav [aria-disabled="true"] { cursor: default; }
-.rnav [aria-current="page"] { color: var(--text-primary); }
-.rnav [aria-current="page"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 2px; height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--signal-active), transparent); }
+
+/* ---------- the mark ----------
+   A sizing box for the real SVG, and nothing else: no frame, no badge, no
+   background, no second glyph. `object-fit: contain` and `height: auto` keep
+   the 362 × 200 ratio whatever the box does, so the mark can never be stretched.
+
+   The link around it is the only focusable home control. Its box is the mark's,
+   which is shorter than 44px, so the target is extended to 44 in the block
+   direction WITHOUT changing the drawn size — the same technique the rest of the
+   product uses for a short control. */
+.brand { display: inline-flex; align-items: center; width: 48px; flex: 0 0 auto; }
+.brand img { width: 100%; height: auto; object-fit: contain; display: block; }
+.brand--compact { width: 44px; }
+
+a:has(> .brand) { position: relative; display: inline-flex; align-items: center;
+  min-height: 44px; border-radius: 10px; text-decoration: none; }
+a:has(> .brand)::after { content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  min-height: 44px; height: 100%; transform: translateY(-50%); }
+a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+/* ---------- route navigation ----------
+   Two groups in one nav. The rule between them is a hairline at the shell's own
+   divider tone — quiet enough to read as a seam rather than as a border. */
+.rnav { display: flex; align-items: center; gap: 14px; }
+.rnav__group { display: flex; align-items: center; gap: 2px; }
+.rnav__rule { width: 1px; height: 18px; background: var(--divider); flex: 0 0 auto; }
+
+.rnav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color var(--motion-fast) var(--ease-standard),
+              background-color var(--motion-fast) var(--ease-standard);
+}
+
+/* The secondary group sits one step back in the type hierarchy — it is where a
+   learner goes when they need something, not where they work. */
+.rnav__group--secondary a { color: var(--text-muted); }
+
+.rnav a:hover { color: var(--text-primary); background-color: var(--surface-subtle); }
+.rnav a:active { background-color: color-mix(in srgb, var(--text-primary) 9%, transparent); }
+.rnav a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* WEIGHT IS RESERVED SO IT CANNOT SHIFT LAYOUT. The active item is heavier; if
+   the label simply got bolder, every item after it would move. The label's own
+   box is sized from the BOLD text by an invisible copy, so the row is identical
+   in every state and the indicator never slides. */
+.rnav__label { display: inline-grid; }
+.rnav__label > span { grid-area: 1 / 1; }
+.rnav__label::before {
+  content: attr(data-label);
+  grid-area: 1 / 1;
+  font-weight: 650;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.rnav [aria-current="page"] { color: var(--text-primary); font-weight: 650; }
+
+/* THE ONE CHARACTERISTIC DETAIL: a precise Signal line under the current route.
+   Hard-edged, exactly the item's inner box, no blur and no shadow. It is drawn
+   at full width always and revealed by opacity, so it cannot animate its own
+   geometry and cannot move anything around it. */
+.rnav a::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 2px;
+  background: var(--signal-active);
+  opacity: 0;
+  transform: scaleX(0.6);
+  transform-origin: 50% 50%;
+  transition: opacity 170ms var(--ease-standard), transform 170ms var(--ease-standard);
+}
+.rnav [aria-current="page"]::after { opacity: 1; transform: scaleX(1); }
+
 .appbar .spacer { margin-left: auto; }
 .appbar .actions { display: inline-flex; align-items: center; gap: 12px; }
 
 /* ---------- mobile top ---------- */
-.mtop { display: flex; align-items: center; justify-content: space-between;
+.mtop { display: flex; align-items: center; gap: 12px;
   height: 54px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
+/* Where the learner is, in the section's own canonical label. No new word is
+   introduced — it is the same string the navigation uses. */
+.mtop__context { font-family: var(--font-mono, inherit); font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.mtop .actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 
 /* ---------- shared chrome bits ---------- */
 .iconbtn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
-  color: var(--text-muted); background: transparent; border: 0; cursor: pointer; position: relative; }
-.iconbtn:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
+  color: var(--text-muted); background: transparent; border: 0; cursor: pointer; position: relative;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
+.iconbtn:hover { color: var(--text-primary); background-color: var(--surface-subtle); }
+.iconbtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .iconbtn .dot { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%;
   background: var(--signal-active); box-shadow: 0 0 0 2px var(--background-field); }
 .avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
   font-weight: 600; font-size: 13px; color: #06120e; text-decoration: none;
   background: linear-gradient(135deg, var(--gate-boundary), var(--signal-active)); }
+/* The avatar draws at 34px; its target is extended to 44 without redrawing it. */
+a:has(> .avatar), .avatar { position: relative; }
+a:has(> .avatar)::after { content: ""; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%); }
+a:has(> .avatar):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 50%; }
 
 /* ---------- bottom nav (mobile) ---------- */
 .bottomnav { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; display: block;
@@ -52,24 +167,46 @@
   padding-bottom: env(safe-area-inset-bottom); }
 .bottomnav ul { display: flex; justify-content: space-around; margin: 0; padding: 0 4px; list-style: none; }
 .bottomnav a, .bottomnav button { min-width: 56px; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; font-size: 10.5px; color: var(--text-muted); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer; }
+  gap: 4px; font-size: 10.5px; color: var(--text-muted); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard); }
+.bottomnav a:focus-visible, .bottomnav button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 10px; }
 .bottomnav [aria-disabled="true"] { cursor: default; }
-.bottomnav [aria-current="page"] { color: var(--signal-active); }
+.bottomnav [aria-current="page"] { color: var(--text-primary); }
 .bottomnav [aria-current="page"] .lbl { position: relative; }
-.bottomnav [aria-current="page"] .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; border-radius: 2px; background: var(--signal-active); }
+/* The same hard Signal line as the desktop bar, at the bar's scale. */
+.bottomnav [aria-current="page"] .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px;
+  height: 2px; background: var(--signal-active); }
 /* "Ещё" marks itself when the open section lives inside it, so the bar never
    shows every slot inactive while the learner is plainly somewhere. */
-.bottomnav button.is-active { color: var(--signal-active); }
+.bottomnav button.is-active { color: var(--text-primary); }
+.bottomnav button.is-active .lbl { position: relative; }
+.bottomnav button.is-active .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px;
+  height: 2px; background: var(--signal-active); }
 /* The overflow sheet. It sits ABOVE the bar and is bounded by the viewport, so
    it can never become the thing that overflows. */
 .bottomnav__sheet { position: absolute; left: 0; right: 0; bottom: 100%;
   background: var(--surface-context); border-top: 1px solid var(--divider-strong);
-  box-shadow: 0 -18px 40px -24px rgba(0,0,0,.9); max-height: 60vh; overflow-y: auto; }
+  box-shadow: 0 -18px 40px -24px rgba(0,0,0,.9); max-height: 60vh; overflow-y: auto;
+  overscroll-behavior: contain; }
 .bottomnav__sheet ul { display: block; padding: 6px 0; }
 .bottomnav__sheet li + li { border-top: 1px solid var(--divider); }
+/* The same primary/secondary seam the desktop bar draws, in a vertical list. */
+.bottomnav__sheet li[data-group="secondary"]:first-of-type { border-top: 1px solid var(--divider-strong); }
 .bottomnav__sheet a { flex-direction: row; justify-content: flex-start; gap: 12px;
   min-height: 52px; padding: 0 18px; font-size: 15px; color: var(--text-primary); width: 100%; }
-.bottomnav__sheet a[aria-current="page"] { color: var(--signal-active); }
+.bottomnav__sheet li[data-group="secondary"] a { color: var(--text-secondary); }
+.bottomnav__sheet a[aria-current="page"] { color: var(--text-primary); font-weight: 650;
+  box-shadow: inset 2px 0 0 var(--signal-active); }
+
+/* ---------- restraint ----------
+   Under a stated preference for less motion the shell still reads exactly the
+   same — the indicator is present or absent, the colours are what they are —
+   it simply stops travelling to get there. */
+@media (prefers-reduced-motion: reduce) {
+  .rnav a, .rnav a::after, .iconbtn, .bottomnav a, .bottomnav button { transition-duration: 1ms; }
+  .rnav a::after { transform: none; }
+  .rnav [aria-current="page"]::after { transform: none; }
+}
 
 /* ---------- main / stage ----------
    overflow-x: clip contains the decorative route SVG horizontally WITHOUT turning

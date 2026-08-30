@@ -39,6 +39,9 @@ import { Icon } from "@/components/ui/icon";
 /** How many canonical sections keep a slot of their own. The fifth is "Ещё". */
 const PRIMARY_SLOTS = 4;
 
+/** Visual grouping only, matching the desktop bar. Not a route decision. */
+const SECONDARY_IDS = new Set(["community", "support"]);
+
 export function MobileBottomNavigation({ activeId = "home" }: { activeId?: string }) {
   const [moreOpen, setMoreOpen] = React.useState(false);
   const moreRef = React.useRef<HTMLButtonElement>(null);
@@ -89,7 +92,10 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
         >
           <ul>
             {overflow.map((item) => (
-              <li key={item.id}>
+              /* The same primary/secondary seam the desktop bar draws. It is a
+                 grouping attribute only — the order, the ids and the
+                 destinations are still the canonical ones. */
+              <li key={item.id} data-group={SECONDARY_IDS.has(item.id) ? "secondary" : "primary"}>
                 <Link
                   href={item.href}
                   aria-current={activeId === item.id ? "page" : undefined}

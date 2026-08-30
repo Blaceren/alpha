@@ -5,6 +5,7 @@ import { NotificationButton } from "@/components/shell/notification-button";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { SessionControls } from "@/components/shell/session-controls";
 import { DesktopRouteNavigation } from "@/components/navigation/desktop-route-navigation";
+import { PRIMARY_NAV } from "@/config/navigation";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 
 /**
@@ -65,6 +66,8 @@ export function AppShell({
   notificationPresence?: ReactNode;
   children: ReactNode;
 }) {
+  const sectionLabel = PRIMARY_NAV.find((item) => item.id === activeId)?.label ?? null;
+
   return (
     <div className={frozenSurface ? "home home--frozen" : "home"}>
       <a href="#main" className="skip">
@@ -85,7 +88,15 @@ export function AppShell({
       {/* mobile top bar */}
       <div className="mtop">
         <Link href="/home" aria-label="Alfa Trade Academy — на главную"><BrandMark compact /></Link>
-        <div className="actions" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {/* Where the learner is. It is the section's OWN canonical label, read
+            from the same navigation config the bars read — no new string, and
+            nothing to disagree with. Hidden from assistive technology because
+            the current item already carries `aria-current`, and hearing the
+            section named twice is noise. */}
+        {sectionLabel ? (
+          <span className="mtop__context" aria-hidden="true">{sectionLabel}</span>
+        ) : null}
+        <div className="actions">
           <NotificationButton presence={notificationPresence} />
           <UserAvatar name={userName} />
           <SessionControls />
