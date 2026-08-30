@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MORE_MENU, PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
 import { Icon } from "@/components/ui/icon";
+import { useMobileMenu } from "@/components/shell/mobile-menu-state";
 
 /**
  * Mobile bottom navigation.
@@ -43,7 +44,9 @@ const PRIMARY_SLOTS = 4;
 const SECONDARY_IDS = new Set(["community", "support"]);
 
 export function MobileBottomNavigation({ activeId = "home" }: { activeId?: string }) {
-  const [moreOpen, setMoreOpen] = React.useState(false);
+  /* The open state is shared with the top bar's avatar: on `/profile` both are
+     visible at once and only one of them may declare the current page. */
+  const { open: moreOpen, setOpen: setMoreOpen } = useMobileMenu();
   const moreRef = React.useRef<HTMLButtonElement>(null);
   const sheetRef = React.useRef<HTMLDivElement>(null);
 
@@ -165,7 +168,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
               className={moreIsActive ? "is-active" : undefined}
               aria-expanded={moreOpen}
               aria-haspopup="dialog"
-              onClick={() => setMoreOpen((open) => !open)}
+              onClick={() => setMoreOpen(!moreOpen)}
             >
               <Icon name="more" className="ic" />
               <span className="lbl">Ещё</span>

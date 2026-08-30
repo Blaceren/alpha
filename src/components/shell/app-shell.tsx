@@ -6,6 +6,7 @@ import { UserAvatar } from "@/components/shell/user-avatar";
 import { SessionControls } from "@/components/shell/session-controls";
 import { DesktopRouteNavigation } from "@/components/navigation/desktop-route-navigation";
 import { PRIMARY_NAV } from "@/config/navigation";
+import { MobileMenuProvider } from "@/components/shell/mobile-menu-state";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 
 /**
@@ -67,8 +68,14 @@ export function AppShell({
   children: ReactNode;
 }) {
   const sectionLabel = PRIMARY_NAV.find((item) => item.id === activeId)?.label ?? null;
+  /* The two utilities are visible links to routes, so on their route they mark
+     themselves — from the same `activeId` the navigation reads, so the bar and
+     the utilities cannot disagree about where the learner is. */
+  const onNotifications = activeId === "notifications";
+  const onProfile = activeId === "profile";
 
   return (
+    <MobileMenuProvider>
     <div className={frozenSurface ? "home home--frozen" : "home"}>
       <a href="#main" className="skip">
         Перейти к содержимому
@@ -79,8 +86,8 @@ export function AppShell({
         <DesktopRouteNavigation activeId={activeId} />
         <span className="spacer" />
         <div className="actions">
-          <NotificationButton presence={notificationPresence} />
-          <UserAvatar name={userName} />
+          <NotificationButton presence={notificationPresence} current={onNotifications} />
+          <UserAvatar name={userName} current={onProfile} placement="desktop" />
           <SessionControls />
         </div>
       </header>
@@ -97,8 +104,8 @@ export function AppShell({
           <span className="mtop__context" aria-hidden="true">{sectionLabel}</span>
         ) : null}
         <div className="actions">
-          <NotificationButton presence={notificationPresence} />
-          <UserAvatar name={userName} />
+          <NotificationButton presence={notificationPresence} current={onNotifications} />
+          <UserAvatar name={userName} current={onProfile} placement="mobile" />
           <SessionControls />
         </div>
       </div>
@@ -109,5 +116,6 @@ export function AppShell({
 
       <MobileBottomNavigation activeId={activeId} />
     </div>
+    </MobileMenuProvider>
   );
 }

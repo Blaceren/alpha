@@ -21,9 +21,31 @@ import { Icon } from "@/components/ui/icon";
  * was nothing. The frozen Notifications design records a hard-coded indicator
  * as INVALID PRODUCT TRUTH. Nothing is now shown unless something knew.
  */
-export function NotificationButton({ presence }: { presence?: ReactNode }) {
+export function NotificationButton({
+  presence,
+  current = false,
+}: {
+  presence?: ReactNode;
+  /**
+   * True on `/notifications`. It is a visible link to a route, so on that route
+   * it says so — the same thing every nav item has always done. It is decided by
+   * the shell from the same `activeId` the navigation reads, so the bell and the
+   * bar can never disagree about where the learner is.
+   *
+   * INDEPENDENT OF UNREAD. Being the current page and having unread
+   * notifications are two different facts about two different things; the mark
+   * below still says only what `hasUnreadNotifications` answered, and this says
+   * only where the learner is.
+   */
+  current?: boolean;
+}) {
   return (
-    <Link href="/notifications" className="iconbtn" aria-label="Уведомления">
+    <Link
+      href="/notifications"
+      className="iconbtn"
+      aria-label="Уведомления"
+      aria-current={current ? "page" : undefined}
+    >
       <Icon name="bell" className="h-5 w-5" />
       {/* Streamed, so the bell is interactive whether or not the answer has
           arrived, and the page never waits on it. */}

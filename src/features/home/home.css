@@ -131,6 +131,9 @@ a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-of
 
 .appbar .spacer { margin-left: auto; }
 .appbar .actions { display: inline-flex; align-items: center; gap: 12px; }
+/* The utility current-line sits just below its control, so the row that holds
+   the utilities must not clip it. */
+.appbar .actions, .mtop .actions { overflow: visible; }
 
 /* ---------- mobile top ---------- */
 .mtop { display: flex; align-items: center; gap: 12px;
@@ -148,6 +151,38 @@ a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-of
   transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
 .iconbtn:hover { color: var(--text-primary); background-color: var(--surface-subtle); }
 .iconbtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ---------- the current route, on a utility control ----------
+   THE SAME GRAMMAR THE BAR USES, at the size a utility is drawn.
+
+   The bell and the avatar are visible links to routes, so on their route they
+   read as current the way every other link does: primary foreground, a quiet
+   surface behind, and one precise 2px Signal line under the control. Nothing
+   glows, nothing grows, nothing blurs — a utility that announced itself louder
+   than the navigation would be the loudest thing on the calmest bar.
+
+   THE INDICATOR IS A SEPARATE ELEMENT FROM THE FOCUS RING, deliberately. The
+   ring is an outline drawn outside the box; the current line is inside it. They
+   can be true at once and read as two facts, which is exactly what they are:
+   "this is the page you are on" and "this is where your keyboard is". */
+.iconbtn[aria-current="page"] { color: var(--text-primary); background-color: var(--surface-subtle); }
+.iconbtn[aria-current="page"]::before,
+.avatar[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 20px;
+  height: 2px;
+  margin-left: -10px;
+  background: var(--signal-active);
+  transition: opacity 170ms var(--ease-standard);
+}
+
+/* The avatar is a filled disc, so its current state is the ring of ground
+   around it rather than a fill behind it — the same quiet surface, read as a
+   halo because the control itself is already solid. */
+.avatar[aria-current="page"] { box-shadow: 0 0 0 3px var(--surface-subtle); }
 .iconbtn .dot { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%;
   background: var(--signal-active); box-shadow: 0 0 0 2px var(--background-field); }
 .avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
@@ -205,7 +240,8 @@ a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
    same — the indicator is present or absent, the colours are what they are —
    it simply stops travelling to get there. */
 @media (prefers-reduced-motion: reduce) {
-  .rnav a, .rnav a::after, .iconbtn, .bottomnav a, .bottomnav button { transition-duration: 1ms; }
+  .rnav a, .rnav a::after, .iconbtn, .iconbtn[aria-current="page"]::before,
+  .avatar[aria-current="page"]::before, .bottomnav a, .bottomnav button { transition-duration: 1ms; }
   .rnav a::after { transform: none; }
   .rnav [aria-current="page"]::after { transform: none; }
 }
