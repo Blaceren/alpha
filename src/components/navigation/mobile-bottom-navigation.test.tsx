@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 import { MORE_MENU, PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
+import { isVisibleSection } from "@/config/feature-visibility";
 
 /**
  * The bottom bar is the mobile primary navigation.
@@ -25,7 +26,10 @@ import { isBuiltRoute } from "@/config/built-routes";
  * one extra tap, nothing unbuilt is advertised, no control is disabled, and no
  * section is both in the bar and in the sheet or in neither.
  */
-const BUILT = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id));
+/* Built AND shown. Community is built and answers, but is withheld from the
+   learner product today, so the bar is not expected to advertise it -
+   see config/feature-visibility.ts. */
+const BUILT = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
 /**
  * Everything the bar is responsible for delivering: the built primary sections
  * plus the built entries of `MORE_MENU`. Профиль is in the second set and not
@@ -33,7 +37,9 @@ const BUILT = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id));
  * phone, so the sheet carries it too.
  */
 const DELIVERABLE = new Set(
-  [...PRIMARY_NAV, ...MORE_MENU].filter((item) => isBuiltRoute(item.id)).map((item) => item.href),
+  [...PRIMARY_NAV, ...MORE_MENU]
+    .filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id))
+    .map((item) => item.href),
 );
 
 describe("MobileBottomNavigation", () => {
@@ -62,7 +68,7 @@ describe("MobileBottomNavigation", () => {
     }
   });
 
-  it("puts Поддержка and Сообщество behind «Ещё», and they are real links", async () => {
+  it("puts Поддержка and Профиль behind «Ещё», and they are real links", async () => {
     const user = userEvent.setup();
     render(<MobileBottomNavigation activeId="home" />);
     // The regression that started all of this: Поддержка must never be a
@@ -70,7 +76,7 @@ describe("MobileBottomNavigation", () => {
     expect(screen.queryByRole("link", { name: /Поддержка/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Ещё/ }));
     expect(screen.getByRole("link", { name: /Поддержка/ })).toHaveAttribute("href", "/support");
-    expect(screen.getByRole("link", { name: /Сообщество/ })).toHaveAttribute("href", "/community");
+    expect(screen.getByRole("link", { name: /Профиль/ })).toHaveAttribute("href", "/profile");
   });
 
   it("never puts a section in both places, and never in neither", async () => {
@@ -117,7 +123,7 @@ describe("MobileBottomNavigation", () => {
   it("marks «Ещё» active when the open section lives inside it", () => {
     // Otherwise the bar shows every slot inactive while the learner is plainly
     // somewhere, which reads as "you are nowhere".
-    render(<MobileBottomNavigation activeId="community" />);
+    render(<MobileBottomNavigation activeId="support" />);
     expect(screen.getByRole("button", { name: /Ещё/ })).toHaveClass("is-active");
   });
 

@@ -14,6 +14,7 @@ import { DesktopRouteNavigation } from "./desktop-route-navigation";
 import { MobileBottomNavigation } from "./mobile-bottom-navigation";
 import { PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute, BUILT_ROUTE_IDS } from "@/config/built-routes";
+import { isVisibleSection } from "@/config/feature-visibility";
 
 describe("support is reachable from the learner navigation", () => {
   it("desktop nav offers Поддержка as a real link to /support", () => {
@@ -68,13 +69,15 @@ describe("support is reachable from the learner navigation", () => {
     const rendered = within(nav)
       .getAllByRole("link")
       .map((a) => a.getAttribute("href"));
-    const expected = PRIMARY_NAV.filter((i) => isBuiltRoute(i.id)).map((i) => i.href);
+    const expected = PRIMARY_NAV.filter((i) => isBuiltRoute(i.id) && isVisibleSection(i.id)).map((i) => i.href);
     expect(rendered).toEqual(expected);
-    // COMMUNITY-V1 built /community, so it is now expected to be PRESENT — the
+    // COMMUNITY-V1 built /community and it still answers, but the section is
+    // withheld from the learner product, so the bar must NOT advertise it. The
+    // route is still built - that is a separate question, asserted below.
     // property this guards is "the advertised list matches reality", and
     // reality moved. /news is still unbuilt and still carries the assertion:
     // an unbuilt section is genuinely absent rather than disabled.
-    expect(rendered).toContain("/community");
+    expect(rendered).not.toContain("/community");
     expect(rendered).not.toContain("/news");
   });
 
@@ -92,7 +95,9 @@ describe("support is reachable from the learner navigation", () => {
       // COMMUNITY-V1. The route was advertised in the navigation model from the
       // start and existed nowhere, which is the exact failure this file was
       // created for. It answers now.
-      expect(BUILT_ROUTE_IDS.has("community"), "community is built and must be reachable").toBe(true);
+      // Built, and deliberately not shown: the two questions stay separate.
+      expect(BUILT_ROUTE_IDS.has("community"), "community is still built").toBe(true);
+      expect(isVisibleSection("community"), "community is withheld from the product").toBe(false);
       for (const id of ["news", "referrals", "mentor", "settings"]) {
       expect(BUILT_ROUTE_IDS.has(id), `${id} is not a built route`).toBe(false);
     }

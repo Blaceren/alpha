@@ -52,23 +52,39 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
   const sheetRef = React.useRef<HTMLDivElement>(null);
 
   const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
-  const needsOverflow = built.length > PRIMARY_SLOTS + 1;
-  const primary = needsOverflow ? built.slice(0, PRIMARY_SLOTS) : built;
 
   /**
-   * What "Ещё" contains: the canonical `MORE_MENU` order, the built entries
-   * only, plus any built primary section that lost its slot. The union is
+   * What "Ещё" contains: the canonical `MORE_MENU` order, the built and shown
+   * entries only, plus any primary section that lost its slot. The union is
    * deduplicated by id, so a section can never be both in the bar and in the
    * sheet, and can never be in neither.
    */
   const overflow = React.useMemo(() => {
-    if (!needsOverflow) return [];
-    const shown = new Set(primary.map((item) => item.id));
+    const shown = new Set(PRIMARY_NAV.filter((i) => isBuiltRoute(i.id) && isVisibleSection(i.id))
+      .slice(0, PRIMARY_SLOTS).map((i) => i.id));
     const seen = new Set<string>();
-    return [...built, ...MORE_MENU]
+    return [...PRIMARY_NAV, ...MORE_MENU]
       .filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id) && !shown.has(item.id))
       .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
-  }, [built, primary, needsOverflow]);
+  }, []);
+
+  /**
+   * WHETHER "ЕЩЁ" IS RENDERED IS A QUESTION ABOUT WHAT IS BEHIND IT.
+   *
+   * It used to be `built.length > PRIMARY_SLOTS + 1` — a count of PRIMARY_NAV
+   * alone, which quietly assumed the primary list would always be the thing
+   * that overflowed. `MORE_MENU` was never counted, and Профиль lives only
+   * there. The moment the built primary sections fitted the bar exactly, the
+   * control vanished and took Профиль with it — a section reachable from
+   * nothing, which is the exact defect this bar was rebuilt to end.
+   *
+   * Withholding Community made that day arrive: five built sections, five
+   * slots. So the predicate now asks what the control is for — is there
+   * anything behind it — and the file's own description of "Ещё" becomes the
+   * rule rather than a coincidence of list lengths.
+   */
+  const needsOverflow = overflow.length > 0;
+  const primary = needsOverflow ? built.slice(0, PRIMARY_SLOTS) : built;
 
   /**
    * Closing the disclosure, and where focus goes when it closes.
