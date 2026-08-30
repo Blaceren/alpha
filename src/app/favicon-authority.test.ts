@@ -27,8 +27,10 @@ describe("the favicon authority", () => {
   it("is declared in the root layout, so every document inherits it", () => {
     const list = icons();
     expect(list.length, "the root layout must declare an icon").toBeGreaterThan(0);
-    expect(list[0].url).toBe("/brand/favicon.svg");
-    expect(list[0].type).toBe("image/svg+xml");
+    const first = list[0];
+    expect(first, "the declaration must be readable").toBeDefined();
+    expect(first?.url).toBe("/brand/favicon.svg");
+    expect(first?.type).toBe("image/svg+xml");
   });
 
   it("points at an asset that exists and is the accepted ATA mark", () => {
