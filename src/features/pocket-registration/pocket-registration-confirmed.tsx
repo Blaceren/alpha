@@ -15,6 +15,7 @@
  * balance and no money, and it cannot appear unless the Backend itself reports
  * the level `completed` — the only authority on that state.
  */
+import Link from "next/link";
 import "@/features/pocket-registration/pocket-registration.css";
 
 export function PocketRegistrationConfirmed({
@@ -37,12 +38,12 @@ export function PocketRegistrationConfirmed({
       </p>
       {nextLevelCode !== null ? (
         <p className="pocket-reg__next">
-          <a
+          <Link
             className="pocket-reg__action pocket-reg__action--link"
             href={`/lessons/${encodeURIComponent(nextLevelCode)}`}
           >
             Перейти к следующему уровню
-          </a>
+          </Link>
         </p>
       ) : null}
     </section>

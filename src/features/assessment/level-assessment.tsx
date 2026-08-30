@@ -9,6 +9,7 @@
  * never stores pass/unlock/answers as local authority. On a server-confirmed
  * pass it refetches the server-authoritative curriculum via `router.refresh()`.
  */
+import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { newRequestId, startAssessment, submitAssessment } from "@/lib/assessment/assessment-client";
@@ -97,9 +98,9 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
   }, []);
 
   const nextAction = nextLevelCode ? (
-    <a className="asmt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>
+    <Link className="asmt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>
       Перейти к следующему уровню →
-    </a>
+    </Link>
   ) : null;
 
   return (

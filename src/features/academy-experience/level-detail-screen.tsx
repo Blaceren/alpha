@@ -256,14 +256,14 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                         ) : null}
                         {content.metadata.hasTranscript ? <> · есть расшифровка</> : null}
                       </p>
-                      <a
+                      <Link
                         className="cur-content__open"
                         href={`/lessons/${encodeURIComponent(summary.levelCode)}/material`}
                       >
                         {content.reading && content.reading.completedSections.length > 0
                           ? "Продолжить материал"
                           : "Открыть материал урока"}
-                      </a>
+                      </Link>
                     </div>
                   ) : (
                     <p className="ax-lvlsec__note">
@@ -418,13 +418,13 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
 
           <nav className="ax-lvlnav" aria-label="Навигация по уровням">
             {navigation.previousLevelCode ? (
-              <a href={`/lessons/${encodeURIComponent(navigation.previousLevelCode)}`}>← Предыдущий уровень</a>
+              <Link href={`/lessons/${encodeURIComponent(navigation.previousLevelCode)}`}>← Предыдущий уровень</Link>
             ) : (
               <span />
             )}
             <Link href="/path">Вернуться к пути</Link>
             {navigation.nextLevelCode ? (
-              <a href={`/lessons/${encodeURIComponent(navigation.nextLevelCode)}`}>Следующий уровень →</a>
+              <Link href={`/lessons/${encodeURIComponent(navigation.nextLevelCode)}`}>Следующий уровень →</Link>
             ) : (
               <span />
             )}

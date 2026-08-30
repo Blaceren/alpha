@@ -1,4 +1,5 @@
 import type { LessonBlock } from "@/lib/curriculum/lesson-body";
+import Link from "next/link";
 import { ctaHref } from "@/features/lesson-reader/lesson-blocks";
 import { LessonMedia } from "@/features/reader-fidelity/reader-media";
 
@@ -181,10 +182,10 @@ export function ReaderBlock({
 
     case "tool_link":
       return (
-        <a className="toollink" href={`/tools/${encodeURIComponent(block.toolCode)}`}>
+        <Link className="toollink" href={`/tools/${encodeURIComponent(block.toolCode)}`}>
           <span className="toollink__label">{block.label}</span>
           {block.context ? <span className="toollink__ctx">{block.context}</span> : null}
-        </a>
+        </Link>
       );
 
     case "cta":
@@ -195,13 +196,13 @@ export function ReaderBlock({
               CTA on a finished or waiting level reads as quiet rather than as a
               demand. It is presentation of a canonical state, never a second
               decision about one. */}
-          <a
+          <Link
             className="acta__link"
             href={ctaHref(block.action, block.toolCode, levelHref, nextLevelHref)}
             data-lit={String(actionable)}
           >
             {block.label}
-          </a>
+          </Link>
         </div>
       );
 

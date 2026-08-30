@@ -15,6 +15,7 @@
  * learner may open. Locked future material is not listed here at all — it lives
  * on Path, where being locked is the point.
  */
+import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
@@ -81,7 +82,7 @@ export async function ExperienceLessons() {
               <li className="ax-lvl" key={l.levelCode} data-state={l.state} data-level={l.levelCode}>
                 <span className="ax-lvl__n">{l.order}</span>
                 <span>
-                  <a className="ax-lvl__t" href={l.href}>{l.title}</a> <MilestoneMark level={l} />
+                  <Link className="ax-lvl__t" href={l.href}>{l.title}</Link> <MilestoneMark level={l} />
                   {mod ? <p className="ax-lvl__why">Модуль {mod.order} — {mod.title}</p> : null}
                 </span>
                 <StateMark level={l} />

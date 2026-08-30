@@ -50,6 +50,15 @@ function withoutClasses(source: string): string {
     /* ...and the closing bracket of a multi-line tag sits on its own line, so
        `}>` becomes `} >`. Still formatting, still not a change. */
     .replace(/\s+(\/?>)/g, "$1")
+    /* AUTHENTICATED-NAVIGATION-FULL-LOAD-1 turned this file's internal anchor
+       into a `next/link`. `Link` renders the same `<a>` with the same href,
+       class, children and position — the rendered contract this test protects
+       is untouched — so the tag NAME is normalised here and every attribute,
+       child and string still has to match exactly. */
+    .replace(/<(\/?)Link\b/g, "<$1a")
+    /* ...and the import that swap needs. Both halves of the same authorised
+       change; everything else in the file still has to match exactly. */
+    .replace(/import Link from "next\/link";\s*/g, "")
     .trim();
 }
 

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import Link from "next/link";
 import { UnreadPresence } from "@/components/shell/unread-presence";
 import { deriveNextAction, explainLevelState } from "@/lib/curriculum/next-action";
 import type {
@@ -314,9 +315,9 @@ export function PathFidelityView({
                   </a>
                 ) : null}
                 {showSecondary ? (
-                  <a className="button button--secondary" href={focusLevel.href}>
+                  <Link className="button button--secondary" href={focusLevel.href}>
                     Открыть описание уровня
-                  </a>
+                  </Link>
                 ) : null}
               </div>
             </section>

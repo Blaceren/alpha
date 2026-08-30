@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import Link from "next/link";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent } from "@/lib/curriculum/academy-view";
@@ -240,10 +241,10 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
 
           <nav className="cur-detail__nav" aria-label="Навигация по уровням">
             {navigation.previousLevelCode ? (
-              <a href={`/lessons/${encodeURIComponent(navigation.previousLevelCode)}`}>← Предыдущий</a>
+              <Link href={`/lessons/${encodeURIComponent(navigation.previousLevelCode)}`}>← Предыдущий</Link>
             ) : <span />}
             {navigation.nextLevelCode ? (
-              <a href={`/lessons/${encodeURIComponent(navigation.nextLevelCode)}`}>Следующий →</a>
+              <Link href={`/lessons/${encodeURIComponent(navigation.nextLevelCode)}`}>Следующий →</Link>
             ) : <span />}
           </nav>
         </article>

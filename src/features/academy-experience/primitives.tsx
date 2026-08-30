@@ -10,6 +10,7 @@
  * None of these components decides anything. They render decisions already made
  * by the Backend and shaped by `next-action.ts`.
  */
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AcademyNextAction } from "@/lib/curriculum/next-action";
 import type {
@@ -63,9 +64,9 @@ export function ActionField({
         </h1>
         <p className="ax-reason">{action.explanation}</p>
         {action.ctaLabel && action.href ? (
-          <a className={`ax-cta${lit ? "" : " ax-cta--quiet"}`} href={action.href}>
+          <Link className={`ax-cta${lit ? "" : " ax-cta--quiet"}`} href={action.href}>
             {action.ctaLabel}
-          </a>
+          </Link>
         ) : null}
         {children}
       </section>

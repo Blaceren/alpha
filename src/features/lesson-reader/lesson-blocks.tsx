@@ -21,6 +21,7 @@
  * control: a practical level is finished by the canonical manual-completion,
  * mentor-review or report owner, never by ticking a box next to the text.
  */
+import Link from "next/link";
 import type { LessonBlock, LessonCtaAction } from "@/lib/curriculum/lesson-body";
 
 /**
@@ -228,22 +229,22 @@ export function LessonBlockView({
 
     case "tool_link":
       return (
-        <a className="lr-toollink" href={`/tools/${encodeURIComponent(block.toolCode)}`}>
+        <Link className="lr-toollink" href={`/tools/${encodeURIComponent(block.toolCode)}`}>
           <span className="lr-toollink__label">{block.label}</span>
           {block.context ? <span className="lr-toollink__ctx">{block.context}</span> : null}
-        </a>
+        </Link>
       );
 
     case "cta":
       return (
         <div className="lr-cta" data-posture={posture}>
           {block.body ? <p className="lr-cta__body">{block.body}</p> : null}
-          <a
+          <Link
             className={`lr-cta__link${posture === "act" ? "" : " lr-cta__link--quiet"}`}
             href={ctaHref(block.action, block.toolCode, levelHref, nextLevelHref)}
           >
             {block.label}
-          </a>
+          </Link>
         </div>
       );
 

@@ -19,6 +19,7 @@
  * `deriveNextAction` Home uses, so the row Path highlights and the statement
  * Home shows are one decision rendered twice, never two computations.
  */
+import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
@@ -73,9 +74,9 @@ function LevelRow({
       <span className="ax-lvl__n">{level.order}</span>
       <span>
         {level.routeAccessible ? (
-          <a className="ax-lvl__t" href={level.href} aria-describedby={whyId}>
+          <Link className="ax-lvl__t" href={level.href} aria-describedby={whyId}>
             {level.title}
-          </a>
+          </Link>
         ) : (
           <span className="ax-lvl__t" aria-describedby={whyId}>
             {level.title}
@@ -145,7 +146,7 @@ export async function ExperiencePath({ moduleParam }: { moduleParam?: string }) 
             const state = moduleNodeState(m, actionableCode);
             const isOpen = selected && m.moduleCode === selected.moduleCode;
             return (
-              <a
+              <Link
                 key={m.moduleCode}
                 className="ax-node"
                 href={`/path?module=${encodeURIComponent(m.moduleCode)}`}
@@ -161,7 +162,7 @@ export async function ExperiencePath({ moduleParam }: { moduleParam?: string }) 
                 <span className="ax-visually-hidden" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
                   {m.title} — {state === "completed" ? "завершён" : state === "current" ? "текущий" : state === "locked" ? "закрыт" : "впереди"}
                 </span>
-              </a>
+              </Link>
             );
           })}
         </nav>

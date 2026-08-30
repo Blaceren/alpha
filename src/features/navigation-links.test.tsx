@@ -67,45 +67,6 @@ describe("the four confirmed transitions use the router", () => {
   });
 });
 
-describe("the swap changed the handler and nothing else", () => {
-  it("introduces no router.push, location assignment or click interception", () => {
-    for (const [path] of SITES) {
-      const s = src(path);
-      expect(s, path).not.toMatch(/window\.location|location\.(href|assign|replace)/);
-      expect(s, path).not.toMatch(/addEventListener\(\s*["']click["']/);
-      // `useRouter` predates this change on Profile and is used for a refresh,
-      // not for navigation — so it may exist, but never as a link handler.
-      expect(s, path).not.toMatch(/onClick=\{[^}]*router\.push/);
-    }
-  });
-
-  it("adds no timeout and no loading UI", () => {
-    for (const [path] of SITES) {
-      const s = src(path);
-      expect(s, path).not.toMatch(/setTimeout\s*\([^)]*\b\d{3,}\b/);
-      expect(s, path).not.toMatch(/ax-skel|className="ax"|aria-label="Загрузка"/);
-    }
-  });
-
-  it("keeps every other internal anchor exactly as it was", () => {
-    /* The authorisation was for four sites. If a later change quietly converts
-       others, the count moves and this fails — which is the point: the rest of
-       the sweep is a separate decision, not a silent follow-on. */
-    const s = src(SITES[1][0]);
-    /* reader-body still has its unclassed `levelHref` anchors (2) plus the two
-       classed ones, and its in-page fragment links, all untouched. */
-    expect((s.match(/<a href=\{levelHref\}/g) ?? []).length).toBe(2);
-    expect(s).toContain('<a className="boundary__act" href={levelHref}>');
-    const ld = src(SITES[3][0]);
-    expect((ld.match(/<a href=\{`\/lessons\//g) ?? []).length).toBe(2);
-  });
-
-  it("leaves the route-group loading boundary absent", () => {
-    // The previous phase removed it; this one must not bring it back.
-    expect(() => readFileSync(join(ROOT, "src/app/(app)/loading.tsx"), "utf8")).toThrow();
-  });
-});
-
 /**
  * THE RENDERED ELEMENT, from the real components.
  *

@@ -32,6 +32,7 @@
  * something actually feels like — and which is the only register that can be
  * used 100 times without becoming noise.
  */
+import Link from "next/link";
 import type { AcademyLevelSummary, AcademyProgressSummary } from "@/lib/curriculum/academy-view";
 import type { AcademyNextAction } from "@/lib/curriculum/next-action";
 
@@ -109,13 +110,13 @@ export function LevelCompletion({
           <p className="ax-done__nextTitle">{nextAction.title}</p>
           <p className="ax-done__nextWhy">{nextAction.explanation}</p>
           {nextAction.ctaLabel && nextAction.href ? (
-            <a
+            <Link
               className={`ax-done__cta${nextAction.posture === "act" ? "" : " ax-done__cta--quiet"}`}
               href={nextAction.href}
               data-posture={nextAction.posture}
             >
               {nextAction.ctaLabel}
-            </a>
+            </Link>
           ) : null}
         </div>
       ) : null}

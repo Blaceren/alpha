@@ -88,13 +88,32 @@ describe("the authenticated route group", () => {
    */
   const BASE = "7c52c387faa6d964b83e2876e9db32f871c37b3e";
 
-  /* The four bare anchors the owner authorised converting to `next/link`.
-     AUTHENTICATED-NAVIGATION-FULL-LOAD-1; pinned in navigation-links.test.tsx. */
+  /* Every file the owner authorised converting from a bare `<a>` to
+     `next/link` — the whole confirmed internal-route class.
+     AUTHENTICATED-NAVIGATION-FULL-LOAD-1; the anchors themselves are pinned by
+     the AST gate in navigation-links.test.tsx. */
   const AUTHORISED_LINK_SWAPS = [
+    "src/features/academy-experience/lessons-screen.tsx",
+    "src/features/academy-experience/level-completion.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
+    "src/features/academy-experience/notifications-screen.tsx",
+    "src/features/academy-experience/path-screen.tsx",
+    "src/features/academy-experience/primitives.tsx",
+    "src/features/academy-experience/profile-screen.tsx",
+    "src/features/assessment/level-assessment.tsx",
+    "src/features/auth-home-fidelity/auth-home-field.tsx",
+    "src/features/curriculum-api/api-level-detail.tsx",
+    "src/features/curriculum-api/api-screens.tsx",
+    "src/features/lesson-reader/lesson-blocks.tsx",
     "src/features/lessons-fidelity/lessons-corpus.tsx",
+    "src/features/notifications-fidelity/notifications-fidelity.tsx",
+    "src/features/path-fidelity/path-fidelity-view.tsx",
+    "src/features/pocket-registration/pocket-registration-confirmed.tsx",
     "src/features/profile-fidelity/profile-fidelity.tsx",
+    "src/features/reader-fidelity/reader-blocks.tsx",
     "src/features/reader-fidelity/reader-body.tsx",
+    "src/features/reader-fidelity/reader-unavailable.tsx",
+    "src/features/report/level-report.tsx",
   ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -110,10 +129,9 @@ describe("the authenticated route group", () => {
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
     expect(changed.sort()).toEqual(AUTHORISED_LINK_SWAPS);
     for (const prefix of [
-      "src/features/home", "src/features/path-fidelity",
-      "src/features/level-detail-fidelity", "src/features/workspace",
-      "src/features/tools", "src/features/tools-fidelity", "src/features/support",
-      "src/features/notifications", "src/features/auth", "src/components/shell",
+      "src/features/home", "src/features/level-detail-fidelity",
+      "src/features/workspace", "src/features/tools", "src/features/tools-fidelity",
+      "src/features/support", "src/features/auth/", "src/components/shell",
       "src/config/feature-visibility.ts", "src/app/layout.tsx",
     ]) {
       expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);

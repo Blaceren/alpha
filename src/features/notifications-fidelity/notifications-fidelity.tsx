@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   COPY,
@@ -247,9 +248,9 @@ function Record({ record }: { record: NotificationRecord }) {
         <p className="n-record__meta">{record.context}</p>
         <div className="n-record__act">
           {record.handoff ? (
-            <a className="n-action" href={record.handoff.href}>
+            <Link className="n-action" href={record.handoff.href}>
               {record.handoff.label}
-            </a>
+            </Link>
           ) : null}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import Link from "next/link";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import type { AcademyCurriculumView, AcademyLevelSummary } from "@/lib/curriculum/academy-view";
@@ -33,9 +34,9 @@ function LevelRow({ level }: { level: AcademyLevelSummary }) {
         <span className="lvl-row__order">{level.order}</span>
         <div className="lvl-row__text">
           {level.routeAccessible ? (
-            <a className="lvl-row__title" href={level.href} aria-describedby={lockId}>
+            <Link className="lvl-row__title" href={level.href} aria-describedby={lockId}>
               {level.title}
-            </a>
+            </Link>
           ) : (
             <span className="lvl-row__title" aria-describedby={lockId}>
               {level.title}
@@ -107,7 +108,7 @@ export async function ApiHome() {
               </p>
               <LevelBadges level={current} />
               {current.routeAccessible ? (
-                <a className="cur-cta" href={current.href}>Открыть уровень</a>
+                <Link className="cur-cta" href={current.href}>Открыть уровень</Link>
               ) : null}
             </div>
           ) : (
@@ -116,7 +117,7 @@ export async function ApiHome() {
 
           {next && next.levelCode !== current?.levelCode ? (
             <p className="cur-home__next">
-              Следующий доступный: <a href={next.href}>{next.title}</a>
+              Следующий доступный: <Link href={next.href}>{next.title}</Link>
             </p>
           ) : null}
 

@@ -217,7 +217,7 @@ export function ReaderBody({
 
       <article className="reader" data-level={stableCode}>
         <p className="return">
-          <a href={levelHref}>← Уровень {levelOrder}</a>
+          <Link href={levelHref}>← Уровень {levelOrder}</Link>
         </p>
 
         <header className="opening" ref={openingRef}>
@@ -314,16 +314,16 @@ export function ReaderBody({
           <p className="boundary__label">{BOUNDARY_LABEL}</p>
           <p className="boundary__text">{BOUNDARY_TEXT[boundary]}</p>
           {boundary === "act" && !hasAuthoredCta ? (
-            <a className="boundary__act" href={levelHref}>
+            <Link className="boundary__act" href={levelHref}>
               {HANDOFF_ACTION[completionMethod] ?? "Открыть страницу уровня"}
-            </a>
+            </Link>
           ) : boundary !== "act" ? (
-            <a className="boundary__quiet" href={levelHref}>
+            <Link className="boundary__quiet" href={levelHref}>
               {QUIET_RETURN}
-            </a>
+            </Link>
           ) : null}
           <nav className="exits" aria-label="Навигация">
-            <a href={levelHref}>← Уровень {levelOrder}</a>
+            <Link href={levelHref}>← Уровень {levelOrder}</Link>
             <Link href="/path">Открыть путь</Link>
           </nav>
         </footer>

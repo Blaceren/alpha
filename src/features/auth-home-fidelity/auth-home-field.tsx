@@ -1,4 +1,5 @@
 import type { HomeField } from "@/features/auth-home-fidelity/auth-home-state";
+import Link from "next/link";
 import {
   AUTHORITY_KEY,
   NO_LEARNER_ACTION,
@@ -89,13 +90,13 @@ function ResolutionCondition({ field }: { field: HomeField }) {
        page. `data-level` is the ONLY thing that crosses the handoff. */
     return (
       <div className="home-resolution" data-resolution="handoff">
-        <a
+        <Link
           className="home-handoff"
           href={field.control.href}
           {...(field.control.levelCode ? { "data-level": field.control.levelCode } : {})}
         >
           {field.control.label}
-        </a>
+        </Link>
       </div>
     );
   }

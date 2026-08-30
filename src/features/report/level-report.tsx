@@ -10,6 +10,7 @@
  * curriculum via `router.refresh()` so L3-completed / L4-available come from the
  * Backend, not the client. Attachments are never surfaced.
  */
+import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -222,7 +223,7 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
         <div className="rpt__done" role="status">
           <p className="rpt__done-title">✓ Отчёт принят — уровень завершён</p>
           {nextLevelCode ? (
-            <a className="rpt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>Перейти к следующему уровню →</a>
+            <Link className="rpt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>Перейти к следующему уровню →</Link>
           ) : (
             <p className="rpt__next-pending">Следующий уровень откроется после обновления.</p>
           )}

@@ -4,6 +4,7 @@ import {
   type AvailabilityClass,
   type ExitId,
 } from "@/features/reader-fidelity/reader-state";
+import Link from "next/link";
 import "@/features/reader-fidelity/reader-fidelity.css";
 
 /**
@@ -60,9 +61,9 @@ export function ReaderUnavailable({
         <p className="avail__text">{state.text}</p>
         <nav className="exits" aria-label="Выходы">
           {state.exits.map((exit) => (
-            <a key={exit} href={href(exit)}>
+            <Link key={exit} href={href(exit)}>
               {EXIT_LABEL[exit]}
-            </a>
+            </Link>
           ))}
         </nav>
       </div>

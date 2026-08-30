@@ -13,6 +13,7 @@
  * of them would mean this page had quietly become a dashboard for systems that
  * have their own owners.
  */
+import Link from "next/link";
 import type { AcademyViewer } from "@/lib/api/viewer";
 import { EmptyState } from "@/features/academy-experience/primitives";
 
@@ -50,7 +51,7 @@ export function ProfileScreen({ viewer }: { viewer: AcademyViewer | null }) {
 
       <p className="ax-reason" style={{ marginTop: 28 }}>
         Выйти из аккаунта можно в верхней панели. Если нужно изменить данные учётной записи,
-        напишите в <a className="ax-lvl__t" href="/support">поддержку</a>.
+        напишите в <Link className="ax-lvl__t" href="/support">поддержку</Link>.
       </p>
     </section>
   );

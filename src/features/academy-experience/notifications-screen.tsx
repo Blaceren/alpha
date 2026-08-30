@@ -13,6 +13,7 @@
  */
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState } from "@/features/academy-experience/primitives";
 import { COMMUNITY_ENABLED } from "@/config/feature-visibility";
@@ -183,9 +184,9 @@ export function NotificationsScreen() {
               </span>
               <span>
                 {href ? (
-                  <a className="ax-lvl__t" href={href}>
+                  <Link className="ax-lvl__t" href={href}>
                     {n.title ?? "Событие обучения"}
-                  </a>
+                  </Link>
                 ) : (
                   <span className="ax-lvl__t">{n.title ?? "Событие обучения"}</span>
                 )}
