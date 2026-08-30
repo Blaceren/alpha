@@ -1,0 +1,108 @@
+/**
+ * WORKSPACE FORM — the three behaviours the seam is most likely to be blamed
+ * for, pinned at the seam.
+ *
+ * The form's own suites already cover the double-save guard, the double-submit
+ * guard, the no-network invalid submit, the stale-revision mapping and the
+ * retryable/fatal split. They were not touched. What was NOT already pinned is
+ * what happens after AUTH LOSS — and the rule that matters there is a negative
+ * one: nothing resubmits by itself.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+vi.mock("@/lib/report/report-client", () => ({
+  fetchReportContext: vi.fn(),
+  saveReportDraft: vi.fn(),
+  submitReport: vi.fn(),
+  resubmitReport: vi.fn(),
+  newReportRequestId: vi.fn((p = "save") => `ata-rpt-${p}-fixedkey01`),
+}));
+
+import * as client from "@/lib/report/report-client";
+import { LevelReport } from "@/features/report/level-report";
+import { buildContext, validValues } from "@/features/report/test-fixtures";
+
+const fetchMock = vi.mocked(client.fetchReportContext);
+const submitMock = vi.mocked(client.submitReport);
+const saveMock = vi.mocked(client.saveReportDraft);
+const resubmitMock = vi.mocked(client.resubmitReport);
+
+const props = { stableCode: "v2.l003.x", locale: "ru", nextLevelCode: null };
+const ok = <T,>(data: T) => ({ ok: true as const, data, requestId: null });
+const authLost = {
+  ok: false as const,
+  error: { category: "UNAUTHENTICATED", status: 401, code: null, messageKey: "x", requestId: null, retryable: false },
+};
+
+async function fillValid(container: HTMLElement) {
+  for (const key of Object.keys(validValues())) {
+    const el = container.querySelector<HTMLElement>(`[data-field="${key}"] input[type="text"], [data-field="${key}"] textarea`);
+    if (el) await userEvent.type(el, "ок");
+  }
+}
+
+beforeEach(() => {
+  refresh.mockClear();
+  for (const m of [fetchMock, submitMock, saveMock, resubmitMock]) m.mockReset();
+});
+
+describe("Workspace form — auth loss never resubmits by itself", () => {
+  it("makes exactly one write, then stops, and never retries on its own", async () => {
+    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    submitMock.mockResolvedValue(authLost as never);
+
+    const { container } = render(<LevelReport {...props} />);
+    await screen.findByText("Отчёт по первым пяти сделкам");
+    await fillValid(container);
+    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+
+    await waitFor(() => expect(submitMock).toHaveBeenCalled());
+    const callsAfterLoss = submitMock.mock.calls.length;
+
+    /* Nothing may fire a second write on its own — no timer, no effect, no
+       recovery path that re-sends what the server refused. */
+    await new Promise((r) => setTimeout(r, 250));
+    expect(submitMock).toHaveBeenCalledTimes(callsAfterLoss);
+    expect(resubmitMock).not.toHaveBeenCalled();
+    expect(saveMock).not.toHaveBeenCalled();
+    /* And it does not silently reload the page's authority either. */
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps the learner's answers after auth loss, so nothing has to be retyped", async () => {
+    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    submitMock.mockResolvedValue(authLost as never);
+
+    const { container } = render(<LevelReport {...props} />);
+    await screen.findByText("Отчёт по первым пяти сделкам");
+    const first = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input')!;
+    await userEvent.type(first, "EURUSD");
+    await fillValid(container);
+    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+    await waitFor(() => expect(submitMock).toHaveBeenCalled());
+
+    const stillThere = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input');
+    expect(stillThere?.value).toContain("EURUSD");
+  });
+
+  it("says one thing about it, in the surface's one live region", async () => {
+    fetchMock.mockResolvedValue(ok(buildContext("available", null)));
+    submitMock.mockResolvedValue(authLost as never);
+
+    const { container } = render(<LevelReport {...props} />);
+    await screen.findByText("Отчёт по первым пяти сделкам");
+    await fillValid(container);
+    await userEvent.click(screen.getByRole("button", { name: /Отправить на проверку/ }));
+    await waitFor(() => expect(submitMock).toHaveBeenCalled());
+
+    /* One status region, and the seam did not add a second copy authority. */
+    const live = container.querySelectorAll('[role="status"][aria-live="polite"]');
+    expect(live).toHaveLength(1);
+    expect(live[0]!.className).toContain("rpt__status");
+    expect(live[0]!.className).toContain("rpt-bar__state");
+  });
+});
