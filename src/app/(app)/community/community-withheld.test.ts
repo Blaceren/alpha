@@ -8,22 +8,26 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const notFound = vi.fn(() => {
-  const e = new Error("NEXT_NOT_FOUND");
-  (e as unknown as { digest: string }).digest = "NEXT_NOT_FOUND";
-  throw e;
-});
-vi.mock("next/navigation", () => ({ notFound }));
+/* `vi.mock` factories are hoisted above the file, so anything they close over
+   has to be hoisted with them. */
+const h = vi.hoisted(() => ({
+  notFound: vi.fn(() => {
+    const e = new Error("NEXT_NOT_FOUND");
+    (e as unknown as { digest: string }).digest = "NEXT_NOT_FOUND";
+    throw e;
+  }),
+  getServerViewer: vi.fn(async () => ({ name: "Мария Ковалёва" })),
+  communityFetch: vi.fn(),
+}));
+const { notFound, getServerViewer, communityFetch } = h;
 
-const getServerViewer = vi.fn(async () => ({ name: "Мария Ковалёва" }));
-vi.mock("@/server/auth/server-session", () => ({ getServerViewer }));
-
+vi.mock("next/navigation", () => ({ notFound: h.notFound }));
+vi.mock("@/server/auth/server-session", () => ({ getServerViewer: h.getServerViewer }));
 /* If the guard ever moved below the data layer, these would be reached. */
-const communityFetch = vi.fn();
 vi.mock("@/lib/community/community-client", () => ({
-  fetchCommunityOverview: communityFetch,
-  fetchCommunitySpace: communityFetch,
-  fetchCommunityThread: communityFetch,
+  fetchCommunityOverview: h.communityFetch,
+  fetchCommunitySpace: h.communityFetch,
+  fetchCommunityThread: h.communityFetch,
 }));
 
 import CommunityPage from "@/app/(app)/community/page";

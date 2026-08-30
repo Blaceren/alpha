@@ -72,7 +72,7 @@ describe("unread presence is derived from the visible set", () => {
     vi.stubGlobal("fetch", f);
     const mod = await import("@/server/notifications/unread-presence");
     await mod.hasUnreadNotifications();
-    const init = f.mock.calls[0]?.[1] as RequestInit | undefined;
+    const init = (f.mock.calls as unknown as Array<[string, RequestInit | undefined]>)[0]?.[1];
     expect(init?.method ?? "GET").toBe("GET");
     expect(init?.body).toBeUndefined();
   });
