@@ -464,3 +464,52 @@
 .ld .avp { --avp-control-size: 44px; }
 /* The volume slider is a 31px-tall range input. Its own box is the target. */
 .ld .avp__volume input[type="range"] { min-height: 44px; }
+
+/* ------------------------------------------------------- completion ------- */
+
+/*
+ * The completion moment. Its own comment in experience.css says "no gradient
+ * that reads as a prize" — and then it painted a navy gradient. The intent was
+ * right; the material was the provisional one. The intent is what is kept here:
+ * the surface settles, the signal that meant "act here" becomes one quiet edge
+ * meaning "this is behind you", and the only lit thing left is the link forward.
+ */
+.ld .ax-done {
+  padding: 24px 24px 26px;
+  border-radius: 8px;
+  background: var(--background-field);
+  border: var(--ld-rule);
+  border-left: 2px solid var(--signal-active);
+}
+.ld .ax-done__kicker {
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 500; color: var(--text-muted); margin: 0 0 10px;
+}
+.ld .ax-done__title {
+  font-size: 21px; line-height: 1.25; letter-spacing: -0.012em;
+  font-weight: 700; color: var(--text-primary); margin: 0 0 20px;
+}
+.ld .ax-done__facts { border-bottom: var(--ld-rule); }
+.ld .ax-done__facts dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 500;
+}
+.ld .ax-done__facts dd { font-size: 15px; color: var(--text-primary); }
+/* The number says what the level was worth. It is not a payout, so it is not lit. */
+.ld .ax-done__xp { color: var(--text-primary); font-weight: 650; }
+.ld .ax-done__nextTitle { font-size: 16px; font-weight: 650; color: var(--text-primary); }
+.ld .ax-done__nextWhy { font-size: 14.5px; color: var(--text-secondary); }
+/* The one lit thing left: the link forward. */
+.ld .ax-done__cta {
+  border-radius: 8px; padding: 12px 22px;
+  background: var(--signal-active); color: var(--background-base);
+  border: 1px solid transparent; font-size: 14.5px; font-weight: 650;
+}
+.ld .ax-done__cta:hover { background: var(--ata-signal-300); }
+.ld .ax-done__cta:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .ax-done__cta--quiet {
+  background: transparent; color: var(--text-primary); border-color: var(--divider-strong);
+}
+.ld .ax-done__cta--quiet:hover { background: var(--surface-subtle); }
