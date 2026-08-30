@@ -41,7 +41,13 @@ const git = (...args: string[]) =>
 function withoutClasses(source: string): string {
   return source
     .replace(/\s*className=\{`[^`]*`\}/g, "")
-    .replace(/\s*className="[^"]*"/g, "");
+    .replace(/\s*className="[^"]*"/g, "")
+    /* One element grew from a single line to several when its class became a
+       template literal. Line breaks are not a change to anything this test is
+       about, so whitespace is collapsed; every attribute, every child and every
+       string still has to match exactly. */
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 describe("Workspace form — the seam is presentation only", () => {
