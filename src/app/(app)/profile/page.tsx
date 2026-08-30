@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
-import { ProfileScreen } from "@/features/academy-experience/profile-screen";
-import "@/features/academy-experience/experience.css";
+import { ProfileFidelity } from "@/features/profile-fidelity/profile-fidelity";
 
 export const metadata: Metadata = {
   title: "Профиль — Alfa Trade Academy",
@@ -16,14 +15,17 @@ export const dynamic = "force-dynamic";
  * Affiliate identity, no staff data. Those belong to other products and other
  * owners, and mixing them here is how a learner profile quietly becomes a
  * financial dashboard.
+ *
+ * A NULL VIEWER IS A READ FAILURE, NOT AN EMPTY PROFILE. The route is behind
+ * the session guard, so reaching this page without a viewer means the read
+ * failed — which is the surface's PAGEFAIL state, with a page-level alert and a
+ * retry, not a page that renders an account with no name in it.
  */
 export default async function ProfilePage() {
   const viewer = await getServerViewer();
   return (
-    <AppShell userName={viewer?.name ?? "Ученик"} activeId="profile">
-      <div className="ax">
-        <ProfileScreen viewer={viewer} />
-      </div>
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="profile" frozenSurface>
+      <ProfileFidelity canonical={viewer?.name ?? null} />
     </AppShell>
   );
 }
