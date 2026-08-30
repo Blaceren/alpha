@@ -163,19 +163,16 @@ const XP_BEARING_SOURCES: CurriculumXpBearingCompletionSource[] = [
 ];
 
 /**
- * Every source that can own a LEVEL'S award row in the ledger.
+ * PHASE-1 ADMIN — why there is no `admin_correction` entry beside these.
  *
- * `XP_BEARING_SOURCES` answers "which owners may pay?"; this answers "whose
- * rows are the durable award for this level?". They differed the moment
- * `admin_correction` arrived, and conflating them would break the completed-retry
- * verifier in the most confusing possible way: an administratively completed
- * level would look like a completion with no durable XP award, and the engine
- * would classify a correct state as corrupt.
+ * `levelXpRows` finds a level's durable award BY `levelDefinitionId`, and an
+ * administrative award deliberately names no level (see `xpInput`). So an
+ * administrative row is invisible to that query by construction, and listing the
+ * source here would change nothing except to suggest otherwise. The retry path
+ * verifies an administrative award by its idempotency key instead, which is the
+ * identity it actually has.
  */
-const LEVEL_AWARD_SOURCES: CurriculumXpSourceType[] = [
-  ...XP_BEARING_SOURCES,
-  "admin_correction",
-];
+void XP_BEARING_SOURCES;
 
 /**
  * A source that can never award XP, whatever the level definition says.
@@ -1188,7 +1185,13 @@ function xpInput(
   }
   return {
     enrollmentId: context.enrollment.id,
-    levelDefinitionId: context.level.id,
+    // PHASE-1 ADMIN — an administrative award names NO level. See the note on
+    // `LEVEL_LINKED_SOURCES` in `xp.ts`: the currently-deployed Backend would
+    // read a level-linked `admin_correction` row as a corrupt enrollment, so
+    // this is what keeps that release a valid rollback anchor. The level is
+    // carried by the award's `sourceId`, by the progress row's provenance and
+    // by two audit records.
+    levelDefinitionId: isAdministrativeSource(input.sourceType) ? null : context.level.id,
     sourceType: input.sourceType,
     sourceId: input.sourceId,
     amount: context.level.xpReward,
@@ -1227,10 +1230,9 @@ async function levelXpRows(tx: Prisma.TransactionClient, context: CompletionCont
     where: {
       enrollmentId: context.enrollment.id,
       levelDefinitionId: context.level.id,
-      // Only award-bearing owners can appear in the ledger; `checkpoint_verification`
-      // is not a member of the XP vocabulary at all. `admin_correction` IS, and
-      // its row is this level's durable award, so it has to be visible here.
-      sourceType: { in: LEVEL_AWARD_SOURCES },
+      // Only XP-bearing owners can appear in the ledger; `checkpoint_verification`
+      // is not a member of the XP vocabulary at all.
+      sourceType: { in: XP_BEARING_SOURCES },
     },
     orderBy: { id: "asc" },
   });
@@ -1273,6 +1275,31 @@ async function verifyCompletedRetry(
       failure("COMPLETION_STATE_CORRUPT", "zero-reward completion must own no XP");
     }
     return completedResult(context, null, context.progress.completedAt, false);
+  }
+  if (isAdministrativeSource(input.sourceType)) {
+    // An administrative award names no level, so the level-scoped row count
+    // above cannot see it and `rows.length` says nothing about whether it
+    // exists. Its identity is the idempotency key, so that is what is verified —
+    // and a mismatch is a genuine conflict (a DIFFERENT administrative request
+    // completed this level) rather than a missing award.
+    let verifiedAdministrative;
+    try {
+      verifiedAdministrative = await verifyCurriculumXpAwardInTransaction(
+        tx,
+        xpInput(context, input),
+      );
+    } catch (error) {
+      mapXpError(error);
+    }
+    if (verifiedAdministrative.kind === "missing") {
+      failure("COMPLETION_CONFLICT", "completed level has a different owner identity");
+    }
+    return completedResult(
+      context,
+      verifiedAdministrative.transaction,
+      context.progress.completedAt,
+      false,
+    );
   }
   const ledger = await resolveEnrollmentXp({
     enrollmentId: context.enrollment.id,

@@ -29,20 +29,36 @@ const APPROVED_SOURCES = new Set<CurriculumXpSourceType>([
   "admin_correction",
 ]);
 
+// PHASE-1 ADMIN — `admin_correction` IS DELIBERATELY ABSENT, and that is a
+// ROLLBACK decision rather than a modelling preference.
+//
+// An administrative correction does credit one specific level, so linking the
+// row to it was the obvious modelling choice and it is what this phase shipped
+// first. It was wrong for a reason that only shows up on the way back out.
+//
+// This contract is SYMMETRIC: a level-linked source MUST name a level and a
+// non-level-linked source MUST NOT. The currently-deployed Backend does not have
+// `admin_correction` in this set, so a row written with a level would be read by
+// it as `xp_source_level_contract_invalid` — and that verdict is not scoped to
+// the row, it fails the WHOLE enrollment resolution, which takes the learner's
+// XP total, their level states and therefore their Academy down. One correction
+// applied before a rollback would have broken the learner it was meant to fix,
+// and the live release would have stopped being a valid rollback anchor the
+// moment the feature was used once.
+//
+// Writing the row with `levelDefinitionId = null` is read identically by both
+// releases, and costs nothing: `admin_correction` is already in
+// `APPROVED_SOURCES` on both sides, the resolver sums every approved row into
+// the enrollment total whether or not it names a level, and the level this row
+// belongs to is still recoverable four other ways — the progress row's
+// `completionMethod`/`completionEvidence`, the per-level completion audit, the
+// adjustment envelope, and the award's own `sourceId`
+// (`admin-correction:<requestId>:l<levelNumber>`).
 const LEVEL_LINKED_SOURCES = new Set<CurriculumXpSourceType>([
   "level_completion",
   "assessment_pass",
   "report_approval",
   "mentor_completion",
-  // PHASE-1 ADMIN. An administrative correction always credits ONE specific
-  // level, so its row must name that level exactly as the four learner-driven
-  // sources do. Leaving it out would not have made it optional — the contract is
-  // symmetric, so a non-level-linked source is FORBIDDEN from naming a level,
-  // and the resolver would have classified every administrative award as
-  // `xp_source_level_contract_invalid` and taken the learner's whole enrollment
-  // read down with it. Verified safe to add: no `admin_correction` row exists in
-  // PREPROD, so no stored row is re-classified by this change.
-  "admin_correction",
 ]);
 
 const PROTOTYPE_KEYS = new Set(["__proto__", "prototype", "constructor"]);

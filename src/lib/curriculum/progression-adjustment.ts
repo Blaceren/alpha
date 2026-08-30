@@ -707,6 +707,15 @@ async function runAdjustment(
           actorUserId: input.learnerUserId,
           asOf: input.evaluationTime,
           expectedStableCode: level.stableCode,
+          // The trusted context. It suppresses the `level_started` growth event
+          // — an operator materialising a row is not a learner opening a level —
+          // and attributes the audit row to the operator instead of the learner.
+          administrative: {
+            actorUserId: input.actorUserId,
+            actorStaffProfileId: input.actorStaffProfileId,
+            reasonCode: input.reasonCode,
+            requestIdHash,
+          },
         });
         if (started.kind !== "started") {
           fail(

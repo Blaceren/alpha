@@ -362,6 +362,118 @@ async function main() {
   });
 
   /* ---------------------------------------------------------------- */
+  /* progression_operator — usable, and ONLY for this                   */
+  /* ---------------------------------------------------------------- */
+
+  await check("a progression_operator session resolves with exactly one permission", async () => {
+    await reset();
+    const scenario = await createScenario();
+    const session = await import("../../src/lib/crm/session");
+    const profile = await prisma.staffProfile.findUniqueOrThrow({
+      where: { id: scenario.operator.profile.id },
+    });
+    assert.equal(profile.staffRole, "progression_operator");
+    // The server-side resolver is the only thing that computes permissions.
+    assert.deepEqual(roles.resolveEffectivePermissions(profile.staffRole), [
+      "curriculum_progress_override",
+    ]);
+    void session;
+  });
+
+  await check("the operator can LIST learners and find the target", async () => {
+    await reset();
+    const scenario = await createScenario();
+    const users = await import("../../src/lib/crm/users");
+    const permissions = roles.resolveEffectivePermissions("progression_operator");
+    const query = users.parseCrmUsersQuery(new URLSearchParams(), permissions);
+    const page = await users.listCrmUsers(query, permissions, scenario.operator.profile.id);
+    assert.ok(
+      page.items.some((item) => item.userId === String(scenario.learner.id)),
+      "the operator must be able to find the learner they are asked to correct",
+    );
+    // Identity stays masked: the list is reachable, PII is not.
+    const row = page.items.find((item) => item.userId === String(scenario.learner.id))!;
+    assert.equal(row.email.visibility, "masked");
+  });
+
+  await check("the operator can OPEN the learner detail, with a masked email", async () => {
+    await reset();
+    const scenario = await createScenario();
+    const detail = await import("../../src/lib/crm/user-detail");
+    const permissions = roles.resolveEffectivePermissions("progression_operator");
+    const view = await detail.resolveCrmUserDetail(scenario.learner.id, permissions);
+    assert.equal(view.userId, String(scenario.learner.id));
+    assert.equal(view.email.visibility, "masked");
+  });
+
+  await check("the operator can READ progression and is AUTHORIZED to adjust", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    const permissions = roles.resolveEffectivePermissions("progression_operator");
+    assert.equal(roles.canViewProgression(permissions), true);
+    assert.equal(roles.canOverrideProgression(permissions), true);
+
+    const snap = await progressionRead.resolveLearnerProgressionSnapshot(scenario.learner.id);
+    assert.equal(snap.kind, "enrolled");
+
+    const plan = await adjustment.previewProgressionAdjustment({
+      learnerUserId: scenario.learner.id,
+      targetStableCode: stableCodeFor(scenario, 6),
+    });
+    assert.equal(plan.canApply, true);
+
+    const receipt = await adjustment.adjustLearnerProgression(await baseInput(scenario, 6));
+    assert.equal(receipt.created, true);
+  });
+
+  await check("the operator can do NOTHING else — every other capability refuses", async () => {
+    const permissions = roles.resolveEffectivePermissions("progression_operator");
+    const refusals: [string, boolean][] = [
+      ["assign owner", roles.canAssignOwner(permissions)],
+      ["reveal lead PII", roles.canRevealLeadPii(permissions)],
+      ["view affiliates", roles.canViewAffiliates(permissions)],
+      ["view owner history", roles.canViewOwnerHistory(permissions)],
+      ["read curriculum authoring", roles.canReadCurriculumAuthoring(permissions)],
+      ["author curriculum", roles.canAuthorCurriculum(permissions)],
+      ["approve curriculum", roles.canApproveCurriculum(permissions)],
+      ["adjudicate source authority", roles.canAdjudicateCurriculumSourceAuthority(permissions)],
+      ["view learner ops", roles.canViewLearnerOps(permissions)],
+      ["handle learner ops", roles.canHandleLearnerOps(permissions)],
+      ["escalate", roles.canEscalateLearnerOps(permissions)],
+      ["resolve escalation", roles.canResolveLearnerOpsEscalation(permissions)],
+      ["manage queues", roles.canManageLearnerOpsQueues(permissions)],
+      ["learner ops QA", roles.canPerformLearnerOpsQa(permissions)],
+      ["learner ops analytics", roles.canViewLearnerOpsAnalytics(permissions)],
+      ["administer learner ops", roles.canAdministerLearnerOps(permissions)],
+      ["report review", roles.canPerformReportReview(permissions)],
+      ["mentor review", roles.canPerformMentorReview(permissions)],
+    ];
+    for (const [name, allowed] of refusals) {
+      assert.equal(allowed, false, `progression_operator must not be able to ${name}`);
+    }
+    // The raw permission set, asserted whole so a future grant cannot slip in.
+    for (const forbidden of [
+      "view_exact_financials",
+      "view_identity_full_email",
+      "reveal_pii",
+      "export",
+      "manage_settings",
+      "view_audit",
+      "community_moderate",
+      "edit_user_notes",
+      "view_user_notes",
+      "create_user_notes",
+    ] as const) {
+      assert.equal(
+        permissions.includes(forbidden),
+        false,
+        `progression_operator must not hold ${forbidden}`,
+      );
+    }
+  });
+
+  /* ---------------------------------------------------------------- */
   /* Preview purity                                                    */
   /* ---------------------------------------------------------------- */
 
@@ -452,7 +564,12 @@ async function main() {
     assert.equal(xp.sourceType, "admin_correction");
     assert.equal(xp.amount, 150);
     assert.equal(xp.createdById, scenario.operator.user.id);
-    assert.ok(xp.levelDefinitionId, "administrative XP must name its level");
+    // NOT level-linked, deliberately — see `LEVEL_LINKED_SOURCES` in xp.ts. The
+    // deployed Backend reads a level-linked administrative award as a corrupt
+    // ENROLLMENT, so this is what keeps that release a valid rollback anchor.
+    // The level lives in the sourceId instead.
+    assert.equal(xp.levelDefinitionId, null, "administrative XP must not be level-linked");
+    assert.match(xp.sourceId ?? "", /:l5$/);
   });
 
   await check("multi-level forward completes the whole interval atomically", async () => {
@@ -483,10 +600,12 @@ async function main() {
       where: { enrollmentId: scenario.enrollment.id, levelDefinitionId: level.id },
     });
     assert.equal(created.status, "completed");
-    // The canonical start owner emits `level_started`; that is an ordinary
-    // learner-shaped fact about a level being opened and is left alone.
+    // The row was materialised through the canonical start owner — and the
+    // owner emitted NOTHING, because an operator creating a progress row is not
+    // a learner opening a level. Case C below proves an ordinary learner start
+    // still emits its event unchanged.
     const started = await prisma.growthEvent.count({ where: { eventType: "level_started" } });
-    assert.equal(started, 1);
+    assert.equal(started, 0, "an administratively materialised row is not a learner start");
   });
 
   await check("an admin correction may resolve a level sitting in pending_review", async () => {
@@ -712,21 +831,150 @@ async function main() {
   /* Analytics                                                         */
   /* ---------------------------------------------------------------- */
 
-  await check("an admin correction emits no level_completed and no academy_activation", async () => {
+  /**
+   * THE INVARIANT, STATED ONCE: for one administrative adjustment the organic
+   * GrowthEvent delta is ZERO. Not "zero completions" — zero events of any
+   * learner-behaviour kind, including the `level_started` an administratively
+   * materialised progress row would otherwise produce. An operator creating the
+   * current progress row does not mean the learner opened that level.
+   */
+  async function growthDeltaFor(fn: () => Promise<unknown>) {
+    const before = await prisma.growthEvent.findMany({ select: { eventType: true } });
+    await fn();
+    const after = await prisma.growthEvent.findMany({ select: { eventType: true } });
+    const delta = new Map<string, number>();
+    for (const row of after) delta.set(row.eventType, (delta.get(row.eventType) ?? 0) + 1);
+    for (const row of before) delta.set(row.eventType, (delta.get(row.eventType) ?? 0) - 1);
+    return [...delta.entries()].filter(([, count]) => count !== 0);
+  }
+
+  await check("A. unstarted single-level correction produces ZERO organic growth events", async () => {
     await reset();
     const scenario = await createScenario();
     await placeAt(scenario, 5);
-    await adjustment.adjustLearnerProgression(await baseInput(scenario, 8));
-    assert.equal(
-      await prisma.growthEvent.count({ where: { eventType: "level_completed" } }),
-      0,
-      "a correction is not a completed level in the funnel",
+    // L5 has no progress row: the correction must materialise it through the
+    // canonical start owner and still emit nothing.
+    const rows = await prisma.userLevelProgress.count({
+      where: { enrollmentId: scenario.enrollment.id },
+    });
+    assert.equal(rows, 4, "level 5 must be unstarted for this case to mean anything");
+    const delta = await growthDeltaFor(async () =>
+      adjustment.adjustLearnerProgression(await baseInput(scenario, 6)),
     );
-    assert.equal(
-      await prisma.growthEvent.count({ where: { eventType: "academy_activation" } }),
-      0,
-      "a correction must never look like organic activation",
+    assert.deepEqual(delta, [], `expected no growth events, got ${JSON.stringify(delta)}`);
+  });
+
+  await check("B. multi-level correction with EVERY level unstarted produces ZERO", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    const delta = await growthDeltaFor(async () =>
+      adjustment.adjustLearnerProgression(await baseInput(scenario, 8)),
     );
+    assert.deepEqual(delta, [], `expected no growth events, got ${JSON.stringify(delta)}`);
+    // …and the levels really were completed, so this is not vacuous.
+    const enrollment = await prisma.userCurriculumEnrollment.findUniqueOrThrow({
+      where: { id: scenario.enrollment.id },
+    });
+    assert.equal(enrollment.currentLevel, 8);
+  });
+
+  await check("C. a NORMAL learner start still emits level_started, unchanged", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    const delta = await growthDeltaFor(async () =>
+      levelState.startCurrentCurriculumLevel({
+        actorUserId: scenario.learner.id,
+        db: prisma,
+        asOf: EVALUATION_TIME,
+      }),
+    );
+    assert.deepEqual(delta, [["level_started", 1]]);
+  });
+
+  await check("D. a NORMAL learner completion still emits its events, unchanged", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    await levelState.startCurrentCurriculumLevel({
+      actorUserId: scenario.learner.id,
+      db: prisma,
+      asOf: EVALUATION_TIME,
+    });
+    const level = scenario.levels.find((l) => l.levelNumber === 5)!;
+    const completionModule = await import("../../src/lib/curriculum/completion");
+    const delta = await growthDeltaFor(async () =>
+      completionModule.completeCurriculumLevel({
+        db: prisma,
+        enrollmentId: scenario.enrollment.id,
+        levelDefinitionId: level.id,
+        sourceType: "level_completion",
+        sourceId: `manual-completion:normal-${process.pid}-0001`,
+        actorId: scenario.learner.id,
+        evaluationTime: EVALUATION_TIME,
+      }),
+    );
+    const kinds = delta.map(([type]) => type).sort();
+    assert.deepEqual(kinds, ["academy_activation", "level_completed"]);
+  });
+
+  await check("E. correction through a report level emits no learner-success event at all", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 3);
+    const delta = await growthDeltaFor(async () =>
+      adjustment.adjustLearnerProgression(await baseInput(scenario, 4)),
+    );
+    assert.deepEqual(delta, [], `expected no growth events, got ${JSON.stringify(delta)}`);
+    for (const eventType of [
+      "level_started",
+      "level_completed",
+      "academy_activation",
+      "report_submitted",
+      "report_approved",
+      "mentor_review_submitted",
+      "mentor_review_approved",
+      "assessment_completed",
+    ] as const) {
+      assert.equal(
+        await prisma.growthEvent.count({ where: { eventType } }),
+        0,
+        `${eventType} must not be emitted by an administrative correction`,
+      );
+    }
+  });
+
+  await check("an administrative start audit names the OPERATOR, not the learner", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    await adjustment.adjustLearnerProgression(await baseInput(scenario, 6));
+    const started = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "CURRICULUM_LEVEL_STARTED" },
+    });
+    assert.equal(started.userId, scenario.operator.user.id);
+    const meta = started.metadata as Record<string, unknown>;
+    assert.equal(meta.actorUserId, scenario.operator.user.id);
+    assert.equal(meta.userId, scenario.learner.id, "the learner is still identified");
+    assert.ok(meta.administrative, "an administrative start must say so");
+  });
+
+  await check("a normal learner start audit is unchanged and carries no administrative mark", async () => {
+    await reset();
+    const scenario = await createScenario();
+    await placeAt(scenario, 5);
+    await levelState.startCurrentCurriculumLevel({
+      actorUserId: scenario.learner.id,
+      db: prisma,
+      asOf: EVALUATION_TIME,
+    });
+    const started = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "CURRICULUM_LEVEL_STARTED" },
+    });
+    assert.equal(started.userId, scenario.learner.id);
+    const meta = started.metadata as Record<string, unknown>;
+    assert.equal(meta.administrative, undefined);
   });
 
   /* ---------------------------------------------------------------- */

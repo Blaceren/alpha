@@ -360,12 +360,13 @@ async function main() {
       ["mentor_completion", published.level1.id],
       ["promocode", null],
       ["migration_adjustment", null],
-      // PHASE-1 ADMIN: `admin_correction` became LEVEL-LINKED. An administrative
-      // correction always credits one specific level, so its row names that
-      // level exactly as the four learner-driven sources do — and because the
-      // level contract is symmetric, a non-level-linked source is FORBIDDEN from
-      // naming one, which is why this moved rather than became optional.
-      ["admin_correction", published.level1.id],
+      // PHASE-1 ADMIN considered moving `admin_correction` to the level-linked
+      // side and moved it back. The currently-deployed Backend does not carry it
+      // there, and this contract is symmetric, so a level-linked administrative
+      // award is read by that release as a CORRUPT ENROLLMENT — not a bad row, a
+      // dead learner. It stays here, and the level it credits is carried by the
+      // award's `sourceId`. See `LEVEL_LINKED_SOURCES` in `xp.ts`.
+      ["admin_correction", null],
     ] as const;
     for (const [sourceType, levelDefinitionId] of cases) {
       const result = await recordCurriculumXp({

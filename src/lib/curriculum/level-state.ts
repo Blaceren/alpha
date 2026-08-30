@@ -825,11 +825,38 @@ function assertExpectedStartTarget(
   );
 }
 
+/**
+ * PHASE-1 ADMIN — the trusted context an administrative correction passes in.
+ *
+ * ONE narrowly-scoped parameter, and it exists because of a specific falsehood.
+ * When an administrative correction reaches a level the learner never opened, it
+ * has to materialise the progress row through this owner — writing one directly
+ * would be a second progress implementation. But the owner's `level_started`
+ * growth event means "a learner opened this level", and an operator creating the
+ * row is not that. Emitting it would put an organic learner-behaviour event into
+ * the funnel for something no learner did, which is exactly what the
+ * administrative-analytics rule forbids.
+ *
+ * It changes TWO things and nothing else: growth events are not emitted, and the
+ * audit row is attributed to the OPERATOR and marked administrative, so the
+ * durable record does not say the learner started a level they never opened.
+ * When absent — every ordinary learner start — this file behaves exactly as it
+ * did, which is why the parameter is optional rather than a mode.
+ */
+export type AdministrativeStartContext = {
+  /** The operator, for the audit row. Never the learner. */
+  readonly actorUserId: number;
+  readonly actorStaffProfileId: string;
+  readonly reasonCode: string;
+  readonly requestIdHash: string;
+};
+
 async function runStartTransaction(
   tx: Prisma.TransactionClient,
   actorUserId: number,
   evaluationTime: Date,
   expectedStableCode?: string,
+  administrative?: AdministrativeStartContext,
 ): Promise<StartCurrentCurriculumLevelResult> {
   const { result, state } = await loadStartState(
     tx,
@@ -893,14 +920,18 @@ async function runStartTransaction(
   // action, so it is the only place a level genuinely starts. The other two
   // creators — checkpoint verification and staging attestation — create progress
   // for an operator-driven path and are covered by the completion hook instead.
-  await emitLevelStartedEvent(tx, {
-    userLevelProgressId: progress.id,
-    enrollmentId: result.enrollment.id,
-    userId: result.enrollment.userId,
-    levelDefinitionId: state.levelDefinition.id,
-    levelNumber: state.levelDefinition.levelNumber,
-    occurredAt: evaluationTime,
-  });
+  // PHASE-1 ADMIN — an administratively materialised row emits nothing. Nobody
+  // opened this level, so the funnel is not told that anybody did.
+  if (!administrative) {
+    await emitLevelStartedEvent(tx, {
+      userLevelProgressId: progress.id,
+      enrollmentId: result.enrollment.id,
+      userId: result.enrollment.userId,
+      levelDefinitionId: state.levelDefinition.id,
+      levelNumber: state.levelDefinition.levelNumber,
+      occurredAt: evaluationTime,
+    });
+  }
 
   const enrollment = await tx.userCurriculumEnrollment.update({
     where: { id: result.enrollment.id },
@@ -909,18 +940,32 @@ async function runStartTransaction(
 
   await tx.auditLog.create({
     data: {
-      userId: actorUserId,
+      // Attributed to the OPERATOR on an administrative start. Recording the
+      // learner as the actor would be the same falsehood the growth suppression
+      // above avoids, written somewhere more durable.
+      userId: administrative ? administrative.actorUserId : actorUserId,
       action: CURRICULUM_AUDIT_ACTIONS.levelStarted,
       entityType: "UserLevelProgress",
       entityId: String(progress.id),
       metadata: {
-        actorUserId,
+        actorUserId: administrative ? administrative.actorUserId : actorUserId,
         userId: actorUserId,
         enrollmentId: enrollment.id,
         curriculumVersionId: result.curriculumVersion.id,
         levelDefinitionId: state.levelDefinition.id,
         levelNumber: state.levelDefinition.levelNumber,
         stableCode: state.levelDefinition.stableCode,
+        // Present only on an administrative start, so its ABSENCE is the
+        // statement that a learner opened this level themselves.
+        ...(administrative
+          ? {
+              administrative: {
+                reasonCode: administrative.reasonCode,
+                actorStaffProfileId: administrative.actorStaffProfileId,
+                requestIdHash: administrative.requestIdHash,
+              },
+            }
+          : {}),
       },
     },
   });
@@ -997,7 +1042,12 @@ async function recoverConcurrentStart(
  */
 export async function startCurrentCurriculumLevelInTransaction(
   tx: Prisma.TransactionClient,
-  input: { actorUserId: number; asOf?: Date; expectedStableCode?: string },
+  input: {
+    actorUserId: number;
+    asOf?: Date;
+    expectedStableCode?: string;
+    administrative?: AdministrativeStartContext;
+  },
 ): Promise<StartCurrentCurriculumLevelResult> {
   if (!isCurriculumV2EnrollmentEnabled()) {
     throw new LevelStartDomainError(
@@ -1016,6 +1066,7 @@ export async function startCurrentCurriculumLevelInTransaction(
     input.actorUserId,
     input.asOf ?? new Date(),
     input.expectedStableCode,
+    input.administrative,
   );
 }
 
