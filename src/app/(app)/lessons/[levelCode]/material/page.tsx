@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { getAcademyConfig } from "@/config/academy-config";
-import { LessonReaderScreen } from "@/features/lesson-reader/lesson-reader-screen";
+import { ReaderFidelityScreen } from "@/features/reader-fidelity/reader-fidelity-screen";
 
-export { metadata } from "@/features/lesson-reader/lesson-reader-screen";
+export { metadata } from "@/features/reader-fidelity/reader-fidelity-screen";
 
 /**
  * Материал урока (/lessons/[levelCode]/material) — the reading surface.
@@ -23,5 +23,5 @@ export default async function LessonMaterialPage({
 }) {
   if (getAcademyConfig().mode !== "api") notFound();
   const { levelCode } = await params;
-  return <LessonReaderScreen levelCode={levelCode} />;
+  return <ReaderFidelityScreen levelCode={levelCode} />;
 }
