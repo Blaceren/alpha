@@ -36,10 +36,20 @@ export function MobileMenuProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * The disclosure state. Outside the provider it answers "closed" rather than
- * throwing: a control rendered without the shell around it is a control with no
- * menu to be behind, and that is the honest answer.
+ * The disclosure state.
+ *
+ * OUTSIDE THE PROVIDER IT STILL WORKS. The navigation is a component in its own
+ * right and is rendered on its own — by its own tests, and by anything that
+ * wants a bar without the whole shell around it. A context that answered "closed
+ * and cannot be opened" would leave those callers with a menu button that does
+ * nothing, which is exactly the defect this shell has been cleaning up.
+ *
+ * Both hooks are called unconditionally, every render, so the order is fixed;
+ * only which value is returned depends on whether a provider is above.
  */
 export function useMobileMenu(): MobileMenuValue {
-  return useContext(MobileMenuContext) ?? { open: false, setOpen: () => {} };
+  const shared = useContext(MobileMenuContext);
+  const [open, setOpen] = useState(false);
+  const local = useMemo(() => ({ open, setOpen }), [open]);
+  return shared ?? local;
 }
