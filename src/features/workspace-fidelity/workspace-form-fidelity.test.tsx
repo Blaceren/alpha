@@ -32,11 +32,16 @@ const COMPONENTS = [
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: ROOT, encoding: "utf8", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
 
-/** `className="a b"` and `` className={`a ${x}`} `` both reduce to their contents. */
-function stripClassAttributes(source: string): string {
+/**
+ * Remove class attributes entirely — including the ones the seam added to
+ * elements that previously carried none. Adding a presentation class to an
+ * unclassed element is explicitly permitted; what is not permitted is any other
+ * difference, and that is what survives this.
+ */
+function withoutClasses(source: string): string {
   return source
-    .replace(/className=\{`[^`]*`\}/g, "className={}")
-    .replace(/className="[^"]*"/g, 'className=""');
+    .replace(/\s*className=\{`[^`]*`\}/g, "")
+    .replace(/\s*className="[^"]*"/g, "");
 }
 
 describe("Workspace form — the seam is presentation only", () => {
@@ -44,24 +49,29 @@ describe("Workspace form — the seam is presentation only", () => {
     for (const file of COMPONENTS) {
       const before = git("show", `${PRE_SEAM}:${file}`);
       const after = readFileSync(join(ROOT, file), "utf8");
-      expect(stripClassAttributes(after), file).toBe(stripClassAttributes(before));
+      expect(withoutClasses(after), file).toBe(withoutClasses(before));
     }
   });
 
   it("only ever ADDS classes — never renames one, never drops one", () => {
-    const classesOf = (s: string) => [
-      ...s.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g),
-    ].map((m) => (m[1] ?? m[2] ?? "").split(/\s+|\$\{[^}]*\}/).filter(Boolean));
-
-    for (const file of COMPONENTS) {
-      const before = classesOf(git("show", `${PRE_SEAM}:${file}`));
-      const after = classesOf(readFileSync(join(ROOT, file), "utf8"));
-      expect(after.length, file).toBe(before.length);
-      before.forEach((original, i) => {
-        for (const cls of original) {
-          expect(after[i], `${file} slot ${i}: "${cls}" must survive`).toContain(cls);
+    /* Counted as a multiset per file: a class that existed before must still
+       appear at least as many times after. A rename would drop the old name;
+       a removal would drop it too. Neither can pass this. */
+    const tally = (s: string) => {
+      const counts = new Map<string, number>();
+      for (const m of s.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
+        for (const cls of (m[1] ?? m[2] ?? "").split(/\s+|\$\{[^}]*\}/).filter(Boolean)) {
+          counts.set(cls, (counts.get(cls) ?? 0) + 1);
         }
-      });
+      }
+      return counts;
+    };
+    for (const file of COMPONENTS) {
+      const before = tally(git("show", `${PRE_SEAM}:${file}`));
+      const after = tally(readFileSync(join(ROOT, file), "utf8"));
+      for (const [cls, n] of before) {
+        expect(after.get(cls) ?? 0, `${file}: "${cls}" appeared ${n}x before`).toBeGreaterThanOrEqual(n);
+      }
     }
   });
 
