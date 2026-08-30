@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getLevelDetail } from "@/lib/curriculum/provider";
 import { explainLevelState } from "@/lib/curriculum/next-action";
@@ -62,13 +63,13 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
   if (!result.ok) {
     if (result.error.category === "LEVEL_NOT_FOUND") {
       return (
-        <AppShell userName={name} activeId="lessons" frozenSurface>
+        <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
           <PageMessage title={WS_COPY.notFoundTitle} body={WS_COPY.notFoundBody} />
         </AppShell>
       );
     }
     return (
-      <AppShell userName={name} activeId="lessons">
+      <AppShell userName={name} activeId="lessons" notificationPresence={<UnreadPresence />}>
         <div className="ax">
           <CurriculumErrorState error={result.error} />
         </div>
@@ -88,7 +89,7 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
    */
   if (!summary.routeAccessible) {
     return (
-      <AppShell userName={name} activeId="lessons" frozenSurface>
+      <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
         <PageMessage
           title={WS_COPY.gateTitle}
           body={explainLevelState(summary)}
@@ -119,7 +120,7 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
   const hasTask = isReport || isMentorReview;
 
   return (
-    <AppShell userName={name} activeId="lessons" frozenSurface>
+    <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="wsp">
         <div className="ws" data-decision={decision}>
           <header className="ws-id">

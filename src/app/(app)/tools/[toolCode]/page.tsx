@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { ToolSurface } from "@/features/tools/components/tool-surface";
 import { ToolFidelitySurface } from "@/features/tools-fidelity/tool-fidelity-surface";
 import { resolvePathScenario } from "@/features/path/model/path-state";
@@ -48,7 +49,7 @@ export default async function ToolSurfacePage({
     const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
     const progress = result.ok ? canonicalToolProgress(result.view) : null;
     return (
-      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface>
+      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
         <ToolFidelitySurface toolCode={toolCode} progress={progress} />
       </AppShell>
     );
@@ -59,7 +60,7 @@ export default async function ToolSurfacePage({
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
 
   return (
-    <AppShell userName="Артём" activeId="tools">
+    <AppShell userName="Артём" activeId="tools" notificationPresence={<UnreadPresence />}>
       <ToolSurface toolCode={toolCode} scenario={scenario} />
     </AppShell>
   );

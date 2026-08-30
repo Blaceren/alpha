@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { ProfileFidelity } from "@/features/profile-fidelity/profile-fidelity";
 
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const viewer = await getServerViewer();
   return (
-    <AppShell userName={viewer?.name ?? "Ученик"} activeId="profile" frozenSurface>
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="profile" frozenSurface notificationPresence={<UnreadPresence />}>
       <ProfileFidelity canonical={viewer?.name ?? null} />
     </AppShell>
   );

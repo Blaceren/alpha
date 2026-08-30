@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { ToolsHub } from "@/features/tools/components/tools-hub";
 import { ToolsRegister } from "@/features/tools-fidelity/tools-fidelity";
 import { projectTools } from "@/features/tools/model/tools-projection";
@@ -42,7 +43,7 @@ export default async function ToolsPage({
        a guess. `projectTools` still owns every lock decision; the register only
        renders what it returns. */
     return (
-      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface>
+      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
         <ToolsRegister tools={progress ? projectTools(progress) : []} />
       </AppShell>
     );
@@ -53,7 +54,7 @@ export default async function ToolsPage({
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
 
   return (
-    <AppShell userName="Артём" activeId="tools">
+    <AppShell userName="Артём" activeId="tools" notificationPresence={<UnreadPresence />}>
       <ToolsHub scenario={scenario} />
     </AppShell>
   );

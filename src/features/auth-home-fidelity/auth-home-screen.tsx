@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import { deriveNextAction } from "@/lib/curriculum/next-action";
@@ -36,7 +37,7 @@ export async function AuthHomeScreen() {
         : fieldForAction(deriveNextAction(result.view));
 
   return (
-    <AppShell userName={name} activeId="home" frozenSurface>
+    <AppShell userName={name} activeId="home" frozenSurface notificationPresence={<UnreadPresence />}>
       <AuthHomeField field={field} />
     </AppShell>
   );

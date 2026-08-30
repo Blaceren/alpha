@@ -28,6 +28,7 @@ export function AppShell({
   userName,
   activeId = "home",
   frozenSurface = false,
+  notificationPresence,
   children,
 }: {
   userName: string;
@@ -52,6 +53,16 @@ export function AppShell({
    * link, same navigation, same session controls.
    */
   frozenSurface?: boolean;
+  /**
+   * The unread mark for the bell, supplied by the caller.
+   *
+   * It is an ELEMENT rather than a boolean, and it is passed in rather than
+   * read here, because resolving it needs `next/headers` — and this shell is
+   * also rendered by the client error boundary, where a server-only import in
+   * its graph fails the build. Omitting it withholds the claim, which is the
+   * honest default: a page that could not render cannot know.
+   */
+  notificationPresence?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -65,7 +76,7 @@ export function AppShell({
         <DesktopRouteNavigation activeId={activeId} />
         <span className="spacer" />
         <div className="actions">
-          <NotificationButton />
+          <NotificationButton presence={notificationPresence} />
           <UserAvatar name={userName} />
           <SessionControls />
         </div>
@@ -75,7 +86,7 @@ export function AppShell({
       <div className="mtop">
         <Link href="/home" aria-label="Alfa Trade Academy — на главную"><BrandMark compact /></Link>
         <div className="actions" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <NotificationButton />
+          <NotificationButton presence={notificationPresence} />
           <UserAvatar name={userName} />
           <SessionControls />
         </div>

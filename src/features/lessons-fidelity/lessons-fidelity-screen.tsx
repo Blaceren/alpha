@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import type { AcademyCurriculumView } from "@/lib/curriculum/academy-view";
@@ -88,7 +89,7 @@ export async function LessonsFidelityScreen() {
   const name = viewer?.name ?? "Ученик";
 
   const bare = (children: React.ReactNode) => (
-    <AppShell userName={name} activeId="lessons">
+    <AppShell userName={name} activeId="lessons" notificationPresence={<UnreadPresence />}>
       <div className="ax">{children}</div>
     </AppShell>
   );
@@ -114,7 +115,7 @@ export async function LessonsFidelityScreen() {
   const materials = corpusOf(result.view);
 
   return (
-    <AppShell userName={name} activeId="lessons" frozenSurface>
+    <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="lsn">
         <section className="lessons-head" aria-labelledby="lessons-title">
           <div className="lessons-head__row">

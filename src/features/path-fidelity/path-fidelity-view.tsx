@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { deriveNextAction, explainLevelState } from "@/lib/curriculum/next-action";
 import type {
   AcademyCurriculumView,
@@ -97,7 +98,7 @@ export function PathFidelityView({
 
   if (!focusModule) {
     return (
-      <AppShell userName={userName} activeId="path">
+      <AppShell userName={userName} activeId="path" notificationPresence={<UnreadPresence />}>
         <div className="ax">
           <CurriculumInfoState
             title="Программа пуста"
@@ -144,7 +145,7 @@ export function PathFidelityView({
     focusLevel !== null && focusLevel.routeAccessible && focusLevel.href !== nextAction.href;
 
   return (
-    <AppShell userName={userName} activeId="path" frozenSurface>
+    <AppShell userName={userName} activeId="path" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="pth" data-pth-root>
         <PathRail />
 

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import { CurriculumErrorState, CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
@@ -25,7 +26,7 @@ export async function PathFidelityScreen() {
 
   if (!result.ok) {
     return (
-      <AppShell userName={userName} activeId="path">
+      <AppShell userName={userName} activeId="path" notificationPresence={<UnreadPresence />}>
         <div className="ax">
           <CurriculumErrorState error={result.error} />
         </div>
@@ -37,7 +38,7 @@ export async function PathFidelityScreen() {
 
   if (view.state === "unavailable" || view.state === "candidate") {
     return (
-      <AppShell userName={userName} activeId="path">
+      <AppShell userName={userName} activeId="path" notificationPresence={<UnreadPresence />}>
         <div className="ax">
           <CurriculumInfoState
             title="Путь пока не начат"

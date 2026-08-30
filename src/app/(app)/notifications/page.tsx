@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { NotificationsFidelity } from "@/features/notifications-fidelity/notifications-fidelity";
 
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function NotificationsPage() {
   const viewer = await getServerViewer();
   return (
-    <AppShell userName={viewer?.name ?? "Ученик"} activeId="notifications" frozenSurface>
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="notifications" frozenSurface notificationPresence={<UnreadPresence />}>
       <NotificationsFidelity />
     </AppShell>
   );

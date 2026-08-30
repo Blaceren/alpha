@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
 import { getCurriculumView, getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelDetail } from "@/lib/curriculum/academy-view";
@@ -49,13 +50,13 @@ export async function ReaderFidelityScreen({ levelCode }: { levelCode: string })
        else is the product's own bounded error screen. */
     if (result.error.category === "LEVEL_NOT_FOUND") {
       return (
-        <AppShell userName={name} activeId="lessons" frozenSurface>
+        <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
           <ReaderUnavailable availability="invalid" />
         </AppShell>
       );
     }
     return (
-      <AppShell userName={name} activeId="lessons">
+      <AppShell userName={name} activeId="lessons" notificationPresence={<UnreadPresence />}>
         <div className="ax">
           <CurriculumErrorState error={result.error} />
         </div>
@@ -70,7 +71,7 @@ export async function ReaderFidelityScreen({ levelCode }: { levelCode: string })
   const availability = availabilityOf(detail);
   if (availability) {
     return (
-      <AppShell userName={name} activeId="lessons" frozenSurface>
+      <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
         <ReaderUnavailable
           availability={availability}
           levelHref={levelHref}
@@ -92,7 +93,7 @@ export async function ReaderFidelityScreen({ levelCode }: { levelCode: string })
   const owningModule = moduleOf(curriculum, detail);
 
   return (
-    <AppShell userName={name} activeId="lessons" frozenSurface>
+    <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <ReaderBody
         body={body}
         stableCode={summary.levelCode}
