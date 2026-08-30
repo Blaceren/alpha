@@ -1067,3 +1067,30 @@ html.tls-root-scope,
     inset:-6px -8px;
   }
 }
+
+/*
+ * THE TWO LINKS ON A STATE PAGE ARE ALSO TARGETS.
+ *
+ * The register's action was given a real 44px box; the return link and the
+ * single action on a state page were not, and measured 19.5px and 20.25px of
+ * effective target at every width. They are set as text on purpose — a state
+ * page is not a call to action — so the box is grown around them rather than
+ * under them: the overlay takes the pointer, the type keeps its position, and
+ * nothing in the layout moves.
+ */
+.tls .t-return,
+.tls .t-action {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+}
+.tls .t-return::after,
+.tls .t-action::after {
+  content:"";
+  position:absolute;
+  inset:0 -10px;
+}
+/* The return link kept its own bottom spacing from the old inline-block box;
+   the flex box is taller, so the gap is restated rather than doubled. */
+.tls .t-return {margin-bottom:calc(var(--space-block) - 12px)}
