@@ -45,9 +45,14 @@ const ENUM: NotificationTypeName[] = [
   "promocode_redeemed",
   "referral_bonus",
   "system",
-  "community_reply",
-  "community_moderation",
 ];
+
+/**
+ * Withheld from the learner product today, and therefore dropped from the
+ * register rather than rendered. They stay in the deployed enum and in the
+ * Backend; what changed is whether the Academy shows them.
+ */
+const WITHHELD = ["community_reply", "community_moderation"] as const;
 
 const NOW = new Date("2026-08-24T15:00:00Z");
 
@@ -117,21 +122,30 @@ describe("Notifications — the semantic mapping", () => {
   });
 
   it("offers a destination only where one really exists", () => {
-    const community = toRecord(
-      row({ type: "community_reply", metadata: { discussionId: "abcd1234efgh" } }),
-      NOW,
-    );
-    expect(community?.destination).toBe("AVAILABLE");
-    expect(community?.handoff).toEqual({ label: "Открыть обсуждение", href: "/community/d/abcd1234efgh" });
+    // A Backend-authored link is the remaining source of a real destination
+    // while the Community events are withheld.
+    const linked = toRecord(row({ type: "system", link: "/support" }), NOW);
+    expect(linked?.destination).toBe("AVAILABLE");
 
     expect(toRecord(row({ type: "system" }), NOW)?.destination).toBe("NO_DESTINATION_NEEDED");
     expect(toRecord(row({ type: "system" }), NOW)?.handoff).toBeNull();
   });
 
-  it("refuses a destination the metadata cannot support", () => {
-    const bad = toRecord(row({ type: "community_reply", metadata: { discussionId: "../etc" } }), NOW);
-    expect(bad?.handoff).toBeNull();
-    expect(bad?.destination).toBe("NO_DESTINATION_NEEDED");
+  it("refuses a destination the payload cannot support", () => {
+    for (const raw of ["not-a-path", "//evil.example", ""]) {
+      const bad = toRecord(row({ type: "system", link: raw }), NOW);
+      expect(bad?.handoff, raw).toBeNull();
+      expect(bad?.destination, raw).toBe("NO_DESTINATION_NEEDED");
+    }
+  });
+
+  it("drops a withheld type from the register entirely", () => {
+    for (const type of WITHHELD) {
+      expect(
+        toRecord(row({ type, metadata: { discussionId: "abcd1234efgh" } }), NOW),
+        type,
+      ).toBeNull();
+    }
   });
 
   it("labels the return without manufacturing urgency", () => {
@@ -262,7 +276,7 @@ describe("Notifications — the frozen composition", () => {
     vi.stubGlobal(
       "fetch",
       respondWith({
-        items: [row({ id: 1, type: "community_reply", metadata: { discussionId: "abcd1234efgh" } })],
+        items: [row({ id: 1, type: "system", link: "/support" })],
       }),
     );
     const { container } = render(<NotificationsFidelity />);
@@ -270,7 +284,7 @@ describe("Notifications — the frozen composition", () => {
     const record = container.querySelector(".n-record")!;
     expect(record.querySelectorAll("a")).toHaveLength(1);
     expect(record.querySelector("a")!.className).toBe("n-action");
-    expect(record.querySelector("a")!.getAttribute("href")).toBe("/community/d/abcd1234efgh");
+    expect(record.querySelector("a")!.getAttribute("href")).toBe("/support");
     /* At most one handoff per record — Notifications hosts no mini-workflows. */
     expect(record.querySelectorAll(".n-action")).toHaveLength(1);
   });
