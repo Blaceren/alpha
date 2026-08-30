@@ -106,7 +106,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [moreOpen]);
+  }, [moreOpen, setMoreOpen]);
 
   /**
    * Focus enters the sheet when it opens, so the next Tab is inside the menu
