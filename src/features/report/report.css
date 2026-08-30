@@ -1,6 +1,31 @@
 /* L3 learner report — uses existing Academy tokens only (no new global tokens).
    Functional mode: readable, calm surfaces, five navigable trade groups, no
    43-field wall, no horizontal overflow at 390px, works at 200% zoom. */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CASCADE LAYER — added by the Workspace form fidelity pass. NOTHING ELSE HERE
+   CHANGED: not one selector, not one declaration, not one value. The file's own
+   internal order is untouched, so its cascade against itself is identical.
+
+   WHY. The Workspace restores the frozen form composition through a
+   presentation seam — additive classes on this markup plus a scoped stylesheet.
+   Both sheets style the same classes, and specificity alone cannot express
+   "inside the restored Workspace the frozen rules win, everywhere else this file
+   is unchanged": `.wsp .rf__label` and `.rf__label` are not comparable in a way
+   that stays true as either file grows.
+
+   A layer says it once and says it structurally. Layered rules lose to unlayered
+   ones, so the scoped Workspace sheet wins inside `.wsp` — and nowhere else,
+   because it is the only other sheet in the product that mentions these classes.
+   Verified: `.rf*` and `.rpt*` appear in exactly two stylesheets, this one and
+   the Workspace fidelity sheet. `.sr-only` is the one shared name, and
+   home.css's copy carries `!important` and already won.
+
+   The alternative was to re-declare all 226 of this file's declarations in the
+   scoped sheet to out-specify them one by one. That is the same effect written
+   226 times, and it silently rots the first time a declaration is added here.
+   ───────────────────────────────────────────────────────────────────────────── */
+@layer ata-report-base {
 .rpt {
   margin-top: 28px;
   padding: 20px;
@@ -362,4 +387,5 @@
     transition: none !important;
     animation: none !important;
   }
+}
 }

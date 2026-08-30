@@ -25,18 +25,18 @@ export function ReportStatusPanel({ submission }: { submission: ReportSubmission
   return (
     <aside className="rpt-status" aria-label="Статус отчёта">
       {submission.rejection ? (
-        <div className="rpt-feedback" role="note">
-          <p className="rpt-feedback__title">
+        <div className="rpt-feedback eng-fb" role="note">
+          <p className="rpt-feedback__title eng-fb__label">
             <span aria-hidden="true">↩︎ </span>Наставник запросил доработку
           </p>
-          <p className="rpt-feedback__reason">
+          <p className="rpt-feedback__reason eng-fb__body">
             <span className="rpt-feedback__label">Причина:</span> {submission.rejection.reasonTitle}
           </p>
           {submission.rejection.humanComment ? (
-            <p className="rpt-feedback__comment">{submission.rejection.humanComment}</p>
+            <p className="rpt-feedback__comment eng-fb__body">{submission.rejection.humanComment}</p>
           ) : null}
           {submission.rejection.correctiveAction ? (
-            <p className="rpt-feedback__action">
+            <p className="rpt-feedback__action eng-fb__body">
               <span className="rpt-feedback__label">Что сделать:</span> {submission.rejection.correctiveAction}
             </p>
           ) : null}

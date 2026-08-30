@@ -11,6 +11,7 @@ import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
 import { WS_COPY, decisionOf, ownerOf, whereOf } from "@/features/workspace-fidelity/workspace-state";
 import "@/features/workspace-fidelity/workspace-fidelity.css";
+import "@/features/workspace-fidelity/workspace-form-fidelity.css";
 
 const REPORT_LOCALE = "ru";
 

@@ -27,13 +27,13 @@ export function ValidationSummary({ errors, serverMessage, labelForKey }: Valida
   if (errors.length === 0 && !serverMessage) return null;
 
   return (
-    <div className="rpt-summary" role="alert" tabIndex={-1} ref={ref} aria-labelledby="rpt-summary-title">
-      <p className="rpt-summary__title" id="rpt-summary-title">
+    <div className="rpt-summary eng-notice" role="alert" tabIndex={-1} ref={ref} aria-labelledby="rpt-summary-title">
+      <p className="rpt-summary__title eng-notice__head" id="rpt-summary-title">
         Проверьте отчёт перед отправкой
       </p>
-      {serverMessage ? <p className="rpt-summary__server">{serverMessage}</p> : null}
+      {serverMessage ? <p className="rpt-summary__server eng-notice__body">{serverMessage}</p> : null}
       {errors.length > 0 ? (
-        <ul className="rpt-summary__list">
+        <ul className="rpt-summary__list eng-notice__body">
           {errors.map((err) => (
             <li key={err.stableKey}>
               <a

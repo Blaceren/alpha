@@ -36,8 +36,8 @@ export function ReportField({ field, value, error, disabled, effectivelyRequired
   if (!isReportFieldType(field.type)) {
     // Fail visibly and safely (never silently drop a field).
     return (
-      <div className="rf rf--unknown" data-field={field.stableKey} role="alert">
-        <p className="rf__label">{field.label || field.stableKey}</p>
+      <div className="rf rf--unknown rpt-f" data-field={field.stableKey} role="alert">
+        <p className="rf__label rpt-f__label">{field.label || field.stableKey}</p>
         <p className="rf__unknown-note">Это поле пока не поддерживается в интерфейсе. Обратитесь в поддержку.</p>
       </div>
     );
@@ -56,14 +56,19 @@ export function ReportField({ field, value, error, disabled, effectivelyRequired
   } as const;
 
   return (
-    <div className="rf" data-field={field.stableKey} data-type={field.type} data-invalid={error ? "true" : undefined}>
+    <div
+      className={`rf rpt-f${error ? " rpt-f--err" : ""}`}
+      data-field={field.stableKey}
+      data-type={field.type}
+      data-invalid={error ? "true" : undefined}
+    >
       {renderControl(field, value, common, onChange)}
 
       {field.helpText ? (
         <p className="rf__help" id={id.help}>{field.helpText}</p>
       ) : null}
       {error ? (
-        <p className="rf__error" id={id.error} role="alert">{error}</p>
+        <p className="rf__error rpt-f__err" id={id.error} role="alert">{error}</p>
       ) : null}
 
       {/* screen-reader required announcement mirror (not colour/asterisk only) */}
@@ -83,7 +88,7 @@ type ControlCommon = {
 
 function labelFor(field: ReportFieldDefinition, controlId: string, required: boolean) {
   return (
-    <label className="rf__label" htmlFor={controlId}>
+    <label className="rf__label rpt-f__label" htmlFor={controlId}>
       {field.label}
       {required ? <span className="rf__req" aria-hidden="true"> *</span> : null}
     </label>
@@ -104,7 +109,7 @@ function renderControl(
       const groupName = common.id;
       return (
         <fieldset className="rf__group" aria-describedby={common["aria-describedby"]} aria-invalid={common["aria-invalid"]}>
-          <legend className="rf__label">
+          <legend className="rf__label rpt-f__label">
             {field.label}
             {required ? <span className="rf__req" aria-hidden="true"> *</span> : null}
           </legend>
@@ -112,7 +117,7 @@ function renderControl(
             { code: "true", label: "Да", val: true },
             { code: "false", label: "Нет", val: false },
           ].map((opt) => (
-            <div className="rf__option" key={opt.code}>
+            <div className="rf__option eng-opt" key={opt.code}>
               <input
                 type="radio"
                 id={`${common.id}-${opt.code}`}
@@ -132,12 +137,12 @@ function renderControl(
     case "single_choice":
       return (
         <fieldset className="rf__group" aria-describedby={common["aria-describedby"]} aria-invalid={common["aria-invalid"]}>
-          <legend className="rf__label">
+          <legend className="rf__label rpt-f__label">
             {field.label}
             {required ? <span className="rf__req" aria-hidden="true"> *</span> : null}
           </legend>
           {field.choices.map((choice) => (
-            <div className="rf__option" key={choice.code}>
+            <div className="rf__option eng-opt" key={choice.code}>
               <input
                 type="radio"
                 id={`${common.id}-${choice.code}`}
@@ -159,12 +164,12 @@ function renderControl(
       const selected = new Set(Array.isArray(value) ? (value as string[]) : []);
       return (
         <fieldset className="rf__group" aria-describedby={common["aria-describedby"]} aria-invalid={common["aria-invalid"]}>
-          <legend className="rf__label">
+          <legend className="rf__label rpt-f__label">
             {field.label}
             {required ? <span className="rf__req" aria-hidden="true"> *</span> : null}
           </legend>
           {field.choices.map((choice) => (
-            <div className="rf__option" key={choice.code}>
+            <div className="rf__option eng-opt" key={choice.code}>
               <input
                 type="checkbox"
                 id={`${common.id}-${choice.code}`}
@@ -190,7 +195,7 @@ function renderControl(
           {labelFor(field, common.id, required)}
           <textarea
             {...common}
-            className="rf__input rf__textarea"
+            className="rf__input rf__textarea rpt-f__in"
             rows={4}
             value={typeof value === "string" ? value : ""}
             placeholder={field.placeholder || undefined}
@@ -206,7 +211,7 @@ function renderControl(
           {labelFor(field, common.id, required)}
           <input
             {...common}
-            className="rf__input"
+            className="rf__input rpt-f__in"
             type="number"
             inputMode="numeric"
             step={1}
@@ -232,7 +237,7 @@ function renderControl(
           {labelFor(field, common.id, required)}
           <input
             {...common}
-            className="rf__input"
+            className="rf__input rpt-f__in"
             type="url"
             inputMode="url"
             value={typeof value === "string" ? value : ""}
@@ -249,7 +254,7 @@ function renderControl(
           {labelFor(field, common.id, required)}
           <input
             {...common}
-            className="rf__input"
+            className="rf__input rpt-f__in"
             type="text"
             value={typeof value === "string" ? value : ""}
             placeholder={field.placeholder || undefined}

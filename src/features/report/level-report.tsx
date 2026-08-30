@@ -156,16 +156,16 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
 
   if (state.status === "DEFINITION_LOADING") {
     return (
-      <section className="rpt" aria-labelledby="rpt-heading" data-status={state.status}>
+      <section className="rpt sub-wrap" aria-labelledby="rpt-heading" data-status={state.status}>
         <h2 id="rpt-heading" className="rpt__heading">Отчёт по уровню</h2>
-        <p className="rpt__status" role="status" aria-live="polite">{statusMessage(state)}</p>
+        <p className="rpt__status rpt-bar__state" role="status" aria-live="polite">{statusMessage(state)}</p>
       </section>
     );
   }
 
   if (state.status === "FLAG_DISABLED") {
     return (
-      <section className="rpt" aria-labelledby="rpt-heading" data-status={state.status}>
+      <section className="rpt sub-wrap" aria-labelledby="rpt-heading" data-status={state.status}>
         <h2 id="rpt-heading" className="rpt__heading">Отчёт по уровню</h2>
         <p className="rpt__notice">Отправка отчёта сейчас недоступна. Материал уровня можно читать выше.</p>
       </section>
@@ -174,11 +174,11 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
 
   if (state.status === "FATAL_ERROR" || (state.status === "NETWORK_ERROR" && !state.context)) {
     return (
-      <section className="rpt" aria-labelledby="rpt-heading" data-status={state.status}>
+      <section className="rpt sub-wrap" aria-labelledby="rpt-heading" data-status={state.status}>
         <h2 id="rpt-heading" className="rpt__heading">Отчёт по уровню</h2>
         <div className="rpt__notice" role="alert">
           <p>{statusMessage(state)}</p>
-          <button type="button" className="rpt__btn" onClick={() => load()}>Повторить</button>
+          <button type="button" className="rpt__btn btn-2" onClick={() => load()}>Повторить</button>
         </div>
       </section>
     );
@@ -195,23 +195,23 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
     || state.status === "NEW_REVISION_CREATING" || state.status === "SUBMITTING" || state.status === "RESUBMITTING";
 
   return (
-    <section className="rpt" aria-labelledby="rpt-heading" data-status={state.status}>
-      <header className="rpt__head">
-        <h2 id="rpt-heading" className="rpt__heading" tabIndex={-1}>{context.assignment.title}</h2>
+    <section className="rpt sub-wrap" aria-labelledby="rpt-heading" data-status={state.status}>
+      <header className="rpt__head sub-head">
+        <h2 id="rpt-heading" className="rpt__heading sub-head__title" tabIndex={-1}>{context.assignment.title}</h2>
         <p className="rpt__instructions">{context.assignment.instructions}</p>
         {context.assignment.successCriteriaSummary ? (
           <p className="rpt__criteria"><span className="rpt__criteria-label">Критерии:</span> {context.assignment.successCriteriaSummary}</p>
         ) : null}
       </header>
 
-      <p className="rpt__status" role="status" aria-live="polite" tabIndex={-1} ref={statusRef} data-status={state.status}>
+      <p className="rpt__status rpt-bar__state" role="status" aria-live="polite" tabIndex={-1} ref={statusRef} data-status={state.status}>
         {statusMessage(state)}
       </p>
 
       {state.status === "STALE_REVISION" ? (
         <div className="rpt__notice" role="alert">
           <p>{statusMessage(state)}</p>
-          <button type="button" className="rpt__btn" onClick={() => load()}>Обновить форму</button>
+          <button type="button" className="rpt__btn btn-2" onClick={() => load()}>Обновить форму</button>
         </div>
       ) : null}
 
@@ -232,7 +232,7 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
       {/* Revision requested: offer a bounded correction action */}
       {state.status === "REVISION_REQUESTED" ? (
         <div className="rpt__revision">
-          <button type="button" className="rpt__btn rpt__btn--primary" onClick={() => dispatch({ type: "begin_correction" })}>
+          <button type="button" className="rpt__btn rpt__btn--primary ws-act" onClick={() => dispatch({ type: "begin_correction" })}>
             Создать исправленную версию
           </button>
         </div>
@@ -245,7 +245,7 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
 
       {/* Editable form (new draft or correction) */}
       {editing ? (
-        <form className="rpt__form" onSubmit={onSubmit} noValidate>
+        <form className="rpt__form sub-body" onSubmit={onSubmit} noValidate>
           {state.status === "VALIDATION_ERROR" ? (
             <ValidationSummary
               errors={state.fieldErrors}
@@ -261,8 +261,8 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
 
           {model.groups.map((group) => (
             <fieldset className="rpt-group" key={group.id} data-group={group.id}>
-              <legend className="rpt-group__legend">{group.label}</legend>
-              <div className="rpt-group__fields">
+              <legend className="rpt-group__legend rpt-group__head">{group.label}</legend>
+              <div className="rpt-group__fields rpt-group__body">
                 {group.fields.map((field) => (
                   <ReportField
                     key={field.stableKey}
@@ -278,10 +278,10 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
             </fieldset>
           ))}
 
-          <div className="rpt__actions">
+          <div className="rpt__actions rpt-bar">
             <button
               type="button"
-              className="rpt__btn"
+              className="rpt__btn btn-2"
               onClick={onSave}
               disabled={busy || !state.dirty}
               aria-disabled={busy || !state.dirty}
@@ -295,7 +295,7 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
                 write. It is only hard-disabled while busy or on unknown types. */}
             <button
               type="submit"
-              className="rpt__btn rpt__btn--primary"
+              className="rpt__btn rpt__btn--primary ws-act"
               disabled={busy || model.unknownTypes.length > 0}
               aria-disabled={busy || model.unknownTypes.length > 0}
             >
@@ -309,8 +309,8 @@ export function LevelReport({ stableCode, locale, nextLevelCode }: LevelReportPr
 
       {/* Pending review refresh: learner polls the server-authoritative state */}
       {state.status === "PENDING_REVIEW" ? (
-        <div className="rpt__actions">
-          <button type="button" className="rpt__btn" onClick={() => load()}>Обновить статус</button>
+        <div className="rpt__actions rpt-bar">
+          <button type="button" className="rpt__btn btn-2" onClick={() => load()}>Обновить статус</button>
         </div>
       ) : null}
     </section>
@@ -328,13 +328,13 @@ function ReadOnlyReport({
   return (
     <div className="rpt-readonly" aria-label="Отправленный отчёт (только чтение)">
       {model.groups.map((group) => (
-        <section className="rpt-readonly__group" key={group.id} data-group={group.id}>
-          <h3 className="rpt-readonly__legend">{group.label}</h3>
-          <dl>
+        <section className="rpt-readonly__group rpt-group" key={group.id} data-group={group.id}>
+          <h3 className="rpt-readonly__legend rpt-group__head">{group.label}</h3>
+          <dl className="rpt-group__body">
             {group.fields.map((field) => (
-              <div className="rpt-readonly__row" key={field.stableKey} data-field={field.stableKey}>
-                <dt>{field.label}</dt>
-                <dd>{formatValue(field.type, values[field.stableKey], field.choices)}</dd>
+              <div className="rpt-readonly__row rpt-f" key={field.stableKey} data-field={field.stableKey}>
+                <dt className="rpt-f__label">{field.label}</dt>
+                <dd className="rpt-f__in rpt-f__ro">{formatValue(field.type, values[field.stableKey], field.choices)}</dd>
               </div>
             ))}
           </dl>
