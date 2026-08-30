@@ -1,0 +1,37 @@
+/*
+ * TOOLS — the one safety fix, kept OUT of the frozen stylesheet on purpose.
+ *
+ * `tools-fidelity.css` is a proven scoping transform of the frozen design
+ * system: 173 selectors in, 173 out, every declaration unchanged. Putting a new
+ * rule in it would destroy that proof — the file would no longer be the frozen
+ * design, and no reviewer could tell by looking which parts were.
+ *
+ * So the fix lives here, alone, where it can be read in ten seconds.
+ *
+ * WHAT IT IS. The register's action is an ordinary text link at the frozen type
+ * size, which gives it a hit area well under 44 x 44 CSS px. The frozen artifact
+ * rendered that action as an inert `<span>`, so the question never arose; the
+ * product's action is a real destination, so it does. The extension is an
+ * invisible `::after` over the link — it changes no pixel and moves no layout,
+ * it only enlarges what a finger can hit.
+ *
+ * WHY 44. The Tools workstream's own accessibility record notes that the
+ * accepted sibling systems chose differently — Tools 44px, Notifications 40px —
+ * and that no canonical global ATA minimum exists. This takes the higher of the
+ * two, which is the value the Tools work itself chose.
+ */
+.tls .t-entry-action.tls-target {
+  position: relative;
+}
+
+.tls .t-entry-action.tls-target::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}

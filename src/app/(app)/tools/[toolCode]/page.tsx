@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { ToolSurface } from "@/features/tools/components/tool-surface";
+import { ToolFidelitySurface } from "@/features/tools-fidelity/tool-fidelity-surface";
 import { resolvePathScenario } from "@/features/path/model/path-state";
+import { getAcademyConfig } from "@/config/academy-config";
+import { getServerViewer } from "@/server/auth/server-session";
+import { getCurriculumView } from "@/lib/curriculum/provider";
+import { canonicalToolProgress } from "@/features/tools/model/canonical-progress";
 import "@/features/tools/tools.css";
 
 export const metadata: Metadata = {
@@ -31,6 +36,24 @@ export default async function ToolSurfacePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { toolCode } = await params;
+
+  /* API MODE READS CANONICAL PROGRESS — AND USED NOT TO.
+     The hub was moved onto canonical progress and the real viewer; this page
+     was not, so it still resolved every lock from the fixture marker whose
+     default is «Артём, L18» and rendered that name in the shell. A learner
+     standing on level 12 could open a tool their own progression has not
+     awarded, and see somebody else's name above it. Same resolver, same
+     catalogue, same unlock rule — only the marker and the viewer are now real. */
+  if (getAcademyConfig().mode === "api") {
+    const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
+    const progress = result.ok ? canonicalToolProgress(result.view) : null;
+    return (
+      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface>
+        <ToolFidelitySurface toolCode={toolCode} progress={progress} />
+      </AppShell>
+    );
+  }
+
   const sp = await searchParams;
   const rawScenario = sp.scenario;
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
