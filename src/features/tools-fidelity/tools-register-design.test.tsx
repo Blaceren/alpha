@@ -233,8 +233,10 @@ describe("a state page's links are targets too", () => {
        this rule. They stay set as text — a state page is not a call to action —
        so the box grows around the type rather than under it. */
     const block = CSS.slice(CSS.indexOf("THE TWO LINKS ON A STATE PAGE"));
-    expect(block).toMatch(/\.tls \.t-return,\s*\n\.tls \.t-action \{[^}]*min-height:44px/);
-    expect(block).toMatch(/\.tls \.t-return::after,\s*\n\.tls \.t-action::after \{[^}]*inset:0 -10px/);
+    expect(block).toContain(".tls .t-return,");
+    expect(block).toContain(".tls .t-action,");
+    expect(block).toMatch(/\.tls \.back \{[\s\S]*?min-height:44px/);
+    expect(block).toMatch(/\.tls \.back::after \{[^}]*inset:0 -10px/);
   });
 });
 

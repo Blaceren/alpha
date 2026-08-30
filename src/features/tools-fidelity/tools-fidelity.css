@@ -1079,18 +1079,24 @@ html.tls-root-scope,
  * nothing in the layout moves.
  */
 .tls .t-return,
-.tls .t-action {
+.tls .t-action,
+/* The workspace pages carry the frozen `.back` link instead, and it had the
+   same 20.5px target. One rule for all three, so a fourth cannot be added
+   without inheriting it. */
+.tls .back {
   position:relative;
   display:inline-flex;
   align-items:center;
   min-height:44px;
 }
 .tls .t-return::after,
-.tls .t-action::after {
+.tls .t-action::after,
+.tls .back::after {
   content:"";
   position:absolute;
   inset:0 -10px;
 }
+.tls .back {margin-bottom:8px}
 /* The return link kept its own bottom spacing from the old inline-block box;
    the flex box is taller, so the gap is restated rather than doubled. */
 .tls .t-return {margin-bottom:calc(var(--space-block) - 12px)}
