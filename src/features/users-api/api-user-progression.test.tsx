@@ -220,6 +220,85 @@ describe("the correction dialog", () => {
     expect(screen.queryByRole("button", { name: "-" })).not.toBeInTheDocument();
   });
 
+  it("completes the whole operator flow: preview → confirm → refetch", async () => {
+    await openDialog();
+
+    const applicablePlan = {
+      learnerUserId: 73,
+      enrollmentId: 34,
+      curriculumCode: "ata-v2",
+      curriculumVersionId: 4,
+      curriculumVersionNumber: 4,
+      totalLevels: 100,
+      fromCurrentLevel: 15,
+      fromHighestCompletedLevel: 14,
+      targetCurrentLevel: 16,
+      targetStableCode: "v2.l016.urok",
+      levels: [
+        {
+          levelNumber: 15,
+          stableCode: "v2.l015.kontrolnaya-tochka",
+          title: "Урок 15",
+          type: "lesson",
+          completionMethod: "assessment_pass",
+          xpReward: 100,
+          currentStatus: "none" as const,
+        },
+      ],
+      xpTotal: 100,
+      toolsUnlocked: [],
+      communitySpacesOpened: [],
+      warnings: [],
+      blocker: null,
+      canApply: true,
+      refusalCode: null,
+    };
+    vi.spyOn(client, "previewProgression").mockResolvedValue({
+      status: "success",
+      data: applicablePlan,
+    });
+    const adjust = vi.spyOn(client, "adjustProgression").mockResolvedValue({
+      status: "success",
+      data: {
+        created: true,
+        learnerUserId: 73,
+        enrollmentId: 34,
+        curriculumVersionId: 4,
+        fromCurrentLevel: 15,
+        toCurrentLevel: 16,
+        levelsCompleted: [15],
+        xpAwarded: 100,
+        xpTransactionIds: [901],
+        auditLogId: 5001,
+        adjustedAt: "2026-08-30T12:00:00.000Z",
+      },
+    });
+
+    await userEvent.selectOptions(screen.getAllByRole("combobox")[0]!, "v2.l016.urok");
+    // The reason textarea; the reference input is the other textbox.
+    const reason = screen
+      .getAllByRole("textbox")
+      .find((node) => node.tagName.toLowerCase() === "textarea")!;
+    await userEvent.type(reason, "Корректирую состояние после сбоя импорта.");
+    await userEvent.click(screen.getByRole("button", { name: "Проверить последствия" }));
+
+    const confirm = await screen.findByRole("button", { name: "Подтвердить корректировку" });
+    await userEvent.click(confirm);
+
+    await waitFor(() => expect(adjust).toHaveBeenCalledTimes(1));
+    // The plan's own from-state travels with the confirm — never a value the
+    // component recomputed, and never one the operator could edit.
+    const [, body] = adjust.mock.calls[0]!;
+    expect(body.expectedCurrentLevel).toBe(15);
+    expect(body.expectedCurriculumVersionId).toBe(4);
+    expect(body.targetStableCode).toBe("v2.l016.urok");
+    expect(body.reasonCode).toBe("preprod_qa");
+    expect(body.reasonText.length).toBeGreaterThanOrEqual(10);
+    expect(body.requestId).toMatch(/^crm-progression-/);
+
+    await screen.findByText(/Учащийся переведён на L16/);
+  });
+
   it("does not offer confirm until the server previewed an applicable plan", async () => {
     await openDialog();
     expect(
