@@ -12,7 +12,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthHomeField } from "@/features/auth-home-fidelity/auth-home-field";
 import { AuthHomeLoadingField } from "@/features/auth-home-fidelity/auth-home-loading";
@@ -258,11 +258,17 @@ describe("Home — LOADING is not a focus posture", () => {
       const { container } = render(<AuthHomeLoadingField />);
       const pending = () => container.querySelector(".home-pending")!.textContent;
       expect(pending()).toBe(PENDING_INITIAL);
-      await vi.advanceTimersByTimeAsync(LONG_WAIT_MS - 1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LONG_WAIT_MS - 1);
+      });
       expect(pending()).toBe(PENDING_INITIAL);
-      await vi.advanceTimersByTimeAsync(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2);
+      });
       expect(pending()).toBe(PENDING_LONG_WAIT);
-      await vi.advanceTimersByTimeAsync(LONG_WAIT_MS * 3);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LONG_WAIT_MS * 3);
+      });
       expect(pending()).toBe(PENDING_LONG_WAIT);
     } finally {
       vi.useRealTimers();
@@ -323,9 +329,18 @@ describe("Home — what the surface never contains", () => {
     codeOnly(SRC("auth-home-screen.tsx")),
   ].join("\n");
 
+  /* The FIELD is what may not name the learner. The shell above it legitimately
+     shows an avatar built from the session name, and the screen passes it — so
+     the screen is deliberately not in this set. */
+  const fieldSources = [
+    codeOnly(SRC("auth-home-field.tsx")),
+    codeOnly(SRC("auth-home-state.ts")),
+    codeOnly(SRC("auth-home-loading.tsx")),
+  ].join("\n");
+
   it("never greets, never names the learner, never shows an avatar", () => {
-    for (const forbidden of ["Привет", "Здравствуй", "userName={", "avatar", "Добро пожаловать"]) {
-      expect(sources, forbidden).not.toContain(forbidden);
+    for (const forbidden of ["Привет", "Здравствуй", "userName", "avatar", "Добро пожаловать", "viewer"]) {
+      expect(fieldSources, forbidden).not.toContain(forbidden);
     }
   });
 
