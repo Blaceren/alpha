@@ -17,8 +17,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
-/** The active PREPROD release this branch was cut from. */
-const BASE = "91549bc40dd37c343de31a41223736eb1b41a452";
+/**
+ * The release Tools shipped in, and the one every later branch is cut from.
+ *
+ * This file was written while Tools was the work in hand and asked "what did
+ * THIS pass change?". Tools is live now, so the question it answers from here
+ * is the one every later phase has to answer about it: nothing in the Tools
+ * surface has moved since the release.
+ */
+const BASE = "ed5d2f81f02925c06359a9b2532698c8d12f1812";
 
 /**
  * The files that may not move at all. The status COPY was deliberately changed
@@ -69,18 +76,14 @@ describe("the Tools surface contract is unchanged", () => {
     expect(after).toBe(before);
   });
 
-  it("changed only the Tools presentation files", () => {
-    const changed = git("diff", "--name-only", BASE, "--", "src/", "e2e/")
+  it("has not moved a single Tools file since the release", () => {
+    const changed = git("diff", "--name-only", BASE, "--", "src/features/tools", "src/features/tools-fidelity", "src/app/(app)/tools")
       .split("\n")
       .filter(Boolean)
+      // This file lives under the Tools tree and is allowed to be re-based when
+      // the release it measures against moves.
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
-    expect(changed.sort()).toEqual([
-      "src/features/tools-fidelity/tools-fidelity.css",
-      "src/features/tools-fidelity/tools-fidelity.tsx",
-      "src/features/tools/components/tools-hub.tsx",
-      "src/features/tools/model/tools-projection.ts",
-      "src/features/tools/tools.css",
-    ]);
+    expect(changed).toEqual([]);
   });
 
   /**
@@ -122,12 +125,13 @@ describe("the Tools surface contract is unchanged", () => {
   });
 
   it("leaves every protected surface untouched", () => {
+    /* Support is the surface under design now, so it is expected to change and
+       is not on this list; everything else must be exactly as it shipped. */
     /* Support is the next phase and must not move in this one; the rest are the
        surfaces this pass has no business in. */
     const changed = git("diff", "--name-only", BASE, "--", "src/").split("\n").filter(Boolean);
     const forbidden = [
       "src/features/auth/",
-      "src/features/support",
       "src/app/(app)/support",
       "src/app/login",
       "src/app/register",
