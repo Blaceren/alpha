@@ -296,3 +296,113 @@ describe("Shell — the states are precise", () => {
     expect(rule(".mtop")).toContain("height: 54px");
   });
 });
+
+/* ------------------------------------------- the utilities mark their route */
+
+describe("Shell — the bell and the avatar say where the learner is", () => {
+  it("marks the bell on /notifications, and only there", () => {
+    for (const id of ACTIVE_IDS) {
+      const { container, unmount } = shell(id);
+      const bells = Array.from(container.querySelectorAll('a[href="/notifications"]'));
+      expect(bells.length, id).toBe(2); // one per bar; one is hidden by a media query
+      for (const bell of bells) {
+        expect(bell.getAttribute("aria-current"), `${id} bell`).toBe(
+          id === "notifications" ? "page" : null,
+        );
+        /* The accessible name is unchanged. */
+        expect(bell.getAttribute("aria-label"), id).toBe("Уведомления");
+      }
+      unmount();
+    }
+  });
+
+  it("marks the avatar on /profile, and keeps its name", () => {
+    for (const id of ACTIVE_IDS) {
+      const { container, unmount } = shell(id);
+      const avatars = Array.from(container.querySelectorAll('a[href="/profile"].avatar'));
+      expect(avatars.length, id).toBe(2);
+      for (const avatar of avatars) {
+        expect(avatar.getAttribute("aria-current"), `${id} avatar`).toBe(
+          id === "profile" ? "page" : null,
+        );
+        expect(avatar.getAttribute("aria-label"), id).toBe("Профиль — Мария Ковалёва");
+      }
+      unmount();
+    }
+  });
+
+  it("keeps the unread mark independent of being the current page", () => {
+    /* Two different facts about two different things. The shell decides current
+       from `activeId`; the mark is whatever the presence element it was handed
+       says, and one cannot imply the other. */
+    const withPresence = render(
+      <AppShell userName="Мария Ковалёва" activeId="notifications" notificationPresence={<span className="dot" />}>
+        <p>тело</p>
+      </AppShell>,
+    );
+    expect(withPresence.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(2);
+    expect(withPresence.container.querySelectorAll(".dot").length).toBeGreaterThan(0);
+    withPresence.unmount();
+
+    const withoutPresence = shell("notifications");
+    expect(withoutPresence.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(2);
+    expect(withoutPresence.container.querySelectorAll(".dot")).toHaveLength(0);
+    withoutPresence.unmount();
+
+    /* And a page that is not /notifications can still carry unread. */
+    const elsewhere = render(
+      <AppShell userName="Мария Ковалёва" activeId="home" notificationPresence={<span className="dot" />}>
+        <p>тело</p>
+      </AppShell>,
+    );
+    expect(elsewhere.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(0);
+    expect(elsewhere.container.querySelectorAll(".dot").length).toBeGreaterThan(0);
+    elsewhere.unmount();
+  });
+
+  it("never declares two current pages: the avatar yields to the open menu", async () => {
+    const { container } = shell("profile");
+    /* Closed: the avatar is the one control on screen pointing at /profile. */
+    const mobileAvatar = container.querySelector(".mtop a.avatar")!;
+    expect(mobileAvatar.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelector(".bottomnav__sheet")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /Ещё/ }));
+    await waitFor(() => expect(container.querySelector(".bottomnav__sheet")).not.toBeNull());
+
+    /* Open: the sheet is the exposed navigation and carries the claim; the
+       avatar steps back rather than making a second one. */
+    const sheetProfile = container.querySelector('.bottomnav__sheet a[href="/profile"]')!;
+    expect(sheetProfile.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelector(".mtop a.avatar")!.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("does not blank the desktop marker when a menu was left open", async () => {
+    /* A menu opened at 390px and then widened: the bottom bar is hidden, so the
+       sheet cannot be beside the desktop avatar and the desktop avatar must not
+       yield to it. Placement decides, not the state alone. */
+    const { container } = shell("profile");
+    await userEvent.click(screen.getByRole("button", { name: /Ещё/ }));
+    await waitFor(() => expect(container.querySelector(".bottomnav__sheet")).not.toBeNull());
+    expect(container.querySelector(".appbar a.avatar")!.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("gives the utilities the bar's grammar and no more", () => {
+    const css = readFileSync(join(ROOT, "src/features/home/home.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (sel: string) => {
+      const i = css.indexOf(sel + " {");
+      return i === -1 ? "" : css.slice(i, css.indexOf("}", i));
+    };
+    expect(rule('.iconbtn[aria-current="page"]')).toContain("var(--text-primary)");
+    expect(rule('.iconbtn[aria-current="page"]')).toContain("var(--surface-subtle)");
+    const indicator = css.slice(
+      css.indexOf('.iconbtn[aria-current="page"]::before'),
+      css.indexOf("}", css.indexOf('.iconbtn[aria-current="page"]::before')),
+    );
+    expect(indicator).toContain("height: 2px");
+    expect(indicator).toContain("var(--signal-active)");
+    for (const forbidden of ["blur", "box-shadow", "scale(", "gradient"]) {
+      expect(indicator, forbidden).not.toContain(forbidden);
+    }
+  });
+});
