@@ -68,7 +68,13 @@
      is ADDED to a 100% width and the surface runs 56px past its own column —
      invisible, because the shell clips overflow-x, which is how it survived. */
   box-sizing: border-box;
-  width: min(100%, 1008px);
+  /* 1064, not 1008, because that is what the Lessons index actually occupies:
+     its `.lsn` sets `width: min(100%, 1008px)` but scopes `box-sizing` to
+     `.lsn *`, so the element itself stays content-box and its border box is
+     1008 + 2x28. Measured at 1440 both surfaces now start their text at x=216;
+     at 390 both start at 16. Matching its declared rule would have left this
+     page 28px inboard of the page it continues. */
+  width: min(100%, 1064px);
   max-width: none;
   margin-inline: auto;
   padding: 34px 28px 72px;
