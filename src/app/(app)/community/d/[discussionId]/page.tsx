@@ -5,11 +5,29 @@ import { getServerViewer } from "@/server/auth/server-session";
 import { CommunityThread } from "@/features/community/components/community-thread";
 import "@/features/community/community.css";
 import { COMMUNITY_ENABLED } from "@/config/feature-visibility";
+import { NOT_FOUND_METADATA } from "@/config/not-found-metadata";
 
-export const metadata: Metadata = {
-  title: "Обсуждение — Alfa Trade Academy",
-  description: "Вопрос и ответы участников программы.",
-};
+/**
+ * METADATA IS RESOLVED WHETHER OR NOT THE COMPONENT RENDERS.
+ *
+ * `notFound()` in the component below stops the page being drawn; it does not
+ * retract what this segment already said about itself. While the section is
+ * withheld the route must therefore describe itself as what it is — a page that
+ * is not there — and the section's own title is returned only when the section
+ * is part of the product again.
+ *
+ * NOTHING IS READ TO DECIDE THIS. The branch is taken on a build-time constant,
+ * above every await: no session, no params, no Community request. Metadata runs
+ * before the component, so a data call here would be a Community fetch on a
+ * hidden address — the exact thing the guard below exists to prevent.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  if (!COMMUNITY_ENABLED) return NOT_FOUND_METADATA;
+  return {
+    title: "Обсуждение — Alfa Trade Academy",
+    description: "Вопрос и ответы участников программы.",
+  };
+}
 
 export const dynamic = "force-dynamic";
 
