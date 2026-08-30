@@ -254,6 +254,14 @@ async function main() {
   // index) and the resolver always resolves the default code, so each scenario
   // starts from a clean database.
   async function reset() {
+    // POCKET-REG-INGRESS-1 добавил Growth-реестр, который ссылается на
+    // enrollment/level/user через Restrict. Эта регрессия стартует уровни
+    // каноническим владельцем, а тот пишет `level_started` — поэтому первый же
+    // успешный старт делал следующий reset() нарушением FK и ронял все
+    // последующие сценарии. Тот же порядок уже применён в
+    // `curriculumLevelCompletionRegression`; здесь его просто не было.
+    await prisma.growthEventOutbox.deleteMany();
+    await prisma.growthEvent.deleteMany();
     await prisma.xPTransaction.deleteMany();
     await prisma.userLevelProgress.deleteMany();
     await prisma.userCurriculumEnrollment.deleteMany();
@@ -1174,10 +1182,26 @@ async function main() {
       assert.equal((resolver.match(/new Date\(\)/g) ?? []).length, 1);
       assert.match(resolver, /const evaluationTime = asOf \?\? new Date\(\);/);
 
+      // ANCHOR ON THE DESTRUCTURED SIGNATURE, not the bare name. PHASE-1 ADMIN
+      // added `startCurrentCurriculumLevelInTransaction`, and the old anchor was
+      // a PREFIX of that name — so the slice silently swallowed both functions
+      // and counted two clocks where the test meant to count one. The brace
+      // disambiguates: only the public command destructures its input.
       const start = source.slice(
-        source.indexOf("export async function startCurrentCurriculumLevel"),
+        source.indexOf("export async function startCurrentCurriculumLevel({"),
       );
       assert.equal((start.match(/new Date\(\)/g) ?? []).length, 1);
+
+      // The in-transaction twin is pinned separately rather than folded into the
+      // count above: it defaults its own clock exactly once, for the same reason
+      // and in the same shape, and a second clock appearing inside it would be
+      // the same defect this scenario exists to catch.
+      const startInTx = source.slice(
+        source.indexOf("export async function startCurrentCurriculumLevelInTransaction"),
+        source.indexOf("export async function startCurrentCurriculumLevel({"),
+      );
+      assert.equal((startInTx.match(/new Date\(\)/g) ?? []).length, 1);
+      assert.match(startInTx, /input\.asOf \?\? new Date\(\)/);
       // The intent is that ONE evaluationTime is threaded through — no second
       // clock and no API-supplied time. L2START-PLAYER-1 added a fourth
       // argument (`expectedStableCode`, a refusal guard), so the assertion pins

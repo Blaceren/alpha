@@ -361,7 +361,7 @@ async function partB() {
     ] as const;
 
     for (const row of levelRows) {
-      await prisma.levelDefinition.create({
+      const created = await prisma.levelDefinition.create({
         data: {
           curriculumVersionId: version.id,
           moduleId: row.moduleId,
@@ -379,6 +379,29 @@ async function partB() {
             "requiredCheckpointLevel" in row ? row.requiredCheckpointLevel : null,
         },
       });
+
+      // L4VC-1 — A LEVEL THAT COMPLETES BY `balance_check` MUST DECLARE ITS
+      // THRESHOLD, and publish validation refuses the version otherwise
+      // (`LEVEL_CHECKPOINT_REQUIREMENT_MISSING`). This fixture predates that
+      // rule: it created levels 3 and 5 as financial checkpoints and never gave
+      // them a requirement, so every publish in part B was refused for two
+      // issues that have nothing to do with what part B is testing.
+      //
+      // The threshold is INTEGER minor units, so $50.00 is 5000 and no float
+      // can ever move a gate. `featureUnlockCode` is deliberately left null on
+      // the level: when it is set, `resource-completeness` additionally requires
+      // it to equal `integrationCode`, and pinning that agreement is a different
+      // test's job.
+      if (row.completionMethod === "balance_check") {
+        await prisma.levelCheckpointRequirement.create({
+          data: {
+            levelDefinitionId: created.id,
+            integrationCode: "pocket_balance",
+            thresholdCurrency: "USD",
+            thresholdMinorUnits: 5000 * row.levelNumber,
+          },
+        });
+      }
     }
 
     return version;
