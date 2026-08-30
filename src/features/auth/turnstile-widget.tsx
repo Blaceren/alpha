@@ -101,6 +101,28 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  /*
+   * A CHALLENGE THAT FAILED IS NOT THE SAME AS ONE STILL LOADING.
+   *
+   * `loadState` answers whether the widget could be put on the page at all —
+   * a missing script, a render that threw. It says nothing about a challenge
+   * that rendered and then failed, because Cloudflare reports that through
+   * `error-callback`, which only cleared the token. The result was a form whose
+   * submit went quiet with no message, no announcement and nothing to tell the
+   * two situations apart: pending and failed looked and read identically.
+   *
+   * This is that missing fact, and it lives here rather than in the forms
+   * because both forms already delegate the whole challenge to this component.
+   * Nothing about the token, the callbacks, the site key or the verification
+   * changes — the widget simply says what happened.
+   */
+  const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
+  /*
+   * Held as "which attempt failed" rather than a bare boolean, so that a
+   * deliberately renewed challenge is clean without an effect to clear it: a
+   * bumped `resetSignal` no longer matches, and the message is simply gone.
+   */
+  const challengeFailed = failedAttempt === resetSignal;
   const statusId = useId();
 
   /**
@@ -133,10 +155,25 @@ export function TurnstileWidget({
       id = turnstile.render(container, {
         sitekey: siteKey,
         action,
-        callback: (token: string) => handlers.current.onToken(token),
-        "error-callback": () => handlers.current.onTokenLost("error"),
+        callback: (token: string) => {
+          // A solved challenge retracts a previous failure. Clearing it here,
+          // on the success path, is what makes recovery visible: the message
+          // goes, and the submit control comes back with it.
+          setFailedAttempt(null);
+          handlers.current.onToken(token);
+        },
+        "error-callback": () => {
+          setFailedAttempt(resetSignal);
+          handlers.current.onTokenLost("error");
+        },
         "expired-callback": () => handlers.current.onTokenLost("expired"),
-        "timeout-callback": () => handlers.current.onTokenLost("timeout"),
+        "timeout-callback": () => {
+          // A challenge that ran out of time did not succeed, and the visitor
+          // has exactly the same symptom as an outright error: a submit control
+          // that will not move. It gets the same explanation.
+          setFailedAttempt(resetSignal);
+          handlers.current.onTokenLost("timeout");
+        },
         theme: "auto",
         size: "flexible",
       });
@@ -191,6 +228,17 @@ export function TurnstileWidget({
       <p id={statusId} className="auth-captcha__status" role="status" aria-live="polite">
         {loadState === "loading" ? "Загружается проверка безопасности…" : ""}
       </p>
+      {/*
+        Rendered only while a challenge has actually failed, so nothing is
+        announced on the first render and the transition announces exactly once.
+        `role="alert"` because the submit control has just gone unavailable and
+        the reason is not otherwise on screen.
+      */}
+      {challengeFailed ? (
+        <p className="auth-captcha__failure" data-testid="turnstile-challenge-failed" role="alert">
+          Проверка безопасности не выполнена. Попробуйте ещё раз.
+        </p>
+      ) : null}
     </div>
   );
 }

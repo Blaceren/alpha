@@ -210,7 +210,8 @@
  */
 .auth .login-error,
 .auth .register-error,
-.auth .auth-captcha--failed {
+.auth .auth-captcha--failed,
+.auth .auth-captcha__failure {
   background: var(--surface-subtle);
   border: var(--auth-rule);
   border-radius: 10px;
@@ -218,15 +219,18 @@
 }
 .auth .login-error::before,
 .auth .register-error::before,
-.auth .auth-captcha--failed::before { left: 12px; margin-top: 4px; }
+.auth .auth-captcha--failed::before,
+.auth .auth-captcha__failure::before { left: 12px; margin-top: 4px; }
 
 /* The mark is a second channel beside the words — never the only one. */
 .auth .register-field__error,
 .auth .login-error,
-.auth .register-error { padding-left: 18px; position: relative; }
+.auth .register-error,
+.auth .auth-captcha__failure { padding-left: 18px; position: relative; }
 .auth .register-field__error::before,
 .auth .login-error::before,
-.auth .register-error::before {
+.auth .register-error::before,
+.auth .auth-captcha__failure::before {
   content: "!";
   position: absolute;
   left: 0;
@@ -243,7 +247,8 @@
 }
 .auth .login-error,
 .auth .register-error,
-.auth .auth-captcha--failed { padding-left: 32px; }
+.auth .auth-captcha--failed,
+.auth .auth-captcha__failure { padding-left: 32px; }
 
 .auth .login-error__ref,
 .auth .register-error__ref {
@@ -280,6 +285,22 @@
 .auth .auth-captcha__status:empty,
 .auth .auth-status:empty { display: none; }
 .auth .auth-captcha--failed { padding-left: 18px; position: relative; color: var(--text-primary); font-size: 13px; }
+
+/*
+ * A FAILED CHALLENGE READS DIFFERENTLY FROM A PENDING ONE.
+ *
+ * The status line above is muted and quiet because "loading" is not news. This
+ * one is the reason the submit control is unavailable, so it is set in the
+ * primary text colour and carries the same mark and the same neutral surface as
+ * every other error on these two pages. No Signal: the action is not available,
+ * and colouring the failure like the button would say the opposite.
+ */
+.auth .auth-captcha__failure {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
 
 /* ------------------------------------------------------------- actions --- */
 

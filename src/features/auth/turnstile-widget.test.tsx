@@ -308,3 +308,129 @@ describe("TurnstileWidget — the action is caller-owned (AFD-3A3)", () => {
     expect(TURNSTILE_REGISTER_ACTION).not.toBe(TURNSTILE_LOGIN_ACTION);
   });
 });
+
+/**
+ * TFU-1 — a failed challenge must be distinguishable from a pending one.
+ *
+ * The frames that prompted this suite showed a page where "still loading" and
+ * "failed" were the same picture: an empty status line and a submit control
+ * that would not move, with nothing on screen or in the accessibility tree to
+ * say which was which. These cases pin the difference.
+ */
+describe("TurnstileWidget — a failed challenge is legible", () => {
+  const FAILURE_TEXT = "Проверка безопасности не выполнена. Попробуйте ещё раз.";
+
+  async function mounted(props: Partial<{ onToken: () => void; onTokenLost: () => void }> = {}) {
+    const view = render(
+      <TurnstileWidget
+        siteKey={TEST_SITE_KEY}
+        action={WIDGET_ACTION}
+        onToken={props.onToken ?? vi.fn()}
+        onTokenLost={props.onTokenLost ?? vi.fn()}
+        resetSignal={0}
+      />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    return view;
+  }
+
+  it("says nothing on the first render", async () => {
+    await mounted();
+
+    // An alert on mount would be announced to every visitor who has done
+    // nothing wrong, and would cry wolf by the time it mattered.
+    expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the failure in words, exactly once, when the challenge errors", async () => {
+    await mounted();
+
+    await turnstile.fail("network-error");
+
+    const alert = await screen.findByTestId("turnstile-challenge-failed");
+    expect(alert).toHaveTextContent(FAILURE_TEXT);
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.getAllByTestId("turnstile-challenge-failed")).toHaveLength(1);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("does not disguise the failure as loading", async () => {
+    await mounted();
+    await turnstile.fail("network-error");
+
+    // The polite status line is what says "loading". If the failure were routed
+    // through it, the two states would read identically again — which is the
+    // defect this suite exists to prevent.
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("");
+    expect(status).not.toHaveTextContent(FAILURE_TEXT);
+    expect(screen.getByTestId("turnstile-challenge-failed")).not.toBe(status);
+  });
+
+  it("treats a timed-out challenge as a failure and an expired token as a lapse", async () => {
+    const view = await mounted();
+    await turnstile.timeout();
+    expect(await screen.findByTestId("turnstile-challenge-failed")).toBeInTheDocument();
+    view.unmount();
+
+    // Expiry is different in kind: the challenge DID succeed, and Turnstile
+    // refreshes it on its own. Announcing a failure there would be false.
+    resetTurnstileDouble();
+    turnstile = installTurnstileDouble({ autoSolve: false });
+    await mounted();
+    await turnstile.expire();
+    expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument();
+  });
+
+  it("retracts the failure when the visitor solves the next challenge", async () => {
+    const onToken = vi.fn();
+    await mounted({ onToken });
+
+    await turnstile.fail("network-error");
+    expect(await screen.findByTestId("turnstile-challenge-failed")).toBeInTheDocument();
+
+    // Recovery through the EXISTING mechanism — the widget's own re-solve. No
+    // extra retry control was added, so this is the whole path back.
+    await turnstile.solve();
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument(),
+    );
+    // Gone from the tree, not merely hidden: a stale alert left behind would be
+    // read out on the next focus move.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onToken).toHaveBeenCalledWith(DUMMY_TOKEN);
+  });
+
+  it("starts a deliberately renewed challenge without the old failure", async () => {
+    const view = await mounted();
+    await turnstile.fail("network-error");
+    expect(await screen.findByTestId("turnstile-challenge-failed")).toBeInTheDocument();
+
+    view.rerender(
+      <TurnstileWidget
+        siteKey={TEST_SITE_KEY}
+        action={WIDGET_ACTION}
+        onToken={vi.fn()}
+        onTokenLost={vi.fn()}
+        resetSignal={1}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps reporting the lost token to the caller", async () => {
+    const onTokenLost = vi.fn();
+    await mounted({ onTokenLost });
+
+    await turnstile.fail("network-error");
+
+    // The message is additive. If showing it had displaced the callback, the
+    // form would keep a dead token and submit it.
+    expect(onTokenLost).toHaveBeenCalledWith("error");
+  });
+});

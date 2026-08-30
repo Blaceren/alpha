@@ -185,7 +185,15 @@ describe("the stylesheet's own contract", () => {
     /* auth.css tinted the summary regions with the same green as the submit
        control. Signal means "this is available to press" and "this has focus";
        an error is neither. Driving the real states is what showed it. */
-    for (const sel of [".auth .login-error", ".auth .register-error", ".auth .auth-captcha--failed"]) {
+    for (const sel of [
+      ".auth .login-error",
+      ".auth .register-error",
+      ".auth .auth-captcha--failed",
+      // A failed challenge is an error like any other here, and gets the same
+      // quiet surface. Painting it Signal would say "press this" about the one
+      // control the failure has just taken away.
+      ".auth .auth-captcha__failure",
+    ]) {
       const at = css.indexOf(sel);
       expect(at, `${sel} must be restated`).toBeGreaterThan(-1);
     }
@@ -193,6 +201,7 @@ describe("the stylesheet's own contract", () => {
     const rule = block.slice(0, block.indexOf("}"));
     expect(rule).toContain("var(--surface-subtle)");
     expect(rule).not.toContain("signal");
+    expect(rule).toContain(".auth .auth-captcha__failure");
   });
 
   it("keeps the third-party widget from pushing the page sideways", () => {
