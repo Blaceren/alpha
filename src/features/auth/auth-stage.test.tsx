@@ -233,3 +233,140 @@ describe("the stylesheet's own contract", () => {
     expect(css).not.toContain("@font-face");
   });
 });
+
+/**
+ * AEM-1 — the error mark has ONE authority for where it sits.
+ *
+ * The mark was positioned twice at the same specificity — `left: 12px` in one
+ * rule and `left: 0` in the next — so the later rule silently won and every
+ * error mark rendered flush against its own region's hairline. The text column
+ * was decided twice as well, and a later `padding-left: 18px` took the gutter
+ * away from the unavailable-captcha region while its mark was still being
+ * positioned into one.
+ *
+ * These cases read the stylesheet the way a browser does — last declaration
+ * wins — so re-introducing a competing rule ANYWHERE below fails here rather
+ * than on a screenshot.
+ */
+describe("the error mark stays in its column", () => {
+  const css = readFileSync(join(ROOT, "src", "features", "auth", "auth-stage.css"), "utf8");
+
+  /** Every style rule in source order, at-rule contents included. */
+  function rules(source: string): Array<{ selector: string; body: string }> {
+    const out: Array<{ selector: string; body: string }> = [];
+    const walk = (text: string, offset = 0) => {
+      let head = "";
+      let j = offset;
+      while (j < text.length) {
+        const ch = text[j];
+        if (ch === "{") {
+          let depth = 1;
+          let k = j + 1;
+          while (k < text.length && depth > 0) {
+            if (text[k] === "{") depth += 1;
+            else if (text[k] === "}") depth -= 1;
+            k += 1;
+          }
+          const body = text.slice(j + 1, k - 1);
+          const selector = head.trim();
+          // An at-rule holds more rules; a style rule holds declarations.
+          if (selector.startsWith("@")) walk(body, 0);
+          else out.push({ selector, body });
+          head = "";
+          j = k;
+          continue;
+        }
+        if (ch === "}") { head = ""; j += 1; continue; }
+        head += ch;
+        j += 1;
+      }
+    };
+    walk(source.replace(/\/\*[\s\S]*?\*\//g, ""));
+    return out;
+  }
+
+  const ALL = rules(css);
+
+  function matches(selectorList: string, target: string) {
+    return selectorList.split(",").map((s) => s.replace(/\s+/g, " ").trim()).includes(target);
+  }
+
+  /** The value a browser would use: the LAST declaration that applies. */
+  function resolve(target: string, prop: string): string | null {
+    let found: string | null = null;
+    for (const rule of ALL) {
+      if (!matches(rule.selector, target)) continue;
+      for (const decl of rule.body.split(";")) {
+        const at = decl.indexOf(":");
+        if (at < 0) continue;
+        const name = decl.slice(0, at).trim();
+        const value = decl.slice(at + 1).trim();
+        if (name === prop) found = value;
+        // `padding: a b c d` decides padding-left too, and that is exactly how
+        // the gutter was lost the first time.
+        if (prop === "padding-left" && name === "padding") {
+          const parts = value.split(/\s+/);
+          const left = parts.length >= 4 ? parts[3] : parts.length >= 2 ? parts[1] : parts[0];
+          found = left ?? null;
+        }
+      }
+    }
+    return found;
+  }
+
+  const BOXED = [".auth .login-error", ".auth .register-error", ".auth .auth-captcha--failed", ".auth .auth-captcha__failure"];
+
+  it.each(BOXED)("%s keeps its mark 12px clear of the hairline", (region) => {
+    // The exact regression: a later `left: 0` winning the cascade.
+    expect(resolve(`${region}::before`, "left")).toBe("12px");
+    expect(resolve(`${region}::before`, "position")).toBe("absolute");
+  });
+
+  it.each(BOXED)("%s reserves a text column the mark cannot reach into", (region) => {
+    const pad = parseFloat(resolve(region, "padding-left") ?? "0");
+    const left = parseFloat(resolve(`${region}::before`, "left") ?? "0");
+    const size = parseFloat(resolve(`${region}::before`, "width") ?? "0");
+    expect(size).toBe(13);
+    // The mark ends before the words begin, with air in between. If the column
+    // is ever narrowed, this is the arithmetic that fails.
+    expect(left + size).toBeLessThanOrEqual(pad);
+    expect(pad - (left + size)).toBeGreaterThanOrEqual(4);
+  });
+
+  it.each(BOXED)("%s centres its mark without a transform or a negative pull", (region) => {
+    expect(resolve(`${region}::before`, "top")).toBe("0");
+    expect(resolve(`${region}::before`, "bottom")).toBe("0");
+    expect(resolve(`${region}::before`, "margin-top")).toBe("auto");
+    expect(resolve(`${region}::before`, "margin-bottom")).toBe("auto");
+    expect(resolve(`${region}::before`, "transform")).toBeNull();
+  });
+
+  it.each(BOXED)("%s renders a mark at all", (region) => {
+    // The unavailable-captcha region reserved a 32px column while the legacy
+    // sheet gave it an inline "⚠ " — a gutter with nothing in it.
+    expect(resolve(`${region}::before`, "content")).toBe('"!"');
+  });
+
+  it("leaves the field note's own contract alone", () => {
+    // No box and no hairline, so the mark leads the line instead of sitting in
+    // a gutter. Sweeping it into the boxed rule would push it onto the words.
+    const target = ".auth .register-field__error";
+    expect(resolve(`${target}::before`, "left")).toBe("0");
+    expect(resolve(`${target}::before`, "margin-top")).toBe("3px");
+    const pad = parseFloat(resolve(target, "padding-left") ?? "0");
+    const size = parseFloat(resolve(`${target}::before`, "width") ?? "0");
+    expect(pad - size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("reads the cascade the way a browser does", () => {
+    // The resolver itself must be able to see a later rule win, or every
+    // assertion above is decorative.
+    const probe = ".auth .login-error::before";
+    expect(resolve(probe, "left")).toBe("12px");
+    const shadowed = rules(css + `\n${probe} { left: 0; }`);
+    ALL.push(...shadowed.slice(ALL.length));
+    expect(resolve(probe, "left")).toBe("0");
+    ALL.length = shadowed.length - 1;
+    expect(resolve(probe, "left")).toBe("12px");
+  });
+});

@@ -212,32 +212,33 @@
 .auth .register-error,
 .auth .auth-captcha--failed,
 .auth .auth-captcha__failure {
+  position: relative;
   background: var(--surface-subtle);
   border: var(--auth-rule);
   border-radius: 10px;
+  /*
+   * The 32px is not decoration. It is the mark's column: 12px of inset that
+   * keeps the mark off the hairline, the 13px mark itself, and 7px of air
+   * before the words start. Nothing below may set `padding-left` on these
+   * regions — taking the column away leaves the mark sitting on the text.
+   */
   padding: 11px 12px 11px 32px;
 }
-.auth .login-error::before,
-.auth .register-error::before,
-.auth .auth-captcha--failed::before,
-.auth .auth-captcha__failure::before { left: 12px; margin-top: 4px; }
+
+/* The field note carries the same mark without the box, so its column is its
+   own: no hairline to clear, and the mark simply leads the line. */
+.auth .register-field__error { position: relative; padding-left: 18px; }
 
 /* The mark is a second channel beside the words — never the only one. */
-.auth .register-field__error,
-.auth .login-error,
-.auth .register-error,
-.auth .auth-captcha__failure { padding-left: 18px; position: relative; }
 .auth .register-field__error::before,
 .auth .login-error::before,
 .auth .register-error::before,
+.auth .auth-captcha--failed::before,
 .auth .auth-captcha__failure::before {
   content: "!";
   position: absolute;
-  left: 0;
-  top: 0;
   width: 13px;
   height: 13px;
-  margin-top: 3px;
   border: 1px solid var(--divider-strong);
   border-radius: 50%;
   font-size: 9px;
@@ -245,10 +246,31 @@
   text-align: center;
   color: var(--text-secondary);
 }
-.auth .login-error,
-.auth .register-error,
-.auth .auth-captcha--failed,
-.auth .auth-captcha__failure { padding-left: 32px; }
+
+/*
+ * WHERE THE MARK SITS — one authority, and the last word on it.
+ *
+ * This used to be stated twice at the same specificity: `left: 12px` in one
+ * rule and `left: 0` in the next. The later one won, so every error mark
+ * rendered flush against the region's own hairline and read as a broken frame
+ * rather than as a mark. Splitting appearance from position and stating
+ * position once, here, is what makes the intended geometry the real geometry.
+ *
+ * `top: 0; bottom: 0` with auto block margins centres the mark against the
+ * words in its own column, at one line or three, without a transform and
+ * without pulling it back into place with a negative margin.
+ */
+.auth .register-field__error::before { left: 0; top: 0; margin-top: 3px; }
+.auth .login-error::before,
+.auth .register-error::before,
+.auth .auth-captcha--failed::before,
+.auth .auth-captcha__failure::before {
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+}
 
 .auth .login-error__ref,
 .auth .register-error__ref {
@@ -284,7 +306,9 @@
 }
 .auth .auth-captcha__status:empty,
 .auth .auth-status:empty { display: none; }
-.auth .auth-captcha--failed { padding-left: 18px; position: relative; color: var(--text-primary); font-size: 13px; }
+/* Surface, gutter and mark come from the boxed-error contract above; what is
+   left here is only what this region says differently. */
+.auth .auth-captcha--failed { color: var(--text-primary); font-size: 13px; line-height: 1.5; }
 
 /*
  * A FAILED CHALLENGE READS DIFFERENTLY FROM A PENDING ONE.
