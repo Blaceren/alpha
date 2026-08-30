@@ -47,6 +47,9 @@ function withoutClasses(source: string): string {
        about, so whitespace is collapsed; every attribute, every child and every
        string still has to match exactly. */
     .replace(/\s+/g, " ")
+    /* ...and the closing bracket of a multi-line tag sits on its own line, so
+       `}>` becomes `} >`. Still formatting, still not a change. */
+    .replace(/\s+(\/?>)/g, "$1")
     .trim();
 }
 
