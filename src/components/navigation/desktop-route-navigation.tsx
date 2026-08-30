@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
+import { isVisibleSection } from "@/config/feature-visibility";
 
 /**
  * Desktop/tablet primary navigation.
@@ -32,7 +33,9 @@ import { isBuiltRoute } from "@/config/built-routes";
 const SECONDARY_IDS = new Set(["community", "support"]);
 
 export function DesktopRouteNavigation({ activeId = "home" }: { activeId?: string }) {
-  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id));
+  /* Built AND shown. A section can exist, answer and still be out of the
+     product today — see config/feature-visibility.ts. */
+  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
   const primary = built.filter((item) => !SECONDARY_IDS.has(item.id));
   const secondary = built.filter((item) => SECONDARY_IDS.has(item.id));
 

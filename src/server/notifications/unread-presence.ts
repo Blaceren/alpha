@@ -2,6 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
+import { isVisibleNotificationType } from "@/config/feature-visibility";
 
 /**
  * Does at least one unread notification exist for this learner, right now?
@@ -55,9 +56,37 @@ export const hasUnreadNotifications = cache(async (): Promise<boolean | null> =>
     if (!response.ok) return null;
     const body: unknown = await response.json();
     if (typeof body !== "object" || body === null) return null;
-    const count = (body as { unreadCount?: unknown }).unreadCount;
-    if (typeof count !== "number" || !Number.isFinite(count)) return null;
-    return count > 0;
+
+    /**
+     * THE MARK AND THE LIST ARE THE SAME SET.
+     *
+     * This used to read `unreadCount` — one number the Backend computes over
+     * every type it stores. While a section is withheld from the product that
+     * number can count an event the register will not show, and the learner
+     * gets the worst possible answer: a bell that says something is waiting,
+     * and a page that says nothing is. So presence is derived from the SAME
+     * rows the register renders, through the SAME visibility predicate.
+     *
+     * WHAT THIS TRADES. The count was authoritative over all history; these
+     * items are the window the Backend returns. An unread item outside that
+     * window no longer lights the mark. That is the honest direction to fail:
+     * this file's own header already notes the count "can assert more than the
+     * learner can reach", and a mark the learner cannot act on is the defect
+     * this surface was built to remove.
+     *
+     * STILL READ-ONLY. Same GET, same already-proxied route. Nothing is
+     * deleted, nothing is marked read, nothing is written.
+     */
+    const items = (body as { items?: unknown }).items;
+    if (!Array.isArray(items)) return null;
+    for (const item of items) {
+      if (typeof item !== "object" || item === null) continue;
+      const row = item as { type?: unknown; readAt?: unknown };
+      const type = typeof row.type === "string" ? row.type : "";
+      if (!isVisibleNotificationType(type)) continue;
+      if (row.readAt === null || row.readAt === undefined) return true;
+    }
+    return false;
   } catch {
     return null;
   } finally {

@@ -7,17 +7,20 @@ import "@/features/public-home/public-home.css";
  * Metadata carried across from the frozen HomeATA `<head>`: the same title, the
  * same description, the same theme colour.
  *
- * THE FAVICON IS SCOPED TO THIS ROUTE. HomeATA's favicon is the authority for
- * Public Home, but a favicon is a per-document thing, and replacing the app's
- * `src/app/icon.svg` would change it for every authenticated surface too —
- * outside what this phase may touch. Declaring it here overrides the icon for
- * `/` alone and leaves every other route exactly as it was.
+ * THE FAVICON IS NO LONGER DECLARED HERE. It used to be, and for a good reason
+ * at the time: HomeATA's favicon was the authority for Public Home, and the
+ * app-wide `src/app/icon.svg` could not be replaced without changing the icon
+ * for every authenticated surface — outside what that phase was allowed to
+ * touch. So the override was scoped to this one route.
+ *
+ * That scope is exactly what left the rest of the product on the old navy mark.
+ * The app now declares one favicon in the root layout and this route inherits
+ * it, so the override is gone rather than duplicated.
  */
 export const metadata: Metadata = {
   title: "ATA — последовательный путь в трейдинге",
   description:
     "Alfa Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.",
-  icons: { icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }] },
 };
 
 export const viewport = { themeColor: "#0B0D0A" };

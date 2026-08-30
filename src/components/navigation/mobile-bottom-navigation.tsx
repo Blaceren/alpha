@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { MORE_MENU, PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
+import { isVisibleSection } from "@/config/feature-visibility";
 import { Icon } from "@/components/ui/icon";
 import { useMobileMenu } from "@/components/shell/mobile-menu-state";
 
@@ -50,7 +51,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
   const moreRef = React.useRef<HTMLButtonElement>(null);
   const sheetRef = React.useRef<HTMLDivElement>(null);
 
-  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id));
+  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
   const needsOverflow = built.length > PRIMARY_SLOTS + 1;
   const primary = needsOverflow ? built.slice(0, PRIMARY_SLOTS) : built;
 
@@ -65,7 +66,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
     const shown = new Set(primary.map((item) => item.id));
     const seen = new Set<string>();
     return [...built, ...MORE_MENU]
-      .filter((item) => isBuiltRoute(item.id) && !shown.has(item.id))
+      .filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id) && !shown.has(item.id))
       .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
   }, [built, primary, needsOverflow]);
 

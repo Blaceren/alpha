@@ -1,4 +1,5 @@
 import { deriveNotificationHref, type HrefSource } from "@/features/academy-experience/notifications-screen";
+import { isVisibleNotificationType } from "@/config/feature-visibility";
 
 /**
  * NOTIFICATIONS — the semantic layer, mapped from the real Backend row.
@@ -186,6 +187,20 @@ export type NotificationRecord = {
  */
 export function toRecord(row: NotificationRow, now: Date): NotificationRecord | null {
   const type = row.type ?? "";
+
+  /**
+   * A WITHHELD SECTION'S EVENTS ARE NOT SHOWN.
+   *
+   * Same mechanism as the suppression below and the same discipline: the row is
+   * dropped from THIS VIEW and nothing else happens to it. It is not deleted,
+   * not marked read, and no request is made about it — the Academy never writes
+   * to consumption, and this phase does not start.
+   *
+   * The shell's unread mark filters on the same predicate, so a hidden event
+   * cannot light the bell while the list it would appear in shows nothing.
+   */
+  if (!isVisibleNotificationType(type)) return null;
+
   const context = contextIdentity(type);
   if (!context) return null;
 

@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState } from "@/features/academy-experience/primitives";
+import { COMMUNITY_ENABLED } from "@/config/feature-visibility";
 
 type Notification = {
   id: number | string;
@@ -80,12 +81,27 @@ function communityHref(n: HrefSource): string | null {
  */
 export type HrefSource = Pick<Notification, "type" | "metadata" | "link" | "url">;
 
+/**
+ * A LINK MAY NOT LEAD INTO A WITHHELD SECTION.
+ *
+ * Two ways one could: the derived Community thread link above, and a `link` or
+ * `url` the Backend authored. The first is closed by the type filter, but the
+ * second is a raw string the Academy does not control, so it is checked here as
+ * well. Belt and braces on purpose — this is the last point before an address
+ * reaches the DOM, and a link to a 404 is worse than no link.
+ */
+function leadsIntoWithheldSection(href: string): boolean {
+  if (COMMUNITY_ENABLED) return false;
+  return href === "/community" || href.startsWith("/community/") || href.startsWith("/community?");
+}
+
 export function deriveNotificationHref(n: HrefSource): string | null {
   const derived = communityHref(n);
-  if (derived) return derived;
+  if (derived) return leadsIntoWithheldSection(derived) ? null : derived;
   const raw = n.link ?? n.url ?? null;
   if (!raw || typeof raw !== "string") return null;
   if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  if (leadsIntoWithheldSection(raw)) return null;
   return raw;
 }
 
