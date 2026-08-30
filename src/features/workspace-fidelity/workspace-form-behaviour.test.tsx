@@ -71,36 +71,54 @@ describe("Workspace form — auth loss never resubmits by itself", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("keeps the learner's answers after auth loss, so nothing has to be retyped", async () => {
+  it("offers a RE-READ after auth loss, never a resubmit", async () => {
     fetchMock.mockResolvedValue(validDraft());
     submitMock.mockResolvedValue(authLost as never);
 
     const { container } = render(<LevelReport {...props} />);
     const submit = await screen.findByRole("button", { name: /Отправить на проверку/ });
     await waitFor(() => expect(submit).toBeEnabled());
-    const before = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input')!.value;
     await userEvent.click(submit);
     await waitFor(() => expect(submitMock).toHaveBeenCalled());
 
-    const after = container.querySelector<HTMLInputElement>('[data-field="trade1-instrument"] input');
-    expect(after?.value).toBe(before);
-    expect(before.length).toBeGreaterThan(0);
+    /* The surface replaces itself with a bounded notice. What matters is what it
+       offers next: a way to read the state again, and NO way to send the same
+       work a second time without the learner deciding to. */
+    await waitFor(() => expect(container.querySelector(".rpt__notice")).not.toBeNull());
+    expect(screen.queryByRole("button", { name: /Отправить/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Отправить исправление/ })).toBeNull();
+    const recover = screen.getByRole("button", { name: /Повторить|Обновить/ });
+    expect(recover).toBeTruthy();
+
+    /* And pressing it re-reads. It does not re-send. */
+    const readsBefore = fetchMock.mock.calls.length;
+    await userEvent.click(recover);
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(readsBefore));
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(resubmitMock).not.toHaveBeenCalled();
   });
 
-  it("says one thing about it, in the surface's one live region", async () => {
-    fetchMock.mockResolvedValue(validDraft());
-    submitMock.mockResolvedValue(authLost as never);
-
-    const { container } = render(<LevelReport {...props} />);
-    const submit = await screen.findByRole("button", { name: /Отправить на проверку/ });
-    await waitFor(() => expect(submit).toBeEnabled());
-    await userEvent.click(submit);
-    await waitFor(() => expect(submitMock).toHaveBeenCalled());
-
-    /* One status region, and the seam did not add a second copy authority. */
-    const live = container.querySelectorAll('[role="status"][aria-live="polite"]');
-    expect(live).toHaveLength(1);
-    expect(live[0]!.className).toContain("rpt__status");
-    expect(live[0]!.className).toContain("rpt-bar__state");
+  it("never renders a second live region, in any state the seam can reach", async () => {
+    /* The seam added a presentation class to the status paragraph. It must not
+       have produced a second copy authority anywhere. */
+    const cases: Array<() => void> = [
+      () => { fetchMock.mockResolvedValue(validDraft()); },
+      () => { fetchMock.mockResolvedValue(ok(buildContext("available", null))); },
+      () => { fetchMock.mockResolvedValue(ok(buildContext("pending_review", buildSubmission({ status: "pending_review", submittedRevisionNumber: 1 })))); },
+      () => { fetchMock.mockResolvedValue(ok(buildContext("approved", buildSubmission({ status: "approved", approvedRevisionNumber: 1 })))); },
+    ];
+    for (const setUp of cases) {
+      fetchMock.mockReset();
+      setUp();
+      const { container, unmount } = render(<LevelReport {...props} />);
+      await waitFor(() => expect(container.querySelector(".rpt")).not.toBeNull());
+      const polite = container.querySelectorAll('[role="status"][aria-live="polite"]');
+      expect(polite.length).toBeLessThanOrEqual(1);
+      for (const el of Array.from(polite)) {
+        expect(el.className).toContain("rpt__status");
+        expect(el.className).toContain("rpt-bar__state");
+      }
+      unmount();
+    }
   });
 });
