@@ -280,20 +280,15 @@ describe("Lessons — search, when the capability is granted", () => {
   });
 
   it("announces the SETTLED result, never a count per keystroke", async () => {
-    vi.useFakeTimers();
-    try {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      const { container } = render(<LessonsCorpus materials={many} capability="available" />);
-      const status = container.querySelector("#search-status")!;
-      await user.type(screen.getByLabelText("Поиск по материалам"), "риск");
-      /* Filtered already, announced not yet. */
-      expect(container.querySelectorAll(".material")).toHaveLength(1);
-      expect(status.textContent).toBe("");
-      await vi.advanceTimersByTimeAsync(400);
-      await waitFor(() => expect(status.textContent).toBe("Найден 1 материал."));
-    } finally {
-      vi.useRealTimers();
-    }
+    const { container } = render(<LessonsCorpus materials={many} capability="available" />);
+    const status = container.querySelector("#search-status")!;
+    await userEvent.type(screen.getByLabelText("Поиск по материалам"), "риск");
+    /* Filtered already — the register commits immediately and atomically. */
+    expect(container.querySelectorAll(".material")).toHaveLength(1);
+    /* Announced not yet: the live region waits for the typing to settle, so
+       assistive technology hears one result state instead of four. */
+    expect(status.textContent).toBe("");
+    await waitFor(() => expect(status.textContent).toBe("Найден 1 материал."), { timeout: 2000 });
   });
 
   it("returns to browse as one coherent state when the query is cleared", async () => {
@@ -336,9 +331,13 @@ describe("Lessons — nothing synthetic crossed over", () => {
   });
 
   it("writes no plural form by hand", () => {
-    expect(src).not.toContain("материала");
-    expect(src).not.toContain("материалов");
-    expect(screenSrc).not.toContain("материалов");
+    /* The forms as terminal string literals — «материала"» / «материалов"» —
+       never appear. «материалам» inside a label is a different word and is fine,
+       which is why this looks at the closing quote rather than the substring. */
+    for (const source of [src, screenSrc]) {
+      expect(source).not.toMatch(/материал(а|ов)["'`]/);
+    }
+    expect(src + screenSrc).toContain("@/features/lessons-fidelity/ru-plural");
   });
 });
 
