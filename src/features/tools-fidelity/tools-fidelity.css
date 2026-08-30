@@ -1,3 +1,46 @@
+/*
+ * TOOLS — the frozen Tools design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: ToolsATA @ b65f309aadc2a46cb24d8d22c577838459006371 —
+ * `prototype/phase2/shell.css` (the accepted ATA palette and base type),
+ * `prototype/phase3-system/tokens.css`, `prototype/phase3-system/system.css`
+ * (the component primitives) and `prototype/phase4-pages/pages.css` (the page
+ * composition), concatenated in the order the frozen frame links them. Every
+ * value is carried across UNCHANGED: 173 selectors, 0 escaping the namespace,
+ * 0 remote URLs, no !important on either side, and the only changed
+ * declarations are the four font bindings below.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. Both families are bound to the product's locally vendored faces —
+ *    "ATA Manrope" and "ATA IBM Plex Mono" — in all four token names the frozen
+ *    files declare (`--ui`/`--mono` and `--ata-ui`/`--ata-mono`).
+ *
+ * 2. Every selector is namespaced under `.tls`.
+ *
+ * 3. `prototype/phase4-pages/shell.css` IS NOT INCLUDED. It is entirely the
+ *    prototype's own topbar — nineteen selectors, all `.topbar*` and `.shell` —
+ *    and the product keeps the accepted AppShell. The frozen Tools source says
+ *    the same thing in its own words: "Tools does not own the shell and does not
+ *    redesign it", and its shell renderer's comment records that the structure
+ *    was inherited verbatim from the product's own `app-shell.tsx`. Including it
+ *    would have added nineteen dead rules and one more thing to explain.
+ *
+ * 4. The chrome rules that DO ride along, from the Phase-2 foundation
+ *    (`.appbar`, `.bottomnav`, `.rnav`, `.brand`, `.avatar`, `.iconbtn`,
+ *    `.mtop`, `.shell`, `.main`), are dead for the same reason: this surface
+ *    emits none of those elements. They are kept because that file also carries
+ *    the palette, the base type and the focus ring, and splitting it would mean
+ *    editing frozen content.
+ *
+ * 5. `html.tls-root-scope` carries the frozen document reset and nothing ever
+ *    adds that class.
+ *
+ * THE ONE RULE THAT IS NOT FROZEN DESIGN lives in its own file,
+ * `tools-fidelity-safety.css`, so that this file's parity proof stays intact
+ * and the exception is impossible to miss.
+ */
+
 /* --- phase2/shell.css --- */
 /* ATA TOOLS — SHARED FOUNDATION + CANONICAL AUTHENTICATED SHELL
    ---------------------------------------------------------------------
