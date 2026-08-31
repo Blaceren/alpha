@@ -35,11 +35,6 @@ const ALLOWED: Array<{ file: string; match: string; why: string }> = [
     match: "block.asset.url",
     why: "asset download handed to the browser, rel=noopener — not a route",
   },
-  {
-    file: "src/features/path-fidelity/path-fidelity-view.tsx",
-    match: 'nextAction.href ?? "#"',
-    why: 'HOLD: the fallback is a fragment, so this href is not uniformly a route',
-  },
 ];
 
 type Anchor = { file: string; line: number; form: string; text: string | null };
@@ -129,5 +124,150 @@ describe("no bare anchor carries an internal route", () => {
 
   it("gives every allowance a reason", () => {
     for (const a of ALLOWED) expect(a.why.length, `${a.file} :: ${a.match}`).toBeGreaterThan(8);
+  });
+});
+
+/* ── WHY THE PATH CTA NEEDS NO EXCEPTION ───────────────────────────────────
+   `path-fidelity-view` used to hold the one href this gate could not classify:
+   `nextAction.href ?? "#"`. Read as a string it is ambiguous — sometimes a
+   route, sometimes a fragment — so it sat in ALLOWED as a HOLD.
+
+   It was never ambiguous in fact. `deriveNextAction` returns ctaLabel and href
+   together or not at all, and the CTA rendered only when both were present, so
+   the fragment was unreachable and the anchor was always a route.
+
+   That pairing is the whole licence for reading the two as one value and
+   rendering a single Link. So it is checked here, exhaustively over the source
+   rather than over whichever states a fixture happens to reach: if a future
+   return ever sets one field without the other, this fails and the seam has to
+   be reconsidered before the gate can stay silent about it. */
+describe("deriveNextAction pairs its label and href", () => {
+  const FILE = "src/lib/curriculum/next-action.ts";
+
+  /** Every `return { … }` in the module, with how it supplies the two fields. */
+  function returns(): Array<{ line: number; cta: string; href: string }> {
+    const src = readFileSync(join(ROOT, FILE), "utf8");
+    const sf = ts.createSourceFile(FILE, src, ts.ScriptTarget.Latest, true);
+    const out: Array<{ line: number; cta: string; href: string }> = [];
+    const visit = (n: ts.Node): void => {
+      if (ts.isReturnStatement(n) && n.expression && ts.isObjectLiteralExpression(n.expression)) {
+        // A spread inherits both fields from `base`, where href is level.href
+        // (typed string) and any ctaLabel present is a literal.
+        let cta = "«base»";
+        let href = "«base»";
+        for (const prop of n.expression.properties) {
+          if (!ts.isPropertyAssignment(prop)) continue;
+          const key = prop.name.getText(sf);
+          const value = prop.initializer.getText(sf).replace(/\s+/g, " ");
+          if (key === "ctaLabel") cta = value;
+          if (key === "href") href = value;
+        }
+        out.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, cta, href });
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return out;
+  }
+
+  it("reads every return in the module, so this cannot pass by finding none", () => {
+    expect(returns().length).toBeGreaterThan(12);
+  });
+
+  it("never sets one of the two to null without the other", () => {
+    const unpaired = returns().filter((r) => (r.cta === "null") !== (r.href === "null"));
+    expect(
+      unpaired,
+      "a null ctaLabel with a live href (or the reverse) would make the path CTA's single Link wrong",
+    ).toEqual([]);
+  });
+
+  it("guards both fields on the same condition where either is conditional", () => {
+    // The one return that computes both: `target.routeAccessible ? … : null`.
+    // Its two ternaries must test the same thing, or the pairing is accidental.
+    const conditional = returns().filter((r) => r.cta.includes("?") && r.href.includes("?"));
+    for (const r of conditional) {
+      expect(r.href.split("?")[0]!.trim(), `line ${r.line}`).toBe(r.cta.split("?")[0]!.trim());
+    }
+    // And no return may make only ONE of them conditional on something.
+    const halfConditional = returns().filter(
+      (r) => r.cta.includes("?") !== r.href.includes("?") && (r.cta === "null" || r.href === "null"),
+    );
+    expect(halfConditional).toEqual([]);
+  });
+
+  it("leaves no fragment fallback behind in the path CTA", () => {
+    const view = readFileSync(
+      join(ROOT, "src/features/path-fidelity/path-fidelity-view.tsx"),
+      "utf8",
+    );
+    const code = view.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toContain('?? "#"');
+    expect(code).toMatch(/<Link[^>]*className="button button--primary"/);
+  });
+});
+
+/* ── THE OTHER DIRECTION ───────────────────────────────────────────────────
+   Everything above forbids a route on a bare anchor. On its own that is only
+   half a classification: it would stay silent if a skip link or a download
+   were "fixed" into a Link, which is just as wrong and just as invisible on
+   the page. A fragment routed through the router is no longer a jump within
+   the document, and a download handed to the router is not a download.
+
+   So the classes are closed from both sides: a route must be a Link, and a
+   non-route must not be. */
+describe("no Link carries something that is not a route", () => {
+  function collectLinks(): Anchor[] {
+    const found: Anchor[] = [];
+    for (const file of tsxFiles(join(ROOT, "src"))) {
+      const rel = relative(ROOT, file);
+      const sf = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const visit = (node: ts.Node): void => {
+        if (
+          (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+          node.tagName.getText() === "Link"
+        ) {
+          const attrs = new Map<string, ts.JsxAttributeValue | undefined>();
+          for (const prop of node.attributes.properties) {
+            if (ts.isJsxAttribute(prop)) attrs.set(prop.name.getText(), prop.initializer);
+          }
+          const h = href(attrs.get("href"));
+          found.push({
+            file: rel,
+            line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+            ...h,
+          });
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sf);
+    }
+    return found;
+  }
+
+  const links = collectLinks();
+
+  it("finds the Links, so a silent parse failure cannot pass this either", () => {
+    expect(links.length).toBeGreaterThan(60);
+  });
+
+  it("routes none of the fragments or external destinations through the router", () => {
+    const wrong = links
+      .filter((l) => provablyNotARoute(l))
+      .map((l) => `${l.file}:${l.line} href form=${l.form} ${l.text ?? ""}`);
+    expect(wrong, "a fragment or external URL belongs on a bare <a>, not a Link").toEqual([]);
+  });
+
+  it("routes none of the allowlisted downloads through the router", () => {
+    const wrong = links
+      .filter((l) => ALLOWED.some((x) => x.file === l.file && (l.text ?? "") === x.match))
+      .map((l) => `${l.file}:${l.line} ${l.text ?? ""}`);
+    expect(wrong, "these are downloads; the browser handles them, not the router").toEqual([]);
   });
 });

@@ -138,10 +138,21 @@ export function PathFidelityView({
   const nextReason = followingLevel ? explainLevelState(followingLevel) : null;
 
   /* The primary action is whatever `deriveNextAction` decided; it returns label
-     and href together or not at all, so one test covers both. The secondary is
-     the frozen "открыть описание" navigation, shown only when it would lead
-     somewhere else than the primary already does. */
-  const showPrimary = Boolean(nextAction.ctaLabel && nextAction.href);
+     and href together or not at all, so one test covers both.
+
+     Reading the two out as a pair is what lets the CTA be a Link. The href is
+     known to be a route here by the same contract that decides whether the CTA
+     renders at all — not by inspecting the string, and not by a fallback. The
+     old `href={nextAction.href ?? "#"}` could never reach its "#": the guard
+     above it already required a non-null href, so the fragment was unreachable
+     and this was an internal route sitting on a bare <a>.
+
+     The secondary is the frozen "открыть описание" navigation, shown only when
+     it would lead somewhere else than the primary already does. */
+  const primaryAction =
+    nextAction.ctaLabel !== null && nextAction.href !== null
+      ? { label: nextAction.ctaLabel, href: nextAction.href }
+      : null;
   const showSecondary =
     focusLevel !== null && focusLevel.routeAccessible && focusLevel.href !== nextAction.href;
 
@@ -309,10 +320,10 @@ export function PathFidelityView({
               </div>
               {nextReason ? <p className="focus__next">{nextReason}</p> : null}
               <div className="focus__actions">
-                {showPrimary ? (
-                  <a className="button button--primary" href={nextAction.href ?? "#"}>
-                    {nextAction.ctaLabel}
-                  </a>
+                {primaryAction ? (
+                  <Link className="button button--primary" href={primaryAction.href}>
+                    {primaryAction.label}
+                  </Link>
                 ) : null}
                 {showSecondary ? (
                   <Link className="button button--secondary" href={focusLevel.href}>

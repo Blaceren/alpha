@@ -39,6 +39,7 @@ import type {
   AcademyModuleSummary,
 } from "@/lib/curriculum/academy-view";
 import type { AcademyCompletionMethod } from "@/lib/curriculum/completion-method";
+import { deriveNextAction } from "@/lib/curriculum/next-action";
 
 /**
  * The shell's unread indicator is a SERVER component: it reads the session
@@ -595,5 +596,96 @@ describe("Path — the stylesheet is scoped and local", () => {
     for (const src of [SRC("path-fidelity-view.tsx"), SRC("path-rail.tsx")]) {
       expect(src).not.toContain("pth-root-scope");
     }
+  });
+});
+
+/* ── THE PRIMARY CTA SEAM ──────────────────────────────────────────────────
+   This was the last conditional href in the surface, written as
+   `href={nextAction.href ?? "#"}`. The fallback read as if the CTA sometimes
+   pointed at a fragment, which is why it was held back from the link
+   conversion — a fragment is not a route and must stay a bare anchor.
+
+   It never pointed at a fragment. `showPrimary` already required a non-null
+   href before the anchor rendered, so the "#" was unreachable: what actually
+   shipped was an internal route on a bare <a>, on every path a learner takes.
+
+   The two branches are proved from opposite sides below. What licenses reading
+   them as a pair at all is the pairing invariant, checked exhaustively over
+   the source of `deriveNextAction` in the internal-links gate. */
+describe("the primary CTA resolves both branches of nextAction", () => {
+  function reactHandlers(el: Element): { onClick: string } {
+    const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
+    const props = (key ? (el as unknown as Record<string, unknown>)[key] : {}) as {
+      onClick?: unknown;
+    };
+    return { onClick: typeof props.onClick };
+  }
+
+  it("routes to the level when nextAction carries an href", () => {
+    const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    const primary = container.querySelector(".button--primary") as HTMLAnchorElement | null;
+
+    expect(primary).not.toBeNull();
+    // Still the same element, class and position a bare anchor produced.
+    expect(primary!.tagName).toBe("A");
+    expect(primary!.className).toBe("button button--primary");
+    expect(primary!.parentElement!.className).toBe("focus__actions");
+    // The href is a route, and never the fragment the old fallback implied.
+    expect(primary!.getAttribute("href")).toMatch(/^\//);
+    expect(primary!.getAttribute("href")).not.toBe("#");
+    // And it is now a router link, which is the whole point.
+    expect(reactHandlers(primary!).onClick).toBe("function");
+
+    /* The words and the destination both still come from the derivation. Asserting
+       the label against a literal here would let the CTA drift away from the state
+       it describes and still pass, which is the failure this pass is about. */
+    const chosen = deriveNextAction(standardView());
+    expect(primary!.textContent).toBe(chosen.ctaLabel);
+    expect(primary!.getAttribute("href")).toBe(chosen.href);
+  });
+
+  it("renders no CTA at all when nextAction has neither label nor href", () => {
+    /* `deriveNextAction` switches on completionMethod and returns both fields
+       null in its default arm — the level type this build does not understand.
+       That arm exists because the method arrives from the Backend, so a value
+       this build has never heard of is a real state, not a hypothetical. The
+       cast is how a test reaches it without weakening the union. */
+    const unsupported = moduleOf(1, [
+      level({
+        order: 1,
+        state: "in_progress",
+        stateLabel: "В работе",
+        routeAccessible: true,
+        completionMethod: "a-method-this-build-predates" as AcademyCompletionMethod,
+        typeInfo: {
+          type: "unsupported",
+          label: "неизвестный тип",
+          isCheckpoint: false,
+          isExternal: false,
+          supported: false,
+        },
+      }),
+    ]);
+    const { container } = render(
+      <PathFidelityView view={viewOf([unsupported], "v2.l001")} userName="Тест" />,
+    );
+
+    expect(container.querySelector(".button--primary")).toBeNull();
+    // The absence is the whole behaviour: no placeholder anchor takes its seat.
+    expect(container.querySelector('a[href="#"]')).toBeNull();
+    const actions = container.querySelector(".focus__actions");
+    if (actions) {
+      for (const a of actions.querySelectorAll("a")) {
+        expect(a.getAttribute("href")).not.toBe("#");
+      }
+    }
+  });
+
+  it("keeps the CTA a single tab stop, as the bare anchor was", () => {
+    const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    const actions = container.querySelector(".focus__actions")!;
+    const stops = actions.querySelectorAll("a, button, input, [tabindex]");
+    for (const s of stops) expect(s.tagName).toBe("A");
+    expect(actions.querySelectorAll(".button--primary")).toHaveLength(1);
   });
 });
