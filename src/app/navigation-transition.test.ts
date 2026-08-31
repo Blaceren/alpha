@@ -153,7 +153,13 @@ describe("the authenticated route group", () => {
     expect(changed.sort()).toEqual(AUTHORISED_VIEWER_IDENTITY);
     for (const prefix of [
       "src/features/home", "src/features/level-detail-fidelity",
-      "src/features/workspace", "src/features/tools", "src/features/tools-fidelity",
+      /* Tools is no longer frozen here: TOOLS-AUTHORITY-DIVERGENCE-1
+         was authorised to move the access decision, and tools-equivalence.test.ts
+         governs that tree in detail — rendered contract, the decision lines, and
+         an explicit list of what was allowed to move. Freezing it in two places
+         would mean the looser of the two is the one that fails first, for the
+         least informative reason. */
+      "src/features/workspace",
       "src/features/support", "src/features/auth/", "src/components/shell",
       "src/config/feature-visibility.ts", "src/app/layout.tsx",
     ]) {
