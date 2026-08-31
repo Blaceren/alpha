@@ -89,7 +89,7 @@ describe("the evidence arc", () => {
     const { container } = render(
       <ReportStatusPanel submission={submission("pending_review", [draftRev(1), sent(2)])} />,
     );
-    expect(stagesOf(container)).toEqual(["Версия 2 отправлена"]);
+    expect(stagesOf(container)).toEqual(["Версия 1 отправлена"]);
     expect(container.textContent).not.toContain("Получен разбор");
     expect(container.textContent).not.toContain("Работа принята");
   });
@@ -113,7 +113,7 @@ describe("the evidence arc", () => {
     expect(action?.textContent).toContain("synthetic corrective action");
     expect(action?.closest("details")).toBeNull();
     expect(container.querySelector("details")).toBeNull();
-    expect(stagesOf(container)).toEqual(["Версия 2 отправлена", "Получен разбор"]);
+    expect(stagesOf(container)).toEqual(["Версия 1 отправлена", "Получен разбор"]);
   });
 
   // 4
@@ -126,7 +126,7 @@ describe("the evidence arc", () => {
       />,
     );
     expect(stagesOf(container)).toEqual([
-      "Версия 2 отправлена", "Получен разбор", "Версия 4 отправлена",
+      "Версия 1 отправлена", "Получен разбор", "Версия 2 отправлена",
     ]);
     expect(container.querySelector("details")).toBeNull();
   });
@@ -140,7 +140,7 @@ describe("the evidence arc", () => {
         })}
       />,
     );
-    expect(stagesOf(container)).toEqual(["Версия 2 отправлена", "Работа принята"]);
+    expect(stagesOf(container)).toEqual(["Версия 1 отправлена", "Работа принята"]);
     expect(container.textContent).not.toContain("Получен разбор");
   });
 
@@ -159,7 +159,7 @@ describe("the evidence arc", () => {
     expect(details.open).toBe(false);
     expect(details.querySelector("summary")?.textContent).toBe("История проверки · 4 этапа");
     expect(stagesOf(container)).toEqual([
-      "Версия 2 отправлена", "Получен разбор", "Версия 4 отправлена", "Работа принята",
+      "Версия 1 отправлена", "Получен разбор", "Версия 2 отправлена", "Работа принята",
     ]);
     // The result dominates, outside the disclosure.
     const verdict = container.querySelector(".rpt-verdict")!;
@@ -179,9 +179,9 @@ describe("the evidence arc", () => {
       />,
     );
     expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор",
       "Версия 2 отправлена", "Получен разбор",
-      "Версия 4 отправлена", "Получен разбор",
-      "Версия 6 отправлена", "Работа принята",
+      "Версия 3 отправлена", "Работа принята",
     ]);
     expect(container.querySelector("summary")?.textContent).toBe("История проверки · 6 этапов");
   });
@@ -196,7 +196,7 @@ describe("the evidence arc", () => {
       const { container, unmount } = render(
         <ReportStatusPanel submission={submission("approved", [draftRev(1), sent(2, bad)])} />,
       );
-      expect(stagesOf(container), JSON.stringify(bad)).toEqual(["Версия 2 отправлена"]);
+      expect(stagesOf(container), JSON.stringify(bad)).toEqual(["Версия 1 отправлена"]);
       unmount();
     }
     // …and a malformed review never becomes an acceptance stage.
@@ -204,19 +204,22 @@ describe("the evidence arc", () => {
   });
 
   // 10
-  it("does not silently duplicate a repeated revision number", () => {
+  it("withholds the arc entirely when two entries claim one revision number", () => {
+    /* A repeated storage key cannot be numbered without deciding which of the
+       two is the first version, and that decision is not the surface's to make.
+       Fail closed: no arc, rather than an arc that says something it does not
+       know. Everything else on the panel is untouched. */
     const { container } = render(
       <ReportStatusPanel
         submission={submission("approved", [
           draftRev(1), sent(2, accepted("2026-01-02T12:00:00.000Z")), sent(2, accepted("2026-01-02T12:00:00.000Z")),
-        ])}
+        ], { approvedRevisionNumber: 2 })}
       />,
     );
-    // Both rows are drawn — the panel does not invent a de-duplication rule —
-    // but they are distinguishable and neither is dropped without saying so.
-    const items = container.querySelectorAll(".rpt-arc__item");
-    expect(items.length).toBe(4);
-    expect(new Set(stagesOf(container)).size).toBe(2);
+    expect(stagesOf(container)).toEqual([]);
+    expect(container.querySelector("details")).toBeNull();
+    // The result itself is still stated.
+    expect(container.querySelector(".rpt-verdict")?.textContent).toContain("Работа принята");
   });
 
   // 11
@@ -232,9 +235,9 @@ describe("the evidence arc", () => {
       />,
     );
     expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор",
       "Версия 2 отправлена", "Получен разбор",
-      "Версия 4 отправлена", "Получен разбор",
-      "Версия 6 отправлена", "Работа принята",
+      "Версия 3 отправлена", "Работа принята",
     ]);
   });
 
@@ -257,9 +260,9 @@ describe("the evidence arc", () => {
       />,
     );
     expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор",
       "Версия 2 отправлена", "Получен разбор",
-      "Версия 4 отправлена", "Получен разбор",
-      "Версия 6 отправлена", "Работа принята",
+      "Версия 3 отправлена", "Работа принята",
     ]);
   });
 
@@ -370,7 +373,170 @@ describe("the evidence arc", () => {
       />,
     );
     // No review reported anywhere: versions only, and no acceptance stage.
-    expect(stagesOf(container)).toEqual(["Версия 2 отправлена"]);
+    expect(stagesOf(container)).toEqual(["Версия 1 отправлена"]);
     expect(container.querySelector(".rpt-verdict")?.textContent).toContain("Работа принята");
+  });
+});
+
+describe("the version number a learner is shown", () => {
+  /* Storage numbers count every revision the server ever wrote, autosaves
+     included, so a learner who sent two versions can hold numbers 4 and 6.
+     Printing those says they sent six. The displayed number is the position
+     among the versions actually sent; the storage number stays the key the
+     review travels on and never reaches the screen. */
+  const stored = (n: number, kind: "initial_submission" | "resubmission", review?: unknown): Rev => ({
+    revisionNumber: n, kind, submittedAt: `2026-01-0${(n % 9) + 1}T10:00:00.000Z`,
+    ...(review !== undefined ? { review } : {}),
+  });
+
+  it("[4] reads as Версия 1", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("pending_review", [draftRev(1), draftRev(2), draftRev(3), stored(4, "initial_submission")])}
+      />,
+    );
+    expect(stagesOf(container)).toEqual(["Версия 1 отправлена"]);
+  });
+
+  it("[4, 6] reads as Версия 1 → Версия 2, with the review of 4 between them", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("approved", [
+          draftRev(1), draftRev(2), draftRev(3),
+          stored(4, "initial_submission", rejected("2026-01-04T12:00:00.000Z")),
+          draftRev(5),
+          stored(6, "resubmission", accepted("2026-01-06T12:00:00.000Z")),
+        ], { approvedRevisionNumber: 6 })}
+      />,
+    );
+    expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор", "Версия 2 отправлена", "Работа принята",
+    ]);
+    // The rejection belongs to storage 4 and therefore sits after display V1;
+    // the approval belongs to storage 6 and therefore closes display V2.
+    const labels = stagesOf(container);
+    expect(labels.indexOf("Получен разбор")).toBe(1);
+    expect(labels.indexOf("Работа принята")).toBe(3);
+  });
+
+  it("[2, 5, 9] reads as Версия 1 → Версия 2 → Версия 3, with no gap drawn", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("approved", [
+          draftRev(1), stored(2, "initial_submission", rejected("2026-01-03T12:00:00.000Z")),
+          draftRev(3), draftRev(4), stored(5, "resubmission", rejected("2026-01-06T12:00:00.000Z")),
+          draftRev(6), draftRev(7), draftRev(8),
+          stored(9, "resubmission", accepted("2026-01-10T12:00:00.000Z")),
+        ], { approvedRevisionNumber: 9 })}
+      />,
+    );
+    expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор",
+      "Версия 2 отправлена", "Получен разбор",
+      "Версия 3 отправлена", "Работа принята",
+    ]);
+    // Six stages for three versions — the holes at 3, 4, 6, 7, 8 draw nothing.
+    expect(container.querySelectorAll(".rpt-arc__item")).toHaveLength(6);
+  });
+
+  it("normalises a reordered history before numbering it", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("approved", [
+          stored(9, "resubmission", accepted("2026-01-10T12:00:00.000Z")),
+          stored(2, "initial_submission", rejected("2026-01-03T12:00:00.000Z")),
+          draftRev(1),
+          stored(5, "resubmission", rejected("2026-01-06T12:00:00.000Z")),
+        ], { approvedRevisionNumber: 9 })}
+      />,
+    );
+    expect(stagesOf(container)).toEqual([
+      "Версия 1 отправлена", "Получен разбор",
+      "Версия 2 отправлена", "Получен разбор",
+      "Версия 3 отправлена", "Работа принята",
+    ]);
+  });
+
+  it("shows no storage number in the text or the accessibility tree", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("approved", [
+          draftRev(1), stored(4, "initial_submission", rejected("2026-01-05T12:00:00.000Z")),
+          stored(6, "resubmission", rejected("2026-01-07T12:00:00.000Z")),
+          stored(9, "resubmission", accepted("2026-01-10T12:00:00.000Z")),
+        ], { approvedRevisionNumber: 9, submittedRevisionNumber: 9 })}
+      />,
+    );
+    const text = container.textContent ?? "";
+    const labels = [...container.querySelectorAll("[aria-label]")].map((n) => n.getAttribute("aria-label") ?? "");
+    for (const where of [text, ...labels]) {
+      for (const raw of ["Версия 4", "Версия 6", "Версия 9", "№4", "№6", "№9", "v4", "v6", "v9"]) {
+        expect(where, raw).not.toContain(raw);
+      }
+    }
+    /* A stage row carries no accessible name of its own: its text IS the name,
+       so there is no second place a storage number could be smuggled into. */
+    expect(container.querySelectorAll(".rpt-arc__item[aria-label]")).toHaveLength(0);
+    expect(container.querySelectorAll(".rpt-arc__list [aria-label]")).toHaveLength(0);
+    for (const label of labels) {
+      expect(label, label).not.toMatch(/\d/);
+    }
+    expect(stagesOf(container).filter((l) => l?.startsWith("Версия"))).toEqual([
+      "Версия 1 отправлена", "Версия 2 отправлена", "Версия 3 отправлена",
+    ]);
+  });
+
+  it("names the reviewed version the same way the arc does", () => {
+    const { container } = render(
+      <ReportStatusPanel
+        submission={submission("rejected", [
+          draftRev(1), draftRev(2), draftRev(3),
+          stored(4, "initial_submission", rejected("2026-01-05T12:00:00.000Z")),
+        ], {
+          submittedRevisionNumber: 4,
+          rejection: {
+            reasonCode: "detail", reasonTitle: "Нужна конкретика",
+            humanComment: "synthetic comment", correctiveAction: "synthetic corrective action",
+            reviewedAt: "2026-01-05T12:00:00.000Z",
+          },
+        })}
+      />,
+    );
+    // One version on screen, one number for it — «Проверялась версия №1».
+    expect(container.querySelector(".rpt-feedback__which")?.textContent).toBe("Проверялась версия №1.");
+    expect(container.textContent).not.toContain("№4");
+  });
+
+  it("leaves the commands and their concurrency guard on the storage number", () => {
+    /* The ordinal is presentation and must not have leaked into anything that
+       talks to the server: `expectedRevision` and the submit/resubmit wiring
+       still carry the server's own revision. */
+    const client = src("src/lib/report/report-client.ts");
+    const level = src("src/features/report/level-report.tsx");
+    /* Counted, not merely present: renaming one of the three command payloads
+       would leave the word in the file and change what goes on the wire. */
+    expect((client.match(/expectedRevision/g) ?? []).length).toBe(8);
+    expect((client.match(/jsonBody: \{ expectedRevision/g) ?? []).length).toBe(3);
+    expect(client).not.toMatch(/expectedRevision[A-Za-z]/);
+    for (const file of [client, level]) {
+      expect(file).not.toContain("displayVersionOf");
+      expect(file).not.toContain("sentVersions");
+    }
+    const panel = src("src/features/report/components/report-status-panel.tsx");
+    /* The panel issues no command. Checked by the calls, not by the letters:
+       `submittedAt`, `initial_submission` and `resubmission` are field and kind
+       names it legitimately reads. */
+    expect(panel).not.toContain("expectedRevision");
+    for (const call of [/submitReport/, /resubmitReport/, /saveDraft/, /fetch\(/, /\buseState\b/]) {
+      expect(panel, String(call)).not.toMatch(call);
+    }
+  });
+
+  it("gives a draft no version number at all", () => {
+    const { container } = render(
+      <ReportStatusPanel submission={submission("draft", [draftRev(1), draftRev(2)])} />,
+    );
+    expect(stagesOf(container)).toEqual([]);
+    expect(container.textContent).not.toContain("Версия");
   });
 });

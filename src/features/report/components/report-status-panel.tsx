@@ -19,6 +19,11 @@
  * contributes no review stage. A resubmission is not evidence that a review
  * happened; it is evidence that a resubmission happened.
  *
+ * NUMBERING IS PRESENTATION ONLY. Every displayed version is a real sent
+ * revision; the ordinal only renames it. Correlation, ordering and every
+ * command still use the server's `revisionNumber`, which this file never
+ * prints.
+ *
  * Exposes no reviewer identity, no reviewer-private scores, no internal ids, no
  * rubric internals and none of the learner's own answer text.
  */
@@ -35,36 +40,64 @@ const KIND_LABEL: Record<ReportSubmission["history"][number]["kind"], string> = 
 type Stage = { key: string; label: string; at: string | null };
 
 /**
- * THE VERSION NUMBER IS THE SERVER'S, NOT A COUNTER.
+ * THE VERSIONS THE LEARNER ACTUALLY SENT, in the server's canonical order.
  *
- * Draft autosaves take numbers from the same sequence, so a learner's first
- * submitted version is rarely number one — on PREPROD today it is usually two,
- * and later ones are four, five or six. Renumbering the list 1, 2, 3 would read
- * more neatly and would name versions that do not exist; the number shown is
- * the one the server assigned.
+ * `revisionNumber` counts every stored revision including the draft autosaves,
+ * so it is a storage key, not a count of anything the learner did. On PREPROD
+ * not one of the nine reports has its sent versions numbered from one: they run
+ * 2, or 4 and 6, or 2 and 5. Ordering by it is right — it is the canonical
+ * order and the only one that survives equal timestamps — but printing it is
+ * not: «Версия 4 → Версия 6» tells someone who sent two versions that they sent
+ * six.
+ *
+ * FAIL CLOSED ON A REPEATED KEY. Two entries claiming the same revision number
+ * is a history that cannot be numbered without guessing which is which, so
+ * nothing is numbered: the arc is withheld rather than invented. The rest of
+ * the panel is unaffected.
  */
-function stagesOf(submission: ReportSubmission): Stage[] {
-  const stages: Stage[] = [];
-  const submitted = submission.history
+function sentVersions(submission: ReportSubmission): ReportSubmission["history"] {
+  const sent = submission.history
     .filter((revision) => revision.kind !== "draft_autosave")
     .slice()
     .sort((left, right) => left.revisionNumber - right.revisionNumber);
+  const keys = new Set(sent.map((revision) => revision.revisionNumber));
+  return keys.size === sent.length ? sent : [];
+}
 
-  for (const revision of submitted) {
+/**
+ * The number a learner is shown: the position of a sent version among the sent
+ * versions, first is one. It is assigned AFTER the canonical sort, so it is a
+ * label for a real revision and never an identifier of its own — the review
+ * still travels with its revision object, and nothing is ever matched by this
+ * ordinal or by a timestamp.
+ */
+function stagesOf(submission: ReportSubmission): Stage[] {
+  const stages: Stage[] = [];
+  const sent = sentVersions(submission);
+
+  sent.forEach((revision, index) => {
+    const version = index + 1;
     stages.push({
       key: `v${revision.revisionNumber}`,
-      label: `Версия ${revision.revisionNumber} отправлена`,
+      label: `Версия ${version} отправлена`,
       at: revision.submittedAt,
     });
     const review = reportReviewEventOf(revision);
-    if (!review) continue;
+    if (!review) return;
     stages.push({
       key: `${review.decision}-${revision.revisionNumber}`,
       label: review.decision === "approved" ? "Работа принята" : "Получен разбор",
       at: review.reviewedAt,
     });
-  }
+  });
   return stages;
+}
+
+/** The displayed number of one stored revision, or null when it is not shown. */
+function displayVersionOf(submission: ReportSubmission, revisionNumber: number | null): number | null {
+  if (revisionNumber === null) return null;
+  const index = sentVersions(submission).findIndex((r) => r.revisionNumber === revisionNumber);
+  return index === -1 ? null : index + 1;
 }
 
 /** «1 этап», «2 этапа», «5 этапов» — the summary counts what is inside it. */
@@ -126,8 +159,13 @@ export function ReportStatusPanel({ submission }: { submission: ReportSubmission
               <span className="rpt-feedback__label">Что сделать:</span> {submission.rejection.correctiveAction}
             </p>
           ) : null}
-          {submission.submittedRevisionNumber !== null ? (
-            <p className="rpt-feedback__which">Проверялась версия №{submission.submittedRevisionNumber}.</p>
+          {/* THE SAME VERSION MUST HAVE THE SAME NUMBER on the same screen.
+              This line named the storage key, so a learner reading it beside an
+              arc that says «Версия 1» would see two numbers for one thing. */}
+          {displayVersionOf(submission, submission.submittedRevisionNumber) !== null ? (
+            <p className="rpt-feedback__which">
+              Проверялась версия №{displayVersionOf(submission, submission.submittedRevisionNumber)}.
+            </p>
           ) : null}
         </div>
       ) : null}
