@@ -9,7 +9,7 @@
  */
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
-import { sessionCookieToForward } from "@/lib/auth/constants";
+import { sessionCookieHeader } from "@/lib/auth/constants";
 import { isBackendSessionResponse } from "@/lib/api/types";
 import { toAcademyViewer, type AcademyViewer } from "@/lib/api/viewer";
 
@@ -20,7 +20,7 @@ export async function getServerViewer(): Promise<AcademyViewer | null> {
   }
 
   const cookieStore = await cookies();
-  const sessionCookie = sessionCookieToForward((name) => cookieStore.get(name));
+  const sessionCookie = sessionCookieHeader((name) => cookieStore.get(name));
   if (!sessionCookie) {
     return null;
   }
@@ -30,7 +30,7 @@ export async function getServerViewer(): Promise<AcademyViewer | null> {
   try {
     const response = await fetch(`${config.backendOrigin}/api/auth/me`, {
       headers: {
-        cookie: `${sessionCookie.name}=${sessionCookie.value}`,
+        cookie: sessionCookie,
         accept: "application/json",
       },
       cache: "no-store",

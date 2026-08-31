@@ -9,7 +9,7 @@
  */
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
-import { sessionCookieToForward } from "@/lib/auth/constants";
+import { sessionCookieHeader } from "@/lib/auth/constants";
 import { REQUEST_ID_HEADER } from "@/lib/api/errors";
 import {
   isBackendCurriculumEnvelope,
@@ -34,9 +34,9 @@ async function backendGet(path: string): Promise<RawResponse | { kind: "config" 
   if (config.mode !== "api" || !config.backendOrigin) return { kind: "config" };
 
   const cookieStore = await cookies();
-  const session = sessionCookieToForward((name) => cookieStore.get(name));
+  const session = sessionCookieHeader((name) => cookieStore.get(name));
   const headers = new Headers({ accept: "application/json" });
-  if (session) headers.set("cookie", `${session.name}=${session.value}`);
+  if (session) headers.set("cookie", session);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);

@@ -26,7 +26,7 @@
  */
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
-import { sessionCookieToForward } from "@/lib/auth/constants";
+import { sessionCookieHeader } from "@/lib/auth/constants";
 
 /** The canonical report lifecycle, exactly as the Backend names it. */
 export type CanonicalReportState = "available" | "draft" | "pending_review" | "rejected" | "approved";
@@ -47,7 +47,7 @@ export async function readReportState(stableCode: string): Promise<CanonicalRepo
   if (config.mode !== "api" || !config.backendOrigin) return null;
 
   const cookieStore = await cookies();
-  const session = sessionCookieToForward((name) => cookieStore.get(name));
+  const session = sessionCookieHeader((name) => cookieStore.get(name));
   if (!session) return null;
 
   const controller = new AbortController();
@@ -59,7 +59,7 @@ export async function readReportState(stableCode: string): Promise<CanonicalRepo
         method: "GET",
         headers: new Headers({
           accept: "application/json",
-          cookie: `${session.name}=${session.value}`,
+          cookie: session,
         }),
         cache: "no-store",
         redirect: "manual",

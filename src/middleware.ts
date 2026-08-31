@@ -1,9 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  LEGACY_SESSION_COOKIE_NAME,
-  PATHNAME_HEADER,
-  SESSION_COOKIE_NAME,
-} from "@/lib/auth/constants";
+import { PATHNAME_HEADER, hasAnySessionCookie } from "@/lib/auth/constants";
 
 /**
  * Authenticated route protection.
@@ -81,10 +77,7 @@ export function middleware(request: NextRequest): NextResponse {
      forwards the cookie to the Backend, which is the only authority on whether
      the session is real. Either name counts, so the cutover order between the
      two releases cannot produce a redirect loop. */
-  if (
-    !request.cookies.has(SESSION_COOKIE_NAME) &&
-    !request.cookies.has(LEGACY_SESSION_COOKIE_NAME)
-  ) {
+  if (!hasAnySessionCookie((name) => request.cookies.has(name))) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);

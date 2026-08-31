@@ -27,20 +27,39 @@ export const LEGACY_SESSION_COOKIE_NAME = "trading_platform_session";
 export const PATHNAME_HEADER = "x-academy-pathname";
 
 /**
- * The session cookie to forward, under the name it actually arrived as.
+ * Every session cookie the browser sent, as a `Cookie` header value.
  *
- * Returns null when neither name is present, which the callers treat as "no
- * session" — the same answer they gave before. The name is returned with the
- * value because the Backend is told which cookie it is receiving; forwarding a
- * legacy value under the new name would be a small lie that the Backend would
- * then have to unpick.
+ * FORWARD BOTH WHEN BOTH ARE THERE. An earlier version of this chose one — the
+ * new name if present, otherwise the legacy one — and that choice is what made
+ * the cutover order fragile. A Backend that reads only `trading_platform_session`
+ * and a Backend that reads only `__Host-…` cannot both be satisfied by a single
+ * forwarded cookie, so during the window when either might be active, the
+ * honest thing is to send everything the browser has and let the Backend pick
+ * the one it understands.
+ *
+ *   legacy only  ->  legacy
+ *   new only     ->  new
+ *   both         ->  both, each under its own name
+ *   neither      ->  null, which every caller treats as "no session"
+ *
+ * Names are preserved exactly. Forwarding a legacy value under the new name
+ * would be a small lie the Backend would then have to unpick.
+ *
+ * THE ACADEMY STILL VERIFIES NOTHING. This is transport. The Backend is the
+ * only authority on whether any of these means anything.
  */
-export function sessionCookieToForward(
+export function sessionCookieHeader(
   read: (name: string) => { value: string } | undefined,
-): { name: string; value: string } | null {
-  const current = read(SESSION_COOKIE_NAME);
-  if (current) return { name: SESSION_COOKIE_NAME, value: current.value };
-  const legacy = read(LEGACY_SESSION_COOKIE_NAME);
-  if (legacy) return { name: LEGACY_SESSION_COOKIE_NAME, value: legacy.value };
-  return null;
+): string | null {
+  const parts: string[] = [];
+  for (const name of [SESSION_COOKIE_NAME, LEGACY_SESSION_COOKIE_NAME]) {
+    const cookie = read(name);
+    if (cookie) parts.push(`${name}=${cookie.value}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : null;
+}
+
+/** True when the browser sent either session cookie. Routing hint only. */
+export function hasAnySessionCookie(has: (name: string) => boolean): boolean {
+  return has(SESSION_COOKIE_NAME) || has(LEGACY_SESSION_COOKIE_NAME);
 }
