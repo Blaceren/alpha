@@ -16,13 +16,15 @@ pass=0; fail=0
 ok(){ printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  FAIL %s\n' "$1"; printf '       %s\n' "${2:-}"; fail=$((fail+1)); }
 
-REPOS="academy backend crm"
+REPOS="academy backend crm partner"
+# partner lives in the affiliate workspace, and always has.
+repo_dir() { case "$1" in partner) echo /home/ubuntu/affiliate-work/partner ;; *) echo /home/ubuntu/learner-ops-v1/$1 ;; esac; }
 ROOT=/home/ubuntu/learner-ops-v1
 
 # --- A. every repo declares both, and they agree ----------------------------
 declare -A NVMRC ENGINES
 for r in $REPOS; do
-  d="$ROOT/$r"
+  d="$(repo_dir "$r")"
   NVMRC[$r]="$(tr -d ' \n' < "$d/.nvmrc" 2>/dev/null || echo MISSING)"
   ENGINES[$r]="$(node -p "JSON.parse(require('fs').readFileSync('$d/package.json','utf8')).engines?.node ?? 'MISSING'" 2>/dev/null)"
   [ "${NVMRC[$r]}" != "MISSING" ] && ok "A $r has .nvmrc (${NVMRC[$r]})" || no "A $r has .nvmrc"
@@ -62,7 +64,7 @@ fi
 
 # --- E. the lockfiles carry the same root engines ---------------------------
 for r in $REPOS; do
-  LOCK="$(node -p "JSON.parse(require('fs').readFileSync('$ROOT/$r/package-lock.json','utf8')).packages['']?.engines?.node ?? 'MISSING'" 2>/dev/null)"
+  LOCK="$(node -p "JSON.parse(require('fs').readFileSync('$(repo_dir "$r")/package-lock.json','utf8')).packages['']?.engines?.node ?? 'MISSING'" 2>/dev/null)"
   [ "$LOCK" = "${ENGINES[$r]}" ] && ok "E $r lockfile root engines match package.json" \
     || no "E $r lockfile root engines match package.json" "lock says '$LOCK', package.json says '${ENGINES[$r]}'"
 done
@@ -71,7 +73,7 @@ done
 # `engines-strict` is what turns the declaration into a refusal. Assert the
 # mechanism exists rather than trusting that npm happens to enforce it.
 for r in $REPOS; do
-  NPMRC="$ROOT/$r/.npmrc"
+  NPMRC="$(repo_dir "$r")/.npmrc"
   if [ -f "$NPMRC" ] && grep -qE '^engine-strict *= *true' "$NPMRC"; then
     ok "F $r sets engine-strict=true, so a wrong Node fails before install"
   else
