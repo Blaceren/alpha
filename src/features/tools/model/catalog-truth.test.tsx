@@ -49,11 +49,18 @@ const shown = (progress: PathProgress, access: ReturnType<typeof toolAccessOpeni
 
 /** The release this phase was cut from; its footprint is measured against it. */
 const BASE = "d32f54fb15b6f9bdd80193d761437e2a026bd5f2";
+/**
+ * …and the commit it shipped as. The footprint is a CLOSED question, so it is
+ * measured over its own range rather than against the working tree: a diff that
+ * ends at HEAD grows with every later phase and starts failing for work this
+ * file was never about. Each later phase is bounded by its own scope test.
+ */
+const MINE = "209345dc72ac9a045db62256aa2b83c76e62393a";
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
 describe("this phase stayed inside its scope", () => {
-  const changed = git("diff", "--name-only", BASE, "--", "src/", "public/")
+  const changed = git("diff", "--name-only", BASE, MINE, "--", "src/", "public/")
     .split("\n")
     .filter(Boolean)
     .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));

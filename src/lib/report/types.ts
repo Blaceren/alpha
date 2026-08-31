@@ -98,11 +98,33 @@ export type ReportRejection = {
   reviewedAt: string;
 };
 
+/**
+ * One completed review of one revision, as the Backend now reports it.
+ *
+ * An ACCEPTANCE carries its decision and its time and nothing else: the four
+ * rejection fields are null, because an acceptance did not say those things.
+ */
+export type LearnerReportReviewEvent = {
+  decision: "approved" | "rejected";
+  reviewedAt: string;
+  reasonCode: string | null;
+  reasonTitle: string | null;
+  humanComment: string | null;
+  correctiveAction: string | null;
+};
+
 export type ReportRevisionSummary = {
   revisionNumber: number;
   kind: "draft_autosave" | "initial_submission" | "resubmission";
   createdAt: string;
   submittedAt: string | null;
+  /**
+   * ADDITIVE AND OPTIONAL. A Backend that predates this field simply omits it,
+   * and everything that worked before still works: the field's absence means
+   * "not known", never "no review happened", and the surface shows no stage for
+   * it rather than inventing one.
+   */
+  review?: LearnerReportReviewEvent | null;
 };
 
 export type ReportStatus = "draft" | "pending_review" | "approved" | "rejected";
@@ -217,6 +239,40 @@ function isSubmissionShape(value: unknown): value is ReportSubmission {
   if (!isObject(value.fieldValues)) return false;
   if (!Array.isArray(value.history)) return false;
   return true;
+}
+
+/**
+ * THE ONE READER of a revision's review, and it fails closed.
+ *
+ * Absent, null, malformed, or carrying a decision this build does not know all
+ * give the same answer: null. The surface then shows no review stage for that
+ * version — which is the honest reading of "the Backend did not tell us" and is
+ * the opposite of reconstructing the stage from the fact that a later version
+ * exists.
+ */
+export function reportReviewEventOf(revision: unknown): LearnerReportReviewEvent | null {
+  if (!isObject(revision)) return null;
+  const value = revision.review;
+  if (!isObject(value)) return null;
+  if (value.decision !== "approved" && value.decision !== "rejected") return null;
+  if (typeof value.reviewedAt !== "string" || value.reviewedAt.length === 0) return null;
+  const optional = (key: string): string | null | undefined => {
+    const field = value[key];
+    if (field === null || field === undefined) return null;
+    return typeof field === "string" ? field : undefined;
+  };
+  const reasonCode = optional("reasonCode");
+  const reasonTitle = optional("reasonTitle");
+  const humanComment = optional("humanComment");
+  const correctiveAction = optional("correctiveAction");
+  if (reasonCode === undefined || reasonTitle === undefined || humanComment === undefined || correctiveAction === undefined) {
+    return null;
+  }
+  return {
+    decision: value.decision,
+    reviewedAt: value.reviewedAt,
+    reasonCode, reasonTitle, humanComment, correctiveAction,
+  };
 }
 
 export function isReportContext(value: unknown): value is ReportContext {

@@ -22,10 +22,18 @@ import { join } from "node:path";
 
 const ROOT = process.cwd();
 const PRE_SEAM = "b75f1537de5bf2abe9bf99e171f4779785a547de";
+/* `report-status-panel.tsx` LEFT THIS LIST in ATA-REPORT-EVIDENCE-CONTRACT-1.
+
+   Byte-equivalence is the right instrument only where nothing but presentation
+   could have moved. The panel gained real behaviour — it now draws the review
+   of each revision, which the contract did not carry before — so normalising
+   that away would turn a genuine change into a silent one. What it renders is
+   asserted directly in `features/report/evidence-arc.test.tsx`, including that
+   it invents no stage. The seam's own concern, that the workspace form did not
+   change, is untouched: the other three files are still held here. */
 const COMPONENTS = [
   "src/features/report/level-report.tsx",
   "src/features/report/components/report-field.tsx",
-  "src/features/report/components/report-status-panel.tsx",
   "src/features/report/components/validation-summary.tsx",
 ];
 
@@ -110,8 +118,22 @@ describe("Workspace form — the seam is presentation only", () => {
   });
 
   it("leaves the product's own report stylesheet byte-identical inside its layer", () => {
+    /* UNCHANGED CLAIM, ONE BLOCK EXCISED FIRST.
+       This still compares every declaration the seam measured, exactly as it
+       did — the seam wrapped the sheet in a layer without touching a single
+       declaration, and that is what is being held. What changed is that a later
+       phase appended the evidence arc's own rules, so the comparison is made
+       against the sheet with that block removed. If the arc block were ever to
+       edit an existing rule instead of adding its own, the excision would not
+       reproduce the earlier declaration list and this would fail. */
     const before = git("show", `${PRE_SEAM}:src/features/report/report.css`);
-    const after = readFileSync(join(ROOT, "src/features/report/report.css"), "utf8");
+    const whole = readFileSync(join(ROOT, "src/features/report/report.css"), "utf8");
+    const opensAt = whole.indexOf("/* --- the evidence arc --- */");
+    const closesAt = whole.indexOf("/* --- done / completed --- */");
+    expect(opensAt, "the arc block is missing").toBeGreaterThan(-1);
+    expect(closesAt).toBeGreaterThan(opensAt);
+    const arc = whole.slice(opensAt, closesAt);
+    const after = whole.slice(0, opensAt) + whole.slice(closesAt);
     const declarations = (css: string) => {
       const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
       return [...bare.matchAll(/\{([^{}]*)\}/g)]
@@ -120,7 +142,11 @@ describe("Workspace form — the seam is presentation only", () => {
         .filter(Boolean);
     };
     expect(declarations(after)).toEqual(declarations(before));
-    expect(after).toContain("@layer ata-report-base {");
+    // And the excised block only ever declares the arc's own selectors.
+    for (const selector of arc.match(/^\.[\w-]+[^{]*\{/gm) ?? []) {
+      expect(selector.trim(), selector).toMatch(/^\.rpt-(arc|verdict)/);
+    }
+    expect(whole).toContain("@layer ata-report-base {");
   });
 });
 

@@ -159,6 +159,12 @@ describe("the authenticated route group", () => {
     "src/features/public-home/public-home-header.tsx",
     "src/features/public-home/public-home-screen.tsx",
     "src/features/public-home/public-home.css",
+    /* ATA-REPORT-EVIDENCE-CONTRACT-1: the review a learner was never shown.
+       Presentation and a fail-closed reader only — no route, no navigation, no
+       progression and no Backend call; evidence-arc.test.tsx pins what they
+       render. */
+    "src/features/report/components/report-status-panel.tsx",
+    "src/features/report/report.css",
     "src/features/tools-fidelity/tool-fidelity-surface.tsx",
     "src/features/tools-fidelity/tools-fidelity.tsx",
     "src/features/tools/components/tool-surface.tsx",
@@ -174,6 +180,7 @@ describe("the authenticated route group", () => {
     "src/lib/curriculum/backend-dto.ts",
     "src/lib/curriculum/completion-method.ts",
     "src/lib/curriculum/view-model.ts",
+    "src/lib/report/types.ts",
     "src/middleware.ts",
     "src/server/auth/server-session.ts",
     "src/server/curriculum/report-state-read.ts",
