@@ -5,6 +5,7 @@ import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
 import { PathFidelityScreen } from "@/features/path-fidelity/path-fidelity-screen";
 import "@/features/path/path.css";
+import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
   title: "Путь — Alfa Trade Academy",
@@ -32,7 +33,7 @@ export default async function PathPage({
   }
   const { scenario } = params;
   return (
-    <AppShell userName="Артём" activeId="path">
+    <AppShell userName={await shellViewerName()} activeId="path">
       <PathWorkspace scenario={resolvePathScenario(scenario)} />
     </AppShell>
   );

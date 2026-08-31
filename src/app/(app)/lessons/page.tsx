@@ -6,6 +6,7 @@ import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
 import { LessonsFidelityScreen } from "@/features/lessons-fidelity/lessons-fidelity-screen";
 import "@/features/lessons-library/lessons-library.css";
+import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
   title: "Уроки — Alfa Trade Academy",
@@ -57,7 +58,7 @@ export default async function LessonsLibraryPage({
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
 
   return (
-    <AppShell userName="Артём" activeId="lessons">
+    <AppShell userName={await shellViewerName()} activeId="lessons">
       <LessonsLibraryWorkspace moduleParam={moduleParam} scenario={scenario} />
     </AppShell>
   );

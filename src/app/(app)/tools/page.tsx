@@ -7,6 +7,7 @@ import { projectTools } from "@/features/tools/model/tools-projection";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
+import { shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import { canonicalToolProgress } from "@/features/tools/model/canonical-progress";
 import "@/features/tools/tools.css";
@@ -54,7 +55,7 @@ export default async function ToolsPage({
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
 
   return (
-    <AppShell userName="Артём" activeId="tools" notificationPresence={<UnreadPresence />}>
+    <AppShell userName={await shellViewerName()} activeId="tools" notificationPresence={<UnreadPresence />}>
       <ToolsHub scenario={scenario} />
     </AppShell>
   );

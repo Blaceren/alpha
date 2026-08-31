@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getLevelDetail } from "@/lib/curriculum/provider";
 import type { AcademyLevelContent, AcademyLevelSummary } from "@/lib/curriculum/academy-view";
 import { deriveNextAction, explainLevelState } from "@/lib/curriculum/next-action";
@@ -128,7 +129,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
         <CurriculumErrorState headingLevel="h1" error={result.error} />
       );
     return (
-      <AppShell userName={name} activeId="lessons" frozenSurface>
+      <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
         <div className="ax ld">{body}</div>
       </AppShell>
     );
@@ -201,7 +202,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
   };
 
   return (
-    <AppShell userName={name} activeId="lessons" frozenSurface>
+    <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="ax ld">
         <article data-level={summary.levelCode} data-state={summary.state} data-posture={posture}>
           <header className="ax-lvlhead">

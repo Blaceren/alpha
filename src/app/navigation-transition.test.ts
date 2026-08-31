@@ -86,48 +86,48 @@ describe("the authenticated route group", () => {
    * has not come back, and no surface body has moved except where the owner
    * authorised it.
    */
-  const BASE = "7c52c387faa6d964b83e2876e9db32f871c37b3e";
+  /* Re-based again on the release that shipped, which is where the internal-link
+     class was closed. From here the question is what SHELL-VIEWER-IDENTITY-2
+     moved, and nothing else. */
+  const BASE = "c54f5f5358fe2ea9dafc9fa0b74375b117fecb73";
 
   /* Every file the owner authorised converting from a bare `<a>` to
      `next/link` — the whole confirmed internal-route class.
      AUTHENTICATED-NAVIGATION-FULL-LOAD-1; the anchors themselves are pinned by
      the AST gate in navigation-links.test.tsx. */
-  const AUTHORISED_LINK_SWAPS = [
-    "src/features/academy-experience/lessons-screen.tsx",
-    "src/features/academy-experience/level-completion.tsx",
+  /* Every file SHELL-VIEWER-IDENTITY-2 was authorised to move: eleven shells
+     that named a fixture learner now read the viewer, and the one reachable
+     shell that withheld the unread mark now passes it. The link swaps of the
+     previous phase are inside BASE and are pinned by the AST gate. */
+  const AUTHORISED_VIEWER_IDENTITY = [
+    "src/app/(app)/home/page.tsx",
+    "src/app/(app)/lessons/[levelCode]/page.tsx",
+    "src/app/(app)/lessons/page.tsx",
+    "src/app/(app)/path/page.tsx",
+    "src/app/(app)/tools/[toolCode]/page.tsx",
+    "src/app/(app)/tools/page.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
-    "src/features/academy-experience/notifications-screen.tsx",
-    "src/features/academy-experience/path-screen.tsx",
-    "src/features/academy-experience/primitives.tsx",
-    "src/features/academy-experience/profile-screen.tsx",
-    "src/features/assessment/level-assessment.tsx",
-    "src/features/auth-home-fidelity/auth-home-field.tsx",
-    "src/features/curriculum-api/api-level-detail.tsx",
-    "src/features/curriculum-api/api-screens.tsx",
-    "src/features/lesson-reader/lesson-blocks.tsx",
-    "src/features/lessons-fidelity/lessons-corpus.tsx",
-    "src/features/notifications-fidelity/notifications-fidelity.tsx",
-    "src/features/path-fidelity/path-fidelity-view.tsx",
-    "src/features/pocket-registration/pocket-registration-confirmed.tsx",
-    "src/features/profile-fidelity/profile-fidelity.tsx",
-    "src/features/reader-fidelity/reader-blocks.tsx",
-    "src/features/reader-fidelity/reader-body.tsx",
-    "src/features/reader-fidelity/reader-unavailable.tsx",
-    "src/features/report/level-report.tsx",
+    "src/server/auth/server-session.ts",
   ];
 
   it("has brought no loading boundary back since the release", () => {
+    /* The route group's own boundary is asserted absent above. What this adds is
+       that nothing under src/app has moved except the shells the owner
+       authorised — a new loading.tsx would show up here as a file that is not on
+       the list. */
     const changed = git("diff", "--name-only", BASE, "--", "src/app")
       .split("\n").filter(Boolean)
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
-    expect(changed).toEqual([]);
+    const unauthorised = changed.filter((f) => !AUTHORISED_VIEWER_IDENTITY.includes(f));
+    expect(unauthorised).toEqual([]);
+    expect(changed.filter((f) => f.endsWith("loading.tsx"))).toEqual([]);
   });
 
-  it("touches no surface body beyond the authorised link swaps", () => {
+  it("touches no surface body beyond the authorised viewer-identity change", () => {
     const changed = git("diff", "--name-only", BASE, "--", "src/")
       .split("\n").filter(Boolean)
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
-    expect(changed.sort()).toEqual(AUTHORISED_LINK_SWAPS);
+    expect(changed.sort()).toEqual(AUTHORISED_VIEWER_IDENTITY);
     for (const prefix of [
       "src/features/home", "src/features/level-detail-fidelity",
       "src/features/workspace", "src/features/tools", "src/features/tools-fidelity",

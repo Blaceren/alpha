@@ -4,6 +4,7 @@ import { HomeScreen } from "@/features/home/home-screen";
 import { resolveScenario } from "@/domain/home";
 import { getAcademyConfig } from "@/config/academy-config";
 import { AuthHomeScreen } from "@/features/auth-home-fidelity/auth-home-screen";
+import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
   title: "Главная — Alfa Trade Academy",
@@ -36,7 +37,7 @@ export default async function HomePage({
   }
   const { scenario } = await searchParams;
   return (
-    <AppShell userName="Артём" activeId="home">
+    <AppShell userName={await shellViewerName()} activeId="home">
       <HomeScreen scenario={resolveScenario(scenario)} />
     </AppShell>
   );

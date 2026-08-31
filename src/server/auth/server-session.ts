@@ -55,3 +55,25 @@ export async function getServerViewer(): Promise<AcademyViewer | null> {
     clearTimeout(timeout);
   }
 }
+
+/**
+ * SHELL-VIEWER-IDENTITY-2 — the shell's name, from the one authority.
+ *
+ * Every authenticated surface had written `viewer?.name ?? "Ученик"` for itself,
+ * and the surfaces that predate that convention wrote a fixture name instead:
+ * eleven shells said «Артём» regardless of who was looking. Those eleven all sit
+ * in fixture-mode branches, so nothing shipped with a stranger's name on it —
+ * but the fallback is what a page reaches for when it has no viewer, and a
+ * fixture name is not a fallback. It is a different person.
+ *
+ * The neutral fallback is unchanged: a surface that cannot know who is looking
+ * says «Ученик», which claims nothing.
+ *
+ * The route-level `loading.tsx` and `error.tsx` shells keep the literal. A
+ * suspense fallback must render without awaiting anything, and an error
+ * boundary is a client component — neither can consult the server viewer, and
+ * neither should pretend to.
+ */
+export async function shellViewerName(): Promise<string> {
+  return (await getServerViewer())?.name ?? "Ученик";
+}

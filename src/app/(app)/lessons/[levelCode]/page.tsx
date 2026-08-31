@@ -21,6 +21,7 @@ import { getAcademyConfig } from "@/config/academy-config";
 import { ExperienceLevelDetail } from "@/features/academy-experience/level-detail-screen";
 import "@/features/lesson/lesson.css";
 import "@/features/report-level/report-level.css";
+import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
   title: "Урок — Alfa Trade Academy",
@@ -66,7 +67,7 @@ export default async function LessonPage({
 
   if (levelNumber === null) {
     return (
-      <AppShell userName="Артём" activeId="lessons">
+      <AppShell userName={await shellViewerName()} activeId="lessons">
         <div className="lesson-page">
           <LessonUnknown />
         </div>
@@ -91,7 +92,7 @@ export default async function LessonPage({
   const reportDefinition = getReportDefinition(levelNumber);
   if (reportDefinition) {
     return (
-      <AppShell userName="Артём" activeId="lessons">
+      <AppShell userName={await shellViewerName()} activeId="lessons">
         <ReportWorkspace
           definition={reportDefinition}
           scenario={resolvePathScenario(rawScenario)}
@@ -128,7 +129,7 @@ export default async function LessonPage({
   if (baseRouteAvailability(levelNumber, marker) === "locked") {
     if (!level) {
       return (
-        <AppShell userName="Артём" activeId="lessons">
+        <AppShell userName={await shellViewerName()} activeId="lessons">
           <div className="lesson-page">
             <LessonUnknown />
           </div>
@@ -137,7 +138,7 @@ export default async function LessonPage({
     }
 
     return (
-      <AppShell userName="Артём" activeId="lessons">
+      <AppShell userName={await shellViewerName()} activeId="lessons">
         <LessonSessionGate
           levelNumber={levelNumber}
           marker={marker}
@@ -159,7 +160,7 @@ export default async function LessonPage({
 
   if (!entry) {
     return (
-      <AppShell userName="Артём" activeId="lessons">
+      <AppShell userName={await shellViewerName()} activeId="lessons">
         <div className="lesson-page">
           <LessonUnknown levelNumber={levelNumber} />
         </div>
@@ -167,5 +168,5 @@ export default async function LessonPage({
     );
   }
 
-  return <AppShell userName="Артём" activeId="lessons">{openView}</AppShell>;
+  return <AppShell userName={await shellViewerName()} activeId="lessons">{openView}</AppShell>;
 }
