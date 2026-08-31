@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME, PATHNAME_HEADER } from "@/lib/auth/constants";
+import {
+  LEGACY_SESSION_COOKIE_NAME,
+  PATHNAME_HEADER,
+  SESSION_COOKIE_NAME,
+} from "@/lib/auth/constants";
 
 /**
  * Authenticated route protection.
@@ -72,7 +76,15 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  if (!request.cookies.has(SESSION_COOKIE_NAME)) {
+  /* PRESENCE, NOT PROOF. This decides whether to render a shell or send the
+     visitor to /login; it authenticates nothing. Every authenticated read
+     forwards the cookie to the Backend, which is the only authority on whether
+     the session is real. Either name counts, so the cutover order between the
+     two releases cannot produce a redirect loop. */
+  if (
+    !request.cookies.has(SESSION_COOKIE_NAME) &&
+    !request.cookies.has(LEGACY_SESSION_COOKIE_NAME)
+  ) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);
@@ -99,11 +111,10 @@ export function middleware(request: NextRequest): NextResponse {
  * learner data, they are identical for every visitor, and they were already
  * being served to anyone who happened to hold any cookie at all.
  *
- * KNOWN, DELIBERATELY UNCHANGED: `public/showcase/` has the same gap, so the
- * media for the `/showcase/video-player` route is redirected for an anonymous
- * visitor. That predates this work and is unrelated to the unified design, so
- * it is reported rather than silently widened into this change. The fix, if
- * approved separately, is one more token in this same list.
+ * The `public/showcase/` gap that used to be recorded here is gone with the
+ * route: H-STALE-2 removed the QA board and its media rather than restyling a
+ * board nobody ships, so there is no longer an anonymous surface under
+ * `public/showcase/` for the matcher to miss.
  */
 export const config = {
   /* `icon.svg` used to be exempted here for a file-based icon that does not

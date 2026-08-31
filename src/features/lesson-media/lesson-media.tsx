@@ -9,7 +9,8 @@
  *   published content asset -> AcademyLessonMedia -> AcademyVideoPlayer
  *
  * WHAT IT DELIBERATELY DOES NOT IMPORT
- * Nothing from `src/app/showcase/**`. The showcase exists so a human can point
+ * Nothing from the QA board that used to live at `src/app/showcase/**`. It
+ * existed so a human could point
  * the player at a file on their own machine while judging it; that produces a
  * `blob:` URL which lives only in one browser tab and would be a broken lesson
  * for everyone else. There is no file input here, no object URL, no upload, and
@@ -23,7 +24,7 @@
  * on the Backend; it does not get bolted onto an `onEnded` handler here.
  *
  * `demoPoster` is left false so a lesson with no published poster shows a plain
- * frame rather than the showcase's synthetic branded graphic.
+ * frame rather than a synthetic branded graphic.
  */
 import { AcademyVideoPlayer } from "@/components/media/academy-video-player";
 import type { AcademyLessonMedia } from "@/lib/curriculum/academy-view";

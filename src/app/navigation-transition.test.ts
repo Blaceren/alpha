@@ -105,6 +105,15 @@ describe("the authenticated route group", () => {
      `icon.svg` from the auth matcher, for a file-based icon that does not
      exist and a path that answers 404.
 
+     H-7 — the learner session cookie took the `__Host-` prefix, so the five
+     server reads that forward it and the middleware that checks for it read
+     both names for the length of the cutover window. The Academy verifies
+     nothing either way; the Backend is the authority.
+
+     H-STALE-2 — the QA showcase route and its media were removed rather than
+     restyled, so the board's stylesheet and its retired palette leave the
+     production artifact with it.
+
      H-8 — next.config.mjs gained the hardening headers the Academy served
      none of. The CSP it ships contains frame-ancestors only, for the reason
      recorded in turnstile-csp.test.ts.
@@ -130,19 +139,28 @@ describe("the authenticated route group", () => {
     "src/app/(app)/support/page.tsx",
     "src/app/(app)/tools/[toolCode]/page.tsx",
     "src/app/(app)/tools/page.tsx",
+    "src/app/showcase/video-player/page.tsx",
+    "src/app/showcase/video-player/video-player-showcase.css",
+    "src/app/showcase/video-player/video-player-showcase.tsx",
     "src/components/media/academy-video-player.css",
     "src/features/academy-experience/level-detail-screen.tsx",
+    "src/features/lesson-media/lesson-media.tsx",
     "src/features/tools-fidelity/tool-fidelity-surface.tsx",
     "src/features/tools/components/tool-surface.tsx",
     "src/features/tools/components/tools-hub.tsx",
     "src/features/tools/model/canonical-progress.ts",
     "src/features/tools/model/tool-access-fixture.ts",
     "src/features/tools/model/tools-projection.ts",
+    "src/lib/auth/constants.ts",
     "src/lib/curriculum/academy-view.ts",
     "src/lib/curriculum/backend-dto.ts",
     "src/lib/curriculum/view-model.ts",
     "src/middleware.ts",
     "src/server/auth/server-session.ts",
+    "src/server/curriculum/report-state-read.ts",
+    "src/server/curriculum/server-read.ts",
+    "src/server/learner-ops/server-read.ts",
+    "src/server/notifications/unread-presence.ts",
   ];
 
   it("has brought no loading boundary back since the release", () => {

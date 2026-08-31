@@ -19,7 +19,7 @@
  */
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
-import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
+import { sessionCookieToForward } from "@/lib/auth/constants";
 import {
   findLevelReviewCase,
   toMentorFeedback,
@@ -36,7 +36,7 @@ async function learnerOpsGet(path: string): Promise<unknown | null> {
   if (config.mode !== "api" || !config.backendOrigin) return null;
 
   const cookieStore = await cookies();
-  const session = cookieStore.get(SESSION_COOKIE_NAME);
+  const session = sessionCookieToForward((name) => cookieStore.get(name));
   // No session, no read. An unauthenticated request would answer 401 and the
   // round trip is pointless.
   if (!session) return null;
@@ -48,7 +48,7 @@ async function learnerOpsGet(path: string): Promise<unknown | null> {
       method: "GET",
       headers: new Headers({
         accept: "application/json",
-        cookie: `${SESSION_COOKIE_NAME}=${session.value}`,
+        cookie: `${session.name}=${session.value}`,
       }),
       cache: "no-store",
       redirect: "manual",

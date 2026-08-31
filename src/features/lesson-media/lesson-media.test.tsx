@@ -133,8 +133,7 @@ describe("the production lesson never reaches showcase code", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the showcase page is not the lesson route", () => {
-    expect(fs.existsSync(path.join(REPO_ROOT, "src/app/showcase/video-player/page.tsx"))).toBe(true);
+  it("the lesson route knows nothing about a showcase", () => {
     const lesson = fs.readFileSync(
       path.join(REPO_ROOT, "src/app/(app)/lessons/[levelCode]/page.tsx"),
       "utf8",
@@ -142,15 +141,34 @@ describe("the production lesson never reaches showcase code", () => {
     expect(lesson).not.toMatch(/showcase/i);
   });
 
-  it("the showcase route does not exist in api mode", () => {
-    // A signed-in learner could otherwise navigate to it and be offered a file
-    // chooser, which is exactly what the production boundary forbids. In api mode
-    // — the real product against the real Backend — the route 404s.
-    const page = fs.readFileSync(
-      path.join(REPO_ROOT, "src/app/showcase/video-player/page.tsx"),
-      "utf8",
-    );
-    expect(page).toMatch(/getAcademyConfig\(\)\.mode === "api"/);
-    expect(page).toMatch(/notFound\(\)/);
+  it("the showcase route does not exist at all", () => {
+    /* It used to exist and 404 in api mode, which was enough to keep a learner
+       away from the file chooser but not enough to keep the board out of the
+       artifact: its component, its stylesheet and its retired palette were
+       compiled into every release, and its media shipped in public/.
+
+       H-STALE-2 closed that by removing the route rather than restyling a board
+       nobody ships. Git history is the retained copy; nothing hidden is left
+       behind, which is why this asserts absence rather than a guard. */
+    expect(fs.existsSync(path.join(REPO_ROOT, "src/app/showcase"))).toBe(false);
+    expect(fs.existsSync(path.join(REPO_ROOT, "public/showcase"))).toBe(false);
+  });
+
+  it("no source file imports the showcase or names its path any more", () => {
+    /* Comments are stripped first, deliberately. Prose that explains WHY a rule
+       exists — the blob: refusal, the media contract, the matcher note — still
+       mentions the board, and that is history rather than a dependency. What
+       must not survive is an import or a path in the code itself. */
+    const offenders: string[] = [];
+    for (const file of walk(path.join(REPO_ROOT, "src"))) {
+      if (file.endsWith("lesson-media.test.tsx")) continue;
+      const code = fs
+        .readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      if (/from\s+["'][^"']*showcase[^"']*["']/.test(code)) offenders.push(`${file} (import)`);
+      if (/["'`][^"'`]*\/showcase\/[^"'`]*["'`]/.test(code)) offenders.push(`${file} (path)`);
+    }
+    expect(offenders).toEqual([]);
   });
 });

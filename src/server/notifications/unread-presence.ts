@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
-import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
+import { sessionCookieToForward } from "@/lib/auth/constants";
 import { isVisibleNotificationType } from "@/config/feature-visibility";
 
 /**
@@ -39,7 +39,7 @@ export const hasUnreadNotifications = cache(async (): Promise<boolean | null> =>
     if (config.mode !== "api" || !config.backendOrigin) return null;
 
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    const sessionCookie = sessionCookieToForward((name) => cookieStore.get(name));
     if (!sessionCookie) return null;
 
     const controller = new AbortController();
@@ -47,7 +47,7 @@ export const hasUnreadNotifications = cache(async (): Promise<boolean | null> =>
 
     const response = await fetch(`${config.backendOrigin}/api/notifications`, {
       headers: {
-        cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,
+        cookie: `${sessionCookie.name}=${sessionCookie.value}`,
         accept: "application/json",
       },
       cache: "no-store",
