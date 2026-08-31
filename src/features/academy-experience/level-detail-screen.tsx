@@ -37,7 +37,7 @@ import { LevelManualCompletion } from "@/features/manual-completion/level-manual
 import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
 import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
-import { isManualCompletionMethod } from "@/lib/curriculum/completion-method";
+import { completionMethodLabel, isManualCompletionMethod } from "@/lib/curriculum/completion-method";
 import { LevelStart } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
 import { PocketRegistrationConfirmed } from "@/features/pocket-registration/pocket-registration-confirmed";
@@ -398,11 +398,7 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             <dl className="ax-lvlmeta">
               <div>
                 <dt>Способ завершения</dt>
-                <dd>{summary.completionSourceLabel}</dd>
-              </div>
-              <div>
-                <dt>Опыт за уровень</dt>
-                <dd>{summary.xpReward > 0 ? `+${summary.xpReward} XP` : "—"}</dd>
+                <dd>{completionMethodLabel(summary.completionMethod)}</dd>
               </div>
               <div>
                 <dt>Предыдущий уровень</dt>
@@ -415,6 +411,14 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                 </div>
               ) : null}
             </dl>
+            {/* XP is a system counter: it motivates, and it opens nothing. It sat
+                as a third equal column beside the condition that actually closes
+                the level, which read as progress-by-accumulation. Same server
+                value, same wording, moved to the quiet note this section already
+                uses for secondary lines. */}
+            <p className="ax-lvlsec__note">
+              Опыт за уровень: {summary.xpReward > 0 ? `+${summary.xpReward} XP` : "—"}
+            </p>
           </section>
 
           <nav className="ax-lvlnav" aria-label="Навигация по уровням">

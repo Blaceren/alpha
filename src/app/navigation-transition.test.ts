@@ -143,7 +143,11 @@ describe("the authenticated route group", () => {
     "src/app/showcase/video-player/video-player-showcase.css",
     "src/app/showcase/video-player/video-player-showcase.tsx",
     "src/components/media/academy-video-player.css",
+    /* ATA-COMPLETION-TRUTH-1B: the completion-method label and the XP demotion.
+       No data, no progression, no Backend — completion-truth.test.tsx pins it. */
+    "src/features/academy-experience/home-screen.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
+    "src/features/curriculum-api/api-level-detail.tsx",
     "src/features/lesson-media/lesson-media.tsx",
     /* HOME BRAND EVOLUTION. The owner authorised this route, and only this
        route, to leave byte-identity with the frozen HomeATA page. The scope
@@ -168,6 +172,7 @@ describe("the authenticated route group", () => {
     "src/lib/auth/constants.ts",
     "src/lib/curriculum/academy-view.ts",
     "src/lib/curriculum/backend-dto.ts",
+    "src/lib/curriculum/completion-method.ts",
     "src/lib/curriculum/view-model.ts",
     "src/middleware.ts",
     "src/server/auth/server-session.ts",

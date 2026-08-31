@@ -61,6 +61,53 @@ export function mapCompletionMethod(method: string): AcademyCompletionMethod {
  * comparison so the one place that decides "offer the manual control" is
  * greppable, and so widening it is a deliberate edit rather than a typo.
  */
+/**
+ * ATA-COMPLETION-TRUTH-1B — how a level gets closed, said in the learner's
+ * language, keyed on the METHOD.
+ *
+ * WHY THIS EXISTS BESIDE `completion-source.ts`. That module localised an
+ * internal enum that was reaching the screen, and it did the right thing at the
+ * time: it mapped nine `AcademyLevelType`s onto six sources. But a level's TYPE
+ * is not how it is closed. `report_approval` and `mentor_review` are two
+ * different methods that both live on report-shaped work, so a type-derived
+ * label called them both «Проверка ментором» — and L3, whose method is
+ * `report_approval`, told the learner a mentor decides it.
+ *
+ * The method has travelled in the summary since G3 (`AcademyLevelSummary
+ * .completionMethod`), already normalised and already fail-closed: anything the
+ * build does not know becomes `unsupported`. So this adds a label for the value
+ * that was always there rather than a new field, and `CompletionSource` keeps
+ * its own meaning untouched.
+ *
+ * FAIL-CLOSED, AND NEVER GUESSED FROM THE TYPE. An unknown or missing method
+ * gets «Не определён» — the same neutral wording the source map already uses.
+ * Guessing «Проверка ментором» from a report-shaped level is precisely the
+ * defect this closes, so no fallback here may consult the type.
+ */
+export const COMPLETION_METHOD_LABEL: Record<AcademyCompletionMethod, string> = {
+  "external-event": "Внешнее событие",
+  assessment: "Проверка знаний",
+  report: "Одобрение отчёта",
+  checkpoint: "Контрольная точка",
+  manual: "Самостоятельно",
+  "mentor-review": "Проверка ментором",
+  unsupported: "Не определён",
+};
+
+/**
+ * The learner-facing label for a completion method.
+ *
+ * Accepts a loose value because the field is a string on the wire; anything not
+ * in the closed vocabulary above resolves to the neutral copy rather than being
+ * echoed or inferred.
+ */
+export function completionMethodLabel(method: string | null | undefined): string {
+  if (typeof method === "string" && method in COMPLETION_METHOD_LABEL) {
+    return COMPLETION_METHOD_LABEL[method as AcademyCompletionMethod];
+  }
+  return COMPLETION_METHOD_LABEL.unsupported;
+}
+
 export function isManualCompletionMethod(method: AcademyCompletionMethod): boolean {
   return method === "manual";
 }

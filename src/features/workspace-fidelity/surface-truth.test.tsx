@@ -204,30 +204,23 @@ describe("this phase stayed inside its scope", () => {
     .filter(Boolean)
     .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
 
-  it("moved five product files and no more", () => {
-    expect(changed.sort()).toEqual([
-      PROFILE,
-      TOOLS,
-      SCREEN,
-      "src/features/workspace-fidelity/workspace-fidelity.css",
-      STATE,
-    ].sort());
-  });
-
-  it("did not start F-4 or F-5", () => {
-    // XP still sits where the audit found it, and the completion-source map is
-    // untouched — both are the next candidate, not this one.
-    for (const f of [
-      "src/features/academy-experience/level-detail-screen.tsx",
-      "src/lib/curriculum/completion-source.ts",
-      "src/lib/curriculum/view-model.ts",
-    ]) {
-      expect(changed, `${f} belongs to the next candidate`).not.toContain(f);
-    }
-    const detail = src("src/features/academy-experience/level-detail-screen.tsx");
-    expect(detail).toContain("<dt>Опыт за уровень</dt>");
-    expect(src("src/lib/curriculum/completion-source.ts")).toContain(
-      'mentor_review: "Проверка ментором"',
+  it("moved five product files in the trees this phase owns, and no more", () => {
+    /* SCOPED TO 1A's OWN TREES, not to everything changed since BASE. Later
+       phases build on this commit, so a bare diff against BASE grows with each
+       of them and the assertion stops meaning anything. What it must keep
+       proving is that nothing else moved *here*. The completion-truth phase
+       that follows is bounded by its own test. */
+    const mine = git(
+      "diff", "--name-only", BASE, "--",
+      "src/features/workspace-fidelity/",
+      "src/features/tools-fidelity/",
+      "src/features/profile-fidelity/",
+    )
+      .split("\n")
+      .filter(Boolean)
+      .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
+    expect(mine.sort()).toEqual(
+      [PROFILE, TOOLS, SCREEN, "src/features/workspace-fidelity/workspace-fidelity.css", STATE].sort(),
     );
   });
 

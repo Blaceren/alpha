@@ -186,7 +186,14 @@ describe("the L1 learner screen does not render the raw enum", () => {
     );
     const completionSourceField = /<dt>Способ завершения<\/dt><dd>\{([^}]+)\}<\/dd>/.exec(file);
     expect(completionSourceField).toBeTruthy();
-    expect((completionSourceField![1] ?? "").trim()).toBe("summary.completionSourceLabel");
+    // ATA-COMPLETION-TRUTH-1B moved the label from the level TYPE to the level's
+    // actual completion METHOD. The invariant this test protects is unchanged —
+    // what the learner reads is never the machine value — so it follows the
+    // binding to its new source rather than pinning the old field name.
+    expect((completionSourceField![1] ?? "").trim()).toBe(
+      "completionMethodLabel(summary.completionMethod)",
+    );
     expect(file).not.toContain("<dd>{summary.completionSource}</dd>");
+    expect(file).not.toContain("<dd>{summary.completionMethod}</dd>");
   });
 });

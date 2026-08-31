@@ -9,7 +9,7 @@ import { LevelCheckpoint } from "@/features/checkpoint/level-checkpoint";
 import { LevelReport } from "@/features/report/level-report";
 import { LevelManualCompletion } from "@/features/manual-completion/level-manual-completion";
 import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
-import { isManualCompletionMethod } from "@/lib/curriculum/completion-method";
+import { completionMethodLabel, isManualCompletionMethod } from "@/lib/curriculum/completion-method";
 import { LevelStart } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
 import { PocketRegistrationConfirmed } from "@/features/pocket-registration/pocket-registration-confirmed";
@@ -85,7 +85,7 @@ export async function ApiLevelDetail({ levelCode }: { levelCode: string }) {
           <section className="cur-detail__meta" aria-label="Параметры уровня">
             <dl>
               <div><dt>Тип</dt><dd>{summary.typeInfo.label}</dd></div>
-              <div><dt>Способ завершения</dt><dd>{summary.completionSourceLabel}</dd></div>
+              <div><dt>Способ завершения</dt><dd>{completionMethodLabel(summary.completionMethod)}</dd></div>
               <div><dt>XP за уровень</dt><dd>{summary.xpReward}</dd></div>
               <div><dt>Предыдущий уровень</dt><dd>{prerequisites.previousLevel ?? "—"}</dd></div>
               {prerequisites.checkpointLevel !== null ? (

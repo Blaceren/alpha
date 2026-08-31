@@ -31,6 +31,7 @@ import { CurriculumErrorState } from "@/features/curriculum-api/curriculum-state
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
 import { readReportState } from "@/server/curriculum/report-state-read";
 import "@/features/academy-experience/experience.css";
+import { completionMethodLabel } from "@/lib/curriculum/completion-method";
 
 type Enrolled = Extract<AcademyCurriculumView, { state: "enrolled" | "completed" }>;
 
@@ -143,7 +144,7 @@ export async function ExperienceHome() {
     });
   }
   if (level) {
-    rail.push({ k: "Как завершается", v: level.completionSourceLabel });
+    rail.push({ k: "Как завершается", v: completionMethodLabel(level.completionMethod) });
     if (level.xpReward > 0) rail.push({ k: "Опыт за уровень", v: `+${level.xpReward} XP` });
   }
   if (view.progress.xp.available) {
