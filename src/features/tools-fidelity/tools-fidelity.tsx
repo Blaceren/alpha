@@ -38,10 +38,11 @@ import "@/features/tools-fidelity/tools-fidelity-safety.css";
 /** Frozen copy, verbatim. */
 export const TOOLS_COPY = {
   registerTitle: "Инструменты",
-  /* The old lead described nineteen working tools opened by a level number.
-     Seventeen do not work yet, and what opens the other two is a checkpoint
-     rather than a number, so it described neither half of the catalogue. */
-  registerLead: "Каталог рабочих и будущих инструментов. Доступ к готовым инструментам зависит от прогресса.",
+  /* The lead has described the catalogue twice now, and both times it was
+     describing a list that included seventeen tools nobody can open. The
+     register no longer lists them, so the lead no longer has two halves to
+     reconcile: it says what these tools are and what governs reaching them. */
+  registerLead: "Рабочие инструменты ATA. Доступ открывается по мере продвижения по пути.",
   back: "Инструменты",
   lockedLead: "Этот инструмент ещё не открыт.",
   lockedBody: (level: number) => `Он станет доступен на уровне ${level} и останется доступным дальше.`,
@@ -72,8 +73,7 @@ export const TOOLS_COPY = {
  *
  * Required: identity · purpose · condition. Optional: provenance · action.
  * The condition line is always last and always present: that fixed locus is what
- * lets a learner read nineteen heterogeneous rows without re-learning where to
- * look each time.
+ * lets a learner read the register without re-learning where to look each time.
  *
  * No search, no filters, no favourites, no recents, no categories, no ranking.
  */
@@ -104,9 +104,9 @@ function RegisterEntry({ tool }: { tool: ToolView }) {
 
      IT IS THE ACTION, NOT THE ROW, THAT NAVIGATES. `.t-entry` is a two-column
      grid, so wrapping the row in a link would leave the grid one child and
-     collapse the anatomy; and a whole-row target would make the sixteen rows
-     that go nowhere look like the three that do. The accessible name carries
-     the tool, because "Открыть" repeated nineteen times names nothing. */
+     collapse the anatomy; and a whole-row target would make a locked row look
+     like an open one. The accessible name carries the tool, because "Открыть"
+     repeated names nothing. */
   const action =
     tool.available && tool.href ? (
       <Link

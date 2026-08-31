@@ -187,18 +187,23 @@ import { TradingJournalWorkspace } from "@/features/tools/components/trading-jou
 import { toolAccessUnlockedThrough } from "@/features/tools/model/tool-access-fixture";
 
 describe("the catalogue lead", () => {
-  it("describes a catalogue of working AND future tools, gated by progress", () => {
+  it("describes working tools, and what governs reaching them", () => {
+    // ATA-TOOLS-CATALOG-TRUTH-1: the register no longer lists future tools, so
+    // the lead no longer has to describe two halves of a catalogue.
     expect(TOOLS_COPY.registerLead).toBe(
-      "Каталог рабочих и будущих инструментов. Доступ к готовым инструментам зависит от прогресса.",
+      "Рабочие инструменты ATA. Доступ открывается по мере продвижения по пути.",
     );
     // The heading itself is untouched.
     expect(TOOLS_COPY.registerTitle).toBe("Инструменты");
   });
 
-  it("no longer claims every entry is a working tool opened by a level", () => {
+  it("promises no future tools and no level number", () => {
     const { container } = render(<ToolsRegister tools={projectTools(at(2), accessThrough(2))} />);
     const lead = container.querySelector(".t-lead")?.textContent ?? "";
     expect(lead).not.toMatch(/остаются доступными после уровня/);
+    expect(lead).not.toMatch(/будущ/i);
+    expect(lead).not.toMatch(/разработк/i);
+    expect(lead).not.toMatch(/\d/);
   });
 });
 

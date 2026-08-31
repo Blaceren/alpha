@@ -13,8 +13,12 @@
  *
  * `available` = unlocked AND the tool's surface is actually built. Only the
  * Trading Journal (L10) and the Risk Calculator (L15) are built in this
- * release; the other seventeen are catalogue entries and say so at every level,
- * with NO active CTA into empty functionality.
+ * release; the other seventeen are catalogue entries with NO active CTA into
+ * empty functionality.
+ *
+ * `projectTools` returns ALL nineteen — the catalogue is the catalogue, and the
+ * direct route resolves against it unchanged. What a learner is SHOWN is a
+ * separate question, answered by `learnerCatalog` below.
  */
 
 import {
@@ -159,6 +163,31 @@ export function projectTools(
   }
 
   return views.map((view) => ({ ...view, current: view.code === currentCode }));
+}
+
+/**
+ * THE LEARNER CATALOGUE — what a person is shown, as opposed to what exists.
+ *
+ * The register listed all nineteen catalogue entries, so seventeen tools that
+ * have no working surface occupied the screen and told the learner which level
+ * would open them. Two of those nineteen are built. A catalogue that is 89%
+ * announcements is not a catalogue of tools; it is a roadmap wearing one.
+ *
+ * WHAT THIS FILTERS ON, AND WHAT IT DOES NOT. Only `implemented`, which is
+ * `implementationStatus` off the catalogue — the single declared answer to
+ * "does this surface exist in this build". It is NOT derived from the unlock
+ * level, the learner's progress, the row's position or any wording. Access is
+ * untouched: a built tool that the Backend says is locked stays visible and
+ * stays locked, because a tool you have not earned yet is still a real part of
+ * the product you are working towards.
+ *
+ * WHAT THIS IS NOT. It is not a second unlock rule, and it is not applied to
+ * `projectTool`: the direct route keeps resolving every catalogue code exactly
+ * as it did, so a deep link to an unbuilt tool still reaches its own honest
+ * state rather than a not-found page.
+ */
+export function learnerCatalog(views: ToolView[]): ToolView[] {
+  return views.filter((view) => view.implemented);
 }
 
 /** The resolved view of ONE tool, for the surface route. Null when unknown. */

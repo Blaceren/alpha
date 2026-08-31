@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { UnreadPresence } from "@/components/shell/unread-presence";
 import { ToolsHub } from "@/features/tools/components/tools-hub";
 import { ToolsRegister } from "@/features/tools-fidelity/tools-fidelity";
-import { projectTools } from "@/features/tools/model/tools-projection";
+import { learnerCatalog, projectTools } from "@/features/tools/model/tools-projection";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
@@ -43,10 +43,14 @@ export default async function ToolsPage({
     const access = toolAccessOf(result);
     /* No enrolled progression means no unlocks — an honest empty register, not
        a guess. `projectTools` still owns every lock decision; the register only
-       renders what it returns. */
+       renders what it returns.
+
+       `learnerCatalog` then drops the entries whose surface this build does not
+       contain. It changes what is LISTED, never what is open: the two built
+       tools keep whatever verdict the Backend gave them. */
     return (
       <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
-        <ToolsRegister tools={progress ? projectTools(progress, access) : []} />
+        <ToolsRegister tools={progress ? learnerCatalog(projectTools(progress, access)) : []} />
       </AppShell>
     );
   }

@@ -45,9 +45,18 @@ const BASE = "c54f5f5358fe2ea9dafc9fa0b74375b117fecb73";
    Normalising those away would turn a genuine change into a silent one. Both
    are named in AUTHORISED below, and what they now DO is asserted in the truth
    matrix rather than by comparing strings. */
+/* ATA-TOOLS-CATALOG-TRUTH-1 removed a third file from this list.
+
+   The hub page now filters the projection to the tools this build actually
+   contains, so WHAT IT RENDERS is deliberately different from the release. A
+   `contract()` rule that normalised the filter away would do the very thing the
+   note above warns about: turn a genuine change into a silent one. What the
+   page renders instead is asserted directly in the catalogue truth matrix.
+
+   The DIRECT ROUTE stays here, byte-pinned. That is the point: the catalogue
+   changed and the deep link did not, and this list is what proves it. */
 const SURFACE = [
   "src/features/tools/model/tool-catalog.ts",
-  "src/app/(app)/tools/page.tsx",
   "src/app/(app)/tools/[toolCode]/page.tsx",
 ];
 

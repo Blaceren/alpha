@@ -198,8 +198,16 @@ describe("F-9 · the profile does not point at a hidden section", () => {
   });
 });
 
+/**
+ * The commit 1A shipped as. Its footprint is a closed question, so it is
+ * measured over its OWN range and not against the working tree: a diff that
+ * ends at HEAD grows with every later phase, and this file then fails for work
+ * it was never about. Each later phase is bounded by its own scope test.
+ */
+const MINE = "7d7946859497b8ffc45b592e5e40abce7fcdf552";
+
 describe("this phase stayed inside its scope", () => {
-  const changed = git("diff", "--name-only", BASE, "--", "src/", "public/")
+  const changed = git("diff", "--name-only", BASE, MINE, "--", "src/", "public/")
     .split("\n")
     .filter(Boolean)
     .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
@@ -211,7 +219,7 @@ describe("this phase stayed inside its scope", () => {
        proving is that nothing else moved *here*. The completion-truth phase
        that follows is bounded by its own test. */
     const mine = git(
-      "diff", "--name-only", BASE, "--",
+      "diff", "--name-only", BASE, MINE, "--",
       "src/features/workspace-fidelity/",
       "src/features/tools-fidelity/",
       "src/features/profile-fidelity/",
