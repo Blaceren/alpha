@@ -1,6 +1,9 @@
 {
   "name": "trading-learning-platform",
   "version": "0.1.0-beta.1",
+  "engines": {
+    "node": "22.14.x"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
