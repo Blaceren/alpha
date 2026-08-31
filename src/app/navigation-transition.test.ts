@@ -145,6 +145,13 @@ describe("the authenticated route group", () => {
     "src/components/media/academy-video-player.css",
     "src/features/academy-experience/level-detail-screen.tsx",
     "src/features/lesson-media/lesson-media.tsx",
+    /* HOME BRAND EVOLUTION. The owner authorised this route, and only this
+       route, to leave byte-identity with the frozen HomeATA page. The scope
+       is `src/features/public-home/**`; the frozen prefixes below are what
+       this phase may still not touch, and they are unchanged. */
+    "src/features/public-home/public-home-header.tsx",
+    "src/features/public-home/public-home-screen.tsx",
+    "src/features/public-home/public-home.css",
     "src/features/tools-fidelity/tool-fidelity-surface.tsx",
     "src/features/tools/components/tool-surface.tsx",
     "src/features/tools/components/tools-hub.tsx",

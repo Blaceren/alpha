@@ -4,12 +4,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 /**
- * Public Home header — HomeATA's header, with its mobile menu.
+ * Public Home header — the frozen HomeATA header, with two corrections.
  *
  * It is a client component only because the menu is interactive. The markup,
- * class names and copy are the frozen page's; the open/closed state is held in
- * React rather than by mutating `aria-expanded` from outside, which is the one
- * mechanical difference from script.js and is invisible in behaviour.
+ * class names and copy are still the frozen page's; the open/closed state is
+ * held in React rather than by mutating `aria-expanded` from outside, which is
+ * the one mechanical difference from script.js and is invisible in behaviour.
+ *
+ * WHAT THIS PHASE CHANGED, AND ONLY THIS:
+ *
+ *   1. The navigation order now follows the DOM. The frozen order listed «Путь»
+ *      before «Практика и обратная связь» while the page has always rendered
+ *      review first, so the menu disagreed with the page it navigates.
+ *
+ *   2. `.wordmark`, `.mobile-login` and `.menu-toggle` reach 44px. They were
+ *      31, 32 and 35px — three of the four sub-44 targets on the page.
+ *
+ * Both corrections live in the stylesheet; the element order below is the only
+ * markup change.
  *
  * The three closing paths of the frozen menu are all preserved:
  *   * clicking any link inside the nav,
@@ -93,8 +105,8 @@ export function PublicHomeHeader({ authenticated }: { authenticated: boolean }) 
           }}
         >
           <a href="#mechanism">Как это работает</a>
-          <a href="#path">Путь</a>
           <a href="#review">Практика и обратная связь</a>
+          <a href="#path">Путь</a>
           <a href="#tools">Инструменты</a>
           <a href="#faq">Вопросы</a>
           <div className="nav-actions" aria-label="Действия с аккаунтом">

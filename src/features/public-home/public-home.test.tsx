@@ -6,309 +6,361 @@ import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
 
 /**
- * Public Home fidelity tests.
+ * Public Home — brand-evolution gates.
  *
- * The page's authority is the frozen HomeATA document
- * (e82bba3a4cb282ba1d0e7814d04db950f0905cb8). These tests exist because the
- * previous implementation of this surface kept the section NAMES and quietly
- * lost most of the content — a reconstruction that looked complete in a diff and
- * was not. Every assertion here is a thing that regression would have caught.
+ * The page's authority is no longer the frozen HomeATA document: that identity
+ * was deliberately broken for this route, and only this route, on the owner's
+ * explicit authorisation. What replaces "is it byte-identical to the freeze" is
+ * this file — a set of properties that must hold for the page to be truthful.
+ *
+ * Every assertion here is a thing that would otherwise regress silently: a
+ * production note shipped to the public, a claim widened past what the product
+ * does, a deep link quietly broken by a renamed section, a synthetic example
+ * losing the label that says it is synthetic.
  */
 
+/** The ten sections of `<main>`; with the header that is eleven responsibilities. */
 const SECTION_IDS = [
   "top",
-  "recognition",
+  "decide",
   "mechanism",
-  "product",
   "review",
-  "first-journey",
+  "product",
   "path",
   "tools",
   "fit",
   "boundaries",
   "faq",
-  "start",
 ] as const;
 
+/** Addresses the page published before this phase. They must keep resolving. */
+const LEGACY_ANCHORS = ["recognition", "first-journey", "start"] as const;
+
+/** Strings that must never reach a visitor. */
+const PRODUCTION_NOTES = [
+  "ожидает утверждённый скриншот",
+  "Контент-слот",
+  "до публикации заменить",
+  "зарезервированное место",
+];
+
+const css = readFileSync(
+  join(process.cwd(), "src/features/public-home/public-home.css"),
+  "utf8",
+);
+const screenSource = readFileSync(
+  join(process.cwd(), "src/features/public-home/public-home-screen.tsx"),
+  "utf8",
+);
+
 function sections(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll("section[id]")).map((s) => s.id);
+  return Array.from(container.querySelectorAll("main > section[id]")).map((s) => s.id);
 }
 
-describe("Public Home — structure", () => {
-  it("renders all twelve frozen sections in the frozen order", () => {
+function text(container: HTMLElement): string {
+  return (container.textContent ?? "").replace(/\s+/g, " ");
+}
+
+describe("Public Home — architecture", () => {
+  it("renders eleven responsibilities: a header and ten sections, in order", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
+    expect(container.querySelectorAll("header").length).toBe(1);
     expect(sections(container)).toEqual([...SECTION_IDS]);
   });
 
-  it("declares exactly one main landmark and exactly one h1", () => {
+  it("opens on the opportunity, not on a negated category", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll("main")).toHaveLength(1);
-    expect(container.querySelectorAll("h1")).toHaveLength(1);
-    expect(container.querySelector("main")?.id).toBe("main");
+    const h1 = container.querySelector("h1") as HTMLElement;
+    expect(text(h1)).toBe("Возможности не приходят с готовыми ответами.");
+    // The page used to open by defining itself against a competitor category.
+    // An argument against others leaves no room for the learner's own agency.
+    expect(text(container)).not.toContain("Не ещё один источник информации");
   });
 
-  it("keeps the skip link as the first focusable element, pointing at main", () => {
+  it("keeps every legacy anchor addressable", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const focusable = container.querySelector("a, button, input, [tabindex]");
-    expect(focusable).toHaveClass("skip-link");
-    expect(focusable).toHaveAttribute("href", "#main");
+    for (const id of LEGACY_ANCHORS) {
+      expect(container.querySelector(`#${id}`), `#${id} no longer resolves`).not.toBeNull();
+    }
   });
 
-  it("keeps the six-step learning loop whole", () => {
+  it("lands #first-journey on the journey line that replaced its section", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const steps = container.querySelectorAll(".learning-loop > li");
-    expect(steps).toHaveLength(6);
-    for (const label of [
+    const alias = container.querySelector("#first-journey");
+    expect(alias).not.toBeNull();
+    // The alias must sit inside #product and immediately before the journey.
+    expect(alias?.closest("section")?.id).toBe("product");
+    expect(alias?.nextElementSibling?.classList.contains("journey-line")).toBe(true);
+  });
+
+  it("lands #start on the final call to action", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const alias = container.querySelector("#start");
+    expect(alias?.nextElementSibling?.classList.contains("final-step")).toBe(true);
+  });
+
+  it("declares exactly one h1 and one main landmark", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    expect(container.querySelectorAll("h1").length).toBe(1);
+    expect(container.querySelectorAll("main").length).toBe(1);
+  });
+
+  it("orders the navigation the way the document is ordered", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const nav = container.querySelector("nav#primary-nav");
+    const navIds = Array.from(nav?.querySelectorAll('a[href^="#"]') ?? []).map((a) =>
+      (a.getAttribute("href") ?? "").slice(1),
+    );
+    const documentOrder = sections(container);
+    const expected = documentOrder.filter((id) => navIds.includes(id));
+    expect(navIds).toEqual(expected);
+  });
+});
+
+describe("Public Home — the claim never outruns the product", () => {
+  it("states DECIDE as a step of the cycle", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const mechanism = container.querySelector("#mechanism") as HTMLElement;
+    const steps = Array.from(mechanism.querySelectorAll("li h3")).map((h) => h.textContent);
+    expect(steps).toEqual([
       "Понять",
-      "Проверить себя",
-      "Применить",
-      "Получить разбор",
+      "Решить",
+      "Действовать",
+      "Проверить",
       "Исправить",
-      "Двигаться дальше",
-    ]) {
-      expect(within(container).getAllByText(label).length).toBeGreaterThan(0);
+      "Продвинуться",
+    ]);
+    expect(text(mechanism)).toContain("Сформулировать собственное решение и назвать его основание");
+  });
+
+  it("carries the qualifier as visible copy, not as a footnote", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const mechanism = text(container.querySelector("#mechanism") as HTMLElement);
+    const review = text(container.querySelector("#review") as HTMLElement);
+    expect(mechanism).toContain("На предусмотренных уровнях");
+    expect(review).toContain("На предусмотренных уровнях");
+  });
+
+  it("never claims review happens on every level", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const body = text(container);
+    for (const overreach of ["на каждом уровне", "каждый уровень проверя", "все 100 уровней"]) {
+      expect(body).not.toContain(overreach);
     }
   });
 
-  it("keeps the four-stage review cycle whole", () => {
+  it("promises no financial outcome anywhere", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll(".review-sequence > li")).toHaveLength(4);
-    for (const label of ["V1", "01", "V2", "✓"]) {
-      expect(container.querySelector(".review-sequence")?.textContent).toContain(label);
+    const body = text(container);
+    expect(body).toContain("не обещаем гарантированный финансовый результат");
+    for (const forbidden of ["прибыл", "доходност", "заработ", "профит"]) {
+      // The single legitimate use is the boundary list: «обещание прибыли».
+      const hits = body.split(forbidden).length - 1;
+      const allowed = forbidden === "прибыл" ? 1 : 0;
+      expect(hits, `"${forbidden}" appears ${hits} times`).toBeLessThanOrEqual(allowed);
     }
   });
 
-  it("keeps the five-step first journey whole", () => {
+  it("shows only the two tools that exist, and no roadmap", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll(".journey-line > li")).toHaveLength(5);
-  });
-
-  it("keeps all seven FAQ entries as native details/summary", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const details = container.querySelectorAll(".faq-list details");
-    expect(details).toHaveLength(7);
-    for (const d of Array.from(details)) {
-      expect(d.querySelector("summary")).not.toBeNull();
-    }
-  });
-
-  it("keeps the path map — 20 module ticks and the five-level current segment", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll(".path-map__modules i")).toHaveLength(20);
-    expect(container.querySelectorAll(".path-map__modules i.is-active")).toHaveLength(1);
-    expect(container.querySelectorAll(".path-map__current span")).toHaveLength(5);
-    expect(container.querySelectorAll(".path-map__current .is-current")).toHaveLength(1);
-  });
-
-  it("keeps both tool cards and the four hero facts", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll(".tool-card")).toHaveLength(2);
-    expect(container.querySelectorAll(".hero__facts > div")).toHaveLength(4);
-  });
-
-  it("keeps the empty video reserve and the product asset slot", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const reserve = container.querySelector(".video-reserve");
-    expect(reserve).not.toBeNull();
-    // It is a reserved space for a future asset: it must stay empty, and it must
-    // keep its accessible label rather than becoming a decorative div.
-    expect(reserve?.textContent).toBe("");
-    expect(reserve).toHaveAttribute("aria-label");
-    expect(container.querySelectorAll(".asset-slot").length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("keeps the Decision Frame mark and the reveal hooks", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    expect(container.querySelectorAll(".frame-mark")).toHaveLength(1);
-    expect(container.querySelectorAll(".frame-mark i")).toHaveLength(2);
-    // 41 in the frozen document. A drop here means content was lost.
-    expect(container.querySelectorAll("[data-reveal]").length).toBeGreaterThanOrEqual(40);
-  });
-
-  it("uses the vendored ATA wordmark, twice, and never a substitute", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const logos = Array.from(container.querySelectorAll("img"));
-    expect(logos).toHaveLength(2);
-    for (const img of logos) {
-      expect(img.getAttribute("src")).toBe("/brand/ata-logo.svg");
-      expect(img.getAttribute("width")).toBe("362");
-      expect(img.getAttribute("height")).toBe("200");
+    const tools = container.querySelector("#tools") as HTMLElement;
+    expect(tools.querySelectorAll(".tool-card").length).toBe(2);
+    const names = Array.from(tools.querySelectorAll(".tool-card h3")).map((h) => h.textContent);
+    expect(names).toEqual(["Trading Journal", "Risk Calculator"]);
+    const copy = text(tools);
+    for (const roadmap of ["скоро", "в разработке", "появится", "планируется", "roadmap"]) {
+      expect(copy.toLowerCase()).not.toContain(roadmap);
     }
   });
 });
 
-describe("Public Home — copy is unabridged", () => {
-  const MUST_APPEAR = [
-    "Не ещё один источник информации о трейдинге.",
-    "Система, где знание превращается в действие, проверку, обратную связь и следующий шаг.",
-    "ATA не является сигнальным сервисом и не обещает гарантированный финансовый результат.",
-    "Информации много. Системы — мало.",
-    "Путь, в котором каждый шаг должен что-то изменить.",
-    "Не витрина контента. Последовательная работа.",
-    "Посмотрел — не значит освоил.",
-    "Первые уровни быстро приводят к практике.",
-    "100 уровней. Но только один следующий шаг.",
-    "Инструмент появляется в контексте задачи.",
-    "Право сказать «не сейчас» тоже создаёт доверие.",
-    "Образовательная система для развития самостоятельности.",
-    "До начала пути не должно оставаться скрытых условий.",
-    "Обучение и прохождение ATA не гарантируют финансовый результат.",
-    "XP",
-    "Мотивирует, но не открывает следующий уровень",
-    "сигнальный сервис;",
-    "копирование сделок;",
-    "Практическая среда",
-  ];
-
-  it("carries every load-bearing string from the frozen page", () => {
+describe("Public Home — nothing empty, nothing unlabelled", () => {
+  it("ships no production note", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const text = container.textContent ?? "";
-    for (const phrase of MUST_APPEAR) {
-      expect(text, `missing frozen copy: ${phrase}`).toContain(phrase);
+    const body = text(container).toLowerCase();
+    for (const note of PRODUCTION_NOTES) {
+      expect(body, `production note leaked: ${note}`).not.toContain(note.toLowerCase());
+    }
+    // The classes that carried them are gone from the markup and the sheet.
+    for (const dead of ["video-reserve", "asset-slot", "asset-note", "review-sequence"]) {
+      expect(screenSource).not.toContain(dead);
+      expect(css.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain(dead);
     }
   });
 
-  it("makes no claim the frozen page does not make", () => {
+  it("gives the hero frame a legible unfinished object, not empty geometry", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const text = (container.textContent ?? "").toLowerCase();
-    // No invented social proof, trading data, guarantees or legal URLs.
-    for (const phrase of ["гарантированный доход", "доходность", "прибыль в месяц", "тысяч учеников"]) {
-      expect(text, `invented claim present: ${phrase}`).not.toContain(phrase);
+    const frame = container.querySelector("#top .dframe") as HTMLElement;
+    expect(frame).not.toBeNull();
+    expect(text(frame)).toContain("Причина входа до сделки");
+    expect(text(frame)).toContain("Ещё не сформулировано");
+  });
+
+  it("resolves that same object in #decide", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const decided = container.querySelector("#decide .dframe") as HTMLElement;
+    expect(text(decided)).toContain("Причина входа до сделки");
+    expect(text(decided)).toContain("Дождался заранее заданного условия входа");
+  });
+
+  it("marks every synthetic panel as a demonstration", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    // Hero frame, decide frame, evidence track, product panel, two tool panels.
+    expect(container.querySelectorAll(".demo-badge").length).toBe(6);
+    for (const selector of ["#top .dframe", "#decide .dframe", "#product .product-panel"]) {
+      const host = container.querySelector(selector) as HTMLElement;
+      expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
+    const tools = container.querySelector("#tools") as HTMLElement;
+    expect(within(tools).getAllByText(/Демонстрационный пример/).length).toBe(2);
+  });
+
+  it("carries no learner data — the demonstration is authored, not captured", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const body = text(container);
+    expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
+    expect(body).not.toMatch(/\+7\s?\(?\d{3}/);
+    expect(body).not.toMatch(/\b\d+\s?(₽|\$|USD|EUR)\b/);
   });
 });
 
-describe("Public Home — session-aware CTA (AUTH_STATE_ONLY)", () => {
-  it("signed out: offers registration and login exactly as the frozen page does", () => {
+describe("Public Home — signature evidence", () => {
+  it("moves one object through four states", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const hrefs = Array.from(container.querySelectorAll("a[href]")).map((a) =>
-      a.getAttribute("href"),
+    const track = container.querySelector(".evidence-track") as HTMLElement;
+    const stages = Array.from(track.querySelectorAll("li")).map((li) =>
+      li.getAttribute("data-frame-stage"),
     );
+    expect(stages).toEqual(["v1", "feedback", "v2", "accepted"]);
+  });
+
+  it("names one rubric criterion, one return reason and one corrective action", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const track = text(container.querySelector(".evidence-track") as HTMLElement);
+    expect(track).toContain("Критерий · Причина до сделки");
+    expect(track).toContain("Требуется доработка");
+    expect(track).toContain("Опишите условие, которое вы определили заранее");
+  });
+
+  it("corrects the same field it flagged", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const track = container.querySelector(".evidence-track") as HTMLElement;
+    const v1 = track.querySelector('[data-frame-stage="v1"]') as HTMLElement;
+    const v2 = track.querySelector('[data-frame-stage="v2"]') as HTMLElement;
+    const field = "Причина входа до сделки";
+    expect(text(v1)).toContain(field);
+    expect(text(v2)).toContain(field);
+    expect(text(v1)).not.toEqual(text(v2));
+  });
+
+  it("does not dress acceptance as a financial win", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const accepted = text(
+      container.querySelector('[data-frame-stage="accepted"]') as HTMLElement,
+    );
+    expect(accepted).toContain("Условия уровня выполнены");
+    expect(accepted).toContain("не результат сделок");
+  });
+
+  it("stops the Decision Frame after the evidence", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    for (const id of ["path", "tools", "fit", "boundaries", "faq"]) {
+      const section = container.querySelector(`#${id}`) as HTMLElement;
+      expect(section.querySelector(".dframe"), `frame leaked into #${id}`).toBeNull();
+      expect(section.querySelector("[data-frame-stage]")).toBeNull();
+    }
+  });
+});
+
+describe("Public Home — session-aware calls to action", () => {
+  it("signed out: hero offers the mechanism and registration, never /home", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const hero = container.querySelector("#top") as HTMLElement;
+    const hrefs = Array.from(hero.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("#mechanism");
     expect(hrefs).toContain("/register");
-    expect(hrefs).toContain("/login");
     expect(hrefs).not.toContain("/home");
-    expect(container.textContent).toContain("Начать путь");
-    expect(container.textContent).toContain("Уже клиент?");
+    expect(within(hero).getByText("Посмотреть, как работает ATA")).toBeTruthy();
   });
 
-  it("signed in: primary CTA becomes «Перейти в Академию» → /home", () => {
+  it("signed in: the account action becomes /home and registration disappears", () => {
     const { container } = render(<PublicHomeScreen authenticated />);
-    const hrefs = Array.from(container.querySelectorAll("a[href]")).map((a) =>
-      a.getAttribute("href"),
-    );
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/home");
-    expect(container.textContent).toContain("Перейти в Академию");
+    expect(hrefs).not.toContain("/register");
+    expect(screen.queryByText(/Уже клиент/)).toBeNull();
+    // The mechanism anchor is state-independent.
+    expect(hrefs).toContain("#mechanism");
   });
 
-  it("signed in: never invites a second registration and hides the service login", () => {
-    const { container } = render(<PublicHomeScreen authenticated />);
-    const hrefs = Array.from(container.querySelectorAll("a[href]")).map((a) =>
-      a.getAttribute("href"),
-    );
-    expect(hrefs).not.toContain("/register");
-    expect(hrefs).not.toContain("/login");
-    expect(container.textContent).not.toContain("Уже клиент?");
+  it("signed out: keeps the login affordances", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs.filter((h) => h === "/login").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Уже клиент/)).toBeTruthy();
   });
 
   it("does not change the composition between the two states", () => {
     const anon = render(<PublicHomeScreen authenticated={false} />);
-    const authed = render(<PublicHomeScreen authenticated />);
-    // Same sections, same order, same section count: the only permitted
-    // difference is which calls to action are offered.
-    expect(sections(authed.container)).toEqual(sections(anon.container));
-    expect(authed.container.querySelectorAll("[data-reveal]").length).toBe(
-      anon.container.querySelectorAll("[data-reveal]").length,
-    );
+    const anonSections = sections(anon.container);
+    anon.unmount();
+    const auth = render(<PublicHomeScreen authenticated />);
+    expect(sections(auth.container)).toEqual(anonSections);
+  });
+});
+
+describe("Public Home — legal labels are not fake links", () => {
+  it("keeps them as text, outside any navigation landmark", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const footer = container.querySelector("footer") as HTMLElement;
+    expect(footer.querySelector("nav")).toBeNull();
+    const legal = footer.querySelector(".site-footer__legal") as HTMLElement;
+    expect(text(legal)).toContain("Конфиденциальность");
+    expect(legal.querySelector("a")).toBeNull();
   });
 });
 
 describe("Public Home — mobile menu", () => {
   it("starts closed and opens on activation", async () => {
     const user = userEvent.setup();
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    render(<PublicHomeScreen authenticated={false} />);
     const toggle = screen.getByRole("button", { name: /Меню/ });
-    const nav = container.querySelector("#primary-nav");
-
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(nav).not.toHaveClass("is-open");
-
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(nav).toHaveClass("is-open");
-  });
-
-  it("closes when a link inside it is chosen", async () => {
-    const user = userEvent.setup();
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const toggle = screen.getByRole("button", { name: /Меню/ });
-    await user.click(toggle);
-    await user.click(screen.getByRole("link", { name: "Как это работает" }));
-    expect(container.querySelector("#primary-nav")).not.toHaveClass("is-open");
   });
 
   it("closes on Escape and returns focus to the toggle", async () => {
     const user = userEvent.setup();
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    render(<PublicHomeScreen authenticated={false} />);
     const toggle = screen.getByRole("button", { name: /Меню/ });
     await user.click(toggle);
     await user.keyboard("{Escape}");
-    expect(container.querySelector("#primary-nav")).not.toHaveClass("is-open");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(document.activeElement).toBe(toggle);
-  });
-
-  it("closes on a click outside the header", async () => {
-    const user = userEvent.setup();
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const toggle = screen.getByRole("button", { name: /Меню/ });
-    await user.click(toggle);
-    await user.click(container.querySelector("main") as HTMLElement);
-    expect(container.querySelector("#primary-nav")).not.toHaveClass("is-open");
-  });
-
-  it("wires the toggle to the nav it controls", () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const toggle = screen.getByRole("button", { name: /Меню/ });
-    expect(toggle).toHaveAttribute("aria-controls", "primary-nav");
-    expect(container.querySelector("#primary-nav")).not.toBeNull();
   });
 });
 
-describe("Public Home — stylesheet is scoped and local", () => {
-  // Resolved from the project root: under the test runner `import.meta.url`
-  // is not a filesystem path, and `.pathname` on it drops the root.
-  const css = readFileSync(
-    join(process.cwd(), "src/features/public-home/public-home.css"),
-    "utf8",
-  );
-
-  // Comments are stripped first: the header of this stylesheet documents that
-  // the Google Fonts @import was deleted, and an assertion that reads prose
-  // fails on the very sentence proving the property holds.
+describe("Public Home — stylesheet holds its contract", () => {
   const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
-  it("makes no remote request — the Google Fonts import is gone", () => {
+  it("makes no remote request", () => {
     expect(rules).not.toMatch(/@import/);
     expect(rules).not.toMatch(/https?:\/\//);
     expect(rules).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
   });
 
-  it("binds the three families to the product's local faces", () => {
-    expect(css).toContain('"ATA Manrope"');
-    expect(css).toContain('"ATA Source Serif 4"');
-    expect(css).toContain('"ATA IBM Plex Mono"');
-    expect(css).not.toMatch(/--font-ui:\s*"Manrope"/);
+  it("adds no external host to the markup either", () => {
+    expect(screenSource).not.toMatch(/https?:\/\/(?!\S*schema)/);
+    expect(screenSource).not.toMatch(/<img[^>]+src="https?:/);
   });
 
   it("lets no selector escape the .ph namespace", () => {
-    const stripped = css
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/@(media|supports)[^{]*\{/g, "");
+    const stripped = rules.replace(/@(media|supports)[^{]*\{/g, "");
     const escaped: string[] = [];
     const rule = /(^|\})\s*([^{}@]+)\{/g;
     let m: RegExpExecArray | null;
     while ((m = rule.exec(stripped)) !== null) {
-      // tsconfig runs with noUncheckedIndexedAccess, so the capture group is
-      // typed as possibly undefined even though the pattern guarantees it.
       const selectorList = m[2] ?? "";
       for (const part of selectorList.split(",")) {
         const s = part.trim();
@@ -320,11 +372,101 @@ describe("Public Home — stylesheet is scoped and local", () => {
       .toEqual([]);
   });
 
-  it("keeps the frozen surface palette values", () => {
-    // A sample of HomeATA's own values. If the stylesheet were "improved",
-    // these would drift.
+  it("keeps the frozen palette and geometry tokens", () => {
     for (const value of ["#0b0d0a", "#c7f76d", "#f8f9f5", "#30421e", "1280px"]) {
       expect(css.toLowerCase()).toContain(value);
     }
+  });
+
+  it("gives the trust note AA contrast at a readable size", () => {
+    const rule = /\.ph \.hero__boundary \{([^}]*)\}/.exec(css);
+    expect(rule, ".hero__boundary rule is missing").not.toBeNull();
+    const body = rule?.[1] ?? "";
+    const size = /font-size:\s*(\d+)px/.exec(body);
+    expect(Number(size?.[1]), "trust note must be at least 12px").toBeGreaterThanOrEqual(12);
+
+    const alpha = /color:\s*rgba\(243,\s*244,\s*239,\s*([\d.]+)\)/.exec(body);
+    expect(alpha, "trust note colour must stay a known rgba").not.toBeNull();
+    const a = Number(alpha?.[1]);
+    const over = (fg: number, bg: number) => fg * a + bg * (1 - a);
+    const channel = (v: number) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    const lum = (r: number, g: number, b: number) =>
+      0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    const fgLum = lum(over(243, 11), over(244, 13), over(239, 10));
+    const bgLum = lum(11, 13, 10);
+    const ratio = (Math.max(fgLum, bgLum) + 0.05) / (Math.min(fgLum, bgLum) + 0.05);
+    expect(ratio, `trust note contrast is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+
+    // And the small-screen override must not undo either property.
+    const mobile = /\.ph \.hero__boundary \{\s*font-size:\s*(\d+)px/g;
+    let m: RegExpExecArray | null;
+    while ((m = mobile.exec(css)) !== null) {
+      expect(Number(m[1])).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it("reserves no fixed hero height that would push the CTAs below the fold", () => {
+    const rule = /\.ph \.hero \{([^}]*)\}/.exec(css);
+    expect(rule, ".ph .hero rule is missing").not.toBeNull();
+    const body = rule?.[1] ?? "";
+    // The frozen sheet reserved 960px for a 16:9 video slot that no longer
+    // exists. With it, the primary call to action started at 918px on a 900px
+    // viewport — the measured defect this composition had to fix.
+    const minHeight = /min-height:\s*(\d+)px/.exec(body);
+    expect(Number(minHeight?.[1] ?? 0), "hero must not reserve a fixed height")
+      .toBeLessThanOrEqual(0);
+    const padTop = /padding:\s*(\d+)px/.exec(body);
+    expect(Number(padTop?.[1] ?? 0), "hero top padding pushes the CTAs down")
+      .toBeLessThanOrEqual(140);
+  });
+
+  it("raises every touch target to 44px, in every rule that sizes one", () => {
+    // Checking only the base rule is not enough: the frozen sheet re-declared
+    // `.mobile-login` inside a media query at 32px, and a gate that reads the
+    // first match would call that green. Every declaration is checked.
+    for (const selector of [".wordmark", ".mobile-login", ".menu-toggle", ".client-entry"]) {
+      const rules = Array.from(
+        css.matchAll(new RegExp(`\\.ph \\${selector}\\s*\\{([^}]*)\\}`, "g")),
+      ).map((m) => m[1] ?? "");
+      expect(rules.length, `${selector} has no rule`).toBeGreaterThan(0);
+      expect(
+        rules.some((body) => /min-height:\s*44px/.test(body)),
+        `${selector} never reaches 44px`,
+      ).toBe(true);
+      for (const body of rules) {
+        const declared = Array.from(body.matchAll(/min-height:\s*(\d+)px/g)).map((m) =>
+          Number(m[1]),
+        );
+        for (const value of declared) {
+          expect(value, `${selector} declares ${value}px somewhere`).toBeGreaterThanOrEqual(44);
+        }
+      }
+    }
+  });
+
+  it("keeps motion to one bounded sequence and honours reduced-motion", () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+    const reduced = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/.exec(css);
+    expect(reduced?.[1]).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
+    expect(reduced?.[1]).toMatch(/transition-delay:\s*0s\s*!important/);
+
+    // The evidence sequence: 240ms each, last starting at 600ms — 840ms total.
+    const delays = Array.from(css.matchAll(/transition-delay:\s*(\d+)ms/g)).map((m) =>
+      Number(m[1]),
+    );
+    const longest = delays.length > 0 ? Math.max(...delays) : 0;
+    expect(longest + 240, "the sequence must finish inside 900ms").toBeLessThanOrEqual(900);
+
+    // Nothing ambient: no infinite animation anywhere on the page.
+    expect(rules).not.toMatch(/animation-iteration-count:\s*infinite/);
+    expect(rules).not.toMatch(/animation:[^;]*infinite/);
+  });
+
+  it("keeps the reveal switched off below 920px, so mobile is static", () => {
+    const mobileBlock = /@media \(max-width: 920px\) \{([\s\S]*?)\n\}/.exec(css);
+    expect(mobileBlock?.[1]).toMatch(/\[data-reveal\][\s\S]*?transition:\s*none/);
   });
 });

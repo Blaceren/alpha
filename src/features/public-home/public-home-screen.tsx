@@ -3,33 +3,67 @@ import { PublicHomeHeader } from "@/features/public-home/public-home-header";
 import { PublicHomeEffects } from "@/features/public-home/public-home-effects";
 
 /**
- * PUBLIC HOME — the frozen HomeATA page, rendered by the product.
+ * PUBLIC HOME — the brand-evolution composition.
  *
- * VISUAL AND CONTENT AUTHORITY: HomeATA @ e82bba3a4cb282ba1d0e7814d04db950f0905cb8
- * (index.html sha256 13a40303…9b4364a0). Every section, in the frozen order;
- * every string, unabridged; every class name, unchanged — so the namespaced
- * stylesheet, which is that page's own CSS, applies to it exactly.
+ * WHAT THIS PAGE WAS, AND WHY IT IS NO LONGER THAT. Until this phase Public Home
+ * was a byte-faithful port of the frozen HomeATA page @ e82bba3a: every section
+ * in the frozen order, every string unabridged, every class name unchanged. That
+ * identity was deliberately broken here, and ONLY here, on the owner's explicit
+ * authorisation (N-4). The permission covers this route alone — Auth, AppShell,
+ * the Academy Home, Path, Lessons, Reader, Workspace, Tools, Support, Profile and
+ * Notifications keep their own contracts untouched, and so do Backend, CRM and
+ * Partner.
  *
- * WHAT IS NOT HomeATA, AND WHY — the complete list:
+ * WHAT SURVIVES THE BREAK. The visual system is unchanged: the same Ink/Signal
+ * surfaces, the same three vendored families, the same grid, spacing, radii,
+ * focus ring and reveal mechanism. This is a recomposition, not a restyle. The
+ * stylesheet is still namespaced under `.ph` and still makes no remote request.
  *
- *   * `<html>`, `<head>`, `<body>` are the app's, not this page's. The favicon
- *     and theme colour move to the route's metadata, and the stylesheet and
- *     controller are imported rather than <link>ed and <script>ed.
- *   * Anchors that leave the page (`/register`, `/login`, `/home`) are Next
- *     <Link>s. In-page anchors (`#mechanism`, `#top`, …) stay plain <a>, because
- *     they are fragment navigation and must not be intercepted by the router.
- *   * Asset paths point at the vendored copies under /brand/.
- *   * The footer year is rendered on the server instead of written by a script.
- *   * AUTH_STATE_ONLY: for a signed-in visitor the primary call to action
- *     becomes «Перейти в Академию» → /home, and the three service login
- *     affordances are omitted. Composition, order and geometry are untouched.
- *     Nothing else differs between the two states.
+ * WHAT CHANGED, AND WHY:
  *
- * It reads NO learner data. The only thing it knows about the visitor is whether
- * a session exists.
+ *   * The page used to open by negating a category — "не ещё один источник
+ *     информации". An argument against competitors leaves no room for the
+ *     learner's own agency, which is exactly the thing the product asks for. It
+ *     now opens on the human situation: opportunity without a ready answer.
+ *
+ *   * `#recognition` became `#decide`: the same «many → one» device, retargeted
+ *     from "too much content" to "someone else's answer vs your own decision".
+ *
+ *   * The six-step loop gained DECIDE and lost its duplicated CHECK. The product
+ *     audit (N-2) confirmed the report REQUIRES a decision and its basis —
+ *     `pre-trade-reason`, a required field graded by its own rubric criterion.
+ *
+ *   * `#first-journey` merged into `#product`. Four consecutive numbered
+ *     sequences was one too many, and the journey is a detail of the product.
+ *
+ *   * Every reserved slot is gone. The page used to ship four production notes
+ *     to the public («ожидает утверждённый скриншот», «Контент-слот…»). Nothing
+ *     here is empty and nothing announces its own emptiness (N-5).
+ *
+ * OLD ANCHORS STILL RESOLVE. `#recognition`, `#first-journey` and `#start` are
+ * kept as dimensionless alias targets placed at the content that replaced them,
+ * so every published deep link still lands in the right place.
+ *
+ * THE SYNTHETIC MATERIAL IS MARKED AS SYNTHETIC. The report entry that runs
+ * through the Decision Frame, the Academy panel and the two tool panels are
+ * demonstrations of structure, authored for this page. They are labelled
+ * «Демонстрационный пример» wherever they appear. No learner work, no learner
+ * data, no screenshot of a real account, and nothing that depicts profit or a
+ * financial outcome.
+ *
+ * It reads NO learner data and performs no request. The only thing it knows
+ * about the visitor is whether a session exists.
  */
+
+/** The one decision object the Frame carries, in its two settled readings. */
+const DECISION_FIELD = "Причина входа до сделки";
+const DECISION_UNSET = "Ещё не сформулировано";
+const DECISION_WEAK = "Вошёл, потому что показалось, что цена развернётся.";
+const DECISION_STRONG =
+  "Дождался заранее заданного условия входа и не менял план во время сделки.";
+
 export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) {
-  const primary = authenticated
+  const account = authenticated
     ? { href: "/home", label: "Перейти в Академию" }
     : { href: "/register", label: "Начать путь" };
 
@@ -44,42 +78,55 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
       <PublicHomeHeader authenticated={authenticated} />
 
       <main id="main">
-        {/* ---------------------------------------------------------- hero */}
+        {/* ------------------------------------------ 02 · opportunity */}
         <section className="hero surface surface--ink" id="top">
           <div className="hero__inner shell">
             <div className="hero__copy" data-reveal>
-              <p className="eyebrow">Alfa Trade Academy · образовательная платформа</p>
+              <p className="eyebrow">ALFA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
               <h1 className="display display--hero">
-                Не ещё один источник информации о трейдинге.{" "}
-                <span>
-                  Система, где знание превращается в действие, проверку, обратную связь и
-                  следующий шаг.
-                </span>
+                Возможности не приходят с готовыми ответами.
               </h1>
               <p className="hero__definition">
-                Уроки, проверки знаний, практические задания и разбор работы человеком собраны в
-                один последовательный путь из 100 уровней.
+                Рынок — одна из таких сред. В ATA вы последовательно учитесь понимать ситуацию,
+                формулировать собственное решение и его основание, действовать, проверять работу и
+                исправлять её.
               </p>
               <div className="hero__actions">
-                <Link className="button button--signal" href={primary.href}>
-                  {primary.label}
+                <a className="button button--signal" href="#mechanism">
+                  Посмотреть, как работает ATA
                   <svg viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M4 10h11M11 6l4 4-4 4" />
                   </svg>
+                </a>
+                <Link className="button button--ghost" href={account.href}>
+                  {account.label}
                 </Link>
               </div>
               <p className="hero__boundary">
-                ATA не является сигнальным сервисом и не обещает гарантированный финансовый
-                результат.
+                ATA — образовательная среда. Мы не даём торговых сигналов и не обещаем
+                гарантированный финансовый результат.
               </p>
             </div>
 
-            <div
-              className="video-reserve"
-              data-reveal
-              role="img"
-              aria-label="Зарезервированное место для будущего бренд-видео и собственного плеера ATA"
-            />
+            {/* Decision Frame — stage 1. NOT an empty reserve: the object inside
+                is a real report field, legible and deliberately unfinished. */}
+            <figure className="dframe dframe--open" data-reveal data-frame-stage="open">
+              <figcaption className="dframe__label">
+                <span className="demo-badge">Демонстрационный пример</span>
+                <span className="dframe__stage">Решение ещё не определено</span>
+              </figcaption>
+              <div className="dframe__object">
+                <p className="dframe__field">{DECISION_FIELD}</p>
+                <p className="dframe__value dframe__value--empty">
+                  {DECISION_UNSET}
+                  <i className="dframe__caret" aria-hidden="true" />
+                </p>
+                <div className="dframe__unresolved" aria-hidden="true">
+                  <i />
+                  <i />
+                </div>
+              </div>
+            </figure>
           </div>
 
           <div className="hero__facts shell" aria-label="Ключевые факты о пути ATA" data-reveal>
@@ -102,55 +149,67 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           </div>
         </section>
 
-        {/* --------------------------------------------------- recognition */}
-        <section className="recognition surface surface--signal" id="recognition">
+        {/* ------------------------------------------------- 03 · decide */}
+        <section className="recognition surface surface--signal" id="decide">
+          {/* Alias: `#recognition` was this section's published address. */}
+          <span className="anchor-alias" id="recognition" aria-hidden="true" />
           <div className="shell recognition__grid">
             <div className="section-intro" data-reveal>
-              <p className="eyebrow eyebrow--dark">Проблема · не в количестве материалов</p>
-              <h2 className="display display--section">Информации много. Системы — мало.</h2>
+              <p className="eyebrow eyebrow--dark">От чужого ответа — к собственному решению</p>
+              <h2 className="display display--section">
+                На рынке решение нельзя полностью делегировать.
+              </h2>
               <p className="lead">
-                Можно смотреть разборы, читать статьи и знать термины — но всё ещё не понимать,
-                что делать следующим и правильно ли применено знание.
+                Можно изучать чужие разборы, стратегии и мнения. Но действовать приходится вам — и
+                понимать, на чём основано ваше решение.
               </p>
             </div>
 
             <div className="reframe" data-reveal>
-              <div className="source-cloud" aria-label="Разрозненные источники информации">
-                <span>YouTube</span>
-                <span>Telegram</span>
-                <span>Статьи</span>
+              <div className="source-cloud" aria-label="Чужие ответы">
+                <span>Разборы</span>
                 <span>Стратегии</span>
                 <span>Сигналы</span>
-                <span>Разные мнения</span>
+                <span>Прогнозы</span>
+                <span>Мнения</span>
+                <span>Чужие выводы</span>
               </div>
               <div className="reframe__axis" aria-hidden="true" />
-              <div className="next-action-concept">
-                <div className="frame-mark frame-mark--compact" aria-hidden="true">
-                  <i />
-                  <i />
+
+              {/* Decision Frame — stage 2: the same object, now determinate. */}
+              <figure className="dframe dframe--set" data-frame-stage="set">
+                <figcaption className="dframe__label">
+                  <span className="demo-badge">Демонстрационный пример</span>
+                  <span className="dframe__stage">Основание сформулировано</span>
+                </figcaption>
+                <div className="dframe__object">
+                  <p className="dframe__field">{DECISION_FIELD}</p>
+                  <p className="dframe__value">{DECISION_STRONG}</p>
                 </div>
-                <p className="micro-label">Принцип ATA · не интерфейс продукта</p>
-                <h3>Один понятный следующий шаг</h3>
-                <p>Не выбирать из двадцати действий. Выполнить текущую задачу и открыть следующую.</p>
-              </div>
+                <p className="dframe__statement">
+                  Собственное решение — не чужой вывод. Это действие, основание которого вы можете
+                  объяснить.
+                </p>
+              </figure>
             </div>
           </div>
         </section>
 
-        {/* ----------------------------------------------------- mechanism */}
+        {/* ---------------------------------------------- 04 · mechanism */}
         <section className="mechanism surface surface--ink" id="mechanism">
           <div className="shell">
             <div className="section-intro section-intro--wide" data-reveal>
               <p className="eyebrow">Как это работает</p>
               <h2 className="display display--section">
-                Путь, в котором каждый шаг должен что-то изменить.
+                Цикл, в котором решение принимаете вы.
               </h2>
               <p className="lead">
-                ATA превращает обучение в повторяемый цикл, а ошибку — в часть процесса развития.
+                На предусмотренных уровнях путь ATA связывает понимание, собственное решение,
+                практическую работу, проверку и исправление.
               </p>
             </div>
 
-            <ol className="learning-loop" aria-label="Шесть этапов учебного цикла ATA">
+            <ol className="learning-loop" aria-label="Шесть этапов цикла ATA">
               <li data-reveal>
                 <span>01</span>
                 <h3>Понять</h3>
@@ -158,34 +217,107 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </li>
               <li data-reveal>
                 <span>02</span>
-                <h3>Проверить себя</h3>
-                <p>Подтвердить понимание через проверку знаний.</p>
+                <h3>Решить</h3>
+                <p>Сформулировать собственное решение и назвать его основание.</p>
               </li>
               <li data-reveal>
                 <span>03</span>
-                <h3>Применить</h3>
-                <p>Перевести знание в конкретную практическую работу.</p>
+                <h3>Действовать</h3>
+                <p>Перевести решение в конкретную практическую работу.</p>
               </li>
               <li data-reveal>
                 <span>04</span>
-                <h3>Получить разбор</h3>
-                <p>На ключевых этапах работа проверяется человеком.</p>
+                <h3>Проверить</h3>
+                <p>Подтвердить понимание проверкой знаний, а работу — разбором.</p>
               </li>
               <li data-reveal>
                 <span>05</span>
                 <h3>Исправить</h3>
-                <p>Учесть замечания и повторно отправить работу.</p>
+                <p>Учесть замечания и, если требуется, отправить новую версию.</p>
               </li>
               <li data-reveal>
                 <span>06</span>
-                <h3>Двигаться дальше</h3>
+                <h3>Продвинуться</h3>
                 <p>После выполнения условий открывается следующий уровень.</p>
               </li>
             </ol>
           </div>
         </section>
 
-        {/* ------------------------------------------------- product proof */}
+        {/* --------------------------------------- 05 · signature evidence */}
+        <section className="review-proof surface surface--ink" id="review">
+          <div className="shell">
+            <div className="review-proof__heading" data-reveal>
+              <div>
+                <p className="eyebrow">Главное доказательство · проверка работы</p>
+                <h2 className="display display--section">Пройдено — ещё не значит освоено.</h2>
+              </div>
+              <p className="lead">
+                На предусмотренных уровнях работа проходит полный цикл: первая версия, разбор
+                человеком, исправление и принятие.
+              </p>
+            </div>
+
+            <p className="demo-badge demo-badge--block" data-reveal>
+              Демонстрационный пример структуры работы
+            </p>
+
+            <ol className="evidence-track" data-evidence aria-label="Цикл проверки практической работы">
+              <li data-reveal data-frame-stage="v1">
+                <p className="evidence__index">V1</p>
+                <h3>Работа отправлена</h3>
+                <div className="evidence__object">
+                  <p className="dframe__field">{DECISION_FIELD}</p>
+                  <p className="dframe__value">{DECISION_WEAK}</p>
+                </div>
+                <p className="evidence__note">
+                  Учащийся фиксирует решение и его основание в отчёте уровня.
+                </p>
+              </li>
+
+              <li data-reveal data-frame-stage="feedback">
+                <p className="evidence__index">Разбор</p>
+                <h3>Работа проверена</h3>
+                <div className="evidence__object evidence__object--flagged">
+                  <p className="dframe__field">Критерий · Причина до сделки</p>
+                  <p className="evidence__verdict">Требуется доработка</p>
+                  <p className="evidence__action">
+                    Опишите условие, которое вы определили заранее, а не ощущение в момент входа.
+                  </p>
+                </div>
+                <p className="evidence__note">
+                  Проверяющий возвращает работу по конкретному критерию рубрики.
+                </p>
+              </li>
+
+              <li data-reveal data-frame-stage="v2">
+                <p className="evidence__index">V2</p>
+                <h3>Замечание исправлено</h3>
+                <div className="evidence__object evidence__object--corrected">
+                  <p className="dframe__field">{DECISION_FIELD}</p>
+                  <p className="dframe__value">{DECISION_STRONG}</p>
+                </div>
+                <p className="evidence__note">
+                  Меняется то же самое место — основание решения, а не оформление.
+                </p>
+              </li>
+
+              <li data-reveal data-frame-stage="accepted">
+                <p className="evidence__index">✓</p>
+                <h3>Работа принята</h3>
+                <div className="evidence__object evidence__object--accepted">
+                  <p className="evidence__accepted">Условия уровня выполнены</p>
+                  <p className="evidence__action">Следующий уровень открывается.</p>
+                </div>
+                <p className="evidence__note">
+                  Принятие подтверждает выполненную работу — не результат сделок.
+                </p>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        {/* ----------------------------------- 06 · product + first journey */}
         <section
           className="product-proof surface surface--signal surface--signal-deep"
           id="product"
@@ -220,118 +352,61 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                   <strong>Контрольные точки и прогресс</strong>
                 </div>
               </div>
+
+              {/* Alias: `#first-journey` was its own section; it now lands on the
+                  journey line that replaced it. */}
+              <span className="anchor-alias" id="first-journey" aria-hidden="true" />
+              <ol className="journey-line" aria-label="Первые шаги пользователя ATA" data-reveal>
+                <li>
+                  <span>Старт</span>
+                  <h3>Создать аккаунт</h3>
+                  <p>Регистрация и зачисление в действующий путь ATA.</p>
+                </li>
+                <li>
+                  <span>L1</span>
+                  <h3>Подготовить среду</h3>
+                  <p>Создать внешнюю торговую среду для практической части.</p>
+                </li>
+                <li>
+                  <span>L2</span>
+                  <h3>Понять устройство ATA</h3>
+                  <p>Вводный урок и первая проверка знаний.</p>
+                </li>
+                <li>
+                  <span>L3</span>
+                  <h3>Практика и разбор</h3>
+                  <p>Первая практическая работа, отчёт и проверка человеком.</p>
+                </li>
+              </ol>
             </div>
 
-            <div className="asset-slot asset-slot--product" data-reveal>
-              <div className="asset-slot__corner asset-slot__corner--tl" aria-hidden="true" />
-              <div className="asset-slot__corner asset-slot__corner--br" aria-hidden="true" />
-              <div>
-                <p className="micro-label">
-                  Только реальный продукт · ожидает утверждённый скриншот
-                </p>
-                <h3>Главный экран Academy</h3>
-                <p>Текущее действие и состояние прогресса</p>
+            <div className="product-panel" data-reveal>
+              <p className="demo-badge">Демонстрационный пример</p>
+              <div className="product-panel__frame">
+                <div className="product-panel__bar">
+                  <span>Academy · текущий шаг</span>
+                </div>
+                <div className="product-panel__body">
+                  <p className="product-panel__eyebrow">Модуль 01 · Уровень 3</p>
+                  <p className="product-panel__title">Первые пять demo-сделок</p>
+                  <p className="product-panel__meta">Отчёт · проверка человеком</p>
+                  <div className="product-panel__steps" aria-hidden="true">
+                    <i className="is-done" />
+                    <i className="is-done" />
+                    <i className="is-current" />
+                    <i />
+                    <i />
+                  </div>
+                  <p className="product-panel__hint">
+                    Следующий уровень откроется после принятия работы.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* -------------------------------------------------- review proof */}
-        <section className="review-proof surface surface--ink" id="review">
-          <div className="shell">
-            <div className="review-proof__heading" data-reveal>
-              <div>
-                <p className="eyebrow">Главное доказательство · проверка работы</p>
-                <h2 className="display display--section">Посмотрел — не значит освоил.</h2>
-              </div>
-              <p className="lead">
-                На ключевых уровнях работа должна пройти полный цикл: первая версия, проверка,
-                исправление, повторная отправка и принятие.
-              </p>
-            </div>
-
-            <ol className="review-sequence" aria-label="Цикл проверки практической работы">
-              <li data-reveal>
-                <span className="review-sequence__index">V1</span>
-                <div className="review-sequence__slot" />
-                <h3>Работа отправлена</h3>
-                <p>Пользователь фиксирует результат практического этапа в отчёте.</p>
-              </li>
-              <li data-reveal>
-                <span className="review-sequence__index">01</span>
-                <div className="review-sequence__slot review-sequence__slot--annotated" />
-                <h3>Работа проверена</h3>
-                <p>Проверяющий возвращает структурированную обратную связь.</p>
-              </li>
-              <li data-reveal>
-                <span className="review-sequence__index">V2</span>
-                <div className="review-sequence__slot review-sequence__slot--resolved" />
-                <h3>Замечания исправлены</h3>
-                <p>Обновлённая версия повторно отправляется на проверку.</p>
-              </li>
-              <li data-reveal>
-                <span className="review-sequence__index">✓</span>
-                <div className="review-sequence__slot review-sequence__slot--approved" />
-                <h3>Работа принята</h3>
-                <p>Требования этапа выполнены, и путь может продолжаться.</p>
-              </li>
-            </ol>
-
-            <p className="asset-note" data-reveal>
-              Контент-слот: до публикации схема заменяется утверждённым обезличенным
-              демо-материалом «V1 → проверка → V2 → принято».
-            </p>
-          </div>
-        </section>
-
-        {/* ------------------------------------------------- first journey */}
-        <section className="first-journey surface surface--signal" id="first-journey">
-          <div className="shell">
-            <div className="section-intro section-intro--wide" data-reveal>
-              <p className="eyebrow eyebrow--dark">Что произойдёт после регистрации</p>
-              <h2 className="display display--section">
-                Первые уровни быстро приводят к практике.
-              </h2>
-              <p className="lead">
-                После создания аккаунта пользователь попадает в Academy и видит один текущий шаг.
-              </p>
-            </div>
-
-            <ol className="journey-line" aria-label="Первые шаги пользователя ATA">
-              <li data-reveal>
-                <span>Старт</span>
-                <h3>Создать аккаунт</h3>
-                <p>Регистрация и автоматическое зачисление в действующий путь ATA.</p>
-              </li>
-              <li data-reveal>
-                <span>L1</span>
-                <h3>Подготовить среду</h3>
-                <p>Создать необходимую внешнюю торговую среду для практической части.</p>
-              </li>
-              <li data-reveal>
-                <span>L2</span>
-                <h3>Понять устройство ATA</h3>
-                <p>Пройти вводный урок и первую проверку знаний.</p>
-              </li>
-              <li data-reveal>
-                <span>L3</span>
-                <h3>Выполнить практику</h3>
-                <p>Сделать первую практическую работу и отправить отчёт.</p>
-              </li>
-              <li data-reveal>
-                <span>L3</span>
-                <h3>Получить разбор</h3>
-                <p>При необходимости исправить работу и отправить её повторно.</p>
-              </li>
-            </ol>
-
-            <Link className="button button--dark" href={primary.href} data-reveal>
-              {primary.label}
-            </Link>
-          </div>
-        </section>
-
-        {/* ---------------------------------------------------------- path */}
+        {/* --------------------------------------------------- 07 · path */}
         <section className="path surface surface--ink" id="path">
           <div className="shell path__grid">
             <div className="path__copy" data-reveal>
@@ -357,7 +432,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                 </div>
                 <div>
                   <dt>XP</dt>
-                  <dd>Мотивирует, но не открывает следующий уровень</dd>
+                  <dd>Системный показатель. Не открывает уровень и не подтверждает освоение</dd>
                 </div>
               </dl>
             </div>
@@ -394,19 +469,18 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           </div>
         </section>
 
-        {/* --------------------------------------------------------- tools */}
+        {/* -------------------------------------------------- 08 · tools */}
         <section className="tools surface surface--signal" id="tools">
           <div className="shell">
             <div className="tools__heading" data-reveal>
               <div>
-                <p className="eyebrow eyebrow--dark">Инструменты · по мере готовности</p>
+                <p className="eyebrow eyebrow--dark">Инструменты · готовы сейчас</p>
                 <h2 className="display display--section">
                   Инструмент появляется в контексте задачи.
                 </h2>
               </div>
               <p className="lead">
-                Не витрина из будущих функций. На Home показываем только два подтверждённых
-                примера.
+                Не витрина из будущих функций. Два инструмента, которые уже работают.
               </p>
             </div>
 
@@ -416,8 +490,26 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                   <span>Открывается на L10</span>
                   <strong>01</strong>
                 </div>
-                <div className="asset-slot asset-slot--tool">
-                  <p className="micro-label">Ожидает утверждённый скриншот</p>
+                <div className="tool-panel">
+                  <p className="demo-badge">Демонстрационный пример</p>
+                  <div className="tool-panel__rows">
+                    <div>
+                      <span>Актив</span>
+                      <strong>—</strong>
+                    </div>
+                    <div>
+                      <span>Причина входа до сделки</span>
+                      <strong>заполняется учащимся</strong>
+                    </div>
+                    <div>
+                      <span>План соблюдён</span>
+                      <strong>да / нет</strong>
+                    </div>
+                    <div>
+                      <span>Наблюдение после сделки</span>
+                      <strong>заполняется учащимся</strong>
+                    </div>
+                  </div>
                 </div>
                 <h3>Trading Journal</h3>
                 <p>
@@ -430,8 +522,26 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                   <span>Открывается на L15</span>
                   <strong>02</strong>
                 </div>
-                <div className="asset-slot asset-slot--tool asset-slot--calculator">
-                  <p className="micro-label">Ожидает утверждённый скриншот</p>
+                <div className="tool-panel">
+                  <p className="demo-badge">Демонстрационный пример</p>
+                  <div className="tool-panel__rows">
+                    <div>
+                      <span>Сценарий</span>
+                      <strong>задаётся заранее</strong>
+                    </div>
+                    <div>
+                      <span>Условие отмены</span>
+                      <strong>задаётся заранее</strong>
+                    </div>
+                    <div>
+                      <span>Доля риска на сделку</span>
+                      <strong>выбирает учащийся</strong>
+                    </div>
+                    <div>
+                      <span>Размер позиции</span>
+                      <strong>рассчитывается</strong>
+                    </div>
+                  </div>
                 </div>
                 <h3>Risk Calculator</h3>
                 <p>
@@ -443,7 +553,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           </div>
         </section>
 
-        {/* ----------------------------------------------------------- fit */}
+        {/* ---------------------------------------------------- 09 · fit */}
         <section className="fit surface surface--signal surface--signal-deep" id="fit">
           <div className="shell">
             <div className="section-intro section-intro--wide" data-reveal>
@@ -451,6 +561,10 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               <h2 className="display display--section">
                 Право сказать «не сейчас» тоже создаёт доверие.
               </h2>
+              <p className="lead">
+                ATA может подойти тем, кто хочет понимать основания собственного решения и готов
+                проверять качество своей работы.
+              </p>
             </div>
 
             <div className="fit__columns">
@@ -481,7 +595,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           </div>
         </section>
 
-        {/* ---------------------------------------------------- boundaries */}
+        {/* --------------------------------------------- 10 · boundaries */}
         <section className="boundaries surface surface--ink" id="boundaries">
           <div className="shell boundaries__grid">
             <div data-reveal>
@@ -516,7 +630,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           </div>
         </section>
 
-        {/* ----------------------------------------------------------- faq */}
+        {/* --------------------------------------- 11 · faq + final cta */}
         <section className="faq surface surface--paper" id="faq">
           <div className="shell faq__grid">
             <div className="faq__heading" data-reveal>
@@ -573,32 +687,27 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </details>
             </div>
           </div>
-        </section>
 
-        {/* ----------------------------------------------------- final cta */}
-        <section className="final-cta surface surface--ink" id="start">
-          <div className="shell final-cta__grid" data-reveal>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/ata-logo.svg" alt="Alfa Trade Academy" width={362} height={200} />
-            <div>
-              <p className="eyebrow">Первый шаг</p>
-              <h2 className="display display--section">
-                Если вам нужен не ещё один источник информации, а понятный путь — начните с
-                первого уровня.
-              </h2>
-            </div>
-            <div className="final-cta__action">
-              <p>После регистрации вы попадёте в Academy и увидите свой первый шаг.</p>
-              <div className="final-cta__buttons">
-                <Link className="button button--signal" href={primary.href}>
-                  {primary.label}
+          {/* Alias: `#start` addressed the final call to action. */}
+          <span className="anchor-alias" id="start" aria-hidden="true" />
+          <div className="shell final-step" data-reveal>
+            <p className="eyebrow eyebrow--dark">Первый шаг</p>
+            <h2 className="display display--section final-step__title">
+              Если вы хотите не повторять чужие ответы, а учиться принимать собственные решения —
+              начните с первого уровня.
+            </h2>
+            <p className="final-step__support">
+              После регистрации вы увидите один понятный следующий шаг.
+            </p>
+            <div className="final-step__actions">
+              <Link className="button button--dark" href={account.href}>
+                {account.label}
+              </Link>
+              {authenticated ? null : (
+                <Link className="client-entry" href="/login">
+                  Уже клиент? <strong>Войти</strong>
                 </Link>
-                {authenticated ? null : (
-                  <Link className="client-entry" href="/login">
-                    Уже клиент? <strong>Войти</strong>
-                  </Link>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </section>
@@ -608,11 +717,10 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
         <div className="shell site-footer__grid">
           <p>© <span data-year>{new Date().getFullYear()}</span> Alfa Trade Academy</p>
           <p>Обучение и прохождение ATA не гарантируют финансовый результат.</p>
-          <nav aria-label="Юридическая информация">
-            <span>Конфиденциальность</span>
-            <span>Условия</span>
-            <span>Риски</span>
-          </nav>
+          {/* The three legal labels have no destination pages yet. They are NOT
+              links and NOT a navigation landmark — an affordance that goes
+              nowhere is worse than plain text (N-6). */}
+          <p className="site-footer__legal">Конфиденциальность · Условия · Риски</p>
         </div>
       </footer>
     </div>
