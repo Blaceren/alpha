@@ -29,11 +29,15 @@ const nextConfig = {
    *                    decorative;
    *
    *   a per-request nonce  which Next supports, but only when middleware
-   *                    generates it and sets the CSP on the REQUEST — and
-   *                    adopting it opts every page out of static rendering,
-   *                    because a nonce cannot be baked into a cached document.
-   *                    Public Home, /login and /register are statically served
-   *                    today. That is an architecture change, not a header.
+   *                    generates it and sets the CSP on the REQUEST, and which
+   *                    forces every document through that middleware on every
+   *                    render. That is an architecture change, not a header.
+   *
+   * A CORRECTION TO AN EARLIER VERSION OF THIS NOTE. It said a nonce would cost
+   * the static rendering of Public Home, /login and /register. It would not:
+   * the prerender manifest lists only /_global-error and /_not-found, and those
+   * three routes have always been rendered per request. The reason to hold the
+   * full policy is the first option above, not the second.
    *
    * So script-src and style-src are deliberately absent, and this is reported
    * rather than guessed at. What ships is every header that needs no such

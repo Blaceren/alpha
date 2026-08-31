@@ -82,3 +82,49 @@ describe("the video player's palette", () => {
     }
   });
 });
+
+/**
+ * H-STALE-2 — the board is gone; its colours must not follow it in.
+ *
+ * The QA showcase board hardcoded a blue palette that was never the product's.
+ * Removing the route removed the stylesheet, but nothing stopped someone
+ * copying a value out of git history into a product surface — and a mutation
+ * battery proved it: pasting the board's blues into a real stylesheet passed
+ * every test in this repository.
+ */
+describe("the retired showcase palette stays out of the product", () => {
+  /** Values that only ever existed on the QA board. */
+  const BOARD_ONLY = [
+    "#2f6ff5", "#1d4fae", "#346fdc", "#4f83e0", "#76a4f8", "#245ec8",
+    "#6f9ad8", "#8090aa", "#9eacc1", "#91a1b8", "#acb9cb", "#c7d3e6",
+    "#dce6f4", "#e9f0fb", "#eef5ff", "#f1f5fb", "#f7faff", "#edf3fb",
+  ];
+
+  function cssFiles(): string[] {
+    const out: string[] = [];
+    const walk = (d: string) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (p.endsWith(".css")) out.push(p);
+      }
+    };
+    walk(join(ROOT, "src"));
+    return out;
+  }
+
+  it("reads every stylesheet, so an empty sweep cannot pass this", () => {
+    expect(cssFiles().length).toBeGreaterThan(20);
+  });
+
+  it("finds none of the board's colours in any stylesheet", () => {
+    const offenders: string[] = [];
+    for (const file of cssFiles()) {
+      const css = readFileSync(file, "utf8").toLowerCase();
+      for (const hex of BOARD_ONLY) {
+        if (css.includes(hex)) offenders.push(`${file.replace(ROOT + "/", "")} :: ${hex}`);
+      }
+    }
+    expect(offenders, "a colour from the removed QA board is in a product stylesheet").toEqual([]);
+  });
+});
