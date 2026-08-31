@@ -37,3 +37,23 @@ CREATE INDEX "UserSession_userId_idx" ON "UserSession"("userId");
 
 -- Expiry sweeps read by expiresAt.
 CREATE INDEX "UserSession_expiresAt_idx" ON "UserSession"("expiresAt");
+
+-- ONE ACTIVE SESSION PER USER, ENFORCED BY THE DATABASE.
+--
+-- The application already revokes-then-inserts inside a transaction, and that
+-- is the right shape. It is not, on its own, an invariant: any other writer —
+-- a script, a future route, a hand-typed INSERT during an incident — can create
+-- a second live row without going through it, and nothing would notice until a
+-- learner had two working sessions.
+--
+-- A PARTIAL index is what expresses the rule exactly. `userId` alone cannot be
+-- unique, because a user accumulates revoked rows over time and they are
+-- history worth keeping. The uniqueness applies only to the live ones.
+--
+-- SQLite supports partial indexes directly, so this needs no application
+-- fallback. Prisma cannot express the WHERE clause in schema.prisma, so the
+-- index is created here and the schema records it in a comment — the database
+-- is the authority either way.
+CREATE UNIQUE INDEX "UserSession_userId_active_key"
+    ON "UserSession"("userId")
+    WHERE "revokedAt" IS NULL;

@@ -19,6 +19,16 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * LEARNER SESSION STORE: 53 -> 54. One additive migration,
+ * `20260831120000_learner_session_store`, which creates UserSession and its
+ * three indexes — including the partial unique index that makes "one live
+ * session per user" a database constraint rather than an application habit.
+ * It alters no existing table and rewrites no existing row, so a Backend built
+ * before it never queries the table and rollback is inert.
+ *
+ * BUMPED IN THE SAME COMMIT AS THE MIGRATION, which is what this file's own
+ * header asks for and what the previous five drifts failed to do.
+ *
  * LEARNER-OPS AND COMMUNITY: 50 -> 53. THREE migrations, none of which bumped
  * this constant when it landed:
  *
@@ -123,7 +133,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 53;
+export const EXPECTED_MIGRATION_COUNT = 54;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

@@ -26,7 +26,7 @@ import {
   type AffiliateStatus,
   type TrackingLinkStatus,
 } from "@/lib/crm/affiliates";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { SESSION_COOKIE_NAME, resolveSession } from "@/lib/session";
 
 export const PUBLIC_CODE_PATTERN = /^[a-z2-7]{32}$/;
 
@@ -48,28 +48,42 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * can ever be attributed, so the ordering costs nothing and the more specific
  * fact is the one recorded.
  */
-export function classifyRequest(request: Request): ClickClassification {
+export async function classifyRequest(request: Request): Promise<ClickClassification> {
   if (isPrefetchRequest(request.headers)) return "prefetch";
 
-  const cookieHeader = request.headers.get("cookie");
-  if (cookieHeader !== null && cookieHeader.length <= 8192) {
-    for (const segment of cookieHeader.split(";")) {
-      const separator = segment.indexOf("=");
-      if (separator <= 0) continue;
-      if (segment.slice(0, separator).trim() !== SESSION_COOKIE_NAME) continue;
-      /* PRESENCE, NOT VERIFICATION — and that is a downgrade worth stating.
-         The session token is opaque now, so nothing outside the database can
-         tell a real one from a forged one, and this function is synchronous
-         click CLASSIFICATION with no security consequence. A forged cookie
-         mislabels one analytics row and grants nothing. Verifying here would
-         mean a database read on every affiliate hop to decide a label. */
-      if (segment.slice(separator + 1).trim().length > 0) {
-        return "authenticated_user";
-      }
-    }
+  /* THE SESSION IS VERIFIED, NOT ASSUMED.
+     An intermediate version of this read the cookie and called its mere
+     presence `authenticated_user`. That is wrong even for analytics: anyone can
+     set a cookie, so the label would have meant "this browser sent a string",
+     and a label nobody can trust is worse than no label — it would have
+     silently suppressed attribution for visitors who were never signed in.
+
+     So it resolves the token through the same authority every authenticated
+     request uses. Revoked, expired, unknown, forged and blocked all resolve to
+     null and fall through to `qualified`, which is the honest answer: as far as
+     this platform is concerned, nobody is signed in.
+
+     The cost is one indexed lookup on a hash, and only when a session cookie is
+     actually present. */
+  const token = readSessionCookieValue(request.headers.get("cookie"));
+  if (token !== null && (await resolveSession(token)) !== null) {
+    return "authenticated_user";
   }
 
   return "qualified";
+}
+
+/** The session cookie's raw value from a Cookie header, or null. */
+function readSessionCookieValue(cookieHeader: string | null): string | null {
+  if (cookieHeader === null || cookieHeader.length > 8192) return null;
+  for (const segment of cookieHeader.split(";")) {
+    const separator = segment.indexOf("=");
+    if (separator <= 0) continue;
+    if (segment.slice(0, separator).trim() !== SESSION_COOKIE_NAME) continue;
+    const value = segment.slice(separator + 1).trim();
+    return value.length > 0 ? value : null;
+  }
+  return null;
 }
 
 export type VisitorJourney = {

@@ -116,7 +116,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Next
   const capture = captureForLink(url, link);
   if (capture.kind === "rejected") return badRequest();
 
-  const classification = classifyRequest(request);
+  const classification = await classifyRequest(request);
   const now = new Date();
 
   // A prefetch and a click by an already-authenticated user are recorded, and

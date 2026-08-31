@@ -141,19 +141,48 @@ function hashToken(token: string): string {
  * insert, so exactly one row is left live.
  */
 export async function issueSession(userId: number): Promise<string> {
-  const token = randomBytes(32).toString("base64url");
-  const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+  /* THE DATABASE IS THE INVARIANT, AND IT CAN SAY NO.
+     `UserSession_userId_active_key` is a unique index over (userId) WHERE
+     revokedAt IS NULL, so two logins racing for the same user cannot both
+     insert — one of them loses. That is the constraint working, not an error
+     worth showing anyone: the loser simply re-reads the world and tries again,
+     and its second attempt revokes the winner's row and inserts its own.
 
-  await prisma.$transaction(async (tx) => {
-    await tx.userSession.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await tx.userSession.create({ data: { userId, tokenHash, expiresAt } });
-  });
+     Bounded deliberately. A retry loop that never gives up would turn a
+     genuine database fault into a hang; three attempts covers contention and
+     lets anything else surface as the failure it is. */
+  let lastError: unknown = null;
 
-  return token;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.userSession.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        await tx.userSession.create({ data: { userId, tokenHash, expiresAt } });
+      });
+      return token;
+    } catch (error) {
+      lastError = error;
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+
+  throw lastError;
+}
+
+/** A unique-constraint failure, however this Prisma version reports it. */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  if (code === "P2002") return true;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && /UNIQUE constraint failed/i.test(message);
 }
 
 /**

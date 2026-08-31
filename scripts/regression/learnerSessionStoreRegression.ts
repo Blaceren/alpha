@@ -233,6 +233,171 @@ async function main() {
     assert.deepEqual(foreign, [], "another table depends on UserSession");
   });
 
+  /* -------------------------------------------- the database's own invariant
+     Everything above proves the APPLICATION keeps one session live. That is not
+     the same as the invariant holding: any other writer can insert a row without
+     going through issueSession. These prove the database refuses it. */
+
+  await check("25. the database itself rejects a second live session", async () => {
+    await prisma.userSession.deleteMany({ where: { userId: user.id } });
+    await session.issueSession(user.id);
+    let rejected = false;
+    try {
+      // Straight past issueSession, exactly as a script or an incident would.
+      await prisma.userSession.create({
+        data: { userId: user.id, tokenHash: `bypass-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000) },
+      });
+    } catch {
+      rejected = true;
+    }
+    assert.equal(rejected, true, "the database allowed a second live session");
+    const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
+    assert.equal(live, 1);
+  });
+
+  await check("26. one revoked plus one live is allowed", async () => {
+    await prisma.userSession.deleteMany({ where: { userId: user.id } });
+    await prisma.userSession.create({
+      data: { userId: user.id, tokenHash: `rev-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000), revokedAt: new Date() },
+    });
+    await session.issueSession(user.id);
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id } }), 2);
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 1);
+  });
+
+  await check("27. many revoked rows are allowed — history is not the constraint", async () => {
+    await prisma.userSession.deleteMany({ where: { userId: user.id } });
+    for (let i = 0; i < 5; i += 1) {
+      await prisma.userSession.create({
+        data: { userId: user.id, tokenHash: `old-${i}-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000), revokedAt: new Date() },
+      });
+    }
+    await session.issueSession(user.id);
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id } }), 6);
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 1);
+  });
+
+  await check("28. the index exists, is unique, and is partial", async () => {
+    const rows: Array<{ sql: string | null }> = await prisma.$queryRawUnsafe(
+      "SELECT sql FROM sqlite_master WHERE type='index' AND name='UserSession_userId_active_key'",
+    );
+    assert.equal(rows.length, 1, "the partial unique index is missing");
+    const sql = (rows[0]?.sql ?? "").toUpperCase();
+    assert.ok(sql.includes("UNIQUE"), "the index is not unique");
+    assert.ok(sql.includes("WHERE"), "the index is not partial — it would forbid revoked history");
+    assert.ok(sql.includes("REVOKEDAT") && sql.includes("NULL"));
+  });
+
+  await check("29. concurrent logins still leave exactly one live row, now with the index in force", async () => {
+    await prisma.userSession.deleteMany({ where: { userId: other.id } });
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, () => session.issueSession(other.id)),
+    );
+    /* NONE of them may fail. The index makes one writer lose the race, and
+       issueSession retries — so a learner who double-clicks Sign in gets a
+       session, not a 500. A rejection here means the retry stopped working. */
+    const rejected = results.filter((r) => r.status === "rejected");
+    assert.deepEqual(
+      rejected.map((r) => String((r as PromiseRejectedResult).reason).slice(0, 120)),
+      [],
+      "a concurrent login failed instead of retrying",
+    );
+    const live = await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } });
+    assert.equal(live, 1, `six concurrent logins left ${live} live rows`);
+    const tokens = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    let working = 0;
+    for (const token of tokens) if (await session.resolveSession(token)) working += 1;
+    assert.equal(working, 1, `${working} tokens still authenticate`);
+  });
+
+  await check("37. a failed issue throws — it never hands back an unpersisted token", async () => {
+    /* The retry loop exists so a lost race does not become a 500. It must not
+       become the opposite: a login that returns a token nothing stored, leaving
+       the browser with a cookie that will never authenticate. A missing user
+       fails the foreign key, which is not a unique violation, so it must
+       surface immediately. */
+    let threw = false;
+    let returned: string | null = null;
+    try {
+      returned = await session.issueSession(2_147_000_000);
+    } catch {
+      threw = true;
+    }
+    assert.equal(threw, true, "issueSession returned instead of throwing");
+    if (returned !== null) {
+      assert.equal(await session.resolveSession(returned), null, "it returned a working token");
+    }
+    const orphans = await prisma.userSession.count({ where: { userId: 2_147_000_000 } });
+    assert.equal(orphans, 0);
+  });
+
+  /* ---------------------------------------------- analytics is not authority
+     Click classification labels a row; it grants nothing. But a label that
+     anyone can set by writing a cookie is not a label, and an intermediate
+     version of this called mere presence `authenticated_user`. These prove it
+     verifies, and that every failure mode falls through to `qualified` rather
+     than claiming a learner. */
+  {
+    const { classifyRequest } = await import("../../src/lib/affiliate/acquisition-click");
+    const req = (cookie: string | null) =>
+      new Request("https://example.test/go/abc", { headers: cookie ? { cookie } : {} });
+    const NAME = session.SESSION_COOKIE_NAME;
+
+    await check("30. a valid active session classifies as an authenticated learner", async () => {
+      await prisma.userSession.deleteMany({ where: { userId: user.id } });
+      const token = await session.issueSession(user.id);
+      assert.equal(await classifyRequest(req(`${NAME}=${token}`)), "authenticated_user");
+    });
+
+    await check("31. a random cookie is not an authenticated learner", async () => {
+      assert.equal(await classifyRequest(req(`${NAME}=not-a-real-token`)), "qualified");
+      assert.equal(await classifyRequest(req(`${NAME}=`)), "qualified");
+      assert.equal(await classifyRequest(req(null)), "qualified");
+    });
+
+    await check("32. a revoked session is not an authenticated learner", async () => {
+      const token = await session.issueSession(user.id);
+      await session.revokeSession(token);
+      assert.equal(await classifyRequest(req(`${NAME}=${token}`)), "qualified");
+    });
+
+    await check("33. an expired session is not an authenticated learner", async () => {
+      const token = await session.issueSession(user.id);
+      await prisma.userSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      assert.equal(await classifyRequest(req(`${NAME}=${token}`)), "qualified");
+    });
+
+    await check("34. a blocked user is not an authenticated learner", async () => {
+      const token = await session.issueSession(user.id);
+      await prisma.user.update({ where: { id: user.id }, data: { status: "blocked" } });
+      assert.equal(await classifyRequest(req(`${NAME}=${token}`)), "qualified");
+      await prisma.user.update({ where: { id: user.id }, data: { status: "active" } });
+    });
+
+    await check("35. a legacy stateless token is not an authenticated learner", async () => {
+      const legacy = `${user.id}.user.${Date.now() + 60_000}.` + "0".repeat(64);
+      assert.equal(await classifyRequest(req(`trading_platform_session=${legacy}`)), "qualified");
+      assert.equal(await classifyRequest(req(`${NAME}=${legacy}`)), "qualified");
+    });
+
+    await check("36. classification decides no permission and writes nothing", () => {
+      const code = fs.readFileSync(
+        path.join(process.cwd(), "src/lib/affiliate/acquisition-click.ts"),
+        "utf8",
+      );
+      const fn = code.slice(code.indexOf("export async function classifyRequest"));
+      const body = fn.slice(0, fn.indexOf("\n}"));
+      for (const forbidden of ["prisma.", "create(", "update(", "delete(", "requireCurrentUser", "canAccess"]) {
+        assert.ok(!body.includes(forbidden), `classifyRequest does ${forbidden}`);
+      }
+      // Its only outward call is the read-only resolver.
+      assert.ok(body.includes("resolveSession"));
+    });
+  }
+
   /* ------------------------------------------------------------ the wiring
      Everything above drives the store directly. That is the right way to test
      what a session IS, and it cannot see whether the ROUTES call any of it — a

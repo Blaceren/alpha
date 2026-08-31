@@ -209,7 +209,8 @@
     "test:regression:growth-fix-wave": "tsx scripts/regression/growthFixWaveRegression.ts",
     "test:regression:growth-fix-wave-2": "tsx scripts/regression/growthFixWave2Regression.ts",
     "ops:learner-ops-fixture": "tsx scripts/ops/learnerOpsAcceptanceFixture.ts",
-    "test:regression:learner-session-store": "tsx scripts/regression/learnerSessionStoreRegression.ts"
+    "test:regression:learner-session-store": "tsx scripts/regression/learnerSessionStoreRegression.ts",
+    "test:regression:learner-session-http": "tsx scripts/regression/learnerSessionHttpRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

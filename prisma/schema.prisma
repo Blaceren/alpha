@@ -5275,4 +5275,10 @@ model UserSession {
 
   @@index([userId])
   @@index([expiresAt])
+
+  /// ONE LIVE SESSION PER USER IS ENFORCED BY THE DATABASE, not by this file.
+  /// The migration creates `UserSession_userId_active_key`, a UNIQUE index on
+  /// (userId) WHERE revokedAt IS NULL. Prisma cannot express a partial index,
+  /// so it lives in SQL — but it is a real constraint, and a second live row
+  /// fails at the database no matter which writer attempts it.
 }
