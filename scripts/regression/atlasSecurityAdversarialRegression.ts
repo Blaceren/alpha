@@ -22,6 +22,8 @@
  * whether narrowness is a defect or a correct scope.
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 import { ANALYSIS_CATALOG, CATALOG_CODES } from "../../src/lib/analysis/analysis-catalog";
 import { buildAnalysisReport } from "../../src/lib/analysis/analysis-report";
@@ -215,8 +217,6 @@ check("A0 this suite's lexicon copy is identical to the accepted suite's", () =>
   //
   // Both lists are extracted from source and compared, so an edit to either
   // fails here until the other is updated.
-  const fs = require("node:fs") as typeof import("node:fs");
-  const path = require("node:path") as typeof import("node:path");
 
   function entriesOf(file: string, key: string): string[] {
     const text = fs.readFileSync(path.join(process.cwd(), file), "utf8");
@@ -474,8 +474,6 @@ check("B7 the rules emit only the two direction values the template understands"
   // other than "up" asserts a decrease. That is safe only while every caller
   // passes exactly "up" or "down", which is asserted here against the rule source
   // rather than assumed.
-  const fs = require("node:fs") as typeof import("node:fs");
-  const path = require("node:path") as typeof import("node:path");
   const rules = fs.readFileSync(
     path.join(process.cwd(), "src/lib/analysis/analysis-rules.ts"),
     "utf8",
@@ -978,7 +976,6 @@ check("H5 the replay states that no model was invoked", () => {
 
 console.log(`\nAFD-5D3 atlas adversarial security: ${passed} passed, ${failed} failed`);
 if (process.env.AFD5D3_RESULTS_JSON) {
-  const fs = require("node:fs") as typeof import("node:fs");
   fs.writeFileSync(
     process.env.AFD5D3_RESULTS_JSON,
     JSON.stringify({ suite: "atlas-adversarial", passed, failed, results }, null, 2),

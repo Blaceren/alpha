@@ -19,6 +19,7 @@
  * Core row — this suite cannot create one because it never opens a connection.
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import { ANALYSIS_THRESHOLDS } from "../../src/lib/analysis/analysis-contract";
 import { buildAnalysisReport } from "../../src/lib/analysis/analysis-report";
@@ -708,7 +709,6 @@ check("G6 no PII of any shape reaches the response", () => {
 check("G7 the sufficiency module opens no database connection", () => {
   // Structural: it imports no Prisma client and no query module, so it cannot
   // create an Agent Core row or read a learner.
-  const fs = require("node:fs") as typeof import("node:fs");
   const source = fs.readFileSync("src/lib/analysis/analysis-sufficiency.ts", "utf8");
   for (const forbidden of ["PrismaClient", "prisma", "$queryRaw", "fetch(", "agentRun"]) {
     assert.ok(!source.includes(forbidden), `sufficiency module references ${forbidden}`);

@@ -19,6 +19,23 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * LEARNER-OPS AND COMMUNITY: 50 -> 53. THREE migrations, none of which bumped
+ * this constant when it landed:
+ *
+ *   20260816000000_learner_operations_v1
+ *   20260816120000_learner_ops_review_work_item_anchors
+ *   20260816180000_community_v1
+ *
+ * THE FIFTH TIME THIS HAS DECAYED, and the first time it went unnoticed for a
+ * different reason than before. The four CRM HTTP suites that read this value
+ * could not START: they spawn `next dev --turbopack`, and this workspace's
+ * node_modules is a farm of symlinks into /srv/ata/repos, so Turbopack failed
+ * to resolve the Next package and the server never bound. A suite that cannot
+ * run cannot go red, so the count drifted with nothing to report it.
+ *
+ * The runtime is fixed in the same closure. This is the correction that makes
+ * the assertion start guarding again.
+ *
  * G4 GROWTH FOUNDATION: 46 -> 47. One additive migration,
  * `20260813000000_growth_event_foundation`, which creates GrowthEvent,
  * GrowthEventOutbox and ProviderIngressEvent and backfills the ledger from the
@@ -106,7 +123,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 50;
+export const EXPECTED_MIGRATION_COUNT = 53;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

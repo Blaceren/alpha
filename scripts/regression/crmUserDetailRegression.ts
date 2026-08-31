@@ -537,7 +537,10 @@ async function main() {
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
       // `affiliates` joins in AFD-2 — an administrative namespace with no
       // learner-facing route and no click, attribution or conversion data.
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
+      /* `learner-ops`, `growth` and `community` joined with their own domains
+         and are present on the deployed Backend. All three are administrative
+         namespaces; the nested-route assertions below are unchanged. */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
       // owner-candidates is a flat read-only route: exactly one route file.
       assert.deepEqual(fs.readdirSync(path.join(crmV1, "owner-candidates")).sort(), ["route.ts"]);
 
@@ -545,7 +548,11 @@ async function main() {
       assert.deepEqual(fs.readdirSync(usersDir).sort(), ["[userId]", "route.ts"]);
       // Notes v1 added nested notes; Owner v1 adds nested owner; Owner History
       // OH-1 adds a nested owner/history read. Nothing else.
-      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), ["notes", "owner", "route.ts"]);
+      assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]")).sort(), /* `progression` joined nested under users/[userId] with administrative
+         forward correction (078bce9), and is present on the deployed Backend.
+         Nested is where it belongs: correcting one learner's record is an
+         operation on that learner, not a top-level CRM namespace. */
+      ["notes", "owner", "progression", "route.ts"]);
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "notes")).sort(), ["route.ts"]);
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner")).sort(), ["history", "route.ts"]);
       assert.deepEqual(fs.readdirSync(path.join(usersDir, "[userId]", "owner", "history")).sort(), ["route.ts"]);

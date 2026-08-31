@@ -760,7 +760,9 @@ async function main() {
       // `affiliates` joins in AFD-2 (partners, campaigns, tracking-links). It is
       // an administrative namespace only: it serves no learner, exposes no
       // public route and holds no click, attribution or conversion data.
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
+      /* `learner-ops`, `growth` and `community` joined with their own domains and
+         are present on the deployed Backend. The ban list below is unchanged. */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
       // Notes v1 and Owner v1 ship NESTED users/[userId]/{notes,owner} routes. A
       // top-level /api/crm/v1/notes or /owner route must still never exist, so
       // both stay banned here — this check only looks at the CRM v1 top level.

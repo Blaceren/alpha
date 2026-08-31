@@ -209,8 +209,25 @@ async function main() {
     });
 
     await check("10. effectivePermissions match the matrix in canonical order", () => {
-      assert.deepEqual(adminReply!.body.effectivePermissions, [...CRM_PERMISSIONS]);
+      /* This used to assert that an admin holds EVERY declared permission. That
+         stopped being true when `progression_operator` was introduced as its own
+         role: `curriculum_progress_override` is granted to that role alone, so
+         no single role holds the whole vocabulary any more. Separation of duties
+         is the point of the split, and asserting the old equality would pin its
+         absence.
+
+         The canonical ORDER is still the thing under test, so it is still
+         compared element by element — against the admin's own grant, with the
+         one permission an admin deliberately lacks named rather than skipped. */
       assert.deepEqual(adminReply!.body.effectivePermissions, resolveEffectivePermissions("crm_admin"));
+      const adminHas = new Set<string>(adminReply!.body.effectivePermissions as string[]);
+      const adminLacks = CRM_PERMISSIONS.filter((permission) => !adminHas.has(permission));
+      assert.deepEqual(adminLacks, ["curriculum_progress_override"]);
+      // Order is canonical: the admin's grant is CRM_PERMISSIONS with that one removed.
+      assert.deepEqual(
+        adminReply!.body.effectivePermissions,
+        CRM_PERMISSIONS.filter((permission) => permission !== "curriculum_progress_override"),
+      );
     });
 
     await check("11. permissionVersion is a positive integer", () => {
@@ -257,7 +274,11 @@ async function main() {
       // — the assertion is now that the session carries exactly the read_only
       // matrix and nothing an admin would have.
       assert.deepEqual(reply.body.effectivePermissions, resolveEffectivePermissions("read_only"));
-      assert.deepEqual(reply.body.effectivePermissions, ["curriculum_read"]);
+      /* `learner_ops_view` joined the read_only matrix with the learner-ops
+         domain (269dd69, which also brought migration 51). It is a read
+         capability — "may look at operational work and learner context" — so it
+         belongs to a read-only staff role. */
+      assert.deepEqual(reply.body.effectivePermissions, ["curriculum_read", "learner_ops_view"]);
       for (const forbidden of [
         "manage_settings",
         "reveal_pii",
@@ -310,7 +331,12 @@ async function main() {
       // 360 have not appeared and that owner mutation lives nested under
       // users/[userId], not here.
       const crmV1 = path.join(process.cwd(), "src", "app", "api", "crm", "v1");
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "owner-candidates", "session", "users"]);
+      /* Three namespaces joined since this line was written, each with its own
+         phase: `learner-ops` and `growth` with the operational domain, and
+         `community` with the discussion domain (022cbad). All three are
+         administrative namespaces, and all three are present on the deployed
+         Backend. The ban list below is the part that matters and is unchanged. */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
       // A top-level /api/crm/v1/notes or /owner route still must not exist:
       // notes and owner are nested under users/[userId] and asserted there.
       for (const banned of ["notes", "owner", "owners", "audit", "360", "user-360"]) {

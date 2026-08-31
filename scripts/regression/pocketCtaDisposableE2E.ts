@@ -27,6 +27,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import bcrypt from "bcryptjs";
 
+/** A parsed JSON body, before anything has decided what it is. */
+type JsonBody = Record<string, unknown> | null;
+
 const ACADEMY = "https://57.128.213.204";
 const CALLBACK = "https://57.128.213.204/api/postbacks/pocket";
 const ENV_FILE = "/home/ubuntu/runtime/ata-dev-v2/env/backend.env";
@@ -75,11 +78,14 @@ function session() {
         if (i > 0) jar.set(pair.slice(0, i), pair.slice(i + 1));
       }
       const text = await res.text();
-      let json: any = null;
-      try { json = JSON.parse(text); } catch { /* html */ }
+      /* A response body is unknown until something reads it. `JsonBody` says
+         only that: an index into an object of unknowns, which every call site
+         below narrows for itself. It is not a claim about any real payload. */
+      let json: JsonBody = null;
+      try { json = JSON.parse(text) as JsonBody; } catch { /* html */ }
       return { status: res.status, text, json };
     },
-    async csrf() { return String((await this.req("GET", "/api/backend/csrf")).json.csrfToken); },
+    async csrf() { return String((await this.req("GET", "/api/backend/csrf")).json?.csrfToken); },
   };
 }
 
@@ -129,7 +135,7 @@ async function main() {
     const reply = await s.req("POST", "/api/backend/exchange/referral-link", undefined,
       { "x-csrf-token": await s.csrf() });
     assert.equal(reply.status, 200, `HTTP ${reply.status}`);
-    const url = new URL(String(reply.json.referralUrl));
+    const url = new URL(String(reply.json?.referralUrl));
     assert.equal(url.origin, "https://u3.shortink.io");
     assert.equal(url.pathname, "/register");
     assert.equal(url.searchParams.get("cid"), "962747", "cid must survive");
@@ -198,10 +204,17 @@ async function main() {
 
   await check("9 the public Academy now reports L1 completed and L2 available", async () => {
     const cur = await s.req("GET", "/api/backend/curriculum/current");
-    const d = cur.json?.data ?? {};
-    const levels = (d.modules ?? []).flatMap((m: any) => m.levels ?? []);
-    const l1 = levels.find((l: any) => l.levelNumber === 1);
-    const l2 = levels.find((l: any) => l.levelNumber === 2);
+    /* The body is unknown until something looks at it. These shapes are read
+       positionally and nothing else here depends on them, so a narrow local
+       type says exactly what is being read without claiming to describe the
+       whole curriculum payload. */
+    type LevelRow = { levelNumber?: number; durableStatus?: string; presentationState?: string };
+    type ModuleRow = { levels?: LevelRow[] };
+    type CurrentBody = { modules?: ModuleRow[]; enrollment?: { highestCompletedLevel?: number } };
+    const d = (cur.json as { data?: CurrentBody } | null)?.data ?? {};
+    const levels = (d.modules ?? []).flatMap((m) => m.levels ?? []);
+    const l1 = levels.find((l) => l.levelNumber === 1);
+    const l2 = levels.find((l) => l.levelNumber === 2);
     assert.equal(d.enrollment?.highestCompletedLevel, 1);
     assert.equal(l1?.durableStatus, "completed", `L1 durable=${l1?.durableStatus}`);
     assert.notEqual(l2?.presentationState, "locked", `L2=${l2?.presentationState}`);
