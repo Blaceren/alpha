@@ -166,7 +166,45 @@ export type SafeReportSubmission = {
     kind: "draft_autosave" | "initial_submission" | "resubmission";
     createdAt: string;
     submittedAt: string | null;
+    /**
+     * The completed, learner-visible review OF THIS REVISION, or null while it
+     * has not been reviewed.
+     *
+     * ADDITIVE AND CORRELATED BY REVISION. A consumer that does not know this
+     * field keeps working, and one that does never has to guess which review
+     * belongs to which version by comparing timestamps — the nesting is the
+     * correlation.
+     *
+     * SINGULAR BECAUSE THE SCHEMA IS. `ReportReview` carries
+     * `@@unique([revisionId])`, so a revision can never accumulate a second
+     * review. An array here would advertise a multiplicity the database
+     * forbids, and every consumer would have to write a loop that can only ever
+     * run once — and decide, wrongly, what to do if it ran twice.
+     */
+    review: LearnerReportReviewEvent | null;
   }>;
+};
+
+/**
+ * ONE COMPLETED REVIEW, as the learner may see it.
+ *
+ * WHY THIS EXISTS. `rejection` above reports only `latestReview`, and only
+ * while its decision is `rejected`. So the moment a report is accepted, every
+ * review it ever received becomes invisible: a learner who submitted, was asked
+ * to correct something, corrected it and was accepted could see the two
+ * versions but nothing about the request that produced the second one.
+ *
+ * WHAT AN APPROVED EVENT CARRIES. Its decision and when it was made, and
+ * nothing else. The rejection fields stay null rather than borrowing the words
+ * of an earlier rejection — an acceptance did not say those things.
+ */
+export type LearnerReportReviewEvent = {
+  decision: "approved" | "rejected";
+  reviewedAt: string;
+  reasonCode: string | null;
+  reasonTitle: string | null;
+  humanComment: string | null;
+  correctiveAction: string | null;
 };
 
 export type ResolveOwnReportContextResult =
@@ -231,11 +269,96 @@ type DefinitionGraph = {
 
 type SubmissionGraph = Prisma.ReportSubmissionGetPayload<{
   include: {
-    revisions: true;
+    revisions: { include: { reviews: { include: { reason: { include: { localizations: true } } } } } };
     receipts: true;
     latestReview: { include: { reason: { include: { localizations: true } } } };
   };
 }>;
+
+/**
+ * THE ONE PROJECTION OF A REVIEW, used by all three learner read paths.
+ *
+ * The context read, the revision list and the revision detail each used to
+ * inline their own copy of these five fields. Three copies of a privacy
+ * boundary is three chances to widen one of them by accident, so the boundary
+ * is written once, here, as an explicit construction.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and must stay absent: `reviewerId`, the
+ * reviewer's name, `reviewerRoleSnapshot`, `claimedAt`, `claimExpiresAt`,
+ * `requestId`, `payloadFingerprint`, rubric `scores`, and every database id.
+ * Nothing here spreads a Prisma row — each field is named.
+ */
+type LearnerReviewRow = {
+  decision: string;
+  reviewedAt: Date;
+  humanComment: string | null;
+  correctiveAction: string | null;
+  reason: { stableKey: string; localizations: Array<{ locale: string; title: string }> } | null;
+};
+
+/**
+ * The four rejection fields as a REJECTION carries them — all four present, or
+ * nothing. Declared separately from `LearnerReportReviewEvent`, whose copies
+ * are nullable because an approved review has none of them: picking from the
+ * event would make these four nullable too and quietly let a half-built
+ * rejection through the older `rejection` field, which promises all four.
+ */
+type LearnerRejectionFields = {
+  reasonCode: string;
+  reasonTitle: string;
+  humanComment: string;
+  correctiveAction: string;
+};
+
+/** The four rejection fields, or null when they are not all available. */
+function learnerRejectionFields(
+  review: LearnerReviewRow,
+  locale: string | null | undefined,
+): LearnerRejectionFields | null {
+  if (review.decision !== "rejected") return null;
+  const reason = review.reason;
+  const localization = locale ? reason?.localizations.find((item) => item.locale === locale) : null;
+  if (!reason || !localization || !review.humanComment || !review.correctiveAction) return null;
+  return {
+    reasonCode: reason.stableKey,
+    reasonTitle: localization.title,
+    humanComment: review.humanComment,
+    correctiveAction: review.correctiveAction,
+  };
+}
+
+/**
+ * One review as a learner-visible event. An approved review reports its
+ * decision and its time with the four rejection fields null; a rejected one
+ * reports them when the reason, its localization, the comment and the
+ * corrective action are all present, and null when any is missing — a partial
+ * rejection is never assembled, and never filled in from a different review.
+ */
+function learnerReviewEvent(review: LearnerReviewRow, locale: string | null | undefined): LearnerReportReviewEvent | null {
+  if (review.decision !== "approved" && review.decision !== "rejected") return null;
+  const fields = learnerRejectionFields(review, locale);
+  return {
+    decision: review.decision,
+    reviewedAt: review.reviewedAt.toISOString(),
+    reasonCode: fields?.reasonCode ?? null,
+    reasonTitle: fields?.reasonTitle ?? null,
+    humanComment: fields?.humanComment ?? null,
+    correctiveAction: fields?.correctiveAction ?? null,
+  };
+}
+
+/**
+ * The review of one revision, or null. The schema allows one; a row that is
+ * neither approved nor rejected is not a completed review and yields null
+ * rather than a half-event.
+ */
+function learnerReviewOf(
+  reviews: readonly LearnerReviewRow[],
+  locale: string | null | undefined,
+): LearnerReportReviewEvent | null {
+  const row = reviews[0];
+  return row ? learnerReviewEvent(row, locale) : null;
+}
 
 function flagsEnabled() {
   return isCurriculumV2ReadEnabled() && isCurriculumV2EnrollmentEnabled() && isCurriculumV2ReportEnabled();
@@ -346,7 +469,20 @@ async function loadSubmission(tx: TransactionClient, scope: Scope): Promise<Subm
   return tx.reportSubmission.findUnique({
     where: { enrollmentId_levelDefinitionId: { enrollmentId: scope.enrollmentId, levelDefinitionId: scope.level.id } },
     include: {
-      revisions: { orderBy: [{ revisionNumber: "asc" }, { id: "asc" }] },
+      /* Reviews are loaded THROUGH the revision they reviewed, so the pairing
+         is structural rather than a timestamp comparison. History order is the
+         canonical `revisionNumber`; `reviewedAt` is the time an event happened,
+         never the thing that orders the history. The nested `orderBy` is
+         defensive only — `@@unique([revisionId])` allows one row. */
+      revisions: {
+        orderBy: [{ revisionNumber: "asc" }, { id: "asc" }],
+        include: {
+          reviews: {
+            include: { reason: { include: { localizations: true } } },
+            orderBy: [{ id: "asc" }],
+          },
+        },
+      },
       receipts: { where: { actorUserId: scope.actorUserId }, orderBy: [{ appliedAt: "asc" }, { id: "asc" }] },
       latestReview: { include: { reason: { include: { localizations: true } } } },
     },
@@ -710,15 +846,19 @@ function inspectSubmission(
   }
   let fieldValues: Record<string, unknown>;
   try { fieldValues = normalizeFieldValues(fields, active.content, active.kind !== "draft_autosave"); } catch { return "revision_pointer_corrupt"; }
+  /* UNCHANGED BEHAVIOUR, ONE FEWER COPY. This still reports only the latest
+     review and only while it is a rejection, and it still treats an incomplete
+     rejection as a corrupt submission when a locale was asked for. What moved
+     is where the five fields are named: `learnerRejectionFields` now owns that,
+     so this path and the two history paths cannot drift apart. */
   let rejection: SafeReportSubmission["rejection"] = null;
   if (submission.latestReview?.decision === "rejected") {
     const review = submission.latestReview;
-    const reason = review.reason;
-    const reasonLocalization = locale ? reason?.localizations.find((item) => item.locale === locale) : null;
-    if (!reason || !reasonLocalization || !review.humanComment || !review.correctiveAction) {
+    const fields = learnerRejectionFields(review, locale);
+    if (!fields) {
       if (locale) return "submission_corrupt";
     } else {
-      rejection = { reasonCode: reason.stableKey, reasonTitle: reasonLocalization.title, humanComment: review.humanComment, correctiveAction: review.correctiveAction, reviewedAt: review.reviewedAt.toISOString() };
+      rejection = { ...fields, reviewedAt: review.reviewedAt.toISOString() };
     }
   }
   return {
@@ -733,7 +873,14 @@ function inspectSubmission(
       firstSubmittedAt: safeDate(submission.firstSubmittedAt),
       submittedAt: safeDate(submission.submittedAt),
       rejection,
-      history: submission.revisions.map((revision) => ({ revisionNumber: revision.revisionNumber, kind: revision.kind, createdAt: revision.createdAt.toISOString(), submittedAt: safeDate(revision.submittedAt) })),
+      history: submission.revisions.map((revision) => ({
+        revisionNumber: revision.revisionNumber,
+        kind: revision.kind,
+        createdAt: revision.createdAt.toISOString(),
+        submittedAt: safeDate(revision.submittedAt),
+        /* The completed review of THIS revision, or null while none exists. */
+        review: learnerReviewOf(revision.reviews, locale),
+      })),
     },
   };
 }
@@ -842,6 +989,8 @@ export type OwnReportRevisionSummary = {
   kind: "draft_autosave" | "initial_submission" | "resubmission";
   createdAt: string;
   submittedAt: string | null;
+  /** Same additive field, same correlation, so the two history routes agree. */
+  review: LearnerReportReviewEvent | null;
 };
 
 export type OwnReportRevisionAttachment = {
@@ -911,6 +1060,7 @@ export async function listOwnReportRevisions(
         kind: revision.kind,
         createdAt: revision.createdAt.toISOString(),
         submittedAt: safeDate(revision.submittedAt),
+        review: learnerReviewOf(revision.reviews, parsed.data.locale),
       })),
       nextCursor,
     };
@@ -945,20 +1095,19 @@ export async function getOwnReportRevision(
     } catch {
       return { kind: "corrupt", reason: "revision_pointer_corrupt" };
     }
-    const review = context.submission.latestReview;
-    let feedback: OwnReportRevisionDetail["feedback"] = null;
-    if (review && review.decision === "rejected" && review.revisionId === revision.id) {
-      const reasonLocalization = review.reason?.localizations.find((item) => item.locale === parsed.data.locale);
-      if (review.reason && reasonLocalization && review.humanComment && review.correctiveAction) {
-        feedback = {
-          reasonCode: review.reason.stableKey,
-          reasonTitle: reasonLocalization.title,
-          humanComment: review.humanComment,
-          correctiveAction: review.correctiveAction,
-          reviewedAt: review.reviewedAt.toISOString(),
-        };
-      }
-    }
+    /* THE REVISION'S OWN REVIEW, not the submission's latest one.
+       The shape is unchanged and so is the rule — a rejection, complete, or
+       null. What changed is which review is read: this used to consult
+       `latestReview` and require it to point at this revision, so asking about
+       an earlier rejected version of an accepted report returned nothing. The
+       docblock above already described the behaviour written here. */
+    const review = learnerReviewOf(revision.reviews, parsed.data.locale);
+    const rejectedRow = revision.reviews.find((row) => row.decision === "rejected");
+    const rejectedFields = rejectedRow ? learnerRejectionFields(rejectedRow, parsed.data.locale) : null;
+    const feedback: OwnReportRevisionDetail["feedback"] =
+      rejectedRow && rejectedFields
+        ? { ...rejectedFields, reviewedAt: rejectedRow.reviewedAt.toISOString() }
+        : null;
     let attachments: OwnReportRevisionAttachment[] = [];
     if (isCurriculumV2ReportAttachmentsEnabled()) {
       const rows = await tx.reportAttachment.findMany({
@@ -1006,6 +1155,7 @@ export async function getOwnReportRevision(
         kind: revision.kind,
         createdAt: revision.createdAt.toISOString(),
         submittedAt: safeDate(revision.submittedAt),
+        review,
         fieldValues,
         feedback,
         attachments,
@@ -1231,7 +1381,18 @@ export async function saveOwnReportDraft(
           workflowVersion: 0,
         },
         include: {
-          revisions: { orderBy: [{ revisionNumber: "asc" }, { id: "asc" }] },
+          /* A submission created in this call has no revisions yet, so this
+             include adds no rows — it is here because the graph type is one
+             shape and a second one would drift. */
+          revisions: {
+            orderBy: [{ revisionNumber: "asc" }, { id: "asc" }],
+            include: {
+              reviews: {
+                include: { reason: { include: { localizations: true } } },
+                orderBy: [{ id: "asc" }],
+              },
+            },
+          },
           receipts: true,
           latestReview: { include: { reason: { include: { localizations: true } } } },
         },
