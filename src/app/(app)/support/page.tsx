@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { getServerViewer } from "@/server/auth/server-session";
+import { UnreadPresence } from "@/components/shell/unread-presence";
 import { SupportHub } from "@/features/support/components/support-hub";
 import "@/features/support/support.css";
 
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
 export default async function SupportPage() {
   const viewer = await getServerViewer();
   return (
-    <AppShell userName={viewer?.name ?? "Ученик"} activeId="support" frozenSurface>
+    <AppShell userName={viewer?.name ?? "Ученик"} activeId="support" frozenSurface notificationPresence={<UnreadPresence />}>
       <SupportHub />
     </AppShell>
   );

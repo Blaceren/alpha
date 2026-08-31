@@ -15,7 +15,7 @@
  * then the real name — the only route with a loading boundary, and correct.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
@@ -148,5 +148,72 @@ describe("the neutral fallback, executed rather than read", () => {
     const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).toContain('?? "Ученик"');
     expect(code).not.toMatch(/"Артём"/);
+  });
+});
+
+/* ── THE LIVE ROUTES, ENUMERATED ───────────────────────────────────────────
+   Everything above reasons about AppShell call sites. That is necessary and
+   not sufficient: a call site can be dead, and a route can reach its shell
+   through two or three components. SHELL-UNREAD-PRESENCE-SUPPORT-1 hid in
+   exactly that gap — /support renders the bell like every other authenticated
+   route and was the only one that never passed the mark, which is invisible to
+   any learner whose list happens to be empty.
+
+   So this block starts from the ROUTES, walks each one to the component that
+   actually renders its shell in api mode, and asserts the mark is passed there.
+   A new route with a bell and no presence fails here even if its shell is
+   written somewhere this file has never heard of. */
+describe("every live api route that shows the bell also passes the unread mark", () => {
+  /** route -> the module whose AppShell that route renders in api mode. */
+  const LIVE_API_ROUTES: Array<{ route: string; shell: string }> = [
+    { route: "/home", shell: "src/features/auth-home-fidelity/auth-home-screen.tsx" },
+    { route: "/path", shell: "src/features/path-fidelity/path-fidelity-view.tsx" },
+    { route: "/lessons", shell: "src/features/lessons-fidelity/lessons-fidelity-screen.tsx" },
+    { route: "/lessons/[levelCode]", shell: "src/features/academy-experience/level-detail-screen.tsx" },
+    { route: "/lessons/[levelCode]/material", shell: "src/features/reader-fidelity/reader-fidelity-screen.tsx" },
+    { route: "/path/[levelCode]/workspace", shell: "src/features/workspace-fidelity/workspace-fidelity-screen.tsx" },
+    { route: "/profile", shell: "src/app/(app)/profile/page.tsx" },
+    { route: "/notifications", shell: "src/app/(app)/notifications/page.tsx" },
+    { route: "/support", shell: "src/app/(app)/support/page.tsx" },
+    { route: "/tools", shell: "src/app/(app)/tools/page.tsx" },
+    { route: "/tools/[toolCode]", shell: "src/app/(app)/tools/[toolCode]/page.tsx" },
+  ];
+
+  /* /community is not on the list because it is not live: it answers 404 by
+     product decision, and its shells are frozen with it. That is a decision,
+     not an omission, and it is written here so the next reader does not "fix"
+     it by adding the route back. */
+
+  it("names a shell module for every route, and each module exists", () => {
+    for (const { route, shell } of LIVE_API_ROUTES) {
+      expect(existsSync(join(ROOT, shell)), `${route} -> ${shell}`).toBe(true);
+    }
+  });
+
+  it("passes notificationPresence from every one of them", () => {
+    const missing = LIVE_API_ROUTES.filter(({ shell }) => {
+      const src = readFileSync(join(ROOT, shell), "utf8");
+      const shells = [...src.matchAll(/<AppShell\b[^>]*>/g)].map((m) => m[0]);
+      // Every shell the module renders must pass it, not merely one of them.
+      return shells.length === 0 || shells.some((tag) => !tag.includes("notificationPresence"));
+    });
+    expect(missing.map((m) => `${m.route} (${m.shell})`)).toEqual([]);
+  });
+
+  it("takes its unread answer from the one accepted server authority", () => {
+    // No new endpoint, no client fetch, no write on page view.
+    const authority = readFileSync(join(ROOT, "src/components/shell/unread-presence.tsx"), "utf8");
+    expect(authority).toContain("hasUnreadNotifications");
+    expect(authority).not.toContain('"use client"');
+    expect(authority).not.toMatch(/fetch\(/);
+    // Unknown is not a claim: anything but a definite true renders nothing.
+    expect(authority).toContain("if (unread !== true) return null;");
+  });
+
+  it("makes no write while resolving presence", () => {
+    const reader = readFileSync(join(ROOT, "src/server/notifications/unread-presence.ts"), "utf8");
+    for (const forbidden of ["POST", "PATCH", "PUT", "DELETE", "read-all", "markAsRead"]) {
+      expect(reader, `presence must not ${forbidden}`).not.toContain(forbidden);
+    }
   });
 });
