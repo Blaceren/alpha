@@ -200,7 +200,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const decided = container.querySelector("#decide .dframe") as HTMLElement;
     expect(text(decided)).toContain("Причина входа до сделки");
-    expect(text(decided)).toContain("Дождался заранее заданного условия входа");
+    expect(text(decided)).toContain("До сделки зафиксировал условие");
   });
 
   it("marks every synthetic panel as a demonstration", () => {
@@ -251,6 +251,54 @@ describe("Public Home — signature evidence", () => {
     expect(text(v1)).toContain(field);
     expect(text(v2)).toContain(field);
     expect(text(v1)).not.toEqual(text(v2));
+  });
+
+  it("names the sequence so no stage reads as already accepted", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const track = container.querySelector(".evidence-track") as HTMLElement;
+    const titles = Array.from(track.querySelectorAll("h3")).map((h) => h.textContent);
+    // «Работа проверена» could be read as work already accepted; the stage is the
+    // receipt of a review, not its outcome.
+    expect(titles).toEqual([
+      "Работа отправлена",
+      "Получен разбор",
+      "Замечание исправлено",
+      "Работа принята",
+    ]);
+    expect(text(container)).not.toContain("Работа проверена");
+  });
+
+  it("closes the objection it raised — V2 states the condition, not that one existed", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const track = container.querySelector(".evidence-track") as HTMLElement;
+    const feedback = text(track.querySelector('[data-frame-stage="feedback"]') as HTMLElement);
+    const v2 = text(track.querySelector('[data-frame-stage="v2"]') as HTMLElement);
+
+    // The reviewer asks for the condition to be described.
+    expect(feedback).toContain("Опишите условие, которое вы определили заранее");
+    // So the corrected version must NAME it. Claiming a condition was waited for
+    // without saying what it was leaves the objection formally open.
+    expect(v2).toContain("зафиксировал условие");
+    expect(v2).toContain("вход только после подтверждения заранее отмеченного уровня");
+    expect(v2).not.toMatch(/^\s*Дождался заранее заданного условия входа/);
+
+    // And it must stay a process statement: no instrument, price or direction.
+    for (const forbidden of ["EUR", "USD", "покупк", "продаж", "лонг", "шорт", "вверх", "вниз"]) {
+      expect(v2.toLowerCase()).not.toContain(forbidden.toLowerCase());
+    }
+  });
+
+  it("carries one identical decision string through #decide and #review", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const decide = container.querySelector("#decide .dframe .dframe__value") as HTMLElement;
+    const v2 = container.querySelector(
+      '[data-frame-stage="v2"] .dframe__value',
+    ) as HTMLElement;
+    expect(decide, "#decide has no resolved value").not.toBeNull();
+    expect(v2, "V2 has no value").not.toBeNull();
+    // One object means one wording. Divergence here is how the two states quietly
+    // stop being the same object.
+    expect(text(v2)).toBe(text(decide));
   });
 
   it("does not dress acceptance as a financial win", () => {
@@ -310,6 +358,17 @@ describe("Public Home — session-aware calls to action", () => {
 });
 
 describe("Public Home — legal labels are not fake links", () => {
+  it("states the final call to action positively", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const final = container.querySelector(".final-step") as HTMLElement;
+    const heading = final.querySelector("h2") as HTMLElement;
+    expect(text(heading)).toBe(
+      "Если вы хотите учиться принимать собственные решения — начните с первого уровня.",
+    );
+    // It used to open by naming what the visitor should not want.
+    expect(text(container)).not.toContain("не повторять чужие ответы");
+  });
+
   it("keeps them as text, outside any navigation landmark", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const footer = container.querySelector("footer") as HTMLElement;
@@ -317,6 +376,31 @@ describe("Public Home — legal labels are not fake links", () => {
     const legal = footer.querySelector(".site-footer__legal") as HTMLElement;
     expect(text(legal)).toContain("Конфиденциальность");
     expect(legal.querySelector("a")).toBeNull();
+  });
+});
+
+describe("Public Home — skip link", () => {
+  it("is the first focusable element and points at main", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const first = container.querySelector("a, button") as HTMLElement;
+    expect(first.classList.contains("skip-link")).toBe(true);
+    expect(first.getAttribute("href")).toBe("#main");
+    expect(container.querySelector("#main")).not.toBeNull();
+  });
+
+  it("stays off-screen without focus, and is not hidden from the keyboard", () => {
+    const rule = /\.ph \.skip-link \{([^}]*position: fixed[^}]*)\}/.exec(css);
+    expect(rule, "skip-link rule is missing").not.toBeNull();
+    const body = rule?.[1] ?? "";
+    // Off-screen by transform, never display:none / visibility:hidden — either of
+    // those would take it out of the tab order and leave the page without one.
+    expect(body).toMatch(/transform:\s*translateY\(-\d+%\)/);
+    expect(body).not.toMatch(/display:\s*none/);
+    expect(body).not.toMatch(/visibility:\s*hidden/);
+
+    const focused = /\.ph \.skip-link:focus-visible \{([^}]*)\}/.exec(css);
+    expect(focused, "skip-link has no focus-visible rule").not.toBeNull();
+    expect(focused?.[1]).toMatch(/transform:\s*translateY\(0\)/);
   });
 });
 

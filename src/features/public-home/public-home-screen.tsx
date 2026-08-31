@@ -60,7 +60,8 @@ const DECISION_FIELD = "Причина входа до сделки";
 const DECISION_UNSET = "Ещё не сформулировано";
 const DECISION_WEAK = "Вошёл, потому что показалось, что цена развернётся.";
 const DECISION_STRONG =
-  "Дождался заранее заданного условия входа и не менял план во время сделки.";
+  "До сделки зафиксировал условие: вход только после подтверждения заранее " +
+  "отмеченного уровня. Дождался его выполнения и не менял план во время сделки.";
 
 export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) {
   const account = authenticated
@@ -277,7 +278,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
 
               <li data-reveal data-frame-stage="feedback">
                 <p className="evidence__index">Разбор</p>
-                <h3>Работа проверена</h3>
+                <h3>Получен разбор</h3>
                 <div className="evidence__object evidence__object--flagged">
                   <p className="dframe__field">Критерий · Причина до сделки</p>
                   <p className="evidence__verdict">Требуется доработка</p>
@@ -693,8 +694,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
           <div className="shell final-step" data-reveal>
             <p className="eyebrow eyebrow--dark">Первый шаг</p>
             <h2 className="display display--section final-step__title">
-              Если вы хотите не повторять чужие ответы, а учиться принимать собственные решения —
-              начните с первого уровня.
+              Если вы хотите учиться принимать собственные решения — начните с первого уровня.
             </h2>
             <p className="final-step__support">
               После регистрации вы увидите один понятный следующий шаг.
