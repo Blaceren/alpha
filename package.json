@@ -1,6 +1,9 @@
 {
   "name": "ata-crm",
   "version": "0.1.0",
+  "engines": {
+    "node": "22.14.x"
+  },
   "private": true,
   "description": "Alfa Trade Academy CRM — internal operations workspace (standalone, mock data only).",
   "scripts": {
