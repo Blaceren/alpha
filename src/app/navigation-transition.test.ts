@@ -105,6 +105,9 @@ describe("the authenticated route group", () => {
      `icon.svg` from the auth matcher, for a file-based icon that does not
      exist and a path that answers 404.
 
+     SHELL-UNREAD-PRESENCE-SUPPORT-1 — /support was the one live route that
+     rendered the bell and never passed the unread mark into it.
+
      TOOLS-AUTHORITY-DIVERGENCE-1 — the access decision moved to the Backend
      verdict, which touches the projection, its two pages, both surfaces, the
      curriculum DTO and view, and adds a stated fixture verdict. No copy,
@@ -117,6 +120,7 @@ describe("the authenticated route group", () => {
     "src/app/(app)/lessons/[levelCode]/page.tsx",
     "src/app/(app)/lessons/page.tsx",
     "src/app/(app)/path/page.tsx",
+    "src/app/(app)/support/page.tsx",
     "src/app/(app)/tools/[toolCode]/page.tsx",
     "src/app/(app)/tools/page.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
