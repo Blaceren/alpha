@@ -105,6 +105,13 @@ describe("the authenticated route group", () => {
      `icon.svg` from the auth matcher, for a file-based icon that does not
      exist and a path that answers 404.
 
+     H-8 — next.config.mjs gained the hardening headers the Academy served
+     none of. The CSP it ships contains frame-ancestors only, for the reason
+     recorded in turnstile-csp.test.ts.
+
+     H-STALE-1 — the video player's retired navy/teal fallbacks now name current
+     tokens. Every one of them is unreachable, so no pixel moved.
+
      SHELL-UNREAD-PRESENCE-SUPPORT-1 — /support was the one live route that
      rendered the bell and never passed the unread mark into it.
 
@@ -123,6 +130,7 @@ describe("the authenticated route group", () => {
     "src/app/(app)/support/page.tsx",
     "src/app/(app)/tools/[toolCode]/page.tsx",
     "src/app/(app)/tools/page.tsx",
+    "src/components/media/academy-video-player.css",
     "src/features/academy-experience/level-detail-screen.tsx",
     "src/features/tools-fidelity/tool-fidelity-surface.tsx",
     "src/features/tools/components/tool-surface.tsx",

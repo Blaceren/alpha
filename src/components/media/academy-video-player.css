@@ -4,23 +4,23 @@
    * src/styles/tokens.css; the HEX after each var() is only a fallback so the
    * player still renders if it is ever mounted outside the token scope.
    */
-  --avp-accent: var(--route-current, #5cf0c6); /* bright interactive teal */
-  --avp-accent-deep: var(--signal-active, #39d3a6); /* deeper teal */
+  --avp-accent: var(--route-current, var(--ata-signal-500)); /* the Signal accent, via the route token */
+  --avp-accent-deep: var(--signal-active, var(--ata-signal-500)); /* the active Signal, via the route token */
   --avp-accent-hover: color-mix(in srgb, var(--avp-accent) 82%, #ffffff);
-  --avp-on-accent: var(--background-base, #070b12); /* dark ink on the accent */
-  --avp-field: var(--background-base, #070b12);
-  --avp-surface: var(--surface-context, #0e1524);
-  --avp-text: var(--text-primary, #eef2f8);
-  --avp-text-2: var(--text-secondary, #cdd6e3);
-  --avp-text-muted: var(--text-muted, #aab4c7);
-  --avp-eyebrow: var(--route-upcoming, #6f9ad8);
+  --avp-on-accent: var(--background-base, var(--ata-ink-900)); /* dark ink on the accent */
+  --avp-field: var(--background-base, var(--ata-ink-900));
+  --avp-surface: var(--surface-context, var(--ata-ink-700));
+  --avp-text: var(--text-primary, #11140f);
+  --avp-text-2: var(--text-secondary, #626a60);
+  --avp-text-muted: var(--text-muted, #9aa396);
+  --avp-eyebrow: var(--route-upcoming, var(--ata-text-secondary));
   --avp-border: var(--divider, rgba(150, 175, 210, 0.14));
   --avp-border-strong: var(--divider-strong, rgba(150, 175, 210, 0.24));
-  --avp-focus: var(--focus-ring, #7fd8bd);
+  --avp-focus: var(--focus-ring, var(--ata-signal-500));
   --avp-glow: var(--glow-current, rgba(57, 211, 166, 0.22));
   --avp-danger: #ff8f96; /* no Academy danger token exists; error semantics only */
   --avp-danger-soft: rgba(255, 120, 128, 0.12);
-  /* Neutral (dark) surface for the primary play buttons — the teal accent is
+  /* Neutral (dark) surface for the primary play buttons — the Signal accent is
    * used only pointwise (timeline, thumbs, active toggles), not as a big fill. */
   --avp-btn-dark: rgba(10, 15, 25, 0.86);
   --avp-btn-dark-hover: rgba(18, 26, 40, 0.94);

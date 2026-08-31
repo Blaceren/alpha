@@ -65,15 +65,49 @@ describe("Turnstile CSP requirements", () => {
     expect(new URL(TURNSTILE_SCRIPT_URL).origin).toBe(TURNSTILE_ORIGIN);
   });
 
-  it("adds no application-level CSP in this phase", () => {
-    // The Academy is not the current CSP owner and this phase must not make it
-    // one. If a `headers()` block or a policy string appears, this test fails
-    // and whoever added it must apply the Turnstile directives above.
-    //
-    // Read as text rather than imported: importing the config would execute it,
-    // and the point is to inspect what the file DECLARES.
+  /**
+   * H-8 CHANGED THE ANSWER TO THIS, AND ONLY PART OF IT.
+   *
+   * This used to assert that no CSP existed at all, because the reasoning above
+   * still held: Next needs a nonce or `unsafe-inline` for its own bootstrap, and
+   * a policy that permits inline script is theatre. That reasoning is unchanged
+   * and was re-derived independently — the served /login carries four inline
+   * scripts, all of them `self.__next_f.push`, none with a nonce.
+   *
+   * What changed is that ONE directive needs none of that. `frame-ancestors`
+   * governs who may frame us; it constrains no script, style, font or request,
+   * so it cannot break Turnstile, Next or RSC. That subset now ships.
+   *
+   * So the assertion inverts rather than disappears: a CSP may exist, and it may
+   * contain framing directives ONLY. The moment a script-src, style-src,
+   * connect-src or frame-src appears, whoever added it owns the Turnstile
+   * allowances above, and this fails until they are in the policy.
+   */
+  it("ships a framing-only CSP, and no directive that could block the widget", () => {
     const config = readFileSync(path.join(process.cwd(), "next.config.mjs"), "utf8");
-    expect(config).not.toContain("headers");
-    expect(config).not.toContain("Content-Security-Policy");
+    const policies = [...config.matchAll(/"Content-Security-Policy",\s*value:\s*"([^"]*)"/g)]
+      .map((m) => m[1] ?? "");
+    expect(policies.length, "H-8 ships exactly one policy").toBe(1);
+
+    const policy = policies[0] ?? "";
+    expect(policy).toContain("frame-ancestors");
+
+    const fetchDirectives = ["script-src", "style-src", "connect-src", "frame-src", "img-src", "font-src", "default-src"];
+    const present = fetchDirectives.filter((d) => policy.includes(d));
+    if (present.length > 0) {
+      // Someone took ownership of the real policy. These are the allowances the
+      // widget needs, pinned next to the constants it actually uses.
+      for (const [directive, origin] of Object.entries(TURNSTILE_CSP_REQUIREMENTS)) {
+        expect(policy, `${directive} must allow ${origin}`).toContain(origin);
+      }
+      expect(policy, "a nonce or unsafe-inline decision is required before script-src ships")
+        .toMatch(/nonce-|'strict-dynamic'/);
+    }
+  });
+
+  it("permits framing of nobody, and says so twice for older browsers", () => {
+    const config = readFileSync(path.join(process.cwd(), "next.config.mjs"), "utf8");
+    expect(config).toContain("frame-ancestors 'none'");
+    expect(config).toContain("X-Frame-Options");
   });
 });
