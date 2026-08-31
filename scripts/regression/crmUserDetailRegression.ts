@@ -63,7 +63,18 @@ const baseEnv: NodeJS.ProcessEnv = {
 for (const key of ["NODE_ENV"]) delete baseEnv[key];
 
 async function start() {
-  const child = spawn("npx", ["next", "dev", "--turbopack", "-p", String(port)], {
+    /* No --turbopack here, deliberately.
+     This workspace's node_modules is a farm of 402 symlinks into
+     /srv/ata/repos/backend/node_modules, so `next` resolves OUTSIDE the project
+     root. Turbopack follows that link, fails `get_next_package`, and dies with
+     "Next.js package not found" while reporting its own version as 0.0.0 — the
+     server never binds, and all four of these suites failed at start() without
+     ever reaching an assertion. The webpack dev server resolves through the
+     same symlinks and answers /api/health in about three seconds.
+     What these suites test is HTTP behaviour, permissions and row counts. The
+     bundler was incidental to that, and picking the one that tolerates the
+     dependency layout is a change to the test runtime, not to the product. */
+  const child = spawn("npx", ["next", "dev", "-p", String(port)], {
     cwd: process.cwd(), env: baseEnv, detached: true, stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout?.on("data", (value) => { logs += String(value); });
