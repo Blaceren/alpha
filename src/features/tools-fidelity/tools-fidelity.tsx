@@ -265,15 +265,29 @@ export function ToolNotEnterablePage({ tool }: { tool: ToolView }) {
  * made-up URL invent a tool.
  */
 export function ToolNotFoundPage() {
+  /* THE TRUTH LINE IS THIS PAGE'S HEADING, NOT A PARAGRAPH.
+   *
+   * It used to come from `StateMessage`, which renders every state's truth line
+   * as a <p>. That is right where it is used — those states sit under a heading
+   * the tool page already has. This page has no other heading, so the document
+   * had none at all and a screen reader arrived with no entry point.
+   *
+   * `StateMessage` is deliberately NOT changed: it also serves the empty, locked
+   * and roadmap states, and giving it a configurable tag would let a second <h1>
+   * appear on a page that already has one. What follows is that component's own
+   * structure with one element swapped, carrying the same classes — `.t-state-truth`
+   * sets its own size and margin, so nothing about the appearance moves. */
   return (
     <div className="tls">
       <div className="t-surface t-surface--prose p4">
         <ReturnLink />
-        <StateMessage
-          truth={TOOLS_COPY.notFoundLead}
-          meaning={TOOLS_COPY.notFoundBody}
-          action={{ label: TOOLS_COPY.notFoundAction, href: "/tools" }}
-        />
+        <div className="t-state" role="status">
+          <h1 className="t-state-truth">{TOOLS_COPY.notFoundLead}</h1>
+          <p className="t-state-meaning">{TOOLS_COPY.notFoundBody}</p>
+        </div>
+        <Link className="t-action" href="/tools">
+          {TOOLS_COPY.notFoundAction}
+        </Link>
       </div>
     </div>
   );

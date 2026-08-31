@@ -121,8 +121,14 @@ describe("the Tools surface contract is unchanged", () => {
        which touches the projection, the two pages, both surfaces and adds the
        fixture verdict. The rendered contract is still asserted above; what
        moved is who decides, and that is asserted in the truth matrix. */
+    /* ATA-AUTHENTICATED-SURFACE-TRUTH-1A authorised three copy-and-markup
+       corrections on this release. Only `tools-fidelity.tsx` falls inside the
+       Tools tree, and only its `ToolNotFoundPage` moved: the catalogue, the
+       locked, roadmap and empty states and the shared `StateMessage` are
+       unchanged, which the rendered assertions above still hold. */
     const AUTHORISED = [
       "src/app/(app)/tools/[toolCode]/page.tsx",
+      "src/features/tools-fidelity/tools-fidelity.tsx",
       "src/app/(app)/tools/page.tsx",
       "src/features/tools-fidelity/tool-fidelity-surface.tsx",
       "src/features/tools/components/tool-surface.tsx",
@@ -199,7 +205,9 @@ describe("the Tools surface contract is unchanged", () => {
       /* Lessons, Reader and Level Detail each carry one of the four authorised
          link swaps; they are pinned by navigation-links.test.tsx instead. */
       "src/features/level-detail-fidelity/",
-      "src/features/workspace",
+      /* workspace-fidelity carries the authorised "no workspace" correction
+         (ATA-AUTHENTICATED-SURFACE-TRUTH-1A) and is pinned in detail by
+         surface-truth.test.tsx rather than frozen here. */
       /* notifications-fidelity carries one of the authorised link swaps. */
       /* Profile carries one of the four authorised link swaps
          (AUTHENTICATED-NAVIGATION-FULL-LOAD-1), so it is pinned by

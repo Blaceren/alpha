@@ -230,6 +230,24 @@ html.wsp-root-scope,
   margin: 0; font-size: 15px; line-height: 1.6; color: var(--text-muted);
   font-style: italic;
 }
+
+/* The single action of the "no workspace" state.
+ *
+ * The exit row at the foot of the page still carries both routes; this is the
+ * same destination raised to the weight of a main action, because in this state
+ * it is the only thing to do. Bordered rather than filled: Signal stays for
+ * progression and state, not for a way back. 44px is the target height, met by
+ * padding rather than a fixed size so the label can wrap on a narrow screen. */
+.wsp .ws-req__cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; margin: 20px 0 0; padding: 11px 20px;
+  border: 1px solid var(--line-3); border-radius: var(--radius);
+  font-size: 15px; font-weight: 600; color: var(--text-primary);
+  text-decoration: none;
+  transition: border-color var(--motion-fast) var(--ease),
+              background-color var(--motion-fast) var(--ease);
+}
+.wsp .ws-req__cta:hover { border-color: var(--text-muted); background: var(--surface-2); }
 .wsp .ws-req__more { margin: 6px 0 0; }
 .wsp .ws-req__more > summary {
   cursor: pointer; list-style: none; display: inline-block;

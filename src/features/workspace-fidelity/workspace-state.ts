@@ -27,9 +27,9 @@ export const WS_COPY = {
   exitPath: "Вернуться к пути",
   exitLevel: "Вернуться к уровню",
   actionBelow: "Действие — в задании ниже.",
-  noWorkspaceTitle: "У этого уровня нет рабочей области",
+  noWorkspaceTitle: "Для этого уровня отдельная рабочая область не требуется.",
   noWorkspaceBody:
-    "Этот уровень завершается другим способом. Откройте его на странице уровня.",
+    "Вернитесь к уровню, чтобы продолжить материал и выполнить условие завершения.",
   gateTitle: "Уровень пока недоступен",
   notFoundTitle: "Уровень не найден",
   notFoundBody: "Такого уровня нет в текущей программе.",
@@ -88,6 +88,34 @@ export function decisionOf(summary: AcademyLevelSummary): DecisionKind {
  * happens on this page, in a form, or outside the Academy entirely will look for
  * it in the wrong place.
  */
+/**
+ * Does this surface actually host the work for the level?
+ *
+ * The same predicate the screen uses to choose between the task host and the
+ * "no workspace" section, kept here so the copy decision below can be tested
+ * without rendering the page.
+ */
+export function hostsWorkHere(summary: AcademyLevelSummary): boolean {
+  return summary.typeInfo.type === "report" || summary.typeInfo.type === "mentor-review";
+}
+
+/**
+ * The "where the work happens" line — or nothing.
+ *
+ * WHY IT CAN BE NOTHING. `whereOf` falls through to «Работа выполняется здесь.»
+ * for every method it does not name. That is true for a mentor-review level,
+ * where the work really is hosted on this page, and false for a lesson, where
+ * the very next section says there is no workspace — the page was asserting
+ * both in adjacent lines. This returns null in exactly that case and leaves
+ * every other wording (Pocket, the checkpoint, the journal, the level's own
+ * form) exactly as it was.
+ */
+export function whereLineOf(summary: AcademyLevelSummary): string | null {
+  const line = whereOf(summary);
+  if (!hostsWorkHere(summary) && line === WS_COPY.whereHere) return null;
+  return line;
+}
+
 export function whereOf(summary: AcademyLevelSummary): string {
   switch (summary.completionMethod) {
     case "report":

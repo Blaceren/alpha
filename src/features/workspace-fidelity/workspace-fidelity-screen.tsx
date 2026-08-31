@@ -9,7 +9,7 @@ import { LevelReport } from "@/features/report/level-report";
 import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
 import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
-import { WS_COPY, decisionOf, ownerOf, whereOf } from "@/features/workspace-fidelity/workspace-state";
+import { WS_COPY, decisionOf, ownerOf, whereLineOf } from "@/features/workspace-fidelity/workspace-state";
 import "@/features/workspace-fidelity/workspace-fidelity.css";
 import "@/features/workspace-fidelity/workspace-form-fidelity.css";
 
@@ -119,6 +119,8 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
 
   const decision = decisionOf(summary);
   const hasTask = isReport || isMentorReview;
+  /* Null exactly when the level hosts no work here — see `whereLineOf`. */
+  const whereLine = whereLineOf(summary);
 
   return (
     <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
@@ -143,7 +145,9 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
             ) : (
               <p className="ws-req__unstated">{WS_COPY.requirementUnstated}</p>
             )}
-            <p className="ws-req__where">{whereOf(summary)}</p>
+            {whereLine !== null ? (
+              <p className="ws-req__where">{whereLine}</p>
+            ) : null}
           </section>
 
           {/* Execution state and whose move it is — ONE block, because they are
@@ -184,6 +188,13 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
             <section className="ws-req" aria-label={WS_COPY.noWorkspaceTitle}>
               <p className="ws-req__title">{WS_COPY.noWorkspaceTitle}</p>
               <p className="ws-req__lead">{WS_COPY.noWorkspaceBody}</p>
+              {/* The one action this state has. The exit row below still holds
+                  both routes; this is the same destination raised to the weight
+                  the state deserves, and it is a <Link>, so a modified click
+                  stays native. */}
+              <Link className="ws-req__cta" href={levelHref}>
+                {WS_COPY.exitLevel}
+              </Link>
             </section>
           )}
 

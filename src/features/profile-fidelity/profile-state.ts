@@ -150,8 +150,11 @@ export const COPY = {
   saving: "Сохранение…",
   cancel: "Отмена",
   constraint: "От 2 до 50 символов",
-  consequence:
-    "Это имя отображается в вашем профиле ATA и рядом с вашими сообщениями в Сообществе.",
+  /* Community is hidden (COMMUNITY_ENABLED = false), and this line used to send
+     a learner to a section they cannot open. If Community is ever switched on,
+     restoring the wider context is its own decision — not a conditional string
+     carried here in advance. */
+  consequence: "Это имя отображается в вашем профиле ATA.",
   support_lead: "Остальные данные учётной записи меняются через поддержку.",
   support_link: "Написать в поддержку",
   error_short: "Имя не может быть короче 2 символов.",

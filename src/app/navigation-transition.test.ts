@@ -149,15 +149,22 @@ describe("the authenticated route group", () => {
        route, to leave byte-identity with the frozen HomeATA page. The scope
        is `src/features/public-home/**`; the frozen prefixes below are what
        this phase may still not touch, and they are unchanged. */
+    /* ATA-AUTHENTICATED-SURFACE-TRUTH-1A: five files, all copy or markup.
+       No data, no access decision, no progression, no shell. */
+    "src/features/profile-fidelity/profile-state.ts",
     "src/features/public-home/public-home-header.tsx",
     "src/features/public-home/public-home-screen.tsx",
     "src/features/public-home/public-home.css",
     "src/features/tools-fidelity/tool-fidelity-surface.tsx",
+    "src/features/tools-fidelity/tools-fidelity.tsx",
     "src/features/tools/components/tool-surface.tsx",
     "src/features/tools/components/tools-hub.tsx",
     "src/features/tools/model/canonical-progress.ts",
     "src/features/tools/model/tool-access-fixture.ts",
     "src/features/tools/model/tools-projection.ts",
+    "src/features/workspace-fidelity/workspace-fidelity-screen.tsx",
+    "src/features/workspace-fidelity/workspace-fidelity.css",
+    "src/features/workspace-fidelity/workspace-state.ts",
     "src/lib/auth/constants.ts",
     "src/lib/curriculum/academy-view.ts",
     "src/lib/curriculum/backend-dto.ts",
@@ -196,7 +203,12 @@ describe("the authenticated route group", () => {
          an explicit list of what was allowed to move. Freezing it in two places
          would mean the looser of the two is the one that fails first, for the
          least informative reason. */
-      "src/features/workspace",
+      /* Workspace is no longer frozen here: ATA-AUTHENTICATED-SURFACE-TRUTH-1A
+         authorised the "no workspace" correction, and surface-truth.test.tsx
+         governs that tree in detail — the contradictory line, the explanation,
+         the single action and its destination. Freezing it in two places would
+         mean the looser of the two fails first, for the least informative
+         reason. */
       "src/features/support", "src/features/auth/", "src/components/shell",
       "src/config/feature-visibility.ts", "src/app/layout.tsx",
     ]) {
