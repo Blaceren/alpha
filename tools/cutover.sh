@@ -74,4 +74,12 @@ st="$(systemctl show "$UNIT" -p ActiveState --value)"
 [ "$st" = "active" ] || die "$UNIT is $st after restart"
 
 echo "  unit: $st/$(systemctl show "$UNIT" -p SubState --value) pid=$(systemctl show "$UNIT" -p ExecMainPID --value) NRestarts=$(systemctl show "$UNIT" -p NRestarts --value)"
-echo "  cwd : $(sudo readlink /proc/$(systemctl show "$UNIT" -p ExecMainPID --value)/cwd 2>/dev/null || echo '?')"
+
+# RELEASE-TOOLING-UNIT-VALIDATION-1. These two lines used to PRINT the cwd and
+# move on, so a service that came back up out of the wrong release, or did not
+# come back up at all under a mistyped unit name, still reported a clean
+# cutover. The identity is now asserted, against the directory we just swapped
+# to, and a mismatch is a refusal.
+. "$(dirname "${BASH_SOURCE[0]}")/service-identity.sh"
+ata_verify_service "$REPO" "$DEST" || die "post-cutover service identity check failed for $REPO"
+
