@@ -62,3 +62,32 @@ describe("the favicon authority", () => {
     expect(pageSrc).not.toMatch(/icons\s*:/);
   });
 });
+
+/* The middleware used to exempt `icon.svg` from the auth matcher, for the
+   file-based icon this suite already asserts must not exist. An exemption for a
+   path nothing serves is a hole nobody is watching: it is not visible in any
+   response, and it would silently become a real bypass the day someone adds
+   that file back. Removing the file without removing its exemption is exactly
+   how that happens, so the two are pinned together here. */
+describe("the auth matcher carries no exemption for an icon that does not exist", () => {
+  const matcher = () => {
+    const src = readFileSync(join(ROOT, "src", "middleware.ts"), "utf8");
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    const m = code.match(/matcher:\s*\[([\s\S]*?)\]/);
+    return m ? m[1] : "";
+  };
+
+  it("does not exempt icon.svg", () => {
+    expect(matcher()).not.toContain("icon.svg");
+  });
+
+  it("still exempts favicon.ico, which browsers request unprompted", () => {
+    // It does not exist either, but a redirect on an unrequested path is worse
+    // than a 404 on one.
+    expect(matcher()).toContain("favicon.ico");
+  });
+
+  it("still exempts the directory the real icon is served from", () => {
+    expect(matcher()).toContain("brand/");
+  });
+});

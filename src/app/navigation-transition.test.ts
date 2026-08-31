@@ -95,10 +95,18 @@ describe("the authenticated route group", () => {
      `next/link` — the whole confirmed internal-route class.
      AUTHENTICATED-NAVIGATION-FULL-LOAD-1; the anchors themselves are pinned by
      the AST gate in navigation-links.test.tsx. */
-  /* Every file SHELL-VIEWER-IDENTITY-2 was authorised to move: eleven shells
-     that named a fixture learner now read the viewer, and the one reachable
-     shell that withheld the unread mark now passes it. The link swaps of the
-     previous phase are inside BASE and are pinned by the AST gate. */
+  /* Every file this closeout was authorised to move, and nothing else.
+
+     SHELL-VIEWER-IDENTITY-2 — eleven shells that named a fixture learner now
+     read the viewer, and the one reachable shell that withheld the unread mark
+     now passes it.
+
+     The dead favicon exemption — src/middleware.ts stopped exempting
+     `icon.svg` from the auth matcher, for a file-based icon that does not
+     exist and a path that answers 404.
+
+     The link swaps of the previous phase are inside BASE and are pinned by the
+     AST gate rather than by this list. */
   const AUTHORISED_VIEWER_IDENTITY = [
     "src/app/(app)/home/page.tsx",
     "src/app/(app)/lessons/[levelCode]/page.tsx",
@@ -107,6 +115,7 @@ describe("the authenticated route group", () => {
     "src/app/(app)/tools/[toolCode]/page.tsx",
     "src/app/(app)/tools/page.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
+    "src/middleware.ts",
     "src/server/auth/server-session.ts",
   ];
 

@@ -106,7 +106,16 @@ export function middleware(request: NextRequest): NextResponse {
  * approved separately, is one more token in this same list.
  */
 export const config = {
+  /* `icon.svg` used to be exempted here for a file-based icon that does not
+     exist: there is no src/app/icon.svg and no public/icon.svg, `/icon.svg`
+     answers 404, and the only icon authority is `/brand/favicon.svg`, which is
+     exempted separately by the `brand/` prefix. An exemption for a path nothing
+     serves is a hole nobody is watching, so it is gone.
+
+     `favicon.ico` stays. It does not exist either, but browsers request it
+     unprompted on every visit, and letting that run the auth middleware would
+     turn a cheap 404 into a redirect on a path no one asked for. */
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|fonts/|brand/).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|fonts/|brand/).*)",
   ],
 };
