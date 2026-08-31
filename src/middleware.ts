@@ -5,13 +5,11 @@ import {
   type AppRole,
 } from "@/lib/permissions";
 
-type SessionPayload = {
-  userId: number;
-  role: AppRole;
-};
-
 const USER_ROLES: AppRole[] = ["user", "admin", "support", "mentor", "moderator", "news_editor"];
-const SESSION_COOKIE_NAME = "trading_platform_session";
+/* The cookie name is deliberately NOT repeated here any more. The middleware
+   no longer reads the session itself — it forwards whatever cookies arrived to
+   /api/auth/session-status and uses that answer — so a second copy of the name
+   would be a second thing to keep in step for no benefit (H-7). */
 
 function addSecurityHeaders(response: NextResponse) {
   const isDev = process.env.NODE_ENV !== "production";
@@ -52,71 +50,35 @@ function addSecurityHeaders(response: NextResponse) {
   return response;
 }
 
-function getSessionSecret() {
-  return process.env.SESSION_SECRET ?? "local-dev-session-secret";
-}
+/**
+ * The session, as the Backend itself resolves it (H-7).
+ *
+ * This used to be `isSessionBlocked` and the middleware verified identity
+ * separately with its own copy of the HMAC. The token is opaque now, so the
+ * only thing that can resolve it is the database — and this call was already
+ * being made on every private route. It answers the whole question now.
+ *
+ * FAIL CLOSED. A non-OK response, a malformed body or a transport error all
+ * resolve to "not authenticated": the middleware refuses rather than guesses.
+ */
+type MiddlewareSession = { authenticated: boolean; blocked: boolean; role: string | null };
 
-function bytesToHex(bytes: ArrayBuffer) {
-  return Array.from(new Uint8Array(bytes))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function sign(value: string) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(getSessionSecret()),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
-
-  return bytesToHex(signature);
-}
-
-async function verifySessionToken(token?: string): Promise<SessionPayload | null> {
-  if (!token) {
-    return null;
+async function resolveSession(request: NextRequest): Promise<MiddlewareSession> {
+  try {
+    const response = await fetch(new URL("/api/auth/session-status", request.url), {
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    if (!response.ok) return { authenticated: false, blocked: false, role: null };
+    const body = (await response.json()) as Partial<MiddlewareSession>;
+    return {
+      authenticated: body.authenticated === true,
+      blocked: body.blocked === true,
+      role: typeof body.role === "string" ? body.role : null,
+    };
+  } catch {
+    return { authenticated: false, blocked: false, role: null };
   }
-
-  const [userIdRaw, roleRaw, expiresAtRaw, signature] = token.split(".");
-  const payload = `${userIdRaw}.${roleRaw}.${expiresAtRaw}`;
-  const expectedSignature = await sign(payload);
-  const role = USER_ROLES.find((availableRole) => availableRole === roleRaw);
-  const expiresAt = Number(expiresAtRaw);
-  const userId = Number(userIdRaw);
-
-  if (
-    !signature ||
-    signature !== expectedSignature ||
-    !role ||
-    !Number.isFinite(expiresAt) ||
-    expiresAt < Date.now() ||
-    !Number.isInteger(userId)
-  ) {
-    return null;
-  }
-
-  return { userId, role };
-}
-
-async function isSessionBlocked(request: NextRequest) {
-  const response = await fetch(new URL("/api/auth/session-status", request.url), {
-    headers: {
-      cookie: request.headers.get("cookie") ?? "",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    return false;
-  }
-
-  const status = (await response.json()) as { blocked?: boolean };
-
-  return status.blocked === true;
 }
 
 /**
@@ -157,22 +119,24 @@ export async function middleware(request: NextRequest) {
     return addSecurityHeaders(NextResponse.next());
   }
 
-  const session = await verifySessionToken(
-    request.cookies.get(SESSION_COOKIE_NAME)?.value,
-  );
+  const session = await resolveSession(request);
 
-  if (!session) {
+  if (!session.authenticated) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
 
     return addSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  if (await isSessionBlocked(request)) {
+  if (session.blocked) {
     return addSecurityHeaders(NextResponse.redirect(new URL("/403", request.url)));
   }
 
-  if (!canAccessRoute(session.role, pathname)) {
+  /* The role comes from the User row this request just resolved, not from
+     anything the browser sent — which is what makes a demotion take effect on
+     the next request rather than at the next login. */
+  const role = USER_ROLES.find((known) => known === session.role);
+  if (!role || !canAccessRoute(role, pathname)) {
     return addSecurityHeaders(NextResponse.redirect(new URL("/403", request.url)));
   }
 

@@ -26,7 +26,7 @@ import {
   type AffiliateStatus,
   type TrackingLinkStatus,
 } from "@/lib/crm/affiliates";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { SESSION_COOKIE_NAME } from "@/lib/session";
 
 export const PUBLIC_CODE_PATTERN = /^[a-z2-7]{32}$/;
 
@@ -57,7 +57,13 @@ export function classifyRequest(request: Request): ClickClassification {
       const separator = segment.indexOf("=");
       if (separator <= 0) continue;
       if (segment.slice(0, separator).trim() !== SESSION_COOKIE_NAME) continue;
-      if (verifySessionToken(segment.slice(separator + 1).trim()) !== null) {
+      /* PRESENCE, NOT VERIFICATION — and that is a downgrade worth stating.
+         The session token is opaque now, so nothing outside the database can
+         tell a real one from a forged one, and this function is synchronous
+         click CLASSIFICATION with no security consequence. A forged cookie
+         mislabels one analytics row and grants nothing. Verifying here would
+         mean a database read on every affiliate hop to decide a label. */
+      if (segment.slice(separator + 1).trim().length > 0) {
         return "authenticated_user";
       }
     }

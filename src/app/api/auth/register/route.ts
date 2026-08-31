@@ -31,8 +31,10 @@ import {
 } from "@/lib/referral/registrationReferral";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
-  createSessionToken,
+  issueSession,
+  LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  clearedLegacySessionCookieOptions,
   sessionCookieOptions,
 } from "@/lib/session";
 import { registerSchema, validateJsonBody } from "@/lib/validation";
@@ -528,7 +530,7 @@ export async function POST(request: Request) {
   if (!verificationRequired) {
     response.cookies.set(
       SESSION_COOKIE_NAME,
-      createSessionToken(user.id, user.role),
+      await issueSession(user.id),
       sessionCookieOptions,
     );
   }

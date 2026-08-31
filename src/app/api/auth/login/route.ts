@@ -9,8 +9,10 @@ import { isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
-  createSessionToken,
+  issueSession,
+  LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  clearedLegacySessionCookieOptions,
   sessionCookieOptions,
 } from "@/lib/session";
 import { loginSchema, validateJsonBody } from "@/lib/validation";
@@ -147,11 +149,12 @@ export async function POST(request: Request) {
   });
 
   const response = NextResponse.json({ user: toPublicUser(user) });
-  response.cookies.set(
-    SESSION_COOKIE_NAME,
-    createSessionToken(user.id, user.role),
-    sessionCookieOptions,
-  );
+  /* Issuing revokes whatever this user had, in one transaction, so a second
+     login ends the first session rather than running alongside it (H-7). */
+  response.cookies.set(SESSION_COOKIE_NAME, await issueSession(user.id), sessionCookieOptions);
+  /* And expire the pre-`__Host-` cookie, so a browser holding one stops sending
+     a value nothing will ever accept. Its value is never read. */
+  response.cookies.set(LEGACY_SESSION_COOKIE_NAME, "", clearedLegacySessionCookieOptions);
 
   return response;
 }

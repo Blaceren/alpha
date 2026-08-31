@@ -4,7 +4,14 @@ import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
-import { SESSION_COOKIE_NAME, shouldUseSecureCookies } from "@/lib/session";
+import {
+  LEGACY_SESSION_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+  clearedLegacySessionCookieOptions,
+  clearedSessionCookieOptions,
+  readSessionToken,
+  revokeSession,
+} from "@/lib/session";
 
 export async function POST(request: Request) {
   if (!validateCsrfToken(request)) {
@@ -38,15 +45,16 @@ export async function POST(request: Request) {
     request,
   });
 
+  const sessionToken = await readSessionToken();
   const response = NextResponse.json({ ok: true });
 
-  response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: shouldUseSecureCookies(),
-    path: "/",
-    maxAge: 0,
-  });
+  /* REVOKE FIRST, THEN CLEAR. Clearing the cookie only stops this browser from
+     sending the token; revoking is what stops the token working at all, which
+     is the whole point of H-7. Idempotent: logging out twice, or with an
+     already-dead token, is a no-op that still reports success. */
+  await revokeSession(sessionToken);
+  response.cookies.set(SESSION_COOKIE_NAME, "", clearedSessionCookieOptions);
+  response.cookies.set(LEGACY_SESSION_COOKIE_NAME, "", clearedLegacySessionCookieOptions);
 
   return response;
 }

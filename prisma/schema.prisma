@@ -252,6 +252,7 @@ model User {
   communityDiscussions          CommunityDiscussion[]      @relation("CommunityDiscussionAuthor")
   communityReplies              CommunityReply[]           @relation("CommunityReplyAuthor")
   communityContentReports       CommunityContentReport[]   @relation("CommunityContentReportReporter")
+  userSessions                  UserSession[]
 }
 
 model XpEvent {
@@ -5239,4 +5240,39 @@ model CommunityModerationAction {
 
   @@index([createdAt])
   @@index([targetType, targetId])
+}
+
+/// H-7 — the learner session, made server-side and revocable.
+///
+/// The learner session used to be a self-contained HMAC token: `userId.role.
+/// expiresAt.signature`, verified with a secret and nothing else. It could not
+/// be revoked, so logout only cleared the cookie and a copied token kept working
+/// until it expired; a second login issued a new token without invalidating the
+/// first; and the role travelled inside the token, so a demotion did not reach a
+/// session already issued.
+///
+/// This table is the authority instead. The raw token is never stored — only a
+/// SHA-256 of it — so the table is useless to anyone who reads it, and a lookup
+/// is a hash comparison rather than a secret comparison.
+///
+/// ONE ACTIVE SESSION PER USER is a product decision, enforced at write time:
+/// login revokes every live row for that user and inserts one, in a single
+/// transaction, so two concurrent logins cannot both survive.
+///
+/// ROLE IS NOT STORED HERE. It is read from the User row at verification time,
+/// which is what makes a role change and a blocked account take effect on the
+/// next request rather than at the next login.
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    Int
+  /// SHA-256 of the bearer token, hex. The raw token exists only in the cookie.
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  /// Null while live. Set by logout, and by the next successful login.
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
