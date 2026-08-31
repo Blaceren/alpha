@@ -81,5 +81,5 @@ echo "  unit: $st/$(systemctl show "$UNIT" -p SubState --value) pid=$(systemctl 
 # cutover. The identity is now asserted, against the directory we just swapped
 # to, and a mismatch is a refusal.
 . "$(dirname "${BASH_SOURCE[0]}")/service-identity.sh"
-ata_verify_service "$REPO" "$DEST" || die "post-cutover service identity check failed for $REPO"
+ata_wait_for_service "$REPO" "$DEST" 90 || die "post-cutover service identity check failed for $REPO"
 

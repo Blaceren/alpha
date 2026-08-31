@@ -126,6 +126,33 @@ ata_verify_service() {
   return 0
 }
 
+# ata_wait_for_service <component> [expected_release_dir] [seconds]
+# Verify, but allow for a service that has just been restarted.
+#
+# WHY THIS EXISTS. `systemctl restart` returns, and the unit reports
+# active/running, BEFORE Next has bound its port — so a verification run
+# immediately afterwards refuses on "nothing is listening", which is true at that
+# instant and says nothing about the cutover. The first Academy cutover under the
+# new gate hit exactly that: the symlink was swapped, the service came up
+# healthy, and the gate reported failure because it asked too early.
+#
+# It waits for the LISTENER, not for a fixed sleep, and it still refuses on
+# everything else immediately — a wrong cwd or a stolen port is not a race and
+# is not worth waiting out.
+ata_wait_for_service() {
+  local c="$1" expect="${2:-}" budget="${3:-60}"
+  local port unit i
+  port="$(ata_port_for "$c")" || { _ata_refuse "$c" "unknown component"; return 1; }
+  unit="$(ata_unit_for "$c")" || return 1
+
+  for (( i = 0; i < budget; i++ )); do
+    if [ -n "$(_ata_port_pids "$port")" ]; then break; fi
+    sleep 1
+  done
+
+  ata_verify_service "$c" "$expect"
+}
+
 # ata_release_is_referenced <release_dir> <sha>
 # Decides whether a release is still pointed at by something live. A prune
 # record NAMES the release it removed — that is its purpose, and it is history.

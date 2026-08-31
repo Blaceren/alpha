@@ -156,7 +156,7 @@ grep -q 'service-identity.sh' "$CUT" \
   && ok "8  cutover.sh sources the authority" \
   || no "8  cutover.sh sources the authority" "a library nothing calls fixes nothing"
 
-grep -q 'ata_verify_service "$REPO" "$DEST"' "$CUT" \
+grep -qE 'ata_(verify|wait_for)_service "\$REPO" "\$DEST"' "$CUT" \
   && ok "8b cutover.sh asserts identity against the directory it swapped to" \
   || no "8b cutover.sh asserts identity against the directory it swapped to"
 
@@ -193,6 +193,40 @@ done
 [ "$BAD" -eq 0 ] \
   && ok "10 no other tool hardcodes a unit name" \
   || no "10 no other tool hardcodes a unit name" "the registry must be the only place a unit is written"
+
+# 11 — the restart race. A cutover verifies a service that has just been told
+#      to restart, and systemd reports active/running before Next binds its
+#      port. The first Academy cutover under this gate refused for that reason
+#      alone, with the swap already correct and the service already healthy.
+reset_world
+_ata_port_pids() { printf ''; }          # nothing bound yet
+if ata_verify_service academy >/dev/null 2>&1; then
+  no "11 an unbound port is still refused by the plain check"
+else ok "11 an unbound port is still refused by the plain check"; fi
+
+reset_world
+BIND_AFTER_FILE="$(mktemp)"
+printf '2' > "$BIND_AFTER_FILE"
+_ata_port_pids() {
+  local left
+  left="$(cat "$BIND_AFTER_FILE")"
+  if [ "$left" -le 0 ]; then printf '4002\n'; else printf '%s' "$((left - 1))" > "$BIND_AFTER_FILE"; fi
+}
+if ata_wait_for_service academy "" 10 >/dev/null 2>&1; then
+  ok "11b the waiting check tolerates a port that binds a moment later"
+else no "11b the waiting check tolerates a port that binds a moment later" \
+        "a cutover must not fail because it asked before the listener was up"; fi
+rm -f "$BIND_AFTER_FILE"
+
+reset_world
+_ata_proc_cwd() { printf '/srv/ata/releases/academy/deadbeef'; }
+if ata_wait_for_service academy "" 3 >/dev/null 2>&1; then
+  no "11c waiting does not excuse a wrong cwd" "only the listener may be waited for"
+else ok "11c waiting does not excuse a wrong cwd"; fi
+
+grep -q 'ata_wait_for_service' "$HERE/../cutover.sh" \
+  && ok "11d cutover.sh waits for the listener rather than racing it" \
+  || no "11d cutover.sh waits for the listener rather than racing it"
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
