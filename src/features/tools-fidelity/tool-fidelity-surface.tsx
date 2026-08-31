@@ -12,6 +12,7 @@ import {
   ToolNotFoundPage,
   ToolWorkFrame,
 } from "@/features/tools-fidelity/tools-fidelity";
+import type { AcademyToolAccess } from "@/lib/curriculum/academy-view";
 
 /**
  * ONE TOOL — dispatched on the RESOLVED view, never on the raw code.
@@ -29,11 +30,14 @@ import {
 export function ToolFidelitySurface({
   toolCode,
   progress,
+  access,
 }: {
   toolCode: string;
   progress: PathProgress | null;
+  /** The Backend's verdict. Null locks every tool, by design. */
+  access: AcademyToolAccess | null;
 }) {
-  const tool = progress ? projectTool(toolCode, progress) : null;
+  const tool = progress ? projectTool(toolCode, progress, access) : null;
 
   if (!tool) {
     /* Unknown code, or no progression to resolve against. Either way the page
@@ -76,6 +80,8 @@ export function ToolFidelitySurface({
  * identity and this file declares no tool of its own.
  */
 function projectToolWithoutProgress(toolCode: string) {
+  /* No progression means no verdict either, and a null verdict is exactly the
+     locked answer this path wants: a real tool code renders as itself, locked. */
   return projectTool(toolCode, {
     scenario: "active",
     currentLevel: 1,
@@ -83,5 +89,5 @@ function projectToolWithoutProgress(toolCode: string) {
     rankLabel: "",
     xpLabel: "",
     streak: 0,
-  } as PathProgress);
+  } as PathProgress, null);
 }

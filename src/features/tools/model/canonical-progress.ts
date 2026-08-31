@@ -22,7 +22,8 @@
  * unfinished gate: level 15 unfinished must not unlock the level-15 tool.
  */
 import type { PathProgress } from "@/features/path/model/path-state";
-import type { AcademyCurriculumView } from "@/lib/curriculum/academy-view";
+import type { AcademyCurriculumView, AcademyToolAccess } from "@/lib/curriculum/academy-view";
+import type { CurriculumViewResult } from "@/lib/curriculum/provider";
 
 /** The instrumentation fields the hub does not render. Never shown, never invented. */
 const UNUSED_INSTRUMENTATION = {
@@ -63,4 +64,18 @@ export function canonicalToolProgress(view: AcademyCurriculumView): PathProgress
     allCompleted,
     ...UNUSED_INSTRUMENTATION,
   };
+}
+
+/**
+ * The Backend's tool verdict off a curriculum read, or null.
+ *
+ * One helper so the hub and the direct URL cannot pick it up differently. A
+ * failed read, a candidate and an unavailable curriculum all resolve to null,
+ * which locks every tool (TOOLS-AUTHORITY-DIVERGENCE-1).
+ */
+export function toolAccessOf(result: CurriculumViewResult): AcademyToolAccess | null {
+  if (!result.ok) return null;
+  const view = result.view;
+  if (view.state !== "enrolled" && view.state !== "completed") return null;
+  return view.toolAccess;
 }

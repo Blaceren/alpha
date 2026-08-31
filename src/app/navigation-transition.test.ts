@@ -105,6 +105,11 @@ describe("the authenticated route group", () => {
      `icon.svg` from the auth matcher, for a file-based icon that does not
      exist and a path that answers 404.
 
+     TOOLS-AUTHORITY-DIVERGENCE-1 — the access decision moved to the Backend
+     verdict, which touches the projection, its two pages, both surfaces, the
+     curriculum DTO and view, and adds a stated fixture verdict. No copy,
+     markup or geometry moved with it.
+
      The link swaps of the previous phase are inside BASE and are pinned by the
      AST gate rather than by this list. */
   const AUTHORISED_VIEWER_IDENTITY = [
@@ -115,6 +120,15 @@ describe("the authenticated route group", () => {
     "src/app/(app)/tools/[toolCode]/page.tsx",
     "src/app/(app)/tools/page.tsx",
     "src/features/academy-experience/level-detail-screen.tsx",
+    "src/features/tools-fidelity/tool-fidelity-surface.tsx",
+    "src/features/tools/components/tool-surface.tsx",
+    "src/features/tools/components/tools-hub.tsx",
+    "src/features/tools/model/canonical-progress.ts",
+    "src/features/tools/model/tool-access-fixture.ts",
+    "src/features/tools/model/tools-projection.ts",
+    "src/lib/curriculum/academy-view.ts",
+    "src/lib/curriculum/backend-dto.ts",
+    "src/lib/curriculum/view-model.ts",
     "src/middleware.ts",
     "src/server/auth/server-session.ts",
   ];

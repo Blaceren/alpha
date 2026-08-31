@@ -25,6 +25,7 @@ import {
   levelProgressState,
   type PathProgress,
 } from "@/features/path/model/path-state";
+import type { AcademyToolAccess } from "@/lib/curriculum/academy-view";
 
 export interface ToolView {
   id: string;
@@ -68,7 +69,14 @@ export function toolHref(code: string): string {
  * resolver. Exported so tests can pin the resolver-owned rule without reaching
  * into a component.
  */
-export function isToolUnlocked(tool: ToolDefinition, progress: PathProgress): boolean {
+/**
+ * The Academy's historical derivation — NO LONGER AN AUTHORITY.
+ *
+ * Kept exported for one reason: the truth matrix compares it against the
+ * Backend verdict, and a rule you have deleted is a rule you can no longer
+ * prove you stopped using. Nothing in this module calls it.
+ */
+export function isToolUnlockedByLocalJoin(tool: ToolDefinition, progress: PathProgress): boolean {
   // A tool is a reward for PASSING its checkpoint: the level must read
   // "completed", not "current" (still standing on the gate) or "available".
   return levelProgressState(tool.unlockLevel, progress) === "completed";
@@ -104,9 +112,23 @@ function requirementLabelFor(implemented: boolean, unlocked: boolean, unlockLeve
  * recently earned one the user can actually use). For Артём (L18) that is
  * Trading Journal — Risk Calculator is unlocked but not available.
  */
-export function projectTools(progress: PathProgress): ToolView[] {
+export function projectTools(
+  progress: PathProgress,
+  access: AcademyToolAccess | null,
+): ToolView[] {
+  /* THE VERDICT IS THE BACKEND'S, AND NOTHING ELSE DECIDES.
+     `progress` is still here because the surface reads rank, XP and the
+     featured-tool ordering from it — but it no longer decides access.
+
+     A null verdict locks everything: absent field, malformed payload,
+     duplicate code, unreachable Backend. A tool this map does not mention is
+     locked for the same reason, since an unknown code is an answer nobody gave
+     (TOOLS-AUTHORITY-DIVERGENCE-1). */
+  const verdict = new Map<string, boolean>();
+  for (const entry of access?.tools ?? []) verdict.set(entry.code, entry.unlocked);
+
   const views = TOOL_DEFINITIONS.map((tool): Omit<ToolView, "current"> => {
-    const unlocked = isToolUnlocked(tool, progress);
+    const unlocked = verdict.get(tool.id) === true;
     const implemented = tool.implementationStatus === "available";
     const available = unlocked && implemented;
     return {
@@ -140,6 +162,12 @@ export function projectTools(progress: PathProgress): ToolView[] {
 }
 
 /** The resolved view of ONE tool, for the surface route. Null when unknown. */
-export function projectTool(code: string, progress: PathProgress): ToolView | null {
-  return projectTools(progress).find((view) => view.code === code) ?? null;
+export function projectTool(
+  code: string,
+  progress: PathProgress,
+  access: AcademyToolAccess | null,
+): ToolView | null {
+  // The hub and the direct URL resolve through the same call, so they cannot
+  // disagree about whether a tool is open.
+  return projectTools(progress, access).find((view) => view.code === code) ?? null;
 }

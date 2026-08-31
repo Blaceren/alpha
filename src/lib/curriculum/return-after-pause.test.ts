@@ -61,6 +61,7 @@ function view(levels: AcademyLevelSummary[]): AcademyCurriculumView {
   };
   return {
     state: "enrolled",
+    toolAccess: null, // no Backend verdict in this fixture; null locks every tool
     curriculum: { curriculumCode: "ata-v2", curriculumVersion: 4, title: "ATA", status: "published", publishedAt: null },
     modules: [courseModule],
     progress: {

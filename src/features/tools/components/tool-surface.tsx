@@ -7,6 +7,7 @@ import {
 } from "@/features/tools/model/tool-catalog";
 import { TradingJournalWorkspace } from "@/features/tools/components/trading-journal-workspace";
 import { RiskCalculatorWorkspace } from "@/features/tools/components/risk-calculator-workspace";
+import { fixtureToolAccess } from "@/features/tools/model/tool-access-fixture";
 
 /**
  * One tool surface (Phase D4-B). Dispatches on the RESOLVED tool view — never on
@@ -20,7 +21,7 @@ export function ToolSurface({
   toolCode: string;
   scenario?: PathScenario;
 }) {
-  const tool = projectTool(toolCode, getPathProgress(scenario));
+  const tool = projectTool(toolCode, getPathProgress(scenario), fixtureToolAccess(scenario));
 
   // Unknown code → the calm not-found convention (no generic crash).
   if (!tool) return <ToolUnknown />;

@@ -8,7 +8,7 @@ import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
 import { shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
-import { canonicalToolProgress } from "@/features/tools/model/canonical-progress";
+import { canonicalToolProgress, toolAccessOf } from "@/features/tools/model/canonical-progress";
 import "@/features/tools/tools.css";
 
 export const metadata: Metadata = {
@@ -49,9 +49,10 @@ export default async function ToolSurfacePage({
   if (getAcademyConfig().mode === "api") {
     const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
     const progress = result.ok ? canonicalToolProgress(result.view) : null;
+    const access = toolAccessOf(result);
     return (
       <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
-        <ToolFidelitySurface toolCode={toolCode} progress={progress} />
+        <ToolFidelitySurface toolCode={toolCode} progress={progress} access={access} />
       </AppShell>
     );
   }

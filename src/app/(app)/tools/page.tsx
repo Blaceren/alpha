@@ -9,7 +9,7 @@ import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
 import { shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
-import { canonicalToolProgress } from "@/features/tools/model/canonical-progress";
+import { canonicalToolProgress, toolAccessOf } from "@/features/tools/model/canonical-progress";
 import "@/features/tools/tools.css";
 
 export const metadata: Metadata = {
@@ -40,12 +40,13 @@ export default async function ToolsPage({
   if (getAcademyConfig().mode === "api") {
     const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
     const progress = result.ok ? canonicalToolProgress(result.view) : null;
+    const access = toolAccessOf(result);
     /* No enrolled progression means no unlocks — an honest empty register, not
        a guess. `projectTools` still owns every lock decision; the register only
        renders what it returns. */
     return (
       <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
-        <ToolsRegister tools={progress ? projectTools(progress) : []} />
+        <ToolsRegister tools={progress ? projectTools(progress, access) : []} />
       </AppShell>
     );
   }

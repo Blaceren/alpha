@@ -24,6 +24,7 @@ import { projectTools } from "@/features/tools/model/tools-projection";
 import { TOOL_DEFINITIONS } from "@/features/tools/model/tool-catalog";
 import type { PathProgress } from "@/features/path/model/path-state";
 import type { ToolView } from "@/features/tools/model/tools-projection";
+import { toolAccessUnlockedThrough } from "@/features/tools/model/tool-access-fixture";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -36,6 +37,12 @@ const progressAt = (currentLevel: number): PathProgress =>
     xpLabel: "",
     streak: 0,
   }) as PathProgress;
+
+/* TOOLS-AUTHORITY-DIVERGENCE-1. Access is the Backend's verdict now, so each
+   case states one alongside the progress marker it already had. The level in
+   both is the same level: these cases describe one learner, and previously the
+   progress marker decided access on its own. */
+const accessThrough = toolAccessUnlockedThrough;
 
 const view = (over: Partial<ToolView> = {}): ToolView => ({
   id: "tool.trading_journal",
@@ -60,7 +67,7 @@ const SRC = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("Tools — the register", () => {
   it("lists every canonical tool, in catalogue order, with no ranking of its own", () => {
-    const tools = projectTools(progressAt(19));
+    const tools = projectTools(progressAt(19), accessThrough(19));
     const { container } = render(<ToolsRegister tools={tools} />);
     const rows = container.querySelectorAll(".t-entry");
     expect(rows).toHaveLength(TOOL_DEFINITIONS.length);
@@ -116,7 +123,7 @@ describe("Tools — the register", () => {
   });
 
   it("has no search, filters, favourites, recents, categories or ranking", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(progressAt(19))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(progressAt(19), accessThrough(19))} />);
     expect(container.querySelector("input")).toBeNull();
     expect(container.querySelector("select")).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(0);
@@ -129,7 +136,7 @@ describe("Tools — the register", () => {
   });
 
   it("does not carry the prototype's owned-work trace, which it has no source for", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(progressAt(19))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(progressAt(19), accessThrough(19))} />);
     expect(container.querySelector(".t-trace")).toBeNull();
   });
 });
@@ -211,7 +218,7 @@ describe("Tools — locked and not-enterable are different pages", () => {
 describe("Tools — the surface dispatches on the resolved view", () => {
   it("never renders a working surface for a tool the progression has not unlocked", () => {
     const { container } = render(
-      <ToolFidelitySurface toolCode="tool.trading_journal" progress={progressAt(2)} />,
+      <ToolFidelitySurface toolCode="tool.trading_journal" progress={progressAt(2)} access={accessThrough(2)} />,
     );
     expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.lockedLead);
     expect(container.querySelector("input")).toBeNull();
@@ -220,26 +227,26 @@ describe("Tools — the surface dispatches on the resolved view", () => {
   it("renders the not-enterable page for an unlocked tool with no surface", () => {
     const unbuilt = TOOL_DEFINITIONS.find((t) => t.implementationStatus === "coming-soon")!;
     const { container } = render(
-      <ToolFidelitySurface toolCode={unbuilt.code} progress={progressAt(101)} />,
+      <ToolFidelitySurface toolCode={unbuilt.code} progress={progressAt(101)} access={accessThrough(101)} />,
     );
     expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.roadmapLead);
   });
 
   it("refuses an unknown code outright", () => {
     const { container } = render(
-      <ToolFidelitySurface toolCode="tool.not_a_real_tool" progress={progressAt(19)} />,
+      <ToolFidelitySurface toolCode="tool.not_a_real_tool" progress={progressAt(19)} access={accessThrough(19)} />,
     );
     expect(container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.notFoundLead);
     expect(container.querySelector(".t-identity")).toBeNull();
   });
 
   it("with no progression at all, a real tool is locked and a fake one is still not found", () => {
-    const real = render(<ToolFidelitySurface toolCode="tool.trading_journal" progress={null} />);
+    const real = render(<ToolFidelitySurface toolCode="tool.trading_journal" progress={null} access={null} />);
     expect(real.container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.lockedLead);
     expect(real.container.querySelector(".t-identity h1")!.textContent).toBe("Trading Journal");
     real.unmount();
 
-    const fake = render(<ToolFidelitySurface toolCode="tool.invented" progress={null} />);
+    const fake = render(<ToolFidelitySurface toolCode="tool.invented" progress={null} access={null} />);
     expect(fake.container.querySelector(".t-state-truth")!.textContent).toBe(TOOLS_COPY.notFoundLead);
   });
 });

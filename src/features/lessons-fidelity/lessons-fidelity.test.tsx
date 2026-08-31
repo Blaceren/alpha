@@ -74,6 +74,7 @@ function viewOf(modules: AcademyModuleSummary[]): Enrolled {
   const all = modules.flatMap((m) => m.levels);
   return {
     state: "enrolled",
+    toolAccess: null, // no Backend verdict in this fixture; null locks every tool
     curriculum: {
       curriculumCode: "v2",
       curriculumVersion: 2,

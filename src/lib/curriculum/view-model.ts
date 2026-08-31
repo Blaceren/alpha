@@ -31,6 +31,7 @@ import type {
 } from "@/lib/curriculum/academy-view";
 import { completionSourceLabel } from "@/lib/curriculum/completion-source";
 import { normalizeLessonBody } from "@/lib/curriculum/lesson-body";
+import { readBackendToolAccess } from "@/lib/curriculum/backend-dto";
 
 /**
  * The learner's reading position, read defensively.
@@ -287,6 +288,9 @@ export function toAcademyCurriculumView(read: BackendCurriculumRead): AcademyCur
     curriculum: mapCurriculum(read.curriculum),
     modules,
     progress: buildProgress(modules, currentLevelNumber, updatedAt, xp),
+    /* Strictly, and fail-closed: anything unreadable becomes null, and null
+       locks every tool rather than falling back to a local guess. */
+    toolAccess: readBackendToolAccess(read.toolAccess),
   };
 }
 

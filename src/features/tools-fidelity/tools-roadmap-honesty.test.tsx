@@ -22,6 +22,12 @@ import type { PathProgress } from "@/features/path/model/path-state";
 const at = (currentLevel: number): PathProgress =>
   ({ scenario: "active", currentLevel, allCompleted: false, rankLabel: "", xpLabel: "", streak: 0 }) as PathProgress;
 
+/* TOOLS-AUTHORITY-DIVERGENCE-1. Access is the Backend's verdict now, so each
+   case states one alongside the progress marker it already had. The level in
+   both is the same level: these cases describe one learner, and previously the
+   progress marker decided access on its own. */
+const accessThrough = toolAccessUnlockedThrough;
+
 const ROADMAP = TOOL_DEFINITIONS.filter((t) => t.implementationStatus !== "available");
 const BUILT = TOOL_DEFINITIONS.filter((t) => t.implementationStatus === "available");
 /* Early, mid, past every gate — the promise must not reappear at any of them. */
@@ -34,7 +40,7 @@ describe("the seventeen unbuilt tools", () => {
   });
 
   it.each(LEVELS)("says «В разработке» at level %i, whatever the progression", (level) => {
-    const rows = projectTools(at(level));
+    const rows = projectTools(at(level), accessThrough(level));
     for (const tool of ROADMAP) {
       const row = rows.find((r) => r.code === tool.code);
       expect(row?.statusLabel, tool.code).toBe("В разработке");
@@ -42,7 +48,7 @@ describe("the seventeen unbuilt tools", () => {
   });
 
   it.each(LEVELS)("never promises to open, at level %i", (level) => {
-    const { container } = render(<ToolsRegister tools={projectTools(at(level))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(at(level), accessThrough(level))} />);
     const rows = [...container.querySelectorAll(".t-entry")];
     for (const [i, tool] of TOOL_DEFINITIONS.entries()) {
       if (tool.implementationStatus === "available") continue;
@@ -56,8 +62,8 @@ describe("the seventeen unbuilt tools", () => {
   });
 
   it("reports the gate as a separate, secondary fact on both sides of it", () => {
-    const before = projectTool("tool.chart_markup", at(2));
-    const after = projectTool("tool.chart_markup", at(101));
+    const before = projectTool("tool.chart_markup", at(2), accessThrough(2));
+    const after = projectTool("tool.chart_markup", at(101), accessThrough(101));
     expect(before?.requirementLabel).toBe("Требование доступа: уровень 20");
     expect(after?.requirementLabel).toBe("Требование доступа выполнено");
     // The readiness line is the SAME on both sides: passing a gate does not
@@ -68,7 +74,7 @@ describe("the seventeen unbuilt tools", () => {
 
   it("changes only the requirement line when the checkpoint is reached", () => {
     const row = (level: number) => {
-      const rows = projectTools(at(level));
+      const rows = projectTools(at(level), accessThrough(level));
       const i = TOOL_DEFINITIONS.findIndex((t) => t.code === "tool.chart_markup");
       const { container } = render(<ToolsRegister tools={rows} />);
       const el = container.querySelectorAll(".t-entry")[i] as HTMLElement;
@@ -89,7 +95,7 @@ describe("the seventeen unbuilt tools", () => {
   });
 
   it.each(LEVELS)("offers nothing to open or focus at level %i", (level) => {
-    const rows = projectTools(at(level));
+    const rows = projectTools(at(level), accessThrough(level));
     const { container } = render(<ToolsRegister tools={rows} />);
     const entries = [...container.querySelectorAll(".t-entry")];
     for (const [i, tool] of TOOL_DEFINITIONS.entries()) {
@@ -102,7 +108,7 @@ describe("the seventeen unbuilt tools", () => {
   it("does not make the promise on a deep-linked page either", () => {
     for (const level of [2, 101]) {
       const { container } = render(
-        <ToolFidelitySurface toolCode="tool.chart_markup" progress={at(level)} />,
+        <ToolFidelitySurface toolCode="tool.chart_markup" progress={at(level)} access={accessThrough(level)} />,
       );
       const text = container.textContent ?? "";
       expect(text, `level ${level}`).not.toMatch(/станет доступен на уровне/);
@@ -115,7 +121,7 @@ describe("the seventeen unbuilt tools", () => {
 
 describe("the two built tools keep their own access contract", () => {
   it("stays locked by progression, and says so in the old words", () => {
-    const rows = projectTools(at(2));
+    const rows = projectTools(at(2), accessThrough(2));
     for (const tool of BUILT) {
       const row = rows.find((r) => r.code === tool.code);
       expect(row?.statusLabel, tool.code).toBe(`Откроется на уровне ${tool.unlockLevel}`);
@@ -125,7 +131,7 @@ describe("the two built tools keep their own access contract", () => {
   });
 
   it("opens with a real CTA once its checkpoint is passed", () => {
-    const rows = projectTools(at(18));
+    const rows = projectTools(at(18), accessThrough(18));
     for (const tool of BUILT) {
       const row = rows.find((r) => r.code === tool.code);
       expect(row?.statusLabel, tool.code).toBe("Открыт · рабочий инструмент");
@@ -137,7 +143,7 @@ describe("the two built tools keep their own access contract", () => {
   });
 
   it("shows a built-but-locked tool the condition page, not the roadmap one", () => {
-    const tool = projectTool("tool.risk_calculator", at(2))!;
+    const tool = projectTool("tool.risk_calculator", at(2), accessThrough(2))!;
     const { container } = render(<ToolLockedPage tool={tool} />);
     expect(container.querySelector(".t-state-truth")?.textContent).toBe("Этот инструмент ещё не открыт.");
     expect(container.textContent).toContain("станет доступен на уровне 15");
@@ -146,7 +152,7 @@ describe("the two built tools keep their own access contract", () => {
 
 describe("the two dimensions never collapse into one", () => {
   it("keeps readiness and progress in separate elements", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(at(2))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(at(2), accessThrough(2))} />);
     const roadmapRow = [...container.querySelectorAll(".t-entry--locked")].find((el) =>
       (el.textContent ?? "").includes("Chart Markup Tool"),
     ) as HTMLElement;
@@ -160,7 +166,7 @@ describe("the two dimensions never collapse into one", () => {
   });
 
   it("gives a built tool one line, because it has one thing to say", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(at(18))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(at(18), accessThrough(18))} />);
     const built = container.querySelectorAll(".t-entry--open");
     expect(built).toHaveLength(2);
     for (const row of built) expect(row.querySelector(".t-entry-requirement")).toBeNull();
@@ -178,6 +184,7 @@ describe("the two dimensions never collapse into one", () => {
 import { ToolWorkFrame, ToolNotEnterablePage, TOOLS_COPY } from "@/features/tools-fidelity/tools-fidelity";
 import { RiskCalculatorWorkspace } from "@/features/tools/components/risk-calculator-workspace";
 import { TradingJournalWorkspace } from "@/features/tools/components/trading-journal-workspace";
+import { toolAccessUnlockedThrough } from "@/features/tools/model/tool-access-fixture";
 
 describe("the catalogue lead", () => {
   it("describes a catalogue of working AND future tools, gated by progress", () => {
@@ -189,7 +196,7 @@ describe("the catalogue lead", () => {
   });
 
   it("no longer claims every entry is a working tool opened by a level", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(at(2))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(at(2), accessThrough(2))} />);
     const lead = container.querySelector(".t-lead")?.textContent ?? "";
     expect(lead).not.toMatch(/остаются доступными после уровня/);
   });
@@ -200,7 +207,7 @@ describe("a roadmap page promises nothing", () => {
 
   it.each([2, 101])("says only what is true, at level %i", (level) => {
     const { container } = render(
-      <ToolFidelitySurface toolCode="tool.chart_markup" progress={at(level)} />,
+      <ToolFidelitySurface toolCode="tool.chart_markup" progress={at(level)} access={accessThrough(level)} />,
     );
     const text = container.textContent ?? "";
     for (const pattern of FORBIDDEN) expect(text, String(pattern)).not.toMatch(pattern);
@@ -228,8 +235,8 @@ describe("a roadmap page promises nothing", () => {
   });
 
   it("keeps the same wording as the register, so the two cannot drift", () => {
-    const row = projectTool("tool.chart_markup", at(2));
-    const { container } = render(<ToolFidelitySurface toolCode="tool.chart_markup" progress={at(2)} />);
+    const row = projectTool("tool.chart_markup", at(2), accessThrough(2));
+    const { container } = render(<ToolFidelitySurface toolCode="tool.chart_markup" progress={at(2)} access={accessThrough(2)} />);
     expect(container.querySelector(".p4-state-fact-value")?.textContent).toBe(row?.requirementLabel);
     expect(container.querySelector(".t-state-truth")?.textContent).toBe(row?.statusLabel);
   });
@@ -241,7 +248,7 @@ describe("a built workspace introduces itself exactly once", () => {
     ["Trading Journal", TradingJournalWorkspace, "Trading Journal", "10"],
   ] as const) {
     it(`${name}: one return link, one name, one level marker, one h1`, () => {
-      const tool = projectTool(name === "Risk Calculator" ? "tool.risk_calculator" : "tool.trading_journal", at(18))!;
+      const tool = projectTool(name === "Risk Calculator" ? "tool.risk_calculator" : "tool.trading_journal", at(18), accessThrough(18))!;
       const { container } = render(
         <ToolWorkFrame tool={tool}>
           <Workspace />
@@ -263,7 +270,7 @@ describe("a built workspace introduces itself exactly once", () => {
   }
 
   it("leaves the calculator's own form contract untouched", () => {
-    const tool = projectTool("tool.risk_calculator", at(18))!;
+    const tool = projectTool("tool.risk_calculator", at(18), accessThrough(18))!;
     const { container } = render(
       <ToolWorkFrame tool={tool}>
         <RiskCalculatorWorkspace />
@@ -280,7 +287,7 @@ describe("a built workspace introduces itself exactly once", () => {
   it("still frames a state page with its outer header", () => {
     // Only the workspace branch lost the outer header; the state pages keep it.
     const { container } = render(
-      <ToolNotEnterablePage tool={projectTool("tool.chart_markup", at(101))!} />,
+      <ToolNotEnterablePage tool={projectTool("tool.chart_markup", at(101), accessThrough(101))!} />,
     );
     expect(container.querySelector(".t-return")).not.toBeNull();
     expect(container.querySelectorAll("h1")).toHaveLength(1);

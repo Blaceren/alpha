@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PathProgress } from "@/features/path/model/path-state";
 import { getPathProgress, type PathScenario } from "@/features/path/model/path-state";
 import { projectTools, type ToolView } from "@/features/tools/model/tools-projection";
+import { fixtureToolAccess } from "@/features/tools/model/tool-access-fixture";
 
 /**
  * Tools Hub (Phase D4-B) — direction «Structured Operational Spine», hub half
@@ -34,7 +35,9 @@ export function ToolsHub({
 }) {
   let tools: ToolView[] | null;
   try {
-    tools = projectTools(progress ?? getPathProgress(scenario));
+    /* Fixture mode gets a stated verdict, never a derived one. API mode does
+       not reach this component. */
+    tools = projectTools(progress ?? getPathProgress(scenario), fixtureToolAccess(scenario));
   } catch {
     tools = null;
   }

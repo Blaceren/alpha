@@ -112,6 +112,7 @@ function viewOf(modules: AcademyModuleSummary[], currentLevelCode: string | null
   const currentModule = modules.find((m) => m.levels.some((l) => l.levelCode === currentLevelCode));
   return {
     state: "enrolled",
+    toolAccess: null, // no Backend verdict in this fixture; null locks every tool
     curriculum: {
       curriculumCode: "v2",
       curriculumVersion: 2,

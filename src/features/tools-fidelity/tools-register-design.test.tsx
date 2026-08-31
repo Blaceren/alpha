@@ -18,6 +18,7 @@ import { ToolsRegister } from "@/features/tools-fidelity/tools-fidelity";
 import { TOOL_DEFINITIONS } from "@/features/tools/model/tool-catalog";
 import { projectTools } from "@/features/tools/model/tools-projection";
 import type { PathProgress } from "@/features/path/model/path-state";
+import { toolAccessUnlockedThrough } from "@/features/tools/model/tool-access-fixture";
 
 const CSS = readFileSync(
   join(process.cwd(), "src", "features", "tools-fidelity", "tools-fidelity.css"),
@@ -80,7 +81,7 @@ describe("the register is legible", () => {
 
 describe("every row states which of the three things it is", () => {
   /* L18: Trading Journal (L10) and Risk Calculator (L15) open, the rest waiting. */
-  const rows = projectTools(progressAt(18));
+  const rows = projectTools(progressAt(18), accessThrough(18));
 
   it("renders all nineteen registry entries, in unlock order", () => {
     const { container } = render(<ToolsRegister tools={rows} />);
@@ -107,7 +108,7 @@ describe("every row states which of the three things it is", () => {
   it("shows a roadmap capability as open-but-not-enterable, never as working", () => {
     /* A learner past L20 has Chart Markup Tool unlocked, and it still must not
        offer an action: the capability does not exist in this build. */
-    const far = projectTools(progressAt(101));
+    const far = projectTools(progressAt(101), accessThrough(101));
     const chart = far.find((t) => t.code === "tool.chart_markup");
     expect(chart?.unlocked).toBe(true);
     expect(chart?.available).toBe(false);
@@ -140,7 +141,7 @@ describe("every row states which of the three things it is", () => {
 });
 
 describe("only a real capability is reachable", () => {
-  const rows = projectTools(progressAt(101));
+  const rows = projectTools(progressAt(101), accessThrough(101));
 
   it("gives exactly two rows an action, and names the tool in it", () => {
     const { container } = render(<ToolsRegister tools={rows} />);
@@ -216,7 +217,7 @@ describe("the register uses the desktop it is given", () => {
   });
 
   it("does not clip a long English name", () => {
-    const { container } = render(<ToolsRegister tools={projectTools(progressAt(101))} />);
+    const { container } = render(<ToolsRegister tools={projectTools(progressAt(101), accessThrough(101))} />);
     const longest = [...container.querySelectorAll(".t-entry-name")]
       .map((e) => e.textContent ?? "")
       .sort((a, b) => b.length - a.length)[0];
@@ -252,3 +253,9 @@ describe("the empty register", () => {
     expect(container.querySelectorAll("a.t-entry-action")).toHaveLength(0);
   });
 });
+
+/* TOOLS-AUTHORITY-DIVERGENCE-1. Access is the Backend's verdict now, so each
+   case states one alongside the progress marker it already had. The level in
+   both is the same level: these cases describe one learner, and previously the
+   progress marker decided access on its own. */
+const accessThrough = toolAccessUnlockedThrough;

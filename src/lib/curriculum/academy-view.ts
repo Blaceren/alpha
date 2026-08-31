@@ -241,6 +241,13 @@ export type AcademyCurriculumView =
       curriculum: AcademyCurriculumSummary;
       modules: AcademyModuleSummary[];
       progress: AcademyProgressSummary;
+      /**
+       * The Backend's tool verdict, or null when it could not be read.
+       *
+       * Null is not "unknown, decide locally" — the local join no longer decides
+       * anything. Null means locked, everywhere (TOOLS-AUTHORITY-DIVERGENCE-1).
+       */
+      toolAccess: AcademyToolAccess | null;
     }
   | {
       state: "candidate";
@@ -252,3 +259,15 @@ export type AcademyCurriculumView =
       state: "unavailable";
       reason: string;
     };
+
+/**
+ * The Backend's tool verdict as the Academy carries it.
+ *
+ * Deliberately the same shape the Backend sends, minus the fields no surface
+ * uses. Reshaping it would create a second place where "unlocked" is decided.
+ */
+export type AcademyToolAccess = {
+  total: number;
+  unlockedCount: number;
+  tools: ReadonlyArray<{ code: string; unlocked: boolean; unlockLevel: number }>;
+};

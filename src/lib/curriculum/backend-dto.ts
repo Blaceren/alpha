@@ -130,6 +130,8 @@ export type BackendEnrolledRead = {
   enrollment: BackendEnrollment;
   modules: BackendModule[];
   xp: BackendXp;
+  /** Read only through `readBackendToolAccess`. */
+  toolAccess?: unknown;
 };
 
 export type BackendCompletedRead = {
@@ -138,6 +140,8 @@ export type BackendCompletedRead = {
   enrollment: BackendEnrollment;
   modules: BackendModule[];
   xp?: BackendXp;
+  /** Read only through `readBackendToolAccess`. */
+  toolAccess?: unknown;
 };
 
 export type BackendUnavailableRead = {
@@ -420,4 +424,68 @@ export function isBackendLevelContent(value: unknown): value is BackendLevelCont
 
 export function isBackendLevelContentEnvelope(value: unknown): value is BackendLevelContentEnvelope {
   return isObject(value) && isBackendLevelContent(value.data);
+}
+
+/**
+ * TOOLS-AUTHORITY-DIVERGENCE-1 — the Backend's tool verdict, read strictly.
+ *
+ * The Backend has decided which tools are unlocked since Phase F and has been
+ * shipping the answer on this payload the whole time. The Academy was deriving
+ * its own from a contiguous-completed-prefix join. The two agreed for every
+ * learner anyone checked, and the Academy's rule was the stricter of the two, so
+ * nothing shipped wrong — but "agrees today" is not an authority, and two rules
+ * that must not drift are one rule too many.
+ *
+ * EVERY REJECTION HERE LOCKS EVERYTHING. The caller turns `null` into a locked
+ * register, so each `return null` below is a decision to withhold access rather
+ * than to guess at it. Withholding a tool someone earned is a recoverable
+ * annoyance; opening one because a payload could not be parsed is not.
+ *
+ * `unlocked` must be a real boolean. A JSON `"false"` is a truthy string, and
+ * that is exactly the mistake this refuses to make.
+ *
+ * A duplicate code is fail-closed rather than last-wins: two entries for one
+ * tool means the payload does not have a single opinion about it, and picking
+ * one of them would be inventing the opinion.
+ */
+export type BackendToolAccessEntry = {
+  code: string;
+  unlocked: boolean;
+  unlockLevel: number;
+};
+
+export type BackendToolAccess = {
+  total: number;
+  unlockedCount: number;
+  tools: BackendToolAccessEntry[];
+};
+
+export function readBackendToolAccess(value: unknown): BackendToolAccess | null {
+  if (!isObject(value)) return null;
+
+  const total = value.total;
+  const unlockedCount = value.unlockedCount;
+  const tools = value.tools;
+  if (typeof total !== "number" || !Number.isInteger(total) || total < 0) return null;
+  if (typeof unlockedCount !== "number" || !Number.isInteger(unlockedCount) || unlockedCount < 0) return null;
+  if (!Array.isArray(tools)) return null;
+
+  const entries: BackendToolAccessEntry[] = [];
+  const seen = new Set<string>();
+  for (const raw of tools) {
+    if (!isObject(raw)) return null;
+    const { code, unlocked, unlockLevel } = raw;
+    if (typeof code !== "string" || code.length === 0) return null;
+    if (typeof unlocked !== "boolean") return null;
+    if (typeof unlockLevel !== "number" || !Number.isInteger(unlockLevel)) return null;
+    if (seen.has(code)) return null;
+    seen.add(code);
+    entries.push({ code, unlocked, unlockLevel });
+  }
+
+  // The envelope must agree with its own contents, or it is not one answer.
+  if (entries.length !== total) return null;
+  if (entries.filter((entry) => entry.unlocked).length !== unlockedCount) return null;
+
+  return { total, unlockedCount, tools: entries };
 }

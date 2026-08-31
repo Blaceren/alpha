@@ -36,10 +36,17 @@ const BASE = "c54f5f5358fe2ea9dafc9fa0b74375b117fecb73";
  * by explicit assertions below rather than by blanket equivalence. Everything
  * that decides ACCESS is here, unchanged.
  */
+/* Byte-equivalence is the right instrument only where nothing but presentation
+   could have moved. Two files left this list when the access authority moved:
+
+     canonical-progress.ts       gained `toolAccessOf`, ten lines of real code
+     tool-fidelity-surface.tsx   gained the verdict as a prop, and passes it on
+
+   Normalising those away would turn a genuine change into a silent one. Both
+   are named in AUTHORISED below, and what they now DO is asserted in the truth
+   matrix rather than by comparing strings. */
 const SURFACE = [
-  "src/features/tools-fidelity/tool-fidelity-surface.tsx",
   "src/features/tools/model/tool-catalog.ts",
-  "src/features/tools/model/canonical-progress.ts",
   "src/app/(app)/tools/page.tsx",
   "src/app/(app)/tools/[toolCode]/page.tsx",
 ];
@@ -75,6 +82,19 @@ function contract(source: string): string {
     .replace(/userName=\{viewer\?\.name \?\? "[^"]*"\}/g, 'userName="«viewer»"')
     .replace(/userName="[^"]*"/g, 'userName="«viewer»"')
     .replace(/import \{ shellViewerName \} from "@\/server\/auth\/server-session";\s*/g, "")
+    /* Nor is the plumbing of the Backend verdict. TOOLS-AUTHORITY-DIVERGENCE-1
+       moved WHO decides access; it changed no copy, no markup and no geometry,
+       which is what this file exists to hold. What the verdict then produces is
+       asserted directly in the truth matrix, not by string comparison here. */
+    .replace(/,\s*access\)/g, ")")
+    .replace(/\s*access=\{[^}]*\}/g, "")
+    .replace(/\s*access,/g, "")
+    .replace(/\s*access: AcademyToolAccess \| null;/g, "")
+    .replace(/import type \{ AcademyToolAccess \} from "@\/lib\/curriculum\/academy-view";\s*/g, "")
+    .replace(/import \{ fixtureToolAccess \} from "@\/features\/tools\/model\/tool-access-fixture";\s*/g, "")
+    .replace(/,\s*fixtureToolAccess\(scenario\)\)/g, ")")
+    .replace(/const access = toolAccessOf\(result\);\s*/g, "")
+    .replace(/canonicalToolProgress, toolAccessOf/g, "canonicalToolProgress")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -96,49 +116,66 @@ describe("the Tools surface contract is unchanged", () => {
     /* The two page shells were authorised to stop naming a fixture learner in
        their unreachable fixture-mode branch. Nothing else under Tools may move,
        and the equivalence assertions above still hold their rendered contract. */
+    /* SHELL-VIEWER-IDENTITY-2 moved the two page shells off a fixture name.
+       TOOLS-AUTHORITY-DIVERGENCE-1 moved the access decision to the Backend,
+       which touches the projection, the two pages, both surfaces and adds the
+       fixture verdict. The rendered contract is still asserted above; what
+       moved is who decides, and that is asserted in the truth matrix. */
     const AUTHORISED = [
       "src/app/(app)/tools/[toolCode]/page.tsx",
       "src/app/(app)/tools/page.tsx",
+      "src/features/tools-fidelity/tool-fidelity-surface.tsx",
+      "src/features/tools/components/tool-surface.tsx",
+      "src/features/tools/components/tools-hub.tsx",
+      "src/features/tools/model/canonical-progress.ts",
+      "src/features/tools/model/tool-access-fixture.ts",
+      "src/features/tools/model/tools-projection.ts",
     ];
     expect(changed.filter((f) => !AUTHORISED.includes(f))).toEqual([]);
   });
 
   /**
-   * THE ACCESS DECISION IS NOT PART OF WHAT CHANGED.
+   * THE ACCESS DECISION, PINNED AT ITS NEW SOURCE.
    *
-   * `tools-projection.ts` carries both the unlock rule and the status copy. The
-   * copy was rewritten on purpose; the rule was not, and these hold that line
-   * character-for-character rather than trusting the diff to be read carefully.
+   * These two used to hold the unlock rule character-for-character, because the
+   * Tools design pass rewrote the status copy around it and the rule had to be
+   * shown untouched. The rule has now deliberately moved to the Backend
+   * (TOOLS-AUTHORITY-DIVERGENCE-1), so holding the old line would pin the defect
+   * rather than the contract. They hold the new decision instead, and they hold
+   * the absence of the old one — which is the part that could silently return.
    */
-  it("leaves the unlock rule exactly as it was", () => {
-    const fn = (source: string) => {
-      const at = source.indexOf("export function isToolUnlocked");
-      expect(at).toBeGreaterThan(-1);
-      return contract(source.slice(at, source.indexOf("\n}", at) + 2));
-    };
-    expect(fn(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8")))
-      .toBe(fn(git("show", `${BASE}:src/features/tools/model/tools-projection.ts`)));
-  });
-
-  it("leaves what a row is allowed to open exactly as it was", () => {
+  it("decides access from the verdict, and from nothing else", () => {
     const decision = (source: string) =>
       source
         .split("\n")
         .map((l) => l.trim())
         .filter((l) =>
-          l.startsWith("const unlocked = isToolUnlocked") ||
+          l.startsWith("const unlocked =") ||
           l.startsWith("const available =") ||
           l.startsWith("href: available"),
         );
-    const now = decision(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8"));
-    expect(now).toEqual([
-      "const unlocked = isToolUnlocked(tool, progress);",
+    expect(decision(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8"))).toEqual([
+      "const unlocked = verdict.get(tool.id) === true;",
       "const available = unlocked && implemented;",
       "href: available ? toolHref(tool.code) : null,",
     ]);
-    // `implemented` is the catalogue's own field, read verbatim.
+    // `implemented` is still the catalogue's own field, read verbatim.
     expect(readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8"))
       .toContain('const implemented = tool.implementationStatus === "available";');
+  });
+
+  it("keeps the retired local join out of the decision path", () => {
+    const source = readFileSync(join(ROOT, "src/features/tools/model/tools-projection.ts"), "utf8");
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // It may still be exported — the truth matrix compares the two rules — but
+    // nothing in this module may call it.
+    expect(code).toContain("export function isToolUnlockedByLocalJoin");
+    // Declared once, called nowhere: one occurrence is the declaration itself.
+    expect(code.split("isToolUnlockedByLocalJoin").length - 1).toBe(1);
+    // And the level rule appears only inside that retired function, never in
+    // the projection that the pages actually call.
+    const projection = code.slice(code.indexOf("export function projectTools"));
+    expect(projection).not.toContain("levelProgressState");
   });
 
   it("leaves every protected surface untouched", () => {

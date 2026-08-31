@@ -15,6 +15,7 @@ import type {
   AcademyLevelSummary,
   AcademyModuleSummary,
 } from "@/lib/curriculum/academy-view";
+import { toolAccessUnlockedThrough } from "@/features/tools/model/tool-access-fixture";
 
 function lvl(order: number, state: AcademyLevelSummary["state"]): AcademyLevelSummary {
   return {
@@ -58,6 +59,7 @@ function viewWith(completedThrough: number, total = 100): AcademyCurriculumView 
   ];
   return {
     state: "enrolled",
+    toolAccess: null, // no Backend verdict in this fixture; null locks every tool
     curriculum: { curriculumCode: "ata-v2", curriculumVersion: 4, title: "T", status: "published", publishedAt: null },
     modules,
     progress: {
@@ -99,35 +101,37 @@ describe("canonicalToolProgress", () => {
   });
 });
 
-describe("canonical progress drives the real unlock resolver", () => {
-  it("a learner who finished 14 levels has the L10 tool and NOT the L15 tool", () => {
-    const tools = projectTools(canonicalToolProgress(viewWith(14))!);
-    const at10 = tools.find((t) => t.unlockLevel === 10);
-    const at15 = tools.find((t) => t.unlockLevel === 15);
-    expect(at10?.unlocked).toBe(true);
-    expect(at15?.unlocked).toBe(false);
-    // And the locked one names the real milestone rather than a vague refusal.
-    expect(at15?.statusLabel).toContain("15");
-  });
+describe("canonical progress no longer drives the unlock resolver", () => {
+  /* This block used to prove the opposite: that finishing level 14 opened the
+     L10 tool and not the L15 one, all of it derived from the completed-level
+     prefix. That rule is gone. The Backend decides access, and these cases now
+     prove that the prefix cannot decide it — which is the only way to show the
+     old authority is really out of the path (TOOLS-AUTHORITY-DIVERGENCE-1). */
 
-  it("standing ON level 15 does not unlock the level-15 tool", () => {
-    // 14 completed, currently on 15 — the gate is not passed.
-    const tools = projectTools(canonicalToolProgress(viewWith(14))!);
-    expect(tools.find((t) => t.unlockLevel === 15)?.unlocked).toBe(false);
-  });
-
-  it("completing level 15 does unlock it", () => {
-    const tools = projectTools(canonicalToolProgress(viewWith(15))!);
-    expect(tools.find((t) => t.unlockLevel === 15)?.unlocked).toBe(true);
-  });
-
-  it("no tool is unlocked for a learner at the very start", () => {
-    const tools = projectTools(canonicalToolProgress(viewWith(0))!);
+  it("a fully completed learner gets nothing when there is no verdict", () => {
+    // The strongest possible local progress, and a null verdict.
+    const tools = projectTools(canonicalToolProgress(viewWith(100))!, null);
     expect(tools.every((t) => !t.unlocked)).toBe(true);
   });
 
-  it("every tool is unlocked once the whole programme is complete", () => {
-    const tools = projectTools(canonicalToolProgress(viewWith(100))!);
+  it("a learner at the very start gets everything the verdict opens", () => {
+    const tools = projectTools(
+      canonicalToolProgress(viewWith(0))!,
+      toolAccessUnlockedThrough(101),
+    );
     expect(tools.every((t) => t.unlocked)).toBe(true);
+  });
+
+  it("the same progress yields different answers under different verdicts", () => {
+    const progress = canonicalToolProgress(viewWith(14))!;
+    const closed = projectTools(progress, toolAccessUnlockedThrough(0));
+    const open = projectTools(progress, toolAccessUnlockedThrough(16));
+    expect(closed.find((t) => t.unlockLevel === 10)?.unlocked).toBe(false);
+    expect(open.find((t) => t.unlockLevel === 10)?.unlocked).toBe(true);
+  });
+
+  it("a locked tool still names its milestone rather than refusing vaguely", () => {
+    const tools = projectTools(canonicalToolProgress(viewWith(14))!, toolAccessUnlockedThrough(11));
+    expect(tools.find((t) => t.unlockLevel === 15)?.statusLabel).toContain("15");
   });
 });
