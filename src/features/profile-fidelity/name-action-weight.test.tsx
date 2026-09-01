@@ -155,6 +155,80 @@ describe("the button in the page", () => {
   });
 });
 
+describe("the request must not move the row", () => {
+  /* MEASURED, and this is why the assertions below exist. With the label
+     switching to «Сохранение…» the button went 103.88px -> 122.38px and «Отмена»
+     went 153.88 -> 172.38 for the length of the request: a control moving
+     sideways under the pointer that just pressed it. The actions row stayed
+     936px wide, which is exactly why row width was not enough evidence.
+     jsdom cannot measure a box, so what is pinned here is the CAUSE — one
+     unchanging string — and the harness measures the consequence. */
+
+  it("shows the same word in every state, including while the request runs", async () => {
+    let release!: (r: unknown) => void;
+    saveProfileName.mockReturnValue(new Promise((r) => { release = r; }));
+    const { input, save } = await openEditor();
+
+    expect(save().textContent!.trim()).toBe(COPY.save_name);
+    await retype(input, "Анна");
+    expect(save().textContent!.trim()).toBe(COPY.save_name);
+    await userEvent.click(save());
+    await waitFor(() => expect(save().getAttribute("aria-busy")).toBe("true"));
+    expect(save().textContent!.trim()).toBe(COPY.save_name);
+
+    release({ ok: false });
+    await waitFor(() => screen.getByText(COPY.mutation_failed));
+    expect(save().textContent!.trim()).toBe(COPY.save_name);
+  });
+
+  it("marks the request with aria-busy and a real disabled, not with the label", async () => {
+    let release!: (r: unknown) => void;
+    saveProfileName.mockReturnValue(new Promise((r) => { release = r; }));
+    const { input, save } = await openEditor();
+    await retype(input, "Анна");
+    await userEvent.click(save());
+
+    await waitFor(() => expect(save().getAttribute("aria-busy")).toBe("true"));
+    expect(save().disabled).toBe(true);
+    expect(save().textContent!.trim()).toBe("Сохранить");
+    release({ ok: false });
+  });
+
+  it("reports progress in the live region instead", async () => {
+    let release!: (r: unknown) => void;
+    saveProfileName.mockReturnValue(new Promise((r) => { release = r; }));
+    const { input, save, container } = await openEditor();
+    await retype(input, "Анна");
+    await userEvent.click(save());
+
+    const status = container.querySelector('[data-role="save-status"]')!;
+    await waitFor(() => expect(status.textContent).toBe(COPY.saving_status));
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(COPY.saving_status.length).toBeGreaterThan(0);
+    release({ ok: false });
+  });
+
+  it("renders the label unconditionally, so no state can widen the button", () => {
+    /* The mutation this catches: putting `busy ? COPY.saving : COPY.save_name`
+       back inside the name button. */
+    const button = TSX.slice(TSX.indexOf('data-role="save"'), TSX.indexOf('data-role="cancel"'));
+    expect(button).toContain("{COPY.save_name}");
+    /* `busy` itself is still legitimate inside this button — it is what sets
+       `aria-busy`. What may never come back is a ternary that picks the LABEL,
+       because the label is what sets the width. */
+    expect(button).not.toContain("COPY.saving");
+    expect(button).not.toMatch(/\?\s*COPY\./);
+    expect(button).toContain('aria-busy": true as const');
+  });
+
+  it("leaves the password button's own label alone", () => {
+    /* `saving` is still correct there: a different control, on a different row,
+       with nothing beside it to push. */
+    expect(TSX).toContain("{pwBusy ? COPY.saving : COPY.password_submit}");
+  });
+});
+
 describe("weight, and the target underneath it", () => {
   it("declares no width, so the button is as wide as its word", () => {
     const rule = CSS.slice(CSS.indexOf(".pf .p-save {"), CSS.indexOf("}", CSS.indexOf(".pf .p-save {")));

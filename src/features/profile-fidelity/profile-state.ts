@@ -142,7 +142,7 @@ export function save(state: ProfileState): SaveOutcome {
     return { next: { ...state, mode: "INVALID", error, announce: null }, submit: false };
   }
   return {
-    next: { ...state, mode: "SUBMITTING", error: null, announce: null },
+    next: { ...state, mode: "SUBMITTING", error: null, announce: COPY.saving_status },
     submit: true,
     name: draft.trim(),
   };
@@ -174,6 +174,16 @@ export const COPY = {
   edit: "Изменить",
   save: "Сохранить",
   saving: "Сохранение…",
+  /* THE NAME BUTTON NO LONGER SAYS THIS.
+     «Сохранение…» is two characters longer than «Сохранить», which made the
+     button grow 18.5px the moment it was pressed and pushed «Отмена» sideways
+     for the length of the request. A control that moves under the pointer that
+     just pressed it is a worse failure than a silent one, and the fix is not to
+     reserve the wider word's space — that is the heavy button this phase
+     removed. Progress belongs in the live region, which is where a screen
+     reader was already being told about it. The password button keeps `saving`:
+     it is a different control on a different row and nothing moves beside it. */
+  saving_status: "Сохраняем имя…",
   cancel: "Отмена",
   constraint: "От 2 до 50 символов",
   /* Community is hidden (COMMUNITY_ENABLED = false), and this line used to send

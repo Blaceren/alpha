@@ -241,10 +241,13 @@ describe("Profile — the frozen composition", () => {
     await userEvent.type(input, "Мария К");
     await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
-    /* SUBMITTING is the edit locus with the value held still. */
-    const saving = screen.getByRole("button", { name: COPY.saving });
+    /* SUBMITTING is the edit locus with the value held still — and the button
+       keeps its word. The request is reported by `aria-busy` and by the live
+       region, not by a longer label that would move «Отмена» sideways. */
+    const saving = screen.getByRole("button", { name: COPY.save_name });
     expect(saving).toHaveProperty("disabled", true);
     expect(saving.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector('[data-role="save-status"]')!.textContent).toBe(COPY.saving_status);
     expect((screen.getByLabelText(COPY.identity_label) as HTMLInputElement).readOnly).toBe(true);
     expect(container.querySelector('[data-role="identity"]')).toBeNull();
 

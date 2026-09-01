@@ -263,7 +263,11 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
                   disabled={!canSave}
                   {...(busy ? { "aria-busy": true as const } : {})}
                 >
-                  {busy ? COPY.saving : COPY.save_name}
+                  {/* ALWAYS THE SAME WORD. The request is announced in the
+                      live region and marked with `aria-busy`; the label is not
+                      the place to report it, because changing it changes the
+                      button's width and moves «Отмена». */}
+                  {COPY.save_name}
                 </button>
                 <button
                   type="button"
