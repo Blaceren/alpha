@@ -10,6 +10,7 @@ import {
   NAME_MAX,
   NAME_MIN,
   PASSWORD_MIN,
+  canSaveName,
   cancel as cancelEdit,
   editDraft,
   initial,
@@ -161,6 +162,7 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
 
   const editingName = isEditing(state.mode) && editor === "name";
   const busy = state.mode === "SUBMITTING";
+  const canSave = canSaveName(state);
   const invalid = state.mode === "INVALID";
   const failed = state.mode === "FAILED";
   const pwBusy = phase === "submitting";
@@ -254,7 +256,12 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
                   className="p-save"
                   data-role="save"
                   onClick={onSave}
-                  {...(busy ? { "aria-busy": true as const, disabled: true } : {})}
+                  /* A real `disabled`, not `pointer-events: none`: the second
+                     leaves the control in the tab order and reachable by
+                     keyboard while looking unavailable, which is the worst of
+                     both. Disabled here means disabled to everyone. */
+                  disabled={!canSave}
+                  {...(busy ? { "aria-busy": true as const } : {})}
                 >
                   {busy ? COPY.saving : COPY.save_name}
                 </button>

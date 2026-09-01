@@ -225,6 +225,8 @@ html.pf-root-scope,
   --p-action-gap:       18px;  /* between Save and Cancel                    */
   --p-action-pad-y:      9px;
   --p-action-pad-x:     18px;
+  /* Save carries one short word and does not need the shared measure. */
+  --p-save-pad-x:       16px;
   --p-action-radius:     3px;  /* the only radius in Profile                 */
 
   /* ─── FEEDBACK MARKER ───────────────────────────────────────────────────
@@ -400,17 +402,35 @@ html.pf-root-scope,
   gap: var(--p-action-gap);
   flex: 0 0 auto;
 }
+/* NO WIDTH IS DECLARED HERE, DELIBERATELY.
+   The button is as wide as its word plus `--p-save-pad-x` and no wider. A fixed
+   width would either clip a translation or leave the Cyrillic label swimming,
+   and a full-width button would turn a one-word action into the loudest object
+   on the page. The 44px target is kept by `min-height` and the shared `::after`
+   below, so trimming the horizontal padding costs nothing an accessible target
+   needs. */
 .pf .p-save {
   font: 650 var(--p-type-action) var(--p-ui);
   color: var(--p-ground);
   background: var(--p-signal);            /* SIGNAL = ACTION. Legitimate.   */
   border: 1px solid var(--p-signal-edge);
   border-radius: var(--p-action-radius);
-  padding: var(--p-action-pad-y) var(--p-action-pad-x);
+  padding: var(--p-action-pad-y) var(--p-save-pad-x);
   cursor: pointer;
 }
-.pf .p-save:hover { background: var(--p-signal-hover); }
-.pf .p-save:active { background: var(--p-signal-edge); }
+.pf .p-save:hover:not(:disabled) { background: var(--p-signal-hover); }
+.pf .p-save:active:not(:disabled) { background: var(--p-signal-edge); }
+/* UNAVAILABLE IS QUIET, AND EXACTLY THE SAME SIZE.
+   Signal means "this does something". With nothing to save it does not, so the
+   fill is withdrawn and only the outline remains. Every box property — border
+   width, padding, radius, type — is identical to the live state, so the row
+   does not move when the name becomes dirty; only colour changes. */
+.pf .p-save:disabled {
+  background: none;
+  color: var(--p-ink-quiet);
+  border-color: var(--p-rule-underline);
+  cursor: default;
+}
 /* BUSY: Signal is withdrawn. A filled Save during a request would read as
    done. Withdrawal is the honest treatment — the action is not available
    and the request is not finished. */

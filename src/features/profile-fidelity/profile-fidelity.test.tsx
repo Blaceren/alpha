@@ -205,22 +205,29 @@ describe("Profile — the frozen composition", () => {
     );
   });
 
-  it("binds a validation failure to the field, never to the page", async () => {
+  it("refuses a too-short name at the button, so the submit never happens", async () => {
+    /* THIS TEST CHANGED SHAPE, AND THE REASON IS THE POINT.
+       It used to click Save on a one-character name and assert the field error
+       that came back. Save is no longer available on a one-character name, so
+       there is no click to make and no error to return — the invalid submit is
+       prevented instead of reported. That is a better outcome and a smaller
+       page, but it does mean the field-level `error_short` surface is no longer
+       reachable through this button; `validate()` remains as the mirror of the
+       Backend rule and is asserted directly elsewhere. */
     const { container } = render(<ProfileFidelity canonical="Мария" />);
     await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
     const input = screen.getByLabelText(COPY.identity_label) as HTMLInputElement;
     await userEvent.clear(input);
     await userEvent.type(input, "Я");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
-    const error = container.querySelector('[data-role="field-error"]')!;
-    expect(error.textContent).toBe(COPY.error_short);
-    expect(error.getAttribute("role")).toBe("alert");
-    expect(input.getAttribute("aria-invalid")).toBe("true");
-    expect(input.getAttribute("aria-describedby")).toContain("p-field-error");
-    expect(container.querySelector('[data-role="page-failure"]')).toBeNull();
+    const save = screen.getByRole("button", { name: COPY.save_name }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    await userEvent.click(save);
+
     expect(saveProfileName).not.toHaveBeenCalled();
-    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(container.querySelector('[data-role="page-failure"]')).toBeNull();
+    /* The draft is not thrown away just because it cannot be sent yet. */
+    expect(input.value).toBe("Я");
   });
 
   it("does not move the identity until the server has confirmed it", async () => {

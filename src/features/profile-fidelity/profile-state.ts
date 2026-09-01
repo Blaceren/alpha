@@ -83,6 +83,29 @@ export function validate(draft: string): "error_short" | null {
   return draft.trim().length < NAME_MIN ? "error_short" : null;
 }
 
+/**
+ * WHEN SAVE IS ACTUALLY AVAILABLE.
+ *
+ * The button used to be live from the moment the editor opened, which made a
+ * filled Signal button offer to save the name the learner already has. An
+ * action that does nothing is worse than an absent one: it invites a request,
+ * spends a round trip and returns the page to where it started.
+ *
+ * Three conditions, all of them necessary. The name must have actually changed
+ * — `isDirty` compares TRIMMED text, so typing a space around an unchanged name
+ * is not a change and does not wake the button. It must be valid at BOTH ends:
+ * `maxLength` stops a person typing a 51st character, but it does not stop a
+ * paste from a password manager or a value set by script, and the button must
+ * not offer to submit something the Backend will refuse. And no request may
+ * already be in flight.
+ */
+export function canSaveName(state: ProfileState): boolean {
+  if (state.mode === "SUBMITTING") return false;
+  if (!isDirty(state)) return false;
+  const trimmed = (state.draft ?? "").trim();
+  return trimmed.length >= NAME_MIN && trimmed.length <= NAME_MAX;
+}
+
 export const initial = (canonical: string | null): ProfileState =>
   canonical === null
     ? { mode: "PAGEFAIL", canonical: null, draft: null, error: null, announce: null }
@@ -183,7 +206,11 @@ export const COPY = {
   page_lead: "Управляйте данными аккаунта и безопасностью входа.",
   section_account: "Данные аккаунта",
   section_security: "Безопасность",
-  save_name: "Сохранить имя",
+  /* «Сохранить», not «Сохранить имя». The row it sits in is already labelled
+     «Имя» and the field above it holds a name; repeating the noun made the
+     button the widest thing in the row — 135px of Signal fill next to the
+     person's own name, which is not the more important of the two. */
+  save_name: "Сохранить",
 
   /* The address itself is not shown: the learner viewer carries id, name, role
      and status, and printing an email would mean widening that boundary for a
