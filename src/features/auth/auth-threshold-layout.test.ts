@@ -20,16 +20,39 @@ import { join } from "node:path";
  * record of what these declarations produced — they are evidence, not an
  * assertion this file can re-derive.
  *
- * MEASURED WITH THE LIVE TURNSTILE KEY. This is the measurement CONDITION, not
- * a footnote: a scratch server started without `TURNSTILE_SITE_KEY` renders the
- * widget at 83px instead of 142px and drops a status line, which flatters every
- * number by about 115px. A measurement taken against the 83px fallback is not a
- * measurement of this page. Every figure below was taken with the same key the
- * live unit passes, after `document.fonts.ready`, after the Turnstile layout
- * settled, with `.auth-captcha` confirmed at 142px, at real viewports.
+ * THREE CAPTCHA STATES, THREE HEIGHTS, AND WHICH ONE EACH NUMBER BELONGS TO.
  *
- * Register submit `bottom`, and the ceiling each viewport must stay under to
- * keep 24px of clearance:
+ * `.auth-captcha` renders at three different heights, and no single one of them
+ * is what this widget "is". Reading one as the general case is how this file was
+ * wrong once already: it recorded 142px as the live height, and 142px is the
+ * height of an ERROR. Each number below therefore travels with the name of the
+ * state it was measured in, and the tests at the bottom of this file refuse to
+ * let those names come apart again.
+ *
+ *   REAL-DOMAIN WORKING STATE — `.auth-captcha` at 71px.
+ *     Turnstile on https://preprod.alfatrade.media in invisible/managed mode:
+ *     `render=explicit`, no visible iframe, `window.turnstile` live, a
+ *     `cdn-cgi/challenge-platform/.../rch/` request in flight, no 110200 in the
+ *     console. This is the page a visitor actually meets.
+ *
+ *   LOCALHOST / ERROR / WORST-CASE STATE — `.auth-captcha` at 142px.
+ *     `TURNSTILE_SITE_KEY` is present but the hostname does not match, so
+ *     Turnstile raises 110200 and renders an error box. Every measurement taken
+ *     over localhost or an SSH tunnel lands here — including a tunnel to the
+ *     live service on 3050. It is the TALLEST of the three, and that is exactly
+ *     why the layout gate is held to it rather than to the working state: a
+ *     composition that clears the fold carrying an error box clears it by a
+ *     further ~71px once the error is gone. Holding the gate to the friendlier
+ *     number would prove less, so the 142px envelope stays.
+ *
+ *   NO-KEY FALLBACK STATE — `.auth-captcha` at 83px.
+ *     `TURNSTILE_SITE_KEY` absent, so `resolveCaptchaContract` renders a
+ *     placeholder and one `.auth-status` region collapses to zero. No deployed
+ *     environment is in this state, and a measurement taken here is evidence
+ *     for nothing.
+ *
+ * LAYOUT GATE — held to the 142px worst-case envelope. Register submit
+ * `bottom`, against the ceiling that leaves 24px of clearance:
  *
  *   viewport    live 99ef7697   0116c208    6a9c1cd0    THIS   ceiling
  *   1440x900    779             864         864          864       876
@@ -37,9 +60,19 @@ import { join } from "node:path";
  *    390x844    835             929         790          770       820
  *    360x800    873             937         790          770       776
  *
- * The numbers below are not prose. They are read back by the tests in this
- * file, checked against the ceilings and against the 24px rule, so an evidence
- * table that drifts from the contract fails rather than misleads.
+ * LIVE CUTOVER EVIDENCE — the same submit measured at 71px on the real domain
+ * after the cutover of 6630b83f, in a fresh anonymous context, after
+ * `document.fonts.ready` and after the widget settled:
+ *
+ *   viewport    bottom   innerHeight   reserve
+ *   1440x900    793      900           107
+ *   1024x768    662      768           106
+ *    390x844    699      844           145
+ *    360x800    699      800           101
+ *
+ * Neither table is prose. Both are read back by the tests below and checked
+ * against the ceilings and the 24px rule, so an evidence table that drifts from
+ * the contract fails rather than misleads.
   */
 
 const ROOT = process.cwd();
@@ -84,16 +117,42 @@ const COMPACT = "@media (max-width: 640px) and (max-height: 950px)";
 const SHORT = "@media (max-height: 820px)";
 const WIDE = "@media (min-width: 900px) {";
 
-/** The measurement condition. A run against the fallback widget is void. */
-const CAPTCHA_REPRESENTATIVE = 142;
-const CAPTCHA_FALLBACK = 83;
+/**
+ * One constant per STATE. There is deliberately no constant standing for "the"
+ * height of the widget, because there is no such height. The name this file
+ * used before — the one that implied a single canonical height — was itself the
+ * mistake, and a test below bans both that identifier and the adjective it was
+ * built from. Neither is spelled out anywhere here: this file reads itself, so
+ * naming the banned word would be using it.
+ */
+const CAPTCHA_REAL_DOMAIN_WORKING = 71;
+const CAPTCHA_LOCALHOST_ERROR = 142;
+const CAPTCHA_NO_KEY_FALLBACK = 83;
 
-/** viewport -> [innerHeight, measured submit bottom, ceiling] */
+/** The gate is held to the tallest state on purpose: a worst-case envelope. */
+const LAYOUT_GATE_TESTED_HEIGHT = CAPTCHA_LOCALHOST_ERROR;
+
+/** The state each height belongs to, as the prose above must label it. */
+const STATE_LABELS: [number, string][] = [
+  [CAPTCHA_REAL_DOMAIN_WORKING, "REAL-DOMAIN WORKING STATE"],
+  [CAPTCHA_LOCALHOST_ERROR, "LOCALHOST / ERROR / WORST-CASE STATE"],
+  [CAPTCHA_NO_KEY_FALLBACK, "NO-KEY FALLBACK STATE"],
+];
+
+/** Worst-case envelope. viewport -> [innerHeight, submit bottom at 142px, ceiling] */
 const EVIDENCE: Record<string, [number, number, number]> = {
   "1440x900": [900, 864, 876],
   "1024x768": [768, 733, 744],
   "390x844": [844, 770, 820],
   "360x800": [800, 770, 776],
+};
+
+/** Live, post-cutover. viewport -> [innerHeight, submit bottom at 71px, reserve] */
+const LIVE_CUTOVER_EVIDENCE: Record<string, [number, number, number]> = {
+  "1440x900": [900, 793, 107],
+  "1024x768": [768, 662, 106],
+  "390x844": [844, 699, 145],
+  "360x800": [800, 699, 101],
 };
 
 /** The tier-4 numbers that produced 770 at 360x800. Nothing may loosen. */
@@ -317,18 +376,32 @@ describe("the recorded evidence is checked, not quoted", () => {
     }
   });
 
-  // N8
-  it("names the widget height the measurement is only valid at", () => {
-    expect(CAPTCHA_REPRESENTATIVE).toBe(142);
-    expect(CAPTCHA_FALLBACK).toBe(83);
-    expect(CSS_TEST_SOURCE).toContain("TURNSTILE_SITE_KEY");
-    // The height NAMED AS THE CONDITION, not merely a 142 somewhere in the
-    // file: the first version of this pin passed while the condition sentence
-    // said 83px, because the number also appears in a comment further down.
-    const stated = CSS_TEST_SOURCE.match(/`\.auth-captcha`[^\n]*?at (\d+)px/);
-    expect(stated, "the measurement condition must name the widget height").toBeTruthy();
-    expect(Number(stated![1]), "a run against the fallback widget is not a measurement of this page")
-      .toBe(CAPTCHA_REPRESENTATIVE);
+  it("checks the live cutover evidence too, at the working height", () => {
+    for (const [vp, [h, bottom, reserve]] of Object.entries(LIVE_CUTOVER_EVIDENCE)) {
+      expect(h - bottom, `${vp} reserve does not match`).toBe(reserve);
+      expect(reserve, `${vp} has less than 24px on the real domain`).toBeGreaterThanOrEqual(24);
+      // The working state is shorter than the error state, so every live figure
+      // must sit ABOVE its own worst-case twin. If one ever did not, the two
+      // tables would be describing different pages.
+      const worst = EVIDENCE[vp];
+      expect(worst, `${vp} missing from the worst-case table`).toBeTruthy();
+      expect(bottom, `${vp} live bottom is not inside the envelope`).toBeLessThanOrEqual(worst![1]);
+      expect(bottom).toBeLessThanOrEqual(worst![2]);
+    }
+  });
+
+  it("agrees with the live table written above it", () => {
+    for (const [vp, [h, bottom, reserve]] of Object.entries(LIVE_CUTOVER_EVIDENCE)) {
+      const rows = CSS_TEST_SOURCE.split("\n").filter(
+        (l) =>
+          l.trimStart().startsWith("*") &&
+          l.includes(vp) &&
+          l.includes(String(bottom)) &&
+          l.includes(String(h)) &&
+          l.includes(String(reserve)),
+      );
+      expect(rows.length, `no live evidence row for ${vp}`).toBe(1);
+    }
   });
 
   // N4
@@ -339,6 +412,53 @@ describe("the recorded evidence is checked, not quoted", () => {
     expect(parseFloat(pad!.value)).toBeLessThanOrEqual(TIER4_CEILINGS["padding-top"]!);
     for (const d of decls.filter((x) => x.prop === "gap")) {
       expect(parseFloat(d.value), `${d.selector} gap loosened`).toBeLessThanOrEqual(TIER4_CEILINGS["gap"]!);
+    }
+  });
+});
+
+describe("the three captcha states never collapse into one", () => {
+  it("keeps three distinct heights, one per state", () => {
+    expect(CAPTCHA_REAL_DOMAIN_WORKING).toBe(71);
+    expect(CAPTCHA_LOCALHOST_ERROR).toBe(142);
+    expect(CAPTCHA_NO_KEY_FALLBACK).toBe(83);
+    expect(new Set([CAPTCHA_REAL_DOMAIN_WORKING, CAPTCHA_LOCALHOST_ERROR, CAPTCHA_NO_KEY_FALLBACK]).size).toBe(3);
+    expect(CSS_TEST_SOURCE).toContain("TURNSTILE_SITE_KEY");
+  });
+
+  it.each(STATE_LABELS)("%dpx is written down beside the state it was measured in", (height, label) => {
+    const at = CSS_TEST_SOURCE.indexOf(label);
+    expect(at, `the prose must carry the label ${label}`).toBeGreaterThan(-1);
+    // The height has to live in that labelled paragraph, not merely somewhere
+    // in the file: a number without its state is what caused the error.
+    const paragraph = CSS_TEST_SOURCE.slice(at, at + 900);
+    expect(paragraph, `${label} must state ${height}px`).toContain(`${height}px`);
+  });
+
+  it("declares no universal height for the widget", () => {
+    // The banned adjective and the banned identifier are the two forms the
+    // mistake took. Both are assembled from fragments so that this assertion
+    // does not itself put them in the file it is checking.
+    const BANNED_ADJECTIVE = "repre" + "sentative";
+    const BANNED_IDENTIFIER = "CAPTCHA_" + BANNED_ADJECTIVE.toUpperCase();
+    expect(CSS_TEST_SOURCE.toLowerCase(), "no state's height may be called the general one")
+      .not.toContain(BANNED_ADJECTIVE);
+    expect(CSS_TEST_SOURCE, "the old constant name may not come back")
+      .not.toContain(BANNED_IDENTIFIER);
+    // 71 is named as the real-domain state, and only there.
+    expect(CSS_TEST_SOURCE).toContain("REAL-DOMAIN WORKING STATE — `.auth-captcha` at 71px");
+    expect(CSS_TEST_SOURCE).toContain("LOCALHOST / ERROR / WORST-CASE STATE — `.auth-captcha` at 142px");
+  });
+
+  it("holds the layout thresholds to the worst case, not to the live one", () => {
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(CAPTCHA_LOCALHOST_ERROR);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(142);
+    // Testing the envelope proves more than testing the friendly state. If this
+    // ever flipped to 71, every ceiling below would become easier to clear and
+    // the gate would quietly stop guarding the case it was written for.
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBeGreaterThan(CAPTCHA_REAL_DOMAIN_WORKING);
+    for (const [vp, [h, bottom, ceiling]] of Object.entries(EVIDENCE)) {
+      expect(ceiling, `${vp} ceiling`).toBe(h - 24);
+      expect(bottom, `${vp} worst-case bottom`).toBeLessThanOrEqual(ceiling);
     }
   });
 });
