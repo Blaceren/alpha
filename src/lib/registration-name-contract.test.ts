@@ -1,73 +1,87 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { REGISTRATION_NAME_BRIDGE, registerSchema } from "@/lib/validation";
+import * as validation from "@/lib/validation";
+import { registerSchema } from "@/lib/validation";
 
 /**
- * THE NAME CONTRACT THIS BUILD CARRIES — and it is the BRIDGE, not the end.
+ * THE NAME CONTRACT THIS BUILD CARRIES — and it is the end of the sequence.
  *
- * ATA-PROFILE-FOUNDATION-1 cannot ship its two halves in either order. A strict
- * Backend in front of the Academy still in production refuses every registration
- * that omits a name, which is all of them; a corrected Academy in front of the
- * old Backend promises any six-character password to a schema that still demands
- * three character categories. Neither is a deployment, both are an outage.
+ * The build before this one was a deployment bridge: the new password policy and
+ * the new change-password route, with the old name rule restored so that the
+ * Academy still in production could not be broken by shipping order. Once the
+ * corrected Academy is live, the bridge has no one left to protect.
  *
- * So this build is deliberately asymmetric: the NEW password policy and the new
- * change-password route, with the OLD name rule restored verbatim. It is safe
- * under the Academy that is live today AND under the corrected one.
- *
- * The tests below assert both halves of that, and they assert that the state is
- * marked as temporary. The final build deletes this file and adds the one that
- * asserts the opposite.
+ * This build removes it. `name` is required and bounded, the generated
+ * Трейдер-#### is gone, and the marker that made the temporary state visible is
+ * gone with the behaviour it marked — asserted below, because a bridge that
+ * outlives its purpose is indistinguishable from a decision nobody made.
  */
 
-describe("this build is a deployment bridge, and says so", () => {
-  it("marks itself", () => {
-    expect(REGISTRATION_NAME_BRIDGE).toBe(true);
+describe("the bridge is gone, and its absence is checked", () => {
+  it("exports no bridge marker", () => {
+    expect("REGISTRATION_NAME_BRIDGE" in validation).toBe(false);
   });
 
-  it("says why, where the rule is", () => {
-    const source = readFileSync("src/lib/validation.ts", "utf8");
-    expect(source).toContain("DEPLOYMENT BRIDGE");
-    expect(source).toContain("REGISTRATION_NAME_BRIDGE");
-    /* The route's fallback must be marked too, or it reads as the intent. */
-    expect(readFileSync("src/app/api/auth/register/route.ts", "utf8")).toContain("BRIDGE ONLY");
+  it("leaves no bridge language behind in the source", () => {
+    const schema = readFileSync("src/lib/validation.ts", "utf8");
+    const route = readFileSync("src/app/api/auth/register/route.ts", "utf8");
+    expect(schema).not.toContain("DEPLOYMENT BRIDGE");
+    expect(schema).not.toContain("REGISTRATION_NAME_BRIDGE");
+    expect(route).not.toContain("BRIDGE ONLY");
+  });
+
+  it("generates no name, anywhere", () => {
+    const route = readFileSync("src/app/api/auth/register/route.ts", "utf8");
+    expect(route).not.toContain("Трейдер-${");
+    expect(route).toContain("name: parsed.data.name,");
   });
 });
 
-describe("the OLD name rule, restored verbatim for the Academy in production", () => {
+describe("a new registration must carry a name", () => {
   const parse = (input: Record<string, unknown>) =>
     registerSchema.safeParse({ email: "a@b.invalid", password: "abcdef", ...input });
 
-  it("accepts a registration with no name, which is what the live Academy sends", () => {
-    expect(parse({}).success).toBe(true);
+  it("refuses a registration with no name at all", () => {
+    expect(parse({}).success).toBe(false);
   });
 
-  it("accepts one character, because the live client never checked", () => {
-    expect(parse({ name: "Я" }).success).toBe(true);
-  });
-
-  it("still refuses a name that is only whitespace", () => {
-    /* `.trim().min(1)` — the pre-phase rule exactly, not a weaker one. */
+  it("refuses a name that is only whitespace", () => {
     expect(parse({ name: "   " }).success).toBe(false);
   });
 
-  it("still keeps something to write, because the column is NOT NULL", () => {
-    expect(readFileSync("src/app/api/auth/register/route.ts", "utf8")).toContain("Трейдер-${");
+  it("refuses one character after trimming", () => {
+    expect(parse({ name: " Я " }).success).toBe(false);
+  });
+
+  it("accepts the two ends of the range", () => {
+    expect(parse({ name: "Ян" }).success).toBe(true);
+    expect(parse({ name: "и".repeat(50) }).success).toBe(true);
+  });
+
+  it("refuses fifty-one", () => {
+    expect(parse({ name: "и".repeat(51) }).success).toBe(false);
+  });
+
+  it("stores the trimmed name, so whitespace cannot buy length", () => {
+    const parsed = parse({ name: "  Анна  " });
+    expect(parsed.success && parsed.data.name).toBe("Анна");
   });
 });
 
-describe("the NEW halves are already here, which is the point of the bridge", () => {
-  const parse = (password: string) =>
-    registerSchema.safeParse({ email: "a@b.invalid", password });
-
+describe("everything the bridge already carried is still here", () => {
   it("asks nothing of a password but its length", () => {
     for (const password of ["abcdef", "123456", "пароль", "      "]) {
-      expect(parse(password).success, password).toBe(true);
+      expect(
+        registerSchema.safeParse({ email: "a@b.invalid", name: "Имя", password }).success,
+        password,
+      ).toBe(true);
     }
-    expect(parse("abcde").success).toBe(false);
+    expect(
+      registerSchema.safeParse({ email: "a@b.invalid", name: "Имя", password: "abcde" }).success,
+    ).toBe(false);
   });
 
-  it("carries the change-password route", () => {
+  it("carries the change-password route unchanged", () => {
     const route = readFileSync("src/app/api/auth/change-password/route.ts", "utf8");
     expect(route).toContain("issueSessionWithin");
     expect(route).toContain("INVALID_CURRENT_PASSWORD");
