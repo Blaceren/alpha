@@ -311,11 +311,20 @@ describe("Profile — the frozen composition", () => {
     expect(container.querySelectorAll("h1")).toHaveLength(1);
   });
 
-  it("keeps the support handoff pointing somewhere real", () => {
+  it("keeps the support handoff pointing somewhere real, in the row it belongs to", () => {
     const { container } = render(<ProfileFidelity canonical="Мария" />);
-    const link = container.querySelector('[data-role="support-link"]') as HTMLAnchorElement;
+    const link = container.querySelector('[data-role="email-support-link"]') as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe("/support");
     expect(container.querySelector('[data-role="consequence"]')!.textContent).toBe(COPY.consequence);
+  });
+
+  it("still hands off from the page-failure state, which has no email row", () => {
+    /* The working page carries its handoff in the email row. A page that failed
+       to load has no rows at all, so the failure state keeps its own. */
+    const { container } = render(<ProfileFidelity canonical={null} />);
+    expect(container.querySelector('[data-role="page-failure"]')).toBeTruthy();
+    const link = container.querySelector('[data-role="support-link"]') as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/support");
   });
 });
 
@@ -350,7 +359,22 @@ describe("Profile — what the page may never become", () => {
        the query names which is which rather than matching on text. */
     const rowLink = document.querySelector('[data-role="email-support-link"]') as HTMLAnchorElement;
     expect(rowLink.getAttribute("href")).toBe("/support");
-    expect(document.querySelector('[data-role="support-link"]')).toBeTruthy();
+  });
+
+  it("offers exactly one support path, and it belongs to the email row", () => {
+    const { container } = render(<ProfileFidelity canonical="Мария" />);
+    const links = [...container.querySelectorAll('a[href="/support"]')];
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute("data-role")).toBe("email-support-link");
+
+    /* Not beside the password section: that is self-service now, and a handoff
+       there would send people to support for something the page does itself. */
+    const security = container.querySelectorAll("section")[1]!;
+    expect(security.querySelectorAll('a[href="/support"]')).toHaveLength(0);
+
+    /* And the sentence that used to make the page-wide promise is gone. */
+    expect(container.textContent).not.toContain("Остальные данные учётной записи");
+    expect(container.textContent).not.toContain("скоро");
   });
 
   it("shows nothing that belongs to another product", () => {
@@ -619,9 +643,20 @@ describe("Profile — changing the password", () => {
   });
 
   it("gives every control a target a thumb can hit", () => {
-    const css = SRC("profile-fidelity.css");
-    expect(css).toContain("min-height: 44px");
-    expect(css).toContain("min-width: 44px");
+    /* Named selectors, not a substring. The first version of this test asked
+       whether the stylesheet contained `min-height: 44px` anywhere; it did, on
+       the row affordances, while the form controls measured 30px on a phone.
+       The harness caught that. This asserts each family carries the floor. */
+    const css = codeOnly(SRC("profile-fidelity.css"));
+    /* The two rules that carry the floor, named exactly. The measurement that
+       actually proves it is the harness, which laid these controls out against
+       this stylesheet at five viewports; this keeps the rules from being
+       deleted between harness runs. */
+    expect(css).toMatch(
+      /\.pf \.p-name-control,\s*\.pf \.p-save,\s*\.pf \.p-cancel \{\s*min-height: 44px;\s*\}/,
+    );
+    expect(css).toMatch(/\.pf \.p-edit,\s*\.pf \.p-edit--link \{[^}]*min-height: 44px/);
+    expect(css).toMatch(/\.pf \.p-cancel \{ min-width: 44px; \}/);
   });
 
   it("keeps the focus ring visible on every control", () => {

@@ -158,7 +158,11 @@ export const COPY = {
      restoring the wider context is its own decision — not a conditional string
      carried here in advance. */
   consequence: "Это имя отображается в вашем профиле ATA.",
-  support_lead: "Остальные данные учётной записи меняются через поддержку.",
+  /* Kept for the page-failure state, which has no email row to carry a handoff
+     and still needs one. It is no longer shown on the working page: the password
+     is self-service now, so «остальные данные» would have pointed at support for
+     something this page does itself. */
+  support_lead: "Если профиль не загружается, напишите в поддержку.",
   support_link: "Написать в поддержку",
   error_short: "Имя не может быть короче 2 символов.",
   mutation_failed: "Не удалось сохранить. Изменения не применены.",

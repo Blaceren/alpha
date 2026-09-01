@@ -789,6 +789,20 @@ html.pf-root-scope,
 
 .pf .p-field { margin-bottom: var(--p-rhythm-locus); }
 
+/* EVERY CONTROL, not only the row affordances.
+ *
+ * The first version of this block raised `.p-edit` and stopped there, and the
+ * unit test agreed with it because it asked whether the stylesheet CONTAINED
+ * `min-height: 44px` — a question the file answered truthfully while the fields
+ * themselves measured 30px on a phone. The harness measured them instead and
+ * said so. Type, colour and padding are untouched; only the floor is added. */
+.pf .p-name-control,
+.pf .p-save,
+.pf .p-cancel {
+  min-height: 44px;
+}
+.pf .p-cancel { min-width: 44px; }
+
 /* THE TARGET, not the type. Nothing above changes size or colour. */
 .pf .p-edit,
 .pf .p-edit--link {

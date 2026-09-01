@@ -41,6 +41,14 @@ import "@/features/profile-fidelity/profile-fidelity.css";
  * forms means two drafts and two ways to lose one; `editor` is a single value,
  * so opening either closes the question.
  *
+ * ONE SUPPORT PATH, AND IT BELONGS TO EMAIL. The page used to end with
+ * «Остальные данные учётной записи меняются через поддержку», which was true
+ * when the password was one of those data. It is not any more — the password is
+ * changed here, in the section above — so the sentence would have started
+ * pointing people at support for something this page now does. The only thing
+ * still handed off is the email address, so the only handoff left is in that
+ * row, next to the thing it is about.
+ *
  * EMAIL IS NAMED BUT NOT SHOWN. `AcademyViewer` carries id, name, role and
  * status — deliberately not the address — and this phase does not widen it. The
  * row states where an email change happens instead of printing a value the page
@@ -428,7 +436,6 @@ export function ProfileFidelity({ canonical }: { canonical: string | null }) {
         <p className="p-consequence" data-role="consequence">
           {COPY.consequence}
         </p>
-        <SupportHandoff />
       </div>
     </div>
   );
