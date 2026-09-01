@@ -585,16 +585,19 @@
  * wins over the 430px and 820px steps it refines.
  */
 @media (max-width: 640px) and (max-height: 950px) {
-  .auth { padding-top: 8px; }
-  .auth__stage { gap: 8px; }
-  .auth__frame { padding: 12px 22px 16px; }
-  .auth__eyebrow { margin-bottom: 6px; }
-  .auth__title { margin-bottom: 6px; }
-  .auth__lead { margin-bottom: 8px; }
-  /* 11 between groups against 5 inside one: the label still reads as belonging
-     to its own input, which is the only thing this rhythm has to carry. */
+  .auth { padding-top: 4px; }
+  .auth__stage { gap: 6px; }
+  .auth__frame { padding: 10px 22px 14px; }
+  .auth__eyebrow { margin-bottom: 4px; }
+  .auth__title { margin-bottom: 4px; }
+  .auth__lead { margin-bottom: 6px; }
+  /* 9 between groups against 5 inside one: the label still reads as belonging
+     to its own input, which is the only thing this rhythm has to carry. This is
+     the floor - the register form with a live 142px Turnstile widget spends
+     636px of an 800px viewport before any chrome at all, so what is left is
+     air, and all of it is now on the table. */
   .auth .login-form,
-  .auth .register-form { gap: 11px; }
+  .auth .register-form { gap: 9px; }
   .auth .login-field,
   .auth .register-field { gap: 5px; }
 }

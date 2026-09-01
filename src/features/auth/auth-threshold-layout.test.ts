@@ -20,16 +20,31 @@ import { join } from "node:path";
  * record of what these declarations produced — they are evidence, not an
  * assertion this file can re-derive.
  *
- * MEASURED, register submit, after `document.fonts.ready`:
+ * MEASURED WITH THE LIVE TURNSTILE KEY. This matters more than anything else
+ * in this file: a scratch server started without `TURNSTILE_SITE_KEY` renders
+ * the widget 59px shorter and drops a status line, which flatters every number
+ * by about 115px. Every figure below was taken against the real widget, after
+ * `document.fonts.ready`, at real viewports. `bottom` of the register submit:
  *
- *   viewport    before(99ef7697)   candidate 0116c208   this candidate
- *   1440x900    —                  785  fits            785  fits (identical)
- *   1024x768    fits               761  fits            761  fits (identical)
- *    390x844    —                  869  BELOW FOLD      754  fits, 90px spare
- *    360x800    751, below fold    877  BELOW FOLD      754  fits, 46px spare
+ *   viewport    live 99ef7697   candidate 0116c208   this candidate
+ *   1440x900    779  fits +121  864  fits  +36       864  fits  +36
+ *   1024x768    779  FAILS -11  840  FAILS -72       840  FAILS -72
+ *    390x844    835  fits   +9  929  FAILS -85       790  fits  +54
+ *    360x800    873  FAILS -73  937  FAILS -137      790  fits  +10
  *
- * The desktop pair is byte-identical to 0116c208 by construction: the compact
- * step is bounded at 640px wide, so no desktop rule is reached at all.
+ * The phone pair now fits, and 360x800 fits for the first time - it was 73px
+ * short before this phase began and 137px short after the frame landed. The
+ * margin at 360 is 10px and that is not an accident of rounding: the register
+ * form with a live 142px Turnstile spends 636px of an 800px viewport before
+ * any chrome exists, so the compact step is spending the last of the air. Any
+ * future addition to this form comes out of that 10px.
+ *
+ * 1024x768 IS STILL BELOW THE FOLD, by 72px, and this pass did not fix it.
+ * It is recorded rather than rounded away. It is not a regression introduced
+ * here: the live page misses it by 11px too. The frame widened the gap and the
+ * compact step cannot reach it, because the step is bounded at 640px and a
+ * short DESKTOP viewport is a different decision from a phone. It needs its own
+ * authorisation.
  */
 
 const ROOT = process.cwd();
@@ -78,7 +93,7 @@ describe("the phone compact step", () => {
     // 331px clear of the fold and the generosity is affordable. Measured: with
     // both bounds present, the step does NOT engage at 390x1200.
     const widthOnly = block("@media (max-width: 640px) {").body;
-    for (const compactOnly of ["padding-top: 8px", "gap: 8px", "gap: 11px", "gap: 5px"]) {
+    for (const compactOnly of ["padding-top: 4px", "gap: 6px", "gap: 9px", "gap: 5px"]) {
       expect(widthOnly, `the width-only step must not carry ${compactOnly}`).not.toContain(compactOnly);
     }
   });
