@@ -26,14 +26,37 @@ import "@/features/auth/auth-stage.css";
  *
  * NO NEW MARKETING COPY. The lead and the supporting line are the pages' own
  * existing words. A sign-in page is not a place to start selling.
+ *
+ * THE THRESHOLD, IN PUBLIC HOME'S VOICE. This page is the step between the
+ * public promise and the private work, so it now speaks in the display face
+ * Public Home speaks in — `--font-public-display`, a global token whose
+ * @font-face already ships in `src/styles/fonts.css`. No font is added and no
+ * request leaves the origin.
+ *
+ * `FONT_ROLES.publicDisplay` says that face is "Public Home ONLY — the
+ * authenticated product never uses it". That remains true: a visitor reading
+ * `/login` has not authenticated, and nothing past this door uses the serif.
+ * The rule draws its line at the threshold; the threshold is the last place the
+ * marketing voice is allowed to be heard, not the first place the product
+ * breaks the rule. A guard test pins exactly that.
+ *
+ * THE FRAME HOLDS THE REAL DECISION. `.auth__frame` wraps the heading, the
+ * supporting line and the form itself — never an empty panel beside them. It is
+ * Public Home's Decision Frame language (a thin rule, a faint grid, two signal
+ * brackets) rendered from GLOBAL tokens, because `--line-dark`, `--signal-400`
+ * and `--radius-lg` are defined inside `.ph` and belong to that surface alone.
+ * If the form ever fails to render, the frame goes with it: it has no content
+ * of its own to keep standing.
  */
 export function AuthStage({
   headingId,
+  eyebrow,
   title,
   lead,
   children,
 }: {
   headingId: string;
+  eyebrow: string;
   title: string;
   lead: string;
   children: ReactNode;
@@ -55,11 +78,17 @@ export function AuthStage({
         </div>
 
         <section className="auth__panel" aria-labelledby={headingId}>
-          <h1 id={headingId} className="auth__title">
-            {title}
-          </h1>
-          <p className="auth__lead">{lead}</p>
-          {children}
+          {/* One framed object: what this door is, what it does, and the form
+              that does it. The eyebrow is the technical voice the product uses
+              for status lines, so the frame opens the way Home's frames open. */}
+          <div className="auth__frame">
+            <p className="auth__eyebrow">{eyebrow}</p>
+            <h1 id={headingId} className="auth__title">
+              {title}
+            </h1>
+            <p className="auth__lead">{lead}</p>
+            {children}
+          </div>
         </section>
       </div>
     </main>

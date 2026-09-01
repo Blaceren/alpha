@@ -35,7 +35,14 @@ export default function RegisterPage() {
   return (
     <AuthStage
       headingId="register-heading"
-      title="Создать аккаунт"
+      eyebrow="ATA / НАЧАЛО"
+      title="Начать путь."
+      /* THE SUPPORTING LINE IS UNCHANGED, DELIBERATELY.
+         The threshold brief proposed «Создайте аккаунт, чтобы пройти первый
+         уровень и сохранять прогресс». Registration does not open a level —
+         a curator does, which is what this page has said all along and what
+         the docblock above commits to. A new heading may change the voice; it
+         may not quietly promise access the account does not grant. */
       lead="Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор."
     >
       <Suspense fallback={null}>

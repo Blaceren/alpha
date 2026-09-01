@@ -24,7 +24,12 @@ export default function LoginPage() {
   const { turnstileSiteKey } = getAcademyConfig();
 
   return (
-    <AuthStage headingId="login-heading" title="Вход" lead="Продолжите свой путь обучения.">
+    <AuthStage
+      headingId="login-heading"
+      eyebrow="ATA / ВХОД"
+      title="Продолжить свой путь."
+      lead="Вернитесь к текущему уровню, своим решениям и сохранённому прогрессу."
+    >
       <Suspense fallback={null}>
         <LoginForm turnstileSiteKey={turnstileSiteKey} />
       </Suspense>

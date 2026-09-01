@@ -61,13 +61,90 @@
 
 .auth__panel { min-width: 0; }
 
+/*
+ * THE FRAME AROUND THE REAL DECISION.
+ *
+ * Public Home draws a Decision Frame around the object a visitor is deciding
+ * about. Here the object is the sign-in itself, so the frame holds the eyebrow,
+ * the heading, the supporting line AND the form — it never stands beside them
+ * as an empty panel, and it cannot outlive the form, because it has no content
+ * of its own.
+ *
+ * Built from GLOBAL tokens only. Public Home's `--line-dark`, `--signal-400`
+ * and `--radius-lg` are declared inside `.ph` and are not visible here; the
+ * equivalents this surface already uses are `--divider`, `--signal-active` and
+ * `--surface-subtle`. The faint 72px grid is the same measure Home's frame uses,
+ * at a lower opacity because this panel sits closer to the reader.
+ */
+.auth__frame {
+  position: relative;
+  min-width: 0;
+  padding: 32px 30px 30px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background:
+    linear-gradient(rgba(237, 240, 234, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237, 240, 234, 0.028) 1px, transparent 1px),
+    var(--surface-subtle);
+  background-size: 72px 72px;
+}
+
+/* The two brackets. Corners only: a full rule would box the form in, and the
+   frame is meant to mark a decision, not fence it. */
+.auth__frame::before,
+.auth__frame::after {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  content: "";
+  pointer-events: none;
+}
+.auth__frame::before {
+  top: 14px;
+  left: 14px;
+  border-top: 6px solid var(--signal-active);
+  border-left: 6px solid var(--signal-active);
+}
+.auth__frame::after {
+  right: 14px;
+  bottom: 14px;
+  border-right: 6px solid var(--signal-active);
+  border-bottom: 6px solid var(--signal-active);
+}
+
+/* The technical voice, the same one the product uses for status lines. The
+   left padding clears the bracket rather than sliding under it. */
+.auth__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  padding-left: 34px;
+}
+
+/*
+ * THE THRESHOLD SPEAKS IN HOME'S VOICE.
+ *
+ * `--font-public-display` is the global token Public Home's hero is set in and
+ * its faces already ship in `src/styles/fonts.css`; nothing is added and no
+ * request leaves the origin. The size is a threshold, not a hero: Home opens at
+ * 77px, this opens at 36 and steps down with the viewport.
+ */
 .auth__title {
+  font-family: var(--font-public-display);
+  /* ONE SCALE, THREE STEPS: 26 narrow, 30 default, 36 wide. The wide step
+     already existed and used to RAISE the heading; setting a larger base here
+     would have inverted it into a reduction, so the base stays where it was
+     and the wide rule keeps its job. */
   font-size: 30px;
-  line-height: 1.14;
-  letter-spacing: -0.018em;
-  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  font-weight: 400;
   color: var(--text-primary);
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   text-wrap: balance;
 }
 .auth__lead {
@@ -76,6 +153,17 @@
   color: var(--text-secondary);
   margin: 0 0 24px;
   max-width: 46ch;
+}
+
+/* Narrow: the frame keeps its meaning and gives back its padding. The brackets
+   shrink with it so they stay corners rather than becoming borders. */
+@media (max-width: 640px) {
+  .auth__frame { padding: 26px 20px 24px; border-radius: 12px; }
+  .auth__frame::before,
+  .auth__frame::after { width: 30px; height: 30px; border-width: 5px; }
+  .auth__frame::before { top: 12px; left: 12px; }
+  .auth__frame::after { right: 12px; bottom: 12px; }
+  .auth__eyebrow { padding-left: 26px; margin-bottom: 12px; }
 }
 
 /*
@@ -420,7 +508,7 @@
     height: 1px;
     background: var(--divider);
   }
-  .auth__title { font-size: 34px; }
+  .auth__title { font-size: 36px; }
 }
 
 @media (min-width: 900px) and (min-height: 760px) {
@@ -434,6 +522,22 @@
   .auth__stage { gap: 22px; }
   .auth__title { font-size: 26px; }
   .auth__mark img { width: 46px; }
+}
+
+/*
+ * THE FRAME GIVES BACK ITS PADDING BEFORE THE FORM GIVES UP THE FOLD.
+ *
+ * The frame costs vertical space, and `/register` is the longer of the two
+ * forms: at 1024x768 the padding pushed its submit control past the first
+ * screen, which it had not been past before. A frame that buys continuity by
+ * hiding the action is not worth the trade, so on a short viewport it trims
+ * itself — the geometry stays, the generosity goes.
+ */
+@media (max-height: 820px) {
+  .auth__frame { padding: 22px 24px 22px; }
+  .auth__eyebrow { margin-bottom: 10px; }
+  .auth__title { margin-bottom: 8px; }
+  .auth__lead { margin-bottom: 18px; }
 }
 
 /* A short viewport - a phone with the keyboard up, or a 1440x700 desktop - must

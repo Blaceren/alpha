@@ -132,62 +132,58 @@ describe("the authenticated route group", () => {
      The link swaps of the previous phase are inside BASE and are pinned by the
      AST gate rather than by this list. */
   const AUTHORISED_VIEWER_IDENTITY = [
-    "src/app/(app)/home/page.tsx",
-    "src/app/(app)/lessons/[levelCode]/page.tsx",
-    "src/app/(app)/lessons/page.tsx",
-    "src/app/(app)/path/page.tsx",
-    "src/app/(app)/support/page.tsx",
-    "src/app/(app)/tools/[toolCode]/page.tsx",
-    "src/app/(app)/tools/page.tsx",
-    "src/app/showcase/video-player/page.tsx",
-    "src/app/showcase/video-player/video-player-showcase.css",
-    "src/app/showcase/video-player/video-player-showcase.tsx",
-    "src/components/media/academy-video-player.css",
-    /* ATA-COMPLETION-TRUTH-1B: the completion-method label and the XP demotion.
-       No data, no progression, no Backend — completion-truth.test.tsx pins it. */
-    "src/features/academy-experience/home-screen.tsx",
-    "src/features/academy-experience/level-detail-screen.tsx",
-    "src/features/curriculum-api/api-level-detail.tsx",
-    "src/features/lesson-media/lesson-media.tsx",
-    /* HOME BRAND EVOLUTION. The owner authorised this route, and only this
-       route, to leave byte-identity with the frozen HomeATA page. The scope
-       is `src/features/public-home/**`; the frozen prefixes below are what
-       this phase may still not touch, and they are unchanged. */
-    /* ATA-AUTHENTICATED-SURFACE-TRUTH-1A: five files, all copy or markup.
-       No data, no access decision, no progression, no shell. */
-    "src/features/profile-fidelity/profile-state.ts",
-    "src/features/public-home/public-home-header.tsx",
-    "src/features/public-home/public-home-screen.tsx",
-    "src/features/public-home/public-home.css",
-    /* ATA-REPORT-EVIDENCE-CONTRACT-1: the review a learner was never shown.
-       Presentation and a fail-closed reader only — no route, no navigation, no
-       progression and no Backend call; evidence-arc.test.tsx pins what they
-       render. */
-    "src/features/report/components/report-status-panel.tsx",
-    "src/features/report/report.css",
-    "src/features/tools-fidelity/tool-fidelity-surface.tsx",
-    "src/features/tools-fidelity/tools-fidelity.tsx",
-    "src/features/tools/components/tool-surface.tsx",
-    "src/features/tools/components/tools-hub.tsx",
-    "src/features/tools/model/canonical-progress.ts",
-    "src/features/tools/model/tool-access-fixture.ts",
-    "src/features/tools/model/tools-projection.ts",
-    "src/features/workspace-fidelity/workspace-fidelity-screen.tsx",
-    "src/features/workspace-fidelity/workspace-fidelity.css",
-    "src/features/workspace-fidelity/workspace-state.ts",
-    "src/lib/auth/constants.ts",
-    "src/lib/curriculum/academy-view.ts",
-    "src/lib/curriculum/backend-dto.ts",
-    "src/lib/curriculum/completion-method.ts",
-    "src/lib/curriculum/view-model.ts",
-    "src/lib/report/types.ts",
-    "src/middleware.ts",
-    "src/server/auth/server-session.ts",
-    "src/server/curriculum/report-state-read.ts",
-    "src/server/curriculum/server-read.ts",
-    "src/server/learner-ops/server-read.ts",
-    "src/server/notifications/unread-presence.ts",
-  ];
+  /* ATA-AUTH-THRESHOLD-CONTINUITY-1: the threshold surface. The two auth
+     pages carry new copy and the shared stage carries the eyebrow and the
+     Decision Frame. No form, endpoint, guard or Turnstile wiring moved —
+     auth-threshold.test.tsx pins each of those separately. */
+  "src/app/(app)/home/page.tsx",
+  "src/app/(app)/lessons/[levelCode]/page.tsx",
+  "src/app/(app)/lessons/page.tsx",
+  "src/app/(app)/path/page.tsx",
+  "src/app/(app)/support/page.tsx",
+  "src/app/(app)/tools/[toolCode]/page.tsx",
+  "src/app/(app)/tools/page.tsx",
+  "src/app/login/page.tsx",
+  "src/app/register/page.tsx",
+  "src/app/showcase/video-player/page.tsx",
+  "src/app/showcase/video-player/video-player-showcase.css",
+  "src/app/showcase/video-player/video-player-showcase.tsx",
+  "src/components/media/academy-video-player.css",
+  "src/features/academy-experience/home-screen.tsx",
+  "src/features/academy-experience/level-detail-screen.tsx",
+  "src/features/auth/auth-stage.css",
+  "src/features/auth/auth-stage.tsx",
+  "src/features/curriculum-api/api-level-detail.tsx",
+  "src/features/lesson-media/lesson-media.tsx",
+  "src/features/profile-fidelity/profile-state.ts",
+  "src/features/public-home/public-home-header.tsx",
+  "src/features/public-home/public-home-screen.tsx",
+  "src/features/public-home/public-home.css",
+  "src/features/report/components/report-status-panel.tsx",
+  "src/features/report/report.css",
+  "src/features/tools-fidelity/tool-fidelity-surface.tsx",
+  "src/features/tools-fidelity/tools-fidelity.tsx",
+  "src/features/tools/components/tool-surface.tsx",
+  "src/features/tools/components/tools-hub.tsx",
+  "src/features/tools/model/canonical-progress.ts",
+  "src/features/tools/model/tool-access-fixture.ts",
+  "src/features/tools/model/tools-projection.ts",
+  "src/features/workspace-fidelity/workspace-fidelity-screen.tsx",
+  "src/features/workspace-fidelity/workspace-fidelity.css",
+  "src/features/workspace-fidelity/workspace-state.ts",
+  "src/lib/auth/constants.ts",
+  "src/lib/curriculum/academy-view.ts",
+  "src/lib/curriculum/backend-dto.ts",
+  "src/lib/curriculum/completion-method.ts",
+  "src/lib/curriculum/view-model.ts",
+  "src/lib/report/types.ts",
+  "src/middleware.ts",
+  "src/server/auth/server-session.ts",
+  "src/server/curriculum/report-state-read.ts",
+  "src/server/curriculum/server-read.ts",
+  "src/server/learner-ops/server-read.ts",
+  "src/server/notifications/unread-presence.ts",
+];
 
   it("has brought no loading boundary back since the release", () => {
     /* The route group's own boundary is asserted absent above. What this adds is
@@ -221,7 +217,15 @@ describe("the authenticated route group", () => {
          the single action and its destination. Freezing it in two places would
          mean the looser of the two fails first, for the least informative
          reason. */
-      "src/features/support", "src/features/auth/", "src/components/shell",
+      /* Auth is no longer frozen here: ATA-AUTH-THRESHOLD-CONTINUITY-1
+         authorised the threshold composition — an eyebrow, the Decision Frame
+         and Public Home's display face on the two headings — and
+         auth-threshold.test.tsx governs that tree in detail: every field name,
+         label binding, autocomplete value, the CSRF and Turnstile wiring, the
+         `next` contract and the submit endpoints are pinned there. Freezing it
+         in two places would mean the looser of the two fails first, for the
+         least informative reason. */
+      "src/features/support", "src/components/shell",
       "src/config/feature-visibility.ts", "src/app/layout.tsx",
     ]) {
       expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);

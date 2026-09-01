@@ -205,9 +205,12 @@ describe("the Tools surface contract is unchanged", () => {
          must not move is a surface BODY. */
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
     const forbidden = [
-      "src/features/auth/",
-      "src/app/login",
-      "src/app/register",
+      /* Auth left this list with ATA-AUTH-THRESHOLD-CONTINUITY-1: the two
+         auth pages and their shared stage were authorised to take Public
+         Home's voice at the threshold. Nothing that authenticates moved —
+         auth-threshold.test.tsx holds those files as byte-identical to the
+         release, which is a stricter claim than this prefix ever made. The two
+         route files left with it, for the copy they pass to that stage. */
       "src/components/shell/",
       "src/features/home",
       /* path-fidelity carries one of the authorised link swaps. */

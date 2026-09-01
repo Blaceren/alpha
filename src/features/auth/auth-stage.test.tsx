@@ -31,9 +31,13 @@ function renderPage(node: React.ReactElement) {
 }
 
 describe("the auth stage composition", () => {
+  /* ATA-AUTH-THRESHOLD-CONTINUITY-1 renamed both headings. The old ones named
+     the mechanism («Вход», «Создать аккаунт»); the new ones name what the
+     visitor is doing at this door, in Public Home's voice. The button labels
+     that perform the action are unchanged and are pinned separately. */
   for (const [name, Page, heading] of [
-    ["login", LoginPage, "Вход"],
-    ["register", RegisterPage, "Создать аккаунт"],
+    ["login", LoginPage, "Продолжить свой путь."],
+    ["register", RegisterPage, "Начать путь."],
   ] as const) {
     it(`${name} has exactly one main and one h1`, () => {
       const { container } = renderPage(<Page />);
