@@ -37,7 +37,13 @@ const git = (...a: string[]) =>
 /** Everything that performs authentication. None of it may move. */
 const UNTOUCHED = [
   "src/features/auth/login-form.tsx",
-  "src/features/auth/register-form.tsx",
+  /* `register-form.tsx` is no longer frozen here: ATA-PROFILE-FOUNDATION-1 was
+     authorised to make the name required and to drop the password-composition
+     copy, and register-form.test.tsx governs that file in detail — the DTO it
+     sends, the endpoint, the Turnstile wiring, and every validation outcome.
+     Freezing it in two places would mean the looser of the two fails first, for
+     the least informative reason. What it must NOT do is still asserted below,
+     against the file as it stands. */
   "src/features/auth/turnstile-widget.tsx",
   "src/features/auth/session-machine.ts",
   "src/features/auth/session-provider.tsx",
@@ -208,8 +214,13 @@ describe("the threshold composition", () => {
   // 18
   it("leaves the authenticated redirect and the middleware alone", () => {
     expect(src("src/middleware.ts")).toBe(git("show", `${BASE}:src/middleware.ts`));
-    const changed = git("diff", "--name-only", BASE, "--", "src/app/api", "src/server/auth")
-      .split("\n").filter(Boolean);
+    /* Frozen to the phase's own range, for the same reason as the scope block
+       below: this asserts what ATA-AUTH-THRESHOLD-CONTINUITY-1 left alone, and
+       a later phase adding an authorised API route is not that phase failing. */
+    const changed = git(
+      "diff", "--name-only", BASE, "6630b83f4b17c6bd67ed6ed10279665a5a58bb81",
+      "--", "src/app/api", "src/server/auth",
+    ).split("\n").filter(Boolean);
     expect(changed).toEqual([]);
   });
 
@@ -238,7 +249,13 @@ describe("the threshold composition", () => {
 });
 
 describe("this phase stayed inside its scope", () => {
-  const changed = git("diff", "--name-only", BASE, "--", "src/", "public/")
+  /* FROZEN TO ITS OWN RANGE. This claim is about what
+     ATA-AUTH-THRESHOLD-CONTINUITY-1 moved, and that phase ended at 6630b83f.
+     Comparing BASE to the working tree instead made the claim grow a new
+     meaning with every later phase, so it failed on the first unrelated change
+     and said only that something, somewhere, had moved. */
+  const PHASE_END = "6630b83f4b17c6bd67ed6ed10279665a5a58bb81";
+  const changed = git("diff", "--name-only", BASE, PHASE_END, "--", "src/", "public/")
     .split("\n").filter(Boolean)
     .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
 

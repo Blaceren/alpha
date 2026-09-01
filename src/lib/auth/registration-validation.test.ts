@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeEmail,
+  nameProblem,
   normalizeName,
   passwordProblem,
   validateRegistrationDraft,
@@ -13,7 +14,7 @@ function draft(over: Partial<Parameters<typeof validateRegistrationDraft>[0]> = 
     email: "learner@example.com",
     password: "Passw0rd",
     confirmPassword: "Passw0rd",
-    name: "",
+    name: "Учащийся",
     ...over,
   };
 }
@@ -24,10 +25,10 @@ describe("normalizeEmail — mirrors Backend .trim().toLowerCase()", () => {
   });
 });
 
-describe("normalizeName — mirrors Backend .trim().min(1).optional()", () => {
+describe("normalizeName — mirrors Backend nameSchema: trimmed, 2..50, required", () => {
   it("omits a blank name so Backend's .min(1) is never violated", () => {
-    expect(normalizeName("")).toBeUndefined();
-    expect(normalizeName("   ")).toBeUndefined();
+    expect(normalizeName("")).toBe("");
+    expect(normalizeName("   ")).toBe("");
   });
 
   it("trims a provided name", () => {
@@ -49,16 +50,35 @@ describe("passwordProblem — mirrors the Backend password policy", () => {
     expect(passwordProblem("Pa0")).toBeDefined();
   });
 
-  it("requires an uppercase letter", () => {
-    expect(passwordProblem("passw0rd")).toBeDefined();
+  it("asks for no character category at all", () => {
+    /* Each of these used to be rejected by a refinement that no longer exists,
+       and each is now a password the Backend accepts. */
+    for (const password of ["passw0rd", "PASSW0RD", "Password", "abcdef", "123456", "пароль"]) {
+      expect(passwordProblem(password), password).toBeUndefined();
+    }
   });
 
-  it("requires a lowercase letter", () => {
-    expect(passwordProblem("PASSW0RD")).toBeDefined();
+  it("measures the value as typed, without trimming it", () => {
+    expect(passwordProblem("  abcd  ")).toBeUndefined();
+    expect(passwordProblem("  a  ")).toBeDefined();
+  });
+});
+
+describe("nameProblem — the mirror of Backend nameSchema", () => {
+  it("requires a name", () => {
+    expect(nameProblem("")).toBe("Укажите имя.");
+    expect(nameProblem("   ")).toBe("Укажите имя.");
   });
 
-  it("requires a digit", () => {
-    expect(passwordProblem("Password")).toBeDefined();
+  it("measures after trimming", () => {
+    expect(nameProblem("  Я  ")).toBeDefined();
+    expect(nameProblem("  Ян  ")).toBeUndefined();
+  });
+
+  it("accepts both ends of the range and refuses past it", () => {
+    expect(nameProblem("и".repeat(2))).toBeUndefined();
+    expect(nameProblem("и".repeat(50))).toBeUndefined();
+    expect(nameProblem("и".repeat(51))).toBeDefined();
   });
 });
 
@@ -86,8 +106,8 @@ describe("validateRegistrationDraft", () => {
 
   it("reports every failing field at once for an accessible error summary", () => {
     const errors = validateRegistrationDraft(
-      draft({ email: "nope", password: "short", confirmPassword: "other" }),
+      draft({ email: "nope", name: "", password: "short", confirmPassword: "other" }),
     );
-    expect(Object.keys(errors).sort()).toEqual(["confirmPassword", "email", "password"]);
+    expect(Object.keys(errors).sort()).toEqual(["confirmPassword", "email", "name", "password"]);
   });
 });

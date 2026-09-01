@@ -297,19 +297,30 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
       </div>
 
       <div className="register-field">
-        <label htmlFor={nameId}>
-          Имя <span className="register-field__optional">— необязательно</span>
-        </label>
+        <label htmlFor={nameId}>Имя</label>
         <input
           id={nameId}
           name="name"
           type="text"
           autoComplete="nickname"
+          required
+          minLength={2}
+          maxLength={50}
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={submitting}
+          aria-invalid={fieldErrors.name ? true : undefined}
+          aria-describedby={fieldErrors.name ? `${nameId}-error` : `${nameId}-hint`}
         />
-        <p className="register-field__hint">Если не указать, платформа подберёт имя автоматически.</p>
+        {fieldErrors.name ? (
+          <p id={`${nameId}-error`} className="register-field__error">
+            {fieldErrors.name}
+          </p>
+        ) : (
+          <p id={`${nameId}-hint`} className="register-field__hint">
+            От 2 до 50 символов.
+          </p>
+        )}
       </div>
 
       <div className="register-field">
@@ -334,7 +345,7 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
           </p>
         ) : (
           <p id={`${passwordId}-hint`} className="register-field__hint">
-            Минимум 6 символов, заглавная и строчная буква, цифра.
+            Минимум 6 символов.
           </p>
         )}
       </div>

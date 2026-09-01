@@ -20,7 +20,13 @@
  */
 import type { BackendAuthSurface } from "@/server/proxy/auth-surface";
 
-export type ProxyOperation = "login" | "session" | "logout" | "csrf" | "register";
+export type ProxyOperation =
+  | "login"
+  | "session"
+  | "logout"
+  | "csrf"
+  | "register"
+  | "changePassword";
 
 export type ProxyRoute = {
   method: "GET" | "POST";
@@ -99,6 +105,35 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
     hasBody: true,
     forwardClientIp: true,
     authSurface: "academy_register",
+  },
+  /**
+   * ATA-PROFILE-FOUNDATION-1 — the learner changes their own password.
+   *
+   * `isLogin: false` on purpose. A 401 here means the SESSION is gone, not
+   * that a credential was wrong: the route is authenticated, and a wrong
+   * current password answers 400. Marking it as a login would teach the
+   * shell to read an expired session as a typo.
+   *
+   * `forwardClientIp` because Backend rate-limits this route on (user, IP).
+   * Without it every attempt in the world would share one bucket keyed on
+   * the loopback hop — the same reasoning that put it on `login`.
+   *
+   * The body is forwarded rather than rebuilt, which is safe here for a
+   * reason that does not hold for `PATCH /api/me`: the Backend schema is a
+   * closed two-field object, so an extra key is stripped rather than acted
+   * on. There is no adjacent field to widen into.
+   *
+   * The rotated session cookie returns through the same Set-Cookie
+   * preservation every auth response uses. Dropping it would sign the
+   * learner out at the moment they proved who they were.
+   */
+  changePassword: {
+    method: "POST",
+    backendPath: "/api/auth/change-password",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: true,
+    authSurface: null,
   },
 };
 

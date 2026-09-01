@@ -101,10 +101,22 @@ describe("login proxy — route matrix", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("still exposes no operation beyond the five named ones", () => {
+  it("still exposes no operation beyond the six named ones", () => {
+    /* ATA-PROFILE-FOUNDATION-1 added `changePassword` and nothing else. The
+       count is the point of this test: an operation that is not named here
+       cannot be reached, so the adjacent Backend auth routes — verify-email,
+       resend-verification, session-status — stay unreachable from a browser. */
     expect([...PROXY_OPERATIONS].sort()).toEqual(
-      ["csrf", "login", "logout", "register", "session"].sort(),
+      ["changePassword", "csrf", "login", "logout", "register", "session"].sort(),
     );
+    /* The one addition is authenticated and raises no challenge: a wrong current
+       password is a 400 from the route, never a 401 the shell would read as an
+       expired session, and no Turnstile surface is claimed for it. */
+    expect(PROXY_ALLOW_LIST.changePassword.backendPath).toBe("/api/auth/change-password");
+    expect(PROXY_ALLOW_LIST.changePassword.method).toBe("POST");
+    expect(PROXY_ALLOW_LIST.changePassword.isLogin).toBe(false);
+    expect(PROXY_ALLOW_LIST.changePassword.authSurface).toBeNull();
+    expect(PROXY_ALLOW_LIST.changePassword.forwardClientIp).toBe(true);
     // Every Backend path is a constant, so no caller input can steer one.
     for (const route of Object.values(PROXY_ALLOW_LIST)) {
       expect(route.backendPath.startsWith("/api/")).toBe(true);

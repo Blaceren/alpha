@@ -45,6 +45,9 @@ export type ProfileState = {
 };
 
 /** Backend `profileUpdateSchema` — z.string().trim().min(2).max(50). */
+/** Mirrors Backend `passwordSchema`. Length is the whole rule. */
+export const PASSWORD_MIN = 6;
+
 export const NAME_MIN = 2;
 export const NAME_MAX = 50;
 
@@ -169,4 +172,35 @@ export const COPY = {
    * would otherwise never be spoken.
    */
   saved_status: "Имя сохранено: {name}.",
+
+  /* ATA-PROFILE-FOUNDATION-1 — the page grew a second area, so it grew a lead
+     and two section headings. The page coordinate is permanent now, which is
+     why «Профиль» is no longer conditional anywhere. */
+  page_lead: "Управляйте данными аккаунта и безопасностью входа.",
+  section_account: "Данные аккаунта",
+  section_security: "Безопасность",
+  save_name: "Сохранить имя",
+
+  /* The address itself is not shown: the learner viewer carries id, name, role
+     and status, and printing an email would mean widening that boundary for a
+     row that cannot act on it. The row says where the change happens instead —
+     and promises no date, because the self-service flow has no mail transport
+     behind it yet. */
+  email_label: "Email",
+  email_via_support: "Изменение email пока выполняется через поддержку.",
+
+  password_label: "Пароль",
+  password_edit: "Изменить пароль",
+  password_current: "Текущий пароль",
+  password_new: "Новый пароль",
+  password_confirm: "Повторите новый пароль",
+  password_constraint: "Минимум 6 символов.",
+  password_submit: "Сменить пароль",
+  password_changed: "Пароль изменён.",
+  password_too_short: "Пароль должен быть не короче 6 символов.",
+  password_mismatch: "Пароли не совпадают.",
+  /* Neutral by design: the caller is already signed in, so this says something
+     about the value typed, not about the account. */
+  password_wrong_current: "Текущий пароль указан неверно.",
+  password_failed: "Не удалось сменить пароль. Пароль не изменён.",
 } as const;

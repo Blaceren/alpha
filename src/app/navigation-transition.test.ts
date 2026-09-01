@@ -132,6 +132,20 @@ describe("the authenticated route group", () => {
      The link swaps of the previous phase are inside BASE and are pinned by the
      AST gate rather than by this list. */
   const AUTHORISED_VIEWER_IDENTITY = [
+  /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
+     is length alone, and Profile gained a security area with a real change-
+     password route. The proxy grew exactly one named operation — login-proxy
+     .test.ts pins the count — and profile-fidelity.test.tsx governs the
+     surface in detail. No session machine, no Turnstile, no CSRF wiring moved. */
+  "src/app/api/backend/auth/change-password/route.ts",
+  "src/features/auth/register-form.tsx",
+  "src/features/profile-fidelity/profile-fidelity.css",
+  "src/features/profile-fidelity/profile-fidelity.tsx",
+  /* profile-state.ts is already authorised further down by an earlier phase; it
+     is listed once, not once per phase that touches it. */
+  "src/lib/auth/registration-validation.ts",
+  "src/lib/profile/profile-client.ts",
+  "src/server/proxy/allow-list.ts",
   /* ATA-AUTH-THRESHOLD-CONTINUITY-1: the threshold surface. The two auth
      pages carry new copy and the shared stage carries the eyebrow and the
      Decision Frame. No form, endpoint, guard or Turnstile wiring moved —
@@ -202,7 +216,11 @@ describe("the authenticated route group", () => {
     const changed = git("diff", "--name-only", BASE, "--", "src/")
       .split("\n").filter(Boolean)
       .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
-    expect(changed.sort()).toEqual(AUTHORISED_VIEWER_IDENTITY);
+    /* Both sides are sorted. The list is a SET of authorised files; the order
+       it happens to be written in is not part of the contract, and making it
+       one meant every addition had to be inserted at exactly the right line
+       or the failure said only that two 54-item arrays differed. */
+    expect(changed.sort()).toEqual([...AUTHORISED_VIEWER_IDENTITY].sort());
     for (const prefix of [
       "src/features/home", "src/features/level-detail-fidelity",
       /* Tools is no longer frozen here: TOOLS-AUTHORITY-DIVERGENCE-1

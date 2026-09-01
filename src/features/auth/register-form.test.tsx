@@ -73,6 +73,10 @@ function created(over: { required?: boolean } = {}) {
  */
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Email"), "Learner@Example.COM");
+  /* The name is required now, so a "valid form" has one. Every test that used
+     this helper was previously registering without a name — which is exactly
+     the state the Backend no longer accepts. */
+  await user.type(screen.getByLabelText(/^Имя/), "Учащийся");
   await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
   await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
   await waitFor(() => expect(submitButton()).toBeEnabled());
@@ -144,16 +148,33 @@ describe("RegisterForm — DTO mapping", () => {
     expect(sentPayload()).not.toHaveProperty("confirmPassword");
   });
 
-  it("omits a blank optional name instead of sending an empty string", async () => {
+  it("refuses to register without a name, and never sends an empty one", async () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
 
     renderForm();
-    await fillValidForm(user);
+    await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText("Пароль"), "abcdef");
+    await user.type(screen.getByLabelText("Повторите пароль"), "abcdef");
     await user.click(submitButton());
 
-    await waitFor(() => expect(registerMock).toHaveBeenCalled());
-    expect(sentPayload().name).toBeUndefined();
+    expect(await screen.findByText("Укажите имя.")).toBeTruthy();
+    expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses one character after trimming, and accepts two", async () => {
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue(created());
+
+    renderForm();
+    await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText(/^Имя/), "  Я  ");
+    await user.type(screen.getByLabelText("Пароль"), "abcdef");
+    await user.type(screen.getByLabelText("Повторите пароль"), "abcdef");
+    await user.click(submitButton());
+
+    expect(await screen.findByText("Имя должно быть не короче 2 символов.")).toBeTruthy();
+    expect(registerMock).not.toHaveBeenCalled();
   });
 
   it("sends a provided name", async () => {
@@ -162,6 +183,7 @@ describe("RegisterForm — DTO mapping", () => {
 
     renderForm();
     await fillValidForm(user);
+    await user.clear(screen.getByLabelText(/^Имя/));
     await user.type(screen.getByLabelText(/^Имя/), "  Аня  ");
     await user.click(submitButton());
 
@@ -275,17 +297,51 @@ describe("RegisterForm — validation states", () => {
     expect(registerMock).not.toHaveBeenCalled();
   });
 
-  it("blocks submission for a password that fails the Backend policy", async () => {
+  it("blocks a password shorter than six, which is the whole policy now", async () => {
     const user = userEvent.setup();
     renderForm();
 
     await user.type(screen.getByLabelText("Email"), "a@b.co");
-    await user.type(screen.getByLabelText("Пароль"), "password");
-    await user.type(screen.getByLabelText("Повторите пароль"), "password");
+    await user.type(screen.getByLabelText(/^Имя/), "Учащийся");
+    await user.type(screen.getByLabelText("Пароль"), "abcde");
+    await user.type(screen.getByLabelText("Повторите пароль"), "abcde");
     await user.click(submitButton());
 
-    expect(await screen.findByText("Добавьте заглавную букву.")).toBeTruthy();
+    expect(await screen.findByText("Пароль должен быть не короче 6 символов.")).toBeTruthy();
     expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts six lowercase letters, with no uppercase and no digit", async () => {
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue(created());
+    renderForm();
+
+    await user.type(screen.getByLabelText("Email"), "a@b.co");
+    await user.type(screen.getByLabelText(/^Имя/), "Учащийся");
+    await user.type(screen.getByLabelText("Пароль"), "abcdef");
+    await user.type(screen.getByLabelText("Повторите пароль"), "abcdef");
+    await user.click(submitButton());
+
+    await waitFor(() => expect(registerMock).toHaveBeenCalled());
+    expect(sentPayload().password).toBe("abcdef");
+  });
+
+  it("marks the name field required, in the DOM and not only in the copy", () => {
+    renderForm();
+    const name = screen.getByLabelText(/^Имя/) as HTMLInputElement;
+    expect(name.required).toBe(true);
+    expect(name.getAttribute("autocomplete")).toBe("nickname");
+    expect(name.minLength).toBe(2);
+    expect(name.maxLength).toBe(50);
+  });
+
+  it("shows no requirement the server does not have", () => {
+    renderForm();
+    expect(screen.queryByText(/заглавная|строчная|цифра/)).toBeNull();
+    expect(screen.getByText("Минимум 6 символов.")).toBeTruthy();
+    expect(screen.queryByText(/необязательно/)).toBeNull();
+    expect(screen.queryByText(/подберёт имя автоматически/)).toBeNull();
+    expect(screen.getByText("От 2 до 50 символов.")).toBeTruthy();
   });
 
   it("blocks submission when the confirmation does not match", async () => {
@@ -766,6 +822,7 @@ describe("RegisterForm — Turnstile failure recovery", () => {
 
     renderForm();
     await user.type(screen.getByLabelText("Email"), "learner@example.com");
+    await user.type(screen.getByLabelText(/^Имя/), "Учащийся");
     await user.type(screen.getByLabelText("Пароль"), "Passw0rd");
     await user.type(screen.getByLabelText("Повторите пароль"), "Passw0rd");
     await turnstile.solve("first-token");

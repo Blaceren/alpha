@@ -17,7 +17,7 @@
 
 export const PASSWORD_MIN_LENGTH = 6;
 
-export type RegistrationField = "email" | "password" | "confirmPassword";
+export type RegistrationField = "email" | "name" | "password" | "confirmPassword";
 
 export type RegistrationFieldErrors = Partial<Record<RegistrationField, string>>;
 
@@ -36,10 +36,24 @@ export function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-/** Backend's `name` is `.trim().min(1).optional()` — blank means "omit". */
-export function normalizeName(raw: string): string | undefined {
-  const trimmed = raw.trim();
-  return trimmed === "" ? undefined : trimmed;
+export const NAME_MIN_LENGTH = 2;
+export const NAME_MAX_LENGTH = 50;
+
+/**
+ * Backend's `name` is `nameSchema` — trimmed, 2 to 50, required. It is no longer
+ * optional and there is no longer anything to omit: a blank name is a rejected
+ * registration, not an instruction to invent one.
+ */
+export function normalizeName(raw: string): string {
+  return raw.trim();
+}
+
+export function nameProblem(raw: string): string | undefined {
+  const name = normalizeName(raw);
+  if (name.length === 0) return "Укажите имя.";
+  if (name.length < NAME_MIN_LENGTH) return `Имя должно быть не короче ${NAME_MIN_LENGTH} символов.`;
+  if (name.length > NAME_MAX_LENGTH) return `Имя должно быть не длиннее ${NAME_MAX_LENGTH} символов.`;
+  return undefined;
 }
 
 /**
@@ -58,13 +72,17 @@ function looksLikeEmail(value: string): boolean {
   return true;
 }
 
+/**
+ * Length, and nothing else — the mirror of Backend's `passwordSchema`.
+ *
+ * The three category checks that were here are gone with the server rule they
+ * mirrored. The value is measured as typed: no trim, so a password that begins
+ * or ends with a space is exactly as long as its author intended.
+ */
 export function passwordProblem(password: string): string | undefined {
   if (password.length < PASSWORD_MIN_LENGTH) {
     return `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов.`;
   }
-  if (!/[A-ZА-Я]/.test(password)) return "Добавьте заглавную букву.";
-  if (!/[a-zа-я]/.test(password)) return "Добавьте строчную букву.";
-  if (!/\d/.test(password)) return "Добавьте цифру.";
   return undefined;
 }
 
@@ -74,6 +92,9 @@ export function validateRegistrationDraft(draft: RegistrationDraft): Registratio
   if (!looksLikeEmail(normalizeEmail(draft.email))) {
     errors.email = "Введите корректный email.";
   }
+
+  const name = nameProblem(draft.name);
+  if (name) errors.name = name;
 
   const password = passwordProblem(draft.password);
   if (password) errors.password = password;

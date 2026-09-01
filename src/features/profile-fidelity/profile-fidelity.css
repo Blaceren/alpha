@@ -721,3 +721,105 @@ html.pf-root-scope,
   white-space: nowrap;
   border: 0;
 }
+
+/* ==========================================================================
+ * ATA-PROFILE-FOUNDATION-1 — two areas, and a target you can actually hit.
+ *
+ * The page was one field. It is now account data and sign-in security, so it
+ * needs section headings, rows that pair a label with a value, and a second
+ * form. Everything below is built from the tokens already declared above — no
+ * new colour, no new face, no new rhythm scale.
+ *
+ * THE TAP TARGET IS THE ONE REAL FIX HERE. `.p-edit` is a text button with
+ * `padding: 0`, which measured 63x18 on desktop: a control smaller than the
+ * 44px minimum on a page whose whole purpose is controls. It keeps its exact
+ * visual weight — same face, same underline, same colour — and gains the area
+ * around it, which is what a pointer and a thumb actually aim at.
+ * ========================================================================== */
+
+.pf .p-lead {
+  max-width: var(--p-prose-measure);
+  margin: 0 0 var(--p-rhythm-section);
+  font: 400 var(--p-type-body) / var(--p-type-body-lh) var(--p-ui);
+  color: var(--p-ink-body);
+}
+
+.pf .p-section { margin-bottom: var(--p-rhythm-section); }
+
+.pf .p-section__title {
+  margin: 0 0 var(--p-rhythm-tight);
+  font: 600 var(--p-type-coord) var(--p-ui);
+  letter-spacing: var(--p-type-coord-track);
+  text-transform: uppercase;
+  color: var(--p-ink-quiet);
+}
+
+/* A row is a label, a value and one affordance. On a narrow viewport the
+   affordance drops to its own line rather than squeezing the value. */
+.pf .p-row {
+  display: flex;
+  align-items: center;
+  gap: var(--p-rhythm-inline);
+  flex-wrap: wrap;
+  padding: var(--p-rhythm-tight) 0;
+  border-bottom: 1px solid var(--p-rule-underline);
+}
+
+.pf .p-row--open { display: block; }
+
+.pf .p-row__label {
+  flex: 0 0 auto;
+  min-width: 9ch;
+  font: 400 var(--p-type-constraint) var(--p-ui);
+  color: var(--p-ink-quiet);
+}
+
+.pf .p-row__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 400 var(--p-type-body) / var(--p-type-body-lh) var(--p-ui);
+  color: var(--p-ink-identity);
+}
+
+.pf .p-row__value--muted {
+  color: var(--p-ink-quiet);
+  font-size: var(--p-type-constraint);
+}
+
+.pf .p-field { margin-bottom: var(--p-rhythm-locus); }
+
+/* THE TARGET, not the type. Nothing above changes size or colour. */
+.pf .p-edit,
+.pf .p-edit--link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  justify-content: flex-end;
+}
+
+.pf .p-edit--link {
+  font: 600 var(--p-type-action) var(--p-ui);
+  color: var(--p-ink-identity);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--p-rule-underline);
+}
+.pf .p-edit--link:hover { text-decoration-color: var(--p-ink-body); }
+
+/* A disabled affordance is the other editor being open. It reads as unavailable
+   rather than absent, so the page does not appear to lose a control. */
+.pf .p-edit:disabled {
+  color: var(--p-ink-quiet);
+  cursor: default;
+  text-decoration-color: transparent;
+}
+
+@media (max-width: 599px) {
+  .pf .p-row { align-items: flex-start; }
+  .pf .p-row__label { flex-basis: 100%; }
+  .pf .p-edit,
+  .pf .p-edit--link { justify-content: flex-start; }
+}

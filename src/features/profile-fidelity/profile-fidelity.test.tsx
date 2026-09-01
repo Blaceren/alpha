@@ -30,8 +30,10 @@ import {
 } from "@/features/profile-fidelity/profile-state";
 
 const saveProfileName = vi.fn();
+const changeProfilePassword = vi.fn();
 vi.mock("@/lib/profile/profile-client", () => ({
   saveProfileName: (...args: unknown[]) => saveProfileName(...args),
+  changeProfilePassword: (...args: unknown[]) => changeProfilePassword(...args),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -41,6 +43,7 @@ const codeOnly = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*
 
 beforeEach(() => {
   saveProfileName.mockReset();
+  changeProfilePassword.mockReset();
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -140,23 +143,35 @@ describe("Profile — the state machine", () => {
 /* --------------------------------------------------------------- rendering */
 
 describe("Profile — the frozen composition", () => {
-  it("makes the identity the page's h1 in read, and exactly one h1", () => {
+  it("keeps ONE permanent h1 that opening a form does not move", async () => {
+    /* This replaces the frozen contract deliberately. The identity used to be
+       the h1 in read mode and the word «Профиль» in edit mode, so the page
+       heading changed as a side effect of opening a field — which a
+       screen-reader user navigating by heading cannot rely on. */
     const { container } = render(<ProfileFidelity canonical="Мария Ковалёва" />);
-    const h1s = container.querySelectorAll("h1");
-    expect(h1s).toHaveLength(1);
-    expect(h1s[0]!.className).toContain("p-identity");
-    expect(h1s[0]!.textContent).toBe("Мария Ковалёва");
-    expect(container.querySelector(".p-coord--page")!.tagName).toBe("P");
-    expect(container.querySelector('[data-role="control-locus"]')!.getAttribute("data-open")).toBe("0");
+    const readHeadings = container.querySelectorAll("h1");
+    expect(readHeadings).toHaveLength(1);
+    expect(readHeadings[0]!.textContent).toBe(COPY.page_title);
+    expect(readHeadings[0]!.className).toContain("p-coord--page");
+    expect(container.querySelector('[data-role="identity"]')!.textContent).toBe("Мария Ковалёва");
+
+    await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
+    const editHeadings = container.querySelectorAll("h1");
+    expect(editHeadings).toHaveLength(1);
+    expect(editHeadings[0]!.textContent).toBe(COPY.page_title);
   });
 
-  it("hands the h1 back to the page coordinate once the name is a field value", async () => {
+  it("states what the page is for, and names both areas", () => {
+    render(<ProfileFidelity canonical="Мария" />);
+    expect(screen.getByText(COPY.page_lead)).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: COPY.section_account })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: COPY.section_security })).toBeTruthy();
+  });
+
+  it("replaces the identity with the field when the editor opens", async () => {
     const { container } = render(<ProfileFidelity canonical="Мария Ковалёва" />);
     await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
-    const h1s = container.querySelectorAll("h1");
-    expect(h1s).toHaveLength(1);
-    expect(h1s[0]!.className).toContain("p-coord--page");
-    expect(container.querySelector(".p-identity")).toBeNull();
+    expect(container.querySelector('[data-role="identity"]')).toBeNull();
     expect(container.querySelector('[data-role="control-locus"]')!.getAttribute("data-open")).toBe("1");
   });
 
@@ -196,7 +211,7 @@ describe("Profile — the frozen composition", () => {
     const input = screen.getByLabelText(COPY.identity_label) as HTMLInputElement;
     await userEvent.clear(input);
     await userEvent.type(input, "Я");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save }));
+    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
     const error = container.querySelector('[data-role="field-error"]')!;
     expect(error.textContent).toBe(COPY.error_short);
@@ -217,18 +232,18 @@ describe("Profile — the frozen composition", () => {
     const input = screen.getByLabelText(COPY.identity_label) as HTMLInputElement;
     await userEvent.clear(input);
     await userEvent.type(input, "Мария К");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save }));
+    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
     /* SUBMITTING is the edit locus with the value held still. */
     const saving = screen.getByRole("button", { name: COPY.saving });
     expect(saving).toHaveProperty("disabled", true);
     expect(saving.getAttribute("aria-busy")).toBe("true");
     expect((screen.getByLabelText(COPY.identity_label) as HTMLInputElement).readOnly).toBe(true);
-    expect(container.querySelector(".p-identity")).toBeNull();
+    expect(container.querySelector('[data-role="identity"]')).toBeNull();
 
     resolveSave({ ok: true, name: "Мария К" });
-    await waitFor(() => expect(container.querySelector(".p-identity")).not.toBeNull());
-    expect(container.querySelector(".p-identity")!.textContent).toBe("Мария К");
+    await waitFor(() => expect(container.querySelector('[data-role="identity"]')).not.toBeNull());
+    expect(container.querySelector('[data-role="identity"]')!.textContent).toBe("Мария К");
   });
 
   it("announces the confirmed value and returns focus quietly", async () => {
@@ -236,7 +251,7 @@ describe("Profile — the frozen composition", () => {
     const { container } = render(<ProfileFidelity canonical="Мария" />);
     await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
     await userEvent.type(screen.getByLabelText(COPY.identity_label), "-Штерн");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save }));
+    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
     await waitFor(() =>
       expect(container.querySelector('[data-role="save-status"]')!.textContent).toBe(
@@ -255,9 +270,9 @@ describe("Profile — the frozen composition", () => {
     const input = screen.getByLabelText(COPY.identity_label) as HTMLInputElement;
     await userEvent.clear(input);
     await userEvent.type(input, "мария к");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save }));
-    await waitFor(() => expect(container.querySelector(".p-identity")).not.toBeNull());
-    expect(container.querySelector(".p-identity")!.textContent).toBe("Мария К");
+    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
+    await waitFor(() => expect(container.querySelector('[data-role="identity"]')).not.toBeNull());
+    expect(container.querySelector('[data-role="identity"]')!.textContent).toBe("Мария К");
   });
 
   it("states a failed save at the attempt, keeps the draft, and offers no second retry", async () => {
@@ -265,16 +280,19 @@ describe("Profile — the frozen composition", () => {
     const { container } = render(<ProfileFidelity canonical="Мария" />);
     await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
     await userEvent.type(screen.getByLabelText(COPY.identity_label), " К");
-    await userEvent.click(screen.getByRole("button", { name: COPY.save }));
+    await userEvent.click(screen.getByRole("button", { name: COPY.save_name }));
 
     const failure = await waitFor(() => container.querySelector('[data-role="mutation-failure"]')!);
     expect(failure.getAttribute("role")).toBe("alert");
     expect(failure.textContent).toBe(COPY.mutation_failed);
-    /* Save above IS the retry — there is never a second control. */
-    expect(container.querySelectorAll("button")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: COPY.save })).toBeTruthy();
+    /* Save above IS the retry — the editor never grows a second control. The
+       count is scoped to the open editor now that the page also carries the
+       security row's affordance. */
+    const editorButtons = container.querySelector('[data-role="name-editor"]')!.querySelectorAll("button");
+    expect(editorButtons).toHaveLength(2);
+    expect(screen.getByRole("button", { name: COPY.save_name })).toBeTruthy();
     expect((screen.getByLabelText(COPY.identity_label) as HTMLInputElement).value).toBe("Мария К");
-    expect(container.querySelector(".p-identity")).toBeNull();
+    expect(container.querySelector('[data-role="identity"]')).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByLabelText(COPY.identity_label)),
     );
@@ -287,7 +305,7 @@ describe("Profile — the frozen composition", () => {
     expect(failure.getAttribute("role")).toBe("alert");
     expect(failure.textContent).toContain(COPY.page_failed_lead);
     expect(container.querySelector('[data-role="control-locus"]')).toBeNull();
-    expect(container.querySelector(".p-identity")).toBeNull();
+    expect(container.querySelector('[data-role="identity"]')).toBeNull();
     expect(screen.getByRole("button", { name: COPY.page_failed_retry })).toBeTruthy();
     /* Still one h1, and it is the page coordinate. */
     expect(container.querySelectorAll("h1")).toHaveLength(1);
@@ -307,11 +325,32 @@ describe("Profile — what the page may never become", () => {
   const surface = codeOnly(SRC("profile-fidelity.tsx"));
   const state = codeOnly(SRC("profile-state.ts"));
 
-  it("edits exactly one field", () => {
-    expect(surface.match(/<input/g) ?? []).toHaveLength(1);
-    for (const field of ["email", "password", "пароль", "телефон", "phone"]) {
+  it("edits identity and sign-in security, and still nothing else", () => {
+    /* THIS REPLACES "edits exactly one field" BY AUTHORISATION.
+       ATA-PROFILE-FOUNDATION-1 added the password form the surface used to
+       forbid. What has NOT changed is the boundary around it: no phone, no
+       balance, no affiliate identity, no staff data — and no email control,
+       because that flow has no mail transport behind it. */
+    for (const field of ["телефон", "phone", "баланс", "balance", "affiliate", "партнёр"]) {
       expect(surface.toLowerCase(), field).not.toContain(field);
     }
+  });
+
+  it("offers no email control, and never calls the pending-email path", async () => {
+    render(<ProfileFidelity canonical="Мария" />);
+    expect(screen.getByText(COPY.email_label)).toBeTruthy();
+    expect(screen.getByText(COPY.email_via_support)).toBeTruthy();
+    /* No editor, no field, no promise of a date. */
+    expect(screen.queryByRole("button", { name: /email/i })).toBeNull();
+    expect(screen.queryByLabelText(/email/i)).toBeNull();
+    expect(surface.toLowerCase()).not.toContain("pendingemail");
+    expect(surface.toLowerCase()).not.toContain("скоро");
+    /* Two links reach /support on this page: the row's own handoff and the
+       page-level one the frozen surface already carried. Both are specified, so
+       the query names which is which rather than matching on text. */
+    const rowLink = document.querySelector('[data-role="email-support-link"]') as HTMLAnchorElement;
+    expect(rowLink.getAttribute("href")).toBe("/support");
+    expect(document.querySelector('[data-role="support-link"]')).toBeTruthy();
   });
 
   it("shows nothing that belongs to another product", () => {
@@ -441,5 +480,169 @@ describe("Profile — the stylesheet is scoped and local", () => {
   it("keeps the frozen container geometry and the four-layer order", () => {
     expect(bare).toMatch(/\.pf \.p-profile\s*\{[^}]*padding: var\(--p-top\) var\(--p-inset\) var\(--p-bottom\)/);
     expect(bare.indexOf("--p-ground")).toBeLessThan(bare.indexOf(".pf .p-coord"));
+  });
+});
+
+/* -------------------------------------------------------------- security */
+
+describe("Profile — changing the password", () => {
+  const open = async () => {
+    render(<ProfileFidelity canonical="Мария" />);
+    await userEvent.click(screen.getByRole("button", { name: COPY.password_edit }));
+  };
+  const fields = () => ({
+    current: screen.getByLabelText(COPY.password_current) as HTMLInputElement,
+    next: screen.getByLabelText(COPY.password_new) as HTMLInputElement,
+    confirm: screen.getByLabelText(COPY.password_confirm) as HTMLInputElement,
+  });
+  const fill = async (current: string, next: string, confirm = next) => {
+    const f = fields();
+    await userEvent.type(f.current, current);
+    await userEvent.type(f.next, next);
+    await userEvent.type(f.confirm, confirm);
+  };
+  const submit = () => userEvent.click(screen.getByRole("button", { name: COPY.password_submit }));
+
+  it("gives every field a visible label and the right autocomplete", async () => {
+    await open();
+    const f = fields();
+    expect(f.current.type).toBe("password");
+    expect(f.next.type).toBe("password");
+    expect(f.confirm.type).toBe("password");
+    expect(f.current.getAttribute("autocomplete")).toBe("current-password");
+    expect(f.next.getAttribute("autocomplete")).toBe("new-password");
+    expect(f.confirm.getAttribute("autocomplete")).toBe("new-password");
+    expect(screen.getByText(COPY.password_constraint)).toBeTruthy();
+  });
+
+  it("does not move the page heading when the form opens", async () => {
+    const { container } = render(<ProfileFidelity canonical="Мария" />);
+    await userEvent.click(screen.getByRole("button", { name: COPY.password_edit }));
+    const h1s = container.querySelectorAll("h1");
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]!.textContent).toBe(COPY.page_title);
+  });
+
+  it("catches a mismatch before any request leaves", async () => {
+    await open();
+    await fill("current-one", "abcdef", "abcdeg");
+    await submit();
+    expect(await screen.findByText(COPY.password_mismatch)).toBeTruthy();
+    expect(changeProfilePassword).not.toHaveBeenCalled();
+  });
+
+  it("refuses five characters before any request leaves", async () => {
+    await open();
+    await fill("current-one", "abcde");
+    await submit();
+    expect(await screen.findByText(COPY.password_too_short)).toBeTruthy();
+    expect(changeProfilePassword).not.toHaveBeenCalled();
+  });
+
+  it("accepts six with no uppercase and no digit, and sends exactly two values", async () => {
+    changeProfilePassword.mockResolvedValue({ ok: true });
+    await open();
+    await fill("current-one", "abcdef");
+    await submit();
+    await waitFor(() => expect(changeProfilePassword).toHaveBeenCalled());
+    expect(changeProfilePassword.mock.calls[0]!.slice(0, 2)).toEqual(["current-one", "abcdef"]);
+  });
+
+  it("clears every field on success and says so", async () => {
+    changeProfilePassword.mockResolvedValue({ ok: true });
+    await open();
+    await fill("current-one", "abcdef");
+    await submit();
+    await waitFor(() => expect(screen.getByText(COPY.password_changed)).toBeTruthy());
+    /* The form is closed, and nothing typed survives it. */
+    expect(screen.queryByLabelText(COPY.password_current)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: COPY.password_edit }));
+    const f = fields();
+    expect(f.current.value).toBe("");
+    expect(f.next.value).toBe("");
+    expect(f.confirm.value).toBe("");
+  });
+
+  it("says only that the current password was wrong, and keeps the form", async () => {
+    changeProfilePassword.mockResolvedValue({ ok: false, wrongCurrent: true });
+    await open();
+    await fill("wrong-one", "abcdef");
+    await submit();
+    const error = await screen.findByText(COPY.password_wrong_current);
+    expect(error.getAttribute("role")).toBe("alert");
+    /* Nothing about the account, and the person's intent is still on screen. */
+    expect(fields().next.value).toBe("abcdef");
+  });
+
+  it("a server failure changes nothing the page was already showing", async () => {
+    changeProfilePassword.mockResolvedValue({
+      ok: false, wrongCurrent: false, error: { code: "BACKEND_UNAVAILABLE" },
+    });
+    await open();
+    await fill("current-one", "abcdef");
+    await submit();
+    expect(await screen.findByText(COPY.password_failed)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: COPY.cancel }));
+    expect(screen.getByText("Мария")).toBeTruthy();
+  });
+
+  it("cancel sends nothing and keeps nothing", async () => {
+    await open();
+    await fill("current-one", "abcdef");
+    await userEvent.click(screen.getByRole("button", { name: COPY.cancel }));
+    expect(changeProfilePassword).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: COPY.password_edit }));
+    expect(fields().current.value).toBe("");
+  });
+
+  it("a submit in flight cannot be sent twice", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    changeProfilePassword.mockReturnValue(new Promise((r) => (resolve = r)));
+    await open();
+    await fill("current-one", "abcdef");
+    await submit();
+    const busy = screen.getByRole("button", { name: COPY.saving });
+    expect(busy).toHaveProperty("disabled", true);
+    expect(busy.getAttribute("aria-busy")).toBe("true");
+    await userEvent.click(busy);
+    expect(changeProfilePassword).toHaveBeenCalledTimes(1);
+    resolve({ ok: true });
+  });
+
+  it("opens only one editor at a time", async () => {
+    render(<ProfileFidelity canonical="Мария" />);
+    await userEvent.click(screen.getByRole("button", { name: COPY.edit }));
+    expect(screen.getByRole("button", { name: COPY.password_edit })).toHaveProperty("disabled", true);
+    await userEvent.click(screen.getByRole("button", { name: COPY.cancel }));
+    await userEvent.click(screen.getByRole("button", { name: COPY.password_edit }));
+    expect(screen.getByRole("button", { name: COPY.edit })).toHaveProperty("disabled", true);
+  });
+
+  it("gives every control a target a thumb can hit", () => {
+    const css = SRC("profile-fidelity.css");
+    expect(css).toContain("min-height: 44px");
+    expect(css).toContain("min-width: 44px");
+  });
+
+  it("keeps the focus ring visible on every control", () => {
+    /* Comments stripped first: the file header QUOTES this selector while
+       explaining it, and matching the quotation instead of the rule made the
+       assertion read a paragraph of prose for an outline. */
+    const css = codeOnly(SRC("profile-fidelity.css"));
+    const i = css.indexOf(".pf .p-profile :is(a, button, input, [tabindex]):focus-visible");
+    expect(i).toBeGreaterThan(-1);
+    const rule = css.slice(i, css.indexOf("}", i));
+    expect(rule).toContain("outline");
+    expect(rule).not.toContain("outline: none");
+    expect(rule).not.toContain("outline:none");
+  });
+
+  it("refuses re-entry while a change is in flight, not only by disabling", () => {
+    /* Source-level on purpose. The button is `disabled` while submitting, so a
+       click cannot reach the handler and a behavioural test passes whether or
+       not the guard exists. The guard is what protects the path that is NOT a
+       click — a form submit, an Enter key, a future caller. */
+    const code = codeOnly(SRC("profile-fidelity.tsx"));
+    expect(code).toContain('if (phase === "submitting") return;');
   });
 });
