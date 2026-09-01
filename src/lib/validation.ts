@@ -121,8 +121,32 @@ export const nameSchema = z
   .min(2, "Имя должно быть не короче 2 символов")
   .max(50, "Имя должно быть не длиннее 50 символов");
 
+/**
+ * DEPLOYMENT BRIDGE — TRUE HERE, FALSE IN THE CONTRACT THAT FOLLOWS.
+ *
+ * There is no safe order for shipping the two halves of this change at once.
+ * Deploy the strict Backend first and the Academy still in production sends
+ * registrations with no name, which the strict schema refuses — a public sign-up
+ * page that fails for everyone. Deploy the Academy first and it promises any
+ * six-character password to a Backend that still demands an uppercase letter, a
+ * lowercase letter and a digit — a form that fails after the person has typed.
+ *
+ * This build is the step between. It carries the NEW password policy and the new
+ * change-password route, so the corrected Academy is safe against it, and it
+ * keeps the OLD name rule exactly as it was — optional, minimum one — so the
+ * Academy still in production is safe against it too.
+ *
+ * IT IS NOT THE CONTRACT. `name` must become required and the generated
+ * Трейдер-#### must go; this constant exists so that intention is machine-
+ * checkable rather than remembered, and the final build removes it along with
+ * the behaviour it marks.
+ */
+export const REGISTRATION_NAME_BRIDGE = true;
+
 export const registerSchema = loginSchema.extend({
-  name: nameSchema,
+  /* Deliberately NOT `nameSchema`. This is the pre-phase rule, restored
+     verbatim: `.trim().min(1).optional()`. See REGISTRATION_NAME_BRIDGE. */
+  name: z.string().trim().min(1).optional(),
   referralCode: z.string().trim().min(1).max(100).optional(),
 });
 

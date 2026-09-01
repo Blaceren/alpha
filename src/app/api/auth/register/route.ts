@@ -208,11 +208,11 @@ export async function POST(request: Request) {
         email: parsed.data.email,
         passwordHash,
         role: "user",
-        // The name is required by `registerSchema` now, so there is nothing to
-        // fall back to. The generated `Трейдер-####` names that already exist
-        // are left exactly as they are: this changes what the product accepts
-        // next, not what it decided before.
-        name: parsed.data.name,
+        /* BRIDGE ONLY — see REGISTRATION_NAME_BRIDGE in lib/validation.ts.
+           The Academy still in production sends no name at all, and the column
+           is NOT NULL, so this build must still have something to write. The
+           final build removes both the fallback and the optionality together. */
+        name: parsed.data.name ?? `Трейдер-${Math.floor(1000 + Math.random() * 9000)}`,
         level: 1,
         xp: invitedXp,
         notificationSettings: {

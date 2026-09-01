@@ -83,46 +83,11 @@ afterAll(async () => {
   if (dir) rmSync(dir, { recursive: true, force: true });
 });
 
-/* ------------------------------------------------------------ the name rule */
-
-describe("a new registration must carry a name", () => {
-  const parse = async (input: Record<string, unknown>) => {
-    const { registerSchema } = await import("@/lib/validation");
-    return registerSchema.safeParse({ email: "a@b.invalid", password: "abcdef", ...input });
-  };
-
-  it("refuses a registration with no name at all", async () => {
-    expect((await parse({})).success).toBe(false);
-  });
-
-  it("refuses a name that is only whitespace", async () => {
-    expect((await parse({ name: "   " })).success).toBe(false);
-  });
-
-  it("refuses one character after trimming", async () => {
-    expect((await parse({ name: " Я " })).success).toBe(false);
-  });
-
-  it("accepts the two ends of the range", async () => {
-    expect((await parse({ name: "Ян" })).success).toBe(true);
-    expect((await parse({ name: "и".repeat(50) })).success).toBe(true);
-  });
-
-  it("refuses fifty-one", async () => {
-    expect((await parse({ name: "и".repeat(51) })).success).toBe(false);
-  });
-
-  it("stores the trimmed name, so whitespace cannot buy length", async () => {
-    const parsed = await parse({ name: "  Анна  " });
-    expect(parsed.success && parsed.data.name).toBe("Анна");
-  });
-
-  it("no longer generates a name, anywhere", () => {
-    const route = readFileSync("src/app/api/auth/register/route.ts", "utf8");
-    expect(route).not.toContain("Трейдер-${");
-    expect(route).toContain("name: parsed.data.name,");
-  });
-});
+/* THE NAME RULE LIVES IN ITS OWN FILE.
+   It is the one rule that differs between the deployment bridge and the final
+   contract, so asserting it here would mean this matrix had to be edited twice
+   for a reason that has nothing to do with what it tests. See
+   registration-name-contract.test.ts. */
 
 /* -------------------------------------------------------- the password rule */
 
