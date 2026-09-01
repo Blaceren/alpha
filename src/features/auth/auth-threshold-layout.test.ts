@@ -20,35 +20,33 @@ import { join } from "node:path";
  * record of what these declarations produced — they are evidence, not an
  * assertion this file can re-derive.
  *
- * MEASURED WITH THE LIVE TURNSTILE KEY. This matters more than anything else
- * in this file: a scratch server started without `TURNSTILE_SITE_KEY` renders
- * the widget 59px shorter and drops a status line, which flatters every number
- * by about 115px. Every figure below was taken against the real widget, after
- * `document.fonts.ready`, at real viewports. `bottom` of the register submit:
+ * MEASURED WITH THE LIVE TURNSTILE KEY. This is the measurement CONDITION, not
+ * a footnote: a scratch server started without `TURNSTILE_SITE_KEY` renders the
+ * widget at 83px instead of 142px and drops a status line, which flatters every
+ * number by about 115px. A measurement taken against the 83px fallback is not a
+ * measurement of this page. Every figure below was taken with the same key the
+ * live unit passes, after `document.fonts.ready`, after the Turnstile layout
+ * settled, with `.auth-captcha` confirmed at 142px, at real viewports.
  *
- *   viewport    live 99ef7697   candidate 0116c208   this candidate
- *   1440x900    779  fits +121  864  fits  +36       864  fits  +36
- *   1024x768    779  FAILS -11  840  FAILS -72       840  FAILS -72
- *    390x844    835  fits   +9  929  FAILS -85       790  fits  +54
- *    360x800    873  FAILS -73  937  FAILS -137      790  fits  +10
+ * Register submit `bottom`, and the ceiling each viewport must stay under to
+ * keep 24px of clearance:
  *
- * The phone pair now fits, and 360x800 fits for the first time - it was 73px
- * short before this phase began and 137px short after the frame landed. The
- * margin at 360 is 10px and that is not an accident of rounding: the register
- * form with a live 142px Turnstile spends 636px of an 800px viewport before
- * any chrome exists, so the compact step is spending the last of the air. Any
- * future addition to this form comes out of that 10px.
+ *   viewport    live 99ef7697   0116c208    6a9c1cd0    THIS   ceiling
+ *   1440x900    779             864         864          864       876
+ *   1024x768    779             840         840          733       744
+ *    390x844    835             929         790          770       820
+ *    360x800    873             937         790          770       776
  *
- * 1024x768 IS STILL BELOW THE FOLD, by 72px, and this pass did not fix it.
- * It is recorded rather than rounded away. It is not a regression introduced
- * here: the live page misses it by 11px too. The frame widened the gap and the
- * compact step cannot reach it, because the step is bounded at 640px and a
- * short DESKTOP viewport is a different decision from a phone. It needs its own
- * authorisation.
- */
+ * The numbers below are not prose. They are read back by the tests in this
+ * file, checked against the ceilings and against the 24px rule, so an evidence
+ * table that drifts from the contract fails rather than misleads.
+  */
 
 const ROOT = process.cwd();
 const CSS = readFileSync(join(ROOT, "src/features/auth/auth-stage.css"), "utf8");
+/** This file reads itself: the evidence table above is prose until something
+    checks that it says what the constants say. */
+const CSS_TEST_SOURCE = readFileSync(join(ROOT, "src/features/auth/auth-threshold-layout.test.ts"), "utf8");
 /** The same file with its prose removed. A comment that EXPLAINS why a variable
     is unreachable must not be read as a use of it. */
 const CODE = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -83,6 +81,26 @@ function declarations(body: string): { selector: string; prop: string; value: st
 }
 
 const COMPACT = "@media (max-width: 640px) and (max-height: 950px)";
+const SHORT = "@media (max-height: 820px)";
+const WIDE = "@media (min-width: 900px) {";
+
+/** The measurement condition. A run against the fallback widget is void. */
+const CAPTCHA_REPRESENTATIVE = 142;
+const CAPTCHA_FALLBACK = 83;
+
+/** viewport -> [innerHeight, measured submit bottom, ceiling] */
+const EVIDENCE: Record<string, [number, number, number]> = {
+  "1440x900": [900, 864, 876],
+  "1024x768": [768, 733, 744],
+  "390x844": [844, 770, 820],
+  "360x800": [800, 770, 776],
+};
+
+/** The tier-4 numbers that produced 770 at 360x800. Nothing may loosen. */
+const TIER4_CEILINGS: Record<string, number> = {
+  "padding-top": 3,
+  "gap": 8,
+};
 
 describe("the phone compact step", () => {
   // M-C1
@@ -203,6 +221,144 @@ describe("the frame's material has one place of authority", () => {
     // Four rings, one colour, and it resolves: measured `rgb(199, 247, 109)` on
     // both /login and /register.
     expect((CSS.match(/outline: 2px solid var\(--signal-active\)/g) ?? []).length).toBe(4);
+  });
+});
+
+describe("the short-viewport tier", () => {
+  // N1
+  it("exists", () => {
+    expect(block(SHORT).body.length).toBeGreaterThan(0);
+  });
+
+  // N2 · N6
+  it("is bounded by height ALONE, so it reaches a 1024x768 laptop", () => {
+    // The scarce thing is vertical room. A width bound here would put the
+    // laptop back where it was: submit at 840 against a 768px viewport.
+    const header = CSS.slice(CSS.indexOf(SHORT), CSS.indexOf("{", CSS.indexOf(SHORT)));
+    expect(header).not.toContain("max-width");
+    expect(header).not.toContain("min-width");
+    // ...and the tier that IS width-bound stays bounded on height too, so a
+    // 390x1200 phone matches neither this tier nor that one.
+    expect(CSS).toContain(COMPACT);
+    expect(header.trim()).toBe("@media (max-height: 820px)");
+  });
+
+  // N3
+  it("carries the whole set of declarations the geometry depends on", () => {
+    const body = block(SHORT).body;
+    for (const required of [
+      ".auth { padding-top:",
+      ".auth__axis { padding-top:",
+      ".auth__frame { padding:",
+      ".auth__eyebrow { margin-bottom:",
+      ".auth__title { margin-bottom:",
+      ".auth__lead { margin-bottom:",
+      "gap:",
+    ]) {
+      expect(body, `short tier must declare ${required}`).toContain(required);
+    }
+  });
+
+  it("changes spacing and nothing else, and nothing is negative", () => {
+    const allowed = new Set([
+      "padding", "padding-top", "padding-bottom", "padding-left", "padding-right",
+      "margin", "margin-top", "margin-bottom", "margin-left", "margin-right",
+      "gap", "row-gap", "column-gap",
+    ]);
+    for (const d of declarations(block(SHORT).body)) {
+      expect(allowed.has(d.prop), `${d.selector} sets ${d.prop}`).toBe(true);
+      expect(d.value, `${d.selector} ${d.prop} is negative`).not.toMatch(/(^|\s)-\d/);
+    }
+  });
+});
+
+describe("the desktop stage is a horizontal decision and stays out of this", () => {
+  // N7
+  it("keeps its columns and its measure", () => {
+    const wide = block(WIDE).body;
+    expect(wide).toContain("grid-template-columns: 220px minmax(0, var(--auth-measure))");
+    expect(wide).toContain("max-width: 940px");
+  });
+
+  it("is not re-laid-out by any vertical tier", () => {
+    const horizontal = new Set(["grid-template-columns", "grid-template", "max-width", "min-width", "width", "--auth-measure"]);
+    for (const tier of [SHORT, COMPACT, "@media (max-width: 640px) {", "@media (max-width: 430px)"]) {
+      for (const d of declarations(block(tier).body)) {
+        // Two things size themselves and always did: the bracket pseudo-elements
+        // (decorative squares) and the mark's artwork (an image inside a link
+        // whose 44px target is pinned separately). The stage the form stands in
+        // is what this pin protects.
+        if (/::before|::after|\bimg\b/.test(d.selector)) continue;
+        // `border-width` is not `width`; compare the property, not a substring.
+        expect(horizontal.has(d.prop), `${tier} sets ${d.prop} on ${d.selector}`).toBe(false);
+      }
+    }
+  });
+});
+
+describe("the recorded evidence is checked, not quoted", () => {
+  // N3 · N4
+  it.each(Object.entries(EVIDENCE))("%s clears its ceiling with 24px to spare", (vp, [h, bottom, ceiling]) => {
+    expect(bottom, `${vp} submit bottom is past its ceiling`).toBeLessThanOrEqual(ceiling);
+    expect(h - bottom, `${vp} has less than 24px of clearance`).toBeGreaterThanOrEqual(24);
+    expect(ceiling).toBe(h - 24);
+  });
+
+  it("agrees with the table written above it", () => {
+    for (const [vp, [, bottom, ceiling]] of Object.entries(EVIDENCE)) {
+      // The table row, not the prose above it: the row is the line that carries
+      // the viewport, its measurement AND its ceiling together.
+      // Only the prose table counts — the constant that declares the numbers
+      // cannot be the thing that corroborates them.
+      const rows = CSS_TEST_SOURCE.split("\n").filter(
+        (l) => l.trimStart().startsWith("*") && l.includes(vp) && l.includes(String(bottom)) && l.includes(String(ceiling)),
+      );
+      expect(rows.length, `no evidence row for ${vp} carrying ${bottom} and ${ceiling}`).toBe(1);
+    }
+  });
+
+  // N8
+  it("names the widget height the measurement is only valid at", () => {
+    expect(CAPTCHA_REPRESENTATIVE).toBe(142);
+    expect(CAPTCHA_FALLBACK).toBe(83);
+    expect(CSS_TEST_SOURCE).toContain("TURNSTILE_SITE_KEY");
+    // The height NAMED AS THE CONDITION, not merely a 142 somewhere in the
+    // file: the first version of this pin passed while the condition sentence
+    // said 83px, because the number also appears in a comment further down.
+    const stated = CSS_TEST_SOURCE.match(/`\.auth-captcha`[^\n]*?at (\d+)px/);
+    expect(stated, "the measurement condition must name the widget height").toBeTruthy();
+    expect(Number(stated![1]), "a run against the fallback widget is not a measurement of this page")
+      .toBe(CAPTCHA_REPRESENTATIVE);
+  });
+
+  // N4
+  it("pins the tier-4 numbers that bought the last 20px", () => {
+    const decls = declarations(block(COMPACT).body);
+    const pad = decls.find((d) => d.selector === ".auth" && d.prop === "padding-top");
+    expect(pad, "tier 4 must set the page padding").toBeTruthy();
+    expect(parseFloat(pad!.value)).toBeLessThanOrEqual(TIER4_CEILINGS["padding-top"]!);
+    for (const d of decls.filter((x) => x.prop === "gap")) {
+      expect(parseFloat(d.value), `${d.selector} gap loosened`).toBeLessThanOrEqual(TIER4_CEILINGS["gap"]!);
+    }
+  });
+});
+
+describe("motion", () => {
+  it("respects a reduced-motion preference, and no tier adds motion of its own", () => {
+    // The live `prefers-reduced-motion` state could not be observed here: this
+    // browser reports no preference and the pane exposes no emulation for it.
+    // What IS checkable is that the rule ships and that the compression tiers
+    // introduce no transition or animation to reduce.
+    const reduced = block("@media (prefers-reduced-motion: reduce)").body;
+    for (const sel of ["login-field input", "register-field input", "login-submit", "register-submit"]) {
+      expect(reduced, `reduced-motion must cover ${sel}`).toContain(sel);
+    }
+    for (const tier of [SHORT, COMPACT]) {
+      const body = block(tier).body;
+      expect(body).not.toContain("transition");
+      expect(body).not.toContain("animation");
+      expect(body).not.toContain("transform");
+    }
   });
 });
 

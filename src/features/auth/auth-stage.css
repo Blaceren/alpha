@@ -169,6 +169,29 @@
   max-width: 46ch;
 }
 
+/*
+ * THE FOUR TIERS, IN CASCADE ORDER.
+ *
+ *   base                                 the composition at rest
+ *   TIER 1  max-width: 640px             narrow-mobile: the frame gives back
+ *                                        padding, the brackets stay corners
+ *   TIER 2  max-height: 820px            short viewport, ANY width — the tier
+ *                                        that reaches 1024x768
+ *   TIER 3  max-width: 430px             the narrowest phones
+ *   TIER 4  (max-width: 640px)
+ *           and (max-height: 950px)      narrow AND short, and the last word
+ *
+ * Tiers 2 and 4 both set the same properties on purpose: 4 is the refinement of
+ * 2 for a viewport that is short in both directions, and it is placed last so
+ * it wins outright rather than relying on specificity. Nothing in 4 is a
+ * duplicate of a value it would have inherited — every declaration there is a
+ * different number from the tier above it.
+ *
+ * A tall phone (390x1200) matches TIER 1 only. It has 331px of clearance and
+ * pays for none of this compression, which is why tier 4 carries a height bound
+ * and tier 2 does not apply to it.
+ */
+
 /* Narrow: the frame keeps its meaning and gives back its padding. The brackets
    shrink with it so they stay corners rather than becoming borders. */
 @media (max-width: 640px) {
@@ -539,19 +562,32 @@
 }
 
 /*
- * THE FRAME GIVES BACK ITS PADDING BEFORE THE FORM GIVES UP THE FOLD.
+ * TIER 2 — SHORT VIEWPORT, ANY WIDTH.
  *
- * The frame costs vertical space, and `/register` is the longer of the two
- * forms: at 1024x768 the padding pushed its submit control past the first
- * screen, which it had not been past before. A frame that buys continuity by
- * hiding the action is not worth the trade, so on a short viewport it trims
- * itself — the geometry stays, the generosity goes.
+ * WHAT THIS FIXES. A 1024x768 laptop is not a phone and was never reached by
+ * the phone step, so it kept paying full price for the frame: the register
+ * submit measured 840 against a 768px viewport, 96px past a safe fold. This
+ * tier is bounded by HEIGHT ALONE for exactly that reason — the thing that is
+ * scarce is vertical room, and a narrow window is not what makes it scarce.
+ *
+ * WHAT IT SPENDS. Page padding, the axis's own top offset, the frame's vertical
+ * padding, the three margins under the eyebrow, heading and lead, and the form's
+ * rhythm. Nothing else: no type size, no line-height, no control height, no
+ * column, no width. The two-column desktop stage keeps its 220px axis and its
+ * 448px measure untouched, because the axis is horizontal geometry and this is
+ * a vertical problem.
  */
 @media (max-height: 820px) {
-  .auth__frame { padding: 22px 24px 22px; }
-  .auth__eyebrow { margin-bottom: 10px; }
-  .auth__title { margin-bottom: 8px; }
-  .auth__lead { margin-bottom: 18px; }
+  .auth { padding-top: 16px; }
+  .auth__axis { padding-top: 0; }
+  .auth__frame { padding: 14px 24px 18px; }
+  .auth__eyebrow { margin-bottom: 5px; }
+  .auth__title { margin-bottom: 5px; }
+  .auth__lead { margin-bottom: 8px; }
+  .auth .login-form,
+  .auth .register-form { gap: 9px; }
+  .auth .login-field,
+  .auth .register-field { gap: 5px; }
 }
 
 /* A short viewport - a phone with the keyboard up, or a 1440x700 desktop - must
@@ -585,21 +621,21 @@
  * wins over the 430px and 820px steps it refines.
  */
 @media (max-width: 640px) and (max-height: 950px) {
-  .auth { padding-top: 4px; }
-  .auth__stage { gap: 6px; }
-  .auth__frame { padding: 10px 22px 14px; }
-  .auth__eyebrow { margin-bottom: 4px; }
-  .auth__title { margin-bottom: 4px; }
-  .auth__lead { margin-bottom: 6px; }
-  /* 9 between groups against 5 inside one: the label still reads as belonging
-     to its own input, which is the only thing this rhythm has to carry. This is
-     the floor - the register form with a live 142px Turnstile widget spends
-     636px of an 800px viewport before any chrome at all, so what is left is
-     air, and all of it is now on the table. */
+  .auth { padding-top: 3px; }
+  .auth__stage { gap: 4px; }
+  .auth__frame { padding: 8px 22px 12px; }
+  .auth__eyebrow { margin-bottom: 3px; }
+  .auth__title { margin-bottom: 3px; }
+  .auth__lead { margin-bottom: 4px; }
+  /* 8 between groups against 4 inside one. The ratio, not the absolute value,
+     is what makes a label read as belonging to its own input, and 2:1 holds.
+     This is the floor: the register form with a live 142px Turnstile spends
+     636px of an 800px viewport before any chrome exists at all, so what is
+     left is air, and all of it is now on the table. */
   .auth .login-form,
-  .auth .register-form { gap: 9px; }
+  .auth .register-form { gap: 8px; }
   .auth .login-field,
-  .auth .register-field { gap: 5px; }
+  .auth .register-field { gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
