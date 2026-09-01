@@ -33,6 +33,20 @@ const config: Config = {
       },
     },
   },
+  /**
+   * The `container` utility is off. It shipped a second responsive ladder -
+   * 640/768/1024/1280/1536 - that no stylesheet in this repo wrote and that
+   * styled nothing: `.container` matched zero elements on /, /login and
+   * /register at every width from 429 to 1181, no component asks for the class,
+   * and no `sm:`/`md:`/`lg:` prefix exists anywhere in the product. Ten rules
+   * were being served on every page to reach no element at all.
+   *
+   * This disables that one plugin and nothing else. The theme, the utility
+   * ladder and the plugin list are untouched.
+   */
+  corePlugins: {
+    container: false,
+  },
   plugins: [],
 };
 

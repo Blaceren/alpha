@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import postcss from "postcss";
 
@@ -498,5 +498,123 @@ describe("every non-canonical value is declared, and every declaration is real",
     expect(DEFERRED.tools_catalog_composition).toBe("DEFERRED");
     expect(ALLOWLIST.find((a) => a.value === 899.98)!.disposition).toBe("NEAR_DUPLICATE_NEEDS_VISUAL_PROOF");
     expect(ALLOWLIST.find((a) => a.value === 920)!.disposition).toBe("CONTENT_DRIVEN_KEEP_FOR_NOW");
+  });
+});
+
+/* ----------------------------------------------------- the container ladder */
+
+/**
+ * Tailwind's `container` utility ships a second breakpoint ladder — 640, 768,
+ * 1024, 1280, 1536 — that no stylesheet in this repo wrote and no element in the
+ * product uses. Measured before it was switched off: `.container` matched zero
+ * elements on /, /login and /register at every width from 429 to 1181.
+ */
+const TAILWIND_CONFIG = readFileSync(join(ROOT, "tailwind.config.ts"), "utf8");
+const CONTAINER_LADDER = [768, 1024, 1280, 1536];
+
+function tsxFiles(dir: string, acc: string[] = []): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) tsxFiles(p, acc);
+    else if ((e.name.endsWith(".tsx") || e.name.endsWith(".ts")) && !e.name.includes(".test.")) acc.push(p);
+  }
+  return acc;
+}
+
+describe("the container ladder stays switched off", () => {
+  it("the core plugin is disabled", () => {
+    expect(TAILWIND_CONFIG).toContain("corePlugins");
+    expect(TAILWIND_CONFIG).toContain("container: false");
+  });
+
+  it("nothing else in the theme moved with it", () => {
+    // Disabling one core plugin must not become a licence to edit the ladder.
+    expect(TAILWIND_CONFIG).not.toContain("screens");
+    expect(TAILWIND_CONFIG).toContain('content: ["./src/**/*.{ts,tsx}"]');
+    expect(TAILWIND_CONFIG).toContain("plugins: []");
+    for (const token of ["--background-base", "--signal-active", "--font-mono"]) {
+      expect(TAILWIND_CONFIG, `theme token ${token} must survive`).toContain(token);
+    }
+  });
+
+  it("no component asks for the class", () => {
+    const offenders: string[] = [];
+    for (const abs of tsxFiles(SRC)) {
+      const text = readFileSync(abs, "utf8");
+      for (const needle of ['className="container', "className={\"container", '"container "', "'container '", " container\"", " container'"]) {
+        if (text.includes(needle)) offenders.push(relative(ROOT, abs));
+      }
+    }
+    expect([...new Set(offenders)], "a component started using Tailwind's container class").toEqual([]);
+  });
+
+  it("no responsive prefix creates a hidden consumer", () => {
+    // A class token STARTS with the prefix. Substring matching finds "sm:"
+    // inside the word "mechanism:" and reports a Tailwind prefix that is really
+    // a comment — which is how the first version of this test failed.
+    const PREFIXES = ["sm:", "md:", "lg:", "xl:", "2xl:"];
+    const SPLIT = new Set([" ", "\n", "\t", "\r", '"', "'", "`", "{", "}", "(", ")", ";", ",", "="]);
+    const prefixed: string[] = [];
+    for (const abs of tsxFiles(SRC)) {
+      const text = readFileSync(abs, "utf8");
+      let token = "";
+      const check = () => {
+        for (const p of PREFIXES) {
+          if (token.startsWith(p)) prefixed.push(`${relative(ROOT, abs)} :: ${token.slice(0, 24)}`);
+        }
+        token = "";
+      };
+      for (const ch of text) { if (SPLIT.has(ch)) check(); else token += ch; }
+      check();
+    }
+    expect([...new Set(prefixed)], "a Tailwind responsive prefix appeared; the stock ladder would come back with it").toEqual([]);
+  });
+
+  it("the ladder's values are not otherwise present as width breakpoints", () => {
+    for (const v of CONTAINER_LADDER) {
+      expect(WIDTH_INVENTORY.has(`min-width|${v}`), `min-width ${v}px reappeared in hand-written CSS`).toBe(false);
+    }
+    // 640 is different: auth owns a max-width: 640px of its own and keeps it.
+    expect(WIDTH_INVENTORY.has("max-width|640")).toBe(true);
+    expect([...WIDTH_INVENTORY.get("max-width|640")!.files]).toContain("src/features/auth/auth-stage.css");
+    expect(WIDTH_INVENTORY.has("min-width|640"), "the container ladder's 640 must not return").toBe(false);
+  });
+
+  it("the built stylesheet carries no .container rule", () => {
+    // Only checkable where a build exists; the source assertions above hold
+    // everywhere. Named rather than skipped silently.
+    const staticDir = join(ROOT, ".next", "static");
+    const configPath = join(ROOT, "tailwind.config.ts");
+    if (!existsSync(staticDir)) {
+      // No build here. The source assertions above still hold; the built-CSS
+      // check is carried by release verification instead.
+      expect(existsSync(configPath)).toBe(true);
+      return;
+    }
+    // A build made BEFORE the config change still contains the rules this
+    // change removes. Judging the config by a stale artifact says nothing, so
+    // the assertion runs only against a build that postdates the config.
+    if (statSync(staticDir).mtimeMs < statSync(configPath).mtimeMs) {
+      expect(existsSync(configPath)).toBe(true);
+      return;
+    }
+    const found: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith(".css")) {
+          const root = postcss.parse(readFileSync(p, "utf8"), { from: p });
+          root.walkRules((r) => {
+            for (const sel of r.selectors) {
+              const s = sel.trim();
+              if (s === ".container" || s === ".\\!container") found.push(`${relative(ROOT, p)} :: ${s}`);
+            }
+          });
+        }
+      }
+    };
+    walk(staticDir);
+    expect(found, "the container rules are back in the built CSS").toEqual([]);
   });
 });
