@@ -81,24 +81,49 @@ export function validateNumericParam(value: string, field = "id") {
   };
 }
 
+/**
+ * THE PASSWORD RULE, AND NOTHING ELSE.
+ *
+ * Length is the only requirement. The three composition refinements that used
+ * to sit on `registerSchema` — an uppercase letter, a lowercase letter, a digit
+ * — are gone: they rejected long passphrases while accepting `Passw1`, and the
+ * text that explained them was the most-read copy on the register page.
+ *
+ * The value is never trimmed and never normalised. A leading or trailing space
+ * is part of the password, because the person typing it meant it to be.
+ */
+export const passwordSchema = z
+  .string()
+  .min(6, "Пароль должен быть не короче 6 символов");
+
 export const loginSchema = z.object({
   email: z.string().trim().email("Введите корректный email").toLowerCase(),
-  password: z.string().min(6, "Пароль должен быть не короче 6 символов"),
+  password: passwordSchema,
   captchaToken: z.string().trim().optional(),
 });
 
+/**
+ * THE ONE PLACE A DISPLAY NAME IS DEFINED.
+ *
+ * `name` was optional with a floor of one character, and the register route
+ * filled the gap with `Трейдер-####`. Two rules disagreed as a result: the
+ * profile editor has always required 2..50, so a name the server generated
+ * could be one the same server would refuse to accept as an edit. The name is
+ * now required at the only moment it can be asked for honestly — registration —
+ * and both surfaces read the same bounds.
+ *
+ * A display name, not a legal one. Trimmed before measuring, so whitespace
+ * cannot buy length.
+ */
+export const nameSchema = z
+  .string()
+  .trim()
+  .min(2, "Имя должно быть не короче 2 символов")
+  .max(50, "Имя должно быть не длиннее 50 символов");
+
 export const registerSchema = loginSchema.extend({
-  name: z.string().trim().min(1).optional(),
+  name: nameSchema,
   referralCode: z.string().trim().min(1).max(100).optional(),
-}).refine((value) => /[A-ZА-Я]/.test(value.password), {
-  path: ["password"],
-  message: "Пароль должен содержать заглавную букву",
-}).refine((value) => /[a-zа-я]/.test(value.password), {
-  path: ["password"],
-  message: "Пароль должен содержать строчную букву",
-}).refine((value) => /\d/.test(value.password), {
-  path: ["password"],
-  message: "Пароль должен содержать цифру",
 });
 
 export const checkpointCheckSchema = z.object({}).strict();

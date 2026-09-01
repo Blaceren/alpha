@@ -42,7 +42,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import type { UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
 
 /**
  * The cookie name, with the `__Host-` prefix.
@@ -140,7 +140,10 @@ function hashToken(token: string): string {
  * both logins revoke, both insert, and the second revoke covers the first
  * insert, so exactly one row is left live.
  */
-export async function issueSession(userId: number): Promise<string> {
+export async function issueSessionWithin(
+  userId: number,
+  beforeRotation?: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<string> {
   /* THE DATABASE IS THE INVARIANT, AND IT CAN SAY NO.
      `UserSession_userId_active_key` is a unique index over (userId) WHERE
      revokedAt IS NULL, so two logins racing for the same user cannot both
@@ -160,6 +163,12 @@ export async function issueSession(userId: number): Promise<string> {
 
     try {
       await prisma.$transaction(async (tx) => {
+        /* THE CALLER'S WRITE AND THE ROTATION ARE ONE COMMIT.
+           A password change that succeeded while its session rotation failed
+           would leave the two facts disagreeing: the old password gone, the
+           old token still live. Running the caller's write here means either
+           both land or neither does. */
+        if (beforeRotation) await beforeRotation(tx);
         await tx.userSession.updateMany({
           where: { userId, revokedAt: null },
           data: { revokedAt: new Date() },
@@ -174,6 +183,11 @@ export async function issueSession(userId: number): Promise<string> {
   }
 
   throw lastError;
+}
+
+/** The original entry point: rotation with nothing alongside it. */
+export async function issueSession(userId: number): Promise<string> {
+  return issueSessionWithin(userId);
 }
 
 /** A unique-constraint failure, however this Prisma version reports it. */
