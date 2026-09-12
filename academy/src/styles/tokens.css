@@ -1,0 +1,103 @@
+/*
+ * Alfa Trade Academy — semantic design tokens (UNIFIED-DESIGN-V1).
+ *
+ * Values now derive from the ACCEPTED unified design brand foundation
+ * (ATA-Integration 560a0f3011c153422575701e846da9c125cd3c79):
+ *   packages/brand/foundations/raw-brand.css        — Ink, Signal, light text
+ *   packages/brand/foundations/selected-neutral.css — strategy N2 tertiary
+ *
+ * They are no longer provisional. The previous Phase D1B ramp was a navy/teal
+ * placeholder explicitly marked "replace only these values when the prelanding
+ * palette arrives" — this is that replacement.
+ *
+ * WHY THE SEMANTIC NAMES DID NOT CHANGE. Every consumer in the product refers
+ * to these names, never to hex. Replacing the VALUES behind the existing names
+ * is what lets Path, Lessons, Lesson Reader, Tools, Profile, Support and the
+ * whole Community domain inherit the accepted palette without editing a single
+ * one of their files. That is deliberate, and it is why the change envelope for
+ * those surfaces is empty.
+ *
+ * ---- GROUND-USE CONTRACT (BINDING) -----------------------------------------
+ * The selected tertiary (--ata-text-tertiary / --text-muted, #7D8478) may carry
+ * normal informational text on Ink 900 and Ink 800 ONLY.
+ *
+ * It MUST NOT carry normal informational text on Ink 700 (--surface-context):
+ * that pair measures 4.34:1, below the 4.5:1 floor. Ink 700 is a non-text,
+ * decorative, skeleton or separately-proven ground.
+ *
+ * The two legacy audit neutrals are prohibited for normal informational text
+ * and are deliberately absent from this file, comments included.
+ * ---------------------------------------------------------------------------
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- accepted raw brand values (INK — shared dark grounds) ---- */
+  --ata-ink-900: #0b0d0a;
+  --ata-ink-800: #11140f;
+  --ata-ink-700: #1a1f18;
+
+  /* ---- accepted raw brand values (SIGNAL — action/focus family) ---- */
+  --ata-signal-300: #d9ff91;
+  --ata-signal-500: #c7f76d;
+  --ata-signal-600: #b7ea5d;
+  --ata-signal-700: #a8d84f;
+
+  /* ---- accepted text values ---- */
+  --ata-text-primary: #edf0ea;
+  --ata-text-secondary: #a6ada0;
+  --ata-text-tertiary: #7d8478;
+
+  /* fields & surfaces — bound to Ink */
+  --background-base: var(--ata-ink-900);
+  --background-field: var(--ata-ink-800);
+  --surface-context: var(--ata-ink-700);
+  --surface-subtle: rgba(237, 240, 234, 0.06);
+
+  /* text — three explicit levels; see the ground-use contract above */
+  --text-primary: var(--ata-text-primary);
+  --text-secondary: var(--ata-text-secondary);
+  --text-muted: var(--ata-text-tertiary);
+
+  /* route states — carried onto the Signal family.
+     Completed/current/upcoming/locked stay four DISTINGUISHABLE values so
+     route state is never colour-only: shape, label and position carry it too. */
+  --route-completed: var(--ata-signal-700);
+  --route-current: var(--ata-signal-500);
+  --route-upcoming: var(--ata-text-secondary);
+  --route-locked: #5c6357;
+
+  /* gate / signal */
+  --gate-boundary: var(--ata-signal-700);
+  --signal-active: var(--ata-signal-500);
+  --signal-soft: #5f7a36;
+
+  /* layout — canonical mobile bottom-nav height (single source for scroll/padding
+     compensation; the visible bar is ~55px, this reserves it plus breathing space) */
+  --mobile-bottom-nav-height: 60px;
+
+  /* interaction & structure */
+  --focus-ring: var(--ata-signal-500);
+  --divider: rgba(237, 240, 234, 0.14);
+  --divider-strong: rgba(237, 240, 234, 0.24);
+  --glow-current: rgba(199, 247, 109, 0.18);
+
+  /* typography families — locally vendored, bound in src/styles/fonts.css.
+     Scoped "ATA " names: the product claims no global family name. */
+  --font-display: "ATA Manrope", system-ui, -apple-system, "Segoe UI", Roboto,
+    Arial, sans-serif;
+  --font-ui: "ATA Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Arial,
+    sans-serif;
+  --font-mono: "ATA IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+  /* Public Home display face ONLY. The authenticated product never uses it. */
+  --font-public-display: "ATA Source Serif 4", Georgia, "Times New Roman",
+    serif;
+
+  /* motion */
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}

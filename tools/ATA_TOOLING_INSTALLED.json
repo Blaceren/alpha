@@ -1,0 +1,18 @@
+{
+  "schema": "ata.tooling.installed/1",
+  "source_repository": "/home/ubuntu/ata-release-tooling",
+  "source_commit": "632ec2777dc6c8db2c02fed161069da52d595012",
+  "source_tree": "d35046bc7ea9e33ca5be295f91e7a0af9fa78bbe",
+  "source_branch": "fix/fe8-partner-rewrite-gate",
+  "installed_at_utc": "2026-08-17T06:55:10Z",
+  "installer": "install-release-tooling.sh",
+  "files": {
+    "publish-release.sh": "f2f0732574f0576066178d2efea08695f63985d75bd271afb6f3a57114c7af38",
+    "build-release.sh": "9aa19eb50f7fb38a5eddaf6208e70bb02e1023cc6e772102c6460aec1e3b9ed7",
+    "verify-build-provenance.sh": "4ed61c6963345d530b106f6e11ae97ff95a13a8d73df9ed68a580ed8712eb262",
+    "cutover.sh": "82052c159127351a2159facb3f73e3d90158650338cc7d40aa28c947226d26b8",
+    "tests/build-provenance.test.sh": "2149036ba1b9fe9709c1c7f80766369961ebfc91ce2ad5aa4c34a695aed74f3c",
+    "tests/release-packaging.test.sh": "410f2cae79721ee6b082ac1d1911f31946e5c55d8060a74218260b50830563cb",
+    "tests/partner-rewrite-gate.test.sh": "063f7ad3d9f9209bebad39d2c69e32a3c5c1c3387b28371aa08c3049644de89e"
+  }
+}

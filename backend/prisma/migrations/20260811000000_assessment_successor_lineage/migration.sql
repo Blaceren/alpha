@@ -1,0 +1,65 @@
+-- PHASE-G2 SUCCESSOR -- the explicit assessment version lineage relation.
+--
+-- WHAT THIS CLOSES. Cloning an AssessmentVersion produced a bank that was, to
+-- the domain, unrelated to the one it was copied from. The copy preserved every
+-- semantic fact that matters -- the four take slots, the prompts, the option
+-- set, the answer key -- and preserved no record that it WAS a copy. The only
+-- trace of descent was a metadata field on an AuditLog row, which is a trail for
+-- humans and must never become a relation the domain reasons over.
+--
+-- WHY THAT MATTERED. Source-authority decisions are stored against one
+-- assessmentVersionId. A successor therefore had zero decisions and reported
+-- every adjudicated conflict as unresolved again -- not because the adjudication
+-- had stopped being true, but because nothing could say which bank the successor
+-- descended from. The independent audit measured exactly this -- seven decisions
+-- that still evaluated APPLIED against the successor's own live values, beside a
+-- projection reporting UNRESOLVED_CONFLICT.
+--
+-- SO THE MISSING FACT IS DESCENT, AND ONLY DESCENT. This column adds no
+-- decision, no evidence, no adjudication and no authority. It records which bank
+-- a bank was cloned from, once, at clone time. Everything the projection later
+-- concludes from it is recomputed from values that were already stored.
+--
+-- WHY NOT INFER IT. versionNumber - 1 is a guess that breaks the moment a level
+-- has a gap, a re-clone or a parallel draft. Timestamps order events without
+-- relating them. An audit row is not a foreign key. The brief was explicit that
+-- only an explicit relation may be load-bearing, and this is that relation.
+--
+-- NOT APPLIED ANYWHERE BY THIS PHASE. Source-only, exactly like the G0, G1 and
+-- G2-foundation migrations it descends from. No live, preprod or production
+-- database is touched, no sealed or cumulative editorial database is touched,
+-- and CURRICULUM_V2_ADMIN_ENABLED stays absent.
+--
+-- IT DESCENDS FROM 20260810000000_source_authority_resolution AND DOES NOT EDIT
+-- IT. Correcting a shipped migration in place would change its checksum and make
+-- every database that already ran it disagree with the repository.
+--
+-- MIGRATION RUNNER CONTRACT. prisma/migrate.ts splits this file on the semicolon
+-- character, so NO COMMENT IN THIS FILE CONTAINS ONE, and every statement is a
+-- single complete statement terminated by exactly one semicolon.
+--
+-- PURELY ADDITIVE. One new nullable column and one index. No existing column is
+-- dropped, renamed, retyped or backfilled, no existing row is rewritten, no
+-- table is rebuilt, and no learner or runtime table is touched. Every existing
+-- AssessmentVersion keeps its exact meaning -- a bank with NULL here simply has
+-- no recorded predecessor, which is what every bank in every existing database
+-- is, including all 58 in the accepted cumulative baseline.
+--
+-- ON DELETE RESTRICT, DELIBERATELY. Lineage is evidence. SET NULL would let a
+-- predecessor be deleted and silently convert a successor whose authority is
+-- INHERITED into one that appears to have none, changing what the projection
+-- reports without anybody deciding to. RESTRICT makes the attempt fail loudly
+-- instead, which matches how every other authority-bearing relation in this
+-- schema already behaves -- SourceAuthorityResolution restricts its assessment,
+-- its production version and its decider for the same reason.
+--
+-- SQLITE NOTE. A nullable ALTER TABLE ADD COLUMN carrying REFERENCES is accepted
+-- because its implicit default is NULL, which is the same form the accepted
+-- authoring_foundation migration used for its actor columns.
+ALTER TABLE "AssessmentVersion" ADD COLUMN "predecessorVersionId" INTEGER REFERENCES "AssessmentVersion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- The lineage walk asks "what is this bank's predecessor" one hop at a time, and
+-- the successor-facing question "what descends from this bank" is what a future
+-- supersession or deletion guard has to answer. One index serves the second and
+-- the primary key already serves the first.
+CREATE INDEX "AssessmentVersion_predecessorVersionId_idx" ON "AssessmentVersion"("predecessorVersionId");

@@ -1,0 +1,102 @@
+/*
+ * PUBLIC MENTOR FEEDBACK — cold material, never lit.
+ *
+ * It inherits the Academy experience tokens (it always renders inside `.ax`),
+ * so it cannot drift from the accepted palette. The one decision it makes for
+ * itself is that it is never the lit surface: a reply is context beside a
+ * decision, and lighting it would put a second "act here" object on a page
+ * whose only actionable object is the canonical task control.
+ */
+
+.ax-feedback {
+  border-radius: var(--ax-radius-field);
+  padding: clamp(20px, 3vw, 30px);
+  background: var(--ax-cold-bg);
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid rgba(157, 176, 207, 0.55);
+}
+
+/* Decided. Quieter still — this is a record, not a pending thing. */
+.ax-feedback[data-posture="done"] {
+  background: rgba(11, 17, 30, 0.55);
+  border-left-color: var(--ax-signal-deep);
+}
+
+.ax-feedback__title {
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ax-ink-faint);
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.ax-feedback__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 22px;
+}
+
+.ax-feedback__item {
+  margin: 0;
+}
+
+.ax-feedback__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.ax-feedback__who {
+  color: var(--ax-ink);
+  font-weight: 600;
+}
+.ax-feedback__when {
+  color: var(--ax-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.ax-feedback__body {
+  /* Reading measure, not container width — a mentor's reply is prose. */
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--ax-ink-muted);
+  margin: 0 0 10px;
+  max-width: 68ch;
+  overflow-wrap: break-word;
+}
+.ax-feedback__body:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * THE DECISION SENTENCE. Deliberately given more contrast than the reply it
+ * follows: if a learner reads one line on this panel, it must be this one.
+ */
+.ax-feedback__decision {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--ax-line);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ax-ink);
+  max-width: 68ch;
+}
+
+/* Completed levels state a fact; pending ones state a limit. Same weight,
+   different signal colour — never a "success" treatment while a decision is
+   outstanding. */
+.ax-feedback__decision[data-state="completed"] {
+  color: var(--ax-ink-muted);
+}
+
+@media (max-width: 640px) {
+  .ax-feedback__body,
+  .ax-feedback__decision {
+    font-size: 15px;
+  }
+}

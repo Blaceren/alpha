@@ -1,0 +1,176 @@
+/* L2 assessment — uses existing Academy tokens only (no new global tokens). */
+.asmt {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.asmt__heading {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 640;
+  margin: 0 0 8px;
+}
+.asmt__heading:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.asmt__status {
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  min-height: 1.2em;
+}
+.asmt__status:focus {
+  outline: none;
+}
+
+.asmt__questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asmt__fieldset {
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 0;
+  background: var(--background-field);
+}
+
+.asmt__legend {
+  font-weight: 600;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+.asmt__qnum {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  margin-right: 6px;
+}
+
+.asmt__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 4px;
+  min-height: 44px; /* touch target */
+}
+.asmt__option input[type="radio"] {
+  margin-top: 3px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--signal-active);
+}
+.asmt__option label {
+  line-height: 1.45;
+  cursor: pointer;
+}
+.asmt__option input[type="radio"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.asmt__btn {
+  margin-top: 18px;
+  padding: 11px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--divider-strong);
+  background: var(--surface-context);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+.asmt__btn--primary {
+  background: var(--signal-active);
+  color: var(--background-base);
+  border-color: transparent;
+}
+.asmt__btn:disabled,
+.asmt__btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.asmt__btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.asmt__result {
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--divider-strong);
+  background: var(--surface-context);
+}
+.asmt__result--fail {
+  border-left: 4px solid var(--route-locked);
+}
+.asmt__result-title {
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.asmt__result-score {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.asmt__done {
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--route-completed);
+  background: var(--surface-context);
+}
+.asmt__done-title {
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.asmt__next {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--signal-active);
+  color: var(--background-base);
+  font-weight: 600;
+  text-decoration: none;
+  min-height: 44px;
+}
+.asmt__next:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.asmt__notice {
+  color: var(--text-secondary);
+  background: var(--background-field);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+@media (max-width: 420px) {
+  .asmt {
+    padding: 16px 14px;
+  }
+  .asmt__fieldset {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asmt * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

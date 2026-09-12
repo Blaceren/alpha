@@ -1,0 +1,20 @@
+{
+  "$comment": "L4VC-1 CANDIDATE — NOT PUBLISHED, NOT IMPORTED, NOT LIVE. Live curriculum remains ata-v2 revision 3. This file describes the intended L4 financial-checkpoint requirement so the verification engine can be proven against real values; approving and publishing revision 4 is a separate act that this phase does not perform.",
+  "schema": "ata.curriculum.checkpoint-requirement/1",
+  "status": "candidate",
+  "curriculumCode": "ata-v2",
+  "candidateRevision": 4,
+  "publishedRevision": 3,
+  "requirements": [
+    {
+      "levelStableCode": "v2.l004.kontrolnaya-tochka-50",
+      "levelType": "financial_checkpoint",
+      "completionMethod": "balance_check",
+      "integrationCode": "checkpoint.module-01",
+      "thresholdCurrency": "USD",
+      "thresholdMinorUnits": 5000,
+      "xpReward": 0,
+      "$comment": "5000 minor units = USD 50.00. Integer minor units only; money is never a float. xpReward 0 — a checkpoint is a gate, not an achievement, and the completion primitive refuses a checkpoint whose definition promises XP."
+    }
+  ]
+}

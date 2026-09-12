@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="362" height="200" viewBox="0 0 362 200" role="img" aria-labelledby="title desc">
+  <title id="title">Логотип Alfa Trade Academy</title>
+  <desc id="desc">Знак ATA с компактной рамкой в первой букве A и раскрытой рамкой во второй.</desc>
+  <defs>
+    <mask id="a1-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="140" height="200">
+      <rect width="140" height="200" fill="#fff"/>
+      <path d="M54 68H70V72H58V84H54Z" fill="#000"/>
+      <path d="M82 96H66V92H78V80H82Z" fill="#000"/>
+      <path d="M50.095 118H84.839L89.867 131.738 97.333 160.066 101.6 180H33.333L37.6 160.066 45.067 131.738Z" fill="#000"/>
+    </mask>
+    <mask id="a2-mask" maskUnits="userSpaceOnUse" x="228" y="0" width="132" height="200">
+      <rect x="228" width="132" height="200" fill="#fff"/>
+      <path d="M278 58H294V62H282V74H278Z" fill="#000"/>
+      <path d="M309 110H293V106H305V94H309Z" fill="#000"/>
+      <path d="M276.095 118H310.839L315.867 131.738 323.333 160.066 327.6 180H259.333L263.6 160.066 271.067 131.738Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="#F3F4EF">
+    <path mask="url(#a1-mask)" d="M12 180 15.2 157.967 26.933 124.393 42.933 81.377 56.8 37.311 62.88 20H70.987L77.067 37.311 90.933 81.377 106.933 124.393 120.8 157.967 124 180Z"/>
+    <path d="M142 20H220L215 36H197.333L190 58V180H172V58L164.667 36H147Z"/>
+    <path mask="url(#a2-mask)" d="M238 180 241.2 157.967 252.933 124.393 268.933 81.377 282.8 37.311 288.88 20H296.987L303.067 37.311 316.933 81.377 332.933 124.393 346.8 157.967 350 180Z"/>
+  </g>
+</svg>

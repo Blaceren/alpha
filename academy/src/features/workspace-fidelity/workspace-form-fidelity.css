@@ -1,0 +1,215 @@
+/*
+ * WORKSPACE FORM — the adaptation layer, and nothing else.
+ *
+ * `workspace-fidelity.css` is the frozen WorkspaceATA stylesheet, carried across
+ * unchanged and proven so. It already contains every value the report form
+ * needs — `.rpt-group`, `.rpt-f`, `.rpt-bar`, `.eng-notice`, `.eng-fb`,
+ * `.eng-opt`, `.btn-2`, `.ws-act` — because the frozen source styles its own
+ * submission view with exactly those.
+ *
+ * The product's form does not have the frozen source's markup, and the
+ * instruction is to ADAPT THE STYLES TO THE CURRENT DOM rather than restructure
+ * it. So the components gained presentation classes — additive, nothing renamed
+ * and nothing removed — and this file handles the places where a class alone
+ * cannot bridge the gap.
+ *
+ * EVERY RULE BELOW IS ONE OF THREE THINGS, and each one says which:
+ *   (A) A CONTAINMENT FIX. A frozen rule assumes the submission view is its own
+ *       full page; here it is nested inside the workspace host.
+ *   (B) AN ELEMENT FIX. The frozen selector meets a different element in this
+ *       DOM — a `<legend>` where the frozen had a `<button>`, a `<dl>` where it
+ *       had a `<div>` — and the declaration has to survive that.
+ *   (C) A DECLARED DIFFERENCE. The frozen source has no vocabulary for this
+ *       part, so it takes the nearest frozen type role rather than inventing
+ *       one. Listed in the pass record; never a new colour, size or spacing.
+ *
+ * NOTHING HERE CHANGES BEHAVIOUR. No rule hides a control, moves a live region,
+ * or alters what is focusable, clickable or announced.
+ */
+
+/* ── (A) The frozen submission view is its own page ──────────────────────────
+   `.sub-wrap` carries `max-width`, `margin: 0 auto` and a 40/120px page padding
+   because in the frozen source the submission view IS the page. Here the form
+   is mounted inside `.ws-host`, which already provides the page container, so
+   applying it again would inset the form twice and centre it inside a centred
+   column. The class stays on the element — it is what `.rpt-bar`'s own
+   `:has(.eng-notice--block)` rule looks up — and only the page geometry is
+   returned to the host. */
+.wsp .ws-host .rpt.sub-wrap {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── (A) The terminal bar is the frozen STATIC one, at every width ───────────
+   The frozen bar is `position: fixed` at the bottom of the viewport, which is
+   right for a full-page submission view and wrong for a form nested in a page
+   that continues below it: it would float over the rest of the workspace and
+   over the shell's own bottom navigation.
+
+   The frozen source already contains the answer — its own ≤599px treatment of
+   the same bar is static, with a top rule and normal flow. That variant is
+   adopted at all widths, so the values are the frozen ones and nothing is
+   invented. */
+.wsp .ws-host .rpt-bar {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 28px 0 0;
+  padding: 22px 0 0;
+  border-top: 1px solid var(--line-2);
+  background: none;
+  backdrop-filter: none;
+  justify-content: flex-start;
+  z-index: auto;
+}
+
+/* ── (B) A `<legend>` is not a `<button>` ────────────────────────────────────
+   The frozen group head is a full-width band across the top of a bordered card.
+   A `<legend>` renders INSIDE the fieldset's border by default — the border
+   breaks around it — so the band would appear as an inset chip. Floating it
+   with a full width takes it out of that special layout and it lays out as an
+   ordinary block, with the fieldset's border unbroken.
+
+   The element, its role and the group's accessible name are untouched. */
+.wsp .ws-host legend.rpt-group__head {
+  float: left;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+}
+
+/* The floated legend needs its own line closed before the body follows. */
+.wsp .ws-host .rpt-group__head + .rpt-group__body {
+  clear: both;
+}
+
+/* ── (B) The group body is a `<dl>` in the read-only echo ────────────────────
+   Same rule, different element: a definition list carries a UA margin the
+   frozen `<div>` did not. */
+.wsp .ws-host dl.rpt-group__body {
+  margin: 0;
+}
+
+.wsp .ws-host .rpt-readonly {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* ── (B) The read-only value is a `<dd>` ─────────────────────────────────────
+   `.rpt-f__ro` is the frozen read-only value box. On a `<dd>` it also has to
+   clear the UA indent, which the frozen `<p>` never had. */
+.wsp .ws-host dd.rpt-f__ro {
+  margin-inline-start: 0;
+}
+
+/* ── (C) The required marker ─────────────────────────────────────────────────
+   DELIBERATELY NOT `.rpt-f__req`. In the frozen source that class marks a field
+   as OPTIONAL; here the same visual slot carries a required asterisk. The two
+   are opposite claims, so the class is not borrowed — only its type treatment
+   is, which is the muted, normal-weight role the frozen source gives every
+   secondary marker beside a label. */
+.wsp .ws-host .rf__req {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ── (C) Field help text ─────────────────────────────────────────────────────
+   The frozen form has no help line — its fields carry a label and nothing else.
+   This takes the frozen hint role (`.ws-act__hint`) rather than inventing a
+   size or a colour. */
+.wsp .ws-host .rf__help {
+  margin: 8px 0 0;
+  max-width: 46ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ── (B) Choice groups ───────────────────────────────────────────────────────
+   The frozen source renders a single choice as a `<select>`; the product uses a
+   radio or checkbox group, because a select conflates "unset" with the first
+   option. `.eng-opt` is the frozen option row and is applied as-is — but in the
+   frozen markup the row IS the `<label>`, and here the label sits inside it. The
+   label is stretched to fill the row so the effective target is the whole row,
+   as it is in the frozen source, and the pointer moves with it. */
+.wsp .ws-host .rf__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wsp .ws-host .rf__option {
+  cursor: default;
+}
+
+.wsp .ws-host .rf__option > label {
+  flex: 1 1 auto;
+  cursor: pointer;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+/* ── (C) The validation summary and the mentor note ──────────────────────────
+   Both take a frozen role — `.eng-notice` and `.eng-fb` — through their added
+   classes. The list inside the summary keeps its markers and needs the frozen
+   body type without the UA list indent being lost. */
+.wsp .ws-host .rpt-summary__list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+/* ── (A) The form's own heading ──────────────────────────────────────────────
+   `.sub-head` closes with a rule in the frozen source, which reads correctly as
+   the head of a page. Nested under the workspace host's own `Задание` label it
+   would be a second rule two lines below the first. */
+.wsp .ws-host .rpt__head.sub-head {
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin: 0 0 24px;
+}
+
+/* ── (C) The duplicated required marker ──────────────────────────────────────
+   A required text field renders its asterisk twice: once inside the `<label>`,
+   and once again as the last child of the field. `.rf` is a column flex
+   container, so the second one lands on a line of its own under the control —
+   visible in the product today and unmissable once the frozen field spacing is
+   applied.
+
+   The trailing one is `aria-hidden`, and the required state is announced from
+   `aria-required` and from the field's own screen-reader sentence, so hiding it
+   removes a duplicate mark and no information. The DOM is untouched: nothing is
+   removed, nothing is reordered, and the label's own asterisk stays. */
+.wsp .ws-host .rf > .rf__req:last-child {
+  display: none;
+}
+
+/* ── (C) The validation summary's jump links ─────────────────────────────────
+   Each error in the summary is a link to the field it belongs to. At the frozen
+   body size they are 17 CSS px tall — the product's own size was 19, so this is
+   a pre-existing shortfall the restoration would otherwise make two pixels
+   worse.
+
+   The frozen source's own `::after` hit-area extension was tried first and is
+   the wrong tool HERE: these links stack, so each extension is clipped by its
+   neighbour's and a hit test showed them reaching 33px, not 44. A real 44px row
+   is honest, measurable, and is the same row-as-target thinking the frozen
+   `.eng-opt` uses for its option rows. */
+.wsp .ws-host .rpt-summary__list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ── (A) The read-only echo shares the form's measure ────────────────────────
+   The submitted answers render outside `.rpt__form`, so they do not inherit the
+   `.sub-body` 860px measure the editable form has. In the frozen source both
+   live inside the same body and read at the same width; without this the
+   read-only view of a report is wider than the form that produced it. */
+.wsp .ws-host .rpt-readonly {
+  max-width: 860px;
+}

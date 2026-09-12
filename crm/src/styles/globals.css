@@ -1,0 +1,61 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: hsl(var(--color-border));
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: hsl(var(--color-background));
+    color: hsl(var(--color-text-primary));
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible keyboard focus everywhere (no color-only meaning). */
+  :focus-visible {
+    outline: 2px solid hsl(var(--color-focus-ring));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Respect reduced motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skip-to-content link, visible only when focused. */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 100;
+    background-color: hsl(var(--color-accent));
+    color: hsl(var(--color-accent-foreground));
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    transition: top 0.15s ease;
+  }
+  .skip-link:focus {
+    top: 0.5rem;
+  }
+}

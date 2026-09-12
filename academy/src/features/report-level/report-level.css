@@ -1,0 +1,831 @@
+/* Report level (Phase D3-B) — Concept B «Evidence Ledger» (DD-271).
+ *
+ * The ledger is the dominant object. Deliberately absent: card grids, hero
+ * panels, a permanent left outline, a full right dashboard sidebar, progress
+ * rings, percentages, stock charts, red error UI, glass blur, gradient glow.
+ *
+ * A report is a FORM, and forms are never cinematic (REFERENCE_MANIFEST §5):
+ * motion here is functional only.
+ */
+
+.rl-page {
+  /* Bottom-nav compensation is deliberately NOT re-added here.
+     home.css defines it ONCE on `.home-main`, from the canonical
+     `--mobile-bottom-nav-height` token and including
+     env(safe-area-inset-bottom) — and `.home-main` wraps every (app) page.
+     This page used to add a second copy of its own, which (a) stacked 84px on
+     top of 84px and left a 108px dead pit under the last control, and (b) got
+     the formula wrong anyway by omitting the safe-area inset. One owner, one
+     formula. */
+  padding: 0 clamp(16px, 4vw, 28px);
+  /* The ledger has a measure: at full width a row summary drifts a screen away
+     from its own action, and the open entry reads as a wide form. */
+  max-width: 1100px;
+}
+
+@media (min-width: 900px) {
+  .rl-page {
+    padding: 0 40px 48px;
+  }
+}
+
+/* ---------------- head ---------------- */
+
+.rl-head {
+  padding-top: 4px;
+}
+
+.rl-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 10px 0;
+  min-height: 44px;
+}
+.rl-back:hover { color: var(--text-secondary); }
+.rl-back-sep { color: var(--route-locked); }
+.rl-crumb { color: var(--text-muted); }
+
+.rl-id {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.rl-num {
+  font-size: 13px;
+  color: var(--signal-active);
+  letter-spacing: 0.5px;
+}
+.rl-h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 22px;
+}
+@media (min-width: 900px) {
+  .rl-h1 { font-size: 28px; }
+}
+.rl-kind {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  border: 1px solid var(--divider-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.rl-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.rl-req { font-size: 14px; color: var(--text-secondary); margin: 0; }
+.rl-req-k { color: var(--text-muted); }
+.rl-req b { color: var(--text-primary); font-weight: 600; }
+
+.rl-proto {
+  font-size: 11.5px;
+  color: var(--route-locked);
+  font-style: italic;
+}
+
+/* ---------------- status band ---------------- */
+
+.rl-band {
+  padding: 12px 0 12px;
+}
+.rl-band.is-pending {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 14px;
+}
+.rl-band-txt { min-width: 0; }
+
+.rl-save {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+.rl-save b { color: var(--text-primary); font-weight: 600; }
+
+/* Save state is carried by TEXT; the dot is a secondary cue, never the message. */
+.rl-save-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  margin-top: 6px;
+  background: var(--route-completed);
+}
+.rl-save-dot.is-dirty { background: var(--route-upcoming); }
+.rl-save-dot.is-saving { background: var(--route-upcoming); }
+/* Not red: failing to save locally is a limitation, not the user's error. */
+.rl-save-dot.is-unavailable { background: var(--route-locked); }
+
+.rl-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--route-upcoming);
+  border: 1px solid color-mix(in srgb, var(--gate-boundary) 45%, transparent);
+  background: color-mix(in srgb, var(--gate-boundary) 9%, transparent);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.rl-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--route-upcoming);
+  /* Static. A pulsing dot would read as a countdown. */
+}
+
+.rl-wait { font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+.rl-truth { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 0; line-height: 1.5; }
+
+.rl-archive {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--divider-strong);
+}
+
+/* Readiness: one element, both viewports. The dots are a mobile-only echo of the
+   rows the ledger hides there. */
+.rl-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.rl-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.rl-strip-dots { display: none; }
+
+/* ---------------- the ledger ---------------- */
+
+.rl-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--divider);
+}
+
+/* A collapsed row is NOT a card: no border, no radius, no fill. */
+.rl-row {
+  display: grid;
+  grid-template-columns: 26px 34px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.rl-row:hover { background: var(--surface-subtle); }
+
+.rl-sig {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  justify-self: center;
+  background: transparent;
+  border: 1.5px solid var(--route-locked);
+}
+.rl-sig.is-filled { background: var(--route-completed); border-color: var(--route-completed); }
+.rl-sig.is-open {
+  background: var(--signal-active);
+  border-color: var(--signal-active);
+  box-shadow: 0 0 0 4px var(--glow-current);
+}
+
+.rl-n { font-size: 13px; color: var(--text-muted); }
+.rl-sum { font-size: 14px; color: var(--text-secondary); min-width: 0; }
+.rl-state { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.rl-act { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.rl-row:hover .rl-act { color: var(--text-secondary); }
+
+/* The open entry: LIGHT instead of a border. */
+.rl-open {
+  border-bottom: 1px solid var(--divider);
+  border-left: 2px solid var(--signal-active);
+  background: var(--surface-context);
+  padding: 10px 14px 12px;
+}
+.rl-open-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+}
+.rl-open-t {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0;
+  color: var(--text-primary);
+}
+.rl-open-head .rl-proto { margin-left: auto; }
+
+.rl-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+.rl-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rl-f.is-long { grid-column: 1 / -1; }
+.rl-f label,
+.rl-f-k { font-size: 11.5px; color: var(--text-muted); margin: 0; }
+.rl-opt { color: var(--route-locked); }
+
+/* Absence of optional context, stated calmly. No frame — there is nothing to
+   type into; no red — skipping it was never an error. */
+.rl-empty {
+  font-size: 14px;
+  color: var(--route-locked);
+  margin: 0;
+  padding: 9px 0;
+  line-height: 1.4;
+}
+
+.rl-in,
+.rl-ta,
+.rl-w {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--background-field);
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 11px;
+  box-shadow: inset 0 0 0 1px rgba(150, 175, 210, 0.08);
+  /* Grows with its content: a fixed row count silently CLIPS what the user
+     wrote at narrow widths, and a report screen that hides the user's own words
+     is not a report screen (found in the D3-A mobile capture). */
+  field-sizing: content;
+}
+.rl-in::placeholder,
+.rl-ta::placeholder,
+.rl-w::placeholder { color: var(--route-locked); }
+
+.rl-ta { resize: none; line-height: 1.55; min-height: 54px; }
+.rl-in { min-height: 40px; }
+
+.rl-in[readonly],
+.rl-ta[readonly],
+.rl-w[readonly] {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-context) 60%, transparent);
+  cursor: default;
+}
+
+/* ---------------- reflection: a different material ---------------- */
+
+/* Closing area: on desktop the agreement stands BESIDE the reflection, capped to
+   roughly a quarter of the working width. Stacked, it pushed the single primary
+   action below the fold at 1440x900 — found in the D3-B first-pass capture. */
+.rl-close {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .rl-close {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 22px;
+  }
+}
+
+.rl-refl {
+  border: 1px solid var(--divider-strong);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+}
+.rl-refl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 9px;
+}
+.rl-refl-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14.5px;
+  margin: 0;
+}
+.rl-refl-s { font-size: 12px; color: var(--text-muted); }
+.rl-refl-head .rl-proto { margin-left: auto; }
+
+.rl-w {
+  display: block;
+  width: 100%;
+  font-size: 14.5px;
+  line-height: 1.6;
+  background: var(--surface-context);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.3);
+  resize: none;
+  min-height: 52px;
+}
+
+/* ---------------- «Перед отправкой» — compact, never dominant ---------------- */
+
+.rl-before {
+  border-left: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--surface-context) 70%, transparent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px 14px;
+}
+/* The grid column already caps it at ~1/4 of the working width, so the
+   agreement stays a note at the end of the work rather than a plane competing
+   with the ledger — Concept C's own stated main risk (DD-271). */
+.rl-before-h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  margin: 0 0 8px;
+  letter-spacing: -0.2px;
+}
+.rl-before-list { margin: 0; }
+
+/* Stacked, not a two-column dl. In a ~1/4-width column a label column left the
+   values ~170px wide, and six facts wrapped into a 641px tower that dominated
+   the ledger — the exact failure this direction was chosen to avoid. */
+.rl-before-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--divider);
+}
+.rl-before-row dt {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  margin-bottom: 2px;
+}
+.rl-before-row dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.45;
+  min-width: 0;
+}
+.rl-before-sub { display: block; color: var(--text-secondary); margin-top: 1px; }
+.rl-before-ready { display: block; color: var(--signal-active); margin-top: 1px; }
+.rl-before-ul { margin: 0; padding-left: 15px; }
+.rl-before-ul li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 1px; }
+.rl-before-ul b { color: var(--text-primary); font-weight: 600; }
+
+/* ---------------- the end ---------------- */
+
+.rl-end {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--divider);
+}
+.rl-end-txt { flex: 1 1 280px; min-width: 0; }
+.rl-left { font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }
+.rl-left.is-ready { color: var(--signal-active); font-weight: 600; }
+.rl-blocked { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+.rl-blocked-sub { font-size: 12.5px; color: var(--route-locked); margin: 4px 0 0; }
+
+.rl-btn {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #06120e;
+  background: var(--signal-active);
+  border: 0;
+  border-radius: 10px;
+  padding: 13px 26px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.rl-btn:disabled {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+  cursor: default;
+}
+.rl-btn-ghost {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  padding: 12px 18px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.rl-btn-ghost:hover { color: var(--text-primary); border-color: var(--route-upcoming); }
+
+.rl-exits { display: flex; gap: 8px; flex-wrap: wrap; }
+.rl-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13.5px;
+}
+.rl-exit:hover { color: var(--text-primary); border-color: var(--route-upcoming); }
+
+/* ---------------- confirmation dialog ---------------- */
+
+.rl-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.rl-scrim-hit {
+  position: absolute;
+  inset: 0;
+  /* Opaque enough to separate, no blur: depth comes from surfaces, not glass. */
+  background: rgba(4, 7, 12, 0.72);
+}
+.rl-dialog {
+  position: relative;
+  width: min(520px, 100%);
+  background: var(--surface-context);
+  border: 1px solid var(--divider-strong);
+  border-radius: 14px;
+  padding: 20px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.rl-dialog-h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  margin: 0 0 10px;
+  letter-spacing: -0.3px;
+}
+.rl-dialog-d ul { margin: 0; padding-left: 18px; }
+.rl-dialog-d li {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 5px;
+}
+.rl-dialog-do {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding-top: 16px;
+  margin-top: 14px;
+  border-top: 1px solid var(--divider);
+}
+
+/* ---------------- mobile: one entry at a time ---------------- */
+
+.rl-steps { display: none; }
+
+@media (max-width: 899px) {
+  /* Only the COLLAPSED rows go — the open entry must survive, or the mobile
+     screen has nothing to write in. Hiding them with display:none also removes
+     them from the tab order, so no duplicate controls exist across breakpoints. */
+  .rl-ledger > li.is-collapsed { display: none; }
+  .rl-ledger { border-top: 0; }
+  .rl-open { border-radius: 10px; }
+
+  /* With the rows hidden, the dots stand in for their state. */
+  .rl-progress {
+    min-height: 48px;
+    padding: 0 4px;
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 14px;
+  }
+  .rl-strip-dots { display: flex; gap: 10px; align-items: center; }
+  .rl-count { margin-left: auto; }
+  .rl-sd {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid var(--route-locked);
+  }
+  .rl-sd.is-filled { background: var(--route-completed); border-color: var(--route-completed); }
+  .rl-sd.is-open {
+    background: var(--signal-active);
+    border-color: var(--signal-active);
+    box-shadow: 0 0 0 4px var(--glow-current);
+  }
+
+  .rl-fields { grid-template-columns: 1fr; }
+
+  .rl-steps {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .rl-steps button {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    border: 1px solid var(--divider-strong);
+    border-radius: 10px;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .rl-steps button:disabled { color: var(--route-locked); cursor: default; }
+
+  .rl-before { max-width: none; }
+
+  .rl-end { align-items: stretch; flex-direction: column; }
+  /* `flex: 1 1 280px` on .rl-end-txt is a WIDTH hint for the desktop ROW layout.
+     Here the container is a COLUMN, so flex-basis resolves against the main axis
+     — height — and silently reserved 280px for 79px of text. The result was a
+     201px hole between the explanation and its own CTA, which read as the button
+     having been abandoned at the bottom of the page. Measured, not guessed. */
+  .rl-end-txt { flex: 0 0 auto; }
+  .rl-btn { width: 100%; }
+}
+
+/* ---------------- revision cycle (D3-C) — Revision Pass ----------------
+ *
+ * The chosen direction B: feedback is an ORDER OF WORK. Blue (--gate-boundary /
+ * --route-upcoming) is the review family; green stays reserved for saving,
+ * readiness and the successful action (DD-284). Nothing here is red: needing
+ * another pass was never the user's error. No wizard, no stepper, no meter —
+ * the pass is carried by words.
+ */
+
+/* «Нужна доработка» chip: the same construction as «На проверке», but the dot
+   is HOLLOW — the review handed the work back; the next move is the user's. */
+.rl-status.is-revision::before {
+  background: transparent;
+  border: 1.5px solid var(--route-upcoming);
+}
+
+/* The reviewer's comment — a calm band above the ledger, the same edge
+   construction as rl-archive / rl-before: a boundary edge, never a card. */
+.rl-feedback {
+  border-left: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--surface-context) 70%, transparent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px 14px;
+  margin: 14px 0;
+}
+.rl-feedback-k {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+/* The comment is the main NEW text of this screen: full contrast, fully
+   visible, never clamped — a whispering verdict would be worse than a loud one. */
+.rl-feedback-c {
+  font-size: 14.5px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.rl-feedback-to {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+}
+.rl-feedback-to-k {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Jump links: real controls with HUMAN labels («Запись 03 · Что заметил после
+   сделки») — raw section ids never render (DD-288). */
+.rl-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--route-upcoming);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  min-height: 32px;
+  cursor: pointer;
+  text-align: left;
+}
+.rl-jump:hover { color: var(--text-primary); }
+.rl-jump-arr { color: var(--gate-boundary); }
+
+/* After a resubmit the same comment stays as QUIET history — words only, no
+   links, no edges: context, not a task list. */
+.rl-feedback.is-history {
+  border-left-color: var(--divider-strong);
+  background: none;
+  padding: 10px 12px;
+  margin: 14px 0 0;
+}
+.rl-feedback.is-history .rl-feedback-c {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+/* The pass line: words, not a meter (DD-274 applied to the revision). */
+.rl-pass {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.rl-pass b { color: var(--text-primary); font-weight: 600; }
+
+/* In-flow pass movement — a link in the text, never a step control. */
+.rl-pass-next {
+  font: inherit;
+  font-size: 13px;
+  color: var(--route-upcoming);
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 32px;
+  cursor: pointer;
+}
+.rl-pass-next:hover { color: var(--text-primary); }
+.rl-pass-hint { margin: 10px 0 0; }
+
+/* «требует внимания» — a fact among facts: the same metadata size as
+   «заполнена», in the review family. Never red, never shouting. */
+.rl-attn {
+  font-size: 11.5px;
+  color: var(--route-upcoming);
+  white-space: nowrap;
+}
+.rl-state.is-attn { color: var(--route-upcoming); }
+
+/* A flagged OPEN section keeps the D3-B construction — light instead of a
+   border — but the light is the review hue, not the signal hue. */
+.rl-open.is-attn { border-left-color: var(--gate-boundary); }
+
+/* The flagged reflection: the same cold review edge on the third material,
+   plus a small hollow marker beside its heading. */
+.rl-refl.is-attn {
+  border-left: 2px solid var(--gate-boundary);
+  border-radius: 0 12px 12px 0;
+}
+.rl-attn-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1.5px solid var(--gate-boundary);
+  background: transparent;
+}
+
+/* Mobile strip: an attention ring around a flagged entry's dot. The dot itself
+   stays a record indicator (filled/open) — «flagged» is an independent fact,
+   and the words on the section carry it too (DD-232). */
+.rl-sd.is-attn {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gate-boundary) 38%, transparent);
+}
+
+/* Screen-reader-only text (mirrors the shared VisuallyHidden primitive). */
+.rl-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------- approved (D3-D) — the calm terminal verdict ----------------
+ *
+ * The approved state stays inside the Evidence Ledger world: NO celebration
+ * hero, NO confetti, NO large green surface, NO dashboard card. Green is the
+ * successful-action family (DD-284), used here only as a small chip and a thin
+ * boundary edge — the report is simply, quietly, accepted. Nothing financial is
+ * shown (no balance, no amount, no remainder, no percentage, no Pocket link) and
+ * approvedAt is stored but never rendered.
+ */
+
+.rl-band.is-approved {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 14px;
+}
+
+/* «Одобрено» chip: the «На проверке» construction, in the completed/success
+   family, with a SOLID filled dot — the verdict has landed. Calm, not loud. */
+.rl-status.is-approved {
+  color: var(--route-completed);
+  border-color: color-mix(in srgb, var(--route-completed) 42%, transparent);
+  background: color-mix(in srgb, var(--route-completed) 10%, transparent);
+}
+.rl-status.is-approved::before {
+  background: var(--route-completed);
+}
+
+.rl-approved-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* The next step on the approved screen: the checkpoint requirement, target only.
+   A thin boundary edge — never a card, never a green panel. */
+.rl-next {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--divider-strong);
+}
+.rl-next-k {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.rl-next-req {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* The approved end area reuses .rl-end (row on desktop, stacked on mobile). The
+   exits column stacks the primary CTA above the quiet secondary link. */
+.rl-end.is-approved .rl-exits {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.rl-end.is-approved .rl-exit {
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .rl-end.is-approved .rl-exits { width: 100%; }
+  .rl-end.is-approved .rl-btn { width: 100%; }
+}

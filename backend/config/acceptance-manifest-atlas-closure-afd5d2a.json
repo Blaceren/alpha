@@ -1,0 +1,350 @@
+{
+  "schema": "ata.acceptance-manifest/1",
+  "phase": "AFD-5D2A",
+  "description": "The AGENT-FOUNDATION-1 inventory carried forward verbatim, plus the AFD-5D2A Atlas contract closure suite. The RC entries are present so a regression caused by the new status/sufficiency/supportTier/comparison contract fails THIS sweep rather than being discovered later.",
+  "defaultTimeoutMs": 900000,
+  "runnable": [
+    {
+      "script": "test:regression:acceptance-manifest"
+    },
+    {
+      "script": "test:regression:affiliate-analytics"
+    },
+    {
+      "script": "test:regression:affiliate-analytics-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:affiliate-attribution"
+    },
+    {
+      "script": "test:regression:affiliate-cohorts"
+    },
+    {
+      "script": "test:regression:affiliate-cohorts-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:affiliate-crm-management-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:affiliate-foundation"
+    },
+    {
+      "script": "test:regression:affiliate-leads"
+    },
+    {
+      "script": "test:regression:affiliate-leads-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:affiliate-leads-plan"
+    },
+    {
+      "script": "test:regression:ai-analyst"
+    },
+    {
+      "script": "test:regression:ai-analyst-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:captcha-turnstile"
+    },
+    {
+      "script": "test:regression:checkpoint-dev-simulator"
+    },
+    {
+      "script": "test:regression:crm-session"
+    },
+    {
+      "script": "test:regression:crm-staff-identity"
+    },
+    {
+      "script": "test:regression:crm-user-detail"
+    },
+    {
+      "script": "test:regression:crm-user-notes"
+    },
+    {
+      "script": "test:regression:crm-user-owner"
+    },
+    {
+      "script": "test:regression:crm-user-owner-history"
+    },
+    {
+      "script": "test:regression:crm-users"
+    },
+    {
+      "script": "test:regression:curriculum-admin-api"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-contract"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-lifecycle"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-runtime"
+    },
+    {
+      "script": "test:regression:curriculum-authoring"
+    },
+    {
+      "script": "test:regression:curriculum-checkpoint-honest-gate"
+    },
+    {
+      "script": "test:regression:curriculum-checkpoint-verification"
+    },
+    {
+      "script": "test:regression:curriculum-content-lifecycle"
+    },
+    {
+      "script": "test:regression:curriculum-content-read-progress"
+    },
+    {
+      "script": "test:regression:curriculum-content-schema"
+    },
+    {
+      "script": "test:regression:curriculum-definitions-api"
+    },
+    {
+      "script": "test:regression:curriculum-domain"
+    },
+    {
+      "script": "test:regression:curriculum-enrollment-command"
+    },
+    {
+      "script": "test:regression:curriculum-enrollment-schema"
+    },
+    {
+      "script": "test:regression:curriculum-first-slice-r2"
+    },
+    {
+      "script": "test:regression:curriculum-lesson-progress-schema"
+    },
+    {
+      "script": "test:regression:curriculum-level-completion"
+    },
+    {
+      "script": "test:regression:curriculum-level-start"
+    },
+    {
+      "script": "test:regression:curriculum-level-state"
+    },
+    {
+      "script": "test:regression:curriculum-package"
+    },
+    {
+      "script": "test:regression:curriculum-package-roundtrip"
+    },
+    {
+      "script": "test:regression:curriculum-phase1"
+    },
+    {
+      "script": "test:regression:curriculum-phase2"
+    },
+    {
+      "script": "test:regression:curriculum-phase3"
+    },
+    {
+      "script": "test:regression:curriculum-phase4"
+    },
+    {
+      "script": "test:regression:curriculum-phase4-http",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:curriculum-phase5"
+    },
+    {
+      "script": "test:regression:curriculum-promocode-xp"
+    },
+    {
+      "script": "test:regression:curriculum-read-api"
+    },
+    {
+      "script": "test:regression:curriculum-report-api"
+    },
+    {
+      "script": "test:regression:curriculum-report-approval"
+    },
+    {
+      "script": "test:regression:curriculum-report-attachments"
+    },
+    {
+      "script": "test:regression:curriculum-report-authoring"
+    },
+    {
+      "script": "test:regression:curriculum-report-required-when"
+    },
+    {
+      "script": "test:regression:curriculum-report-review"
+    },
+    {
+      "script": "test:regression:curriculum-report-schema"
+    },
+    {
+      "script": "test:regression:curriculum-report-submission"
+    },
+    {
+      "script": "test:regression:curriculum-report-zero-reward"
+    },
+    {
+      "script": "test:regression:curriculum-report-zero-reward-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:curriculum-resolver"
+    },
+    {
+      "script": "test:regression:curriculum-schema"
+    },
+    {
+      "script": "test:regression:curriculum-upgrade"
+    },
+    {
+      "script": "test:regression:curriculum-xp-api"
+    },
+    {
+      "script": "test:regression:curriculum-xp-ledger"
+    },
+    {
+      "script": "test:regression:curriculum-xp-level-state"
+    },
+    {
+      "script": "test:regression:curriculum-xp-schema"
+    },
+    {
+      "script": "test:regression:curriculum-zero-reward-completion"
+    },
+    {
+      "script": "test:regression:flag-policy-schema5"
+    },
+    {
+      "script": "test:regression:login-turnstile"
+    },
+    {
+      "script": "test:regression:pocket-affiliate-url"
+    },
+    {
+      "script": "test:regression:pocket-deposit-events"
+    },
+    {
+      "script": "test:regression:pocket-direct-postback"
+    },
+    {
+      "script": "test:regression:pocket-direct-postback-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:pocket-first-deposit"
+    },
+    {
+      "script": "test:regression:pocket-l1-owner"
+    },
+    {
+      "script": "test:regression:pocket-legacy-hardening"
+    },
+    {
+      "script": "test:regression:pocket-partner-adapter"
+    },
+    {
+      "script": "test:regression:pocket-partner-checkpoint-e2e",
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:pocket-security"
+    },
+    {
+      "script": "test:regression:pocket-trader-identity"
+    },
+    {
+      "script": "test:regression:prc1-cross-service-journey",
+      "timeoutMs": 3600000
+    },
+    {
+      "script": "test:regression:public-referral-url"
+    },
+    {
+      "script": "test:regression:registration-referral"
+    },
+    {
+      "script": "test:regression:sql-audit"
+    },
+    {
+      "script": "test:regression:withdrawal"
+    },
+    {
+      "script": "test:regression:agent-core"
+    },
+    {
+      "script": "test:regression:agent-core-security"
+    },
+    {
+      "script": "test:regression:agent-core-atlas"
+    },
+    {
+      "script": "test:regression:agent-core-plan"
+    },
+    {
+      "script": "test:regression:atlas-contract"
+    },
+    {
+      "script": "test:regression:atlas-matrix"
+    }
+  ],
+  "excluded": [
+    {
+      "script": "smoke:ci",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server. It is a deployment smoke test, not a source-level regression, and fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:integration",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:mvp",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server. It is a deployment smoke test, not a source-level regression, and fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:pocket-progression",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server. It is a deployment smoke test, not a source-level regression, and fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:production",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server. It is a deployment smoke test, not a source-level regression, and fails identically on the untouched base commit."
+    },
+    {
+      "script": "test:regression:affiliate-acquisition-http",
+      "classification": "excluded_by_environment",
+      "reason": "Same Cloudflare Siteverify round trip as above: the /go -> /register binding cannot complete without a verified CAPTCHA, because `register` is in ALWAYS_ENFORCED. Covered without egress by test:regression:affiliate-attribution and by the PRODUCT-RC-1 cross-service journey, which asserts the closed refusal and then drives the binding through the accepted service functions."
+    },
+    {
+      "script": "test:regression:affiliate-attribution-e2e",
+      "classification": "excluded_by_environment",
+      "reason": "Requires Cloudflare Turnstile test credentials (AFD3B2_TURNSTILE_TEST_SECRET / _SITE_KEY) AND a live HTTPS round trip to https://challenges.cloudflare.com/turnstile/v0/siteverify, whose URL is a hard-coded constant in src/lib/captcha/siteverify.ts. PRODUCT-RC-1 forbids creating external egress. It skips cleanly with a printed reason rather than asserting nothing silently. Its non-HTTP half is fully covered by test:regression:affiliate-attribution (99 assertions, isolated, no server)."
+    },
+    {
+      "script": "test:regression:login-turnstile-e2e",
+      "classification": "excluded_by_environment",
+      "reason": "Requires AFD3A3_TURNSTILE_TEST_SECRET, _SECRET_SPENT and _SITE_KEY plus a live Cloudflare Siteverify round trip. Forbidden by the PRODUCT-RC-1 no-egress rule. The login CAPTCHA contract itself is covered without egress by test:regression:captcha-turnstile (59 assertions) and test:regression:login-turnstile."
+    },
+    {
+      "script": "test:regression:pocket-first-deposit-e2e",
+      "classification": "excluded_by_environment",
+      "reason": "Requires AFD4_TURNSTILE_TEST_SECRET and the same Cloudflare round trip. Forbidden by the PRODUCT-RC-1 no-egress rule. First-deposit ingestion, idempotency, conflict handling and the absence of any balance write are covered without egress by test:regression:pocket-first-deposit (isolated) and by cross-service journey steps 17-20."
+    }
+  ],
+  "forbidden": [
+    {
+      "script": "test:regression:pocketcta-disposable-e2e",
+      "reason": "Reads the live POSTBACK_SECRET, sends a real callback to the live DEV backend and creates a live account. PRODUCT-RC-1 substitutes isolated coverage that uses a copied database, an isolated loopback backend, a synthetic secret and synthetic callbacks, and contacts nothing external: test:regression:pocket-l1-owner (enrolment owner, L1 completion, L2 unlock, zero XP, no balance, idempotent replay, conflicting identity refused, missing/invalid secret refused), test:regression:pocket-direct-postback and test:regression:pocket-direct-postback-e2e (callback accepted, identity bound exactly once, unknown clickid refused, duplicate/conflicting playerid refused), test:regression:pocket-affiliate-url and test:regression:public-referral-url (the referral link is the external affiliate URL built from a public origin), and the PRODUCT-RC-1 cross-service journey (the Academy-visible L1-complete/L2-available state). The only case with NO isolated equivalent is its final assertion that the LIVE primary learner is still at Level 1 — that is a statement about live data, not about this source, and PRODUCT-RC-1 verifies it directly in the closing gates instead."
+    }
+  ]
+}

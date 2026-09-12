@@ -1,0 +1,340 @@
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--background-field);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  /*
+   * AFD-3A3. `.login` is a grid and this is its item; a grid item's default
+   * `min-width: auto` is its CONTENT minimum, so a child that cannot shrink
+   * below its intrinsic width pushes the track — and therefore the page — wider
+   * than the viewport. Measured at 320px: the card reached 358px and the
+   * document scrolled sideways.
+   *
+   * The Turnstile widget is exactly such a child (a fixed-width third-party
+   * frame), and adding it to /login is what made this visible here. It was
+   * already true on /register, and to a smaller degree on /login before any
+   * widget existed. `min-width: 0` lets the card shrink to the viewport and
+   * hands the overflow to `.auth-captcha__frame`, which scrolls.
+   */
+  min-width: 0;
+  padding: 32px 28px;
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  background: var(--surface-context);
+}
+
+.login-brand {
+  font-family: var(--font-display);
+  font-weight: 640;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.login-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 680;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.login-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Flex items default to `min-width: auto` for the same reason as above. */
+  min-width: 0;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.login-field label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.login-field input {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+}
+
+.login-field input:disabled {
+  opacity: 0.6;
+}
+
+.login-error {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--signal-active) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 40%, transparent);
+  border-radius: 10px;
+}
+
+.login-error__ref {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.login-submit {
+  min-height: 46px;
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--background-base);
+  background: var(--signal-active);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* ------------------------------------------------------------------ register
+   The registration surface (AFD-3A) reuses `.login` / `.login-card` for the
+   anonymous auth shell and adds only what a longer, multi-field form needs.
+   Nothing here has a fixed width, so the card stays inside 320px viewports. */
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.register-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.register-field label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.register-field__optional {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.register-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+}
+
+.register-field input:disabled {
+  opacity: 0.6;
+}
+
+.register-field__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Errors are marked by an icon glyph and by text, never by colour alone. */
+.register-field__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.register-field__error::before {
+  content: "⚠ ";
+}
+
+.register-error {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--signal-active) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 40%, transparent);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.register-error::before {
+  content: "⚠ ";
+}
+
+.register-error__ref {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.register-referral {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.register-referral--warn::before {
+  content: "⚠ ";
+}
+
+.register-submit {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--background-base);
+  background: var(--signal-active);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.register-submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/*
+ * Turnstile (AFD-3A2).
+ *
+ * The widget is a third-party iframe whose intrinsic width is roughly 300px in
+ * its normal size. The container is therefore allowed to SCROLL rather than
+ * clip: at 390px with the card's padding the frame fits, but a compact
+ * viewport, a large text-size preference or the interactive challenge's taller
+ * layout must never cut the challenge off — an unreachable checkbox is an
+ * unregisterable user.
+ */
+.auth-captcha {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.auth-captcha__frame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.auth-captcha__status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.auth-captcha__status:empty {
+  display: none;
+}
+
+/* Same treatment as an inline error: marked by glyph and text, not colour. */
+.auth-captcha--failed {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--signal-active) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 40%, transparent);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.auth-captcha--failed::before {
+  content: "⚠ ";
+}
+
+.auth-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.auth-status:empty {
+  display: none;
+}
+
+.register-alt {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.register-alt__link {
+  color: var(--signal-active);
+  font-weight: 600;
+}
+
+.register-success__title {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 660;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.register-success__body {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.register-success__email {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* Focus must stay visible for keyboard users on every interactive control. */
+.register-form :is(input, button, a):focus-visible,
+.register-success :is(button, a):focus-visible,
+.register-error:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 2px;
+}

@@ -1,0 +1,72 @@
+/**
+ * The level start control (L2START-PLAYER-1). Existing tokens only — no new
+ * palette, no redesign of the level page. It reuses the same surface treatment
+ * as the checkpoint gate so an available level and a checkpoint read as the same
+ * kind of "one action lives here" block.
+ */
+
+.lvl-start {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+}
+
+.lvl-start__title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+.lvl-start__explain {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.lvl-start__action {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-raised, transparent);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: border-color 120ms ease, opacity 120ms ease;
+}
+
+.lvl-start__action:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+}
+
+.lvl-start__action:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--text-primary));
+  outline-offset: 2px;
+}
+
+.lvl-start__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The result line. Focusable programmatically so a keyboard or screen-reader
+   user is taken to the answer rather than left on the button. */
+.lvl-start__status {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.lvl-start__status[data-tone="error"] {
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lvl-start__action {
+    transition: none;
+  }
+}

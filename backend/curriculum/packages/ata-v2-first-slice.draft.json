@@ -1,0 +1,254 @@
+{
+  "schemaVersion": "ata.curriculum.package/1",
+  "minImporterVersion": 1,
+  "packageCode": "ata-v2.first-slice",
+  "packageRevision": 1,
+  "status": "draft",
+  "curriculumCode": "ata-v2",
+  "curriculumVersionNumber": 1,
+  "curriculumTitle": "Alfa Trade Academy — 100-уровневый путь",
+  "curriculumDescription": "Первый срез: модуль 1 «Первое знакомство», уровни 1–4.",
+  "locale": "ru",
+  "createdFrom": "academy-web@4b01f22 src/data/curriculum/fixture.ts (LEVEL_ROWS 1-4, MODULE_ROWS 1) — canonical: les-prog.txt + docs/CURRICULUM_AND_UNLOCKS.md",
+  "approval": {
+    "approvedBy": null,
+    "approvedAt": null,
+    "note": "DRAFT. Structure (codes, titles, types, order, gates) is authoritative. Lesson body, video reference, assessment and report prompt are NOT authoritative and are omitted rather than invented — see 11_CONTENT_APPROVAL_PACK.md."
+  },
+  "pendingApprovals": [
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "lesson_content",
+      "classification": "MISSING",
+      "detail": "No authoritative lesson body for level 2. The Academy authors exactly one full lesson (level 18) and one stub (level 19); level 2 has none.",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "video_reference",
+      "classification": "MISSING",
+      "detail": "No approved video/media reference or asset URL exists for level 2.",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "estimated_duration",
+      "classification": "MISSING",
+      "detail": "No approved estimated duration for level 2.",
+      "blocksReadiness": false
+    },
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "assessment",
+      "classification": "MISSING",
+      "detail": "No approved question set for level 2. The only authored Academy question bank belongs to level 18 and is prototype content for a different level.",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "correct_answers",
+      "classification": "MISSING",
+      "detail": "No authoritative correct answers or explanations for level 2. Answers must never be inferred or generated.",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+      "element": "pass_policy",
+      "classification": "MISSING",
+      "detail": "No approved pass threshold or retry/attempt policy for level 2.",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
+      "element": "report_prompt",
+      "classification": "MISSING",
+      "detail": "The Academy report fixture is declared PROTOTYPE-ONLY and explicitly NOT canonical curriculum content (DD-268), with editorialNote «Структура задания уточняется редакцией».",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
+      "element": "report_fields",
+      "classification": "MISSING",
+      "detail": "Required fields, min/max lengths, attachment policy and draft policy for the level 3 report are not approved. Only entryCount=5 is dictated by the canonical artifact «Отчёт по 5 demo-сделкам».",
+      "blocksReadiness": true
+    },
+    {
+      "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
+      "element": "report_rubric",
+      "classification": "MISSING",
+      "detail": "Mentor acceptance criteria are not approved. LevelReportBinding requires a reportRubricVersion, so the report cannot be bound until rubric criteria exist. Criteria must not be invented.",
+      "blocksReadiness": true
+    }
+  ],
+  "contentFingerprint": "4a8fde320fff8e5fb9c46f01415c8189d1c142a52c6c288f25c05cac0d42e229",
+  "modules": [
+    {
+      "moduleCode": "module.01",
+      "moduleNumber": 1,
+      "title": "Первое знакомство",
+      "description": "Регистрация Pocket, устройство академии и первые demo-сделки.",
+      "learningObjective": "Пройти регистрацию, понять устройство академии и сделать первые demo-сделки.",
+      "checkpointLevelCode": "v2.l004.kontrolnaya-tochka-50",
+      "levels": [
+        {
+          "levelCode": "v2.l001.registraciya-pocket",
+          "levelNumber": 1,
+          "type": "external_event",
+          "title": "Регистрация Pocket",
+          "shortDescription": "Регистрация и подтверждение аккаунта Pocket",
+          "learningObjective": "Зарегистрировать и подтвердить аккаунт Pocket.",
+          "completionMethod": "pocket_postback",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": {
+            "completionSource": "external_event",
+            "integrationCode": "pocket.registration",
+            "selfCompletable": false,
+            "blockedExplanation": [
+              {
+                "locale": "ru",
+                "text": "Уровень открывается после регистрации и подтверждения аккаунта Pocket. Подтверждение приходит от внешней системы — его нельзя отметить вручную."
+              }
+            ],
+            "provenance": {
+              "classification": "EXISTING_ACADEMY_SOURCE",
+              "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+              "sourceRef": "LEVEL_ROWS[0] artifact «Регистрация и подтверждение аккаунта Pocket»",
+              "revision": "4b01f22",
+              "confidence": "high",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "Explanation copy is derived from the canonical artifact string; wording is editorial and may be refined without changing the gate."
+            }
+          },
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[0]",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": null
+          }
+        },
+        {
+          "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+          "levelNumber": 2,
+          "type": "lesson",
+          "title": "Как устроен Alfa Trade Academy",
+          "shortDescription": "",
+          "learningObjective": "Понять устройство академии: модули, уровни и контрольные точки.",
+          "completionMethod": "assessment_pass",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l001.registraciya-pocket"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": null,
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[1] kind=video-test",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": "Structure only. Lesson body, video reference, duration, questions, options, correct answers, explanations, pass threshold and retry policy are MISSING — Academy authors exactly one lesson (level 18) and none for level 2."
+          }
+        },
+        {
+          "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
+          "levelNumber": 3,
+          "type": "report",
+          "title": "Первые пять demo-сделок",
+          "shortDescription": "Отчёт по 5 demo-сделкам",
+          "learningObjective": "Совершить пять demo-сделок и описать их в отчёте.",
+          "completionMethod": "report_approval",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l002.kak-ustroen-alfa-trade-academy"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": null,
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[2] kind=report, artifact «Отчёт по 5 demo-сделкам»",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": "Structure only. The report prompt, fields, limits, attachment/draft policy and mentor acceptance criteria are MISSING: the Academy report fixture declares itself PROTOTYPE-ONLY and NOT canonical (DD-268) and carries editorialNote «Структура задания уточняется редакцией». Only entryCount=5 is dictated by the canonical artifact."
+          }
+        },
+        {
+          "levelCode": "v2.l004.kontrolnaya-tochka-50",
+          "levelNumber": 4,
+          "type": "financial_checkpoint",
+          "title": "Контрольная точка $50",
+          "shortDescription": "",
+          "learningObjective": "Подтвердить баланс контрольной точки модуля.",
+          "completionMethod": "balance_check",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l003.pervye-pyat-demo-sdelok"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": {
+            "completionSource": "financial_checkpoint",
+            "integrationCode": "checkpoint.module-01",
+            "selfCompletable": false,
+            "blockedExplanation": [
+              {
+                "locale": "ru",
+                "text": "Контрольная точка подтверждается по балансу счёта. Отметить её вручную в академии нельзя."
+              }
+            ],
+            "provenance": {
+              "classification": "EXISTING_ACADEMY_SOURCE",
+              "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+              "sourceRef": "LEVEL_ROWS[3] kind=checkpoint «Контрольная точка $50»",
+              "revision": "4b01f22",
+              "confidence": "medium",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "The $50 threshold appears in the canonical level title; the checkpoint evaluation rule itself lives in the checkpoint engine and is not restated here."
+            }
+          },
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[3]",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": null
+          }
+        }
+      ]
+    }
+  ]
+}

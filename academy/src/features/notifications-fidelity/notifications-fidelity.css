@@ -1,0 +1,765 @@
+/*
+ * NOTIFICATIONS — the frozen NotationLedger stylesheet, namespaced for the
+ * product.
+ *
+ * SOURCE OF TRUTH: NotificationsATA @ c73b854446b8d6016a570d4cc5b60ba358c71409 —
+ * `system/tokens.css` followed by `system/notifications.css`, concatenated in
+ * the order the frozen page links them. Every value is carried across
+ * UNCHANGED, and the transform proves it: 309 declarations in, 309 out, 2
+ * changed, and those two are the font bindings below. 94 selectors, 0 escaping
+ * the namespace, 0 remote URLs, no !important on either side.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The two families are bound to the product's locally vendored faces —
+ *    "ATA Manrope" and "ATA IBM Plex Mono". The stacks are otherwise identical.
+ *
+ * 2. Every selector is namespaced under `.nt`:
+ *      :root                  -> .nt   (the three token tiers scope to this surface)
+ *      body                   -> .nt   (field, colour and type land on the root)
+ *      html                   -> html.nt-root-scope  (see 3)
+ *      *, a, h1, p, ul, li, … -> .nt *, .nt a, …
+ *      :focus-visible         -> .nt :focus-visible
+ *      .sr-only, .n-*         -> .nt .sr-only, .nt .n-*
+ *
+ * 3. `html.nt-root-scope` carries the frozen `html,body{margin:0;padding:0}`
+ *    reset, and NOTHING EVER ADDS THAT CLASS. It is kept so the declaration
+ *    count balances; the real document reset is the product's own.
+ *
+ * 4. `.nt .n-page` is the surface container, exactly as in the frozen document
+ *    where it was `<main class="n-page">`. Here the shell owns the one `<main>`
+ *    landmark, so the class lands on a plain element inside it — the geometry is
+ *    unchanged and no second landmark is created. The shell drops its own
+ *    padding for a restored surface (`.home-main--frozen`).
+ *
+ * 5. `.nt .nav-unread` is carried across and never rendered. In the frozen
+ *    system it is the Notifications-owned mark inside that prototype's own
+ *    shell; the product keeps its accepted shell and its accepted dot, and what
+ *    the restoration changes about the indicator is its TRUTH, not its pixels —
+ *    see components/shell/notification-button.tsx.
+ *
+ * Adding `.nt ` raises every rule's specificity by the same amount, so the
+ * cascade order inside the surface is preserved exactly.
+ */
+
+/* --- system/tokens.css --- */
+/* ATA NOTIFICATIONS — PHASE 3 — DESIGN SYSTEM — TOKENS
+   =====================================================================
+   The canonical token set for the Notifications surface, direction C —
+   NOTATION LEDGER.
+
+   THREE TIERS, and the boundary between them is the whole point:
+
+     TIER 1  FOUNDATION      accepted ATA. Notifications does not own it and
+                             does not extend it. Restated verbatim.
+     TIER 2  SHELL CONTRACT  the variable names the canonical Academy shell
+                             consumes. Notifications supplies values it did
+                             not choose; it owns none of these meanings.
+     TIER 3  SURFACE SYSTEM  Phase 3 owns this tier, and only this tier.
+
+   WHAT PHASE 3 DECIDED. The Phase-2 prototype carried ~40 loose numeric
+   literals. Phase 2's freeze recorded that "nothing here is a Design-System
+   token; the exact value belongs to a later phase". This file is that later
+   phase. Every literal is now a named role on a scale, and every value that
+   MOVED is recorded in ATA-NOTIFICATIONS-PHASE3-DRIFT-CONTROL.md with its
+   measured pixel consequence. Nothing moved by more than 2px.
+
+   WHAT PHASE 3 DID NOT DECIDE. No colour value is invented, adjusted or
+   added. The neutral ramp is the accepted ATA ramp, and the measured
+   contrast shortfall on the meta tone is recorded as N3-H-01 rather than
+   quietly repaletted — fixing it needs authority this phase does not have.
+   ===================================================================== */
+
+.nt {
+
+  /* ============================================ TIER 1 — FOUNDATION ====
+     Accepted ATA. Source: the accepted foundation restated in the Phase-2
+     evidence (design/foundation.css), itself taken from the accepted ATA
+     foundation tier. No value here is a Notifications decision. */
+
+  --ink-900:#0B0D0A;  --ink-800:#11140F;  --ink-700:#1A1F18;
+  --sig-300:#D9FF91;  --sig-500:#C7F76D;  --sig-600:#B7EA5D;  --sig-700:#A8D84F;
+  --text-100:#EDF0EA; --text-300:#A6ADA0; --text-500:#6E766A; --text-700:#4C534A;
+
+  --ui:"ATA Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"ATA IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+
+  /* ======================================== TIER 2 — SHELL CONTRACT ====
+     design/shell.css is the canonical Academy shell and is a PROTECTED
+     Phase-2 artifact. It is reused byte-for-byte, never edited.
+
+     PHASE-3A CORRECTION. Phase 3 listed --txt-3 and --txt-4 here too. That
+     was wrong, and the evidence is direct: design/shell.css reads exactly
+     eight variables — --ease, --line-1, --line-2, --mono, --sig-500,
+     --txt-1, --txt-2, --ui — and neither --txt-3 nor --txt-4 is among them.
+     They are Notifications-owned and now sit in Tier 3, which is what made
+     the contrast repair possible without touching the shell at all. */
+
+  --txt-1:var(--text-100);
+  --txt-2:var(--text-300);
+
+  --line-1:rgba(255,255,255,.07);
+  --line-2:rgba(255,255,255,.12);
+  --line-3:rgba(255,255,255,.20);
+
+  --ease:cubic-bezier(.2,0,0,1);
+
+
+  /* ======================================= TIER 3 — SURFACE SYSTEM ====
+     Phase 3 owns everything below. */
+
+  /* ---- NOTIFICATIONS-LOCAL SEMANTIC NEUTRAL --------------------------
+     NOT an ATA global brand colour. NOT an extension of the accepted ATA
+     ramp. A Notifications-local role, and it stays local until global
+     design-system authority adopts it separately.
+
+     WHY IT EXISTS. Phase 3 mapped the tertiary text role to --text-500,
+     which measures 4.15:1 against the page ground — below the 4.5:1 needed
+     for normal-size informational text. That role carries every timestamp,
+     every context line, every trace line, the scoped action-presence
+     sentence, the read-state reason and every state-block support line.
+
+     WHY NOT AN EXISTING VALUE. The accepted ATA ramp is four steps —
+     #EDF0EA · #A6ADA0 · #6E766A · #4C534A — and the sibling systems carry
+     the identical four. There is nothing between #A6ADA0 (8.46:1) and
+     #6E766A (4.15:1). Promoting tertiary text to #A6ADA0 would have
+     collapsed it into the supporting tone and flattened the three-step
+     hierarchy Direction C depends on. So neither precedence step 1 nor 2
+     could be satisfied, and a local role is the authorised third option.
+
+     WHAT IT IS. The same neutral axis as the accepted ramp — G is the
+     lightest channel, R sits 7 below it, B sits 12 below — lifted just far
+     enough to clear the threshold with margin and no further:
+
+         #7D8478   5.06:1 on --ink-900   ·  12.4% above the 4.5 floor
+         hierarchy: 16.96  >  8.46  >  5.06     (was 16.96 > 8.46 > 4.15)
+
+     It is neutral, non-Signal, non-blue, non-amber, non-red, non-gold and
+     carries no category meaning. This is a hierarchy REPAIR, not hierarchy
+     removal: tertiary text is still visibly tertiary. */
+  --n-neutral-tertiary:#7D8478;
+
+  /* Notifications-owned text roles. Not read by the canonical shell. */
+  --txt-3:var(--n-neutral-tertiary);
+  --txt-4:var(--text-700);   /* NON-TEXT ONLY — see §contrast below */
+
+  /* The shell unread mark is a NON-TEXT mark carrying an sr-only text
+     equivalent, and its salience was tuned and accepted in Phase 2. It is
+     pinned to the original neutral rather than following --txt-3, for two
+     reasons: brightening it would make unread compete with Signal, and it
+     renders inside the canonical shell, where this repair must not move a
+     single pixel. */
+  --mark-nav-tone:var(--text-500);
+
+  /* ---- SPACE ---------------------------------------------------------
+     A 2px-based ramp, fine-grained at the bottom because the notation
+     layer is small and coarse at the top because the register breathes.
+     Twelve steps; every one is used. */
+  --sp-1:2px;   --sp-2:4px;   --sp-3:6px;   --sp-4:8px;
+  --sp-5:10px;  --sp-6:12px;  --sp-7:16px;  --sp-8:22px;
+  --sp-9:28px;  --sp-10:34px; --sp-11:48px; --sp-12:72px;
+
+  /* ---- TYPE ROLES ----------------------------------------------------
+     Eight roles. Each is a ROLE, not a size: the surface never sets a font
+     size directly. `--tr-lead` deliberately serves both the change
+     statement and the page-level failure lead — Phase 2 had them at 15.5
+     and 15, which was a difference nobody chose. */
+  --tr-page-title-size:23px;   --tr-page-title-weight:650;
+  --tr-page-title-track:-.015em; --tr-page-title-leading:1.2;
+
+  --tr-lead-size:15.5px;       --tr-lead-weight:600;  --tr-lead-leading:1.45;
+  --tr-lead-weight-read:500;   /* consumption's second channel — see §signal */
+
+  --tr-empty-lead-size:16px;   --tr-empty-lead-weight:550;
+  --tr-empty-lead-leading:1.4;
+
+  --tr-support-size:13.5px;    --tr-support-weight:400; --tr-support-leading:1.55;
+  --tr-meta-size:12.5px;       --tr-meta-weight:400;    --tr-meta-leading:1.45;
+
+  --tr-action-size:13px;       --tr-action-weight:600;
+  --tr-control-size:12.5px;    --tr-control-weight:600;
+
+  --tr-notation-size:11px;     --tr-notation-track:.04em;
+  --tr-notation-leading:1.35;
+
+  /* ---- MEASURE -------------------------------------------------------
+     Two measures, not four. Phase 2 used 60/64/56/52ch with no stated
+     reason; the register column is one measure and the state blocks —
+     which are not the register — are narrower so they read as asides. */
+  --measure-page:900px;
+  --measure-prose:60ch;
+  --measure-aside:52ch;
+
+  /* ---- NOTATION GEOMETRY ---------------------------------------------
+     The strip is the direction. These four values ARE Direction C, and
+     the guards in design/phase2-*-guard.md constrain what may be added to
+     them: nothing continuous, nothing connected, no third mark. */
+  --note-col:96px;
+  --note-gap:var(--sp-8);
+  --note-indent:calc(var(--note-col) + var(--note-gap));
+  --mark-action-w:14px;  --mark-action-h:2px;
+  --mark-unread-size:6px;
+  --mark-nav-w:8px;      --mark-nav-h:2px;
+
+  /* ---- SIGNAL --------------------------------------------------------
+     Signal means action · focus · selection · current interaction. It is
+     never unread, never new, never success, never important, never urgent.
+     Three roles, and each names the ONE thing it is allowed to mean. */
+  --sig-action:var(--sig-500);   /* a confirmed CURRENT action           */
+  --sig-edge:var(--sig-700);     /* the boundary of an action control    */
+  --sig-focus:var(--sig-500);    /* current interaction                  */
+  --sig-wash:rgba(199,247,109,.09);
+
+  /* ---- CONFIDENCE ----------------------------------------------------
+     THERE IS NO CONFIDENCE TOKEN, AND THAT IS THE REPAIR.
+
+     Phase 3 expressed reduced confidence as `opacity:.82` on the register
+     container. Opacity composites every descendant toward the ground, so it
+     lowered the contrast of ALL text in the register — taking the tertiary
+     role to 3.14:1, worst in the one state where a learner most needs to
+     read carefully.
+
+     The repaired principle:
+
+         VISUAL CONFIDENCE MUST NOT EXCEED DATA CONFIDENCE,
+         BUT REDUCED DATA CONFIDENCE MUST NEVER BE COMMUNICATED
+         BY MAKING REQUIRED TEXT UNREADABLY LOW-CONTRAST.
+
+     Staleness is owned by the page-level failure state, in words, in an
+     announced alert — which is the Phase-2A principle it already had. The
+     register keeps its full semantic roles and stays completely readable.
+     The records are still visibly not-current, by four structural facts:
+     no action-presence statement, no Signal marks, no handoffs, and a
+     failure block directly above them in the same grid.
+
+     Removing the token rather than retuning it is deliberate. With no
+     confidence value in the system, it is structurally impossible for the
+     confidence mechanism to degrade text — a stronger guarantee than any
+     carefully chosen number. See ATA-NOTIFICATIONS-PHASE3A-CONFIDENCE-TREATMENT.md. */
+
+  /* ---- CONTROLS ------------------------------------------------------ */
+  --control-radius:2px;
+  --control-pad-y:8px;   --control-pad-x:14px;
+  --control-pad-y-touch:10px;
+  --target-min:40px;     /* desktop control height floor                 */
+  --target-min-touch:44px;
+
+  /* ---- MOTION --------------------------------------------------------
+     One duration. A register of record does not animate. */
+  --dur-quick:140ms;
+
+  /* ---- FOCUS ---------------------------------------------------------
+     One focus treatment for the whole surface. Signal is legitimate here:
+     focus IS current interaction. No glow, no animation. */
+  --focus-width:2px;
+  --focus-offset:2px;
+}
+
+/* ---- CONTRAST CONTRACT -----------------------------------------------
+   Measured, not asserted. Ratios against --ink-900 #0B0D0A, published in
+   system/phase3a-contrast.json and RECOMPUTED by system/qa-phase3a.py on
+   every run, so this table cannot drift from the tokens it describes.
+
+     --text-100          16.96:1   statement, page title       AAA
+     --sig-500           15.75:1   action label and mark       AAA
+     --sig-700           11.71:1   control edge                AAA
+     --text-300           8.46:1   supporting prose            AAA
+     --n-neutral-tertiary 5.06:1   meta · time · context ·
+                                   trace · scoped presence ·
+                                   state support               AA   (was 4.15)
+     --text-700           2.46:1   NON-TEXT ONLY               below 3:1
+
+   --ink-900 is the ONLY ground carrying text on this surface. --ink-800 is
+   declared and unused; --ink-700 appears solely behind loading placeholder
+   bones, which are non-text and aria-hidden. QA asserts that no text role
+   is used on either.
+
+   THREE RULES, all enforced by QA:
+
+   1. Every normal-size informational text role must reach >= 4.5:1 on
+      every ground it is canonically used on.
+
+   2. --txt-4 / --text-700 MUST NOT carry text. Its only Phase-2 use was
+      the per-record staleness marker, removed by the Phase-2A repair. It
+      survives for the non-text tones that legitimately need a deep neutral.
+
+   3. No mechanism — opacity, filter, blend or otherwise — may reduce a
+      required text role below the threshold. Confidence is expressed at
+      page level, in words. There is no confidence token to misuse.
+
+   SCOPE. This closes the Notifications design-system foundation defect
+   only. It does NOT establish a global ATA accessibility colour system,
+   and it makes no claim that ATA or Notifications is WCAG compliant. */
+
+.nt * {box-sizing:border-box}
+html.nt-root-scope,
+.nt {margin:0;padding:0}
+.nt {
+  background:var(--ink-900);
+  color:var(--txt-1);
+  font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.nt h1,
+.nt h2,
+.nt h3,
+.nt p,
+.nt ul,
+.nt ol,
+.nt li,
+.nt figure {margin:0;padding:0}
+.nt ul,
+.nt ol {list-style:none}
+.nt a {color:inherit}
+
+.nt :focus-visible {
+  outline:var(--focus-width) solid var(--sig-focus);
+  outline-offset:var(--focus-offset);
+  border-radius:var(--control-radius);
+}
+
+.nt .sr-only {
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+
+/* --- system/notifications.css --- */
+/* ATA NOTIFICATIONS — PHASE 3 — DESIGN SYSTEM — SURFACE COMPONENTS
+   =====================================================================
+   The reusable component grammar of direction C — NOTATION LEDGER.
+
+   ONE GRID. `.n-grid` — a 96px notation column plus the content column —
+   is shared by the page-level statement, every record, and every state
+   block. That is what makes the left margin read as ONE continuous
+   scannable strip rather than as a per-component decoration. It is also
+   the single largest drift risk in the direction, so read
+   design/phase2-path-adjacency-guard.md before adding anything to it.
+
+   NO RULES, NO GROUNDS. Separation is whitespace plus grid alignment.
+   A record has no border, no background and no container. Adding either
+   turns this direction into Direction B, which was not selected.
+
+   THREE THINGS THIS FILE MAY NEVER DO, each of which was an accepted
+   Phase-1 or Phase-2 ruling rather than a preference:
+
+     · bind Signal to consumption — unread is consumption, not action
+     · make the row a click target — the handoff is an explicit control
+     · express any state by colour alone — every mark carries text
+
+   Naming: `n-` is the Notifications surface system. `.nav-unread` is the
+   one exception: design/shell.css is PROTECTED and already reserves that
+   class as the Notifications-owned slot inside the canonical shell.
+   ===================================================================== */
+
+
+/* ═══════════════════════════════════════════════ 1 · PAGE ════════════ */
+
+.nt .n-page {padding:var(--sp-10) var(--sp-10) var(--sp-12)}
+.nt .n-page__inner {max-width:var(--measure-page)}
+
+.nt .n-page__title {
+  font-size:var(--tr-page-title-size);
+  font-weight:var(--tr-page-title-weight);
+  letter-spacing:var(--tr-page-title-track);
+  line-height:var(--tr-page-title-leading);
+  color:var(--txt-1);
+}
+
+/* THE GRID. Every direct child of the page body opts into it, so the
+   notation column is continuous down the page even where a component has
+   nothing to put in it. The empty state relies on exactly that: the strip
+   persists, empty, so the page reads as the same object with nothing in
+   it rather than as a different page. */
+.nt .n-grid {
+  display:grid;
+  grid-template-columns:var(--note-col) minmax(0,1fr);
+  column-gap:var(--note-gap);
+}
+
+
+/* ══════════════════════════════════ 2 · ACTION PRESENCE ═════════════
+   The page-level answer to «требуется ли от меня что-то теперь?».
+   Binary and fail-closed: PRESENT, NONE (scope-limited), or absent
+   entirely. There is no third visual state, because there is no third
+   truth — when actionability cannot be confirmed the component is not
+   rendered at all. */
+
+.nt .n-presence {margin-top:var(--sp-7);align-items:baseline}
+.nt .n-presence__notation {
+  grid-column:1;justify-self:end;
+  display:flex;justify-content:flex-end;padding-top:7px;
+}
+.nt .n-presence__mark {
+  display:block;
+  width:var(--mark-action-w);height:var(--mark-action-h);
+  background:var(--sig-action);
+}
+.nt .n-presence__text {
+  grid-column:2;
+  font-size:var(--tr-support-size);
+  line-height:var(--tr-support-leading);
+  color:var(--txt-2);
+}
+
+/* NONE is scope-limited, never a completion claim. It is deliberately
+   quieter than PRESENT and its mark is neutral and shorter — an absence
+   of current action is not itself an action. */
+.nt .n-presence[data-presence="none"] .n-presence__mark {
+  background:var(--line-2);width:var(--sp-5);
+}
+.nt .n-presence[data-presence="none"] .n-presence__text {color:var(--txt-3)}
+
+
+/* ═══════════════════════════════════════════ 3 · REGISTER ═══════════ */
+
+.nt .n-register {
+  margin-top:var(--sp-9);
+  display:flex;flex-direction:column;gap:var(--sp-9);
+}
+
+/* CONFIDENCE — PHASE-3A REPAIR.
+   `data-confidence="last-known"` remains, and it carries NO visual
+   reduction. There is deliberately no rule here.
+
+   Phase 3 set `opacity:.82` on this container. Opacity composites every
+   descendant toward the ground, so it lowered the contrast of all text in
+   the register at once — taking the tertiary role to 3.14:1 in the one
+   state where a learner most needs to read carefully. Reduced data
+   confidence must never be communicated by making required text unreadable.
+
+   Staleness is owned by the page-level failure block, in words, announced
+   as an alert. The register keeps full semantic roles and stays readable.
+   It is still visibly not-current by four structural facts: no
+   action-presence statement, no Signal marks, no handoffs, and the failure
+   block directly above it in this same grid.
+
+   The attribute is retained because it is SEMANTIC — the renderer sets it
+   from the request state, and QA asserts it appears exactly once and only
+   on a container. What is gone is the visual mechanism, not the truth. */
+
+
+/* ══════════════════════════════════════════════ 4 · RECORD ══════════ */
+
+.nt .n-record {align-items:start}
+
+/* --- 4.1 notation cell -----------------------------------------------
+   Right-aligned so the strip has a hard inner edge to scan against.
+   Reading order is time, then marks. */
+.nt .n-record__notation {
+  grid-column:1;justify-self:end;text-align:right;
+  display:flex;flex-direction:column;align-items:flex-end;
+  gap:var(--sp-3);padding-top:var(--sp-1);
+}
+
+.nt .n-time {
+  font-family:var(--mono);
+  font-size:var(--tr-notation-size);
+  letter-spacing:var(--tr-notation-track);
+  line-height:var(--tr-notation-leading);
+  color:var(--txt-3);
+  white-space:nowrap;
+}
+
+.nt .n-marks {display:flex;align-items:center;gap:var(--sp-3);min-height:var(--sp-3)}
+
+/* THE ENTIRE NOTATION VOCABULARY. Two marks. Adding a third requires
+   Direct CPD authority — design/phase2-notation-vocabulary-guard.md. */
+.nt .n-mark--action {
+  width:var(--mark-action-w);height:var(--mark-action-h);
+  background:var(--sig-action);
+}
+.nt .n-mark--unread {
+  width:var(--mark-unread-size);height:var(--mark-unread-size);
+  background:var(--txt-2);
+}
+/* txt-2 rather than txt-3: at 6px the tertiary tone fell below reliable
+   detectability. It stays neutral and stays far less salient than the
+   Signal mark beside it — different shape, different tone, different
+   size — so unread is findable without competing with current action. */
+
+/* --- 4.2 content cell ------------------------------------------------
+   Undecorated prose. Nothing is attached to the statement. */
+.nt .n-record__body {grid-column:2;min-width:0}
+
+.nt .n-record__statement {
+  font-size:var(--tr-lead-size);
+  font-weight:var(--tr-lead-weight);
+  line-height:var(--tr-lead-leading);
+  color:var(--txt-1);
+  max-width:var(--measure-prose);
+}
+/* Consumption's SECOND channel. The neutral square is the first; weight is
+   the second; the `sr-only` text equivalent is the third. Never colour
+   alone, and never Signal. */
+.nt .n-record[data-consumption="READ"] .n-record__statement {
+  font-weight:var(--tr-lead-weight-read);
+}
+
+.nt .n-record__support {
+  margin-top:var(--sp-3);
+  font-size:var(--tr-support-size);
+  line-height:var(--tr-support-leading);
+  color:var(--txt-2);
+  max-width:var(--measure-prose);
+}
+.nt .n-record[data-consumption="READ"] .n-record__support {color:var(--txt-3)}
+
+.nt .n-record__meta {
+  margin-top:var(--sp-5);
+  font-size:var(--tr-meta-size);
+  line-height:var(--tr-meta-leading);
+  color:var(--txt-3);
+}
+
+/* TRACE. The record's own statement about its current standing —
+   resolved, destination unavailable, actionability unconfirmed. It is
+   prose, deliberately: these are the three states most easily turned into
+   a badge taxonomy, and prose cannot become one. */
+.nt .n-record__trace {
+  margin-top:var(--sp-5);
+  font-size:var(--tr-meta-size);
+  line-height:var(--tr-support-leading);
+  color:var(--txt-3);
+  max-width:var(--measure-prose);
+}
+
+.nt .n-record__act:not(:empty) {margin-top:var(--sp-6)}
+
+
+/* ═══════════════════════════════════════════ 5 · CONTROLS ═══════════
+   Three controls, three jobs. Only one of them is Signal, because only
+   one of them acts on the learner's work. */
+
+/* HANDOFF — hands the learner to the surface that owns the work. Signal
+   is correct here and only here. Never a whole-row target; never more
+   than one per record; withheld entirely when the destination is not
+   available, rather than rendered inert. */
+.nt .n-action {
+  display:inline-block;
+  padding:var(--control-pad-y) var(--control-pad-x);
+  border:1px solid var(--sig-edge);
+  border-radius:var(--control-radius);
+  background:none;color:var(--sig-action);
+  font:var(--tr-action-weight) var(--tr-action-size) var(--ui);
+  text-decoration:none;cursor:pointer;white-space:nowrap;
+  transition:background var(--dur-quick) var(--ease);
+}
+.nt .n-action:hover {background:var(--sig-wash)}
+
+/* NEUTRAL CONTROL — retrieval and recovery. Neither acts on the learner's
+   work, so neither earns Signal. */
+.nt .n-control {
+  padding:var(--control-pad-y-touch) var(--control-pad-x);
+  border:1px solid var(--line-2);
+  border-radius:var(--control-radius);
+  background:none;color:var(--txt-2);
+  font:var(--tr-control-weight) var(--tr-control-size) var(--ui);
+  cursor:pointer;
+  transition:color var(--dur-quick) var(--ease),
+             border-color var(--dur-quick) var(--ease);
+}
+.nt .n-control:hover {color:var(--txt-1);border-color:var(--line-3)}
+
+/* RETRIEVAL — aligned to the content column so the notation strip is not
+   interrupted by a control that belongs to no record. Indent is DERIVED
+   from the grid, never a literal. */
+.nt .n-retrieve {margin-top:var(--sp-9);margin-left:var(--note-indent)}
+
+/* RECOVERY — lives inside the failure block, so it is indented by the
+   grid already. Its hover reaches for Signal because retrying is the one
+   moment the control becomes the current interaction. */
+.nt .n-recover {margin-top:var(--sp-6);color:var(--txt-1);border-color:var(--line-3)}
+.nt .n-recover:hover {border-color:var(--sig-edge);color:var(--sig-action)}
+
+
+/* ══════════════════════════════════════ 6 · STATE BLOCKS ════════════
+   Empty, failure and loading share ONE anatomy: a notation cell, a lead,
+   a supporting line, and optionally a control. They are siblings, not
+   three inventions — which is what makes them structurally
+   distinguishable from a record while remaining part of the same page.
+
+   Phase-1 §8 requires each state to be distinguishable from every other
+   by STRUCTURE before any copy is applied. The modifiers below carry that
+   distinction in the notation cell: empty shows nothing, failure shows a
+   neutral bar, loading shows a placeholder. */
+
+.nt .n-state {margin-top:var(--sp-8)}
+.nt .n-state__notation {grid-column:1;justify-self:end;padding-top:var(--sp-2)}
+.nt .n-state__body {grid-column:2}
+
+.nt .n-state__lead {
+  font-size:var(--tr-lead-size);
+  font-weight:var(--tr-lead-weight);
+  line-height:var(--tr-lead-leading);
+  color:var(--txt-1);
+}
+.nt .n-state__support {
+  margin-top:var(--sp-3);
+  font-size:var(--tr-support-size);
+  line-height:var(--tr-support-leading);
+  color:var(--txt-3);
+  max-width:var(--measure-aside);
+}
+
+/* EMPTY — the notation cell is present and deliberately empty. Quieter
+   lead than a failure, because nothing has gone wrong. No illustration,
+   no reward, no CTA, and no claim about work anywhere else in ATA. */
+.nt .n-state--empty {margin-top:var(--sp-9)}
+.nt .n-state--empty .n-state__lead {
+  font-size:var(--tr-empty-lead-size);
+  font-weight:var(--tr-empty-lead-weight);
+  line-height:var(--tr-empty-lead-leading);
+  color:var(--txt-2);
+}
+
+/* FAILURE — an application state above the register, never a record. The
+   neutral bar in the notation cell is what stops it reading as an item:
+   it sits in the strip but is not a mark. */
+.nt .n-state--failure .n-state__notation {padding-top:var(--sp-2)}
+.nt .n-state__bar {
+  display:block;
+  width:var(--mark-action-w);height:var(--mark-action-h);
+  background:var(--line-3);
+}
+
+
+/* ═════════════════════════════════════════════ 7 · LOADING ══════════
+   Placeholders that read as NOT YET CONTENT and are shaped like the
+   content that is coming — Phase-1 §4 names the Phase-0 weakness as a
+   placeholder that did not resemble the content shape.
+
+   No shimmer, no pulse, no animation. A register of record does not
+   perform while it waits, and motion here would be the loudest thing on
+   the calmest surface in the product. Absence of animation is the
+   decision, not an omission. */
+
+/* The placeholder reserves the vertical space the ACTION-PRESENCE statement
+   will occupy. Without it the register region began ~39px higher than in
+   every other state, so the page jumped downward the moment content arrived.
+   Found by visual review; every DOM assertion passed.
+
+   A bone claims nothing — it is aria-hidden inside an aria-busy region — so
+   reserving the space is not the same as asserting that a statement exists.
+   Where the statement turns out to be WITHHELD, the space simply closes. */
+.nt .n-skeleton__presence {margin-top:var(--sp-7)}
+.nt .n-skeleton__presence .n-skeleton__notation {padding-top:7px}
+/* The placeholder's height is DERIVED from the type role it stands in for,
+   not typed as a literal. A bone is 11px tall but the statement it replaces
+   occupies a 13.5px × 1.55 line box, and that 7.9px gap was the whole
+   residual jump. Deriving it means the placeholder follows the role: change
+   --tr-support-leading and the reserved space follows automatically. */
+.nt .n-skeleton__presence .n-skeleton__body {
+  min-height:calc(var(--tr-support-size) * var(--tr-support-leading));
+  display:flex;align-items:center;
+}
+
+.nt .n-skeleton {margin-top:var(--sp-9);display:flex;flex-direction:column;gap:var(--sp-9)}
+.nt .n-skeleton__row {align-items:start}
+.nt .n-skeleton__notation {
+  grid-column:1;justify-self:end;
+  display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-3);
+  padding-top:var(--sp-1);
+}
+.nt .n-skeleton__body {grid-column:2;min-width:0}
+.nt .n-bone {display:block;background:var(--ink-700);border-radius:1px}
+.nt .n-bone--time {width:76px;height:9px}
+.nt .n-bone--mark {width:var(--mark-action-w);height:var(--sp-3)}
+.nt .n-bone--presence {width:min(46%,300px);height:11px}
+.nt .n-bone--statement {width:min(52%,340px);height:13px}
+.nt .n-bone--support {margin-top:var(--sp-4);width:min(38%,250px);height:11px}
+.nt .n-bone--meta {margin-top:var(--sp-5);width:132px;height:10px}
+
+/* Row height is reserved the same way, from the roles a record is built of,
+   so a loading row and a loaded row occupy comparable space and the register
+   does not reflow line by line as content lands. */
+.nt .n-skeleton__row .n-skeleton__body {
+  min-height:calc(var(--tr-lead-size) * var(--tr-lead-leading)
+                + var(--tr-support-size) * var(--tr-support-leading)
+                + var(--tr-meta-size) * var(--tr-meta-leading)
+                + var(--sp-4) + var(--sp-5));
+}
+
+
+/* ═══════════════════════════════ 8 · SHELL UNREAD PRESENCE ══════════
+   The ONE Notifications-owned element inside the canonical shell.
+   design/shell.css reserves the inline slot and its geometry; this rule
+   supplies only the mark.
+
+   The register's own notation reduced to nav scale, so the shell mark and
+   the page mark are visibly the same idea. NEUTRAL, never Signal: it
+   states unread existence, which is consumption, not current action.
+   Withheld on failure and on unknown — a false positive here would be the
+   Phase-0 defect returning. */
+.nt .nav-unread {
+  width:var(--mark-nav-w);height:var(--mark-nav-h);
+  background:var(--mark-nav-tone);border-radius:0;
+}
+/* PINNED, not following --txt-3. This mark is NON-TEXT — it carries an
+   sr-only text equivalent — so the text-contrast repair does not apply to
+   it, and it renders inside the canonical shell, where this repair must not
+   move a pixel. Brightening it would also make unread compete with Signal. */
+
+
+/* ══════════════════════════════════════════════ 9 · MOBILE ══════════
+   ≤599px, matching the canonical shell's own breakpoint. Notifications
+   does not introduce a breakpoint of its own.
+
+   THE GRID COLLAPSES AND THE GRAMMAR SURVIVES. The strip cannot hold a
+   column at 390px, so it becomes an inline notation LINE directly above
+   each change — marks first, then time. The marks keep their position
+   relative to the record, which is what preserves the grammar even though
+   the geometry does not. There is no vertical axis at any width. */
+
+@media (max-width:599px){
+  .nt .n-page {padding:var(--sp-8) var(--sp-7) var(--sp-11)}
+
+  .nt .n-grid {display:block}
+
+  /* `justify-self` is reset explicitly. Chrome honours it on BLOCK-level
+     boxes, so the desktop `justify-self:end` shrink-wrapped the notation
+     and pushed it to the right margin once the grid collapsed. Found by
+     visual review in Phase 2; the overflow measurement was clean, because
+     nothing overflowed — it was simply in the wrong place. */
+  .nt .n-record__notation,
+.nt .n-state__notation,
+.nt .n-skeleton__notation {justify-self:stretch}
+
+  .nt .n-record__notation,
+.nt .n-skeleton__notation {
+    flex-direction:row;align-items:center;justify-content:flex-start;
+    gap:var(--sp-5);padding-top:0;text-align:left;
+    margin-bottom:var(--sp-3);
+  }
+  /* Marks lead the line on mobile, so the mark slot must hold its width even
+     when it is empty. Without this, a READ record — which has no mark —
+     collapsed the slot to 0 and its timestamp sat ~6px left of every unread
+     record's, leaving the strip with a ragged left edge. On desktop the
+     column is right-aligned against a hard inner edge, so the problem does
+     not arise and no reservation is needed. Found by visual review at 390px. */
+  .nt .n-marks {order:-1;min-width:var(--mark-action-w);justify-content:flex-start}
+
+  .nt .n-register,
+.nt .n-skeleton {gap:var(--sp-9)}
+
+  /* Measures are removed rather than reduced: at 390px the viewport is
+     already the measure, and a ch-based cap would fight the wrap. */
+  .nt .n-record__statement,
+.nt .n-record__support,
+.nt .n-record__trace,
+.nt .n-state__support {max-width:none}
+
+  .nt .n-presence {display:flex;align-items:baseline;gap:var(--sp-5);margin-top:var(--sp-7)}
+  .nt .n-presence__notation {padding-top:var(--sp-4)}
+
+  /* Targets are a property of the control, never a by-product of text
+     length — Phase-1 responsive requirement 4. */
+  .nt .n-action {
+    padding:var(--control-pad-y-touch) var(--control-pad-x);
+    min-height:var(--target-min);
+    line-height:20px;
+  }
+  .nt .n-retrieve {margin-left:0;width:100%;min-height:var(--target-min-touch)}
+  .nt .n-recover {min-height:var(--target-min-touch)}
+}

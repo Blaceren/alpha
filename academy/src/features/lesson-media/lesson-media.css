@@ -1,0 +1,13 @@
+/**
+ * The production lesson media wrapper (L2START-PLAYER-1). Layout only — the
+ * player brings its own visual language from `academy-video-player.css`, and
+ * this must not restyle it.
+ */
+
+.lesson-media {
+  margin: 0 0 18px;
+}
+
+.lesson-media > * {
+  max-width: 100%;
+}

@@ -1,0 +1,1327 @@
+{
+  "schemaVersion": "ata.curriculum.package/1",
+  "minImporterVersion": 1,
+  "packageCode": "ata-v2.first-slice",
+  "packageRevision": 3,
+  "status": "approved",
+  "curriculumCode": "ata-v2",
+  "curriculumVersionNumber": 2,
+  "curriculumTitle": "Alfa Trade Academy — 100-уровневый путь",
+  "curriculumDescription": "Первый срез: модуль 1 «Первое знакомство», уровни 1–4.",
+  "locale": "ru",
+  "createdFrom": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 (D1–D8) — EXPLICIT_OPERATOR_APPROVAL 2026-07-24; revision 3 TECHNICAL_CANONICALIZATION (AC-1, canonical assessment runtime representation) — content identical to revision 2, no editorial change, no re-approval",
+  "approval": {
+    "approvedBy": "product_operator",
+    "approvedAt": "2026-07-24",
+    "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+  },
+  "pendingApprovals": [],
+  "contentFingerprint": "860751bff541439ac76858c917ed2572e2b3e92b41109cfbea74122eb46625ad",
+  "modules": [
+    {
+      "moduleCode": "module.01",
+      "moduleNumber": 1,
+      "title": "Первое знакомство",
+      "description": "Регистрация Pocket, устройство академии и первые demo-сделки.",
+      "learningObjective": "Пройти регистрацию, понять устройство академии и сделать первые demo-сделки.",
+      "checkpointLevelCode": "v2.l004.kontrolnaya-tochka-50",
+      "levels": [
+        {
+          "levelCode": "v2.l001.registraciya-pocket",
+          "levelNumber": 1,
+          "type": "external_event",
+          "title": "Регистрация Pocket",
+          "shortDescription": "Регистрация и подтверждение аккаунта Pocket",
+          "learningObjective": "Зарегистрировать и подтвердить аккаунт Pocket.",
+          "completionMethod": "pocket_postback",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": {
+            "completionSource": "external_event",
+            "integrationCode": "pocket.registration",
+            "selfCompletable": false,
+            "blockedExplanation": [
+              {
+                "locale": "ru",
+                "text": "Уровень открывается после регистрации и подтверждения аккаунта Pocket. Подтверждение приходит от внешней системы — его нельзя отметить вручную."
+              }
+            ],
+            "provenance": {
+              "classification": "EXISTING_ACADEMY_SOURCE",
+              "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+              "sourceRef": "LEVEL_ROWS[0] artifact «Регистрация и подтверждение аккаунта Pocket»",
+              "revision": "4b01f22",
+              "confidence": "high",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "Explanation copy is derived from the canonical artifact string; wording is editorial and may be refined without changing the gate."
+            }
+          },
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[0]",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": null
+          }
+        },
+        {
+          "levelCode": "v2.l002.kak-ustroen-alfa-trade-academy",
+          "levelNumber": 2,
+          "type": "lesson",
+          "title": "Как устроен Alfa Trade Academy",
+          "shortDescription": "",
+          "learningObjective": "Понять устройство академии: модули, уровни и контрольные точки.",
+          "completionMethod": "assessment_pass",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l001.registraciya-pocket"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": 480,
+          "content": {
+            "contentCode": "ata-v2.l002.kak-ustroen.content",
+            "versionNumber": 1,
+            "status": "published",
+            "videoDurationSeconds": null,
+            "localizations": [
+              {
+                "locale": "ru",
+                "title": "Как устроен Alfa Trade Academy",
+                "subtitle": "",
+                "learningObjectiveExtension": "После просмотра ученик должен понимать, как устроен путь в академии, почему уровни открываются последовательно, что означают контрольные точки и XP, и почему локальное действие в интерфейсе не заменяет подтверждённое выполнение условия.",
+                "summary": "Alfa Trade Academy — это последовательный учебный путь. Следующий уровень открывается только после выполнения условия, которое подтверждено платформой. XP показывает учебный прогресс, а не деньги и не обещание прибыли.",
+                "transcript": null,
+                "body": {
+                  "sections": [
+                    {
+                      "code": "hook",
+                      "title": "Хук",
+                      "body": "Alfa Trade Academy — это не папка, где сразу открыты сто несвязанных уроков. Программа ведёт тебя по последовательному маршруту: в каждый момент есть один основной следующий шаг. В этом видео разберём, из чего состоит путь, что открывает новые уровни, зачем нужны контрольные точки и что на самом деле означает XP."
+                    },
+                    {
+                      "code": "moduli-i-urovni",
+                      "title": "Модули и уровни",
+                      "body": "Вся программа разделена на модули, а внутри каждого модуля находятся уровни. Уровни бывают разными: видео с тестом, практическое задание, отчёт или контрольная точка. Тип уровня определяет не только то, что ты увидишь на экране, но и то, какое действие считается выполнением. Например, для видео недостаточно просто открыть страницу: если уровень завершается тестом, нужно пройти именно тест."
+                    },
+                    {
+                      "code": "posledovatelnost",
+                      "title": "Последовательность",
+                      "body": "Путь устроен последовательно. Платформа учитывает уже выполненные условия и показывает, какой уровень доступен сейчас. Закрытый уровень нельзя открыть победой в одной сделке, изменением данных в браузере или переходом по прямой ссылке. Сначала выполняется условие предыдущего уровня, затем платформа подтверждает прогресс и открывает следующий шаг. Это защищает программу от пропусков и сохраняет понятную логику обучения."
+                    },
+                    {
+                      "code": "kontrolnye-tochki",
+                      "title": "Контрольные точки и внешние условия",
+                      "body": "Некоторые уровни зависят не только от ответа в тесте. Например, регистрация Pocket подтверждается внешней системой, а финансовая контрольная точка — проверкой условия баланса. Такие уровни нельзя отметить вручную. Контрольная точка нужна не для прогноза прибыли и не для давления на пополнение. Она проверяет конкретное обязательное условие и только после подтверждения открывает следующий участок пути."
+                    },
+                    {
+                      "code": "xp",
+                      "title": "XP",
+                      "body": "XP внутри академии — это показатель учебного прогресса. Он помогает видеть, сколько шагов уже выполнено и как движется обучение. XP не является деньгами, его нельзя вывести, и он не обещает торговый результат. Высокий XP говорит только о прохождении учебных действий, а не о гарантии прибыли."
+                    },
+                    {
+                      "code": "instrumenty-i-progress",
+                      "title": "Инструменты, черновики и прогресс",
+                      "body": "В академии могут быть инструменты и черновики: торговый журнал, калькулятор риска, форма отчёта. Они помогают выполнять задания и сохранять работу, но само наличие записи или черновика ещё не означает, что уровень завершён. Для отчёта может потребоваться отправка и одобрение ментора, для теста — проходной результат, для checkpoint — внешнее подтверждение. Источник итогового статуса — платформа, а не локальная отметка в браузере."
+                    },
+                    {
+                      "code": "primer-module-01",
+                      "title": "Пример пути module.01",
+                      "body": "В первом модуле путь выглядит так. Сначала подтверждается регистрация Pocket. Затем становится доступен этот урок о структуре академии. После успешного теста открывается отчёт по пяти demo-сделкам. Отчёт нужно заполнить и отправить на проверку. Только после одобрения становится доступна контрольная точка модуля. Каждый шаг имеет своё условие, и ни один из них не заменяется случайным действием."
+                    },
+                    {
+                      "code": "itog",
+                      "title": "Итог",
+                      "body": "Запомни четыре правила. Первое: путь последовательный, и платформа показывает следующий шаг. Второе: контрольная точка проверяет обязательное условие и не отмечается вручную. Третье: XP — учебный показатель, а не деньги и не гарантия прибыли. Четвёртое: черновики и локальные данные помогают работать, но завершение и разблокировка подтверждаются платформой. Теперь переходи к короткому тесту."
+                    }
+                  ],
+                  "examples": [],
+                  "commonMistakes": [],
+                  "glossary": [
+                    {
+                      "term": "T2.1 — Путь последовательный",
+                      "definition": "В каждый момент платформа показывает один основной следующий шаг; уровни не выбираются случайно."
+                    },
+                    {
+                      "term": "T2.2 — Контрольные точки проверяют условия",
+                      "definition": "Checkpoint открывает следующий участок пути только после подтверждения обязательного условия; вручную отметить его нельзя."
+                    },
+                    {
+                      "term": "T2.3 — XP — учебный показатель",
+                      "definition": "XP отражает прогресс внутри академии. Это не деньги, не payout и не гарантия результата."
+                    },
+                    {
+                      "term": "T2.4 — Прогресс подтверждается платформой",
+                      "definition": "Черновики, инструменты и локальные данные полезны, но сами по себе не завершают уровень и не снимают блокировку."
+                    }
+                  ],
+                  "nextAction": {
+                    "label": "К тесту",
+                    "body": "Теперь переходи к короткому тесту."
+                  },
+                  "riskDisclaimer": "XP не является деньгами, его нельзя вывести, и он не обещает торговый результат."
+                }
+              }
+            ],
+            "assets": [],
+            "provenance": {
+              "classification": "EXPLICIT_OPERATOR_APPROVAL",
+              "sourcePath": null,
+              "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+              "revision": "L2-RU-1.0",
+              "confidence": "high",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+            }
+          },
+          "assessment": {
+            "assessmentCode": "ata-v2.l002.assessment",
+            "versionNumber": 1,
+            "status": "published",
+            "passPercent": 100,
+            "maxAttempts": null,
+            "showExplanation": true,
+            "questions": [
+              {
+                "questionCode": "ata-v2.l002.q1",
+                "questionNumber": 1,
+                "type": "single_choice",
+                "skillTag": null,
+                "optionCodes": [
+                  "a",
+                  "b",
+                  "c",
+                  "d"
+                ],
+                "correctOptionCodes": [
+                  "c"
+                ],
+                "correctNumericValue": null,
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "prompt": "Как в Alfa Trade Academy определяется следующий шаг ученика?",
+                    "optionLabels": [
+                      "Все уровни доступны сразу и проходятся в любом порядке.",
+                      "Следующий уровень выбирается случайно после каждого входа.",
+                      "Платформа последовательно открывает следующий шаг после выполнения обязательного условия.",
+                      "Продвижение зависит только от результата последней сделки."
+                    ],
+                    "explanation": "Программа построена как последовательный маршрут. Следующий шаг определяется подтверждённым прогрессом, а не случайным выбором или исходом одной сделки."
+                  }
+                ],
+                "lessonTakeawayRef": "T2.1",
+                "provenance": {
+                  "classification": "EXPLICIT_OPERATOR_APPROVAL",
+                  "sourcePath": null,
+                  "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+                  "revision": "L2-ASSESSMENT-V1",
+                  "confidence": "high",
+                  "conflicts": [],
+                  "approvalRequired": false,
+                  "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+                }
+              },
+              {
+                "questionCode": "ata-v2.l002.q2",
+                "questionNumber": 2,
+                "type": "single_choice",
+                "skillTag": null,
+                "optionCodes": [
+                  "a",
+                  "b",
+                  "c",
+                  "d"
+                ],
+                "correctOptionCodes": [
+                  "b"
+                ],
+                "correctNumericValue": null,
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "prompt": "Для чего в программе нужна контрольная точка?",
+                    "optionLabels": [
+                      "Чтобы показать прогноз прибыли на следующий модуль.",
+                      "Чтобы проверить обязательное условие перехода и открыть следующий участок пути.",
+                      "Чтобы заменить все уроки и тесты внутри модуля.",
+                      "Чтобы обнулить ранее пройденный прогресс."
+                    ],
+                    "explanation": "Checkpoint — это gate. Он подтверждает конкретное условие и не является прогнозом, заменой уроков или сбросом прогресса."
+                  }
+                ],
+                "lessonTakeawayRef": "T2.2",
+                "provenance": {
+                  "classification": "EXPLICIT_OPERATOR_APPROVAL",
+                  "sourcePath": null,
+                  "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+                  "revision": "L2-ASSESSMENT-V1",
+                  "confidence": "high",
+                  "conflicts": [],
+                  "approvalRequired": false,
+                  "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+                }
+              },
+              {
+                "questionCode": "ata-v2.l002.q3",
+                "questionNumber": 3,
+                "type": "single_choice",
+                "skillTag": null,
+                "optionCodes": [
+                  "a",
+                  "b",
+                  "c",
+                  "d"
+                ],
+                "correctOptionCodes": [
+                  "d"
+                ],
+                "correctNumericValue": null,
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "prompt": "Что означает XP внутри академии?",
+                    "optionLabels": [
+                      "Сумму, которую можно вывести из Pocket.",
+                      "Гарантированный процент доходности.",
+                      "Компенсацию за убыточные сделки.",
+                      "Показатель учебного прогресса, который не является деньгами и не гарантирует торговый результат."
+                    ],
+                    "explanation": "XP используется только для отображения учебного прогресса. Он не связан с выводом средств, payout или гарантией прибыли."
+                  }
+                ],
+                "lessonTakeawayRef": "T2.3",
+                "provenance": {
+                  "classification": "EXPLICIT_OPERATOR_APPROVAL",
+                  "sourcePath": null,
+                  "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+                  "revision": "L2-ASSESSMENT-V1",
+                  "confidence": "high",
+                  "conflicts": [],
+                  "approvalRequired": false,
+                  "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+                }
+              },
+              {
+                "questionCode": "ata-v2.l002.q4",
+                "questionNumber": 4,
+                "type": "single_choice",
+                "skillTag": null,
+                "optionCodes": [
+                  "a",
+                  "b",
+                  "c",
+                  "d"
+                ],
+                "correctOptionCodes": [
+                  "c"
+                ],
+                "correctNumericValue": null,
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "prompt": "Что действительно может открыть следующий заблокированный уровень?",
+                    "optionLabels": [
+                      "Изменение локальных данных в браузере.",
+                      "Создание черновика без отправки.",
+                      "Выполнение условия, которое подтверждено платформой.",
+                      "Открытие страницы уровня по прямой ссылке."
+                    ],
+                    "explanation": "Черновики и локальные данные не являются источником прогресса. Уровень открывается только после подтверждённого выполнения его условия."
+                  }
+                ],
+                "lessonTakeawayRef": "T2.4",
+                "provenance": {
+                  "classification": "EXPLICIT_OPERATOR_APPROVAL",
+                  "sourcePath": null,
+                  "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+                  "revision": "L2-ASSESSMENT-V1",
+                  "confidence": "high",
+                  "conflicts": [],
+                  "approvalRequired": false,
+                  "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+                }
+              }
+            ],
+            "provenance": {
+              "classification": "EXPLICIT_OPERATOR_APPROVAL",
+              "sourcePath": null,
+              "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+              "revision": "L2-ASSESSMENT-V1",
+              "confidence": "high",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+            }
+          },
+          "report": null,
+          "gate": null,
+          "provenance": {
+            "classification": "EXPLICIT_OPERATOR_APPROVAL",
+            "sourcePath": null,
+            "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+            "revision": "L2-RU-1.0",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+          }
+        },
+        {
+          "levelCode": "v2.l003.pervye-pyat-demo-sdelok",
+          "levelNumber": 3,
+          "type": "report",
+          "title": "Первые пять demo-сделок",
+          "shortDescription": "Отчёт по 5 demo-сделкам",
+          "learningObjective": "Совершить пять demo-сделок и описать их в отчёте.",
+          "completionMethod": "report_approval",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l002.kak-ustroen-alfa-trade-academy"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": {
+            "reportCode": "ata-v2.l003.report",
+            "versionNumber": 1,
+            "status": "published",
+            "localizations": [
+              {
+                "locale": "ru",
+                "title": "Отчёт по 5 demo-сделкам",
+                "instructions": "Выполните пять последовательных сделок только на demo-счёте. Перед каждой сделкой заполните план: актив, направление, длительность и причину входа. После закрытия сделки зафиксируйте результат, отметьте, соблюдён ли план, и запишите одно наблюдение. После пятой сделки сформулируйте общий вывод: какой повторяющийся паттерн вы заметили и какое одно правило примените в следующей demo-сессии. Задание оценивает полноту наблюдений и дисциплину процесса, а не количество прибыльных сделок.",
+                "successCriteriaSummary": "Задание оценивает полноту наблюдений и дисциплину процесса, а не количество прибыльных сделок.",
+                "submitLabel": "Отправить на проверку"
+              }
+            ],
+            "fields": [
+              {
+                "stableKey": "confirm-demo-only",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 0,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Подтверждение demo-only",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-asset",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 1,
+                "minLength": 2,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Актив",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-direction",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 2,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "up",
+                  "down"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Направление",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-duration",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 3,
+                "minLength": 1,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Длительность / экспирация",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-pre-trade-reason",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 4,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Причина входа до сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-result",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 5,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "positive",
+                  "negative",
+                  "returned"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Результат",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-plan-followed",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 6,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "План соблюдён",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade1-deviation-note",
+                "type": "long_text",
+                "required": false,
+                "sortOrder": 7,
+                "minLength": 20,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Отклонение от плана",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ],
+                "requiredWhen": {
+                  "fieldCode": "trade1-plan-followed",
+                  "operator": "equals",
+                  "value": false
+                }
+              },
+              {
+                "stableKey": "trade1-post-trade-observation",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 8,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Наблюдение после сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-asset",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 9,
+                "minLength": 2,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Актив",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-direction",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 10,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "up",
+                  "down"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Направление",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-duration",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 11,
+                "minLength": 1,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Длительность / экспирация",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-pre-trade-reason",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 12,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Причина входа до сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-result",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 13,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "positive",
+                  "negative",
+                  "returned"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Результат",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-plan-followed",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 14,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "План соблюдён",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade2-deviation-note",
+                "type": "long_text",
+                "required": false,
+                "sortOrder": 15,
+                "minLength": 20,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Отклонение от плана",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ],
+                "requiredWhen": {
+                  "fieldCode": "trade2-plan-followed",
+                  "operator": "equals",
+                  "value": false
+                }
+              },
+              {
+                "stableKey": "trade2-post-trade-observation",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 16,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Наблюдение после сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-asset",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 17,
+                "minLength": 2,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Актив",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-direction",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 18,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "up",
+                  "down"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Направление",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-duration",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 19,
+                "minLength": 1,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Длительность / экспирация",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-pre-trade-reason",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 20,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Причина входа до сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-result",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 21,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "positive",
+                  "negative",
+                  "returned"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Результат",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-plan-followed",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 22,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "План соблюдён",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade3-deviation-note",
+                "type": "long_text",
+                "required": false,
+                "sortOrder": 23,
+                "minLength": 20,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Отклонение от плана",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ],
+                "requiredWhen": {
+                  "fieldCode": "trade3-plan-followed",
+                  "operator": "equals",
+                  "value": false
+                }
+              },
+              {
+                "stableKey": "trade3-post-trade-observation",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 24,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Наблюдение после сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-asset",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 25,
+                "minLength": 2,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Актив",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-direction",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 26,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "up",
+                  "down"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Направление",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-duration",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 27,
+                "minLength": 1,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Длительность / экспирация",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-pre-trade-reason",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 28,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Причина входа до сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-result",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 29,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "positive",
+                  "negative",
+                  "returned"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Результат",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-plan-followed",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 30,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "План соблюдён",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade4-deviation-note",
+                "type": "long_text",
+                "required": false,
+                "sortOrder": 31,
+                "minLength": 20,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Отклонение от плана",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ],
+                "requiredWhen": {
+                  "fieldCode": "trade4-plan-followed",
+                  "operator": "equals",
+                  "value": false
+                }
+              },
+              {
+                "stableKey": "trade4-post-trade-observation",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 32,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Наблюдение после сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-asset",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 33,
+                "minLength": 2,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Актив",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-direction",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 34,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "up",
+                  "down"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Направление",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-duration",
+                "type": "short_text",
+                "required": true,
+                "sortOrder": 35,
+                "minLength": 1,
+                "maxLength": 60,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Длительность / экспирация",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-pre-trade-reason",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 36,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Причина входа до сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-result",
+                "type": "single_choice",
+                "required": true,
+                "sortOrder": 37,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [
+                  "positive",
+                  "negative",
+                  "returned"
+                ],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Результат",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-plan-followed",
+                "type": "boolean",
+                "required": true,
+                "sortOrder": 38,
+                "minLength": null,
+                "maxLength": null,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "План соблюдён",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "trade5-deviation-note",
+                "type": "long_text",
+                "required": false,
+                "sortOrder": 39,
+                "minLength": 20,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Отклонение от плана",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ],
+                "requiredWhen": {
+                  "fieldCode": "trade5-plan-followed",
+                  "operator": "equals",
+                  "value": false
+                }
+              },
+              {
+                "stableKey": "trade5-post-trade-observation",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 40,
+                "minLength": 50,
+                "maxLength": 500,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Наблюдение после сделки",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "summary-repeated-pattern",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 41,
+                "minLength": 100,
+                "maxLength": 800,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Повторяющийся паттерн",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              },
+              {
+                "stableKey": "summary-next-session-rule",
+                "type": "long_text",
+                "required": true,
+                "sortOrder": 42,
+                "minLength": 50,
+                "maxLength": 300,
+                "choiceCodes": [],
+                "localizations": [
+                  {
+                    "locale": "ru",
+                    "label": "Одно правило на следующую demo-сессию",
+                    "helpText": "",
+                    "placeholder": "",
+                    "choiceLabels": []
+                  }
+                ]
+              }
+            ],
+            "attachmentsAllowed": false,
+            "maxAttachments": 0,
+            "draftAllowed": true,
+            "mentorReviewRequired": true,
+            "provenance": {
+              "classification": "EXPLICIT_OPERATOR_APPROVAL",
+              "sourcePath": null,
+              "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+              "revision": "L3-REPORT-V1",
+              "confidence": "high",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+            }
+          },
+          "gate": null,
+          "provenance": {
+            "classification": "EXPLICIT_OPERATOR_APPROVAL",
+            "sourcePath": null,
+            "sourceRef": "ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1",
+            "revision": "L3-REPORT-V1",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": "Утверждаю ATA_FIRST_SLICE_CONTENT_APPROVAL_CANDIDATE_V1 без правок. D1–D8 утверждены. (EXPLICIT_OPERATOR_APPROVAL 2026-07-24, product_operator)"
+          }
+        },
+        {
+          "levelCode": "v2.l004.kontrolnaya-tochka-50",
+          "levelNumber": 4,
+          "type": "financial_checkpoint",
+          "title": "Контрольная точка $50",
+          "shortDescription": "",
+          "learningObjective": "Подтвердить баланс контрольной точки модуля.",
+          "completionMethod": "balance_check",
+          "xpReward": 0,
+          "requiredXp": 0,
+          "prerequisiteLevelCodes": [
+            "v2.l003.pervye-pyat-demo-sdelok"
+          ],
+          "checkpointLevelCode": null,
+          "estimatedDurationSeconds": null,
+          "content": null,
+          "assessment": null,
+          "report": null,
+          "gate": {
+            "completionSource": "financial_checkpoint",
+            "integrationCode": "checkpoint.module-01",
+            "selfCompletable": false,
+            "blockedExplanation": [
+              {
+                "locale": "ru",
+                "text": "Контрольная точка подтверждается по балансу счёта. Отметить её вручную в академии нельзя."
+              }
+            ],
+            "provenance": {
+              "classification": "EXISTING_ACADEMY_SOURCE",
+              "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+              "sourceRef": "LEVEL_ROWS[3] kind=checkpoint «Контрольная точка $50»",
+              "revision": "4b01f22",
+              "confidence": "medium",
+              "conflicts": [],
+              "approvalRequired": false,
+              "note": "The $50 threshold appears in the canonical level title; the checkpoint evaluation rule itself lives in the checkpoint engine and is not restated here."
+            }
+          },
+          "provenance": {
+            "classification": "EXISTING_ACADEMY_SOURCE",
+            "sourcePath": "academy-web/src/data/curriculum/fixture.ts",
+            "sourceRef": "LEVEL_ROWS[3]",
+            "revision": "4b01f22",
+            "confidence": "high",
+            "conflicts": [],
+            "approvalRequired": false,
+            "note": null
+          }
+        }
+      ]
+    }
+  ]
+}

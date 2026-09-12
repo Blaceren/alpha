@@ -1,0 +1,659 @@
+/*
+ * ACADEMY EXPERIENCE — the shared visual language for Home (Direction A,
+ * Single Task Field) and Path (Direction B, Learning Spine).
+ *
+ * The two screens have deliberately different dominant compositions and one
+ * shared system: typography scale, surface materials, state language, the signal
+ * point, spacing and progression semantics. That is the approved merge.
+ *
+ * MATERIALS — three surface types, not one card style. This is the rule that
+ * keeps the page from becoming the rejected dashboard: a bordered card around
+ * every block is explicitly forbidden, so posture is carried by MATERIAL instead
+ * of by a badge sitting on identical grey.
+ *
+ *   lit      — the learner can act. Raised field, warm-cold contrast, one signal.
+ *   cold     — the learner is waiting on somebody else. Transparent, no glow.
+ *   unlit    — blocked or locked. Flat, recessed, no light at all.
+ *
+ * No value here is a final brand token: the palette is still provisional
+ * (docs/DESIGN_SYSTEM.md), so these are scoped, named by ROLE, and easy to
+ * repoint once the real palette lands. Nothing invents a "brand hex" and calls
+ * it settled.
+ */
+
+.ax {
+  --ax-field: #060b18;
+  --ax-field-deep: #04070f;
+  --ax-line: rgba(148, 178, 224, 0.16);
+  --ax-line-strong: rgba(148, 178, 224, 0.3);
+  --ax-ink: #eaf1ff;
+  --ax-ink-muted: #9db0cf;
+  --ax-ink-faint: #6f83a3;
+  --ax-signal: #4fe0c0;
+  --ax-signal-deep: #1f8f7d;
+  --ax-warn: #f0b866;
+
+  --ax-lit-bg: linear-gradient(168deg, #0e1830 0%, #0a1224 58%, #070d1c 100%);
+  --ax-cold-bg: rgba(20, 32, 56, 0.44);
+  --ax-unlit-bg: rgba(11, 17, 30, 0.72);
+
+  --ax-gap: 28px;
+  --ax-radius-field: 4px;
+  --ax-radius-tight: 2px;
+
+  color: var(--ax-ink);
+  display: block;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 28px 96px;
+}
+
+/* Deliberately NOT uniform: the field, the rail and the spine each have their
+   own geometry. Identical border-radius on every surface is an anti-pattern. */
+
+/* ------------------------------------------------------------------ type -- */
+
+.ax-coord {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--ax-ink-muted);
+  margin: 0 0 18px;
+}
+.ax-coord b { color: var(--ax-ink); font-weight: 600; }
+
+.ax-statement {
+  /* The action sentence. Large and high-contrast on purpose — the prelanding's
+     low-contrast body text is landing-only and is not carried here. */
+  font-size: clamp(28px, 4.4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin: 0 0 16px;
+  max-width: 20ch;
+}
+.ax-reason {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ax-ink-muted);
+  margin: 0 0 28px;
+  max-width: 62ch;
+}
+.ax-section-title {
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ax-ink-faint);
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------- action field -- */
+
+.ax-fieldwrap { position: relative; margin: 0 0 var(--ax-gap); }
+
+.ax-field {
+  position: relative;
+  border-radius: var(--ax-radius-field);
+  padding: clamp(28px, 4vw, 52px);
+  overflow: hidden;
+}
+
+/* ACT — the only surface on the page that is lit. */
+.ax-field[data-posture="act"] {
+  background: var(--ax-lit-bg);
+  border: 1px solid var(--ax-line-strong);
+  border-left: 2px solid var(--ax-signal);
+}
+/* WAITING — cold and transparent. The learner has already done their part, so
+   this must not read as a failure; it is quieter than act, brighter than unlit. */
+.ax-field[data-posture="waiting"] {
+  background: var(--ax-cold-bg);
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid rgba(157, 176, 207, 0.55);
+}
+/* BLOCKED — unlit. No glow, no signal point. */
+.ax-field[data-posture="blocked"] {
+  background: var(--ax-unlit-bg);
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid rgba(111, 131, 163, 0.35);
+}
+.ax-field[data-posture="done"] {
+  background: var(--ax-lit-bg);
+  border: 1px solid var(--ax-line-strong);
+  border-left: 2px solid var(--ax-signal-deep);
+}
+
+/* The one moving/lit accent on the screen. Never repeated per row. */
+.ax-signal {
+  position: absolute;
+  top: clamp(28px, 4vw, 52px);
+  right: clamp(28px, 4vw, 52px);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ax-signal);
+  box-shadow: 0 0 0 4px rgba(79, 224, 192, 0.14);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ax-field[data-posture="act"] .ax-signal { animation: ax-pulse 2.8s ease-in-out infinite; }
+}
+@keyframes ax-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(79, 224, 192, 0.14); }
+  50%      { box-shadow: 0 0 0 9px rgba(79, 224, 192, 0.05); }
+}
+
+.ax-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px;
+  border-radius: var(--ax-radius-tight);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--ax-signal);
+  color: #04120f;
+  background: var(--ax-signal);
+}
+.ax-cta:hover { background: #63e9cc; }
+.ax-cta:focus-visible { outline: 2px solid var(--ax-ink); outline-offset: 3px; }
+/* Waiting/blocked postures get a quiet control, never the lit one. */
+.ax-cta--quiet {
+  background: transparent;
+  color: var(--ax-ink);
+  border-color: var(--ax-line-strong);
+}
+.ax-cta--quiet:hover { background: rgba(148, 178, 224, 0.08); }
+
+/*
+ * ONE LINE of context inside the Action Field, below the control.
+ *
+ * Used by mentor feedback ("наставник ответил"), which is news a waiting learner
+ * needs but which must not become a second statement competing with the action
+ * sentence: smaller, quieter, and never carrying the reply's own text.
+ */
+.ax-field__aside {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--ax-line);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ax-ink-muted);
+  max-width: 62ch;
+}
+
+/* ------------------------------------------------------ progress trace -- */
+
+/*
+ * 100 levels as one compact orientation object — not 100 labels. Segments are
+ * grouped by module so the boundaries are legible without a legend.
+ */
+.ax-trace { margin: 0 0 var(--ax-gap); }
+.ax-trace__bar {
+  display: flex;
+  gap: 3px;
+  align-items: stretch;
+  height: 26px;
+}
+.ax-trace__mod {
+  display: flex;
+  gap: 1px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ax-line);
+}
+.ax-trace__mod[data-state="completed"] { border-bottom-color: var(--ax-signal-deep); }
+.ax-trace__mod[data-state="current"] { border-bottom-color: var(--ax-signal); }
+.ax-trace__seg { flex: 1 1 0; min-width: 0; border-radius: 1px; background: rgba(111, 131, 163, 0.22); }
+.ax-trace__seg[data-state="completed"] { background: var(--ax-signal-deep); }
+.ax-trace__seg[data-state="current"] { background: var(--ax-signal); }
+.ax-trace__seg[data-state="pending_review"] { background: rgba(157, 176, 207, 0.6); }
+.ax-trace__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--ax-ink-muted);
+  margin: 10px 0 0;
+}
+
+/* ------------------------------------------------------------ context -- */
+
+/* Composed AROUND the field as a metadata rail — deliberately not tiles. */
+.ax-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--ax-line);
+}
+.ax-rail__item { padding: 18px 22px 18px 0; }
+.ax-rail__item + .ax-rail__item { padding-left: 22px; border-left: 1px solid var(--ax-line); }
+.ax-rail__k { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ax-ink-faint); margin: 0 0 6px; }
+.ax-rail__v { font-size: 16px; color: var(--ax-ink); margin: 0; line-height: 1.4; }
+
+/* --------------------------------------------------- feedback (mentor) -- */
+
+/*
+ * Public mentor feedback. Structurally SEPARATE from the action field so a
+ * message can never read as a completion — the distinction §14 requires.
+ */
+.ax-feedback {
+  margin: 0 0 var(--ax-gap);
+  padding: 22px 24px;
+  background: var(--ax-cold-bg);
+  border: 1px solid var(--ax-line);
+  border-radius: var(--ax-radius-field);
+}
+.ax-feedback__note {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--ax-warn);
+}
+.ax-feedback__msg { margin: 0 0 12px; font-size: 15px; line-height: 1.6; color: var(--ax-ink); }
+.ax-feedback__who { font-size: 13px; color: var(--ax-ink-faint); margin: 0 0 4px; }
+.ax-media-slot {
+  margin-top: 16px; padding: 14px 16px; border: 1px dashed var(--ax-line);
+  border-radius: var(--ax-radius-tight); font-size: 13px; color: var(--ax-ink-faint);
+}
+
+/* ------------------------------------------------------ learning spine -- */
+
+.ax-spine { display: grid; grid-template-columns: 92px 1fr; gap: 0; align-items: start; }
+
+.ax-spine__rail {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-right: 26px;
+  border-right: 1px solid var(--ax-line);
+}
+.ax-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 9px 0;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ax-ink-faint);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ax-node__num {
+  min-width: 30px; text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 600; letter-spacing: 0.02em;
+}
+.ax-node__dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: transparent; border: 1px solid rgba(111, 131, 163, 0.5);
+  margin-right: -31px;
+  flex: none;
+}
+.ax-node[data-state="completed"] { color: var(--ax-ink-muted); }
+.ax-node[data-state="completed"] .ax-node__dot { background: var(--ax-signal-deep); border-color: var(--ax-signal-deep); }
+.ax-node[data-state="current"] { color: var(--ax-ink); }
+.ax-node[data-state="current"] .ax-node__dot {
+  background: var(--ax-signal); border-color: var(--ax-signal);
+  box-shadow: 0 0 0 4px rgba(79, 224, 192, 0.16);
+  width: 11px; height: 11px; margin-right: -32px;
+}
+.ax-node[aria-current="true"] .ax-node__num { color: var(--ax-ink); }
+.ax-node:focus-visible { outline: 2px solid var(--ax-signal); outline-offset: 2px; }
+
+.ax-spine__body { padding-left: 30px; min-width: 0; }
+
+/* Module heading + levels: rows on a shared plane, NOT one card per level. */
+.ax-mod__title { font-size: clamp(22px, 3vw, 30px); font-weight: 600; letter-spacing: -0.015em; margin: 0 0 6px; }
+.ax-mod__meta { font-size: 14px; color: var(--ax-ink-muted); margin: 0 0 24px; }
+.ax-mod__obj { font-size: 15px; line-height: 1.6; color: var(--ax-ink-muted); margin: 0 0 26px; max-width: 66ch; }
+
+.ax-levels { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ax-line); }
+.ax-lvl {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 16px 12px 16px 0;
+  border-bottom: 1px solid var(--ax-line);
+}
+.ax-lvl[data-current="true"] { background: rgba(79, 224, 192, 0.045); box-shadow: inset 2px 0 0 var(--ax-signal); padding-left: 12px; }
+.ax-lvl__n { font-variant-numeric: tabular-nums; color: var(--ax-ink-faint); font-size: 14px; }
+.ax-lvl__t { font-size: 16px; color: var(--ax-ink); text-decoration: none; line-height: 1.4; }
+a.ax-lvl__t:hover { color: var(--ax-signal); }
+.ax-lvl[data-state="locked"] .ax-lvl__t,
+.ax-lvl[data-state="locked"] .ax-lvl__n { color: var(--ax-ink-faint); }
+.ax-lvl__why { grid-column: 2 / -1; font-size: 13px; color: var(--ax-ink-faint); margin: 6px 0 0; }
+
+/* State + milestone marks. Text-first, never colour-only (§34). */
+.ax-mark {
+  font-size: 12px; letter-spacing: 0.03em; white-space: nowrap;
+  padding: 3px 9px; border-radius: 2px;
+  border: 1px solid var(--ax-line); color: var(--ax-ink-muted);
+}
+.ax-mark[data-state="completed"] { color: var(--ax-signal); border-color: rgba(79, 224, 192, 0.35); }
+.ax-mark[data-state="pending_review"] { color: #b9c8e4; border-color: rgba(157, 176, 207, 0.4); }
+.ax-mark[data-state="in_progress"],
+.ax-mark[data-state="available"] { color: var(--ax-ink); border-color: var(--ax-line-strong); }
+.ax-mark[data-state="checkpoint_unverified"] { color: var(--ax-warn); border-color: rgba(240, 184, 102, 0.35); }
+/* Only the two structural milestone families are marked — ordinary levels get
+   no decorative badge (approved direction: no badge on every row). */
+.ax-milestone { font-size: 12px; color: var(--ax-ink-faint); letter-spacing: 0.03em; }
+.ax-milestone[data-kind="checkpoint"] { color: var(--ax-warn); }
+.ax-milestone[data-kind="mentor-review"] { color: #9fd0ff; }
+
+/* --------------------------------------------------- generic surfaces -- */
+
+.ax-empty, .ax-error, .ax-loading {
+  padding: 40px 28px;
+  border: 1px solid var(--ax-line);
+  border-radius: var(--ax-radius-field);
+  background: var(--ax-unlit-bg);
+  max-width: 62ch;
+}
+.ax-empty h2, .ax-error h2, .ax-loading h2 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
+.ax-empty p, .ax-error p, .ax-loading p { margin: 0; color: var(--ax-ink-muted); line-height: 1.6; }
+
+/* Skeletons differ per surface — identical skeletons everywhere is an
+   anti-pattern, so the field skeleton is field-shaped and the spine skeleton is
+   spine-shaped. */
+.ax-skel { background: rgba(148, 178, 224, 0.09); border-radius: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .ax-skel { animation: ax-breathe 1.6s ease-in-out infinite; }
+}
+@keyframes ax-breathe { 0%,100% { opacity: 0.55; } 50% { opacity: 0.9; } }
+.ax-skel--statement { height: 42px; width: min(20ch, 100%); margin-bottom: 16px; }
+.ax-skel--line { height: 14px; margin-bottom: 10px; }
+.ax-skel--cta { height: 46px; width: 210px; margin-top: 22px; }
+
+/* ------------------------------------------------------------- mobile -- */
+
+@media (max-width: 860px) {
+  .ax { padding: 24px 16px 108px; }
+  .ax-statement { font-size: clamp(24px, 7vw, 32px); max-width: none; }
+  .ax-reason { font-size: 16px; }
+  .ax-field { padding: 22px 18px 24px; }
+  .ax-signal { top: 18px; right: 18px; }
+  .ax-cta { width: 100%; justify-content: center; }
+  .ax-rail { grid-template-columns: 1fr; }
+  .ax-rail__item + .ax-rail__item { padding-left: 0; border-left: 0; border-top: 1px solid var(--ax-line); }
+  .ax-rail__item { padding-right: 0; }
+
+  /* APPROVED MOBILE SPINE: the vertical rail becomes a horizontal module rail
+     with the current module centred and its neighbours visible. A learner must
+     never have to scroll 20 nodes horizontally with precision, so the rail
+     scroll-snaps and the current node is scrolled into view. */
+  .ax-spine { display: block; }
+  .ax-spine__rail {
+    position: static;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding: 0 0 12px;
+    margin: 0 0 20px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ax-line);
+    -webkit-overflow-scrolling: touch;
+  }
+  .ax-node {
+    flex: none;
+    scroll-snap-align: center;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-start;
+    padding: 6px 10px;
+    min-width: 54px;
+  }
+  .ax-node__num { min-width: 0; text-align: center; }
+  .ax-node__dot { margin: 0; }
+  .ax-spine__body { padding-left: 0; }
+  .ax-lvl { grid-template-columns: 34px 1fr; row-gap: 6px; }
+  .ax-lvl > .ax-mark { grid-column: 2; justify-self: start; }
+  .ax-trace__bar { height: 20px; }
+}
+
+/* ---------------------------------------------------------- level detail -- */
+
+/*
+ * LEVEL DETAIL inherits the Home/Path language but not Home's composition.
+ * Home owns the programme-wide next action; this page owns one level and hosts
+ * its canonical task surface. Same materials, same state language, same signal
+ * semantics — different shape, because cloning the Action Field here would give
+ * the learner two competing primary objects on the same journey.
+ */
+.ax-lvlhead { margin: 0 0 30px; }
+.ax-lvlhead__title {
+  font-size: clamp(26px, 3.8vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.ax-lvlhead__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.ax-lvlhead__why { font-size: 16px; line-height: 1.55; color: var(--ax-ink-muted); margin: 0 0 18px; max-width: 62ch; }
+.ax-lvlhead__obj { font-size: 16px; line-height: 1.6; color: var(--ax-ink); margin: 0; max-width: 66ch; }
+
+/* The state strip: one line that says what the level is and where it stands.
+   Material follows posture exactly as the Action Field does. */
+.ax-statestrip {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 18px; margin: 0 0 26px;
+  border-radius: var(--ax-radius-tight);
+  border-left: 2px solid var(--ax-line-strong);
+  background: var(--ax-unlit-bg);
+}
+.ax-statestrip[data-posture="act"] { background: var(--ax-lit-bg); border-left-color: var(--ax-signal); }
+.ax-statestrip[data-posture="waiting"] { background: var(--ax-cold-bg); border-left-color: rgba(157, 176, 207, 0.55); }
+.ax-statestrip[data-posture="done"] { background: var(--ax-lit-bg); border-left-color: var(--ax-signal-deep); }
+.ax-statestrip__dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: rgba(111, 131, 163, 0.5);
+}
+.ax-statestrip[data-posture="act"] .ax-statestrip__dot { background: var(--ax-signal); box-shadow: 0 0 0 4px rgba(79, 224, 192, 0.14); }
+.ax-statestrip[data-posture="done"] .ax-statestrip__dot { background: var(--ax-signal-deep); }
+.ax-statestrip__text { font-size: 15px; color: var(--ax-ink); margin: 0; }
+
+/* Section rhythm shared by content and the hosted task surfaces. */
+.ax-lvlsec { margin: 0 0 30px; }
+.ax-lvlsec > h2 {
+  font-size: 13px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ax-ink-faint); margin: 0 0 14px; font-weight: 600;
+}
+.ax-lvlsec__note { font-size: 15px; color: var(--ax-ink-muted); line-height: 1.6; margin: 0; max-width: 62ch; }
+
+/*
+ * THE HANDOFF INTO THE READING SURFACE.
+ *
+ * Level Detail keeps the summary and the level's state; the written lesson has
+ * its own page. This is the seam between them, so it states the lesson's real
+ * shape (sections, how far the learner has read) and offers ONE link. It is
+ * deliberately quiet: the lit control on this page belongs to the canonical
+ * task, and a second bright button would compete with it.
+ */
+.ax-lvlsec .cur-content__material {
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--ax-line);
+}
+.ax-lvlsec .cur-content__shape {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--ax-ink-faint);
+}
+.ax-lvlsec .cur-content__open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 11px 22px;
+  border-radius: var(--ax-radius-tight);
+  border: 1px solid var(--ax-line-strong);
+  color: var(--ax-ink);
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ax-lvlsec .cur-content__open:hover { background: rgba(148, 178, 224, 0.08); }
+.ax-lvlsec .cur-content__open:focus-visible { outline: 2px solid var(--ax-signal); outline-offset: 3px; }
+
+/*
+ * THE COMPLETION MOMENT.
+ *
+ * The material transition IS the celebration (§15). The surface settles: the
+ * signal that meant "act here" becomes a single quiet edge that means "this is
+ * behind you", and the only bright thing left on the page is the link forward.
+ *
+ * Explicitly absent: any animation, any burst, any counter that counts, any
+ * coin/trophy/medal, any gradient that reads as a prize. This runs 100 times
+ * over a programme, and anything louder would be unbearable by level 10 and
+ * insulting by level 90.
+ */
+.ax-done {
+  border-radius: var(--ax-radius-field);
+  padding: clamp(22px, 3.2vw, 34px);
+  background: linear-gradient(168deg, rgba(14, 24, 48, 0.55) 0%, rgba(7, 13, 28, 0.75) 100%);
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid var(--ax-signal-deep);
+}
+.ax-done__kicker {
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ax-signal);
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.ax-done__title {
+  font-size: clamp(20px, 2.6vw, 26px);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: var(--ax-ink);
+  margin: 0 0 22px;
+}
+
+.ax-done__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  margin: 0;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--ax-line);
+}
+.ax-done__facts > div { margin: 0; }
+.ax-done__facts dt {
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ax-ink-faint);
+  margin: 0 0 5px;
+}
+.ax-done__facts dd {
+  margin: 0;
+  font-size: 16px;
+  color: var(--ax-ink);
+  font-variant-numeric: tabular-nums;
+}
+/* XP: legible, not loud. No glow, no gradient, no growth animation — it is a
+   number that says what the level was worth, not a payout. */
+.ax-done__xp { color: var(--ax-signal); font-weight: 600; }
+
+.ax-done__next { padding-top: 20px; }
+.ax-done__nextTitle {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ax-ink);
+  margin: 0 0 6px;
+}
+.ax-done__nextWhy {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ax-ink-muted);
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+.ax-done__cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 24px;
+  border-radius: var(--ax-radius-tight);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--ax-signal);
+  color: #04120f;
+  background: var(--ax-signal);
+}
+.ax-done__cta:hover { background: #63e9cc; }
+.ax-done__cta:focus-visible { outline: 2px solid var(--ax-ink); outline-offset: 3px; }
+/* Waiting or blocked: the same quiet control Home uses for the same action. */
+.ax-done__cta--quiet {
+  background: transparent;
+  color: var(--ax-ink);
+  border-color: var(--ax-line-strong);
+}
+.ax-done__cta--quiet:hover { background: rgba(148, 178, 224, 0.08); }
+
+@media (max-width: 640px) {
+  .ax-done__facts { gap: 14px 28px; }
+  .ax-done__cta { width: 100%; justify-content: center; }
+}
+
+/*
+ * TASK SURFACE HOST.
+ *
+ * The canonical task components (assessment, report, checkpoint, manual, mentor,
+ * registration) keep their own markup and their own owners — they are correct
+ * and this phase does not rewire them. What made them read as fixture-era
+ * islands was sitting on their own background inside a page with a different
+ * one. Hosting them on a shared surface and normalising only type colour, links
+ * and control shape is enough to make them part of the same product without a
+ * design-system rewrite.
+ */
+.ax-task {
+  padding: 26px 24px;
+  border: 1px solid var(--ax-line);
+  border-left: 2px solid var(--ax-line-strong);
+  border-radius: var(--ax-radius-field);
+  background: var(--ax-cold-bg);
+}
+.ax-task[data-posture="act"] { border-left-color: var(--ax-signal); background: var(--ax-lit-bg); }
+.ax-task[data-posture="done"] { border-left-color: var(--ax-signal-deep); }
+.ax-task h2, .ax-task h3 { color: var(--ax-ink); }
+.ax-task p, .ax-task li, .ax-task dd, .ax-task label { color: var(--ax-ink-muted); }
+.ax-task strong, .ax-task dt { color: var(--ax-ink); }
+.ax-task a { color: var(--ax-signal); }
+.ax-task button:focus-visible, .ax-task a:focus-visible, .ax-task input:focus-visible,
+.ax-task textarea:focus-visible, .ax-task select:focus-visible {
+  outline: 2px solid var(--ax-signal); outline-offset: 2px;
+}
+
+/* Level parameters — a metadata rail, not a card grid. */
+.ax-lvlmeta { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border-top: 1px solid var(--ax-line); margin: 0 0 30px; }
+.ax-lvlmeta > div { padding: 16px 20px 16px 0; }
+.ax-lvlmeta > div + div { padding-left: 20px; border-left: 1px solid var(--ax-line); }
+.ax-lvlmeta dt { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ax-ink-faint); margin: 0 0 6px; }
+.ax-lvlmeta dd { margin: 0; font-size: 16px; color: var(--ax-ink); }
+
+/* Prev/next. A return path is part of the level's job, so it is not decoration. */
+.ax-lvlnav {
+  display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding-top: 22px; border-top: 1px solid var(--ax-line);
+}
+.ax-lvlnav a { color: var(--ax-ink-muted); text-decoration: none; font-size: 15px; }
+.ax-lvlnav a:hover { color: var(--ax-signal); }
+
+@media (max-width: 860px) {
+  .ax-lvlmeta { grid-template-columns: 1fr; }
+  .ax-lvlmeta > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--ax-line); }
+  .ax-lvlmeta > div { padding-right: 0; }
+  .ax-task { padding: 20px 16px; }
+  .ax-lvlnav { flex-direction: column; gap: 10px; }
+}

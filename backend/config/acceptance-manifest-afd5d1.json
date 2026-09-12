@@ -1,0 +1,28 @@
+{
+  "schema": "ata.acceptance-manifest/1",
+  "phase": "AFD-5D1",
+  "defaultTimeoutMs": 900000,
+  "runnable": [
+    { "script": "test:regression:ai-analyst" },
+    { "script": "test:regression:ai-analyst-e2e", "timeoutMs": 1800000 },
+    { "script": "test:regression:affiliate-analytics" },
+    { "script": "test:regression:affiliate-analytics-e2e", "timeoutMs": 1800000 },
+    { "script": "test:regression:affiliate-cohorts" },
+    { "script": "test:regression:affiliate-cohorts-e2e", "timeoutMs": 1800000 },
+    { "script": "test:regression:affiliate-leads" },
+    { "script": "test:regression:affiliate-leads-e2e", "timeoutMs": 1800000 }
+  ],
+  "excluded": [
+    {
+      "script": "smoke:integration",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    }
+  ],
+  "forbidden": [
+    {
+      "script": "test:regression:pocketcta-disposable-e2e",
+      "reason": "Reads the live POSTBACK_SECRET, sends a real callback to the live DEV backend and creates a live account. Never run by an acceptance sweep."
+    }
+  ]
+}

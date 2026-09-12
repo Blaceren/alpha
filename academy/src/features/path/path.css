@@ -1,0 +1,394 @@
+/* Путь — Route Field as an explorable workspace.
+   Phase D2A built the structure; D2A-R1 corrected the PRESENTATION layer only
+   (data model, curriculum fixture and layout engine are untouched).
+
+   Composition: scale marker + grouped module navigator + framed module window
+   (pannable on narrow) + compact checkpoint summary + contextual detail.
+   DOM nodes and the SVG connection layer share one percentage coordinate space
+   (see layout-engine.ts), so they always align. Bottom-nav compensation comes
+   from the canonical token (D1B.2). */
+
+/* ---------- page frame ---------- */
+.path-page { position: relative; padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px); }
+
+/* ---------- header ---------- */
+.path-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; }
+.path-h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.3px;
+  font-size: clamp(24px, 2.4vw, 30px); margin: 0; color: var(--text-primary); }
+.path-now { font-size: 13.5px; color: var(--text-secondary); margin: 0; }
+.path-now b { color: var(--text-primary); font-weight: 600; }
+.path-cp-ahead { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 0; }
+.path-cp-ahead b { color: var(--text-secondary); font-weight: 600; }
+
+.rtc { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  margin-left: auto; border-radius: 9px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+  font-family: inherit; color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--signal-active) 38%, transparent);
+  background: color-mix(in srgb, var(--signal-active) 8%, transparent); }
+.rtc:hover { background: color-mix(in srgb, var(--signal-active) 15%, transparent); }
+.rtc .dotmark { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--signal-active); }
+.rtc[hidden] { display: none; }
+
+/* =========================================================
+   Module navigator — scale marker + four chapters of five.
+   Roles are geometric: current = filled node mark, viewed = bracket frame.
+   ========================================================= */
+.modnav { margin-top: 16px; }
+.modnav-top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+
+.modnav-scale { display: inline-flex; align-items: baseline; gap: 3px; margin: 0;
+  font-family: var(--font-mono); }
+.mns-now { font-size: 19px; font-weight: 600; color: var(--text-primary); line-height: 1; }
+.mns-of { font-size: 12.5px; color: var(--text-muted); }
+
+.modnav-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.modnav-title { font-size: 14px; color: var(--text-primary); font-weight: 600; margin: 0; }
+.modnav-title .mm-k { font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 500; margin-right: 5px; }
+.modnav-range { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
+
+/* band: chapter groups separated by a weak boundary, horizontally scrollable */
+.modnav-band { display: flex; align-items: stretch; gap: 0; overflow-x: auto;
+  margin-top: 8px; padding-bottom: 4px; scrollbar-width: thin; touch-action: pan-x pan-y; }
+.modnav-chapter { display: flex; gap: 2px; margin: 0; padding: 0 9px; list-style: none;
+  border-left: 1px solid var(--divider); }
+.modnav-chapter:first-child { border-left: 0; padding-left: 0; }
+.modnav-chapter li { flex: 0 0 auto; }
+
+/* touch strip stays ≥44px tall; the visible mark stays small (not a big button) */
+.modseg { position: relative; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-width: 34px; min-height: 44px; padding: 0 2px;
+  border: 0; background: none; cursor: pointer; font-family: var(--font-mono); }
+.modseg .seg-in { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.modseg .num { font-style: normal; font-size: 11.5px; line-height: 1; color: var(--text-muted); }
+.modseg .tick { display: block; width: 15px; height: 3px; border-radius: 2px;
+  background: var(--divider-strong); }
+.modseg:hover .num { color: var(--text-primary); }
+
+/* progression states — trace weight carries the group meaning */
+.modseg.m-completed .num { color: var(--text-secondary); }
+.modseg.m-completed .tick { background: var(--signal-soft); }
+.modseg.m-current .num { color: var(--text-primary); }
+.modseg.m-current .tick { background: var(--signal-active); }
+.modseg.m-upcoming .num { color: var(--text-secondary); }
+.modseg.m-upcoming .tick { background: var(--route-upcoming); opacity: .8; }
+.modseg.m-locked .num { color: color-mix(in srgb, var(--text-muted) 70%, transparent); }
+.modseg.m-locked .tick { background: var(--divider); }
+
+/* distant future: compressed, quieter — never competing with the near context */
+.modseg[data-distant] { min-width: 26px; }
+.modseg[data-distant] .tick { width: 9px; height: 2px; }
+.modseg[data-distant] .num { font-size: 10.5px; }
+
+/* CURRENT — a filled node mark under the number (geometry, not colour) */
+.modseg[data-current] .seg-in::after { content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--signal-active); box-shadow: 0 0 0 3px var(--glow-current); }
+.modseg[data-current] .num { font-weight: 700; }
+
+/* VIEWED — a bracket frame around the mark (geometry, not colour) */
+.modseg[data-viewed]::before,
+.modseg[data-viewed]::after { content: ""; position: absolute; left: 2px; right: 2px; height: 6px;
+  border: 1.5px solid var(--text-secondary); }
+.modseg[data-viewed]::before { top: 3px; border-bottom: 0; border-radius: 3px 3px 0 0; }
+.modseg[data-viewed]::after { bottom: 3px; border-top: 0; border-radius: 0 0 3px 3px; }
+.modseg[data-viewed] .num { color: var(--text-primary); }
+
+.modseg:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-radius: 6px; }
+
+/* =========================================================
+   Body: framed route field + contextual detail
+   ========================================================= */
+.path-body { margin-top: 14px; }
+
+/* the field reads as a workspace viewport: framed, with corner marks */
+.path-field { position: relative; border: 1px solid var(--divider);
+  border-radius: 3px;
+  background:
+    radial-gradient(110% 90% at 30% 30%, color-mix(in srgb, var(--signal-active) 4%, transparent), transparent 55%),
+    radial-gradient(90% 110% at 86% 12%, color-mix(in srgb, var(--gate-boundary) 6%, transparent), transparent 60%);
+}
+/* corner brackets — the "you are looking through a viewport" cue */
+.path-field::before,
+.path-field::after { content: ""; position: absolute; width: 13px; height: 13px; pointer-events: none; }
+.path-field::before { top: -1px; left: -1px; border-top: 2px solid var(--divider-strong); border-left: 2px solid var(--divider-strong); }
+.path-field::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--divider-strong); border-right: 2px solid var(--divider-strong); }
+
+/* stage wraps the pannable area so the fades/affordance anchor to the canvas */
+.path-stage { position: relative; }
+.path-scroll { overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; scrollbar-width: thin; }
+.path-canvas { position: relative; width: 720px; height: 300px; }
+
+.path-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pline { fill: none; vector-effect: non-scaling-stroke; }
+.pl-completed { stroke: var(--route-completed); stroke-width: 2.2; opacity: .92; }
+.pl-upcoming { stroke: var(--route-upcoming); stroke-width: 2; opacity: .8; }
+.pl-future { stroke: var(--route-upcoming); stroke-width: 1.8; opacity: .48; stroke-dasharray: 5 7; }
+.pl-distant { stroke: var(--route-locked); stroke-width: 1.6; opacity: .55; stroke-dasharray: 2 8; }
+.pl-boundary { stroke: var(--gate-boundary); stroke-width: 2.4; opacity: .8; }
+.pl-gate { stroke: var(--gate-boundary); stroke-width: 2.4; }
+.pl-gate-back { stroke: var(--gate-boundary); stroke-width: 2.4; opacity: .45; }
+.pl-aperture { stroke: var(--signal-active); stroke-width: 1.4; opacity: .6; fill: none; }
+.pl-branch { stroke: var(--signal-active); stroke-width: 1.6; opacity: .6; stroke-dasharray: 1.5 4; }
+/* context leader: selected node → detail panel edge */
+.pl-leader { stroke: var(--focus-ring); stroke-width: 1.6; opacity: .55; stroke-dasharray: 2 3; }
+
+/* ---------- nodes ---------- */
+.pnode { position: absolute; transform: translate(-50%, -50%); min-width: 44px; min-height: 44px;
+  display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: inherit; color: inherit; z-index: 3; }
+.pnode .marker { position: relative; display: grid; place-items: center; }
+
+/* marker geometry differs by state (never colour alone) */
+.pn-completed .marker { width: 14px; height: 14px; border-radius: 50%;
+  background: var(--signal-soft); border: 1.5px solid color-mix(in srgb, var(--route-completed) 55%, transparent); }
+.pn-completed .marker::after { content: ""; width: 6px; height: 3.5px;
+  border-left: 1.6px solid #dff7ee; border-bottom: 1.6px solid #dff7ee;
+  transform: rotate(-45deg) translate(0.5px, -0.5px); }
+.pn-current .marker { width: 24px; height: 24px; border-radius: 50%;
+  border: 2.5px solid var(--signal-active); background: var(--background-field);
+  box-shadow: 0 0 0 7px var(--glow-current), 0 0 22px 4px var(--glow-current); }
+.pn-current .marker::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--signal-active); }
+@media (prefers-reduced-motion: no-preference) {
+  .pn-current .marker { animation: pnode-pulse 3.2s var(--ease-standard) infinite; }
+  @keyframes pnode-pulse {
+    0%, 100% { box-shadow: 0 0 0 6px var(--glow-current), 0 0 18px 3px var(--glow-current); }
+    50% { box-shadow: 0 0 0 9px var(--glow-current), 0 0 26px 6px var(--glow-current); }
+  }
+}
+.pn-available .marker { width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--route-upcoming); background: color-mix(in srgb, var(--route-upcoming) 12%, transparent); }
+.pn-locked .marker { width: 12px; height: 12px; border-radius: 50%;
+  border: 1.6px dashed color-mix(in srgb, var(--route-locked) 80%, transparent); background: transparent; }
+/* checkpoint nodes: diamond geometry (rotated square) */
+.pn-cp .marker { border-radius: 3px; transform: rotate(45deg); }
+.pn-cp .marker::after { transform: rotate(-45deg); }
+.pn-checkpoint-ahead .marker { width: 16px; height: 16px; border: 2px solid var(--gate-boundary); background: transparent; }
+.pn-checkpoint-ahead .marker::after { content: none; }
+.pn-checkpoint-current .marker { width: 18px; height: 18px; border: 2.5px solid var(--signal-active);
+  background: var(--background-field); box-shadow: 0 0 0 6px var(--glow-current), 0 0 20px 4px var(--glow-current); }
+.pn-checkpoint-current .marker::after { content: ""; width: 6px; height: 6px; border-radius: 1px; background: var(--signal-active); }
+@media (prefers-reduced-motion: no-preference) {
+  .pn-checkpoint-current .marker { animation: pnode-pulse 3.2s var(--ease-standard) infinite; }
+}
+.pn-checkpoint-completed .marker { width: 16px; height: 16px; border: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--gate-boundary) 40%, transparent); }
+.pn-checkpoint-completed .marker::after { content: none; }
+
+/* selection ring (keyboard/click) — geometry + outline, not colour only */
+.pnode[data-selected="true"] .marker { outline: 2px solid color-mix(in srgb, var(--focus-ring) 75%, transparent); outline-offset: 4px; }
+.pnode:focus-visible { outline: none; }
+.pnode:focus-visible .marker { outline: 2px solid var(--focus-ring); outline-offset: 5px; }
+
+/* node labels */
+.pnode-label { position: absolute; left: 50%; transform: translateX(-50%); width: 128px; text-align: center; pointer-events: none; }
+.pnode-label.side-below { top: calc(50% + 22px); }
+.pnode-label.side-above { bottom: calc(50% + 22px); }
+.pnode-label .n { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+.pnode-label .t { display: block; font-size: 12px; line-height: 1.3; color: var(--text-secondary); margin-top: 1px; }
+.pnode-label .s { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.pn-current .pnode-label .t { color: var(--text-primary); font-weight: 600; font-size: 12.5px; }
+.pn-current .pnode-label .s { color: var(--signal-active); }
+.pn-locked .pnode-label .t { color: var(--text-muted); }
+
+/* ---------- in-field gate tag (the readable summary lives below the field) ---------- */
+.gate-tag { position: absolute; transform: translateX(-50%); width: 128px; text-align: center;
+  z-index: 2; pointer-events: none; }
+.gate-tag .k { font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--gate-boundary); margin: 0; }
+.gate-tag .n { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin: 2px 0 0; }
+
+.branch-label { position: absolute; transform: translate(-50%, -115%); z-index: 2; pointer-events: none; text-align: center; }
+.branch-label .k { font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+.branch-label .v { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin: 1px 0 0; white-space: nowrap; }
+
+/* ---------- pan affordance (only while the canvas overflows) ---------- */
+.pan-fade { position: absolute; top: 0; bottom: 0; width: 46px; pointer-events: none; z-index: 4; }
+.pan-fade-l { left: 0; background: linear-gradient(90deg, var(--background-field) 18%, transparent); }
+.pan-fade-r { right: 0; background: linear-gradient(270deg, var(--background-field) 18%, transparent); }
+/* the affordance sits on the route's own vertical middle, at the right edge */
+.pan-hint { position: absolute; right: 9px; top: 50%; z-index: 5; display: inline-flex; gap: 3px;
+  transform: translateY(-50%); pointer-events: none;
+  transition: opacity var(--motion-base) var(--ease-standard); }
+.pan-hint i { display: block; width: 7px; height: 7px; border-top: 1.5px solid var(--signal-active);
+  border-right: 1.5px solid var(--signal-active); transform: rotate(45deg); opacity: .9; }
+.pan-hint i:last-child { opacity: .4; }
+@media (prefers-reduced-motion: no-preference) {
+  .pan-hint { animation: pan-nudge 2.4s var(--ease-standard) infinite; }
+  @keyframes pan-nudge {
+    0%, 100% { transform: translate(0, -50%); }
+    50% { transform: translate(4px, -50%); }
+  }
+}
+/* after the first interaction of the session the affordance softens away */
+.pan-hint[data-panned] { opacity: 0; animation: none; }
+
+/* ---------- compact checkpoint summary (outside the pannable canvas) ---------- */
+.cp-summary { position: relative; display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 2px 12px; padding: 10px 12px 10px 26px; border-top: 1px solid var(--divider); }
+.cps-mark { position: absolute; left: 11px; top: 14px; width: 8px; height: 8px; border-radius: 2px;
+  border: 1.6px solid var(--gate-boundary); transform: rotate(45deg); }
+.cps-main { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
+.cps-main b { color: var(--text-primary); font-weight: 600; }
+.cps-reward { font-size: 12px; color: var(--text-muted); margin: 0; }
+.cps-reward b { color: var(--text-secondary); font-weight: 600; }
+
+/* ---------- neighbour-module edges (footer row under the field) ---------- */
+.field-footer { display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; border-top: 1px solid var(--divider); }
+.mod-edge { display: inline-flex; align-items: center; gap: 7px;
+  min-height: 44px; padding: 0 10px; background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 12px; color: var(--text-muted); }
+.mod-edge:hover { color: var(--text-secondary); }
+.mod-edge .arr { font-family: var(--font-mono); color: var(--text-muted); }
+
+/* =========================================================
+   Detail layer — strict geometry, one expressive boundary edge, opaque.
+   ========================================================= */
+.path-detail { position: relative;
+  /* SOLID deep-navy surface: the route beneath must never read through it */
+  background: var(--surface-context);
+  border: 1px solid var(--divider-strong);
+  border-radius: 2px;
+  padding: 18px 20px 20px 22px; }
+/* the boundary edge the node's leader line lands on */
+.d-edge { position: absolute; left: -1px; top: -1px; bottom: -1px; width: 2px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--focus-ring) 70%, transparent),
+    color-mix(in srgb, var(--signal-active) 45%, transparent) 45%,
+    transparent); }
+
+.path-detail .d-eyebrow { font-size: 11.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin: 0; padding-right: 46px; }
+.path-detail h2 { font-family: var(--font-display); font-size: 19px; line-height: 1.2; font-weight: 700; color: var(--text-primary); margin: 6px 0 2px; }
+.path-detail .d-state { font-size: 12.5px; color: var(--signal-active); margin: 0 0 10px; }
+.path-detail .d-state.cold { color: var(--gate-boundary); }
+.path-detail .d-state.mut { color: var(--text-muted); }
+.path-detail .d-sec { border-top: 1px solid var(--divider); padding-top: 10px; margin-top: 10px; }
+.path-detail .d-k { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 4px; }
+.path-detail ul { margin: 0; padding: 0; list-style: none; }
+.path-detail li { font-size: 13.5px; color: var(--text-secondary); padding: 3px 0 3px 16px; position: relative; }
+.path-detail li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 2px; background: var(--divider-strong); }
+.path-detail li b { color: var(--text-primary); font-weight: 600; }
+.path-detail .d-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; }
+.path-detail .d-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* close control — ≥44×44 touch target */
+.d-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 3px; border: 0; cursor: pointer;
+  background: none; color: var(--text-muted); font-size: 16px; font-family: inherit; }
+.d-close:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+
+.d-cta { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 16px;
+  border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+  text-decoration: none; /* the lesson CTAs are links since D2B */
+  color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--signal-active) 42%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 14%, transparent),
+    color-mix(in srgb, var(--signal-active) 6%, transparent)); }
+.d-cta:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 20%, transparent),
+    color-mix(in srgb, var(--signal-active) 9%, transparent)); }
+.d-cta.quiet { border-color: var(--divider-strong); background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+
+/* scrim is mobile-only (see narrow block) */
+.path-scrim { display: none; }
+
+/* =========================================================
+   NARROW (<900) — mobile sheet over a soft scrim
+   ========================================================= */
+@media (max-width: 899px) {
+  /* the scrim dims the workspace only — the bottom nav stays lit and tappable */
+  .path-scrim { display: block; position: fixed; inset: 0 0 auto 0; z-index: 44; border: 0; padding: 0;
+    height: calc(100dvh - var(--mobile-bottom-nav-height) - env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--background-base) 72%, transparent); cursor: default; }
+
+  .path-detail { position: fixed; z-index: 45; inset-inline: 10px;
+    bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 10px);
+    /* the sheet never covers the whole screen: a Route Field strip stays visible */
+    max-height: min(56vh, 420px); overflow-y: auto;
+    border-radius: 3px;
+    box-shadow: 0 -16px 44px rgba(2, 6, 14, .6); }
+  .path-detail .d-actions { position: sticky; bottom: 0; margin-top: 16px; padding-top: 12px;
+    background: var(--surface-context); }
+}
+
+/* =========================================================
+   WIDE (≥900) — detail as a plane anchored to the selected node
+   ========================================================= */
+@media (min-width: 900px) {
+  .path-page { padding: 26px clamp(28px, 4vw, 56px) 40px; }
+  .path-scroll { overflow: visible; }
+  .path-canvas { width: 100%; height: clamp(360px, 46vh, 480px); }
+  .path-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+  /* No gap: the panel becomes the workspace's right wall, so the leader line
+     from the selected node lands directly on its boundary edge. */
+  .path-body.detail-open { grid-template-columns: minmax(0, 1fr) minmax(292px, 344px); align-items: start; }
+  .path-body.detail-open .path-field { border-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .path-body.detail-open .path-field::after { display: none; }
+  .path-detail { align-self: stretch; border-left: 0; border-radius: 0 3px 3px 0; }
+  .pnode-label { width: 148px; }
+  .pnode-label .t { font-size: 12.5px; }
+  .gate-tag { width: 150px; }
+  .cp-summary { padding: 11px 14px 11px 28px; }
+}
+
+@media (min-width: 1200px) {
+  .path-page { padding: 30px clamp(40px, 5vw, 84px) 44px; }
+  .path-body.detail-open { grid-template-columns: minmax(0, 1fr) 360px; }
+  .path-canvas { height: clamp(380px, 52vh, 540px); }
+}
+
+/* =========================================================
+   SHORT VIEWPORTS (landscape phones, 200% zoom)
+   The bottom nav is fixed: meaningful route content must clear it, so the
+   header/navigator compress and the canvas height derives from the space that
+   is actually left. The current node is never traded away for the header.
+   ========================================================= */
+@media (max-height: 560px) {
+  .path-page { padding-top: 8px; }
+  /* header collapses to a single baseline row (title + "where am I now") */
+  .path-head > div { display: contents; }
+  .path-h1 { font-size: 19px; }
+  .path-now { font-size: 12.5px; }
+  .path-cp-ahead { display: none; }
+  .path-head { gap: 4px 14px; }
+
+  .modnav { margin-top: 8px; }
+  .modnav-meta { display: none; }   /* module title stays in the header line */
+  .modnav-band { margin-top: 5px; padding-bottom: 2px; }
+  .modseg { min-height: 44px; }     /* touch strip is never traded away */
+  .mns-now { font-size: 16px; }
+  .path-body { margin-top: 8px; }
+
+  /* Node labels collapse to a single inline line (number + title) so they fit
+     inside the short canvas instead of being clipped by it, and so the route's
+     lowest text still clears the bottom bar. The per-node state word drops here
+     only: state is still carried by the marker GEOMETRY (five distinct shapes),
+     by each node's accessible name and by the detail layer — never by colour. */
+  .pnode-label { width: 176px; line-height: 1.2; }
+  .pnode-label .n { display: inline; font-size: 10px; margin-right: 4px; }
+  .pnode-label .t { display: inline; font-size: 10.5px; }
+  .pnode-label .s { display: none; }
+  .pn-current .pnode-label .t { font-size: 10.5px; }
+  .pnode-label.side-below { top: calc(50% + 14px); }
+  .pnode-label.side-above { bottom: calc(50% + 14px); }
+
+  .field-footer .mod-edge { min-height: 38px; font-size: 11.5px; }
+  .path-detail { max-height: 74vh; }
+  .cps-mark { top: 11px; }
+  .cp-summary { padding: 7px 10px 7px 24px; }
+}
+
+/* Tier 1 — moderately short (200% zoom, small laptop windows).
+   Both the route and the gate summary fit: the summary moves ABOVE the field so
+   the nearest checkpoint (threshold + reward) is inside the first viewport and
+   never depends on panning the canvas. */
+@media (max-height: 560px) and (min-height: 421px) {
+  .path-field { display: flex; flex-direction: column; }
+  .cp-summary { order: -1; border-top: 0; border-bottom: 1px solid var(--divider); }
+  .path-canvas { height: clamp(135px, calc(100dvh - 310px), 235px); }
+}
+
+/* Tier 2 — very short (landscape phones). There is not enough room for both, so
+   the first viewport is spent on what §7 prioritises: the route and the current
+   node. The gate summary keeps its place under the field, below the fold, and
+   the page scrolls to it. The current node is never traded for chrome. */
+@media (max-height: 420px) {
+  .path-canvas { height: clamp(127px, calc(100dvh - 258px), 200px); }
+}

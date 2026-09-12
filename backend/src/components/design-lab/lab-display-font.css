@@ -1,0 +1,10 @@
+/*
+ * POCKET-REG-SECURITY-CLOSURE-1 (F3/P2). Binds each design-lab display variable
+ * to the vendored root-layout face plus the platform stack. See
+ * `lab-display-font.ts` for why these are no longer remote Google fonts.
+ */
+.lab-display-a    { --font-lab-a: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.lab-display-c    { --font-lab-c: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.lab-display-tqv2 { --tqv2-display: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.lab-display-v7   { --v7-display: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.lab-display-v3   { --tqv3-display: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }

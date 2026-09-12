@@ -1,0 +1,1160 @@
+/*
+ * TOOLS — the frozen Tools design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: ToolsATA @ b65f309aadc2a46cb24d8d22c577838459006371 —
+ * `prototype/phase2/shell.css` (the accepted ATA palette and base type),
+ * `prototype/phase3-system/tokens.css`, `prototype/phase3-system/system.css`
+ * (the component primitives) and `prototype/phase4-pages/pages.css` (the page
+ * composition), concatenated in the order the frozen frame links them. Every
+ * value is carried across UNCHANGED: 173 selectors, 0 escaping the namespace,
+ * 0 remote URLs, no !important on either side, and the only changed
+ * declarations are the four font bindings below.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. Both families are bound to the product's locally vendored faces —
+ *    "ATA Manrope" and "ATA IBM Plex Mono" — in all four token names the frozen
+ *    files declare (`--ui`/`--mono` and `--ata-ui`/`--ata-mono`).
+ *
+ * 2. Every selector is namespaced under `.tls`.
+ *
+ * 3. `prototype/phase4-pages/shell.css` IS NOT INCLUDED. It is entirely the
+ *    prototype's own topbar — nineteen selectors, all `.topbar*` and `.shell` —
+ *    and the product keeps the accepted AppShell. The frozen Tools source says
+ *    the same thing in its own words: "Tools does not own the shell and does not
+ *    redesign it", and its shell renderer's comment records that the structure
+ *    was inherited verbatim from the product's own `app-shell.tsx`. Including it
+ *    would have added nineteen dead rules and one more thing to explain.
+ *
+ * 4. The chrome rules that DO ride along, from the Phase-2 foundation
+ *    (`.appbar`, `.bottomnav`, `.rnav`, `.brand`, `.avatar`, `.iconbtn`,
+ *    `.mtop`, `.shell`, `.main`), are dead for the same reason: this surface
+ *    emits none of those elements. They are kept because that file also carries
+ *    the palette, the base type and the focus ring, and splitting it would mean
+ *    editing frozen content.
+ *
+ * 5. `html.tls-root-scope` carries the frozen document reset and nothing ever
+ *    adds that class.
+ *
+ * THE ONE RULE THAT IS NOT FROZEN DESIGN lives in its own file,
+ * `tools-fidelity-safety.css`, so that this file's parity proof stays intact
+ * and the exception is impossible to miss.
+ */
+
+/* --- phase2/shell.css --- */
+/* ATA TOOLS — SHARED FOUNDATION + CANONICAL AUTHENTICATED SHELL
+   ---------------------------------------------------------------------
+   The shell is NOT a Tools design decision. Structure, geometry and
+   breakpoint are inherited from the canonical Academy shell:
+     src/components/shell/app-shell.tsx        — "desktop/tablet top command
+       band + mobile top bar + mobile bottom navigation. No sidebar."
+     src/components/navigation/desktop-route-navigation.tsx   — nav.rnav
+     src/components/navigation/mobile-bottom-navigation.tsx   — 4 slots + Ещё
+     src/features/home/home.css                — .appbar/.mtop/.bottomnav
+   Only the PALETTE is the accepted ATA foundation; the legacy teal
+   --signal-active is replaced by ATA Signal. Nothing else is redesigned. */
+
+.tls {
+  --ink-900:#0B0D0A; --ink-800:#11140F; --ink-700:#1A1F18;
+  --sig-500:#C7F76D; --sig-300:#D9FF91; --sig-600:#B7EA5D; --sig-700:#A8D84F;
+  --line-1:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12); --line-3:rgba(255,255,255,.20);
+  --txt-1:#EDF0EA; --txt-2:#A6ADA0; --txt-3:#6E766A; --txt-4:#4C534A;
+  --focus:var(--sig-500);
+  --mobile-bottom-nav-height:60px;
+  --ui:"ATA Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"ATA IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+.tls * {box-sizing:border-box}
+html.tls-root-scope,
+.tls {margin:0;padding:0}
+.tls {background:var(--ink-900);color:var(--txt-1);font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.5}
+.tls .mono {font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tls a {color:inherit;text-decoration:none}
+.tls :focus-visible {outline:2px solid var(--focus);outline-offset:2px}
+.tls .shell {display:flex;flex-direction:column;min-height:100vh}
+.tls .main {position:relative;flex:1;overflow-x:clip;min-width:0}
+
+/* ---------- desktop top command band (canonical .appbar / .rnav) ---------- */
+.tls .appbar {display:none;align-items:center;gap:clamp(12px,2vw,24px);
+  height:60px;padding:0 clamp(20px,3vw,34px);border-bottom:1px solid var(--line-1)}
+.tls .brand {display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:15px;
+  color:var(--txt-1);letter-spacing:.02em}
+.tls .brand .mark {width:22px;height:22px;flex:0 0 auto;border-radius:5px;
+  background:linear-gradient(135deg,var(--sig-700),var(--sig-500))}
+.tls .rnav {display:flex;gap:2px}
+.tls .rnav a {position:relative;color:var(--txt-3);font-size:14px;padding:8px 12px;border-radius:8px}
+.tls .rnav [aria-current="page"] {color:var(--txt-1)}
+.tls .rnav [aria-current="page"]::after {content:"";position:absolute;left:10px;right:10px;bottom:2px;
+  height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--sig-500),transparent)}
+.tls .appbar .spacer {margin-left:auto}
+.tls .appbar .actions {display:inline-flex;align-items:center;gap:12px}
+.tls .iconbtn {display:inline-grid;place-items:center;width:44px;height:44px;border-radius:12px;
+  color:var(--txt-3);position:relative;font-size:15px}
+.tls .iconbtn .dot {position:absolute;top:9px;right:9px;width:7px;height:7px;border-radius:50%;
+  background:var(--sig-500);box-shadow:0 0 0 2px var(--ink-900)}
+.tls .avatar {display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;
+  font-weight:600;font-size:13px;color:var(--ink-900);
+  background:linear-gradient(135deg,var(--sig-700),var(--sig-500))}
+
+/* ---------- mobile top bar (canonical .mtop) ---------- */
+.tls .mtop {display:flex;align-items:center;justify-content:space-between;
+  height:54px;padding:0 16px;border-bottom:1px solid var(--line-1)}
+.tls .mtop .actions {display:inline-flex;align-items:center;gap:8px}
+
+/* ---------- mobile bottom navigation (canonical .bottomnav) ---------- */
+.tls .bottomnav {position:fixed;inset-inline:0;bottom:0;z-index:40;display:block;
+  min-height:var(--mobile-bottom-nav-height);border-top:1px solid var(--line-1);
+  background:color-mix(in srgb,var(--ink-900) 88%,transparent);backdrop-filter:blur(6px)}
+.tls .bottomnav ul {display:flex;justify-content:space-around;margin:0;padding:0 4px;list-style:none}
+.tls .bottomnav a,
+.tls .bottomnav button {min-width:56px;min-height:54px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;font-size:10.5px;color:var(--txt-3);
+  background:none;border:0;font-family:inherit}
+.tls .bottomnav .ico {font-size:15px;line-height:1}
+.tls .bottomnav [aria-current="page"] {color:var(--sig-500)}
+.tls .bottomnav [aria-current="page"] .lbl {position:relative}
+.tls .bottomnav [aria-current="page"] .lbl::after {content:"";position:absolute;left:0;right:0;bottom:-3px;
+  height:2px;border-radius:2px;background:var(--sig-500)}
+
+/* canonical NAV breakpoint: the desktop band replaces the mobile bars at >=900px */
+@media (min-width:900px){
+  .tls .appbar {display:flex}
+  .tls .mtop {display:none}
+  .tls .bottomnav {display:none}
+}
+@media (max-width:899px){
+  .tls .main {padding-bottom:calc(var(--mobile-bottom-nav-height) + 24px)}
+}
+
+.tls .back {display:inline-block;color:var(--txt-3);font-size:13px;margin-bottom:20px}
+.tls .back:before {content:"← "}
+
+/* --- phase3-system/tokens.css --- */
+/* ATA TOOLS — PHASE 3 — SEMANTIC TOKENS
+   =====================================================================
+   Tokens encode MEANING, not screenshots. Every value here traces to the
+   accepted Direction C baseline (2d93f8e), but only values with a
+   repeatable purpose were promoted. Accidental prototype numbers were
+   either folded into the nearest scale step or kept as a COMPONENT token
+   where the accepted direction proved a specific geometry.
+
+   Three tiers, deliberately:
+     FOUNDATION  — the raw ATA palette and type families. Not Tools-owned.
+     SEMANTIC    — what a role means in Tools. This is the Tools contract.
+     COMPONENT   — geometry a specific accepted surface proved.
+
+   Tools does NOT own the ATA palette, the type families, or the global
+   shell. It owns how those are ASSIGNED to Tools roles.
+   ===================================================================== */
+
+.tls {
+  /* ---------------- FOUNDATION — accepted ATA, not Tools-owned -------- */
+  --ata-ink-900:#0B0D0A;  --ata-ink-800:#11140F;  --ata-ink-700:#1A1F18;
+  --ata-sig-300:#D9FF91;  --ata-sig-500:#C7F76D;
+  --ata-sig-600:#B7EA5D;  --ata-sig-700:#A8D84F;
+  --ata-text-100:#EDF0EA; --ata-text-300:#A6ADA0;
+  --ata-text-500:#6E766A; --ata-text-700:#4C534A;
+  --ata-ui:"ATA Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --ata-mono:"ATA IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  /* ---------------- SEMANTIC — surface -------------------------------- */
+  /* canvas is the working ground; raised is ONLY for an editable field or
+     a semantically bounded object. There is no generic "card" surface. */
+  --surface-canvas:var(--ata-ink-900);
+  --surface-raised:var(--ata-ink-800);
+  --surface-object:var(--ata-ink-700);
+
+  /* ---------------- SEMANTIC — text ----------------------------------- */
+  /* four roles only. A fifth tier would be a hierarchy nobody can read. */
+  --text-primary:var(--ata-text-100);    /* the learner's own work, state truth */
+  --text-secondary:var(--ata-text-300);  /* condition, action, supporting value */
+  /*
+   * THE CATALOGUE IS NOT DISABLED, AND MUST NOT READ AS IF IT WERE.
+   *
+   * Seventeen of nineteen rows are locked for almost every learner, so the two
+   * quiet steps of this ramp carry most of the page. Measured on the register's
+   * own canvas they were #6E766A at 4.15:1 and #4C534A at 2.46:1 — the second
+   * of those is below even the large-text floor, at 12.5px. The tool names, the
+   * purposes and the unlock conditions were not recessive; they were unreadable,
+   * which is what made the whole register look switched off.
+   *
+   * Same hue, same role for each step, raised until both clear WCAG AA for body
+   * text: 5.22:1 and 4.63:1. Recession is now carried by weight, position and
+   * the column structure — never by taking the words away from the reader.
+   */
+  --text-tertiary:#7D8779;               /* purpose, section label, caveat — 5.22:1 */
+  --text-quiet:#757E71;                  /* provenance, trace, placeholder — 4.63:1 */
+
+  /* ---------------- SEMANTIC — signal --------------------------------- */
+  /* Signal means ACTION · FOCUS · SELECTION · CURRENT INTERACTION.
+     It never means unlocked, available, persistent, advanced, important,
+     success, completed, reward, profit, or "history exists". */
+  --signal-action:var(--ata-sig-500);
+  --signal-focus:var(--ata-sig-500);
+  --signal-edge:var(--ata-sig-700);      /* action border, never a fill */
+  --signal-current:var(--ata-sig-500);   /* current destination marker */
+
+  /* ---------------- SEMANTIC — rule ----------------------------------- */
+  /* Direction C separates with rules, not boxes. Four weights is enough. */
+  --rule-subtle:rgba(255,255,255,.07);   /* row separation */
+  --rule-default:rgba(255,255,255,.12);  /* section / field boundary */
+  --rule-strong:rgba(255,255,255,.20);   /* rare structural division */
+  --rule-focus:var(--signal-focus);
+
+  /* ---------------- SEMANTIC — type size ------------------------------ */
+  --type-page-title:23px;       /* register / surface H1 */
+  --type-surface-title:22px;
+  --type-work:13.5px;           /* the learner's own content */
+  --type-capability:15px;       /* capability name in the register */
+  --type-state-lead:16px;       /* the one sentence a held state leads with */
+  --type-action:13.5px;
+  --type-purpose:13px;
+  --type-condition:12.5px;
+  --type-label:12.5px;          /* section + form label */
+  --type-caveat:12px;
+  --type-micro:11.5px;          /* field hint */
+  --type-provenance:11px;       /* mono level mark, dates */
+  --type-field:14px;            /* mono input value */
+
+  /* ---------------- SEMANTIC — type weight / rhythm ------------------- */
+  --weight-title:650;
+  --weight-strong:600;
+  --weight-body:400;
+  --weight-recessive:500;       /* locked capability name */
+  --leading-tight:1.25;         /* titles */
+  --leading-body:1.5;
+  --tracking-title:-.015em;
+  --tracking-label:.01em;
+
+  /* ---------------- SEMANTIC — spacing scale -------------------------- */
+  /* Eight steps. Deliberately short: the accepted direction proved that
+     rhythm, not variety, is what makes 19 heterogeneous rows cohere. */
+  --space-micro:4px;      /* within one line of text */
+  --space-tight:6px;      /* label → control */
+  --space-inline:8px;     /* between inline siblings */
+  --space-control:12px;   /* inside a control */
+  --space-row:16px;       /* between records */
+  --space-block:20px;     /* between blocks in a section */
+  --space-section:28px;   /* between sections */
+  --space-surface:34px;   /* surface outer padding */
+
+  /* ---------------- SEMANTIC — width / measure ------------------------ */
+  --width-register:1080px;      /* register + structured work surfaces */
+  --width-prose:760px;          /* state-copy-heavy surfaces */
+  --measure-work:70ch;          /* the learner's own content */
+  --measure-purpose:72ch;
+  --measure-lead:62ch;
+  --measure-caveat:62ch;
+  --measure-await:34ch;
+
+  /* ---------------- SEMANTIC — control -------------------------------- */
+  --control-height:42px;        /* field and action, same height by contract */
+  --control-radius:6px;         /* the ONLY radius in the system */
+  --control-pad-x:12px;
+  --action-pad-x:20px;
+  --touch-min:44px;             /* pointer-free minimum */
+  --touch-nav:54px;             /* canonical shell nav target */
+
+  /* ---------------- SEMANTIC — focus ---------------------------------- */
+  --focus-ring-width:2px;
+  --focus-ring-offset:2px;
+  --focus-ring-color:var(--signal-focus);
+
+  /* ---------------- COMPONENT — register geometry --------------------- */
+  /* 13px row padding and a 52px provenance gutter are not scale steps;
+     they are the density the accepted register proved at 19 entries. */
+  --register-row-pad-y:13px;
+  --register-gutter:52px;
+  --register-gutter-mobile:40px;
+  --register-gutter-gap:18px;
+  --register-gutter-gap-mobile:12px;
+  --register-purpose-lines:2;
+
+  /* ---------------- COMPONENT — owned-work trace ---------------------- */
+  /* P3-C1 closure: the trace is bounded so persistence cannot buy weight. */
+  --trace-max-lines:1;
+  --trace-max-lines-mobile:2;
+  --trace-measure:44ch;
+
+  /* ---------------- COMPONENT — result region ------------------------- */
+  --result-slot-width:84px;     /* awaiting slot, never a dash */
+  --result-row-pad-y:11px;
+
+  /* ---------------- MOTION -------------------------------------------- */
+  /* Only state change earns motion. No ambient animation exists in this
+     system. Duration is defined because focus/expansion need one value. */
+  --motion-state:120ms;
+  --motion-ease:cubic-bezier(.2,.0,.2,1);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .tls { --motion-state:0ms }
+}
+
+/* --- phase3-system/system.css --- */
+/* ATA TOOLS — PHASE 3 — SURFACE SYSTEM
+   =====================================================================
+   Formalizes the accepted Direction C into repeatable primitives. Every
+   rule here is expressed in semantic tokens; no raw colour or size may
+   appear below this line except where a token would be meaningless.
+
+   The system answers one question: how do 19 heterogeneous capabilities
+   belong to one surface system without becoming 19 identical cards or 19
+   unrelated mini-applications? Answer: a SHARED IDENTITY GRAMMAR and a
+   SHARED STATE GRAMMAR, with the working canvas left family-owned.
+   ===================================================================== */
+
+/* ============================ base ============================ */
+.tls * {box-sizing:border-box}
+html.tls-root-scope,
+.tls {margin:0;padding:0}
+.tls {
+  background:var(--surface-canvas);
+  color:var(--text-primary);
+  font-family:var(--ata-ui);
+  font-size:15px;
+  line-height:var(--leading-body);
+  -webkit-font-smoothing:antialiased;
+}
+.tls a {color:inherit;text-decoration:none}
+.tls .mono {font-family:var(--ata-mono);font-variant-numeric:tabular-nums}
+
+/* Focus is a system contract, not a component decision. Signal appears
+   here because focus IS one of Signal's four meanings. */
+.tls :focus-visible {
+  outline:var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset:var(--focus-ring-offset);
+}
+
+/* ============================ surface ============================ */
+.tls .t-surface {
+  padding:var(--space-surface) clamp(20px,3vw,var(--space-surface))
+          calc(var(--space-surface) * 2.5);
+  max-width:var(--width-register);
+  /* The register had a max width and no centring, so on any desktop it sat in a
+     column against the left edge with the rest of the viewport empty. A bounded
+     measure is the point; parking it in one corner was not. */
+  margin-inline:auto;
+}
+.tls .t-surface--prose {max-width:var(--width-prose)}
+
+/* ---- return / entry context: mandatory on every specialized surface ---- */
+.tls .t-return {
+  display:inline-block;
+  color:var(--text-tertiary);
+  font-size:var(--type-purpose);
+  margin-bottom:var(--space-block);
+}
+.tls .t-return:before {content:"← "}
+
+/* ---- capability identity: the shared grammar across all seven families ---- */
+.tls .t-identity {
+  padding-bottom:var(--space-block);
+  border-bottom:1px solid var(--rule-default);
+  margin-bottom:var(--space-section);
+}
+.tls .t-identity h1 {
+  font-size:var(--type-surface-title);
+  font-weight:var(--weight-title);
+  letter-spacing:var(--tracking-title);
+  line-height:var(--leading-tight);
+  margin:0 0 var(--space-tight);
+}
+.tls .t-identity .t-purpose {
+  color:var(--text-tertiary);
+  font-size:var(--type-action);
+  margin:0;
+  max-width:var(--measure-lead);
+}
+/* Working metadata, NOT unlock provenance. Provenance is absent here by
+   contract: a capability outgrows the level that introduced it. */
+.tls .t-identity .t-worknote {
+  font-size:var(--type-condition);
+  color:var(--text-quiet);
+  margin:var(--space-tight) 0 0;
+}
+
+.tls .t-page-title {
+  font-size:var(--type-page-title);
+  font-weight:var(--weight-title);
+  letter-spacing:var(--tracking-title);
+  line-height:var(--leading-tight);
+  margin:0 0 var(--space-tight);
+}
+.tls .t-lead {
+  color:var(--text-tertiary);
+  font-size:var(--type-action);
+  max-width:var(--measure-lead);
+  margin:0 0 var(--space-section);
+}
+
+/* ---- working section: rule-defined region (containment level 1) ---- */
+.tls .t-section {margin-top:var(--space-section)}
+.tls .t-section-label {
+  font-size:var(--type-label);
+  font-weight:var(--weight-strong);
+  color:var(--text-tertiary);
+  letter-spacing:var(--tracking-label);
+  margin:0 0 var(--space-control);
+}
+
+/* ---- supporting truth / caveat: the honesty line, always last ---- */
+.tls .t-caveat {
+  color:var(--text-quiet);
+  font-size:var(--type-caveat);
+  margin-top:var(--space-block);
+  max-width:var(--measure-caveat);
+}
+
+/* ============================ register ============================ */
+.tls .t-register {border-top:1px solid var(--rule-subtle)}
+.tls .t-entry {
+  display:grid;
+  grid-template-columns:var(--register-gutter) minmax(0,1fr);
+  gap:0 var(--register-gutter-gap);
+  padding:var(--register-row-pad-y) 0;
+  border-bottom:1px solid var(--rule-subtle);
+}
+/* provenance locus — quiet, mono, never competing with identity */
+.tls .t-entry-provenance {
+  font-family:var(--ata-mono);
+  font-size:var(--type-provenance);
+  color:var(--text-quiet);
+  padding-top:3px;
+}
+.tls .t-entry-body {min-width:0}
+.tls .t-entry-head {display:flex;align-items:baseline;gap:var(--space-row)}
+.tls .t-entry-name {
+  font-size:var(--type-capability);
+  font-weight:var(--weight-strong);
+  margin:0;
+  flex:1 1 auto;
+  min-width:0;
+}
+/* Action is text, not a button, and NOT Signal at rest: the register is a
+   register, not nineteen calls to action. */
+.tls .t-entry-action {
+  flex:0 0 auto;
+  font-size:var(--type-purpose);
+  color:var(--text-secondary);
+}
+.tls .t-entry-purpose {
+  color:var(--text-tertiary);
+  font-size:var(--type-purpose);
+  margin:2px 0 0;
+  max-width:var(--measure-purpose);
+  display:-webkit-box;
+  -webkit-line-clamp:var(--register-purpose-lines);
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+/* STABLE STATE LOCUS — always the last line, same place, never labelled */
+.tls .t-entry-condition {
+  font-size:var(--type-condition);
+  color:var(--text-secondary);
+  margin:5px 0 0;
+  max-width:78ch;
+}
+/* OWNED-WORK TRACE — bounded by contract (P3-C1).
+   The separator is punctuation (content), the gap is layout (margin):
+   an inline-block with nowrap collapses the whitespace that would
+   otherwise sit between the condition and the trace. */
+.tls .t-trace {
+  color:var(--text-quiet);
+  margin-left:.35em;
+  display:inline-block;
+  max-width:var(--trace-measure);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  vertical-align:bottom;
+}
+.tls .t-trace:before {content:"— «"}
+.tls .t-trace:after {content:"»"}
+
+/* Locked entries recede by WEIGHT, not by fading out of legibility: the name
+   drops a step in the ramp and loses its strong weight, and the purpose keeps
+   the same colour it has on an open row. A learner deciding whether a tool is
+   worth working towards has to be able to read what it is. */
+.tls .t-entry--locked .t-entry-name {
+  color:var(--text-secondary);
+  font-weight:var(--weight-recessive);
+}
+.tls .t-entry--locked .t-entry-condition {color:var(--text-tertiary)}
+
+/* ============================ records (F1) ============================ */
+.tls .t-record {
+  padding:var(--register-row-pad-y) 0;
+  border-bottom:1px solid var(--rule-subtle);
+}
+.tls .t-record-meta {
+  display:flex;
+  gap:var(--space-control);
+  align-items:baseline;
+  margin-bottom:3px;
+}
+.tls .t-record-date {
+  font-family:var(--ata-mono);
+  font-size:var(--type-provenance);
+  color:var(--text-quiet);
+}
+.tls .t-record-context {font-size:var(--type-condition);color:var(--text-tertiary)}
+.tls .t-record-body {
+  margin:0;
+  font-size:var(--type-work);
+  color:var(--text-primary);
+  max-width:var(--measure-work);
+}
+
+/* ---- primary action: the one place Signal is allowed on a surface ---- */
+.tls .t-action {
+  display:inline-block;
+  margin-top:var(--space-block);
+  font-size:var(--type-action);
+  color:var(--signal-action);
+}
+.tls .t-action:focus-visible {outline-offset:4px}
+
+/* ============================ field / result (F4) ============================ */
+/* The F4 grammar: INPUT territory → ACTION → RESULT territory. The two
+   territories are structurally different, not merely labelled. */
+.tls .t-work-split {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:clamp(var(--space-section),5vw,64px);
+  align-items:start;
+}
+.tls .t-field {display:block;margin-bottom:var(--space-row)}
+.tls .t-field-label {
+  display:block;
+  font-size:var(--type-label);
+  color:var(--text-secondary);
+  margin-bottom:var(--space-tight);
+}
+/* containment level 2 — a real editable object */
+.tls .t-field-control {
+  display:flex;
+  align-items:center;
+  gap:var(--space-inline);
+  background:var(--surface-raised);
+  border:1px solid var(--rule-default);
+  border-radius:var(--control-radius);
+  padding:0 var(--control-pad-x);
+  height:var(--control-height);
+  transition:border-color var(--motion-state) var(--motion-ease);
+}
+.tls .t-field-control:focus-within {border-color:var(--rule-focus)}
+.tls .t-field-control input {
+  flex:1 1 auto;min-width:0;height:100%;
+  background:transparent;border:0;outline:none;
+  color:var(--text-primary);
+  font-family:var(--ata-mono);
+  font-size:var(--type-field);
+}
+.tls .t-field-control input::placeholder {color:var(--text-quiet)}
+/* the unit is decoration for sighted users; the label carries the meaning */
+.tls .t-field-unit {flex:0 0 auto;font-size:var(--type-condition);color:var(--text-quiet)}
+.tls .t-field-hint {
+  display:block;
+  font-size:var(--type-micro);
+  color:var(--text-quiet);
+  margin-top:5px;
+}
+.tls .t-run {
+  margin-top:var(--space-micro);
+  height:var(--control-height);
+  padding:0 var(--action-pad-x);
+  border-radius:var(--control-radius);
+  border:1px solid var(--signal-edge);
+  background:transparent;
+  color:var(--signal-action);
+  font-family:inherit;
+  font-size:var(--type-action);
+  cursor:pointer;
+}
+/* result territory — labelled slots that are visibly AWAITING, never dashes */
+.tls .t-result {
+  border-left:1px solid var(--rule-subtle);
+  padding-left:clamp(var(--space-block),3vw,var(--space-section));
+}
+.tls .t-result-row {
+  display:flex;justify-content:space-between;align-items:baseline;
+  gap:var(--space-row);
+  padding:var(--result-row-pad-y) 0;
+  border-bottom:1px solid var(--rule-subtle);
+}
+.tls .t-result-key {font-size:var(--type-purpose);color:var(--text-tertiary)}
+.tls .t-result-awaiting {
+  flex:0 0 var(--result-slot-width);
+  height:1px;
+  background:var(--rule-default);
+  align-self:center;
+}
+.tls .t-result-note {
+  margin:var(--space-control) 0 0;
+  font-size:var(--type-condition);
+  color:var(--text-quiet);
+  max-width:var(--measure-await);
+}
+
+/* ============================ data rows (F5) ============================ */
+/* Three aligned columns: key · value · coverage. Coverage rides WITH the
+   value — never a footnote a reader can skip — but it must not read AS
+   the value. Both are numeric, so separation is structural: the value
+   right-aligns to its own column and coverage occupies a fixed column
+   after it, so denominators stack vertically and stay legible as a
+   distinct quantity. Visual confidence may not exceed data confidence. */
+.tls .t-datarow {
+  display:flex;align-items:baseline;gap:var(--space-block);
+  padding:10px 0;
+  border-bottom:1px solid var(--rule-subtle);
+  font-size:var(--type-work);
+  max-width:64ch;
+}
+.tls .t-datarow-key {color:var(--text-tertiary);flex:1 1 auto;min-width:0}
+.tls .t-datarow-value {
+  font-family:var(--ata-mono);
+  color:var(--text-secondary);
+  flex:0 0 auto;
+  text-align:right;
+  min-width:3ch;
+}
+.tls .t-coverage {
+  flex:0 0 11ch;
+  color:var(--text-quiet);
+  font-size:var(--type-caveat);
+  font-family:var(--ata-ui);
+  text-align:right;
+}
+/* the spacer cell keeps columns aligned on rows that have no coverage;
+   it must stay wordless */
+.tls .t-coverage:not(:empty):before {content:"охват "}
+.tls .t-datarow-value--missing {color:var(--text-quiet)}
+
+/* ============================ held states ============================ */
+.tls .t-state {margin:0;max-width:var(--measure-lead)}
+.tls .t-state-truth {
+  font-size:var(--type-state-lead);
+  color:var(--text-primary);
+  margin:0 0 var(--space-inline);
+}
+.tls .t-state-meaning {font-size:var(--type-work);color:var(--text-tertiary);margin:0}
+.tls .t-list {
+  margin:0;padding-left:18px;
+  color:var(--text-secondary);
+  font-size:var(--type-work);
+  max-width:60ch;
+}
+.tls .t-list li {padding:var(--space-micro) 0}
+
+/* ============================ case fields (F7) ============================ */
+.tls .t-case-field {padding:14px 0;border-bottom:1px solid var(--rule-subtle)}
+.tls .t-case-key {
+  font-size:var(--type-label);
+  font-weight:var(--weight-strong);
+  color:var(--text-tertiary);
+  margin:0 0 var(--space-micro);
+}
+.tls .t-case-value {
+  margin:0;
+  font-size:var(--type-work);
+  color:var(--text-primary);
+  max-width:var(--measure-work);
+}
+
+/* ============================ responsive continuum ============================ */
+/* Tools does NOT own the shell breakpoint (900px). These are CONTENT
+   breakpoints: they describe how Tools content behaves inside whatever
+   width the shell hands it. */
+
+/* 1024 — compact desktop: the register keeps its anatomy, the surface
+   simply narrows. Nothing reflows yet. */
+@media (max-width:1100px){
+  .tls .t-surface {padding-left:clamp(20px,3vw,28px);padding-right:clamp(20px,3vw,28px)}
+}
+
+/* 768 — the split working canvas can no longer hold two columns. */
+@media (max-width:820px){
+  .tls .t-work-split {grid-template-columns:minmax(0,1fr);gap:var(--space-section)}
+  .tls .t-result {
+    border-left:0;
+    border-top:1px solid var(--rule-subtle);
+    padding-left:0;
+    padding-top:var(--space-block);
+  }
+}
+
+/* 430 and below — mobile. Register compresses; measures release. */
+@media (max-width:899px){
+  .tls .t-surface {
+    padding:var(--space-section) var(--space-row) var(--space-surface);
+  }
+  .tls .t-page-title {font-size:21px}
+  .tls .t-lead {margin-bottom:var(--space-block);font-size:var(--type-purpose)}
+  .tls .t-entry {
+    grid-template-columns:var(--register-gutter-mobile) minmax(0,1fr);
+    gap:0 var(--register-gutter-gap-mobile);
+    padding:11px 0;
+  }
+  .tls .t-entry-head {flex-wrap:wrap;gap:var(--space-micro) var(--space-control)}
+  .tls .t-entry-purpose {font-size:var(--type-condition)}
+  .tls .t-entry-condition {font-size:var(--type-caveat);margin-top:var(--space-micro)}
+  /* the trace may take a second line on mobile rather than truncate to
+     meaninglessness, but it still may not become a block */
+  .tls .t-trace {
+    white-space:normal;
+    max-width:100%;
+    display:inline;
+    -webkit-line-clamp:var(--trace-max-lines-mobile);
+  }
+  .tls .t-record-body,
+.tls .t-case-value,
+.tls .t-entry-purpose,
+.tls .t-entry-condition,
+.tls .t-lead,
+.tls .t-state,
+.tls .t-datarow {max-width:100%}
+  /* the fixed shell nav must never sit on top of the last action */
+  .tls .t-surface {padding-bottom:calc(var(--mobile-bottom-nav-height,60px) + var(--space-section))}
+}
+
+/* 360 — smallest supported. Only the gutter gives way; nothing clips. */
+@media (max-width:380px){
+  .tls .t-surface {padding-left:var(--space-control);padding-right:var(--space-control)}
+  .tls .t-entry {grid-template-columns:34px minmax(0,1fr);gap:0 var(--space-inline)}
+  .tls .t-entry-head {gap:2px var(--space-inline)}
+}
+
+/* --- phase4-pages/pages.css --- */
+/* ATA TOOLS — PHASE 4 — PAGE COMPOSITION
+   =====================================================================
+   APPLIES the frozen Phase-3 system. It does not modify it.
+
+   Every value below is either a frozen Phase-3 semantic token or a
+   PAGE-LOCAL composition value that exists only because this page has a
+   structure Phase 3 deliberately left to page design. No new global
+   semantic token is introduced. Where a page needed something the system
+   did not provide, the choice was: keep it page-local, or stop and report
+   a system conflict. Nothing here reached the second case.
+   ===================================================================== */
+
+/* ---------------- page-local composition variables -------------------
+   Scoped to .p4 so they cannot leak into the frozen system. */
+.tls .p4 {
+  --p4-doc-gap:clamp(20px,3vw,28px);      /* between document sections   */
+  --p4-field-group-gap:var(--space-section);
+  --p4-instance-indent:0px;                /* F3 stream aligns with rule */
+}
+
+/* ============================ register ============================ */
+/* The register page is the frozen Phase-3 anatomy. Phase 4 changes only
+   what the system left open: the lead measure at page level. */
+.tls .p4 .t-lead {max-width:64ch}
+
+/* ---- P4-CF-03 CLOSURE — enforcing the frozen trace bound -------------
+   The Phase-3 CONTRACT is correct and unchanged: one line on desktop, at
+   most two on mobile (--trace-max-lines / --trace-max-lines-mobile).
+
+   The Phase-3 PROTOTYPE declared that bound without enforcing it: its
+   mobile rule sets -webkit-line-clamp but leaves the element inline, and a
+   clamp without display:-webkit-box is inert. Phase-4 stress content
+   exposed it — a long trace took three lines, and an unbreakable Russian
+   token pushed the register 1px past 390 and 17px past 360.
+
+   The frozen system is NOT modified. Phase 4 enforces the frozen contract
+   at page level, which is what a page is supposed to do with a contract. */
+.tls .p4 .t-trace {overflow-wrap:anywhere}
+@media (max-width:899px){
+  .tls .p4 .t-trace {
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:var(--trace-max-lines-mobile);
+    overflow:hidden;
+    white-space:normal;
+    max-width:100%;
+  }
+}
+
+/* ============================ document surfaces (F2) ============== */
+/* A standing document is ONE object. Its sections are rule-separated
+   parts of that object — not peers, not cards, not a list of documents. */
+.tls .p4-doc-section {
+  padding:var(--space-block) 0;
+  border-bottom:1px solid var(--rule-subtle);
+}
+.tls .p4-doc-section:first-of-type {padding-top:var(--space-control)}
+.tls .p4-doc-key {
+  font-size:var(--type-label);
+  font-weight:var(--weight-strong);
+  color:var(--text-tertiary);
+  letter-spacing:var(--tracking-label);
+  margin:0 0 var(--space-tight);
+}
+.tls .p4-doc-body {
+  margin:0;
+  font-size:var(--type-work);
+  color:var(--text-primary);
+  max-width:var(--measure-work);
+}
+
+/* ============================ definition + instances (F3) ========= */
+/* The definition is the standing object; instances are facts measured
+   against it. Instances are never scored, ranked or streaked. */
+.tls .p4-def {border-top:1px solid var(--rule-subtle)}
+.tls .p4-def-row {
+  display:grid;
+  grid-template-columns:minmax(0,22ch) minmax(0,1fr);
+  gap:0 var(--space-block);
+  padding:var(--space-control) 0;
+  border-bottom:1px solid var(--rule-subtle);
+}
+.tls .p4-def-key {font-size:var(--type-condition);color:var(--text-tertiary)}
+.tls .p4-def-body {
+  margin:0;font-size:var(--type-work);color:var(--text-primary);
+  max-width:var(--measure-work);
+}
+.tls .p4-instance {
+  display:flex;gap:var(--space-control);align-items:baseline;
+  padding:11px 0;border-bottom:1px solid var(--rule-subtle);
+}
+.tls .p4-instance-date {
+  flex:0 0 auto;
+  font-family:var(--ata-mono);
+  font-size:var(--type-provenance);
+  color:var(--text-quiet);
+}
+.tls .p4-instance-body {
+  margin:0;font-size:var(--type-work);color:var(--text-secondary);
+  max-width:var(--measure-work);
+}
+
+/* ============================ records (F1) ======================== */
+/* Edit is frozen-authorised, so a revisit affordance is legitimate.
+   Delete is HELD, so no destructive affordance exists. */
+.tls .p4-record {padding:var(--space-block) 0;border-bottom:1px solid var(--rule-subtle)}
+.tls .p4-record-meta {
+  display:flex;gap:var(--space-control);align-items:baseline;
+  margin-bottom:var(--space-tight);
+}
+.tls .p4-record-date {
+  font-family:var(--ata-mono);font-size:var(--type-provenance);color:var(--text-quiet);
+}
+.tls .p4-record-context {font-size:var(--type-condition);color:var(--text-tertiary);flex:1 1 auto}
+.tls .p4-record-edited {font-size:var(--type-caveat);color:var(--text-quiet)}
+.tls .p4-record-body {
+  margin:0;font-size:var(--type-work);color:var(--text-primary);
+  max-width:var(--measure-work);
+}
+
+/* ============================ field groups (F4) =================== */
+/* Grouping follows the order the work is actually done in, which is also
+   the keyboard order. It is composition, not a new system primitive. */
+.tls .p4-field-group {margin-bottom:var(--p4-field-group-gap)}
+.tls .p4-field-group:last-of-type {margin-bottom:var(--space-block)}
+.tls .p4-field-group-label {
+  font-size:var(--type-label);
+  font-weight:var(--weight-strong);
+  color:var(--text-tertiary);
+  letter-spacing:var(--tracking-label);
+  margin:0 0 var(--space-control);
+}
+/* invalid input — an interaction pattern; carries no business threshold */
+.tls .p4-invalid .t-field-control {border-color:var(--rule-strong)}
+.tls .p4-field-error {
+  display:block;font-size:var(--type-micro);
+  color:var(--text-secondary);margin-top:5px;
+}
+
+/* ============================ state pages ========================= */
+/* P4-CF-02 — locked and not-enterable gain a stronger surface-specific
+   distinction WITHOUT any semantic change: locked states a condition that
+   will be met later, not-enterable states an access fact that already
+   holds. The difference is expressed structurally, never by colour. */
+.tls .p4-state-fact {
+  display:grid;
+  grid-template-columns:minmax(0,18ch) minmax(0,1fr);
+  gap:0 var(--space-block);
+  margin-top:var(--space-section);
+  padding-top:var(--space-control);
+  border-top:1px solid var(--rule-subtle);
+  max-width:var(--measure-lead);
+}
+.tls .p4-state-fact-key {font-size:var(--type-condition);color:var(--text-tertiary)}
+.tls .p4-state-fact-value {
+  font-size:var(--type-condition);color:var(--text-secondary);
+  font-family:var(--ata-mono);
+}
+/* not-enterable resolves forward; locked resolves on a condition. The
+   forward line is prose, the condition line is a stated fact — that
+   asymmetry is the distinction. */
+.tls .p4-state-forward {
+  margin:var(--space-block) 0 0;
+  font-size:var(--type-condition);
+  color:var(--text-quiet);
+  max-width:var(--measure-lead);
+}
+
+/* ============================ responsive ========================== */
+@media (max-width:820px){
+  .tls .p4-def-row {grid-template-columns:minmax(0,1fr);gap:var(--space-micro) 0}
+  .tls .p4-state-fact {grid-template-columns:minmax(0,1fr);gap:var(--space-micro) 0}
+}
+@media (max-width:899px){
+  .tls .p4-doc-body,
+.tls .p4-def-body,
+.tls .p4-instance-body,
+.tls .p4-record-body {max-width:100%}
+  .tls .p4 .t-lead {max-width:100%}
+  .tls .p4-record-meta {flex-wrap:wrap;gap:var(--space-micro) var(--space-control)}
+}
+@media (max-width:380px){
+  .tls .p4-record-context {flex:1 1 100%}
+}
+
+/* ============================ PHASE 4A ============================ */
+/* SHELL-GEOMETRY CONSEQUENCE, not a design change.
+
+   Frozen system.css:412 reserves the bottom of every mobile surface for a
+   fixed bottom navigation:
+       padding-bottom: calc(var(--mobile-bottom-nav-height,60px) + 28px)
+   The canonical Academy shell has no bottom navigation — no accepted
+   sibling surface has one — so that 88px would now hold nothing but air.
+
+   The frozen file is NOT modified. The reservation is released page-locally
+   and replaced with the canonical mobile bottom padding, which is what Path
+   uses: a normal surface pad plus the real safe-area inset. */
+@media (max-width:899px){
+  .tls .p4.t-surface {
+    padding-bottom:calc(var(--space-surface) + env(safe-area-inset-bottom));
+  }
+}
+
+/* ==================== the register row, as four loci ==================== *
+ *
+ * WHY THE ROW IS RE-LAID AND THE MARKUP IS NOT TOUCHED.
+ *
+ * Every row said the same four things — which gate opens it, what it is, what
+ * state it is in, and whether anything can be done — but three of them were
+ * stacked in one text column, so the state of a tool could only be found by
+ * reading to the end of each row in turn. Nineteen rows of that is not a
+ * register, it is a list you have to parse.
+ *
+ * The four loci become four columns on desktop, and each keeps a fixed x
+ * position down the whole page: gate · identity · state · action. The eye can
+ * then run down ONE column to answer one question about all nineteen tools.
+ *
+ * `display: contents` is what makes this a stylesheet change and nothing more.
+ * The wrappers stay exactly where they are in the DOM — the class-stripped tree
+ * is identical to before — and only their boxes step aside so the elements
+ * inside them can take grid cells directly. No element moved, none was added,
+ * and no text changed.
+ */
+@media (min-width:900px){
+  .tls .t-register {
+    /* The column measures are shared by every row, declared once here, so a
+       long English tool name cannot widen its own row out of alignment. */
+    --col-gate:var(--register-gutter);
+    --col-state:23ch;
+    /* Wide enough for the longest CTA the catalogue declares — «Открыть
+       калькулятор» — because an action that wraps onto two lines stops looking
+       like one thing to press. The track is fixed rather than content-sized so
+       every row's action starts at the same x. */
+    --col-action:19ch;
+  }
+  .tls .t-entry {
+    grid-template-columns:
+      var(--col-gate)
+      minmax(0,1fr)
+      minmax(0,var(--col-state))
+      minmax(0,var(--col-action));
+    grid-template-rows:auto auto;
+    align-items:start;
+    column-gap:var(--register-gutter-gap);
+    padding:calc(var(--register-row-pad-y) + 3px) 0;
+  }
+  .tls .t-entry-provenance {grid-column:1;grid-row:1 / span 2}
+  /* The two wrappers dissolve as boxes and keep their place in the tree. */
+  .tls .t-entry-body,
+  .tls .t-entry-head {display:contents}
+  .tls .t-entry-name {grid-column:2;grid-row:1;min-width:0}
+  .tls .t-entry-purpose {grid-column:2;grid-row:2;margin-top:3px;max-width:none}
+  .tls .t-entry-condition {
+    grid-column:3;
+    grid-row:1 / span 2;
+    margin:1px 0 0;
+    max-width:none;
+    font-size:var(--type-condition);
+    line-height:var(--leading-normal,1.45);
+  }
+  .tls .t-entry-action {
+    grid-column:4;
+    grid-row:1 / span 2;
+    justify-self:end;
+    align-self:center;
+    white-space:nowrap;
+  }
+}
+
+/*
+ * THREE STATES THAT MUST NOT BE TOLD APART BY COLOUR.
+ *
+ * A tool is one of: waiting on a gate, open and working, or open with the
+ * capability not yet released. The third is the one that was invisible — it
+ * read exactly like the second, so a learner could reach a checkpoint and find
+ * that what they were promised does not open.
+ *
+ * Each state gets a mark in the state column: a mono gate reference for a
+ * locked tool, a filled square for a working one, an open square for a
+ * capability still to come. Shape and text carry it; colour only agrees.
+ */
+.tls .t-entry-condition::before {
+  content:"";
+  display:inline-block;
+  width:7px;
+  height:7px;
+  margin-right:7px;
+  vertical-align:baseline;
+  border:1px solid var(--text-quiet);
+}
+.tls .t-entry--open .t-entry-condition {color:var(--text-secondary)}
+.tls .t-entry--open .t-entry-condition::before {
+  background:var(--signal-current);
+  border-color:var(--signal-current);
+}
+/* Открыт по прогрессу, но поверхности ещё нет: an outline, never a fill —
+   the shape says "reserved", the words say the rest. */
+.tls .t-entry--roadmap .t-entry-condition::before {border-color:var(--text-secondary)}
+.tls .t-entry--locked .t-entry-condition::before {
+  border-style:dashed;
+  border-color:var(--text-tertiary);
+}
+
+/* The action is the only Signal on the page, and only where something opens. */
+.tls .t-entry--open .t-entry-action {color:var(--signal-action)}
+.tls .t-entry--open .t-entry-name {color:var(--text-primary)}
+
+/*
+ * MOBILE — the row becomes a block, and the state keeps its own line.
+ *
+ * The desktop columns are dropped rather than squeezed: at 390px a 23ch state
+ * column would leave the tool name four characters wide. The order of the four
+ * loci is unchanged, so the page reads the same way, just vertically.
+ */
+@media (max-width:899px){
+  .tls .t-entry-body,
+  .tls .t-entry-head {display:block}
+  .tls .t-entry-head {display:flex}
+  .tls .t-entry-name {
+    /* Long English names wrap; they are never truncated and never clipped. */
+    overflow-wrap:anywhere;
+    color:var(--text-primary);
+  }
+  .tls .t-entry--locked .t-entry-name {color:var(--text-secondary)}
+  .tls .t-entry-purpose {max-width:none}
+  .tls .t-entry-condition {margin-top:6px}
+  /* A tapped action must be a real 44px target even though it is set as text. */
+  .tls .t-entry-action {
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    min-height:44px;
+  }
+  .tls .t-entry-action::after {
+    content:"";
+    position:absolute;
+    inset:-6px -8px;
+  }
+}
+
+/*
+ * THE TWO LINKS ON A STATE PAGE ARE ALSO TARGETS.
+ *
+ * The register's action was given a real 44px box; the return link and the
+ * single action on a state page were not, and measured 19.5px and 20.25px of
+ * effective target at every width. They are set as text on purpose — a state
+ * page is not a call to action — so the box is grown around them rather than
+ * under them: the overlay takes the pointer, the type keeps its position, and
+ * nothing in the layout moves.
+ */
+.tls .t-return,
+.tls .t-action,
+/* The workspace pages carry the frozen `.back` link instead, and it had the
+   same 20.5px target. One rule for all three, so a fourth cannot be added
+   without inheriting it. */
+.tls .back {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+}
+.tls .t-return::after,
+.tls .t-action::after,
+.tls .back::after {
+  content:"";
+  position:absolute;
+  inset:0 -10px;
+}
+.tls .back {margin-bottom:8px}
+/*
+ * `.rc-back` is the Risk Calculator workspace's own return link, styled in the
+ * fixture-mode stylesheet. It reaches this surface too, and measured 20.5px.
+ * Restated here rather than there so the change cannot leak to any other page:
+ * `.tls .rc-back` only matches inside the Tools root.
+ */
+.tls .rc-back,
+.tls .je-back {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+}
+.tls .rc-back::after,
+.tls .je-back::after {content:"";position:absolute;inset:0 -10px}
+/* The return link kept its own bottom spacing from the old inline-block box;
+   the flex box is taller, so the gap is restated rather than doubled. */
+.tls .t-return {margin-bottom:calc(var(--space-block) - 12px)}
+
+/*
+ * THE PROGRESSION LINE, BENEATH THE READINESS LINE.
+ *
+ * Two facts that move independently, so they are set as two lines rather than
+ * one sentence with a separator: readiness leads because it decides what the
+ * learner can do at all, and the requirement follows it a step quieter. On
+ * desktop both live in the state column, which keeps the row's four loci intact.
+ */
+.tls .t-entry-requirement {
+  margin:3px 0 0;
+  font-size:var(--type-caveat,11.5px);
+  line-height:1.45;
+  color:var(--text-tertiary);
+  max-width:78ch;
+}
+@media (min-width:900px){
+  .tls .t-entry-requirement {
+    grid-column:3;
+    grid-row:2;
+    align-self:start;
+    margin:2px 0 0;
+    max-width:none;
+  }
+  /* The readiness line gives up the second row of the state column to it. */
+  .tls .t-entry-condition {grid-row:1}
+}
+/* A met requirement is a settled fact, not an achievement: no Signal, no mark
+   of its own — the row's state mark already says which of the three it is. */
+.tls .t-entry--roadmap .t-entry-requirement {color:var(--text-quiet)}
+
+/*
+ * A ONE-CELL FACT SPANS THE WHOLE ROW.
+ *
+ * The roadmap page states its requirement as one sentence rather than a
+ * key/value pair, and the block still reserved the 18ch key column for it — so
+ * «Требование доступа: уровень 20» broke across two lines with an empty column
+ * beside it. When there is one cell, it gets the row.
+ */
+.tls .p4-state-fact-value:only-child {
+  grid-column:1 / -1;
+  max-width:none;
+}

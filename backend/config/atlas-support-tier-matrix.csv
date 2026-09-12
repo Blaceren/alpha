@@ -1,0 +1,34 @@
+finding_code,denominator_operand,tier_below_min,tier_at_min,tier_at_strong,comparison_kind,production_reachable,notes
+funnel_rate_level,denominator,descriptive,moderate,strong,none,yes,rate over a real denominator
+cohort_rate_level,denominator,descriptive,moderate,strong,none,yes,rate over a real denominator
+small_sample_rate,denominator,descriptive,moderate,strong,none,below_min_only,the rule emits ONLY when the denominator is under minRateDenominator so in production this code is always descriptive
+member_rate_differs_from_aggregate,memberDenominator,descriptive,moderate,strong,member_vs_aggregate,yes,memberDenominator operand added by AFD-5D2A
+member_clicks_without_registrations,clicks,descriptive,moderate,strong,none,yes,
+member_registrations_without_deposits,pocketRegistrations,descriptive,moderate,strong,none,yes,
+cohort_median_lag,sampleSize,descriptive,moderate,strong,none,yes,
+series_count_change,(none),descriptive,descriptive,descriptive,count_change,yes,absoluteDelta is the ONLY new arithmetic in AFD-5D2A
+series_rate_change,(none),descriptive,descriptive,descriptive,rate_change,yes,percentage POINTS never percent
+amount_aggregation_unavailable,(none),descriptive,descriptive,descriptive,none,yes,source of MIXED_CURRENCY and of METRIC_UNAVAILABLE
+cohort_cutoff_clamped,(none),descriptive,descriptive,descriptive,none,yes,source of COHORT_FOLLOWUP_INCOMPLETE
+cohort_median_unavailable,(none),descriptive,descriptive,descriptive,none,yes,source of METRIC_UNAVAILABLE when durations ran backwards
+series_reconciliation_mismatch,(none),descriptive,descriptive,descriptive,none,yes,source of INTEGRITY_WARNING
+cohort_duplicate_first_deposit,(none),descriptive,descriptive,descriptive,none,yes,source of INTEGRITY_WARNING
+cohort_missing_or_duplicate_registration,(none),descriptive,descriptive,descriptive,none,yes,source of INTEGRITY_WARNING
+negative_duration_observed,(none),descriptive,descriptive,descriptive,none,yes,source of INTEGRITY_WARNING
+conflicting_deposits_present,(none),descriptive,descriptive,descriptive,none,yes,
+pending_identity_deposits_present,(none),descriptive,descriptive,descriptive,none,yes,
+insufficient_data,(none),descriptive,descriptive,descriptive,none,yes,emptiness raises NO sufficiency issue
+cohort_size,(none),descriptive,descriptive,descriptive,none,yes,
+period_volume,(none),descriptive,descriptive,descriptive,none,yes,
+coverage_split,(none),descriptive,descriptive,descriptive,none,yes,
+breakdown_concentration,(none),descriptive,descriptive,descriptive,none,yes,BREAKDOWN_TRUNCATED is catalogued but unemitted
+breakdown_member_count,(none),descriptive,descriptive,descriptive,none,yes,
+series_flat,(none),descriptive,descriptive,descriptive,none,yes,
+funnel_rate_undefined,(none),descriptive,descriptive,descriptive,none,yes,
+cohort_rate_undefined,(none),descriptive,descriptive,descriptive,none,yes,
+question_cause_not_available,(none),descriptive,descriptive,descriptive,none,yes,standing question
+question_current_balance_unavailable,(none),descriptive,descriptive,descriptive,none,yes,standing question
+question_education_timeline_unavailable,(none),descriptive,descriptive,descriptive,none,yes,standing question
+question_forecast_not_available,(none),descriptive,descriptive,descriptive,none,yes,standing question
+question_redeposits_unavailable,(none),descriptive,descriptive,descriptive,none,yes,standing question
+question_traffic_quality_not_available,(none),descriptive,descriptive,descriptive,none,yes,standing question

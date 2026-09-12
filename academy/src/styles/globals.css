@@ -1,0 +1,65 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--background-field);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-synthesis-weight: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--signal-active) 34%, transparent);
+    color: var(--text-primary);
+  }
+}
+
+/* Reduced motion: the UI must stay fully legible without any animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Authenticated-shell logout control (api mode only; hidden for fixture viewer). */
+.logout-button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.logout-button:hover {
+  color: var(--text-primary);
+}
+
+.logout-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}

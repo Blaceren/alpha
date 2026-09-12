@@ -1,0 +1,723 @@
+/*
+ * PROFILE — the frozen Profile design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: ProfileATA @ df540ad3aa3fbf212499e931473fa1a9579a15d3 —
+ * `design/phase3/system/layer0-foundation.css`, `layer1-semantic.css`,
+ * `layer2-components.css`, `layer3-behaviour.css` and the Phase-4
+ * `design/phase4/page/page.css`, concatenated in the order the frozen page links
+ * them. Every value is carried across UNCHANGED, and the transform proves it:
+ * 278 declarations in, 278 out, 2 changed, and those two are the font bindings
+ * below. 77 selectors, 0 escaping the namespace, 0 remote URLs, !important 3/3.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The two families are bound to the product's locally vendored faces —
+ *    "ATA Manrope" and "ATA IBM Plex Mono". The stacks are otherwise identical.
+ *
+ * 2. Every selector is namespaced under `.pf`:
+ *      :root                    -> .pf   (the four layers scope to this surface)
+ *      body                     -> .pf   (field, colour and type land on the root)
+ *      html                     -> html.pf-root-scope  (see 3)
+ *      *, a, button, input, h1… -> .pf *, .pf a, …
+ *      :focus-visible           -> .pf :focus-visible
+ *      .p-*, .sr-only, .p4-status -> .pf .p-*, …
+ *
+ *    `.pf .p-profile :is(a, button, input, [tabindex]):focus-visible` is ONE
+ *    selector and survived as one: the transform splits a selector list on
+ *    top-level commas only, because splitting inside `:is()` would have produced
+ *    three broken fragments and a clean-looking declaration count.
+ *
+ * 3. `html.pf-root-scope` carries the frozen document reset, and NOTHING EVER
+ *    ADDS THAT CLASS. It is kept so the declaration count balances; the real
+ *    document reset is the product's own.
+ *
+ * 4. `.pf .p-profile` is the surface container — padding and `max-width` — as it
+ *    was in the frozen document where it was `<main class="p-profile">`. Here the
+ *    shell owns the one `<main>` landmark, so the class lands on a plain element
+ *    inside it. The geometry is unchanged and no second landmark is created.
+ *
+ * 5. `.pf .sr-only` is carried across and unused: this surface's one
+ *    visually-hidden element is the live region, which the Phase-4 layer gives
+ *    its own `.p4-status` rule for exactly the reasons that file records.
+ *
+ * Adding `.pf ` raises every rule's specificity by the same amount, so the
+ * cascade order across the four layers is preserved exactly — which matters
+ * more here than anywhere else, because the layering IS the design system.
+ */
+
+/* --- design/phase3/system/layer0-foundation.css --- */
+/* ATA NOTIFICATIONS — PHASE 2 — SHARED FOUNDATION
+   =====================================================================
+   The accepted ATA foundation, identical for Directions A, B and C.
+   Notifications does not own the palette or the type families; they are
+   reproduced here so that the only thing that differs between the three
+   directions is the Notifications visual system itself.
+
+   PALETTE SOURCE — the accepted ATA foundation as recorded in
+   ToolsATA/prototype/phase3-system/tokens.css (FOUNDATION tier, marked
+   there as "accepted ATA, not Tools-owned") and restated in the Phase-2
+   brief §11. No value is invented here.
+
+   TYPE — Manrope primary, IBM Plex Mono for selective precision metadata.
+   Neither face is installed on the capture host, so captures render the
+   declared fallback stack. This matches the condition under which the
+   accepted sibling evidence was captured and is recorded honestly in
+   design/phase2-capture-manifest.json rather than hidden.
+
+   SIGNAL — action · focus · selection · current interaction. Never unread,
+   never new, never success, never completed, never important, never urgent.
+   ===================================================================== */
+
+.pf {
+  /* ---- FOUNDATION — accepted ATA ------------------------------------ */
+  --ink-900:#0B0D0A;  --ink-800:#11140F;  --ink-700:#1A1F18;
+  --sig-300:#D9FF91;  --sig-500:#C7F76D;  --sig-600:#B7EA5D;  --sig-700:#A8D84F;
+  --text-100:#EDF0EA; --text-300:#A6ADA0; --text-500:#6E766A; --text-700:#4C534A;
+
+  --ui:"ATA Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"ATA IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  /* ---- shared semantic roles (identical in A/B/C) -------------------- */
+  --txt-1:var(--text-100);   /* the change itself, state truth            */
+  --txt-2:var(--text-300);   /* reason, supporting value                  */
+  --txt-3:var(--text-500);   /* context, time, caveat                     */
+  --txt-4:var(--text-700);   /* trace, provenance                         */
+
+  --line-1:rgba(255,255,255,.07);
+  --line-2:rgba(255,255,255,.12);
+  --line-3:rgba(255,255,255,.20);
+
+  /* Signal, restricted to its frozen meanings */
+  --sig-action:var(--sig-500);
+  --sig-edge:var(--sig-700);
+  --sig-focus:var(--sig-500);
+
+  --ease:cubic-bezier(.2,0,0,1);
+}
+
+.pf * {box-sizing:border-box}
+html.pf-root-scope,
+.pf {margin:0;padding:0}
+.pf {
+  background:var(--ink-900);
+  color:var(--txt-1);
+  font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.pf h1,
+.pf h2,
+.pf h3,
+.pf p,
+.pf ul,
+.pf ol,
+.pf li,
+.pf figure {margin:0;padding:0}
+.pf ul,
+.pf ol {list-style:none}
+.pf a {color:inherit}
+
+/* One focus treatment for all three directions. Signal is legitimate here:
+   focus is current interaction. No glow, no animation. */
+.pf :focus-visible {
+  outline:2px solid var(--sig-focus);
+  outline-offset:2px;
+  border-radius:2px;
+}
+
+.pf .sr-only {
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+
+/* --- design/phase3/system/layer1-semantic.css --- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATA PROFILE — PHASE 3 — LAYER 1 — PROFILE SEMANTIC SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════
+   LAYER 0 is design/phase3/reference/foundation.css — INHERITED, byte-exact,
+   never redefined here. This layer names what Profile MEANS by those values.
+
+   Every token below answers three questions: what it means, what stays
+   invariant, and what may move responsively. A number with no semantic answer
+   is not a token — it stays a literal in Layer 2.
+
+   NOTHING HERE IS GLOBAL ATA AUTHORITY. Every name is prefixed `--p-` for
+   Profile, and none may be promoted to a global primitive.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.pf .p-profile {
+
+  /* ─── INHERITED ALIASES ─────────────────────────────────────────────────
+     Not Profile authority. Named only so Layer 2 never reaches past Layer 1
+     into raw global values, which is how surfaces start "owning" the palette. */
+  --p-ground:        var(--ink-900);   /* INHERITED — the only text ground   */
+  --p-ink-identity:  var(--txt-1);     /* INHERITED — 16.96:1                */
+  --p-ink-body:      var(--txt-2);     /* INHERITED —  8.46:1                */
+  --p-signal:        var(--sig-action);/* INHERITED — ACTION only            */
+  --p-signal-edge:   var(--sig-edge);  /* INHERITED                          */
+  --p-signal-hover:  var(--sig-300);   /* INHERITED — the lighter action tone */
+  --p-signal-focus:  var(--sig-focus); /* INHERITED — FOCUS only             */
+  --p-ui:            var(--ui);        /* INHERITED — Manrope                */
+  --p-mono:          var(--mono);      /* INHERITED — IBM Plex Mono          */
+
+  /* ─── PROFILE-LOCAL SEMANTIC NEUTRAL ────────────────────────────────────
+     PROFILE-LOCAL. The accepted ramp has nothing between 8.46:1 and 4.15:1,
+     and Phase 2 mapped four informational roles — page coordinate, field
+     coordinate, field constraint, support — to --text-500 at 4.15:1, under the
+     4.5:1 informational floor. Promoting them to --txt-2 would merge them into
+     the body tone and flatten a hierarchy the direction depends on.
+
+     LOWER EMPHASIS ≠ LOWER LEGIBILITY. The role is repaired once, here.
+     Same value the Notifications surface reached for the identical defect —
+     adopting it rather than inventing a second near-identical grey. It stays
+     PROFILE-LOCAL until global design-system authority adopts it separately. */
+  --p-ink-quiet:     #7D8478;          /* 5.06:1 — informational, subordinate */
+
+  /* --txt-3 survives for NON-TEXT only, where 4.15:1 clears the 3.0 floor. */
+  --p-rule-feedback: var(--txt-3);     /* the feedback marker, not text       */
+
+  /* ─── RULES ─────────────────────────────────────────────────────────────
+     READ: inherited --line-2, composited 1.35:1. Deliberately below the 3:1
+     non-text floor and deliberately correct — in read state the rule bounds NO
+     control. The name is text at 16.96:1 and the affordance is a text button
+     at 16.96:1; both identify themselves. The rule is a RELATIONSHIP mark, and
+     giving it control-grade contrast is exactly how the locus would start
+     reading as a field at rest.
+
+     EDIT: PROFILE-LOCAL, lifted to clear 3:1. Here the rule genuinely is the
+     input's only boundary — visual information required to identify a user
+     interface component — so it must reach the non-text floor. Inherited
+     --line-3 composites to 1.79:1 and does not.
+
+     The accepted direction already stepped this rule between read and edit.
+     Phase 3 makes that existing step reach a threshold, which widens the
+     read/edit distinction rather than inventing a new one. */
+  --p-locus-rule-read:  var(--line-2);          /* 1.35:1 — relationship mark */
+  --p-locus-rule-edit:  rgba(255,255,255,.34);  /* 3.04:1 — control boundary  */
+  --p-rule-underline:   var(--line-3); /* text-control underlines             */
+
+  /* ─── MEASURE ───────────────────────────────────────────────────────────
+     INVARIANT: Profile is a narrow column on a wide page. The page never
+     becomes a form canvas. RESPONSIVE: the locus collapses to the viewport
+     below the single breakpoint; the page measure never grows. */
+  --p-page-measure:   1000px;          /* outer bound of the whole surface    */
+  --p-locus-measure:   640px;          /* the OPERABLE measure — the one line */
+  --p-prose-measure:    54ch;          /* reading measure for explanation     */
+
+  /* ─── INSET ─────────────────────────────────────────────────────────────
+     RESPONSIVE. Aligns Profile content to the canonical shell inset. */
+  --p-inset:            32px;
+  --p-top:              88px;
+  --p-bottom:          120px;
+
+  /* ─── RHYTHM ────────────────────────────────────────────────────────────
+     Seven steps, each with one job. Not a generic 4/8 scale: a scale invented
+     for its own sake is how a small surface acquires a large system. */
+  --p-rhythm-tight:     12px;  /* coordinate → the thing it names            */
+  --p-rhythm-inline:    14px;  /* locus → its own metadata and feedback      */
+  --p-rhythm-locus:     18px;  /* identity → the rule beneath it             */
+  --p-rhythm-feedback:  22px;  /* locus block → mutation feedback            */
+  --p-rhythm-coord:     40px;  /* page coordinate → identity                 */
+  --p-rhythm-section:   40px;  /* locus complete → consequence begins        */
+  --p-rhythm-handoff:   80px;  /* consequence → support. INTENTIONAL SPACE.  */
+
+  /* ─── ACTION ────────────────────────────────────────────────────────────  */
+  --p-action-gap:       18px;  /* between Save and Cancel                    */
+  --p-action-pad-y:      9px;
+  --p-action-pad-x:     18px;
+  --p-action-radius:     3px;  /* the only radius in Profile                 */
+
+  /* ─── FEEDBACK MARKER ───────────────────────────────────────────────────
+     PROFILE-LOCAL. A short vertical rule that scopes feedback to the control
+     it belongs to. NOT a global primitive, NOT a Notifications gutter: it is
+     one mark beside one message, never a column beside a series. */
+  --p-marker-width:      2px;
+  --p-marker-gap-field:  12px;   /* validation — bound to the field          */
+  --p-marker-gap-mut:    14px;   /* mutation failure — bound to the request  */
+
+  /* ─── FOCUS ─────────────────────────────────────────────────────────────
+     INHERITED CONVENTION from the accepted sibling systems: 2px Signal
+     outline, never colour alone, never a glow, never a layout shift.
+     PROFILE-LOCAL: the offset, because the locus needs room to breathe. */
+  --p-focus-width:       2px;
+  --p-focus-offset:      6px;   /* on the locus — clears the rule            */
+  --p-focus-offset-ctl:  3px;   /* on discrete controls                      */
+
+  /* ─── TYPE ROLES ────────────────────────────────────────────────────────
+     Eight roles. Each is a JOB, not a size. */
+  --p-type-coord:        11px;  /* mono, uppercase — page / field coordinate */
+  --p-type-coord-track: .14em;
+  --p-type-identity:     28px;  /* THE NAME. Restrained by decision, not room*/
+  --p-type-identity-lh:  1.2;
+  --p-type-identity-tr: -.014em;
+  --p-type-body:       13.5px;  /* consequence, mutation feedback            */
+  --p-type-body-lh:      1.6;
+  --p-type-feedback:     13px;  /* validation — field-bound                  */
+  --p-type-action:       13px;  /* every action label                        */
+  --p-type-constraint: 12.5px;  /* the field's own rule                      */
+  --p-type-support:    12.5px;  /* the handoff                               */
+  --p-type-support-lh:  1.65;
+  --p-type-pagefail:     26px;  /* page-failure lead — below identity, on    */
+  --p-type-pagefail-lh: 1.25;   /* purpose: a failure is not an identity     */
+
+  /* ─── MOTION ────────────────────────────────────────────────────────────
+     Declared so Layer 3 can rule on it explicitly rather than by silence. */
+  --p-motion-state:      0ms;   /* PHASE-3 CANDIDATE RULING: none authored   */
+  --p-ease:              var(--ease);  /* INHERITED, unused at 0ms           */
+}
+
+/* Below the single breakpoint the measure collapses and the vertical rhythm
+   tightens. NOTHING ELSE CHANGES — the same eight type roles, the same seven
+   rhythm steps, the same locus. Mobile is not a different system. */
+@media (max-width: 599px){
+  .pf .p-profile {
+    --p-locus-measure: 100%;
+    --p-inset:          16px;
+    --p-top:            40px;
+    --p-bottom:         72px;
+    --p-rhythm-coord:   28px;
+    --p-rhythm-locus:   12px;
+    --p-rhythm-handoff: 56px;
+    --p-type-identity:  25px;
+  }
+}
+
+/* --- design/phase3/system/layer2-components.css --- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATA PROFILE — PHASE 3 — LAYER 2 — COMPONENT / STATE CONTRACTS
+   ═══════════════════════════════════════════════════════════════════════════
+   Six components. Not one per line of text — one per thing that has a ROLE, a
+   set of allowed states, and a boundary. Every value comes from Layer 1; a raw
+   number appearing here is a literal that failed to earn a semantic name, and
+   each one is called out where it occurs.
+
+   THE CENTRAL CONTRACT — read this before changing anything:
+
+     THE CONTROL LOCUS IS A RELATIONSHIP, NOT A FIELD.
+
+   In READ state the locus carries IDENTITY TEXT and a text affordance. It has
+   no box, no background, no placeholder, no field-width, no input chrome, and
+   its type is heading scale — four properties that together are why it cannot
+   be read as a disabled input. In EDIT state the SAME line hosts a real
+   control at the SAME scale in the SAME place. That is the continuity.
+
+   If a future change makes read state look operable-but-inert, or makes the
+   locus reusable as a generic FormRow, the direction has been lost.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── C1 · PROFILE SURFACE ───────────────────────────────────────────────────
+   Role: the Profile column. Owns inset, measure and vertical rhythm. Owns no
+   content. Never a card, never a panel, never a two-column grid. */
+.pf .p-profile {
+  padding: var(--p-top) var(--p-inset) var(--p-bottom);
+  max-width: var(--p-page-measure);
+}
+
+/* ── C2 · COORDINATE ────────────────────────────────────────────────────────
+   Role: says where you are, and what the next line is. Two instances — page
+   («ПРОФИЛЬ») and field («ИМЯ») — one type role. Mono is precision, not
+   decoration; it is the reason these read as coordinates and not as labels on
+   a form. Never interactive. Never Signal. */
+.pf .p-coord {
+  font-family: var(--p-mono);
+  font-size: var(--p-type-coord);
+  letter-spacing: var(--p-type-coord-track);
+  text-transform: uppercase;
+  color: var(--p-ink-quiet);
+}
+.pf .p-coord--page {  margin-bottom: var(--p-rhythm-coord); }
+.pf .p-coord--field { display: block; margin-bottom: var(--p-rhythm-tight); }
+
+/* ── C3 · CONTROL LOCUS ─────────────────────────────────────────────────────
+   Role: the one operable relationship on the surface. Present identically in
+   read and edit; `data-open` says which. Allowed states: read, edit, edit-busy,
+   edit-invalid. Forbidden states: disabled, readonly-styled, boxed, filled,
+   placeholder-bearing, repeated. */
+.pf .p-locus {
+  width: min(var(--p-locus-measure), 100%);
+  border-bottom: 1px solid var(--p-locus-rule-read);
+  padding-bottom: var(--p-rhythm-locus);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 28px;                    /* literal: the one horizontal gap in the
+                                   system; naming it would imply a family */
+}
+.pf .p-locus[data-open="1"] { border-bottom-color: var(--p-locus-rule-edit); }
+
+/* C3a · IDENTITY — the content of the locus in read state. */
+.pf .p-identity {
+  font-family: var(--p-ui);
+  font-size: var(--p-type-identity);
+  font-weight: 600;
+  line-height: var(--p-type-identity-lh);
+  letter-spacing: var(--p-type-identity-tr);
+  color: var(--p-ink-identity);
+  min-width: 0;
+  overflow-wrap: anywhere;      /* long identity WRAPS. It never truncates,
+                                   never ellipsises, never scrolls in read. */
+}
+
+/* C3b · EDIT AFFORDANCE — the one quiet action in read state.
+   A text control, deliberately: a button block here would make the locus a
+   form row and the page an editor. Never Signal at rest. */
+.pf .p-edit {
+  flex: 0 0 auto;
+  font: 600 var(--p-type-action) var(--p-ui);
+  color: var(--p-ink-identity);
+  background: none; border: 0; padding: 0; cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--p-rule-underline);
+}
+.pf .p-edit:hover { text-decoration-color: var(--p-ink-body); }
+
+/* C3c · NAME CONTROL — the real input, on the locus line.
+   PROFILE-LOCAL. This is not an ATA TextField and must not become one: it has
+   no border, no background, no radius, no padding and no placeholder, because
+   the locus is already the field's only boundary. Identity scale is preserved
+   so the learner is editing the same thing they were reading. */
+.pf .p-name-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--p-ui);
+  font-size: var(--p-type-identity);
+  font-weight: 600;
+  line-height: var(--p-type-identity-lh);
+  letter-spacing: var(--p-type-identity-tr);
+  color: var(--p-ink-identity);
+  background: none; border: 0; padding: 0; border-radius: 0;
+}
+.pf .p-name-control::placeholder { color: transparent; }  /* there is no placeholder */
+
+/* ── C4 · ACTION GROUP ──────────────────────────────────────────────────────
+   Role: the mutation actions. Exactly two, always in this order, always
+   together. Save is the primary mutation action in EVERY state that has one —
+   including after failure. There is no third control, ever. */
+.pf .p-actions {
+  display: flex; align-items: center;
+  gap: var(--p-action-gap);
+  flex: 0 0 auto;
+}
+.pf .p-save {
+  font: 650 var(--p-type-action) var(--p-ui);
+  color: var(--p-ground);
+  background: var(--p-signal);            /* SIGNAL = ACTION. Legitimate.   */
+  border: 1px solid var(--p-signal-edge);
+  border-radius: var(--p-action-radius);
+  padding: var(--p-action-pad-y) var(--p-action-pad-x);
+  cursor: pointer;
+}
+.pf .p-save:hover { background: var(--p-signal-hover); }
+.pf .p-save:active { background: var(--p-signal-edge); }
+/* BUSY: Signal is withdrawn. A filled Save during a request would read as
+   done. Withdrawal is the honest treatment — the action is not available
+   and the request is not finished. */
+.pf .p-save[aria-busy="true"] {
+  background: none;
+  color: var(--p-ink-body);
+  border-color: var(--p-rule-underline);
+  cursor: default;
+}
+.pf .p-cancel {
+  font: 600 var(--p-type-action) var(--p-ui);
+  color: var(--p-ink-body);
+  background: none; border: 0;
+  padding: var(--p-action-pad-y) 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--p-rule-underline);
+}
+.pf .p-cancel:hover { color: var(--p-ink-identity); }
+/* Cancel is never destructive-styled. Discarding a draft is not a deletion. */
+
+/* ── C5 · LOCAL FEEDBACK ────────────────────────────────────────────────────
+   Role: says what happened, next to the thing it happened to. Two variants,
+   distinguished by what they are bound to — not by severity colour.
+     --field    validation  · bound to the input     · identity-tone text
+     --mutation request     · bound to the attempt   · body-tone text
+   Forbidden: alert, banner, modal, toast, callout, icon, red, destructive.
+   The marker is a scoping mark, never a category colour. */
+.pf .p-feedback {
+  width: min(var(--p-locus-measure), 100%);
+  border-left: var(--p-marker-width) solid var(--p-rule-feedback);
+}
+.pf .p-feedback--field {
+  margin-top: var(--p-rhythm-inline);
+  padding-left: var(--p-marker-gap-field);
+  font-size: var(--p-type-feedback);
+  line-height: var(--p-type-body-lh);
+  color: var(--p-ink-identity);
+  border-left-color: var(--p-ink-body);   /* nearer the field it belongs to */
+}
+.pf .p-feedback--mutation {
+  margin-top: var(--p-rhythm-feedback);
+  padding-left: var(--p-marker-gap-mut);
+}
+.pf .p-feedback--mutation p {
+  font-size: var(--p-type-body);
+  line-height: var(--p-type-body-lh);
+  color: var(--p-ink-body);
+}
+
+/* ── C6 · SUPPORT HANDOFF ───────────────────────────────────────────────────
+   Role: the safety net. Lowest rank on the surface, in every state. Never a
+   recovery CTA, never a card, never adjacent to a failure. */
+.pf .p-support {
+  margin-top: var(--p-rhythm-handoff);
+  max-width: var(--p-prose-measure);
+  font-size: var(--p-type-support);
+  line-height: var(--p-type-support-lh);
+  color: var(--p-ink-quiet);
+}
+.pf .p-support a {
+  color: var(--p-ink-body);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--p-rule-underline);
+}
+
+/* ── SUPPORTING TEXT ────────────────────────────────────────────────────────
+   Not components: single-role text with no states and no interaction. */
+.pf .p-meta {
+  width: min(var(--p-locus-measure), 100%);
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 24px;                    /* literal: local to this one row           */
+  margin-top: var(--p-rhythm-inline);
+}
+.pf .p-constraint {
+  font-size: var(--p-type-constraint);
+  color: var(--p-ink-quiet);
+}
+.pf .p-consequence {
+  margin-top: var(--p-rhythm-section);
+  max-width: var(--p-prose-measure);
+  font-size: var(--p-type-body);
+  line-height: var(--p-type-body-lh);
+  color: var(--p-ink-body);
+}
+
+/* ── PAGE REQUEST FAILURE ───────────────────────────────────────────────────
+   A DIFFERENT THING from mutation failure, and it must look it. The identity
+   could not be read at all, so there is no locus, no name, no affordance and
+   nothing to edit. It is a statement plus a page-level retry — never an empty
+   profile, never a fabricated name. Deliberately below identity scale: a
+   failure is not an identity. */
+.pf .p-pagefail { max-width: var(--p-prose-measure); }
+.pf .p-pagefail__lead {
+  font-family: var(--p-ui);
+  font-size: var(--p-type-pagefail);
+  font-weight: 600;
+  line-height: var(--p-type-pagefail-lh);
+  color: var(--p-ink-identity);
+}
+.pf .p-pagefail p {
+  font-size: var(--p-type-body);
+  line-height: var(--p-type-body-lh);
+  color: var(--p-ink-body);
+  margin-top: var(--p-rhythm-inline);
+}
+.pf .p-pagefail .p-actions { margin-top: 24px; }   /* literal: one-off spacing   */
+
+/* --- design/phase3/system/layer3-behaviour.css --- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATA PROFILE — PHASE 3 — LAYER 3 — RESPONSIVE / ACCESSIBILITY / BEHAVIOUR
+   ═══════════════════════════════════════════════════════════════════════════
+   Rules that are true of the system regardless of which component they land
+   on. Kept separate from Layer 2 on purpose: focus and motion are system
+   contracts, not per-component decisions, and a component that could opt out
+   of focus is a component that will.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── FOCUS ──────────────────────────────────────────────────────────────────
+   INHERITED CONVENTION: 2px Signal outline, on every focusable control,
+   never removed, never replaced by a colour change alone. This is the one
+   place Signal appears without an action.
+
+   No glow. No shadow. No layout shift — outline, not border, so nothing
+   reflows when focus lands. */
+.pf .p-profile :is(a, button, input, [tabindex]):focus-visible {
+  outline: var(--p-focus-width) solid var(--p-signal-focus);
+  outline-offset: var(--p-focus-offset-ctl);
+  border-radius: 2px;         /* literal: keeps the ring off text corners   */
+}
+/* The name control sits ON the locus rule, so its ring needs clearance —
+   otherwise the outline and the rule read as one boxed field, which is the
+   exact drift this system exists to prevent. */
+.pf .p-profile .p-name-control:focus-visible {
+  outline-offset: var(--p-focus-offset);
+  border-radius: 0;
+}
+.pf .p-profile :is(a, button, input):focus:not(:focus-visible) { outline: none; }
+
+/* ── MOTION ─────────────────────────────────────────────────────────────────
+   PHASE-3 CANDIDATE RULING: NO AUTHORED MOTION.
+
+   The view→edit transition is already legible without it: the rule darkens,
+   the affordance is replaced by a real control at the same scale in the same
+   place, and focus moves. Motion would decorate a transition that is already
+   structurally clear, and this surface's whole claim is that nothing is
+   accidental.
+
+   The declaration exists so the ruling is explicit and testable rather than
+   implied by absence — and so reduced-motion has something to collapse. */
+.pf .p-profile *,
+.pf .p-profile *::before,
+.pf .p-profile *::after {
+  transition-duration: var(--p-motion-state);   /* 0ms */
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce){
+  .pf .p-profile *,
+.pf .p-profile *::before,
+.pf .p-profile *::after {
+    transition-duration: 0ms !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────────
+   ONE breakpoint, at 599px. Everything above it is the same layout at a
+   different measure; everything below it is the same system with the locus
+   full-width and the affordance dropped below the line.
+
+   1440 · 1024 · 768   the locus holds its 640px measure; the page column is
+                       capped at 1000px and left-aligned to the shell inset
+   430 · 390 · 360     the locus becomes the viewport minus inset; identity
+                       steps 28→25px; actions stack under the line
+
+   WHAT NEVER CHANGES: the order of the five elements, the single rule, the
+   fact that the name is the content of the locus, and the support handoff
+   staying last. Mobile is not a stacked desktop — it is the same idea at a
+   smaller measure. */
+@media (max-width: 599px){
+  /* the locus opens downward: the line stays the one operable thing, and the
+     keyboard never covers the affordance or the actions */
+  .pf .p-locus {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;                /* literal: the stacked-locus gap             */
+  }
+  .pf .p-edit { align-self: flex-start; }
+  .pf .p-meta { flex-direction: column; align-items: stretch; gap: 18px; }
+  .pf .p-actions { gap: 16px; }
+}
+
+/* ── LONG VALUE ─────────────────────────────────────────────────────────────
+   READ: identity wraps and stays whole. No ellipsis, no clamp, no truncation —
+   a name that cannot be read is not an identity.
+   EDIT: a single-line control scrolls internally. All 50 characters need not
+   be visible at once; the value, the caret and selection stay intact, and the
+   page never scrolls sideways. */
+.pf .p-identity { overflow-wrap: anywhere; hyphens: none; }
+.pf .p-name-control { text-overflow: clip; }
+.pf .p-profile { overflow-x: clip; }        /* the page never scrolls sideways   */
+
+/* ── TOUCH ──────────────────────────────────────────────────────────────────
+   PROFILE-LOCAL MINIMUM HIT AREA: 44 × 44 CSS px, below the breakpoint.
+
+   AUTHORITY. There is no canonical global ATA minimum. The accepted sibling
+   systems each chose their own and chose differently — Tools 44px, Notifications
+   40px — which is itself the evidence that this is a global decision nobody has
+   made. Profile takes the higher of the two so it is not the weakest surface,
+   and records the value as PROFILE-LOCAL. It must not be read as a global rule.
+
+   MECHANISM. Visual restraint is not tiny interactive geometry. The visible
+   label keeps its size; an invisible centred pseudo-area carries the target.
+   Nothing about the composition changes, and density does not increase.
+
+   Phase 3 tried inline `padding-block` on the support link and it enlarged
+   nothing — an inline anchor's block padding paints outside the line box. That
+   attempt is not repeated: the support link is an inline target inside a
+   sentence, constrained by the line-height of surrounding non-target text, and
+   is covered by the inline exception. It stays measured and recorded, not faked. */
+@media (max-width: 599px){
+  /* The Phase-3 block padding is KEPT EXACTLY AS IT WAS. It is real geometry on
+     real buttons, it is part of the accepted mobile composition, and removing it
+     in favour of the pseudo-area would move the read-state layout — which would
+     change P3-07 and P3-10, two frames Direct CPD ruled PASS. Verified by
+     re-rendering all six mobile frames to a scratch path and comparing bytes. */
+  .pf .p-edit,
+.pf .p-cancel { padding-block: 8px; }
+  .pf .p-edit { margin-block: -8px 0; }     /* reclaim the optical position      */
+
+  /* The pseudo-area only makes up the REMAINING distance to the minimum. */
+  .pf .p-edit,
+.pf .p-cancel,
+.pf .p-save { position: relative; }
+  .pf .p-edit::after,
+.pf .p-cancel::after,
+.pf .p-save::after {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    /* invisible, non-painting, and behind nothing it could occlude */
+    background: transparent;
+    pointer-events: auto;
+  }
+  /* The pseudo-area must never become a visible box. If a future edit gives it
+     a border, background or outline, the QA sentinel catches it. */
+}
+
+/* ── STATE TRUTH ────────────────────────────────────────────────────────────
+   READ ≠ DISABLED INPUT. Read state renders no input node at all, so there is
+   nothing to disable — the guarantee is structural, in the renderer.
+
+   The sentinel that used to live here has moved to
+   `design/phase3/qa/qa-diagnostics.css`. It painted a red dashed outline on any
+   `[disabled]` or `[readonly]` input, and SUBMITTING legitimately uses
+   `readonly` to stabilise the draft during the request — so the guardrail fired
+   on an authorised state and leaked a debug treatment into canonical evidence.
+
+   Two faults, both real: a QA diagnostic inside the user-visible system, and a
+   sentinel whose scope did not know which inert grammar is authorised.
+
+   THE USER-VISIBLE SYSTEM RENDERS NO DIAGNOSTICS. The sentinel is still
+   machine-testable, still catches the drift it was built for, and is now scoped
+   correctly — it just never paints unless diagnostics are explicitly on. */
+
+/* --- design/phase4/page/page.css --- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATA PROFILE — PHASE 4 — PAGE COMPOSITION
+   ═══════════════════════════════════════════════════════════════════════════
+   PAGE COMPOSITION ONLY. This file is NOT design-system authority and must
+   never become it. Every visual value the page uses comes from the frozen
+   Phase-3 layers, which are linked ahead of this file and are not touched.
+
+   Exactly ONE rule lives here, and it paints nothing.
+
+   Why a Phase-4 file exists at all: the confirmed-save announcement needs a
+   live region in the document, and a live region needs to be OUT of the
+   visible composition without being out of the accessibility tree. That is a
+   page concern — the design system has no opinion about it and should not
+   grow one for a single element.
+
+   The rule below is the standard visually-hidden pattern, chosen over
+   alternatives that all fail for a live region:
+     display:none / visibility:hidden — removed from the a11y tree entirely,
+       so nothing is ever announced;
+     opacity:0 — still occupies layout, so it would move the page;
+     width:0;height:0 — some engines skip zero-size text.
+   `position:absolute` takes it out of flow, so the finished page is
+   pixel-identical to the Phase-3 canonical evidence for every matching state.
+   That is verified frame by frame, not assumed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pf .p4-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

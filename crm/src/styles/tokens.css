@@ -1,0 +1,73 @@
+/*
+ * PROVISIONAL semantic design tokens — Alfa Trade Academy CRM.
+ * No confirmed brand book yet (docs/DECISIONS.md), so these are neutral,
+ * professional, operational values. Colors are stored as HSL channels so
+ * Tailwind's `hsl(var(--token) / <alpha-value>)` opacity utilities work.
+ *
+ * Light theme is the default; the .dark / prefers-color-scheme block overrides.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* radii + typography */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+
+  /* surfaces */
+  --color-background: 210 20% 98%;
+  --color-surface: 0 0% 100%;
+  --color-elevated: 0 0% 100%;
+  --color-border: 214 20% 90%;
+
+  /* text */
+  --color-text-primary: 222 30% 16%;
+  --color-text-secondary: 220 12% 38%;
+  --color-text-muted: 220 10% 55%;
+
+  /* accent + semantics (provisional) */
+  --color-accent: 221 70% 46%;
+  --color-accent-foreground: 0 0% 100%;
+  --color-success: 152 45% 34%;
+  --color-warning: 38 80% 42%;
+  --color-danger: 356 62% 46%;
+  --color-info: 205 70% 42%;
+  --color-focus-ring: 221 83% 53%;
+
+  /* structural */
+  --color-sidebar: 222 30% 14%;
+  --color-sidebar-foreground: 214 22% 84%;
+  --color-row-hover: 214 32% 95%;
+  --color-selected: 221 70% 95%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-background: 222 28% 9%;
+    --color-surface: 222 24% 12%;
+    --color-elevated: 222 22% 15%;
+    --color-border: 220 16% 24%;
+
+    --color-text-primary: 210 20% 94%;
+    --color-text-secondary: 214 14% 72%;
+    --color-text-muted: 214 12% 56%;
+
+    --color-accent: 217 84% 62%;
+    --color-accent-foreground: 222 40% 10%;
+    --color-success: 152 42% 48%;
+    --color-warning: 38 78% 56%;
+    --color-danger: 356 66% 60%;
+    --color-info: 205 72% 58%;
+    --color-focus-ring: 217 84% 62%;
+
+    --color-sidebar: 222 30% 11%;
+    --color-sidebar-foreground: 214 20% 80%;
+    --color-row-hover: 222 20% 17%;
+    --color-selected: 221 40% 22%;
+  }
+}

@@ -1,0 +1,1420 @@
+/*
+ * PATH — the frozen PuthATA stylesheet, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: PuthATA @ 3c740ccf8eb9182e858706a7423f07d29019858e,
+ * styles.css (1362 lines). Every value — every colour, radius, clamp, grid,
+ * gap, duration, easing and breakpoint — is carried across UNCHANGED. This file
+ * is a SCOPING transform, not a restyle, and the transform proves it:
+ * 609 declarations in, 609 out, 2 changed, and those two are the font bindings
+ * below. 242 selectors, 0 escaping the namespace, 0 remote URLs, !important 7/7.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The Google Fonts @import is deleted and the two families are bound to the
+ *    product's locally vendored faces — "ATA Manrope", "ATA IBM Plex Mono" — so
+ *    the surface makes no remote request. The stacks and fallbacks are
+ *    otherwise identical.
+ *
+ * 2. Every selector is namespaced under `.pth`. PuthATA was a standalone
+ *    document and could style `body`, `html`, `*`, `a`, `img`, `h1`, `h2`, `p`,
+ *    `ol`, `ul`, `::selection` and `:focus-visible` globally. Here it shares a
+ *    document with the shell and eight sibling surfaces, so a single global rule
+ *    would regress all of them:
+ *      :root                -> .pth        (the variables scope to this surface)
+ *      body                 -> .pth        (field, colour and type land on the root)
+ *      main                 -> .pth        (see 3)
+ *      *, a, h1, p, ol, …   -> .pth *, .pth a, …
+ *      ::selection          -> .pth ::selection
+ *      :focus-visible       -> .pth :focus-visible
+ *
+ * 3. `main` COLLAPSES ONTO `.pth` rather than becoming `.pth main`. In the
+ *    frozen document `main` was the surface's own container — it carries
+ *    `width: min(100%, 1008px)`, the 34/28/64 padding and `margin-inline: auto`.
+ *    In the product the shell owns the one `<main>` landmark for every
+ *    authenticated surface, so a nested `main` would be both a duplicate
+ *    landmark and, since `.pth` sits INSIDE that landmark, a selector that
+ *    matches nothing — the container geometry would silently vanish. Collapsing
+ *    it onto the root keeps the geometry exactly and adds no second landmark.
+ *    The shell drops its own padding for a restored surface (`.home-main--frozen`)
+ *    so the container is not inset twice.
+ *
+ * 4. `html { background: var(--bg-app) }` survives as `html.pth-root-scope`,
+ *    and NOTHING EVER ADDS THAT CLASS. It is kept only so the declaration count
+ *    balances and the rule stays visible for a future decision. The real page
+ *    ground is the shell's, and it is already the same colour: the frozen
+ *    `--bg-app` is #0b0d0a, which is the product's own `--ata-ink-900` /
+ *    `--background-base`. HomeAuthATA's token layer says the same thing in
+ *    words — "Carried unchanged from the ATA brand foundation" — so the shell
+ *    adopting it for restored surfaces introduces no new colour.
+ *
+ * 5. Nothing else. The `.qa-harness`, `.topbar` and `.skip-link` rules are
+ *    carried across untouched but are never rendered: the harness is marked
+ *    "DESIGN QA — SYNTHETIC FIXTURE · не является функцией продукта" in its own
+ *    markup, and the topbar is described there as a "deliberately neutral low-fi
+ *    shell" that the real implementation replaces. They are dead rules kept for
+ *    parity, not styles in use.
+ *
+ * Adding `.pth ` raises every rule's specificity by the same amount, so the
+ * cascade order inside the surface is preserved exactly.
+ */
+
+/* ============================================================
+   ATA ACADEMY PATH — desktop high-fi RC1 (visual maturity).
+   Same mechanics, matured material: Manrope owns human product
+   language, Mono is a narrow precision layer; the macro strip is
+   a continuous segmented curriculum axis (not a meter); the module
+   field is a tonal territory, not a bordered card; the focus panel
+   opens its top edge to receive the stem — node → stem → detail is
+   one structural mechanism. Density falls with distance from current.
+   Spec: ACADEMY-PATH-HIFI-SPEC.md
+   ============================================================ */
+
+.pth {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg-app: #0b0d0a;
+  --surface-workspace: #11140f;
+  --surface-focus: #1a1f18;
+
+  /* lines (each remaining line has a job) */
+  --line-1: rgba(243, 244, 239, 0.07);
+  --line-2: rgba(243, 244, 239, 0.13);
+  --line-3: rgba(243, 244, 239, 0.27);
+
+  /* text */
+  --text-primary: #f3f4ef;
+  --text-secondary: #c2c8bd;
+  --text-muted: #9aa396;
+  --text-on-signal: #0b0d0a;
+
+  /* signal: current / active / selected / actionable */
+  --signal: #c7f76d;
+  --signal-hover: #d3fa85;
+
+  /* axis */
+  --axis-done: rgba(243, 244, 239, 0.42);
+  --axis-future: rgba(243, 244, 239, 0.15);
+  --mark-done: #98a295;
+
+  --radius-region: 8px;
+  --radius-control: 8px;
+
+  --font-ui: "ATA Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "ATA IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-ata: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --motion-fast: 160ms;
+  --motion-standard: 220ms;
+  --motion-structural: 320ms;
+  --focus-ring: var(--signal);
+}
+
+.pth *,
+.pth *::before,
+.pth *::after {
+  box-sizing: border-box;
+}
+
+html.pth-root-scope {
+  background: var(--bg-app);
+}
+
+.pth {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.pth img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.pth h1,
+.pth h2,
+.pth p,
+.pth ol,
+.pth ul {
+  margin: 0;
+}
+
+.pth a {
+  color: inherit;
+}
+
+.pth ::selection {
+  background: var(--signal);
+  color: var(--text-on-signal);
+}
+
+.pth :focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.pth .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pth .skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 8px;
+  left: 12px;
+  padding: 9px 14px;
+  border-radius: var(--radius-control);
+  background: var(--signal);
+  color: var(--text-on-signal);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: underline;
+  transform: translateY(-160%);
+}
+
+.pth .skip-link:focus-visible {
+  transform: translateY(0);
+  --focus-ring: var(--text-primary);
+}
+
+/* ---------- neutral shell: authenticated context reference ---------- */
+
+.pth .topbar {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.pth .topbar__wordmark {
+  flex: 0 0 auto;
+  width: 46px;
+}
+
+.pth .topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pth .topbar__nav a {
+  padding: 9px 12px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 140ms var(--ease);
+}
+
+.pth .topbar__nav a:hover {
+  color: var(--text-primary);
+}
+
+.pth .topbar__nav a.is-active {
+  box-shadow: inset 0 -2px 0 var(--signal);
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.pth .topbar__context {
+  display: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.pth .topbar__menu {
+  display: none;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 600 12px var(--font-ui);
+}
+
+.pth {
+  width: min(100%, 1008px);
+  padding: 34px 28px 64px;
+  margin-inline: auto;
+}
+
+/* ---------- path header: quiet authority ---------- */
+
+.pth .path-header__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+
+.pth h1 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.pth .path-header__done {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pth .path-header__now {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.pth .path-header__now b {
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.pth .path-header__module {
+  margin-left: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pth .path-header__module::before {
+  margin-right: 12px;
+  color: var(--line-3);
+  content: "·";
+}
+
+/* ---------- macro: continuous segmented curriculum axis ---------- */
+
+.pth .mod-nav {
+  margin-top: 30px;
+}
+
+.pth .mod-nav__ribbon {
+  display: flex;
+  height: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.pth .mod-seg {
+  position: relative;
+  flex: 1 1 0;
+}
+
+/* the axis itself */
+.pth .mod-seg::before {
+  position: absolute;
+  top: 5px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--axis-future);
+  content: "";
+}
+
+.pth .mod-seg--done::before {
+  top: 4px;
+  height: 4px;
+  background: rgba(243, 244, 239, 0.36);
+}
+
+.pth .mod-seg--current::before {
+  top: 2px;
+  height: 8px;
+  border-radius: 1.5px;
+  background: var(--signal);
+}
+
+/* module boundaries: ticks, chapters of five stand taller */
+.pth .mod-seg::after {
+  position: absolute;
+  top: 3px;
+  right: -0.5px;
+  width: 1px;
+  height: 6px;
+  background: var(--line-2);
+  content: "";
+}
+
+.pth .mod-seg--chapter::after {
+  top: 1px;
+  height: 10px;
+  background: var(--line-3);
+}
+
+.pth .mod-seg:last-child::after {
+  display: none;
+}
+
+.pth .mod-nav__scale {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-top: 10px;
+}
+
+.pth .mod-nav__scale span:first-child {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.pth .mod-nav__scale span:last-child {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ---------- module field: tonal territory, not a bordered card ---------- */
+
+.pth .workspace {
+  margin-top: 24px;
+  padding: 24px 32px 24px;
+  border-radius: var(--radius-region);
+  background: var(--surface-workspace);
+}
+
+.pth .workspace__head {
+  display: grid;
+  align-items: baseline;
+  gap: 3px 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.pth .workspace__kicker {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pth .workspace__range {
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.pth .workspace__name {
+  grid-column: 1 / -1;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.008em;
+}
+
+.pth .workspace__edge {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.pth .workspace__edge::before {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 10px;
+  background: var(--line-3);
+  content: "";
+  vertical-align: middle;
+}
+
+.pth .workspace__edge--entry {
+  margin-top: 12px;
+}
+
+.pth .workspace__edge--exit {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line-2); /* job: boundary to the next module */
+}
+
+/* ---------- learning axis ---------- */
+
+.pth .rail {
+  position: relative;
+  margin-top: 14px;
+}
+
+.pth .rail__scroller {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.pth .level-strip {
+  display: flex;
+  padding: 0;
+  list-style: none;
+}
+
+.pth .level-node {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 38px 20px 6px 0;
+}
+
+.pth .level-node + .level-node {
+  padding-left: 22px;
+}
+
+/* axis segments: confirmed behind, tentative ahead */
+.pth .level-node::before {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--axis-done);
+  content: "";
+}
+
+.pth .level-node--next::before,
+.pth .level-node--locked::before {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--axis-future) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.pth .level-node:last-child::before {
+  right: auto;
+  width: 30px;
+}
+
+/* ---------- level marks: one geometric grammar (20px) ---------- */
+
+.pth .level-node__mark {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--line-3);
+  border-radius: 50%;
+  background: var(--surface-workspace);
+  transition:
+    background-color var(--motion-standard) var(--ease-ata),
+    border-color var(--motion-standard) var(--ease-ata),
+    box-shadow var(--motion-standard) var(--ease-ata);
+}
+
+.pth .level-node + .level-node .level-node__mark {
+  left: 22px;
+}
+
+/* fulfilled history — quiet, never disabled */
+.pth .level-node--done .level-node__mark {
+  border-color: var(--mark-done);
+  background: var(--mark-done);
+}
+
+.pth .level-node--done .level-node__mark::after {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  width: 5px;
+  height: 8px;
+  border-right: 2px solid var(--bg-app);
+  border-bottom: 2px solid var(--bg-app);
+  content: "";
+  transform: rotate(40deg);
+}
+
+/* current, the move is yours */
+.pth .level-node--current .level-node__mark {
+  border-color: var(--surface-workspace);
+  background: var(--signal);
+  box-shadow: 0 0 0 2px var(--signal);
+}
+
+/* current, the system is working */
+.pth .level-node--wf-waiting .level-node__mark {
+  border-color: var(--signal);
+  background: var(--surface-workspace);
+  box-shadow: none;
+}
+
+.pth .level-node--wf-waiting .level-node__mark::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.pth .level-node--next .level-node__mark {
+  border-color: var(--line-3);
+}
+
+.pth .level-node--locked .level-node__mark {
+  border-style: dashed;
+  border-color: var(--line-2);
+}
+
+/* condition node: diamond, the axis parts around it */
+.pth .level-node--cp .level-node__mark {
+  border-radius: 2px;
+  box-shadow: 0 0 0 5px var(--surface-workspace);
+  transform: rotate(45deg);
+}
+
+.pth .level-node--cp.level-node--current .level-node__mark {
+  border-color: var(--surface-workspace);
+  background: var(--signal);
+  box-shadow:
+    0 0 0 2px var(--signal),
+    0 0 0 7px var(--surface-workspace);
+}
+
+.pth .level-node--cp.level-node--wf-waiting .level-node__mark::after {
+  border-radius: 1px;
+}
+
+/* ---------- node text: human layer in Manrope, codes in Mono ---------- */
+
+.pth .level-node__code {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+
+.pth .level-node__name {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.32;
+}
+
+.pth .level-node--current .level-node__name {
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-weight: 750;
+}
+
+.pth .level-node--locked .level-node__name {
+  color: var(--text-muted);
+  font-weight: 550;
+}
+
+.pth .level-node--far .level-node__name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pth .level-node__type {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+}
+
+/* state words: bare Manrope, product language */
+.pth .level-node__state {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  transition: color var(--motion-standard) var(--ease-ata), opacity var(--motion-fast) var(--ease-ata);
+}
+
+.pth .level-node--current .level-node__state {
+  color: var(--signal);
+}
+
+.pth .level-node--next .level-node__state {
+  color: var(--text-secondary);
+}
+
+.pth .level-node__reason {
+  display: block;
+  margin-top: 7px;
+  max-width: 220px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* ---------- current focus: node → stem → detail, one mechanism ---------- */
+
+.pth .focus {
+  position: relative;
+  margin-top: 38px;
+  padding: 24px 28px 26px;
+  border: 1px solid var(--line-2); /* job: focus boundary */
+  border-radius: var(--radius-region);
+  background: var(--surface-focus);
+}
+
+.pth .focus__leader {
+  position: absolute;
+  top: -39px;
+  width: 2px;
+  height: 39px;
+  background: var(--signal);
+  transition: left var(--motion-structural) var(--ease-ata);
+}
+
+/* the panel opens its edge to receive the stem */
+.pth .focus__leader::after {
+  position: absolute;
+  bottom: -2px;
+  left: -7px;
+  width: 16px;
+  height: 4px;
+  background: var(--surface-focus);
+  content: "";
+}
+
+/* near-edge current node: stem fuses with the corner leg (one structure) */
+.pth .focus__leader--merged {
+  width: 3px;
+}
+
+.pth .focus__leader--merged::after {
+  display: none;
+}
+
+/* Decision Frame: current progression focus */
+.pth .frame-corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+}
+
+.pth .frame-corner--tl {
+  top: -1px;
+  left: -1px;
+  border-top: 3px solid var(--signal);
+  border-left: 3px solid var(--signal);
+}
+
+.pth .frame-corner--br {
+  right: -1px;
+  bottom: -1px;
+  border-right: 3px solid var(--signal);
+  border-bottom: 3px solid var(--signal);
+}
+
+.pth .focus h2:focus-visible {
+  outline-offset: 5px;
+}
+
+.pth .focus h2 {
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.008em;
+}
+
+.pth .focus__meta {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* workflow state: geometry + human words */
+.pth .focus__state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.pth .fstate-glyph {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+
+.pth .focus__state--current {
+  color: var(--signal);
+}
+
+.pth .focus__state--current .fstate-glyph {
+  background: var(--signal);
+}
+
+.pth .focus__state--waiting {
+  color: var(--text-secondary);
+}
+
+.pth .focus__state--waiting .fstate-glyph {
+  border: 2px solid var(--signal);
+}
+
+.pth .focus__state--revision {
+  color: var(--text-primary);
+}
+
+.pth .focus__state--revision .fstate-glyph {
+  background: var(--signal);
+}
+
+.pth .focus__state--checkpoint {
+  color: var(--text-primary);
+}
+
+.pth .focus__state--checkpoint .fstate-glyph {
+  border: 2px solid var(--signal);
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.pth .focus__body {
+  max-width: 600px;
+  margin-top: 13px;
+}
+
+.pth .focus__body p {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.pth .focus__next {
+  margin-top: 17px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-1); /* job: meaning / consequence rule */
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pth .focus__next::before {
+  margin-right: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  content: "→";
+}
+
+.pth .focus__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 19px;
+}
+
+/* text-level continuity: local fade, container stays */
+.pth .is-swapping {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-ata);
+}
+
+.pth .focus,
+.pth .focus h2,
+.pth .focus__meta,
+.pth .focus__state,
+.pth .focus__body,
+.pth .focus__next,
+.pth .focus__actions {
+  transition: opacity var(--motion-fast) var(--ease-ata), transform var(--motion-fast) var(--ease-ata);
+}
+
+/* temporal coherence: old context lines dim while a transition is in flight */
+.pth .path-header__now,
+.pth .mod-nav__scale {
+  transition: opacity var(--motion-fast) var(--ease-ata);
+}
+
+.pth .is-transiting {
+  opacity: 0.3;
+}
+
+/* temporal coherence: outgoing detail is unambiguously leaving */
+.pth .focus--outgoing h2,
+.pth .focus--outgoing .focus__meta,
+.pth .focus--outgoing .focus__state,
+.pth .focus--outgoing .focus__body,
+.pth .focus--outgoing .focus__next,
+.pth .focus--outgoing .focus__actions {
+  opacity: 0.3;
+  transform: translateY(2px);
+}
+
+/* incoming detail resolves after the new current settles */
+.pth .focus--incoming h2,
+.pth .focus--incoming .focus__meta,
+.pth .focus--incoming .focus__state,
+.pth .focus--incoming .focus__body,
+.pth .focus--incoming .focus__next,
+.pth .focus--incoming .focus__actions {
+  opacity: 0;
+  transition: none;
+}
+
+/* presentation-only: the old current mark fulfils before the tree swaps */
+.pth .level-node--fulfilling .level-node__mark {
+  border-color: var(--mark-done) !important;
+  background: var(--mark-done) !important;
+  box-shadow: none !important;
+}
+
+.pth .level-node--fulfilling .level-node__state {
+  opacity: 0.35;
+}
+
+/* module boundary: the field turns to the next window */
+.pth .workspace.is-turning .workspace__head,
+.pth .workspace.is-turning .workspace__edge,
+.pth .workspace.is-turning .rail,
+.pth .workspace.is-turning .focus {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.pth .workspace__head,
+.pth .workspace__edge,
+.pth .rail,
+.pth .focus {
+  transition:
+    opacity var(--motion-fast) var(--ease-ata),
+    transform var(--motion-structural) var(--ease-ata);
+}
+
+/* return-to-current — APPROVED rail utility: quiet, directional, never a CTA */
+.pth .rail__return {
+  position: absolute;
+  z-index: 2;
+  top: -8px;
+  right: 8px;
+  min-height: 44px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 600 11.5px/1 var(--font-ui);
+  transition: color var(--motion-fast) var(--ease-ata), opacity var(--motion-fast) var(--ease-ata);
+}
+
+.pth .rail__return:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- actions: premium application controls ---------- */
+
+.pth .button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: 700 13.5px/1 var(--font-ui);
+  letter-spacing: 0.005em;
+  transition:
+    background-color 140ms var(--ease),
+    border-color 140ms var(--ease);
+}
+
+.pth .button--primary {
+  border-color: rgba(11, 13, 10, 0.25);
+  background: var(--signal);
+  color: var(--text-on-signal);
+}
+
+.pth .button--primary:hover {
+  background: var(--signal-hover);
+}
+
+.pth .button--secondary {
+  border-color: var(--line-3);
+  font-weight: 650;
+}
+
+.pth .button--secondary:hover {
+  border-color: var(--text-muted);
+  background: rgba(243, 244, 239, 0.04);
+}
+
+/* pressed: physical and precise, no bounce */
+.pth .button:active {
+  transform: translateY(1px);
+}
+
+.pth .button--primary:active {
+  background: #b9ea5f;
+}
+
+.pth .button--secondary:active {
+  background: rgba(243, 244, 239, 0.07);
+}
+
+.pth .button:disabled {
+  cursor: default;
+  opacity: 0.55;
+  transform: none;
+}
+
+.pth .button--busy,
+.pth .button[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.6;
+  pointer-events: none;
+  transform: none;
+}
+
+/* ---------- QA harness (dev tool, hidden via ?qa=0) ---------- */
+
+.pth .qa-harness {
+  padding: 14px 32px 18px;
+  border-top: 2px dashed var(--line-3);
+  background: #000;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.pth .qa-harness__tag {
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+}
+
+.pth .qa-harness a {
+  color: var(--text-secondary);
+}
+
+.pth .qa-harness strong {
+  color: var(--signal);
+  font-weight: 500;
+}
+
+.pth .qa-harness button {
+  margin: 2px 4px 2px 0;
+  padding: 4px 9px;
+  border: 1px solid var(--line-3);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 500 11px var(--font-mono);
+}
+
+.pth .qa-harness button:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- ≤1100 tightening ---------- */
+
+@media (max-width: 1100px) {
+  .pth {
+    padding-inline: 24px;
+  }
+
+  .pth .workspace {
+    padding-inline: 26px;
+  }
+
+  .pth .level-node {
+    padding-right: 16px;
+  }
+
+  .pth .level-node + .level-node {
+    padding-left: 16px;
+  }
+
+  .pth .level-node + .level-node .level-node__mark {
+    left: 16px;
+  }
+}
+
+/* ---------- mobile carryover: mechanics frozen ---------- */
+
+@media (max-width: 599px) {
+  /* ============================================================
+     FINAL MOBILE HIGH-FI — first-class translation of the accepted
+     desktop system. Composition: compressed orientation block, the
+     first viewport reaches the current node; asymmetric current
+     landing (~42%) exposes upcoming context; distance compression:
+     types only on current, state words on current/next, geometry
+     carries the rest. Detail stays "on the Path", controls inline.
+     AUTHENTICATED MOBILE SHELL — CONTEXT PLACEHOLDER,
+     FINAL SHELL OUT OF PATH SCOPE.
+     ============================================================ */
+
+  .pth .topbar {
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+
+  .pth .topbar__wordmark {
+    width: 42px;
+  }
+
+  .pth .topbar__nav {
+    display: none;
+  }
+
+  .pth .topbar__context,
+.pth .topbar__menu {
+    display: inline-block;
+  }
+
+  .pth .topbar__context {
+    font-size: 10.5px;
+  }
+
+  .pth .topbar__menu {
+    padding: 7px 13px;
+  }
+
+  .pth {
+    padding: 16px 16px 40px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+  /* ----- compressed orientation block ----- */
+
+  .pth h1 {
+    font-size: 19px;
+  }
+
+  .pth .path-header__done {
+    font-size: 11.5px;
+  }
+
+  .pth .path-header__now {
+    margin-top: 7px;
+    font-size: 14.5px;
+    line-height: 1.4;
+  }
+
+  .pth .path-header__module {
+    margin-left: 8px;
+    font-size: 12px;
+  }
+
+  .pth .path-header__module::before {
+    margin-right: 8px;
+  }
+
+  .pth .mod-nav {
+    margin-top: 16px;
+  }
+
+  .pth .mod-nav__ribbon {
+    height: 10px;
+  }
+
+  .pth .mod-seg::before {
+    top: 4px;
+  }
+
+  .pth .mod-seg--done::before {
+    top: 3px;
+  }
+
+  .pth .mod-seg--current::before {
+    top: 1.5px;
+    height: 7px;
+  }
+
+  .pth .mod-seg::after {
+    top: 2.5px;
+    height: 5px;
+  }
+
+  .pth .mod-seg--chapter::after {
+    top: 1px;
+    height: 8px;
+  }
+
+  .pth .mod-nav__scale {
+    gap: 2px 12px;
+    margin-top: 7px;
+  }
+
+  .pth .mod-nav__scale span:first-child {
+    font-size: 12.5px;
+  }
+
+  .pth .mod-nav__scale span:last-child {
+    font-size: 11.5px;
+  }
+
+  /* ----- module field: territory, fixed meso-context ----- */
+
+  .pth .workspace {
+    margin-top: 16px;
+    padding: 16px 16px 16px;
+  }
+
+  .pth .workspace__head {
+    gap: 2px 12px;
+  }
+
+  .pth .workspace__name {
+    font-size: 16px;
+  }
+
+  .pth .workspace__range {
+    grid-row: auto;
+    grid-column: 1 / -1;
+    margin-top: 1px;
+  }
+
+  .pth .workspace__edge {
+    font-size: 12px;
+  }
+
+  .pth .workspace__edge--entry {
+    margin-top: 10px;
+  }
+
+  .pth .workspace__edge--exit {
+    margin-top: 16px;
+    padding-top: 11px;
+  }
+
+  /* ----- learning axis: only the rail pans ----- */
+
+  .pth .rail {
+    margin-top: 10px;
+    margin-inline: -16px;
+  }
+
+  .pth .rail::before,
+.pth .rail::after {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    width: 44px;
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms var(--ease);
+  }
+
+  .pth .rail::before {
+    left: 0;
+    background: linear-gradient(90deg, var(--surface-workspace) 30%, transparent);
+  }
+
+  .pth .rail::after {
+    right: 0;
+    background: linear-gradient(-90deg, var(--surface-workspace) 30%, transparent);
+  }
+
+  .pth .rail--more-left::before,
+.pth .rail--more-right::after {
+    opacity: 1;
+  }
+
+  .pth .rail__scroller {
+    padding-inline: 16px;
+    scroll-snap-type: x proximity;
+  }
+
+  .pth .level-strip {
+    min-width: max-content;
+  }
+
+  .pth .level-node {
+    flex: 0 0 158px;
+    padding: 34px 16px 4px 0;
+    scroll-snap-align: center;
+  }
+
+  .pth .level-node + .level-node {
+    padding-left: 16px;
+  }
+
+  .pth .level-node + .level-node .level-node__mark {
+    left: 16px;
+  }
+
+  /* distance compression: current keeps full identity, neighbours slim down */
+  .pth .level-node__name {
+    font-size: 13px;
+    font-weight: 550;
+  }
+
+  .pth .level-node--current .level-node__name {
+    font-size: 14px;
+    font-weight: 750;
+  }
+
+  .pth .level-node--far .level-node__name {
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  /* type labels: visible on current only; kept for AT elsewhere */
+  .pth .level-node:not(.level-node--current) .level-node__type {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* state words: current + next; done state kept for AT */
+  .pth .level-node--done .level-node__state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .pth .level-node__state {
+    margin-top: 7px;
+    font-size: 11.5px;
+  }
+
+  /* whole-word rule: a partially visible node keeps its shell, not its text */
+  .pth .level-node__code,
+.pth .level-node__name,
+.pth .level-node__type,
+.pth .level-node__state {
+    transition: opacity 140ms var(--ease);
+  }
+
+  .pth .level-node--peek .level-node__code,
+.pth .level-node--peek .level-node__name,
+.pth .level-node--peek .level-node__type,
+.pth .level-node--peek .level-node__state {
+    opacity: 0;
+  }
+
+  .pth .level-node__reason {
+    display: none;
+  }
+
+  /* ----- current focus: node → stem → detail, one object on the Path ----- */
+
+  .pth .focus {
+    margin-top: 24px;
+    padding: 15px 16px 16px;
+  }
+
+  .pth .focus__leader {
+    top: -25px;
+    height: 25px;
+  }
+
+  .pth .frame-corner {
+    width: 20px;
+    height: 20px;
+  }
+
+  .pth .focus h2 {
+    font-size: 15.5px;
+  }
+
+  .pth .focus__meta {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  .pth .focus__state {
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  .pth .fstate-glyph {
+    width: 10px;
+    height: 10px;
+  }
+
+  .pth .focus__body {
+    margin-top: 9px;
+  }
+
+  .pth .focus__body p {
+    margin-top: 5px;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+
+  .pth .focus__next {
+    margin-top: 12px;
+    padding-top: 10px;
+    font-size: 12.5px;
+  }
+
+  .pth .focus__actions {
+    gap: 9px;
+    margin-top: 13px;
+  }
+
+  /* inline product controls, comfortable touch height — not giant pills */
+  .pth .focus__actions .button {
+    min-height: 44px;
+    padding: 10px 22px;
+  }
+
+  .pth .qa-harness {
+    padding: 12px 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pth *,
+.pth *::before,
+.pth *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}

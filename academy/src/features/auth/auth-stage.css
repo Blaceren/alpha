@@ -1,0 +1,460 @@
+/*
+ * THE AUTH STAGE.
+ *
+ * Every rule is scoped under `.auth`. Nothing here is a global selector, so no
+ * other surface can be reached by this file — `/login` and `/register` are the
+ * only two documents that carry the class.
+ *
+ * The material is the accepted foundation and nothing else: Ink for ground,
+ * the local ATA faces, hairlines at the shell's own divider tones, and Signal
+ * used only where something is genuinely actionable. No glow, no blur, no
+ * glass, no decorative gradient, no navy.
+ */
+
+.auth {
+  /* Ink, the same ground the Academy and Public Home stand on. */
+  background: var(--background-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  min-height: 100dvh;
+  display: grid;
+  /* `start`, not `center`: a centred grid item on a short viewport is clipped
+     at BOTH ends and cannot be scrolled to. Vertical centring is applied only
+     where there is room for it, below. */
+  align-content: start;
+  padding: 24px 16px 32px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+  --auth-measure: 448px;   /* inside the 420-480 band */
+  --auth-rule: 1px solid var(--divider);
+}
+
+.auth__stage {
+  width: 100%;
+  max-width: var(--auth-measure);
+  margin-inline: auto;
+  display: grid;
+  gap: 26px;
+}
+
+/* ---------------------------------------------------------------- brand -- */
+
+.auth__mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 6px;
+}
+.auth__mark img {
+  display: block;
+  width: 52px;
+  height: auto;
+  object-fit: contain;
+}
+.auth__mark:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 3px;
+}
+/* The axis rule exists only where the axis is a column of its own. */
+.auth__axis-line { display: none; margin: 0; }
+
+/* ---------------------------------------------------------------- panel -- */
+
+.auth__panel { min-width: 0; }
+
+.auth__title {
+  font-size: 30px;
+  line-height: 1.14;
+  letter-spacing: -0.018em;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+  text-wrap: balance;
+}
+.auth__lead {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+  max-width: 46ch;
+}
+
+/*
+ * THE CARD IS NOT OVERRIDDEN — IT IS NO LONGER RENDERED.
+ *
+ * `.login-card`, `.login-brand`, `.login-title` and `.login-subtitle` were the
+ * old composition: a bordered box, a paragraph standing in for the mark, and a
+ * heading inside it. The pages now render the stage instead, so those elements
+ * do not exist and there is nothing here to hide. `auth.css` keeps their rules
+ * for the same reason the Community code was kept — deleting is not this
+ * phase's job, and a rule that matches nothing costs nothing.
+ */
+
+/* ---------------------------------------------------------------- fields -- */
+
+.auth .login-form,
+.auth .register-form { display: grid; gap: 18px; margin: 0; }
+
+.auth .login-field,
+.auth .register-field { display: grid; gap: 7px; min-width: 0; }
+
+.auth .login-field label,
+.auth .register-field label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+}
+.auth .register-field__optional {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.auth .login-field input,
+.auth .register-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: var(--auth-rule);
+  border-radius: 10px;
+  background: var(--background-field);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 16px;   /* 16px or larger, so iOS does not zoom the page on focus */
+  line-height: 1.4;
+  transition: border-color 140ms var(--ease-standard),
+              background-color 140ms var(--ease-standard);
+}
+.auth .login-field input::placeholder,
+.auth .register-field input::placeholder { color: var(--text-muted); }
+
+.auth .login-field input:hover:not(:disabled),
+.auth .register-field input:hover:not(:disabled) { border-color: var(--divider-strong); }
+
+.auth .login-field input:focus-visible,
+.auth .register-field input:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 2px;
+  border-color: var(--divider-strong);
+}
+
+.auth .login-field input:disabled,
+.auth .register-field input:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.auth .login-field input[aria-invalid="true"],
+.auth .register-field input[aria-invalid="true"] { border-color: var(--text-muted); }
+
+/*
+ * AUTOFILL.
+ *
+ * Chrome paints its own background and text colour on an autofilled control and
+ * ignores `background-color`. On this dark ground that turned every remembered
+ * field into a pale blue-grey card — the defect reported from the live page.
+ *
+ * The background is therefore painted with an inset shadow, which autofill does
+ * NOT override, and the glyphs and caret are set with the two properties it
+ * does read. The long transition delay is the standard hold that stops Chrome
+ * repainting its own colour a frame later.
+ *
+ * The field looks exactly the same filled, autofilled or typed into — which is
+ * the point: a learner should not be able to tell the browser helped.
+ */
+.auth .login-field input:-webkit-autofill,
+.auth .register-field input:-webkit-autofill,
+.auth .login-field input:-webkit-autofill:hover,
+.auth .register-field input:-webkit-autofill:hover,
+.auth .login-field input:-webkit-autofill:focus,
+.auth .register-field input:-webkit-autofill:focus,
+.auth .login-field input:-webkit-autofill:active,
+.auth .register-field input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--background-field) inset;
+  box-shadow: 0 0 0 1000px var(--background-field) inset;
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  -webkit-transition: background-color 100000s ease-in-out 0s;
+  transition: background-color 100000s ease-in-out 0s;
+}
+/* Firefox marks its own autofill and does honour normal colours. */
+.auth .login-field input:autofill,
+.auth .register-field input:autofill {
+  background: var(--background-field);
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------- helper and error -- */
+
+.auth .register-field__hint {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+.auth .register-field__error,
+.auth .login-error,
+.auth .register-error {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin: 0;
+}
+/*
+ * ERRORS ARE NOT PAINTED IN SIGNAL.
+ *
+ * `auth.css` gave the summary regions a Signal tint — a 12% fill and a 40%
+ * border of the same green as the submit control. Driving the real states put
+ * an error box on screen in the colour the page uses for "this is the thing to
+ * press", which is the opposite of what it means. Signal is reserved here for a
+ * genuinely available action and for focus; an error gets a quiet surface, and
+ * its meaning is carried by the words and by the mark beside them.
+ */
+.auth .login-error,
+.auth .register-error,
+.auth .auth-captcha--failed,
+.auth .auth-captcha__failure {
+  position: relative;
+  background: var(--surface-subtle);
+  border: var(--auth-rule);
+  border-radius: 10px;
+  /*
+   * The 32px is not decoration. It is the mark's column: 12px of inset that
+   * keeps the mark off the hairline, the 13px mark itself, and 7px of air
+   * before the words start. Nothing below may set `padding-left` on these
+   * regions — taking the column away leaves the mark sitting on the text.
+   */
+  padding: 11px 12px 11px 32px;
+}
+
+/* The field note carries the same mark without the box, so its column is its
+   own: no hairline to clear, and the mark simply leads the line. */
+.auth .register-field__error { position: relative; padding-left: 18px; }
+
+/* The mark is a second channel beside the words — never the only one. */
+.auth .register-field__error::before,
+.auth .login-error::before,
+.auth .register-error::before,
+.auth .auth-captcha--failed::before,
+.auth .auth-captcha__failure::before {
+  content: "!";
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/*
+ * WHERE THE MARK SITS — one authority, and the last word on it.
+ *
+ * This used to be stated twice at the same specificity: `left: 12px` in one
+ * rule and `left: 0` in the next. The later one won, so every error mark
+ * rendered flush against the region's own hairline and read as a broken frame
+ * rather than as a mark. Splitting appearance from position and stating
+ * position once, here, is what makes the intended geometry the real geometry.
+ *
+ * `top: 0; bottom: 0` with auto block margins centres the mark against the
+ * words in its own column, at one line or three, without a transform and
+ * without pulling it back into place with a negative margin.
+ */
+.auth .register-field__error::before { left: 0; top: 0; margin-top: 3px; }
+.auth .login-error::before,
+.auth .register-error::before,
+.auth .auth-captcha--failed::before,
+.auth .auth-captcha__failure::before {
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+.auth .login-error__ref,
+.auth .register-error__ref {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.auth .register-referral { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+
+/* ------------------------------------------------------------- captcha --- */
+
+/*
+ * The widget is a third-party iframe and nothing here reaches inside it: no
+ * rule touches its content, its branding or its behaviour. What is set is the
+ * space it occupies, so it reads as part of the form rather than a block
+ * dropped into one — and so it cannot push the page sideways.
+ */
+.auth .auth-captcha { display: grid; gap: 8px; min-width: 0; }
+.auth .auth-captcha__frame {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-radius: 10px;
+}
+.auth .auth-captcha__status,
+.auth .auth-status {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+.auth .auth-captcha__status:empty,
+.auth .auth-status:empty { display: none; }
+/* Surface, gutter and mark come from the boxed-error contract above; what is
+   left here is only what this region says differently. */
+.auth .auth-captcha--failed { color: var(--text-primary); font-size: 13px; line-height: 1.5; }
+
+/*
+ * A FAILED CHALLENGE READS DIFFERENTLY FROM A PENDING ONE.
+ *
+ * The status line above is muted and quiet because "loading" is not news. This
+ * one is the reason the submit control is unavailable, so it is set in the
+ * primary text colour and carries the same mark and the same neutral surface as
+ * every other error on these two pages. No Signal: the action is not available,
+ * and colouring the failure like the button would say the opposite.
+ */
+.auth .auth-captcha__failure {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- actions --- */
+
+.auth .login-submit,
+.auth .register-submit {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 13px 20px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--signal-active);
+  color: var(--background-base);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-standard), opacity 140ms var(--ease-standard);
+}
+.auth .login-submit:hover:not(:disabled),
+.auth .register-submit:hover:not(:disabled) { background: var(--ata-signal-300); }
+.auth .login-submit:focus-visible,
+.auth .register-submit:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.auth .login-submit:disabled,
+.auth .register-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The way across to the other page. A quiet line, closed by a hairline, so it
+   reads as navigation and never competes with the one lit action. */
+.auth .register-alt,
+.auth .login-alt {
+  margin: 4px 0 0;
+  padding-top: 18px;
+  border-top: var(--auth-rule);
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.auth .register-alt__link,
+.auth .login-alt__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--divider-strong);
+}
+.auth .register-alt__link:hover,
+.auth .login-alt__link:hover { text-decoration-color: var(--signal-active); }
+.auth .register-alt__link:focus-visible,
+.auth .login-alt__link:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+
+/* ---------------------------------------------------- the completed state -- */
+
+.auth .register-success { display: grid; gap: 12px; }
+.auth .register-success__title {
+  font-size: 20px; font-weight: 700; line-height: 1.25; color: var(--text-primary); margin: 0;
+}
+.auth .register-success__body { font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); margin: 0; }
+.auth .register-success__email { color: var(--text-primary); font-family: var(--font-mono); font-size: 13.5px; }
+
+/* ------------------------------------------------------------- wide ------ */
+
+/*
+ * From the desktop breakpoint the axis becomes a column of its own and the
+ * stage is asymmetric: the mark and a hairline on the left, the form on the
+ * right at its own measure. The form stays the object — the left column carries
+ * no competing content.
+ *
+ * `align-content: center` is applied ONLY here and only when the viewport is
+ * tall enough to hold the stage; on a short one the rule below hands the page
+ * back to ordinary document scroll.
+ */
+@media (min-width: 900px) {
+  .auth { padding: 40px; }
+  .auth__stage {
+    max-width: 940px;
+    grid-template-columns: 220px minmax(0, var(--auth-measure));
+    gap: 0 72px;
+    align-items: start;
+  }
+  .auth__axis {
+    position: relative;
+    display: grid;
+    gap: 20px;
+    align-content: start;
+    padding-top: 6px;
+  }
+  .auth__mark img { width: 62px; }
+  .auth__axis-line {
+    display: block;
+    height: 1px;
+    background: var(--divider);
+  }
+  .auth__title { font-size: 34px; }
+}
+
+@media (min-width: 900px) and (min-height: 760px) {
+  .auth { align-content: center; }
+}
+
+/* ------------------------------------------------------------- narrow ---- */
+
+@media (max-width: 430px) {
+  .auth { padding: 20px 16px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .auth__stage { gap: 22px; }
+  .auth__title { font-size: 26px; }
+  .auth__mark img { width: 46px; }
+}
+
+/* A short viewport - a phone with the keyboard up, or a 1440x700 desktop - must
+   scroll to the end of the form. Nothing is centred and nothing is clipped. */
+@media (max-height: 700px) {
+  .auth { align-content: start; padding-top: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth .login-field input,
+  .auth .register-field input,
+  .auth .login-submit,
+  .auth .register-submit { transition-duration: 0.001s; }
+}
+
+/* Windows high contrast: the system owns the palette; keep the shapes legible. */
+@media (forced-colors: active) {
+  .auth .login-field input,
+  .auth .register-field input,
+  .auth .login-submit,
+  .auth .register-submit { border: 1px solid ButtonBorder; }
+  .auth .login-field input:focus-visible,
+  .auth .register-field input:focus-visible { outline: 2px solid Highlight; }
+}

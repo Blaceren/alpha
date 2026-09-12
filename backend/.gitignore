@@ -1,0 +1,45 @@
+# --- Dependencies / build output ---
+node_modules/
+.next/
+# Generated build cache. `.next/` above never covered this sibling path, which is
+# how 447 MiB of webpack packs — plus rotating Next preview/RSC keys — reached the
+# repository and then every immutable release. Nothing creates or reads it: no
+# package script, no next.config, no build or deploy tool. A clean build without it
+# produces an identical route set (198), an identical server/static file inventory,
+# and passes typecheck, lint, unit and domain regressions.
+.next-cache-seed/
+coverage/
+*.tsbuildinfo
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+.secure/
+
+# --- Databases (never commit) ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+
+# --- User uploads & runtime storage ---
+/storage/
+uploads/
+
+# --- Backups & archives ---
+/backups/
+/.codex-backups/
+*.tgz
+*.tar.gz
+*.bak
+*.bak-*
+
+# --- Logs / temp / tooling ---
+logs/
+*.log
+tmp/
+.DS_Store
+design-memory/
