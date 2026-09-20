@@ -1,3 +1,7 @@
+/* POCKET-REG-SECURITY-CLOSURE-1 (F3/P2): design-lab display variables, no remote fonts.
+ * CSS requires @import to precede all other rules, so it is declared here. */
+@import "../components/design-lab/lab-display-font.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -2056,5 +2060,3 @@ textarea {
   }
 }
 
-/* POCKET-REG-SECURITY-CLOSURE-1 (F3/P2): design-lab display variables, no remote fonts. */
-@import "../components/design-lab/lab-display-font.css";
