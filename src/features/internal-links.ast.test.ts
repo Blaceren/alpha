@@ -35,6 +35,11 @@ const ALLOWED: Array<{ file: string; match: string; why: string }> = [
     match: "block.asset.url",
     why: "asset download handed to the browser, rel=noopener — not a route",
   },
+  {
+    file: "src/features/public-news/public-news-screens.tsx",
+    match: "item.source.url",
+    why: "a news item's external https source, rel=nofollow noopener in a new tab — never an Academy route",
+  },
 ];
 
 type Anchor = { file: string; line: number; form: string; text: string | null };

@@ -205,7 +205,7 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 | tool.risk_calculator | Risk Calculator | /tools/risk-calculator | L15 | checkpoint L15 | ручной ввод (модель бинарных опционов), Risk Plan в версиях |
 | tool.entry_checklist | Entry Checklist | /tools/entry-checklist | L20 | checkpoint L20 | 9 фиксированных пунктов, проверки хранятся |
 | tool.personal_stats | Personal Stats | /tools/stats | L25 | checkpoint L25 | только записи Trading Journal; доли и количества, без денег |
-| tool.news_calendar | News Calendar | /tools/news | L30 | checkpoint L30 | новости вносит копирайтер в CRM |
+| tool.news_calendar | News Calendar | /tools/news | L30 | checkpoint L30 | опубликованные новости из CRM (роль «Копирайтер»); план ученика: пояс, важность, минуты до/после, валюты (версии) |
 
 - Инструмент — страница `/tools/<slug>` **в той же вкладке**, внутри оболочки Академии, с кнопкой
   «Все инструменты»; доступ решает Backend (`toolAccess` в чтении curriculum), Академия не

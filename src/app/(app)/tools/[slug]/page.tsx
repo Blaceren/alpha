@@ -10,6 +10,7 @@ import { JournalWorkspace } from "@/features/tool-windows/journal/journal-worksp
 import { RiskWorkspace } from "@/features/tool-windows/risk/risk-workspace";
 import { ChecklistWorkspace } from "@/features/tool-windows/checklist/checklist-workspace";
 import { StatsWorkspace } from "@/features/tool-windows/stats/stats-workspace";
+import { NewsWorkspace } from "@/features/tool-windows/news/news-workspace";
 import {
   RETIRED_TOOL_CODES,
   toolWindowByCode,
@@ -36,11 +37,13 @@ import { readJournalOnServer } from "@/server/tools/journal-read";
 import { readRiskStateOnServer } from "@/server/tools/risk-read";
 import { readChecklistOnServer } from "@/server/tools/checklist-read";
 import { readStatsOnServer } from "@/server/tools/stats-read";
+import { readNewsCalendarOnServer } from "@/server/tools/news-read";
 import type { TradeCardState } from "@/features/tool-windows/trade-card/trade-card-client";
 import type { JournalPage } from "@/features/tool-windows/journal/journal-model";
 import type { RiskState } from "@/features/tool-windows/risk/risk-model";
 import type { ChecklistState } from "@/features/tool-windows/checklist/checklist-model";
 import type { JournalStats } from "@/features/tool-windows/stats/stats-model";
+import type { NewsCalendarState } from "@/features/tool-windows/news/news-model";
 import "@/features/tool-windows/tool-windows.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -92,7 +95,7 @@ export default async function ToolRoute({
   const reviewCardId = tool.slug === "journal" ? cardIdOf(sp.card) : null;
 
   if (getAcademyConfig().mode === "api") {
-    const [viewer, result, tradeCard, journal, risk, checklist, stats] = await Promise.all([
+    const [viewer, result, tradeCard, journal, risk, checklist, stats, news] = await Promise.all([
       getServerViewer(),
       getCurriculumView(),
       tool.slug === "trade-card" ? readTradeCardStateOnServer() : Promise.resolve(null),
@@ -100,6 +103,7 @@ export default async function ToolRoute({
       tool.slug === "risk-calculator" ? readRiskStateOnServer() : Promise.resolve(null),
       tool.slug === "entry-checklist" ? readChecklistOnServer() : Promise.resolve(null),
       tool.slug === "stats" ? readStatsOnServer() : Promise.resolve(null),
+      tool.slug === "news" ? readNewsCalendarOnServer() : Promise.resolve(null),
     ]);
     const access = toolAccessOf(result);
     const view = resolveToolWindow(tool.slug, access);
@@ -111,7 +115,17 @@ export default async function ToolRoute({
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
           releasingLevelTitle={result.ok ? levelTitleOf(result.view, tool.unlockLevel) : null}
-          data={{ tradeCard, journal, risk, checklist, stats, journalOpen: isOpen("journal", access), reviewCardId }}
+          data={{
+            tradeCard,
+            journal,
+            risk,
+            checklist,
+            stats,
+            news: news?.state ?? null,
+            newsDay: news?.day ?? null,
+            journalOpen: isOpen("journal", access),
+            reviewCardId,
+          }}
         />
       </AppShell>
     );
@@ -135,6 +149,8 @@ export default async function ToolRoute({
           risk: null,
           checklist: null,
           stats: null,
+          news: null,
+          newsDay: null,
           journalOpen: isOpen("journal", access),
           reviewCardId,
         }}
@@ -150,6 +166,9 @@ type ToolData = {
   readonly risk: RiskState | null;
   readonly checklist: ChecklistState | null;
   readonly stats: JournalStats | null;
+  readonly news: NewsCalendarState | null;
+  /** The learner's today in their saved plan's zone, worked out with the first read. */
+  readonly newsDay: string | null;
   /** Whether the Trading Journal is open: a saved card then goes into it. */
   readonly journalOpen: boolean;
   /** The Trade Card whose journal entry opens for review, from `?card=`. */
@@ -211,6 +230,8 @@ function workspaceFor(tool: ToolWindowDefinition, data: ToolData) {
       return <ChecklistWorkspace initialState={data.checklist} />;
     case "stats":
       return <StatsWorkspace initialStats={data.stats} />;
+    case "news":
+      return <NewsWorkspace initialState={data.news} initialDay={data.newsDay} />;
     default:
       return <ToolSoon tool={tool} />;
   }

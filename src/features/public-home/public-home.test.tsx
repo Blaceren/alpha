@@ -554,3 +554,12 @@ describe("Public Home — stylesheet holds its contract", () => {
     expect(mobileBlock?.[1]).toMatch(/\[data-reveal\][\s\S]*?transition:\s*none/);
   });
 });
+
+describe("Public Home — the way to the news", () => {
+  it("links the public news pages from the menu, as a route and not an anchor", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const nav = container.querySelector("nav#primary-nav") as HTMLElement;
+    const news = Array.from(nav.querySelectorAll("a")).find((a) => a.textContent === "Новости");
+    expect(news?.getAttribute("href")).toBe("/news");
+  });
+});

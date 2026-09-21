@@ -42,7 +42,9 @@ describe("«Инструменты» — the six tools", () => {
   });
 
   it("says «Скоро» for an earned tool this build does not have", () => {
-    render(<ToolsHub tools={resolveToolWindows(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)))} />);
+    // All six are built; a catalogue with one not built yet keeps the state provable.
+    const catalogue = TOOL_WINDOWS.map((tool) => (tool.slug === "news" ? { ...tool, built: false } : tool));
+    render(<ToolsHub tools={resolveToolWindows(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)), catalogue)} />);
     const news = rows()[5]!;
     expect(within(news).getByText("Скоро")).toBeInTheDocument();
     expect(within(news).queryByRole("link")).toBeNull();

@@ -163,3 +163,61 @@ describe("matcher — static brand assets", () => {
     expect(pattern.test("/branding")).toBe(true);
   });
 });
+
+describe("TOOLS-V2 NEWS — public news and crawler files", () => {
+  it("lets an anonymous visitor reach the news list and a news page", () => {
+    expect(redirectTarget(middleware(request("/news")))).toBeNull();
+    expect(redirectTarget(middleware(request("/news?page=2")))).toBeNull();
+    expect(redirectTarget(middleware(request("/news/ssha-bazovyy-ipts-2026-09-21")))).toBeNull();
+  });
+
+  it("lets crawlers fetch robots.txt and the sitemap", () => {
+    expect(redirectTarget(middleware(request("/robots.txt")))).toBeNull();
+    expect(redirectTarget(middleware(request("/sitemap.xml")))).toBeNull();
+  });
+
+  it("does not exempt a route that merely starts with the same letters, nor the tool", () => {
+    expect(redirectTarget(middleware(request("/newsletter")))).toContain("/login");
+    expect(redirectTarget(middleware(request("/tools/news")))).toContain("/login");
+    expect(redirectTarget(middleware(request("/robots.txt.bak")))).toContain("/login");
+  });
+});
+
+describe("search indexing — the X-Robots-Tag header", () => {
+  const saved = { indexing: process.env.ACADEMY_SEARCH_INDEXING, origin: process.env.ACADEMY_PUBLIC_ORIGIN };
+  afterEach(() => {
+    process.env.ACADEMY_SEARCH_INDEXING = saved.indexing;
+    process.env.ACADEMY_PUBLIC_ORIGIN = saved.origin;
+  });
+
+  it("says noindex on every page when indexing is not configured — PREPROD", () => {
+    delete process.env.ACADEMY_SEARCH_INDEXING;
+    delete process.env.ACADEMY_PUBLIC_ORIGIN;
+    for (const path of ["/", "/news", "/news/ssha-ipts-2026-09-21", "/login", "/register", "/home"]) {
+      expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
+    }
+  });
+
+  it("stays off when it is switched on without a valid canonical origin", () => {
+    process.env.ACADEMY_SEARCH_INDEXING = "on";
+    process.env.ACADEMY_PUBLIC_ORIGIN = "http://alfatrade.media";
+    expect(middleware(request("/")).headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("leaves only the home and the news indexable in production", () => {
+    process.env.ACADEMY_SEARCH_INDEXING = "on";
+    process.env.ACADEMY_PUBLIC_ORIGIN = "https://alfatrade.media";
+    for (const path of ["/", "/news", "/news/ssha-ipts-2026-09-21"]) {
+      expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBeNull();
+    }
+    for (const path of ["/login", "/register", "/home", "/tools/news", "/news/Bad_Slug", "/robots.txt"]) {
+      expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
+    }
+  });
+
+  it("says noindex in fixture mode too", () => {
+    process.env.ACADEMY_MODE = "fixture";
+    delete process.env.ACADEMY_SEARCH_INDEXING;
+    expect(middleware(request("/home")).headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+});

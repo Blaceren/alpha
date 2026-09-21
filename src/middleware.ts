@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { PATHNAME_HEADER, hasAnySessionCookie } from "@/lib/auth/constants";
+import { NOINDEX_HEADER_VALUE, isIndexablePath, searchIndexing } from "@/config/search-indexing";
 
 /**
  * Authenticated route protection.
@@ -52,14 +53,45 @@ const ANONYMOUS_ROUTES = ["/login", "/register"] as const;
  */
 const PUBLIC_HOME_PATH = "/";
 
+/**
+ * TOOLS-V2 NEWS — public content: the news list and each news page.
+ *
+ * Their whole audience includes people who have never signed in, and in
+ * production search engines. Exact-or-subpath like `ANONYMOUS_ROUTES`, so
+ * `/newsletter` stays guarded. They render published news only, which the
+ * Backend already serves to anyone; no learner data is behind them.
+ */
+const PUBLIC_CONTENT_ROUTES = ["/news"] as const;
+
+/** Files crawlers ask for by name. Exact matches only. */
+const CRAWLER_FILES = new Set(["/robots.txt", "/sitemap.xml"]);
+
 function isAnonymousRoute(pathname: string): boolean {
   if (pathname === PUBLIC_HOME_PATH) return true;
-  return ANONYMOUS_ROUTES.some(
+  if (CRAWLER_FILES.has(pathname)) return true;
+  return [...ANONYMOUS_ROUTES, ...PUBLIC_CONTENT_ROUTES].some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }
 
+/**
+ * SEARCH INDEXING — every response that is not an indexable page on an
+ * indexing host says `noindex, nofollow` in a header too, not only in the
+ * page's meta tag: a redirect, a file or a page rendered before its metadata
+ * would otherwise say nothing. See `config/search-indexing.ts`.
+ */
+function withRobotsHeader(response: NextResponse, pathname: string): NextResponse {
+  if (!(searchIndexing().enabled && isIndexablePath(pathname))) {
+    response.headers.set("X-Robots-Tag", NOINDEX_HEADER_VALUE);
+  }
+  return response;
+}
+
 export function middleware(request: NextRequest): NextResponse {
+  return withRobotsHeader(route(request), request.nextUrl.pathname);
+}
+
+function route(request: NextRequest): NextResponse {
   if (!isApiMode()) {
     return NextResponse.next();
   }

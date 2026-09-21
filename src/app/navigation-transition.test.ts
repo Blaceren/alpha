@@ -212,6 +212,33 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/stats/stats-parts.tsx",
   "src/features/tool-windows/stats/stats-workspace.tsx",
   "src/server/tools/stats-read.ts",
+  /* TOOLS-V2 slice 6: the News Calendar — its window, its proxy route and its
+     server read, a page of the shell like the other tools with no loading
+     boundary — and the public news it reads: `/news` and `/news/<slug>`
+     outside the route group, like Public Home, read anonymously on the
+     server. SEARCH INDEXING (owner, 2026-09-21): only Public Home and the news
+     are indexable, in production only; everything else, PREPROD included, is
+     noindex — so Public Home's metadata, robots.txt and the sitemap move with
+     it; the root layout does not (the noindex default is the middleware's
+     header on every page). */
+  "src/app/api/backend/tools/news-calendar/route.ts",
+  "src/app/news/[slug]/page.tsx",
+  "src/app/news/page.tsx",
+  "src/app/page.tsx",
+  "src/app/robots.ts",
+  "src/app/sitemap.ts",
+  "src/config/search-indexing.ts",
+  "src/features/public-news/local-release-time.tsx",
+  "src/features/public-news/public-news-model.ts",
+  "src/features/public-news/public-news-parts.tsx",
+  "src/features/public-news/public-news-screens.tsx",
+  "src/features/public-news/public-news.css",
+  "src/features/tool-windows/news/news-client.ts",
+  "src/features/tool-windows/news/news-model.ts",
+  "src/features/tool-windows/news/news-parts.tsx",
+  "src/features/tool-windows/news/news-workspace.tsx",
+  "src/server/news/public-news-read.ts",
+  "src/server/tools/news-read.ts",
   /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
      is length alone, and Profile gained a security area with a real change-
      password route. The proxy grew exactly one named operation — login-proxy

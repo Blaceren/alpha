@@ -177,7 +177,8 @@ for (const at of AT_RULES) {
 
 type Surface = "public-home" | "auth" | "authenticated" | "shared";
 function surfaceOf(file: string): Surface {
-  if (file.startsWith("src/features/public-home/")) return "public-home";
+  // TOOLS-V2 NEWS: the public news pages are built on Public Home's system and run its ladder.
+  if (file.startsWith("src/features/public-home/") || file.startsWith("src/features/public-news/")) return "public-home";
   if (file.startsWith("src/features/auth/")) return "auth";
   if (file.startsWith("src/styles/") || file.startsWith("src/components/")) return "shared";
   return "authenticated";
@@ -274,9 +275,9 @@ const ALLOWLIST: Allowed[] = [
   { value: 640, side: "max-width", files: ["src/features/academy-experience/experience.css", "src/features/auth/auth-stage.css", "src/features/lesson-reader/lesson-reader.css", "src/features/mentor-review/mentor-feedback.css"], role: "content-stack",
     surfaces: ["auth", "authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Crosses auth and authenticated surfaces. On auth it is padding only, measured live at 641/640 with a tall viewport to separate it from the phone compact tier; the other three trim their own content. Kept because the same number is doing four unrelated jobs and merging would couple them." },
-  { value: 680, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
+  { value: 680, side: "max-width", files: ["src/features/public-home/public-home.css", "src/features/public-news/public-news.css"], role: "public-home",
     surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
-    why: "Evidence track goes two columns to one. Observed live at 679/680/681. Public Home runs its own ladder and shares no transition with the app shell." },
+    why: "Evidence track goes two columns to one. Observed live at 679/680/681. Public Home runs its own ladder and shares no transition with the app shell. The public news pages use the same step for their phone layout: the header wraps, a release row stacks." },
   { value: 720, side: "max-width", files: ["src/features/checkpoint/level-checkpoint.css", "src/features/report-level/report-level.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Checkpoint and level ledger stack at their own content width." },
@@ -298,9 +299,9 @@ const ALLOWLIST: Allowed[] = [
   { value: 1023, side: "max-width", files: ["src/features/auth-home-fidelity/auth-home-fidelity.css", "src/features/lessons-fidelity/lessons-fidelity.css"], role: "home-local",
     surfaces: ["authenticated"], disposition: "CONFLICTING_CASCADE",
     why: "The other half of Home's private ladder, 17px from Public Home's 1040 and 176px from the documented 1199. Same reasoning as 767." },
-  { value: 1040, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
+  { value: 1040, side: "max-width", files: ["src/features/public-home/public-home.css", "src/features/public-news/public-news.css"], role: "public-home",
     surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
-    why: "Public Home's navigation mode switch: nav goes flex/static to grid/absolute and the menu toggle appears. Observed live at 1039/1040/1041." },
+    why: "Public Home's navigation mode switch: nav goes flex/static to grid/absolute and the menu toggle appears. Observed live at 1039/1040/1041. The public news pages fold a release row from five columns to three at the same step." },
   { value: 1080, side: "min-width", files: ["src/features/lesson/lesson.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Opening side of the same neighbourhood as the 1080 ceiling above but on a different file and a different grid; the coincidence of value is not evidence of a shared transition." },

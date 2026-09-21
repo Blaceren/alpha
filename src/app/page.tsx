@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
+import { indexableRobots, searchIndexing } from "@/config/search-indexing";
 import { getServerViewer } from "@/server/auth/server-session";
 import "@/features/public-home/public-home.css";
 
@@ -17,11 +18,37 @@ import "@/features/public-home/public-home.css";
  * The app now declares one favicon in the root layout and this route inherits
  * it, so the override is gone rather than duplicated.
  */
-export const metadata: Metadata = {
-  title: "ATA — последовательный путь в трейдинге",
-  description:
-    "Alfa Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.",
-};
+const TITLE = "ATA — последовательный путь в трейдинге";
+const DESCRIPTION =
+  "Alfa Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.";
+
+/**
+ * SEARCH INDEXING (owner, 2026-09-21): in production this page is indexed —
+ * the Academy's story, with the way to login and registration — and it names
+ * its canonical address. Everywhere else, PREPROD included, it is noindex like
+ * every other page. Decided per request, so one build serves both hosts.
+ */
+export function generateMetadata(): Metadata {
+  const indexing = searchIndexing();
+  return {
+    title: TITLE,
+    description: DESCRIPTION,
+    robots: indexableRobots(indexing),
+    ...(indexing.enabled
+      ? {
+          alternates: { canonical: `${indexing.origin}/` },
+          openGraph: {
+            type: "website",
+            url: `${indexing.origin}/`,
+            title: TITLE,
+            description: DESCRIPTION,
+            siteName: "Alfa Trade Academy",
+            locale: "ru_RU",
+          },
+        }
+      : {}),
+  };
+}
 
 export const viewport = { themeColor: "#0B0D0A" };
 

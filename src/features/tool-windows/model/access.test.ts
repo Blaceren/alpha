@@ -19,15 +19,23 @@ describe("resolveToolWindows — the Backend's verdict, joined to the catalogue"
     expect(Object.values(states(null))).toEqual(["locked", "locked", "locked", "locked", "locked", "locked"]);
   });
 
-  it("opens a built tool the verdict unlocks, and says «soon» for an unbuilt one", () => {
+  it("opens every built tool the verdict unlocks", () => {
     expect(states(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)))).toEqual({
       "trade-card": "open",
       journal: "open",
       "risk-calculator": "open",
       "entry-checklist": "open",
       stats: "open",
-      news: "soon",
+      news: "open",
     });
+  });
+
+  it("says «soon» for a tool the verdict unlocks and this build does not have", () => {
+    // All six are built; a catalogue with one not built yet keeps the state provable.
+    const catalogue = TOOL_WINDOWS.map((tool) => (tool.slug === "news" ? { ...tool, built: false } : tool));
+    const views = resolveToolWindows(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)), catalogue);
+    expect(views.find((view) => view.tool.slug === "news")?.state).toBe("soon");
+    expect(views.find((view) => view.tool.slug === "stats")?.state).toBe("open");
   });
 
   it("treats a tool the verdict does not mention as locked, and ignores codes it does not know", () => {

@@ -2568,6 +2568,475 @@
   }
 }
 
+/* ========================================================= news calendar */
+
+/* The day and its releases, and beside them from 900px the learner's plan. */
+.nc-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.nc-aside {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+/* THE STATUS LINE: where the plan stands right now, in its outcome's tone. */
+.nc-now {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--tw-line-2);
+  border-left: 3px solid var(--tw-text-3);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.nc-now[data-tone="closed"] {
+  border-left-color: var(--tw-negative);
+}
+
+.nc-now[data-tone="open"] {
+  border-left-color: var(--tw-positive);
+}
+
+.nc-now__title {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nc-now[data-tone="closed"] .nc-now__title {
+  color: var(--tw-negative);
+}
+
+.nc-now[data-tone="open"] .nc-now__title {
+  color: var(--tw-positive);
+}
+
+.nc-now__line {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nc-now__currency {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.nc-now__rule {
+  margin: 2px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* The day: ‹ 21 сентября · понедельник › and a way back to today. */
+.nc-daynav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-daynav__step {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.nc-daynav__step:hover:not(:disabled) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-daynav__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nc-daynav__day {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.nc-daynav__today {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: transparent;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.nc-daynav__today:hover {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-day__plan {
+  margin-top: 2px;
+}
+
+/* THE SIGNATURE: the day on one track, midnight to midnight, each window the
+   plan closes hatched in the negative tone, the releases as marks, «сейчас» in
+   Signal — the current moment, Signal's own role. */
+.nc-timeline {
+  margin-top: 26px;
+}
+
+.nc-track {
+  position: relative;
+  height: 44px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.nc-track__window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 3px;
+  border-inline: 1px solid rgba(215, 163, 168, 0.62);
+  background: repeating-linear-gradient(135deg, rgba(215, 163, 168, 0.4) 0 2px, transparent 2px 7px);
+}
+
+.nc-track__mark {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--tw-text-3);
+}
+
+.nc-track__mark[data-importance="3"] {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+
+.nc-track__mark[data-covered] {
+  background: var(--tw-text-1);
+  box-shadow: 0 0 0 2px var(--tw-well);
+}
+
+.nc-track__now {
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tw-signal);
+}
+
+.nc-track__now-label {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 1px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--tw-surface);
+  color: var(--tw-signal);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.nc-hours {
+  position: relative;
+  height: 18px;
+  margin-top: 5px;
+}
+
+.nc-hours__tick {
+  position: absolute;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+.nc-hours__tick:first-child {
+  transform: none;
+}
+
+.nc-hours__tick:last-child {
+  transform: translateX(-100%);
+}
+
+.nc-hours__tick:not([data-major]) {
+  display: none;
+}
+
+.nc-timeline__words {
+  margin: 8px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* The day's releases: time · currency · name and values · прошло / скоро. */
+.nc-events {
+  margin: 16px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--tw-line-1);
+  list-style: none;
+}
+
+.nc-events__none {
+  margin-top: 16px;
+}
+
+.nc-event {
+  display: grid;
+  grid-template-columns: 46px 46px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.nc-event__time {
+  color: var(--tw-text-1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.nc-cur {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: 999px;
+  color: var(--tw-text-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+.nc-event__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nc-event__title {
+  color: var(--tw-text-1);
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.nc-event__title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.nc-event__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nc-event__imp {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+}
+
+.nc-event__imp[data-importance="3"] {
+  color: var(--tw-text-1);
+}
+
+.nc-event__values {
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-event__closes {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  color: var(--tw-negative);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.nc-event__closes::before {
+  content: "";
+  width: 12px;
+  height: 10px;
+  border-inline: 1px solid rgba(215, 163, 168, 0.62);
+  background: repeating-linear-gradient(135deg, rgba(215, 163, 168, 0.55) 0 2px, transparent 2px 5px);
+}
+
+.nc-event__outside {
+  margin-top: 3px;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nc-event__state {
+  grid-column: 3;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.nc-event[data-state="soon"] .nc-event__state {
+  color: var(--tw-signal);
+}
+
+.nc-event[data-state="past"] .nc-event__time,
+.nc-event[data-state="past"] .nc-event__title {
+  color: var(--tw-text-2);
+}
+
+/* The plan: segmented choices that may run to two lines, and currency chips. */
+.nc-plan .tc-segmented__option {
+  padding: 6px 8px;
+  line-height: 1.25;
+}
+
+.nc-select {
+  appearance: auto;
+}
+
+.nc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nc-chip {
+  min-width: 62px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.nc-chip:hover:not(:disabled):not([data-on]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-chip[data-on] {
+  border-color: var(--tw-signal);
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
+}
+
+.nc-draft {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.nc-plan__actions {
+  flex-wrap: wrap;
+}
+
+@media (min-width: 600px) {
+  .nc-hours__tick:not([data-major]) {
+    display: inline;
+  }
+
+  .nc-event {
+    grid-template-columns: 50px 50px minmax(0, 1fr) auto;
+    column-gap: 14px;
+  }
+
+  .nc-event__state {
+    grid-column: 4;
+    grid-row: 1;
+    margin-top: 2px;
+  }
+
+  .nc-chip {
+    min-height: 40px;
+  }
+}
+
+/* From 900px the plan stands beside the day and stays in view. */
+@media (min-width: 900px) {
+  .nc-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .nc-aside {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+}
+
 /* ====================================================== wider screens */
 
 @media (min-width: 600px) {

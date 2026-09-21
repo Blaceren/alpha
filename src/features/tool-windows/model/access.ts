@@ -29,9 +29,13 @@ export interface ToolWindowView {
   readonly href: string;
 }
 
-export function resolveToolWindows(access: AcademyToolAccess | null): ToolWindowView[] {
+export function resolveToolWindows(
+  access: AcademyToolAccess | null,
+  /** The catalogue; the real one everywhere but in the tests of a tool not built yet. */
+  catalogue: readonly ToolWindowDefinition[] = TOOL_WINDOWS,
+): ToolWindowView[] {
   const verdict = new Map((access?.tools ?? []).map((entry) => [entry.code, entry]));
-  return TOOL_WINDOWS.map((tool) => {
+  return catalogue.map((tool) => {
     const entry = verdict.get(tool.code);
     const unlocked = entry?.unlocked === true;
     return {

@@ -86,6 +86,15 @@ vi.mock("@/features/tool-windows/stats/stats-workspace", () => ({
     return <p>stats-workspace</p>;
   },
 }));
+const readNews = vi.fn();
+vi.mock("@/server/tools/news-read", () => ({ readNewsCalendarOnServer: () => readNews() }));
+const newsProps = vi.fn();
+vi.mock("@/features/tool-windows/news/news-workspace", () => ({
+  NewsWorkspace: (props: unknown) => {
+    newsProps(props);
+    return <p>news-workspace</p>;
+  },
+}));
 
 import ToolRoute from "./page";
 import { toolAccessOpening } from "@/features/tool-windows/model/access";
@@ -314,7 +323,9 @@ describe("the state", () => {
     ).toBeInTheDocument();
   });
 
-  it("says plainly when an earned tool is not built yet", async () => {
+  it("opens the News Calendar on an open verdict, with the server's read and the learner's day", async () => {
+    const news = { plan: { timeZone: "Asia/Tokyo" }, window: {}, events: [], reference: {} };
+    readNews.mockResolvedValue({ state: news, day: "2026-09-22" });
     const earned = [
       "tool.trade_card",
       "tool.trading_journal",
@@ -325,6 +336,16 @@ describe("the state", () => {
     ];
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
     render(await open("news"));
-    expect(screen.getByRole("heading", { name: "News Calendar готовится" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "News Calendar" })).toBeInTheDocument();
+    expect(newsProps).toHaveBeenCalledWith({ initialState: news, initialDay: "2026-09-22" });
+    expect(readStats).not.toHaveBeenCalled();
+  });
+
+  it("locks the News Calendar until level 30 is completed", async () => {
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist", "tool.personal_stats"];
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
+    render(await open("news"));
+    expect(screen.queryByText("news-workspace")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Откроется на уровне 30" })).toBeInTheDocument();
   });
 });

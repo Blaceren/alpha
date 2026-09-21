@@ -48,7 +48,11 @@ const UNTOUCHED = [
   "src/features/auth/session-machine.ts",
   "src/features/auth/session-provider.tsx",
   "src/features/auth/auth.css",
-  "src/middleware.ts",
+  /* `src/middleware.ts` is no longer frozen here. TOOLS-V2 NEWS (2026-09-21) was
+     authorised to let anonymous visitors reach the public news pages and the
+     crawler files, and to send the noindex header; `middleware.test.ts` governs
+     the guard in detail, and what this phase left alone is asserted below
+     against the phase's own range. */
 ];
 
 describe("the authenticating half is byte-identical to the release", () => {
@@ -213,7 +217,13 @@ describe("the threshold composition", () => {
 
   // 18
   it("leaves the authenticated redirect and the middleware alone", () => {
-    expect(src("src/middleware.ts")).toBe(git("show", `${BASE}:src/middleware.ts`));
+    // Frozen to the phase's own range: this phase did not move the middleware.
+    expect(git("show", `6630b83f4b17c6bd67ed6ed10279665a5a58bb81:src/middleware.ts`)).toBe(
+      git("show", `${BASE}:src/middleware.ts`),
+    );
+    // And the authenticated redirect it guarded is still the same sentence.
+    expect(src("src/middleware.ts")).toContain('const loginUrl = new URL("/login", request.url);');
+    expect(src("src/middleware.ts")).toContain('loginUrl.searchParams.set("next", `${pathname}${search}`);');
     /* Frozen to the phase's own range, for the same reason as the scope block
        below: this asserts what ATA-AUTH-THRESHOLD-CONTINUITY-1 left alone, and
        a later phase adding an authorised API route is not that phase failing. */

@@ -435,3 +435,40 @@ describe("tools proxy — Personal Stats", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("tools proxy — News Calendar", () => {
+  const page = { operation: "news-calendar" } as const;
+  const save = { operation: "news-plan-save" } as const;
+
+  it("forwards no query, or exactly one day as two instants, rebuilt", () => {
+    const query = (raw: string) => resolveToolsQuery(page, new URLSearchParams(raw));
+    expect(query("")).toBe("");
+    expect(query("from=2026-09-20T22:00:00.000Z&to=2026-09-21T22:00:00.000Z")).toBe(
+      "?from=2026-09-20T22%3A00%3A00.000Z&to=2026-09-21T22%3A00%3A00.000Z",
+    );
+    for (const raw of [
+      "from=2026-09-20T22:00:00.000Z",
+      "to=2026-09-21T22:00:00.000Z",
+      "from=2026-09-20&to=2026-09-21",
+      "from=2026-09-20T22:00:00Z&to=2026-09-21T22:00:00Z",
+      "from=2026-09-20T22:00:00.000Z&to=2026-09-21T22:00:00.000Z&userId=7",
+      "from=2026-09-20T22:00:00.000Z&from=2026-09-20T23:00:00.000Z&to=2026-09-21T22:00:00.000Z",
+    ]) {
+      expect(query(raw), raw).toBeNull();
+    }
+    expect(resolveToolsQuery(save, new URLSearchParams("x=1"))).toBeNull();
+  });
+
+  it("reads with GET and saves with POST on the one constant path, and refuses anything else", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(resolveToolsTargetPath(page)).toBe("/api/tools/news-calendar");
+    expect(resolveToolsTargetPath(save)).toBe("/api/tools/news-calendar");
+    await proxyTools(request("GET", "/api/backend/tools/news-calendar", { cookie: "s=1" }), page);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${ORIGIN}/api/tools/news-calendar`);
+    fetchMock.mockClear();
+    expect((await proxyTools(request("GET", "/api/backend/tools/news-calendar?day=today", { cookie: "s=1" }), page)).status).toBe(400);
+    expect((await proxyTools(request("PATCH", "/api/backend/tools/news-calendar", {}, "{}"), save)).status).toBe(405);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

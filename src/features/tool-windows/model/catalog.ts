@@ -104,7 +104,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     description: "События дня в вашем часовом поясе и окна, когда вход закрыт по плану.",
     unlockLevel: 30,
     releasedBy: "checkpoint",
-    built: false,
+    built: true,
   },
 ];
 

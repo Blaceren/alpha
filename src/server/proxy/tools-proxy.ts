@@ -43,13 +43,17 @@ export type ToolsProxyInput =
   | { operation: "risk-save" }
   | { operation: "checklist-state" }
   | { operation: "checklist-save" }
-  | { operation: "stats-page" };
+  | { operation: "stats-page" }
+  | { operation: "news-calendar" }
+  | { operation: "news-plan-save" };
 
 /** A cuid, and nothing that could leave the path segment it belongs to. */
 const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
 const JOURNAL_FILTERS = new Set(["all", "violated", "no_conclusion"]);
 const STATS_PERIODS = new Set(["7d", "30d", "all"]);
 const CALENDAR_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** An instant as the browser's `toISOString()` writes it, and nothing else. */
+const ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
  * The largest write is a hand-recorded journal entry: short fields and three
@@ -61,6 +65,8 @@ export const MAX_TOOLS_BODY_BYTES = 32 * 1024;
 export const MAX_TOOLS_RESPONSE_BYTES = 128 * 1024;
 /** A journal page: twenty entries whose texts may each be at their longest. */
 export const MAX_JOURNAL_RESPONSE_BYTES = 768 * 1024;
+/** Three days of calendar: at most 300 releases of a few hundred bytes each. */
+export const MAX_NEWS_RESPONSE_BYTES = 256 * 1024;
 
 const READ_REQUEST_HEADERS = new Set(["cookie", "accept", REQUEST_ID_HEADER]);
 const WRITE_REQUEST_HEADERS = new Set(["content-type", "cookie", "x-csrf-token", "accept", REQUEST_ID_HEADER]);
@@ -77,7 +83,9 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
     case "risk-state":
     case "checklist-state":
     case "stats-page":
+    case "news-calendar":
       return "GET";
+    case "news-plan-save":
     case "trade-card-fix":
     case "journal-create":
     case "risk-save":
@@ -101,6 +109,17 @@ export function resolveToolsQuery(input: ToolsProxyInput, search: URLSearchParam
       else if (key === "today" && CALENDAR_DATE_RE.test(value) && !out.has("today")) out.set("today", value);
       else return null;
     }
+    const query = out.toString();
+    return query.length > 0 ? `?${query}` : "";
+  }
+  if (input.operation === "news-calendar") {
+    // No query (the first read, now ± 36 h), or exactly one day: `from` and `to`.
+    const out = new URLSearchParams();
+    for (const [key, value] of search.entries()) {
+      if ((key === "from" || key === "to") && ISO_INSTANT_RE.test(value) && !out.has(key)) out.set(key, value);
+      else return null;
+    }
+    if (out.has("from") !== out.has("to")) return null;
     const query = out.toString();
     return query.length > 0 ? `?${query}` : "";
   }
@@ -164,6 +183,9 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
       return "/api/tools/entry-checks";
     case "stats-page":
       return "/api/tools/stats";
+    case "news-calendar":
+    case "news-plan-save":
+      return "/api/tools/news-calendar";
     default:
       return null;
   }
@@ -235,7 +257,12 @@ export async function proxyTools(request: Request, input: ToolsProxyInput): Prom
   }
 
   const out = await backendResponse.arrayBuffer();
-  const cap = input.operation === "journal-page" ? MAX_JOURNAL_RESPONSE_BYTES : MAX_TOOLS_RESPONSE_BYTES;
+  const cap =
+    input.operation === "journal-page"
+      ? MAX_JOURNAL_RESPONSE_BYTES
+      : input.operation === "news-calendar"
+        ? MAX_NEWS_RESPONSE_BYTES
+        : MAX_TOOLS_RESPONSE_BYTES;
   if (out.byteLength > cap) {
     return errorResponse(makeError("BACKEND_UNAVAILABLE"), 502);
   }
