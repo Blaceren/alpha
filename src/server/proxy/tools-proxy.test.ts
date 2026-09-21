@@ -408,3 +408,30 @@ describe("tools proxy — the Entry Checklist", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("tools proxy — Personal Stats", () => {
+  const page = { operation: "stats-page" } as const;
+  const stats = (path: string) => request("GET", path, { cookie: "s=1" });
+
+  it("forwards only a period from the list and a calendar date, rebuilt", () => {
+    const query = (raw: string) => resolveToolsQuery(page, new URLSearchParams(raw));
+    expect(query("")).toBe("");
+    expect(query("period=all")).toBe("?period=all");
+    expect(query("period=7d&today=2026-09-21")).toBe("?period=7d&today=2026-09-21");
+    for (const raw of ["period=90d", "period=7d&today=21.09.2026", "period=7d&period=30d", "period=7d&userId=7", "today=x"]) {
+      expect(query(raw), raw).toBeNull();
+    }
+  });
+
+  it("reads with GET on the one constant path, and refuses anything else there", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(resolveToolsTargetPath(page)).toBe("/api/tools/stats");
+    await proxyTools(stats("/api/backend/tools/stats?period=30d&today=2026-09-21"), page);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${ORIGIN}/api/tools/stats?period=30d&today=2026-09-21`);
+    fetchMock.mockClear();
+    expect((await proxyTools(stats("/api/backend/tools/stats?period=all&admin=1"), page)).status).toBe(400);
+    expect((await proxyTools(request("POST", "/api/backend/tools/stats", {}, "{}"), page)).status).toBe(405);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

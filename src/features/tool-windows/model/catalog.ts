@@ -95,7 +95,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     description: "Win rate, соблюдение плана и нарушения по записям журнала.",
     unlockLevel: 25,
     releasedBy: "checkpoint",
-    built: false,
+    built: true,
   },
   {
     code: "tool.news_calendar",

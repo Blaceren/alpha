@@ -9,6 +9,7 @@ import { TradeCardWorkspace } from "@/features/tool-windows/trade-card/trade-car
 import { JournalWorkspace } from "@/features/tool-windows/journal/journal-workspace";
 import { RiskWorkspace } from "@/features/tool-windows/risk/risk-workspace";
 import { ChecklistWorkspace } from "@/features/tool-windows/checklist/checklist-workspace";
+import { StatsWorkspace } from "@/features/tool-windows/stats/stats-workspace";
 import {
   RETIRED_TOOL_CODES,
   toolWindowByCode,
@@ -34,10 +35,12 @@ import { readTradeCardStateOnServer } from "@/server/tools/trade-card-read";
 import { readJournalOnServer } from "@/server/tools/journal-read";
 import { readRiskStateOnServer } from "@/server/tools/risk-read";
 import { readChecklistOnServer } from "@/server/tools/checklist-read";
+import { readStatsOnServer } from "@/server/tools/stats-read";
 import type { TradeCardState } from "@/features/tool-windows/trade-card/trade-card-client";
 import type { JournalPage } from "@/features/tool-windows/journal/journal-model";
 import type { RiskState } from "@/features/tool-windows/risk/risk-model";
 import type { ChecklistState } from "@/features/tool-windows/checklist/checklist-model";
+import type { JournalStats } from "@/features/tool-windows/stats/stats-model";
 import "@/features/tool-windows/tool-windows.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -89,13 +92,14 @@ export default async function ToolRoute({
   const reviewCardId = tool.slug === "journal" ? cardIdOf(sp.card) : null;
 
   if (getAcademyConfig().mode === "api") {
-    const [viewer, result, tradeCard, journal, risk, checklist] = await Promise.all([
+    const [viewer, result, tradeCard, journal, risk, checklist, stats] = await Promise.all([
       getServerViewer(),
       getCurriculumView(),
       tool.slug === "trade-card" ? readTradeCardStateOnServer() : Promise.resolve(null),
       tool.slug === "journal" ? readJournalOnServer() : Promise.resolve(null),
       tool.slug === "risk-calculator" ? readRiskStateOnServer() : Promise.resolve(null),
       tool.slug === "entry-checklist" ? readChecklistOnServer() : Promise.resolve(null),
+      tool.slug === "stats" ? readStatsOnServer() : Promise.resolve(null),
     ]);
     const access = toolAccessOf(result);
     const view = resolveToolWindow(tool.slug, access);
@@ -107,7 +111,7 @@ export default async function ToolRoute({
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
           releasingLevelTitle={result.ok ? levelTitleOf(result.view, tool.unlockLevel) : null}
-          data={{ tradeCard, journal, risk, checklist, journalOpen: isOpen("journal", access), reviewCardId }}
+          data={{ tradeCard, journal, risk, checklist, stats, journalOpen: isOpen("journal", access), reviewCardId }}
         />
       </AppShell>
     );
@@ -130,6 +134,7 @@ export default async function ToolRoute({
           journal: null,
           risk: null,
           checklist: null,
+          stats: null,
           journalOpen: isOpen("journal", access),
           reviewCardId,
         }}
@@ -144,6 +149,7 @@ type ToolData = {
   readonly journal: JournalPage | null;
   readonly risk: RiskState | null;
   readonly checklist: ChecklistState | null;
+  readonly stats: JournalStats | null;
   /** Whether the Trading Journal is open: a saved card then goes into it. */
   readonly journalOpen: boolean;
   /** The Trade Card whose journal entry opens for review, from `?card=`. */
@@ -203,6 +209,8 @@ function workspaceFor(tool: ToolWindowDefinition, data: ToolData) {
       return <RiskWorkspace initialState={data.risk} />;
     case "entry-checklist":
       return <ChecklistWorkspace initialState={data.checklist} />;
+    case "stats":
+      return <StatsWorkspace initialStats={data.stats} />;
     default:
       return <ToolSoon tool={tool} />;
   }

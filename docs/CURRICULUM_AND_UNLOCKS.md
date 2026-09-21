@@ -204,7 +204,7 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 | tool.trading_journal | Trading Journal | /tools/journal | L10 | checkpoint L10 | карточки после открытия + ручные записи |
 | tool.risk_calculator | Risk Calculator | /tools/risk-calculator | L15 | checkpoint L15 | ручной ввод (модель бинарных опционов), Risk Plan в версиях |
 | tool.entry_checklist | Entry Checklist | /tools/entry-checklist | L20 | checkpoint L20 | 9 фиксированных пунктов, проверки хранятся |
-| tool.personal_stats | Personal Stats | /tools/stats | L25 | checkpoint L25 | только записи Trading Journal |
+| tool.personal_stats | Personal Stats | /tools/stats | L25 | checkpoint L25 | только записи Trading Journal; доли и количества, без денег |
 | tool.news_calendar | News Calendar | /tools/news | L30 | checkpoint L30 | новости вносит копирайтер в CRM |
 
 - Инструмент — страница `/tools/<slug>` **в той же вкладке**, внутри оболочки Академии, с кнопкой

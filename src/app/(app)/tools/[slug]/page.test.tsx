@@ -49,6 +49,8 @@ const readRisk = vi.fn();
 vi.mock("@/server/tools/risk-read", () => ({ readRiskStateOnServer: () => readRisk() }));
 const readChecklist = vi.fn();
 vi.mock("@/server/tools/checklist-read", () => ({ readChecklistOnServer: () => readChecklist() }));
+const readStats = vi.fn();
+vi.mock("@/server/tools/stats-read", () => ({ readStatsOnServer: () => readStats() }));
 const workspaceProps = vi.fn();
 vi.mock("@/features/tool-windows/trade-card/trade-card-workspace", () => ({
   TradeCardWorkspace: (props: unknown) => {
@@ -75,6 +77,13 @@ vi.mock("@/features/tool-windows/checklist/checklist-workspace", () => ({
   ChecklistWorkspace: (props: unknown) => {
     checklistProps(props);
     return <p>checklist-workspace</p>;
+  },
+}));
+const statsProps = vi.fn();
+vi.mock("@/features/tool-windows/stats/stats-workspace", () => ({
+  StatsWorkspace: (props: unknown) => {
+    statsProps(props);
+    return <p>stats-workspace</p>;
   },
 }));
 
@@ -117,6 +126,9 @@ beforeEach(() => {
   readRisk.mockResolvedValue(null);
   readChecklist.mockReset();
   readChecklist.mockResolvedValue(null);
+  readStats.mockReset();
+  readStats.mockResolvedValue(null);
+  statsProps.mockReset();
   journalProps.mockReset();
   riskProps.mockReset();
   checklistProps.mockReset();
@@ -222,6 +234,25 @@ describe("the state", () => {
     expect(readRisk).not.toHaveBeenCalled();
   });
 
+  it("opens Personal Stats on an open verdict, with the server's all-time read", async () => {
+    const stats = { period: "all", trades: 0 };
+    readStats.mockResolvedValue(stats);
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist", "tool.personal_stats"];
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
+    render(await open("stats"));
+    expect(screen.getByRole("heading", { level: 1, name: "Personal Stats" })).toBeInTheDocument();
+    expect(statsProps).toHaveBeenCalledWith({ initialStats: stats });
+    expect(readChecklist).not.toHaveBeenCalled();
+  });
+
+  it("locks Personal Stats until level 25 is completed", async () => {
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist"];
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
+    render(await open("stats"));
+    expect(screen.queryByText("stats-workspace")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Откроется на уровне 25" })).toBeInTheDocument();
+  });
+
   it("locks the Entry Checklist until level 20 is completed", async () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"]), 12));
     render(await open("entry-checklist"));
@@ -290,9 +321,10 @@ describe("the state", () => {
       "tool.risk_calculator",
       "tool.entry_checklist",
       "tool.personal_stats",
+      "tool.news_calendar",
     ];
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
-    render(await open("stats"));
-    expect(screen.getByRole("heading", { name: "Personal Stats готовится" })).toBeInTheDocument();
+    render(await open("news"));
+    expect(screen.getByRole("heading", { name: "News Calendar готовится" })).toBeInTheDocument();
   });
 });

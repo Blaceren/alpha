@@ -9,6 +9,7 @@ import {
   toolAccessOf,
   toolAccessOpening,
 } from "./access";
+import { TOOL_WINDOWS } from "./catalog";
 
 const states = (access: AcademyToolAccess | null) =>
   Object.fromEntries(resolveToolWindows(access).map((view) => [view.tool.slug, view.state]));
@@ -19,20 +20,13 @@ describe("resolveToolWindows — the Backend's verdict, joined to the catalogue"
   });
 
   it("opens a built tool the verdict unlocks, and says «soon» for an unbuilt one", () => {
-    const earned = [
-      "tool.trade_card",
-      "tool.trading_journal",
-      "tool.risk_calculator",
-      "tool.entry_checklist",
-      "tool.personal_stats",
-    ];
-    expect(states(toolAccessOpening(earned))).toEqual({
+    expect(states(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)))).toEqual({
       "trade-card": "open",
       journal: "open",
       "risk-calculator": "open",
       "entry-checklist": "open",
-      stats: "soon",
-      news: "locked",
+      stats: "open",
+      news: "soon",
     });
   });
 

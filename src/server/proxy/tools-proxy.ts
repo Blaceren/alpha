@@ -2,7 +2,7 @@
  * Bounded same-origin proxy for the learner's TOOL routes (SERVER-ONLY).
  *
  * Like every other proxy in this directory it is NOT an arbitrary forwarder. It
- * exposes exactly ten learner operations, each pinned to one HTTP method and
+ * exposes exactly eleven learner operations, each pinned to one HTTP method and
  * one constant Backend path shape:
  *
  *   trade-card-state    GET   /api/tools/trade-cards
@@ -15,10 +15,12 @@
  *   risk-save           POST  /api/tools/risk-plan
  *   checklist-state     GET   /api/tools/entry-checks
  *   checklist-save      POST  /api/tools/entry-checks
+ *   stats-page          GET   /api/tools/stats?period=…&today=…
  *
  * THE ONLY CALLER-CONTROLLED INPUT IS A VALIDATED ID, and for a journal page a
- * filter from a closed list. No host, no absolute URL, no arbitrary path, and
- * no query parameter other than those two on that one operation — rebuilt from
+ * filter from a closed list and a cursor, for a stats page a period from a
+ * closed list and the learner's calendar date. No host, no absolute URL, no
+ * arbitrary path, and no other query parameter — every query is rebuilt from
  * the validated values, never passed through — which keeps SSRF structurally
  * impossible. The browser never sees the Backend origin.
  *
@@ -40,11 +42,14 @@ export type ToolsProxyInput =
   | { operation: "risk-state" }
   | { operation: "risk-save" }
   | { operation: "checklist-state" }
-  | { operation: "checklist-save" };
+  | { operation: "checklist-save" }
+  | { operation: "stats-page" };
 
 /** A cuid, and nothing that could leave the path segment it belongs to. */
 const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
 const JOURNAL_FILTERS = new Set(["all", "violated", "no_conclusion"]);
+const STATS_PERIODS = new Set(["7d", "30d", "all"]);
+const CALENDAR_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The largest write is a hand-recorded journal entry: short fields and three
@@ -71,6 +76,7 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
     case "journal-page":
     case "risk-state":
     case "checklist-state":
+    case "stats-page":
       return "GET";
     case "trade-card-fix":
     case "journal-create":
@@ -88,6 +94,16 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
  * cursor, validated and rebuilt. Null means "refuse"; "" means "none".
  */
 export function resolveToolsQuery(input: ToolsProxyInput, search: URLSearchParams): string | null {
+  if (input.operation === "stats-page") {
+    const out = new URLSearchParams();
+    for (const [key, value] of search.entries()) {
+      if (key === "period" && STATS_PERIODS.has(value) && !out.has("period")) out.set("period", value);
+      else if (key === "today" && CALENDAR_DATE_RE.test(value) && !out.has("today")) out.set("today", value);
+      else return null;
+    }
+    const query = out.toString();
+    return query.length > 0 ? `?${query}` : "";
+  }
   if (input.operation !== "journal-page") return [...search.keys()].length === 0 ? "" : null;
   const out = new URLSearchParams();
   for (const [key, value] of search.entries()) {
@@ -146,6 +162,8 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
     case "checklist-state":
     case "checklist-save":
       return "/api/tools/entry-checks";
+    case "stats-page":
+      return "/api/tools/stats";
     default:
       return null;
   }

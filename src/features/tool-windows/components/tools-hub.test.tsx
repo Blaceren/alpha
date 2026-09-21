@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { ToolsHub } from "./tools-hub";
 import { resolveToolWindows, toolAccessOpening } from "@/features/tool-windows/model/access";
+import { TOOL_WINDOWS } from "@/features/tool-windows/model/catalog";
 
 function rows() {
   return screen.getAllByRole("listitem");
@@ -41,17 +42,10 @@ describe("«Инструменты» — the six tools", () => {
   });
 
   it("says «Скоро» for an earned tool this build does not have", () => {
-    const earned = [
-      "tool.trade_card",
-      "tool.trading_journal",
-      "tool.risk_calculator",
-      "tool.entry_checklist",
-      "tool.personal_stats",
-    ];
-    render(<ToolsHub tools={resolveToolWindows(toolAccessOpening(earned))} />);
-    const stats = rows()[4]!;
-    expect(within(stats).getByText("Скоро")).toBeInTheDocument();
-    expect(within(stats).queryByRole("link")).toBeNull();
+    render(<ToolsHub tools={resolveToolWindows(toolAccessOpening(TOOL_WINDOWS.map((tool) => tool.code)))} />);
+    const news = rows()[5]!;
+    expect(within(news).getByText("Скоро")).toBeInTheDocument();
+    expect(within(news).queryByRole("link")).toBeNull();
   });
 
   it("promises no signal and no money", () => {

@@ -2293,6 +2293,281 @@
   }
 }
 
+/* ======================================================== personal stats */
+
+.st-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-top .jr-filters {
+  margin-top: 0;
+}
+
+.st-top__range {
+  margin: 0;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.st-body {
+  margin-top: 18px;
+}
+
+/* Another period on its way: the figures on screen stay, quieted. */
+.st-body[data-stale] > :not([role="status"]) {
+  opacity: 0.45;
+  transition: opacity 140ms var(--tw-ease);
+}
+
+.st-sample {
+  margin: 0 0 12px;
+}
+
+/* The presentation's four figures: one well, two by two on a phone. */
+.st-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.st-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.st-figure:nth-child(2n) {
+  border-left: 1px solid var(--tw-line-2);
+}
+
+.st-figure:nth-child(n + 3) {
+  border-top: 1px solid var(--tw-line-2);
+}
+
+.st-figure__label {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.st-figure__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.st-figure__basis {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.st-sections {
+  display: flex;
+  flex-direction: column;
+  margin-top: 22px;
+}
+
+.st-split__mark-label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* THE SIGNATURE: each group's win rate on a 0–100% track, break-even marked
+   across both. Above the mark the fill takes the completed tone, below it the
+   negative one; the words carry every value. */
+.st-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.st-row__name {
+  color: var(--tw-text-1);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.st-row__value {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-row[data-standing="above"] .st-row__value {
+  color: var(--tw-positive);
+}
+
+.st-row[data-standing="below"] .st-row__value {
+  color: var(--tw-negative);
+}
+
+.st-track {
+  position: relative;
+  display: block;
+  height: 12px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: 6px;
+  background: var(--tw-well);
+}
+
+.st-track__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 5px;
+  background: var(--tw-text-3);
+}
+
+.st-row[data-standing="above"] .st-track__fill {
+  background: var(--tw-positive);
+}
+
+.st-row[data-standing="below"] .st-track__fill {
+  background: var(--tw-negative);
+}
+
+/* Too few trades on this side to say anything: no tone at all. */
+.st-row__few {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.st-track__mark {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tw-text-1);
+}
+
+.st-rules__total {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.st-rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.st-rule__label {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.st-rule__count {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rule__bar {
+  display: block;
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--tw-line-1);
+}
+
+.st-rule__fill {
+  display: block;
+  height: 100%;
+  background: var(--tw-negative);
+}
+
+@media (min-width: 600px) {
+  .st-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+  }
+}
+
+/* From 900px the four figures stand in one row, and the split sits beside the
+   rules broken. */
+@media (min-width: 900px) {
+  .st-figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .st-figure:nth-child(n + 3) {
+    border-top: 0;
+  }
+
+  .st-figure + .st-figure {
+    border-left: 1px solid var(--tw-line-2);
+  }
+
+  .st-sections {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .st-sections > .tc-section + .tc-section {
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+}
+
 /* ====================================================== wider screens */
 
 @media (min-width: 600px) {

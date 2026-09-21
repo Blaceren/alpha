@@ -203,6 +203,15 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/checklist/checklist-parts.tsx",
   "src/features/tool-windows/checklist/checklist-workspace.tsx",
   "src/server/tools/checklist-read.ts",
+  /* TOOLS-V2 slice 5: Personal Stats. Its window, its proxy route and its
+     server read; a page of the shell like the other tools, with no loading
+     boundary. */
+  "src/app/api/backend/tools/stats/route.ts",
+  "src/features/tool-windows/stats/stats-client.ts",
+  "src/features/tool-windows/stats/stats-model.ts",
+  "src/features/tool-windows/stats/stats-parts.tsx",
+  "src/features/tool-windows/stats/stats-workspace.tsx",
+  "src/server/tools/stats-read.ts",
   /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
      is length alone, and Profile gained a security area with a real change-
      password route. The proxy grew exactly one named operation — login-proxy
