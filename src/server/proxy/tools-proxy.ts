@@ -2,7 +2,7 @@
  * Bounded same-origin proxy for the learner's TOOL routes (SERVER-ONLY).
  *
  * Like every other proxy in this directory it is NOT an arbitrary forwarder. It
- * exposes exactly eight learner operations, each pinned to one HTTP method and
+ * exposes exactly ten learner operations, each pinned to one HTTP method and
  * one constant Backend path shape:
  *
  *   trade-card-state    GET   /api/tools/trade-cards
@@ -13,6 +13,8 @@
  *   journal-change      PATCH /api/tools/journal/{entryId}
  *   risk-state          GET   /api/tools/risk-plan
  *   risk-save           POST  /api/tools/risk-plan
+ *   checklist-state     GET   /api/tools/entry-checks
+ *   checklist-save      POST  /api/tools/entry-checks
  *
  * THE ONLY CALLER-CONTROLLED INPUT IS A VALIDATED ID, and for a journal page a
  * filter from a closed list. No host, no absolute URL, no arbitrary path, and
@@ -36,7 +38,9 @@ export type ToolsProxyInput =
   | { operation: "journal-create" }
   | { operation: "journal-change"; entryId: string }
   | { operation: "risk-state" }
-  | { operation: "risk-save" };
+  | { operation: "risk-save" }
+  | { operation: "checklist-state" }
+  | { operation: "checklist-save" };
 
 /** A cuid, and nothing that could leave the path segment it belongs to. */
 const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
@@ -66,10 +70,12 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
     case "trade-card-state":
     case "journal-page":
     case "risk-state":
+    case "checklist-state":
       return "GET";
     case "trade-card-fix":
     case "journal-create":
     case "risk-save":
+    case "checklist-save":
       return "POST";
     case "trade-card-change":
     case "journal-change":
@@ -137,6 +143,9 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
     case "risk-state":
     case "risk-save":
       return "/api/tools/risk-plan";
+    case "checklist-state":
+    case "checklist-save":
+      return "/api/tools/entry-checks";
     default:
       return null;
   }

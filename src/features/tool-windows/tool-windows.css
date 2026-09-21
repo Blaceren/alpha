@@ -1938,6 +1938,361 @@
   }
 }
 
+/* ======================================================= entry checklist */
+
+.ck-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.ck-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.ck-col[data-col="verdict"] {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+/* What the check is for: the asset, and the learner's own minimum payout. */
+.ck-subject {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 12px;
+}
+
+/* «EUR/USD OTC · перед входом», the count, and nine segments, one per item. */
+.ck-progress {
+  margin-top: 18px;
+}
+
+.ck-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+
+.ck-progress__what {
+  color: var(--tw-text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ck-progress__count {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-progress__bars {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ck-progress__bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tw-line-2);
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.ck-progress__bar[data-on] {
+  background: var(--tw-positive);
+}
+
+.ck-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.ck-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A group is classified the way Lessons classifies a module. */
+.ck-group__name {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ck-group__name::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 11px;
+  margin-right: 9px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background: var(--tw-index);
+}
+
+.ck-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One item, the size of a finger. A confirmed item takes the completed tone;
+   a stop factor says so in the negative one. */
+.ck-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  cursor: pointer;
+  transition: border-color 140ms var(--tw-ease);
+}
+
+.ck-item:hover {
+  border-color: var(--tw-line-olive-hover);
+}
+
+.ck-item__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.twp .ck-item__input:focus-visible {
+  outline: none;
+}
+
+.ck-item:has(.ck-item__input:focus-visible) {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+.ck-item__box {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--tw-line-3);
+  border-radius: 5px;
+  color: var(--tw-on-signal);
+}
+
+.ck-item[data-on] {
+  border-color: color-mix(in srgb, var(--tw-positive) 45%, transparent);
+}
+
+.ck-item[data-on] .ck-item__box {
+  border-color: var(--tw-positive);
+  background: var(--tw-positive);
+}
+
+.ck-item__text {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ck-item__stop {
+  grid-column: 2;
+  color: var(--tw-negative);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* THE VERDICT: the one conclusion of the check, in its outcome's tone. */
+.ck-verdict {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.ck-verdict svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.ck-verdict[data-verdict="enter"] {
+  border-color: color-mix(in srgb, var(--tw-positive) 55%, transparent);
+}
+
+.ck-verdict[data-verdict="enter"] svg,
+.ck-verdict[data-verdict="enter"] .ck-verdict__title {
+  color: var(--tw-positive);
+}
+
+.ck-verdict[data-verdict="skip"] {
+  border-color: color-mix(in srgb, var(--tw-negative) 55%, transparent);
+}
+
+.ck-verdict[data-verdict="skip"] svg,
+.ck-verdict[data-verdict="skip"] .ck-verdict__title {
+  color: var(--tw-negative);
+}
+
+.ck-verdict[data-verdict="none"] svg {
+  color: var(--tw-text-3);
+}
+
+.ck-verdict__title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.ck-verdict__body {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ck-actions {
+  margin-top: 16px;
+}
+
+/* The checks already kept, newest first. */
+.ck-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.ck-recent__empty {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.ck-recent__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ck-check {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.ck-check:last-child {
+  border-bottom-color: transparent;
+}
+
+.ck-check__what {
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-check__verdict {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.ck-check[data-verdict="enter"] .ck-check__verdict {
+  color: var(--tw-positive);
+}
+
+.ck-check[data-verdict="skip"] .ck-check__verdict {
+  color: var(--tw-negative);
+}
+
+@media (min-width: 600px) {
+  .ck-subject {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .ck-item {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    min-height: 44px;
+  }
+
+  .ck-item__box {
+    grid-row: auto;
+  }
+
+  .ck-item__stop {
+    grid-column: 3;
+  }
+}
+
+/* From 900px the verdict stands beside the items and stays in view while they
+   are ticked. */
+@media (min-width: 900px) {
+  .ck-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .ck-col[data-col="verdict"] {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .ck-check {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: baseline;
+    gap: 16px;
+  }
+}
+
 /* ====================================================== wider screens */
 
 @media (min-width: 600px) {

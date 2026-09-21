@@ -14,6 +14,7 @@
  * Money travels as decimal strings ("8.00") and is computed in integer cents.
  */
 import { formatMinor, parseAmountToMinor } from "../trade-card/trade-card-model";
+import { localDateTime } from "../model/local-date";
 
 /* ------------------------------------------------------------------ types */
 
@@ -240,32 +241,8 @@ export function percent(basisPoints: number): string {
   return tenths % 10 === 0 ? `${tenths / 10}%` : `${(tenths / 10).toFixed(1)}%`;
 }
 
-const MONTHS_FULL = [
-  "января",
-  "февраля",
-  "марта",
-  "апреля",
-  "мая",
-  "июня",
-  "июля",
-  "августа",
-  "сентября",
-  "октября",
-  "ноября",
-  "декабря",
-];
-
-/**
- * «21 сентября, 18:40» on the learner's clock, with the year only when it is not
- * `now`'s. Called in the browser only: the server's zone is not the learner's.
- */
-export function versionTime(iso: string, now: Date): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "";
-  const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
-  const year = at.getFullYear() === now.getFullYear() ? "" : ` ${at.getFullYear()}`;
-  return `${at.getDate()} ${MONTHS_FULL[at.getMonth()]}${year}, ${time}`;
-}
+/** «21 сентября, 18:40»: when a version was saved, on the learner's clock. */
+export const versionTime = localDateTime;
 
 /** «3 убыточные сделки», with the Russian plural. */
 export function losingTradesWords(count: number): string {

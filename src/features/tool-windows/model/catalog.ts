@@ -86,7 +86,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     description: "Условия допуска перед входом: среда, setup и собственное состояние.",
     unlockLevel: 20,
     releasedBy: "checkpoint",
-    built: false,
+    built: true,
   },
   {
     code: "tool.personal_stats",

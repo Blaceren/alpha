@@ -8,6 +8,7 @@ import { ToolSoon } from "@/features/tool-windows/components/tool-soon";
 import { TradeCardWorkspace } from "@/features/tool-windows/trade-card/trade-card-workspace";
 import { JournalWorkspace } from "@/features/tool-windows/journal/journal-workspace";
 import { RiskWorkspace } from "@/features/tool-windows/risk/risk-workspace";
+import { ChecklistWorkspace } from "@/features/tool-windows/checklist/checklist-workspace";
 import {
   RETIRED_TOOL_CODES,
   toolWindowByCode,
@@ -32,9 +33,11 @@ import { getCurriculumView } from "@/lib/curriculum/provider";
 import { readTradeCardStateOnServer } from "@/server/tools/trade-card-read";
 import { readJournalOnServer } from "@/server/tools/journal-read";
 import { readRiskStateOnServer } from "@/server/tools/risk-read";
+import { readChecklistOnServer } from "@/server/tools/checklist-read";
 import type { TradeCardState } from "@/features/tool-windows/trade-card/trade-card-client";
 import type { JournalPage } from "@/features/tool-windows/journal/journal-model";
 import type { RiskState } from "@/features/tool-windows/risk/risk-model";
+import type { ChecklistState } from "@/features/tool-windows/checklist/checklist-model";
 import "@/features/tool-windows/tool-windows.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -86,12 +89,13 @@ export default async function ToolRoute({
   const reviewCardId = tool.slug === "journal" ? cardIdOf(sp.card) : null;
 
   if (getAcademyConfig().mode === "api") {
-    const [viewer, result, tradeCard, journal, risk] = await Promise.all([
+    const [viewer, result, tradeCard, journal, risk, checklist] = await Promise.all([
       getServerViewer(),
       getCurriculumView(),
       tool.slug === "trade-card" ? readTradeCardStateOnServer() : Promise.resolve(null),
       tool.slug === "journal" ? readJournalOnServer() : Promise.resolve(null),
       tool.slug === "risk-calculator" ? readRiskStateOnServer() : Promise.resolve(null),
+      tool.slug === "entry-checklist" ? readChecklistOnServer() : Promise.resolve(null),
     ]);
     const access = toolAccessOf(result);
     const view = resolveToolWindow(tool.slug, access);
@@ -103,7 +107,7 @@ export default async function ToolRoute({
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
           releasingLevelTitle={result.ok ? levelTitleOf(result.view, tool.unlockLevel) : null}
-          data={{ tradeCard, journal, risk, journalOpen: isOpen("journal", access), reviewCardId }}
+          data={{ tradeCard, journal, risk, checklist, journalOpen: isOpen("journal", access), reviewCardId }}
         />
       </AppShell>
     );
@@ -121,7 +125,14 @@ export default async function ToolRoute({
         unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
         currentLevel={getPathProgress(scenario).currentLevel}
         releasingLevelTitle={getLevel(tool.unlockLevel).title}
-        data={{ tradeCard: null, journal: null, risk: null, journalOpen: isOpen("journal", access), reviewCardId }}
+        data={{
+          tradeCard: null,
+          journal: null,
+          risk: null,
+          checklist: null,
+          journalOpen: isOpen("journal", access),
+          reviewCardId,
+        }}
       />
     </AppShell>
   );
@@ -132,6 +143,7 @@ type ToolData = {
   readonly tradeCard: TradeCardState | null;
   readonly journal: JournalPage | null;
   readonly risk: RiskState | null;
+  readonly checklist: ChecklistState | null;
   /** Whether the Trading Journal is open: a saved card then goes into it. */
   readonly journalOpen: boolean;
   /** The Trade Card whose journal entry opens for review, from `?card=`. */
@@ -189,6 +201,8 @@ function workspaceFor(tool: ToolWindowDefinition, data: ToolData) {
       return <JournalWorkspace initialPage={data.journal} reviewCardId={data.reviewCardId} />;
     case "risk-calculator":
       return <RiskWorkspace initialState={data.risk} />;
+    case "entry-checklist":
+      return <ChecklistWorkspace initialState={data.checklist} />;
     default:
       return <ToolSoon tool={tool} />;
   }

@@ -383,3 +383,28 @@ describe("tools proxy — the Risk Calculator", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("tools proxy — the Entry Checklist", () => {
+  const checks = (method: string, path = "/api/backend/tools/entry-checks", body?: BodyInit) =>
+    request(method, path, { "content-type": "application/json", cookie: "s=1", "x-csrf-token": "t" }, body);
+
+  it("reads with GET and keeps a check with POST, on the one constant path", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(resolveToolsTargetPath({ operation: "checklist-state" })).toBe("/api/tools/entry-checks");
+    await proxyTools(checks("GET"), { operation: "checklist-state" });
+    await proxyTools(checks("POST", undefined, "{}"), { operation: "checklist-save" });
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
+      [`${ORIGIN}/api/tools/entry-checks`, "GET"],
+      [`${ORIGIN}/api/tools/entry-checks`, "POST"],
+    ]);
+  });
+
+  it("refuses a query and a wrong method without contacting Backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await proxyTools(checks("GET", "/api/backend/tools/entry-checks?all=1"), { operation: "checklist-state" })).status).toBe(400);
+    expect((await proxyTools(checks("PATCH", undefined, "{}"), { operation: "checklist-save" })).status).toBe(405);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

@@ -260,7 +260,7 @@ export function TradeCardPlanForm({
  * says «Выберите», as the expiry's does: the label above already names the
  * field, and a longer word is cut off in a phone's half column.
  */
-export function AssetOptions({ reference }: { reference: TradeCardReference }) {
+export function AssetOptions({ reference }: { reference: Pick<TradeCardReference, "assets"> }) {
   const groups = [...new Set(reference.assets.map((asset) => asset.group))];
   return (
     <>

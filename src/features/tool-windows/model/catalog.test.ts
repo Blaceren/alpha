@@ -36,11 +36,12 @@ describe("TOOLS-V2 catalogue", () => {
     expect(fromCatalogue).toEqual(fromCheckpoints);
   });
 
-  it("builds the first three tools so far, one tool at a time", () => {
+  it("builds the first four tools so far, one tool at a time", () => {
     expect(TOOL_WINDOWS.filter((tool) => tool.built).map((tool) => tool.slug)).toEqual([
       "trade-card",
       "journal",
       "risk-calculator",
+      "entry-checklist",
     ]);
   });
 

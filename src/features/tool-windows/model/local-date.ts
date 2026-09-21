@@ -13,6 +13,33 @@ export function localDate(instant: Date): string {
   return `${instant.getFullYear()}-${month}-${day}`;
 }
 
+const MONTHS_FULL = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
+
+/**
+ * «21 сентября, 18:40» on the learner's clock, with the year only when it is not
+ * `now`'s. Call it in the browser only: the server's zone is not the learner's.
+ */
+export function localDateTime(iso: string, now: Date): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  const year = at.getFullYear() === now.getFullYear() ? "" : ` ${at.getFullYear()}`;
+  return `${at.getDate()} ${MONTHS_FULL[at.getMonth()]}${year}, ${time}`;
+}
+
 const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 /**

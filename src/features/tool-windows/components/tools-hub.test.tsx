@@ -41,11 +41,17 @@ describe("«Инструменты» — the six tools", () => {
   });
 
   it("says «Скоро» for an earned tool this build does not have", () => {
-    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist"];
+    const earned = [
+      "tool.trade_card",
+      "tool.trading_journal",
+      "tool.risk_calculator",
+      "tool.entry_checklist",
+      "tool.personal_stats",
+    ];
     render(<ToolsHub tools={resolveToolWindows(toolAccessOpening(earned))} />);
-    const checklist = rows()[3]!;
-    expect(within(checklist).getByText("Скоро")).toBeInTheDocument();
-    expect(within(checklist).queryByRole("link")).toBeNull();
+    const stats = rows()[4]!;
+    expect(within(stats).getByText("Скоро")).toBeInTheDocument();
+    expect(within(stats).queryByRole("link")).toBeNull();
   });
 
   it("promises no signal and no money", () => {
