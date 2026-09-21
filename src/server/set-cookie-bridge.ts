@@ -8,11 +8,23 @@
  *
  * What it does, and why each rule exists:
  *
- * - **Name allowlist.** Only the two cookies this phase reviewed are bridged:
- *   the session cookie and the CSRF cookie. A backend that started setting
- *   anything else — an analytics id, a second session, a cookie named to shadow
- *   a CRM one — would be silently dropped rather than trusted. An allowlist is
- *   the only version of this that stays correct as the backend evolves.
+ * - **Name allowlist.** Only the reviewed cookies are bridged: the session
+ *   cookie, the CSRF cookie, and the pre-H-7 session name — the last one ONLY
+ *   as a deletion (see LEGACY_SESSION_COOKIE_NAME). A backend that started
+ *   setting anything else — an analytics id, a second session, a cookie named to
+ *   shadow a CRM one — would be silently dropped rather than trusted. An
+ *   allowlist is the only version of this that stays correct as the backend
+ *   evolves.
+ *
+ * - **The session cookie name is the backend's, exactly.** Backend H-7 renamed
+ *   the session to `__Host-trading_platform_session` and stopped reading the old
+ *   name. The CRM kept looking for the old one, so every correct staff login
+ *   ended in a 502 and no CRM session could exist. The name here must track
+ *   `SESSION_COOKIE_NAME` in the backend's `src/lib/session.ts`.
+ *
+ * - **`__Host-` cookies are always Secure.** A browser refuses to store a
+ *   `__Host-` cookie that is not Secure, so for that prefix the flag is not a
+ *   policy choice — see `requiresSecure`.
  *
  * - **Domain is always dropped.** A `Domain` attribute from the backend is
  *   meaningless-to-hostile here: at best it names the backend host (so the
@@ -25,7 +37,8 @@
  *   whole CRM app (page routes and `/api/crm/*` alike). A narrower backend Path
  *   would silently break the app rather than fail loudly.
  *
- * - **`Secure` is recomputed, never copied.** See config/cookie-security.ts.
+ * - **`Secure` is recomputed, never copied.** See config/cookie-security.ts —
+ *   except for `__Host-` cookies, where it is always set (above).
  *
  * - **`HttpOnly` and `SameSite` are preserved as sent.** These are real security
  *   decisions the backend already made correctly: the session cookie is
@@ -45,8 +58,22 @@
  */
 import { shouldUseSecureCookies } from "@/config/cookie-security";
 
-/** The backend session cookie. HttpOnly; the browser never reads it in script. */
-export const SESSION_COOKIE_NAME = "trading_platform_session";
+/**
+ * The backend session cookie. HttpOnly; the browser never reads it in script.
+ * Must equal the backend's `SESSION_COOKIE_NAME` (`src/lib/session.ts`).
+ */
+export const SESSION_COOKIE_NAME = "__Host-trading_platform_session";
+
+/**
+ * The session name the backend used before H-7.
+ *
+ * The backend never issues a session under it any more; on login and logout it
+ * sends it back EMPTY with `Max-Age=0`, to expire whatever an old browser still
+ * holds. It is bridged for exactly that purpose, and a non-empty value under this
+ * name is dropped — this bridge must never deliver a session the backend no
+ * longer accepts.
+ */
+export const LEGACY_SESSION_COOKIE_NAME = "trading_platform_session";
 
 /**
  * The backend CSRF cookie. Deliberately readable by script — the double-submit
@@ -54,8 +81,12 @@ export const SESSION_COOKIE_NAME = "trading_platform_session";
  */
 export const CSRF_COOKIE_NAME = "trading_platform_csrf";
 
-/** Exactly the cookies this phase reviewed and is willing to bridge. */
-export const BRIDGED_COOKIE_NAMES = [SESSION_COOKIE_NAME, CSRF_COOKIE_NAME] as const;
+/** Exactly the cookies reviewed for bridging (the legacy name as a deletion only). */
+export const BRIDGED_COOKIE_NAMES = [
+  SESSION_COOKIE_NAME,
+  LEGACY_SESSION_COOKIE_NAME,
+  CSRF_COOKIE_NAME,
+] as const;
 
 export type BridgedCookieName = (typeof BRIDGED_COOKIE_NAMES)[number];
 
@@ -74,6 +105,14 @@ export interface BridgedCookie {
 
 function isBridgedName(name: string): name is BridgedCookieName {
   return (BRIDGED_COOKIE_NAMES as readonly string[]).includes(name);
+}
+
+/**
+ * `__Host-` cookies are stored by a browser only when Secure, so for them the
+ * flag is forced. Everything else follows the CRM's deployment rule.
+ */
+function requiresSecure(name: BridgedCookieName, env?: Record<string, string | undefined>): boolean {
+  return name.startsWith("__Host-") || shouldUseSecureCookies(env);
 }
 
 function parseSameSite(raw: string | undefined): "lax" | "strict" | "none" {
@@ -117,6 +156,9 @@ export function parseBridgedSetCookie(
   // An empty value is valid and meaningful: it is how logout clears the cookie.
   const value = pair.slice(eq + 1).trim();
 
+  // The legacy session name is only ever bridged as a deletion.
+  if (name === LEGACY_SESSION_COOKIE_NAME && value !== "") return null;
+
   const attributes = new Map<string, string | undefined>();
   for (const segment of segments.slice(1)) {
     const trimmed = segment.trim();
@@ -136,7 +178,7 @@ export function parseBridgedSetCookie(
     path: "/",
     httpOnly: attributes.has("httponly"),
     sameSite: parseSameSite(attributes.get("samesite")),
-    secure: shouldUseSecureCookies(env),
+    secure: requiresSecure(name, env),
   };
 
   const maxAgeRaw = attributes.get("max-age");
@@ -206,11 +248,12 @@ export function clearedCookie(
     name,
     value: "",
     path: "/",
-    // Clearing must repeat the flags the cookie was set with, or the browser
-    // treats it as a different cookie and the original survives.
-    httpOnly: name === SESSION_COOKIE_NAME,
-    sameSite: "lax",
-    secure: shouldUseSecureCookies(env),
+    // Clearing repeats the flags the cookie was set with. For the `__Host-`
+    // session that is not optional: a deletion that is not Secure, or carries a
+    // Domain, is rejected by the browser and the live cookie survives.
+    httpOnly: name === SESSION_COOKIE_NAME || name === LEGACY_SESSION_COOKIE_NAME,
+    sameSite: name === SESSION_COOKIE_NAME ? "strict" : "lax",
+    secure: requiresSecure(name, env),
     maxAge: 0,
   };
 }

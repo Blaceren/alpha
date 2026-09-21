@@ -115,14 +115,14 @@ describe("callBackend — request shape", () => {
       path: BACKEND_PATHS.logout,
       method: "POST",
       json: {},
-      cookie: "trading_platform_session=abc",
+      cookie: "__Host-trading_platform_session=abc",
       csrfToken: "tok",
       fetchImpl,
       env: ENV,
     });
     const init = fetchImpl.mock.calls[0]![1] as RequestInit;
     const headers = init.headers as Record<string, string>;
-    expect(headers.Cookie).toBe("trading_platform_session=abc");
+    expect(headers.Cookie).toBe("__Host-trading_platform_session=abc");
     expect(headers["x-csrf-token"]).toBe("tok");
   });
 
@@ -161,7 +161,7 @@ describe("callBackend — result normalization", () => {
     const response = jsonResponse({ user: { id: 1 } });
     response.headers.append(
       "set-cookie",
-      "trading_platform_session=v; Path=/; HttpOnly; SameSite=lax",
+      "__Host-trading_platform_session=v; Path=/; Secure; HttpOnly; SameSite=strict",
     );
     const result = await callBackend({
       path: BACKEND_PATHS.login,
@@ -246,7 +246,7 @@ describe("callBackend — logging discipline", () => {
         path: BACKEND_PATHS.login,
         method: "POST",
         json: { email: "a@b.c", password: "supersecret" },
-        cookie: "trading_platform_session=abc",
+        cookie: "__Host-trading_platform_session=abc",
         csrfToken: "tok",
         fetchImpl: vi.fn().mockRejectedValue(new Error("boom")),
         env: ENV,

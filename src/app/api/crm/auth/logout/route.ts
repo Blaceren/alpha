@@ -4,6 +4,7 @@ import { BACKEND_PATHS, callBackend } from "@/server/backend-client";
 import { applyBridgedCookies, noStoreJson } from "@/server/auth-response";
 import {
   CSRF_COOKIE_NAME,
+  LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   clearedCookie,
 } from "@/server/set-cookie-bridge";
@@ -17,18 +18,17 @@ export const revalidate = 0;
  * Forwards `POST /api/auth/logout`, including the caller's cookies and the
  * double-submit CSRF header the backend requires on this route.
  *
- * ## What logout can and cannot guarantee
+ * ## What logout guarantees
  *
- * The backend session is a stateless HMAC-signed token: `userId.role.expiresAt`
- * plus a signature, with no server-side session row. Logout therefore *clears the
- * cookie*; it does not revoke a stored session, because there is nothing stored
- * to revoke. A token captured before logout stays cryptographically valid until
- * its own expiry. That is a property of the existing backend contract, not
- * something the CRM can fix from this side, and it is recorded plainly in the
- * phase audit rather than papered over here.
+ * Since backend H-7 the session is an opaque token backed by a server-side
+ * `UserSession` row, and the backend's logout REVOKES that row before clearing
+ * the cookie — so a token captured before logout stops working at all. The
+ * browser's `__Host-trading_platform_session` cookie is forwarded unchanged in
+ * the Cookie header, which is what lets the backend find the row to revoke.
  *
- * What the CRM *can* guarantee is that the browser no longer holds the cookie,
- * so the CRM origin has no ambient authority afterwards.
+ * On this side the CRM guarantees the browser no longer holds the cookie, so the
+ * CRM origin has no ambient authority afterwards. The pre-H-7 name is cleared
+ * too, so an old browser stops sending a cookie nothing accepts.
  *
  * ## Why the cookies are cleared even when the backend call fails
  *
@@ -51,7 +51,11 @@ export async function POST(request: Request) {
   });
 
   // Whatever happened upstream, this browser leaves without CRM cookies.
-  const cleared = [clearedCookie(SESSION_COOKIE_NAME), clearedCookie(CSRF_COOKIE_NAME)];
+  const cleared = [
+    clearedCookie(SESSION_COOKIE_NAME),
+    clearedCookie(LEGACY_SESSION_COOKIE_NAME),
+    clearedCookie(CSRF_COOKIE_NAME),
+  ];
 
   if (result.status !== "responded") {
     const response = noStoreJson({ ok: true, upstream: "unavailable" }, 200);

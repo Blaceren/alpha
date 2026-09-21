@@ -378,3 +378,69 @@ describe("CRM login route — the staff contract, unchanged", () => {
     expect(impl).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The regression that took the CRM down (2026-08-31 → 09-21): backend H-7 renamed
+ * the session to `__Host-trading_platform_session` and, on the same response,
+ * expires the pre-H-7 name. The CRM looked only for the old name, found the
+ * empty deletion, and answered 502 to every correct staff login.
+ */
+describe("CRM login route — the H-7 session cookie", () => {
+  const H7_SESSION_VALUE = "0123456789abcdef0123456789abcdef";
+  // Literal, not the CRM constant: this is what the BACKEND sends (src/lib/session.ts),
+  // and the test must fail against a CRM that expects any other name.
+  const BACKEND_SESSION_NAME = "__Host-trading_platform_session";
+  const H7_SESSION =
+    `${BACKEND_SESSION_NAME}=${H7_SESSION_VALUE}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=strict`;
+  const LEGACY_CLEAR =
+    "trading_platform_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=lax";
+
+  function h7LoginResponse(setCookies: string[]): Response {
+    const headers = new Headers({ "content-type": "application/json" });
+    for (const line of setCookies) headers.append("set-cookie", line);
+    return new Response(JSON.stringify({ user: {} }), { status: 200, headers });
+  }
+
+  it("signs a staff member in from the real H-7 login response", async () => {
+    const { calls } = backendDouble(
+      () => h7LoginResponse([H7_SESSION, LEGACY_CLEAR]),
+      () => backendResponse({ staffRole: "crm_admin" }),
+    );
+
+    const res = await POST(loginRequest());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    // The staff check went to the backend with the session the backend will read.
+    expect(headersOf(callAt(calls, 1)).Cookie).toBe(`${BACKEND_SESSION_NAME}=${H7_SESSION_VALUE}`);
+
+    const cookies = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+    const session = cookies.find((c) => c.startsWith(`${BACKEND_SESSION_NAME}=`));
+    expect(session).toBeDefined();
+    expect(session).toContain(H7_SESSION_VALUE);
+    // A __Host- cookie without Secure is discarded by the browser.
+    expect(session!.toLowerCase()).toContain("secure");
+    expect(session!.toLowerCase()).toContain("path=/");
+    expect(session!.toLowerCase()).not.toContain("domain=");
+
+    // The pre-H-7 name is passed on only as a deletion.
+    const legacy = cookies.find((c) => c.startsWith("trading_platform_session="));
+    expect(legacy).toBeDefined();
+    expect(legacy!.startsWith("trading_platform_session=;")).toBe(true);
+  });
+
+  it("does not bridge a pre-H-7 session: the backend would never accept it", async () => {
+    const { impl } = backendDouble(() =>
+      h7LoginResponse(["trading_platform_session=stale-token; Path=/; HttpOnly; SameSite=lax"]),
+    );
+
+    const res = await POST(loginRequest());
+
+    expect(res.status).toBe(502);
+    // No staff check is spent on a cookie that is not a session.
+    expect(impl).toHaveBeenCalledTimes(1);
+    const cookies = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+    expect(cookies.some((c) => c.includes("stale-token"))).toBe(false);
+  });
+});
