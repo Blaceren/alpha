@@ -176,7 +176,6 @@ describe("every live api route that shows the bell also passes the unread mark",
     { route: "/notifications", shell: "src/app/(app)/notifications/page.tsx" },
     { route: "/support", shell: "src/app/(app)/support/page.tsx" },
     { route: "/tools", shell: "src/app/(app)/tools/page.tsx" },
-    { route: "/tools/[toolCode]", shell: "src/app/(app)/tools/[toolCode]/page.tsx" },
   ];
 
   /* /community is not on the list because it is not live: it answers 404 by

@@ -56,7 +56,7 @@ describe("HomeScreen — current checkpoint", () => {
   it("shows what opens beyond the gate (next rank + tool), not user money", () => {
     render(<HomeScreen scenario="checkpoint" />);
     expect(screen.getByText("Наблюдатель IV")).toBeInTheDocument();
-    expect(screen.getByText("Chart Markup Tool")).toBeInTheDocument();
+    expect(screen.getByText("Entry Checklist")).toBeInTheDocument();
   });
 });
 

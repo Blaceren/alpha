@@ -79,12 +79,12 @@ describe("checkpoints", () => {
     }
   });
 
-  it("nearest checkpoint for L18 is L20 ($200 → Наблюдатель IV, Chart Markup Tool)", () => {
+  it("nearest checkpoint for L18 is L20 ($200 → Наблюдатель IV, Entry Checklist)", () => {
     const cp = getNextCheckpoint(18);
     expect(cp.level).toBe(20);
     expect(cp.thresholdUsd).toBe(200);
     expect(cp.rank.label).toBe("Наблюдатель IV");
-    expect(cp.toolUnlock?.name).toBe("Chart Markup Tool");
+    expect(cp.toolUnlock?.name).toBe("Entry Checklist");
   });
 
   it("rank ladder: 5 families × 4 tiers in canonical order", () => {
@@ -101,23 +101,28 @@ describe("checkpoints", () => {
 });
 
 describe("unlock mapping", () => {
-  it("has exactly 19 curriculum tools (L4 has none) and no secret tool", () => {
-    expect(TOOL_UNLOCKS).toHaveLength(19);
+  it("releases five tools on checkpoints (TOOLS-V2), none on L4, and no secret tool", () => {
+    expect(TOOL_UNLOCKS).toHaveLength(5);
     const codes = TOOL_UNLOCKS.map((t) => t.code);
-    expect(new Set(codes).size).toBe(19);
+    expect(new Set(codes).size).toBe(5);
     expect(codes).not.toContain("tool.secret");
     // L4 checkpoint has no tool
     expect(CURRICULUM.modules[0]?.checkpoint.toolUnlock).toBeUndefined();
   });
 
-  it("tool unlock levels match the canon", () => {
+  it("tool unlock levels are the first block of the owner's catalogue", () => {
     const byLevel = Object.fromEntries(TOOL_UNLOCKS.map((t) => [t.unlockLevel, t.name]));
-    expect(byLevel[10]).toBe("Trading Journal");
-    expect(byLevel[15]).toBe("Risk Calculator");
-    expect(byLevel[20]).toBe("Chart Markup Tool");
-    expect(byLevel[60]).toBe("Session Planner");
-    expect(byLevel[65]).toBe("Strategy Statistics");
-    expect(byLevel[100]).toBe("Pro Workspace");
+    expect(byLevel).toEqual({
+      10: "Trading Journal",
+      15: "Risk Calculator",
+      20: "Entry Checklist",
+      25: "Personal Stats",
+      30: "News Calendar",
+    });
+    // The later checkpoints keep their rank and channel, and release no tool.
+    for (const checkpoint of CURRICULUM.modules.map((m) => m.checkpoint).filter((c) => c.level >= 35)) {
+      expect(checkpoint.toolUnlock, `L${checkpoint.level}`).toBeUndefined();
+    }
   });
 
   it("community unlocks are exactly L4/L20/L35/L45/L85", () => {

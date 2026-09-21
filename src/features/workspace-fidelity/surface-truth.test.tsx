@@ -2,14 +2,12 @@ import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen } from "@testing-library/react";
 import {
   WS_COPY,
   hostsWorkHere,
   whereLineOf,
   whereOf,
 } from "@/features/workspace-fidelity/workspace-state";
-import { ToolNotFoundPage } from "@/features/tools-fidelity/tools-fidelity";
 import { COPY as PROFILE_COPY } from "@/features/profile-fidelity/profile-state";
 import type { AcademyLevelSummary } from "@/lib/curriculum/academy-view";
 
@@ -131,46 +129,9 @@ describe("F-2 · workspace no longer contradicts itself", () => {
   });
 });
 
-describe("F-8 · the unknown tool has a heading", () => {
-  it("renders the truth line as the page h1", () => {
-    const { container } = render(<ToolNotFoundPage />);
-    const h1 = container.querySelector("h1");
-    expect(h1, "the page had no heading at all").not.toBeNull();
-    expect(h1?.textContent).toBe("Такого инструмента нет.");
-    expect(container.querySelectorAll("h1").length).toBe(1);
-    // The class is what carries the appearance, so nothing moves visually.
-    expect(h1?.className).toBe("t-state-truth");
-  });
-
-  it("keeps the way back", () => {
-    render(<ToolNotFoundPage />);
-    const back = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
-    expect(back).toContain("/tools");
-    expect(back.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("does not change the shared StateMessage", () => {
-    const s = src(TOOLS);
-    // Still a <p>, still no configurable tag: the empty, locked and roadmap
-    // states sit under a heading their page already has.
-    expect(s).toContain('<p className="t-state-truth">{truth}</p>');
-    expect(s).toMatch(/export function StateMessage\(\{\s*\n\s*truth,\s*\n\s*meaning,\s*\n\s*action,/);
-    expect(s).not.toMatch(/StateMessage[\s\S]{0,400}?as[?]?:\s*(keyof|"h1")/);
-  });
-
-  it("leaves the catalogue and the other tool states alone", () => {
-    const s = src(TOOLS);
-    for (const marker of [
-      "TOOLS_COPY.emptyLead",
-      "TOOLS_COPY.lockedLead",
-      "TOOLS_COPY.roadmapLead",
-    ]) {
-      expect(s).toContain(marker);
-    }
-    // Only ToolNotFoundPage stopped using StateMessage.
-    expect(s).not.toMatch(/notFoundLead\}\s*\n\s*meaning=/);
-  });
-});
+/* F-8 (the unknown tool's heading) went with the tool surface it tested: TOOLS-V2
+   replaced the whole catalogue on 2026-09-21, and an unknown tool address is now
+   the ordinary 404 (`src/app/(tool)/tools/[slug]/page.tsx`). */
 
 describe("F-9 · the profile does not point at a hidden section", () => {
   it("no longer mentions Community", () => {
@@ -257,7 +218,7 @@ describe("this phase stayed inside its scope", () => {
   });
 
   it("introduces no bare in-app anchor in the files it touched", () => {
-    for (const f of [SCREEN, TOOLS]) {
+    for (const f of [SCREEN]) {
       const s = src(f);
       const bare = [...s.matchAll(/<a\s[^>]*href="\/(?!\/)/g)];
       expect(bare.map((m) => m[0]), `${f} must use next/link`).toEqual([]);

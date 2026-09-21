@@ -232,7 +232,7 @@ describe("checkpoint — financial privacy", () => {
     renderLibrary();
     const cp = document.querySelector(".lib-row.is-checkpoint") as HTMLElement;
     expect(cp).toHaveTextContent("Баланс Pocket от $200");
-    expect(cp).toHaveTextContent("Chart Markup Tool");
+    expect(cp).toHaveTextContent("Entry Checklist");
     expect(cp).toHaveTextContent("ранг Наблюдатель IV");
     expect(cp).toHaveTextContent("канал Разбор графиков");
     expect(cp.querySelector("a")).toBeNull();

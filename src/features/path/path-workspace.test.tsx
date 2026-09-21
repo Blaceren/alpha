@@ -46,7 +46,7 @@ describe("PathWorkspace — active scenario (current L18, module 4)", () => {
     expect(summary?.textContent).toMatch(/Уровень 20/);
     expect(summary?.textContent).toMatch(/от \$200/);
     expect(summary?.textContent).toMatch(/Наблюдатель IV/);
-    expect(summary?.textContent).toMatch(/Chart Markup Tool/);
+    expect(summary?.textContent).toMatch(/Entry Checklist/);
     const text = document.body.textContent ?? "";
     expect(text).toMatch(/от \$200/);
     // financial privacy: no user balance, no remaining, no Pocket CTA
@@ -201,7 +201,7 @@ describe("PathWorkspace — checkpoint scenario (L20 gate current)", () => {
     expect(within(detail).getByText(/Баланс Pocket от/)).toBeInTheDocument();
     expect(within(detail).getByText(/Demo не учитывается/)).toBeInTheDocument();
     expect(within(detail).getByText("Наблюдатель IV")).toBeInTheDocument();
-    expect(within(detail).getByText("Chart Markup Tool")).toBeInTheDocument();
+    expect(within(detail).getByText("Entry Checklist")).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: "Проверить выполнение" })).toBeInTheDocument();
     // privacy inside the detail layer
     const text = detail.textContent ?? "";

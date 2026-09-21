@@ -193,7 +193,7 @@ test("checkpoint mobile: the last outcome is fully scrollable above the bottom n
   });
   await page.waitForTimeout(250);
 
-  const lastOutcome = page.getByText("Chart Markup Tool");
+  const lastOutcome = page.getByText("Entry Checklist");
   const nav = page.locator("nav.bottomnav");
   await expect(lastOutcome).toBeVisible();
   const oBox = await lastOutcome.boundingBox();

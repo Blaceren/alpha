@@ -244,10 +244,7 @@ type Allowed = {
  * with an empty reason and an entry naming the wrong side are all failures.
  */
 const ALLOWLIST: Allowed[] = [
-  { value: 360, side: "max-width", files: ["src/features/tools/tools.css"], role: "phone-trim",
-    surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
-    why: "Register rows and rail nodes rewrap at the narrowest supported phone; measured against the row's own content, not a system band." },
-  { value: 380, side: "max-width", files: ["src/features/lesson/lesson.css", "src/features/tools-fidelity/tools-fidelity.css"], role: "phone-trim",
+  { value: 380, side: "max-width", files: ["src/features/lesson/lesson.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Within 20px of 360 and 400 doing similar padding work on different components; consolidation needs a visual pass on routes that require a session." },
   { value: 390, side: "max-width", files: ["src/components/media/academy-video-player.css"], role: "phone-trim",
@@ -289,9 +286,6 @@ const ALLOWLIST: Allowed[] = [
   { value: 767, side: "max-width", files: ["src/features/auth-home-fidelity/auth-home-fidelity.css"], role: "home-local",
     surfaces: ["authenticated"], disposition: "CONFLICTING_CASCADE",
     why: "Home declares its own ladder (--h-breakpoint-desktop 1023 / tablet 767 / mobile 599) as custom properties that a media prelude cannot read. Two of the three values contradict DESIGN_SYSTEM.md §6. Recorded, not resolved: fixing it means moving Home's field, which is a separate authorised change." },
-  { value: 820, side: "max-width", files: ["src/features/tools-fidelity/tools-fidelity.css"], role: "content-stack",
-    surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
-    why: "Tool surface padding; the file states explicitly that Tools does not own the shell breakpoint and that these are content breakpoints." },
   { value: 860, side: "max-width", files: ["src/features/academy-experience/experience.css", "src/features/level-detail-fidelity/level-detail-fidelity.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "39px below the shell edge and doing structural work of its own; whether it can move onto 899 needs a rendered comparison on a route that requires a session." },
@@ -307,15 +301,12 @@ const ALLOWLIST: Allowed[] = [
   { value: 1040, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
     surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Public Home's navigation mode switch: nav goes flex/static to grid/absolute and the menu toggle appears. Observed live at 1039/1040/1041." },
-  { value: 1080, side: "max-width", files: ["src/features/tools/tools.css"], role: "content-stack",
-    surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
-    why: "20px from 1100 doing comparable column work on an adjacent surface; the strongest consolidation candidate once authenticated routes can be measured." },
   { value: 1080, side: "min-width", files: ["src/features/lesson/lesson.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Opening side of the same neighbourhood as the 1080 ceiling above but on a different file and a different grid; the coincidence of value is not evidence of a shared transition." },
-  { value: 1100, side: "max-width", files: ["src/features/lessons-fidelity/lessons-fidelity.css", "src/features/path-fidelity/path-fidelity.css", "src/features/tools-fidelity/tools-fidelity.css"], role: "content-stack",
+  { value: 1100, side: "max-width", files: ["src/features/lessons-fidelity/lessons-fidelity.css", "src/features/path-fidelity/path-fidelity.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
-    why: "Three surfaces trimming inline padding at the same number, 20px from 1080. Likely one role, but proving it needs the rendered pages." },
+    why: "Two surfaces trimming inline padding at the same number, 20px from 1080. Likely one role, but proving it needs the rendered pages." },
   { value: 1180, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
     surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Hero goes two columns to stacked. Observed live at 1179/1180/1181. 19px from the documented 1199 but on a different surface with a different grid; merging across the two would move one of them." },
@@ -337,7 +328,6 @@ const ALLOWLIST: Allowed[] = [
 const DEFERRED: Record<string, string> = {
   "899.98px": "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
   public_home_920_motion: "CONTENT_DRIVEN_KEEP_FOR_NOW",
-  tools_catalog_composition: "DEFERRED",
 };
 
 /* ------------------------------------------------------------------- tests */
@@ -372,7 +362,8 @@ describe("the scanner cannot invent or shorten a breakpoint", () => {
 
 describe("the inventory is real", () => {
   it("parsed every stylesheet", () => {
-    expect(cssFiles(SRC).length).toBeGreaterThanOrEqual(38);
+    // 36 since TOOLS-V2 replaced three tool stylesheets with one.
+    expect(cssFiles(SRC).length).toBeGreaterThanOrEqual(36);
     expect(AT_RULES.length).toBeGreaterThan(0);
   });
 
@@ -495,7 +486,6 @@ describe("every non-canonical value is declared, and every declaration is real",
   it("records the findings this phase deliberately did not fix", () => {
     expect(DEFERRED["899.98px"]).toBe("NEAR_DUPLICATE_NEEDS_VISUAL_PROOF");
     expect(DEFERRED.public_home_920_motion).toBe("CONTENT_DRIVEN_KEEP_FOR_NOW");
-    expect(DEFERRED.tools_catalog_composition).toBe("DEFERRED");
     expect(ALLOWLIST.find((a) => a.value === 899.98)!.disposition).toBe("NEAR_DUPLICATE_NEEDS_VISUAL_PROOF");
     expect(ALLOWLIST.find((a) => a.value === 920)!.disposition).toBe("CONTENT_DRIVEN_KEEP_FOR_NOW");
   });

@@ -46,9 +46,9 @@ const BASE = {
     levelIndex: 20,
     requirementUsd: 200,
     nextRankLabel: rankLabel("observer", 4), // Наблюдатель IV
-    unlockToolName: "Chart Markup Tool",
+    unlockToolName: "Entry Checklist",
   },
-  toolsAvailable: ["Trading Journal", "Risk Calculator"] as string[],
+  toolsAvailable: ["Trade Card", "Trading Journal", "Risk Calculator"] as string[],
 };
 
 const ACTIVE: HomeState = {

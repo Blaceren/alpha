@@ -224,7 +224,7 @@ describe("checkpoint — financial privacy", () => {
     expect(cp.checkpoint).not.toBeNull();
     expect(cp.checkpoint!.requirement).toBe("Баланс Pocket от $200");
     expect(cp.checkpoint!.rewards).toEqual([
-      "Chart Markup Tool",
+      "Entry Checklist",
       "ранг Наблюдатель IV",
       "канал Разбор графиков",
     ]);

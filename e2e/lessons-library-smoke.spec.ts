@@ -101,7 +101,7 @@ test("desktop: /lessons is the library, not a redirect to the lesson", async ({ 
   // the checkpoint states its target and what it opens — and is not clickable
   const cp = page.locator(".lib-row.is-checkpoint");
   await expect(cp).toContainText("Баланс Pocket от $200");
-  await expect(cp).toContainText("Chart Markup Tool");
+  await expect(cp).toContainText("Entry Checklist");
   await expect(cp).toContainText("ранг Наблюдатель IV");
   await expect(cp).toContainText("канал Разбор графиков");
   await expect(cp.locator("a")).toHaveCount(0);

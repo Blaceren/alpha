@@ -156,6 +156,12 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 
 ## 3. Checkpoint → Rank → Threshold → Tool
 
+> **TOOLS-V2 (решение владельца, 2026-09-21) — колонка «Tool unlock» ниже заменена.** Первый блок
+> инструментов — шесть: **Trade Card (L5, открывается уроком, не checkpoint)**, Trading Journal (L10),
+> Risk Calculator (L15), **Entry Checklist (L20)**, **Personal Stats (L25)**, News Calendar (L30).
+> Checkpoints L35–L100 сохраняют rank, threshold и community-канал, но инструмент не открывают.
+> Актуальная карта — §4. Таблица ниже сохранена как исходный curriculum (`les-prog.txt`).
+
 20 checkpoints, каждый связан с одним rank и (кроме L4) одним tool unlock.
 
 | Checkpoint | Level | Min real balance | Rank | Family | Tool unlock |
@@ -186,6 +192,30 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 ---
 
 ## 4. Tool unlock map (по коду)
+
+### TOOLS-V2 — действующая карта (решение владельца, 2026-09-21)
+
+Источник: презентация «Окна инструментов ATA» и ответы владельца. Коды и уровни совпадают с
+`CURRICULUM_TOOLS` Backend (проверяется `verifyAcademyTransfer` и тестами каталога с обеих сторон).
+
+| Tool code | Название | Адрес | Unlock | Чем открывается | Данные |
+|-----------|----------|-------|:------:|-----------------|--------|
+| tool.trade_card | Trade Card | /tools/trade-card | L5 | урок L5 «Жизненный цикл сделки» | ручной ввод, хранится на сервере |
+| tool.trading_journal | Trading Journal | /tools/journal | L10 | checkpoint L10 | карточки после открытия + ручные записи |
+| tool.risk_calculator | Risk Calculator | /tools/risk-calculator | L15 | checkpoint L15 | ручной ввод (модель бинарных опционов) |
+| tool.entry_checklist | Entry Checklist | /tools/entry-checklist | L20 | checkpoint L20 | 9 фиксированных пунктов |
+| tool.personal_stats | Personal Stats | /tools/stats | L25 | checkpoint L25 | только записи Trading Journal |
+| tool.news_calendar | News Calendar | /tools/news | L30 | checkpoint L30 | новости вносит копирайтер в CRM |
+
+- Инструмент открывается **в новой вкладке**, без оболочки Академии; доступ решает Backend
+  (`toolAccess` в чтении curriculum), Академия не вычисляет его из уровня.
+- Данные инструментов принадлежат ученику: менторы и поддержка их не видят.
+- Старые ссылки уроков `/tools/tool.<code>` ведут на адрес инструмента; ссылки на выведенные коды —
+  на страницу «Инструменты».
+- Выведенные коды (`tool.chart_markup` … `tool.pro_workspace`) остаются допустимыми в контенте уроков,
+  но в каталог не входят.
+
+### Исходная карта (до TOOLS-V2, историческая)
 
 | Tool code | Название | Unlock level | Тип данных |
 |-----------|----------|:-----------:|-----------|

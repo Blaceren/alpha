@@ -161,7 +161,7 @@ test("200% zoom: current node, checkpoint summary, tool name and threshold are a
   const summary = page.locator(".cp-summary");
   await expect(summary).toContainText("Уровень 20");
   await expect(summary).toContainText("$200");
-  await expect(summary).toContainText("Chart Markup Tool");
+  await expect(summary).toContainText("Entry Checklist");
   await expect(summary).toContainText("Наблюдатель IV");
 
   const inside = await page.evaluate(() => {

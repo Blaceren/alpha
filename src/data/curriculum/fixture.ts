@@ -159,6 +159,12 @@ const LEVEL_ROWS: LevelRow[] = [
 
 /* ------------------------------------------------------------------ *
  * Checkpoints: level → [thresholdUsd, family, tier, tool?, channel?]
+ *
+ * TOOLS-V2 (owner decision 2026-09-21). The first block of tools is six:
+ * Trade Card (L5, released by a LESSON, so it has no row here), then Trading
+ * Journal, Risk Calculator, Entry Checklist, Personal Stats and News Calendar on
+ * the L10-L30 checkpoints. The fourteen later checkpoint tools of the original
+ * curriculum are retired; those checkpoints keep their rank and channel.
  * ------------------------------------------------------------------ */
 type CheckpointRow = [
   number,
@@ -172,23 +178,23 @@ const CHECKPOINT_ROWS: Record<number, CheckpointRow> = {
   4: [50, "observer", 1, undefined, ["start_questions", "Старт и вопросы"]],
   10: [100, "observer", 2, ["trading_journal", "Trading Journal"]],
   15: [150, "observer", 3, ["risk_calculator", "Risk Calculator"]],
-  20: [200, "observer", 4, ["chart_markup", "Chart Markup Tool"], ["chart_review", "Разбор графиков"]],
-  25: [300, "analyst", 1, ["indicator_checklist", "Indicator Checklist"]],
+  20: [200, "observer", 4, ["entry_checklist", "Entry Checklist"], ["chart_review", "Разбор графиков"]],
+  25: [300, "analyst", 1, ["personal_stats", "Personal Stats"]],
   30: [400, "analyst", 2, ["news_calendar", "News Calendar"]],
-  35: [500, "analyst", 3, ["pause_mode", "Pause Mode"], ["discipline_journal", "Дисциплина и дневник"]],
-  40: [750, "analyst", 4, ["weekly_review", "Weekly Review"]],
-  45: [1000, "tactician", 1, ["strategy_builder", "Strategy Builder"], ["strategies", "Стратегии"]],
-  50: [1500, "tactician", 2, ["capital_plan", "Capital Plan"]],
-  55: [2000, "tactician", 3, ["market_regime_board", "Market Regime Board"]],
-  60: [2500, "tactician", 4, ["session_planner", "Session Planner"]],
-  65: [3000, "strategist", 1, ["strategy_statistics", "Strategy Statistics"]],
-  70: [4000, "strategist", 2, ["watchlist", "Watchlist"]],
-  75: [5000, "strategist", 3, ["psychology_checkin", "Psychology Check-in"]],
-  80: [6000, "strategist", 4, ["habit_calendar", "Habit Calendar"]],
-  85: [7000, "architect", 1, ["mentor_case_room", "Mentor Case Room"], ["advanced_circle", "Продвинутый круг"]],
-  90: [8000, "architect", 2, ["performance_dashboard", "Performance Dashboard"]],
-  95: [9000, "architect", 3, ["personal_playbook", "Personal Playbook"]],
-  100: [10000, "architect", 4, ["pro_workspace", "Pro Workspace"]],
+  35: [500, "analyst", 3, undefined, ["discipline_journal", "Дисциплина и дневник"]],
+  40: [750, "analyst", 4],
+  45: [1000, "tactician", 1, undefined, ["strategies", "Стратегии"]],
+  50: [1500, "tactician", 2],
+  55: [2000, "tactician", 3],
+  60: [2500, "tactician", 4],
+  65: [3000, "strategist", 1],
+  70: [4000, "strategist", 2],
+  75: [5000, "strategist", 3],
+  80: [6000, "strategist", 4],
+  85: [7000, "architect", 1, undefined, ["advanced_circle", "Продвинутый круг"]],
+  90: [8000, "architect", 2],
+  95: [9000, "architect", 3],
+  100: [10000, "architect", 4],
 };
 
 /* ------------------------------------------------------------------ *
@@ -289,7 +295,11 @@ export const MENTOR_REVIEW_REQUIREMENTS: MentorReviewRequirement[] = CURRICULUM.
   .filter((l) => l.mentorReview)
   .map((l) => ({ levelNumber: l.number }));
 
-/** Derived: all curriculum tool unlocks (19; the Secret tool is referral-gated, not here). */
+/**
+ * Derived: the tools a CHECKPOINT releases (5). The Trade Card is released by
+ * the L5 lesson and lives in the tool catalogue (`features/tool-windows`), and
+ * the Secret tool is referral-gated; neither is here.
+ */
 export const TOOL_UNLOCKS: ToolUnlock[] = CURRICULUM.modules
   .map((m) => m.checkpoint.toolUnlock)
   .filter((t): t is ToolUnlock => t !== undefined);
