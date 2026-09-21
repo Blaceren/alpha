@@ -171,7 +171,6 @@ export function TradeCardPlanForm({
               type="text"
               inputMode="decimal"
               autoComplete="off"
-              placeholder="8"
               value={draft.amount}
               onChange={change("amount")}
               disabled={disabled}
@@ -193,7 +192,6 @@ export function TradeCardPlanForm({
               type="text"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="90"
               value={draft.payoutPercent}
               onChange={change("payoutPercent")}
               disabled={disabled}

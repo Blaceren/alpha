@@ -23,10 +23,14 @@
 /* ============================== tools page ============================== */
 
 .twh {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: 60rem;
+  /* The measure and centring Support uses, so the two surfaces put their
+     content at the same x on the same screen. Below 900px the shell pads. */
+  max-width: 1080px;
+  margin-inline: auto;
   color: var(--text-primary);
   /* The bottom-nav clearance contract (DD-313). */
   padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 44px);
@@ -179,8 +183,9 @@
 }
 
 @media (min-width: 900px) {
+  /* The shell's main area carries no padding from here up. */
   .twh {
-    padding-bottom: 48px;
+    padding: 48px clamp(24px, 4vw, 56px) 56px;
   }
 }
 
@@ -488,7 +493,7 @@
 .tw-steps {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  gap: clamp(4px, 1.2vw, 6px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -511,7 +516,10 @@
 .tw-step__label {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  /* Five labels share a phone's width: they shrink a little rather than
+     lose their endings. The ellipsis is only a last resort. */
+  font-size: clamp(0.625rem, 2.8vw, 0.75rem);
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
