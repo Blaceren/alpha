@@ -221,9 +221,11 @@ check("12 the unlock vocabulary is internally consistent", () => {
   assert.ok(!curriculumToolCodes.includes("tool.secret"));
 });
 
-check("13 L4 is the one checkpoint with no tool unlock", () => {
-  const withoutTool = ATA_CHECKPOINTS.filter((c) => c.toolCode === null);
-  assert.deepEqual(withoutTool.map((c) => c.levelNumber), [4]);
+check("13 TOOLS-V2: among checkpoints, only L10…L30 release a tool", () => {
+  const withTool = ATA_CHECKPOINTS.filter((c) => c.toolCode !== null);
+  assert.deepEqual(withTool.map((c) => c.levelNumber), [10, 15, 20, 25, 30]);
+  // The Trade Card is released by the L5 LESSON, which is not a checkpoint.
+  assert.ok(!ATA_CHECKPOINTS.some((c) => c.levelNumber === 5));
   assert.deepEqual(
     ATA_CHECKPOINTS.filter((c) => c.channelCode !== null).map((c) => c.levelNumber),
     [4, 20, 35, 45, 85],

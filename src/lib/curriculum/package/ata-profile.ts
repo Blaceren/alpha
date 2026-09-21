@@ -255,12 +255,21 @@ export function validateAtaUnlockVocabulary(): PackageIssue[] {
     issue(issues, "ATA100_RANK_COUNT", "vocabulary.ranks", `expected ${ATA_CHECKPOINT_COUNT} rank transitions`);
   }
 
-  // Every unlock must be released BY a checkpoint level. An unlock hanging off a
-  // non-checkpoint level would be an unlock nothing can ever grant.
+  // TOOLS-V2: a tool is opened by durably completing ANY level of the course —
+  // the Trade Card by the L5 lesson — so the rule is "a real level", no longer
+  // "a checkpoint". A level outside the course would still be an unlock nothing
+  // can ever grant, and two tools on one level would make that level's release
+  // ambiguous for the checkpoint agreement below.
+  const toolLevels = new Set<number>();
   for (const tool of CURRICULUM_TOOLS) {
-    if (!checkpointLevels.has(tool.unlockLevel)) {
-      issue(issues, "ATA100_TOOL_UNLOCK_LEVEL_INVALID", `vocabulary.tools.${tool.code}`, "tool unlock level is not a checkpoint level");
+    const level: number = tool.unlockLevel;
+    if (!Number.isInteger(level) || level < 1 || level > ATA_LEVEL_COUNT) {
+      issue(issues, "ATA100_TOOL_UNLOCK_LEVEL_INVALID", `vocabulary.tools.${tool.code}`, "tool unlock level is not a level of the course");
     }
+    if (toolLevels.has(level)) {
+      issue(issues, "ATA100_TOOL_UNLOCK_LEVEL_INVALID", `vocabulary.tools.${tool.code}`, "another tool already unlocks at this level");
+    }
+    toolLevels.add(level);
   }
   for (const channel of COMMUNITY_CHANNELS) {
     if (!checkpointLevels.has(channel.unlockLevel)) {

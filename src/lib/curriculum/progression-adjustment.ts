@@ -40,10 +40,12 @@
  * them: merging the two authorities would put a QA affordance behind an
  * operator-facing correction button.
  *
- * A pleasant consequence, verified rather than assumed: every one of the 19 tool
- * unlocks and all 5 Community gates sits on a financial checkpoint, so an
- * administrative correction can never open a tool or a Community space. The
- * preview says so rather than leaving the operator to wonder.
+ * A consequence, verified rather than assumed: all 5 Community gates sit on a
+ * financial checkpoint, so an administrative correction can never open a
+ * Community space. TOOLS DIFFER since TOOLS-V2: a tool opens when its level is
+ * durably completed, however it was completed, and the Trade Card's level (L5)
+ * is an ordinary lesson. A correction through it opens the tool, and the preview
+ * names every tool it would open rather than leaving the operator to wonder.
  *
  * ============================== ALL OR NOTHING ==============================
  * Every level in the interval is completed inside ONE transaction. A partial
@@ -59,6 +61,7 @@ import {
   type CurriculumLevelCompletionErrorCode,
 } from "./completion";
 import { isProtectedAuthorityPair, isAdminCorrectablePair } from "./completion-pairs";
+import { CURRICULUM_TOOLS } from "./product-vocabulary";
 import {
   CURRICULUM_AUDIT_ACTIONS,
   DEFAULT_CURRICULUM_CODE,
@@ -185,9 +188,9 @@ export type ProgressionAdjustmentPlan = {
   /** Sum of the canonical rewards that would be credited as `admin_correction`. */
   xpTotal: number;
   /**
-   * Always empty, and the reason is a domain fact rather than an omission: every
-   * tool unlock level is a financial checkpoint, which this owner may never
-   * complete.
+   * Titles of the tools this correction would open: a tool whose level is in
+   * `levels` and is not already completed. Checkpoint-released tools can never
+   * appear, because this owner may never complete a financial checkpoint.
    */
   toolsUnlocked: readonly string[];
   /** Empty for the same reason: every Community gate is a checkpoint level. */
@@ -219,6 +222,17 @@ type Tx = Prisma.TransactionClient;
 /* ------------------------------------------------------------------ */
 /* Planning — pure, and shared by preview and confirm                   */
 /* ------------------------------------------------------------------ */
+
+/**
+ * TOOLS-V2 — the tools completing `levels` would open, by title. Derived from
+ * the same rule `tool-access.ts` applies: a tool is open when the level that
+ * releases it is completed, so a level that is already completed opens nothing.
+ */
+function toolsOpenedBy(levels: readonly ProgressionAdjustmentPlanLevel[]): string[] {
+  return CURRICULUM_TOOLS.filter((tool) =>
+    levels.some((level) => level.levelNumber === tool.unlockLevel && level.currentStatus !== "completed"),
+  ).map((tool) => tool.title);
+}
 
 /**
  * Resolve everything the correction depends on, and decide whether it may run.
@@ -379,8 +393,14 @@ async function planAdjustment(
   if (levels.length > 1) {
     warnings.push(`Будет административно завершено уровней: ${levels.length}.`);
   }
+  const toolsUnlocked = toolsOpenedBy(levels);
   warnings.push(
-    "Инструменты и доступ в Community не изменятся: каждый из них открывается финансовой контрольной точкой, которую административная корректировка выполнить не может.",
+    toolsUnlocked.length > 0
+      ? `Откроются инструменты: ${toolsUnlocked.join(", ")}. Инструмент открывается завершением своего уровня, в том числе административным.`
+      : "Инструменты не изменятся: в интервале нет незавершённого уровня, который открывает инструмент.",
+  );
+  warnings.push(
+    "Доступ в Community не изменится: каждое пространство открывается финансовой контрольной точкой, которую административная корректировка выполнить не может.",
   );
 
   if (blocker) {
@@ -388,6 +408,7 @@ async function planAdjustment(
       ...base,
       levels,
       xpTotal: levels.reduce((total, level) => total + level.xpReward, 0),
+      toolsUnlocked,
       warnings,
       blocker,
       canApply: false,
@@ -399,6 +420,7 @@ async function planAdjustment(
     ...base,
     levels,
     xpTotal: levels.reduce((total, level) => total + level.xpReward, 0),
+    toolsUnlocked,
     warnings,
     blocker: null,
     canApply: levels.length > 0,

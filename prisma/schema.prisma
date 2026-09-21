@@ -253,6 +253,8 @@ model User {
   communityReplies              CommunityReply[]           @relation("CommunityReplyAuthor")
   communityContentReports       CommunityContentReport[]   @relation("CommunityContentReportReporter")
   userSessions                  UserSession[]
+  /// TOOLS-V2. The learner's own trade cards. Private to the learner.
+  toolTradeCards                ToolTradeCard[]
 }
 
 model XpEvent {
@@ -5281,4 +5283,44 @@ model UserSession {
   /// (userId) WHERE revokedAt IS NULL. Prisma cannot express a partial index,
   /// so it lives in SQL — but it is a real constraint, and a second live row
   /// fails at the database no matter which writer attempts it.
+}
+
+/// TOOLS-V2 — Trade Card (L5). The plan of ONE binary-options trade, written by
+/// the learner BEFORE opening it by hand in Pocket, and its result after expiry.
+/// Private to the learner: no staff surface reads it. The lifecycle
+/// (fixed → saved | cancelled) and the money rules live in
+/// `src/lib/tools/trade-card.ts`. Every CHECK is in the migration.
+model ToolTradeCard {
+  id                String    @id @default(cuid())
+  userId            Int
+  /// fixed | saved | cancelled
+  status            String
+  /// A code from `src/lib/tools/reference.ts`, e.g. EURUSD_OTC.
+  assetCode         String
+  /// up | down
+  direction         String
+  /// The stake of this one trade in minor units (cents). Never a balance.
+  amountMinor       Int
+  payoutPercent     Int
+  /// A code from `src/lib/tools/reference.ts`, e.g. M3.
+  expiryCode        String
+  /// "HH:MM" exactly as the learner typed it, in their own local time.
+  entryTime         String
+  reason            String
+  fixedAt           DateTime
+  planRevisionCount Int       @default(0)
+  /// profit | loss, present exactly when the card is saved.
+  result            String?
+  observation       String?
+  savedAt           DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+
+  /// ONE OPEN CARD PER LEARNER IS ENFORCED BY THE DATABASE. The migration creates
+  /// `ToolTradeCard_userId_open_key`, a UNIQUE index on (userId) WHERE
+  /// status = 'fixed'. Prisma cannot express a partial index.
 }

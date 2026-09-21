@@ -107,7 +107,11 @@ export type AtaCheckpointSource = {
   /** ISO-4217. `LevelCheckpointRequirement` accepts USD and nothing else. */
   readonly thresholdCurrency: "USD";
   readonly rankCode: string;
-  /** L4 is the one checkpoint that releases no tool. */
+  /**
+   * The tool this checkpoint releases, or null. TOOLS-V2: only L10…L30 release a
+   * tool — L4 never did, L35…L100 no longer do, and the Trade Card is released by
+   * the L5 lesson, which is not a checkpoint at all.
+   */
   readonly toolCode: string | null;
   readonly channelCode: string | null;
 };
@@ -269,23 +273,23 @@ const CHECKPOINT_ROWS: ReadonlyArray<
   [  4,    50,    5_000, "rank.observer_1"       , null                           , "channel.start_questions"],
   [ 10,   100,   10_000, "rank.observer_2"       , "tool.trading_journal"         , null],
   [ 15,   150,   15_000, "rank.observer_3"       , "tool.risk_calculator"         , null],
-  [ 20,   200,   20_000, "rank.observer_4"       , "tool.chart_markup"            , "channel.chart_review"],
-  [ 25,   300,   30_000, "rank.analyst_1"        , "tool.indicator_checklist"     , null],
+  [ 20,   200,   20_000, "rank.observer_4"       , "tool.entry_checklist"         , "channel.chart_review"],
+  [ 25,   300,   30_000, "rank.analyst_1"        , "tool.personal_stats"          , null],
   [ 30,   400,   40_000, "rank.analyst_2"        , "tool.news_calendar"           , null],
-  [ 35,   500,   50_000, "rank.analyst_3"        , "tool.pause_mode"              , "channel.discipline_journal"],
-  [ 40,   750,   75_000, "rank.analyst_4"        , "tool.weekly_review"           , null],
-  [ 45,  1000,  100_000, "rank.tactician_1"      , "tool.strategy_builder"        , "channel.strategies"],
-  [ 50,  1500,  150_000, "rank.tactician_2"      , "tool.capital_plan"            , null],
-  [ 55,  2000,  200_000, "rank.tactician_3"      , "tool.market_regime_board"     , null],
-  [ 60,  2500,  250_000, "rank.tactician_4"      , "tool.session_planner"         , null],
-  [ 65,  3000,  300_000, "rank.strategist_1"     , "tool.strategy_statistics"     , null],
-  [ 70,  4000,  400_000, "rank.strategist_2"     , "tool.watchlist"               , null],
-  [ 75,  5000,  500_000, "rank.strategist_3"     , "tool.psychology_checkin"      , null],
-  [ 80,  6000,  600_000, "rank.strategist_4"     , "tool.habit_calendar"          , null],
-  [ 85,  7000,  700_000, "rank.architect_1"      , "tool.mentor_case_room"        , "channel.advanced_circle"],
-  [ 90,  8000,  800_000, "rank.architect_2"      , "tool.performance_dashboard"   , null],
-  [ 95,  9000,  900_000, "rank.architect_3"      , "tool.personal_playbook"       , null],
-  [100, 10000, 1000_000, "rank.architect_4"      , "tool.pro_workspace"           , null],
+  [ 35,   500,   50_000, "rank.analyst_3"        , null                           , "channel.discipline_journal"],
+  [ 40,   750,   75_000, "rank.analyst_4"        , null                           , null],
+  [ 45,  1000,  100_000, "rank.tactician_1"      , null                           , "channel.strategies"],
+  [ 50,  1500,  150_000, "rank.tactician_2"      , null                           , null],
+  [ 55,  2000,  200_000, "rank.tactician_3"      , null                           , null],
+  [ 60,  2500,  250_000, "rank.tactician_4"      , null                           , null],
+  [ 65,  3000,  300_000, "rank.strategist_1"     , null                           , null],
+  [ 70,  4000,  400_000, "rank.strategist_2"     , null                           , null],
+  [ 75,  5000,  500_000, "rank.strategist_3"     , null                           , null],
+  [ 80,  6000,  600_000, "rank.strategist_4"     , null                           , null],
+  [ 85,  7000,  700_000, "rank.architect_1"      , null                           , "channel.advanced_circle"],
+  [ 90,  8000,  800_000, "rank.architect_2"      , null                           , null],
+  [ 95,  9000,  900_000, "rank.architect_3"      , null                           , null],
+  [100, 10000, 1000_000, "rank.architect_4"      , null                           , null],
 ];
 
 /** The only currency `LevelCheckpointRequirement` accepts (schema CHECK). */
@@ -355,7 +359,7 @@ export const ATA_CHECKPOINTS: readonly AtaCheckpointSource[] = CHECKPOINT_ROWS.m
 export const ATA_LEVEL_COUNT = 100 as const;
 export const ATA_MODULE_COUNT = 20 as const;
 export const ATA_CHECKPOINT_COUNT = 20 as const;
-export const ATA_TOOL_UNLOCK_COUNT = 19 as const;
+export const ATA_TOOL_UNLOCK_COUNT = 6 as const;
 export const ATA_COMMUNITY_UNLOCK_COUNT = 5 as const;
 export const ATA_PRACTICAL_COUNT = 20 as const;
 export const ATA_MENTOR_REVIEW_COUNT = 7 as const;

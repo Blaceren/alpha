@@ -1185,11 +1185,13 @@ async function main() {
     return createGraph(specs);
   }
 
-  await check("4.1 exactly the canonical 19 tools are emitted, in unlock order, no duplicates", () => {
+  await check("4.1 exactly the canonical tools are emitted, in unlock order, no duplicates", () => {
     const access = toolAccess.lockedCurriculumToolAccess();
-    assert.equal(access.total, 19);
-    assert.equal(access.tools.length, 19);
-    assert.equal(new Set(access.tools.map((entry) => entry.code)).size, 19);
+    const count = vocabulary.CURRICULUM_TOOLS.length;
+    assert.equal(count, 6, "TOOLS-V2: the six tools of the first block");
+    assert.equal(access.total, count);
+    assert.equal(access.tools.length, count);
+    assert.equal(new Set(access.tools.map((entry) => entry.code)).size, count);
     assert.deepEqual(
       access.tools.map((entry) => entry.code),
       vocabulary.CURRICULUM_TOOLS.map((tool) => tool.code),
@@ -1209,7 +1211,7 @@ async function main() {
     await wipeCurriculum();
     const graph = await toolGraph();
     const learner = await createUser("tools");
-    // Standing on L11: L1–L10 complete, so ONLY the L10 tool is open.
+    // Standing on L11: L1–L10 complete, so ONLY the L5 (a lesson) and L10 tools are open.
     const enrollment = await enroll(learner.id, graph, 11);
     await startLevel(enrollment.id, graph, 11);
 
@@ -1219,8 +1221,13 @@ async function main() {
       (states as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
     );
     const open = access.tools.filter((entry) => entry.unlocked).map((entry) => entry.code);
-    assert.deepEqual(open, ["tool.trading_journal"]);
-    assert.equal(access.unlockedCount, 1);
+    assert.deepEqual(open, ["tool.trade_card", "tool.trading_journal"]);
+    assert.equal(access.unlockedCount, 2);
+    // TOOLS-V2: the Trade Card hangs off the L5 LESSON, not a checkpoint.
+    const card = access.tools.find((entry) => entry.code === "tool.trade_card")!;
+    assert.equal(card.unlockLevel, 5);
+    assert.equal(card.reason, "unlock_level_completed");
+    assert.equal(card.unlockLevelStableCode, graph.levels[4].stableCode);
     const journal = access.tools.find((entry) => entry.code === "tool.trading_journal")!;
     assert.equal(journal.unlockLevel, 10);
     assert.equal(journal.reason, "unlock_level_completed");
@@ -1230,10 +1237,10 @@ async function main() {
     assert.equal(risk.unlocked, false);
     assert.equal(risk.reason, "unlock_level_incomplete");
     // L25 does not exist in a 20-level graph: fail closed, not "open".
-    const indicator = access.tools.find((entry) => entry.code === "tool.indicator_checklist")!;
-    assert.equal(indicator.unlocked, false);
-    assert.equal(indicator.reason, "unlock_level_missing");
-    assert.equal(indicator.unlockLevelStableCode, null);
+    const stats = access.tools.find((entry) => entry.code === "tool.personal_stats")!;
+    assert.equal(stats.unlocked, false);
+    assert.equal(stats.reason, "unlock_level_missing");
+    assert.equal(stats.unlockLevelStableCode, null);
   });
 
   await check("4.4 in_progress / pending_review / checkpoint_unverified all read LOCKED", async () => {
@@ -1249,7 +1256,10 @@ async function main() {
       });
       assert.equal(states.kind, "resolved", status);
       const access = toolAccess.resolveCurriculumToolAccess((states as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels);
-      assert.equal(access.unlockedCount, 0, `${status} must not open a tool`);
+      // L1–L9 are durably complete, so the L5 Trade Card is open; the L10 row is
+      // only ${status} and must not open the L10 tool.
+      const open = access.tools.filter((entry) => entry.unlocked).map((entry) => entry.code);
+      assert.deepEqual(open, ["tool.trade_card"], `${status} must not open the L10 tool`);
       const journal = access.tools.find((entry) => entry.code === "tool.trading_journal")!;
       assert.equal(journal.reason, "unlock_level_incomplete");
     }
@@ -1335,7 +1345,16 @@ async function main() {
     const richAccess = toolAccess.resolveCurriculumToolAccess(
       (richStates as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
     );
-    assert.equal(richAccess.unlockedCount, 0);
+    // Only the L5 tool, whose source lesson IS complete. 1 350 XP opens nothing more.
+    assert.deepEqual(
+      richAccess.tools.filter((entry) => entry.unlocked).map((entry) => entry.code),
+      ["tool.trade_card"],
+    );
+    assert.equal(
+      richAccess.tools.find((entry) => entry.code === "tool.trading_journal")!.unlocked,
+      false,
+      "XP does not open the L10 tool",
+    );
 
     // (b) Zero XP, source level complete → open.
     const poor = await createUser("tools-poor");
@@ -1346,7 +1365,7 @@ async function main() {
     const poorAccess = toolAccess.resolveCurriculumToolAccess(
       (poorStates as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
     );
-    assert.equal(poorAccess.unlockedCount, 1);
+    assert.equal(poorAccess.unlockedCount, 2);
     assert.equal(
       poorAccess.tools.find((entry) => entry.code === "tool.trading_journal")!.unlocked,
       true,
@@ -1400,7 +1419,7 @@ async function main() {
     setFlags({ read: true, enrollment: true, xp: true });
   });
 
-  await check("5.2 the full read carries all 19 tool entries; the summary carries the slim shape", async () => {
+  await check("5.2 the full read carries every tool entry; the summary carries the slim shape", async () => {
     await wipeCurriculum();
     const graph = await toolGraph();
     const learner = await createUser("read-tools");
@@ -1409,9 +1428,9 @@ async function main() {
     const states = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
 
     const full = readApi.mapEnrolledCurriculumRead(states as never);
-    assert.equal(full.toolAccess.total, 19);
-    assert.equal(full.toolAccess.tools.length, 19);
-    assert.equal(full.toolAccess.unlockedCount, 1);
+    assert.equal(full.toolAccess.total, vocabulary.CURRICULUM_TOOLS.length);
+    assert.equal(full.toolAccess.tools.length, vocabulary.CURRICULUM_TOOLS.length);
+    assert.equal(full.toolAccess.unlockedCount, 2);
     for (const entry of full.toolAccess.tools) {
       assert.equal(typeof entry.code, "string");
       assert.equal(typeof entry.unlocked, "boolean");
@@ -1425,9 +1444,9 @@ async function main() {
 
     const summary = readApi.mapEnrolledCurriculumSummary(states as never);
     assert.equal(summary.shape, "summary");
-    assert.equal(summary.toolAccess.total, 19);
-    assert.equal(summary.toolAccess.unlockedCount, 1);
-    assert.deepEqual(summary.toolAccess.unlocked, ["tool.trading_journal"]);
+    assert.equal(summary.toolAccess.total, vocabulary.CURRICULUM_TOOLS.length);
+    assert.equal(summary.toolAccess.unlockedCount, 2);
+    assert.deepEqual(summary.toolAccess.unlocked, ["tool.trade_card", "tool.trading_journal"]);
     assert.ok(!("tools" in summary.toolAccess), "the summary must not carry the full set");
     // Slim really means slim: the summary must stay far smaller than the graph.
     assert.ok(

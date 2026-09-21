@@ -14,7 +14,8 @@
  * on the platform and it lives here.
  *
  * ================================ THE RULE ================================
- * A tool is unlocked when the CHECKPOINT LEVEL THAT RELEASES IT is durably
+ * A tool is unlocked when the LEVEL THAT RELEASES IT (a checkpoint, or since
+ * TOOLS-V2 an ordinary lesson such as L5 for the Trade Card) is durably
  * completed for this enrollment. That is the accepted domain relationship, and
  * it comes from two Backend-owned sources that already have to agree:
  * `CURRICULUM_TOOLS[].unlockLevel` (product vocabulary) and `CHECKPOINT_ROWS`
@@ -67,7 +68,7 @@ export type CurriculumToolAccessEntry = {
   readonly code: string;
   /** THE verdict. The only field an access decision may be taken from. */
   readonly unlocked: boolean;
-  /** DISPLAY: the checkpoint level number that releases this tool. */
+  /** DISPLAY: the level number that releases this tool. */
   readonly unlockLevel: number;
   /** DISPLAY: that level's stable code, or null when the version has no such level. */
   readonly unlockLevelStableCode: string | null;
@@ -78,7 +79,8 @@ export type CurriculumToolAccessEntry = {
 };
 
 /**
- * The learner-facing tool access set: all 19, always, in canonical unlock order.
+ * The learner-facing tool access set: every curriculum tool, always, in
+ * canonical unlock order.
  *
  * The whole set travels even when nothing is open, because "absent" and "locked"
  * must not be the same wire state — a client that has to infer a missing entry's
@@ -94,8 +96,8 @@ export type CurriculumToolAccess = {
  * The slim Home-shaped projection (§20).
  *
  * Home renders at most a small tool context and must not pay for the full set,
- * so the summary carries the counts and the open codes — bounded by 19 short
- * strings — and nothing else. It is a PROJECTION of the same resolution, never a
+ * so the summary carries the counts and the open codes — bounded by the size of
+ * the tool catalog — and nothing else. It is a PROJECTION of the same resolution, never a
  * second one: `summarizeToolAccess` takes the full result as its input, so the
  * two shapes cannot disagree about what is open.
  */

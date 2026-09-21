@@ -24,7 +24,9 @@
  *
  * ============================== WHAT IT PROVES ==============================
  *   100 levels · 20 modules · 20 practicals · 7 mentor-review practicals
- *   20 checkpoints · 19 tool unlocks · 5 community unlocks · 20 rank transitions
+ *   20 checkpoints · 5 checkpoint tool unlocks · 5 community unlocks · 20 rank transitions
+ * (TOOLS-V2: six tools in all; the Trade Card is released by the L5 lesson, not a
+ * checkpoint, so it has no checkpoint row on either side.)
  * plus, per level, title / kind / artifact / mentorReview / module placement, and
  * per checkpoint, threshold / rank / tool / channel.
  *
@@ -45,6 +47,16 @@ import {
   CURRICULUM_TOOLS,
   RANK_TRANSITIONS,
 } from "@/lib/curriculum/product-vocabulary";
+
+/**
+ * TOOLS-V2: the tools a CHECKPOINT releases. The Trade Card is released by the L5
+ * lesson, which the Academy fixture's checkpoint rows cannot carry, so the
+ * checkpoint comparison covers exactly the tools that hang off a checkpoint.
+ */
+const CHECKPOINT_RELEASED_TOOLS = CURRICULUM_TOOLS.filter((tool) =>
+  ATA_CHECKPOINTS.some((checkpoint) => checkpoint.levelNumber === tool.unlockLevel),
+);
+const LESSON_RELEASED_TOOL_COUNT = CURRICULUM_TOOLS.length - CHECKPOINT_RELEASED_TOOLS.length;
 
 /**
  * The digests recorded when the values were transferred.
@@ -279,7 +291,7 @@ function compare(academyRoot: string): { mismatches: Mismatch[]; digests: string
     ["checkpoints", ATA_CHECKPOINTS.length, academy.checkpoints.length],
     ["practicals", ATA_LEVELS.filter((l) => l.kind === "practical").length, academy.levels.filter((l) => l.kind === "practical").length],
     ["mentorReviewPracticals", ATA_LEVELS.filter((l) => l.mentorReview).length, academy.levels.filter((l) => l.mentorReview).length],
-    ["toolUnlocks", CURRICULUM_TOOLS.length, academy.checkpoints.filter((c) => c.toolCode).length],
+    ["toolUnlocks", CHECKPOINT_RELEASED_TOOLS.length, academy.checkpoints.filter((c) => c.toolCode).length],
     ["communityUnlocks", COMMUNITY_CHANNELS.length, academy.checkpoints.filter((c) => c.channelCode).length],
     ["rankTransitions", RANK_TRANSITIONS.length, academy.checkpoints.length],
   ];
@@ -294,7 +306,7 @@ function compare(academyRoot: string): { mismatches: Mismatch[]; digests: string
     ["checkpoints", ATA_PRODUCT_EXPECTATIONS.checkpoints, academy.checkpoints.length],
     ["practicals", ATA_PRODUCT_EXPECTATIONS.practicals, academy.levels.filter((l) => l.kind === "practical").length],
     ["mentorReviews", ATA_PRODUCT_EXPECTATIONS.mentorReviews, academy.levels.filter((l) => l.mentorReview).length],
-    ["toolUnlocks", ATA_PRODUCT_EXPECTATIONS.toolUnlocks, academy.checkpoints.filter((c) => c.toolCode).length],
+    ["toolUnlocks", ATA_PRODUCT_EXPECTATIONS.toolUnlocks - LESSON_RELEASED_TOOL_COUNT, academy.checkpoints.filter((c) => c.toolCode).length],
     ["communityUnlocks", ATA_PRODUCT_EXPECTATIONS.communityUnlocks, academy.checkpoints.filter((c) => c.channelCode).length],
   ];
   for (const [key, declared, actual] of expectations) {
@@ -375,7 +387,7 @@ function compare(academyRoot: string): { mismatches: Mismatch[]; digests: string
   }
 
   /* Backend must not carry a tool/channel Academy never released. */
-  for (const tool of CURRICULUM_TOOLS) {
+  for (const tool of CHECKPOINT_RELEASED_TOOLS) {
     if (!academy.checkpoints.some((checkpoint) => checkpoint.toolCode === tool.code)) {
       add("tools", tool.code, "present in Backend", "absent in Academy");
     }

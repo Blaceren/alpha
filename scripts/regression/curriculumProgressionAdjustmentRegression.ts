@@ -88,6 +88,7 @@ async function main() {
   const levelState = await import("../../src/lib/curriculum/level-state");
   const roles = await import("../../src/lib/crm/roles");
   const pairs = await import("../../src/lib/curriculum/completion-pairs");
+  const toolAccess = await import("../../src/lib/tools/access");
 
   let sequence = 0;
 
@@ -508,16 +509,39 @@ async function main() {
     assert.deepEqual(plan.levels.map((l) => l.levelNumber), [2, 3]);
   });
 
-  await check("preview always reports no tool and no Community change", async () => {
+  await check("preview names the tools a correction opens, and never a Community space", async () => {
+    await reset();
+    // TOOLS-V2: the Trade Card is released by L5, an ordinary lesson.
+    const throughL5 = await createScenario();
+    await placeAt(throughL5, 5);
+    const opening = await adjustment.previewProgressionAdjustment({
+      learnerUserId: throughL5.learner.id,
+      targetStableCode: stableCodeFor(throughL5, 8),
+    });
+    assert.deepEqual([...opening.toolsUnlocked], ["Trade Card"]);
+    assert.deepEqual([...opening.communitySpacesOpened], []);
+    assert.ok(opening.warnings.some((warning) => warning.startsWith("Откроются инструменты: Trade Card.")));
+
+    await reset();
+    const pastL5 = await createScenario();
+    await placeAt(pastL5, 6);
+    const quiet = await adjustment.previewProgressionAdjustment({
+      learnerUserId: pastL5.learner.id,
+      targetStableCode: stableCodeFor(pastL5, 8),
+    });
+    assert.deepEqual([...quiet.toolsUnlocked], []);
+    assert.deepEqual([...quiet.communitySpacesOpened], []);
+    assert.ok(quiet.warnings.some((warning) => warning.startsWith("Инструменты не изменятся")));
+  });
+
+  await check("a correction through L5 really opens the Trade Card, as its preview said", async () => {
     await reset();
     const scenario = await createScenario();
     await placeAt(scenario, 5);
-    const plan = await adjustment.previewProgressionAdjustment({
-      learnerUserId: scenario.learner.id,
-      targetStableCode: stableCodeFor(scenario, 8),
-    });
-    assert.deepEqual([...plan.toolsUnlocked], []);
-    assert.deepEqual([...plan.communitySpacesOpened], []);
+    assert.equal(await toolAccess.isToolUnlockedForUser(scenario.learner.id, "tool.trade_card", prisma), false);
+    const receipt = await adjustment.adjustLearnerProgression(await baseInput(scenario, 6));
+    assert.deepEqual([...receipt.levelsCompleted], [5]);
+    assert.equal(await toolAccess.isToolUnlockedForUser(scenario.learner.id, "tool.trade_card", prisma), true);
   });
 
   /* ---------------------------------------------------------------- */

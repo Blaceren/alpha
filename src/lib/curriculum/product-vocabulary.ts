@@ -46,8 +46,8 @@
  *   scripts/curriculum/verifyAcademyTransfer.ts --academy <path>
  *
  * It re-parses Academy's own `fixture.ts` and re-derives all 100 levels, 20
- * modules, 20 checkpoints, 19 tool unlocks, 5 community unlocks and 20 rank
- * transitions, then compares them to the values below. It takes an EXPLICIT
+ * modules, 20 checkpoints, the checkpoint tool unlocks, 5 community unlocks and
+ * 20 rank transitions, then compares them to the values below. It takes an EXPLICIT
  * checkout path, is dev/audit only, and nothing in `src/` reaches it — a Backend
  * gate must never depend on someone else's checkout being present.
  *
@@ -84,37 +84,56 @@ export type CurriculumTool = {
   readonly code: string;
   /** Product name. English is the domain language for tools, matching the course. */
   readonly title: string;
-  /** DOMAIN: the checkpoint level that releases this tool. */
+  /**
+   * DOMAIN: the level whose durable completion opens this tool. Any level of
+   * the course — a checkpoint (L10…L30) or an ordinary lesson (L5).
+   */
   readonly unlockLevel: number;
 };
 
 /**
- * The 19 curriculum tools, in unlock order (L10 → L100).
+ * The curriculum tools, in unlock order.
  *
- * L4 is the only checkpoint with no tool: it releases a community channel and
- * the first rank instead. That is the shipped product contract, not an omission.
+ * TOOLS-V2 (2026-09-21). The six tools of the first product block, each opened
+ * by completing the level whose lessons it builds on. Trade Card opens after
+ * the L5 LESSON, so a tool is no longer required to hang off a checkpoint: the
+ * rule is "the unlock level is durably completed", evaluated by `tool-access.ts`.
  */
 export const CURRICULUM_TOOLS = [
+  { code: "tool.trade_card", title: "Trade Card", unlockLevel: 5 },
   { code: "tool.trading_journal", title: "Trading Journal", unlockLevel: 10 },
   { code: "tool.risk_calculator", title: "Risk Calculator", unlockLevel: 15 },
-  { code: "tool.chart_markup", title: "Chart Markup Tool", unlockLevel: 20 },
-  { code: "tool.indicator_checklist", title: "Indicator Checklist", unlockLevel: 25 },
+  { code: "tool.entry_checklist", title: "Entry Checklist", unlockLevel: 20 },
+  { code: "tool.personal_stats", title: "Personal Stats", unlockLevel: 25 },
   { code: "tool.news_calendar", title: "News Calendar", unlockLevel: 30 },
-  { code: "tool.pause_mode", title: "Pause Mode", unlockLevel: 35 },
-  { code: "tool.weekly_review", title: "Weekly Review", unlockLevel: 40 },
-  { code: "tool.strategy_builder", title: "Strategy Builder", unlockLevel: 45 },
-  { code: "tool.capital_plan", title: "Capital Plan", unlockLevel: 50 },
-  { code: "tool.market_regime_board", title: "Market Regime Board", unlockLevel: 55 },
-  { code: "tool.session_planner", title: "Session Planner", unlockLevel: 60 },
-  { code: "tool.strategy_statistics", title: "Strategy Statistics", unlockLevel: 65 },
-  { code: "tool.watchlist", title: "Watchlist", unlockLevel: 70 },
-  { code: "tool.psychology_checkin", title: "Psychology Check-in", unlockLevel: 75 },
-  { code: "tool.habit_calendar", title: "Habit Calendar", unlockLevel: 80 },
-  { code: "tool.mentor_case_room", title: "Mentor Case Room", unlockLevel: 85 },
-  { code: "tool.performance_dashboard", title: "Performance Dashboard", unlockLevel: 90 },
-  { code: "tool.personal_playbook", title: "Personal Playbook", unlockLevel: 95 },
-  { code: "tool.pro_workspace", title: "Pro Workspace", unlockLevel: 100 },
 ] as const satisfies readonly CurriculumTool[];
+
+/**
+ * Codes of the pre-V2 placeholder tools (L20…L100), withdrawn from the catalog.
+ *
+ * Kept ONLY as vocabulary content may still name: published lessons link to
+ * several of them, and forgetting the code would turn every such lesson into a
+ * validation failure the next time it is edited. None of them unlocks, none is
+ * sent to a learner, and a link to one renders as "coming later".
+ */
+export const RETIRED_CURRICULUM_TOOL_CODES = [
+  "tool.chart_markup",
+  "tool.indicator_checklist",
+  "tool.pause_mode",
+  "tool.weekly_review",
+  "tool.strategy_builder",
+  "tool.capital_plan",
+  "tool.market_regime_board",
+  "tool.session_planner",
+  "tool.strategy_statistics",
+  "tool.watchlist",
+  "tool.psychology_checkin",
+  "tool.habit_calendar",
+  "tool.mentor_case_room",
+  "tool.performance_dashboard",
+  "tool.personal_playbook",
+  "tool.pro_workspace",
+] as const;
 
 /**
  * The referral-gated 20th tool. It has NO unlock level, is not a curriculum
@@ -125,9 +144,10 @@ export const CURRICULUM_TOOLS = [
  */
 export const SECRET_TOOL = { code: "tool.secret", title: "Секретный инструмент" } as const;
 
-/** Every tool code content may reference. */
+/** Every tool code content may reference: live, retired and the secret one. */
 export const PRODUCT_TOOL_CODES: ReadonlySet<string> = new Set<string>([
   ...CURRICULUM_TOOLS.map((tool) => tool.code),
+  ...RETIRED_CURRICULUM_TOOL_CODES,
   SECRET_TOOL.code,
 ]);
 
