@@ -215,7 +215,8 @@
     "test:regression:tool-trading-journal": "tsx scripts/regression/toolTradingJournalRegression.ts",
     "test:regression:tool-risk-plan": "tsx scripts/regression/toolRiskPlanRegression.ts",
     "test:regression:tool-entry-checklist": "tsx scripts/regression/toolEntryChecklistRegression.ts",
-    "test:regression:tool-personal-stats": "tsx scripts/regression/toolPersonalStatsRegression.ts"
+    "test:regression:tool-personal-stats": "tsx scripts/regression/toolPersonalStatsRegression.ts",
+    "test:regression:news-calendar": "tsx scripts/regression/newsCalendarRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

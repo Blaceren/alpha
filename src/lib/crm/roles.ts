@@ -1,7 +1,7 @@
 import type { StaffRole } from "@prisma/client";
 import type { CrmSessionPermission } from "@/lib/crm/session-permission-contract";
 
-// Canonical CRM staff roles — exactly nine, in the locked contract order.
+// Canonical CRM staff roles — eleven, in the locked contract order (appended, never inserted).
 // This is the single source of truth for the StaffRole axis. It is deliberately
 // separate from the learner/admin UserRole enum and never derived from it.
 export const CRM_STAFF_ROLES = [
@@ -29,6 +29,18 @@ export const CRM_STAFF_ROLES = [
   // hand-writes CHECKs only where it wants them -- `XPTransaction.sourceType`
   // has one, this column does not). The physical schema is unchanged.
   "progression_operator",
+  // TOOLS-V2 NEWS — the copywriter (owner, 2026-09-21: news are written in the
+  // CRM by staff with a copywriter role, and each item is a public page).
+  //
+  // A NEW ROLE HOLDING ONE PERMISSION, for the reason `progression_operator`
+  // is one: `content_manager` would also bring curriculum authoring, and every
+  // other role reads learners. The copywriter writes about markets, not about
+  // people, so it holds `news_publish` and nothing else — in particular NOT
+  // `view_users`, which is exactly why that read now has a name.
+  //
+  // No migration, for the same checked reason as above: the column is TEXT
+  // with no CHECK constraint.
+  "copywriter",
 ] as const;
 
 export type CrmStaffRole = (typeof CRM_STAFF_ROLES)[number];
@@ -153,6 +165,10 @@ export const CRM_PERMISSIONS = [
   // cross-repository authority for the vocabulary; this file decides only who
   // holds it, which is the grant table below.
   "curriculum_progress_override",
+  // TOOLS-V2 NEWS — two names, appended. Why each exists is recorded in
+  // `session-permission-contract.ts`; who holds them is the grant table below.
+  "view_users",
+  "news_publish",
 ] as const;
 
 export type CrmPermission = (typeof CRM_PERMISSIONS)[number];
@@ -303,6 +319,18 @@ void _permissionVocabularyParity;
 //     StaffProfile whose `User.role` is `admin`, which today grants it silent
 //     report-review and level-completion authority. Withholding the permission
 //     is what removes that, and it is asserted by regression.
+// TOOLS-V2 NEWS GRANT RULES.
+//
+//   • `view_users` -> every role that existed before the copywriter, and none
+//     that did not. It names the basic learner read (list, account card,
+//     current owner) that any StaffProfile used to pass with no permission at
+//     all, so granting it to all ten changes nothing for anyone. Its only
+//     effect is that a role can now be made WITHOUT it.
+//
+//   • `news_publish` -> `copywriter`, and `crm_admin`, the one role holding
+//     `manage_settings`: an administrator who could not correct a published
+//     page would have to route every fix through a copywriter. No other role
+//     gains it; `content_manager` authors curriculum, not public news.
 export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission[]> = {
   crm_admin: [
     "view_exact_financials",
@@ -331,6 +359,8 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_admin",
     "learner_ops_escalation_resolve",
     "community_moderate",
+    "view_users",
+    "news_publish",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -351,6 +381,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_qa",
     "learner_ops_analytics",
     "learner_ops_escalation_resolve",
+    "view_users",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -363,6 +394,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "create_user_notes",
     "learner_ops_view",
     "learner_ops_handle",
+    "view_users",
   ],
   // mentor holds nothing: an accepted product decision for Notes v1. Mentors
   // have no CRM permission today, so granting note access here would be a new
@@ -379,6 +411,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     // authority is a frontline and management act, and widening the raise
     // permission was the shortcut this fix exists to refuse.
     "learner_ops_escalation_resolve",
+    "view_users",
   ],
   support: [
     "edit_user_notes",
@@ -387,6 +420,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
     "learner_ops_view",
     "learner_ops_handle",
     "learner_ops_escalate",
+    "view_users",
   ],
   // COMMUNITY-V1 — `moderator` receives its FIRST permission, and exactly one.
   //
@@ -395,20 +429,22 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
   // It receives no `view_user_notes`, no `reveal_pii` and no financial
   // permission: a moderator decides whether a POST belongs, which needs the
   // post, not the person's file.
-  moderator: ["community_moderate"],
+  moderator: ["community_moderate", "view_users"],
   // AFD-5A gives analyst its first permission — read-only affiliate inventory.
   // Deliberately NOT `manage_settings`: an analyst may inspect configuration and
   // must not be able to change it.
   analyst: [
     "view_affiliate_analytics",
     "learner_ops_analytics",
+    "view_users",
   ],
   // PHASE-G0 — the content role's first permissions. Author, never approve.
-  content_manager: ["curriculum_read", "curriculum_author"],
+  content_manager: ["curriculum_read", "curriculum_author", "view_users"],
   // PHASE-G0 — read_only's first permission, and the only kind it may ever hold.
   read_only: [
     "curriculum_read",
     "learner_ops_view",
+    "view_users",
   ],
   // PHASE-1 ADMIN. Exactly one permission, and deliberately nothing else.
   //
@@ -421,7 +457,13 @@ export const STAFF_ROLE_PERMISSIONS: Record<CrmStaffRole, readonly CrmPermission
   //
   // It is also NOT added to `CRM_ELIGIBLE_OWNER_ROLES`: correcting a record is
   // not owning a learner relationship.
-  progression_operator: ["curriculum_progress_override"],
+  //
+  // TOOLS-V2 NEWS adds `view_users`, and only because it names what this role
+  // could already do: find the learner whose record it corrects in the list.
+  progression_operator: ["curriculum_progress_override", "view_users"],
+  // TOOLS-V2 NEWS. Exactly one permission. No `view_users`: the copywriter
+  // never sees a learner, their level, their owner or their notes.
+  copywriter: ["news_publish"],
 };
 
 // Server-side resolver — the only place effectivePermissions are computed.
@@ -698,4 +740,20 @@ export function canViewProgression(
     permissions.includes("learner_ops_view") ||
     permissions.includes("curriculum_progress_override")
   );
+}
+
+/* -------------------------------------------------------- TOOLS-V2 NEWS */
+
+/**
+ * The basic learner read: the list, a learner's account card, their current
+ * owner. Exactly one permission, no fallback. Every role but the copywriter
+ * holds it (see the grant rules above).
+ */
+export function canViewUsers(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("view_users");
+}
+
+/** Write, edit, publish and unpublish news items. Exactly one permission, no fallback. */
+export function canPublishNews(permissions: readonly CrmPermission[]): boolean {
+  return permissions.includes("news_publish");
 }

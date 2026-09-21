@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
 import type { StaffRole } from "@prisma/client";
-import { CRM_STAFF_ROLES, CRM_ELIGIBLE_OWNER_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles";
+import { CRM_STAFF_ROLES, CRM_ELIGIBLE_OWNER_ROLES, STAFF_ROLE_PERMISSIONS, resolveEffectivePermissions } from "../../src/lib/crm/roles";
 import { crmOwnerResponseSchema, crmOwnerCandidatesResponseSchema } from "../../src/lib/crm/schemas";
 import { EXPECTED_MIGRATION_COUNT, expectedPriorMigrationCount } from "./support/migrationCount";
 
@@ -259,12 +259,20 @@ async function main() {
       assertEnvelope(await c.request("PUT", ownerUrl(readLearner.id), { ownerEmployeeId: null, expectedVersion: 0 }), 403, "unauthorized");
     });
 
-    await check("6. all nine StaffRoles may READ the current owner", async () => {
-      for (const role of CRM_STAFF_ROLES) {
+    await check("6. every StaffRole holding view_users may READ the current owner; the copywriter may not", async () => {
+      // TOOLS-V2 NEWS: the owner read joined the learner read, `view_users`.
+      const readers = CRM_STAFF_ROLES.filter((role) => resolveEffectivePermissions(role).includes("view_users"));
+      assert.deepEqual(readers, CRM_STAFF_ROLES.filter((role) => role !== "copywriter"));
+      for (const role of readers) {
         const c = await loginAs(staffByRole.get(role)!.email);
         const reply = await c.request("GET", ownerUrl(readLearner.id));
         assert.equal(reply.status, 200, `${role} expected 200, got ${reply.status}`);
       }
+      const copywriter = await loginAs(staffByRole.get("copywriter")!.email);
+      const refused = await copywriter.request("GET", ownerUrl(readLearner.id));
+      assert.equal(refused.status, 403);
+      assert.equal(refused.body.messageKey, "crm.users.forbidden");
+      assert.ok(!("owner" in refused.body), "a refusal names no owner");
     });
 
     await check("7. exactly the assign_owner roles may LIST candidates (others 403)", async () => {

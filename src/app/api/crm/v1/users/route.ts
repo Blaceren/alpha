@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { CrmAuthError, crmRequestId, resolveCrmSession } from "@/lib/crm/session";
 import { crmUsersResponseSchema } from "@/lib/crm/schemas";
-import { CrmUsersInputError, listCrmUsers, parseCrmUsersQuery } from "@/lib/crm/users";
+import { CrmUsersInputError, assertCanViewUsers, listCrmUsers, parseCrmUsersQuery } from "@/lib/crm/users";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +21,7 @@ export async function GET(request: Request) {
   try {
     // 401/403 resolved here, before any query parsing or data access.
     const session = await resolveCrmSession();
+    assertCanViewUsers(session.effectivePermissions);
 
     const query = parseCrmUsersQuery(new URL(request.url).searchParams, session.effectivePermissions);
     // `session.employeeId` is the authenticated StaffProfile.id — the only

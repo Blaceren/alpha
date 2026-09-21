@@ -258,6 +258,10 @@ model User {
   toolJournalEntries            ToolJournalEntry[]
   toolRiskPlans                 ToolRiskPlan[]
   toolEntryChecks               ToolEntryCheck[]
+  toolNewsPlans                 ToolNewsPlan[]
+  /// NEWS. Items this staff member created or last changed in the CRM.
+  newsItemsCreated              NewsItem[]                 @relation("NewsItemCreatedBy")
+  newsItemsUpdated              NewsItem[]                 @relation("NewsItemUpdatedBy")
 }
 
 model XpEvent {
@@ -3299,6 +3303,9 @@ enum StaffRole {
   /// `StaffProfile.staffRole` carries no CHECK constraint, so the physical
   /// schema is unchanged and no migration accompanies this value.
   progression_operator
+  /// TOOLS-V2 NEWS. Writes and publishes news items in the CRM; holds exactly
+  /// `news_publish` and never reads a learner. Code-only, like the value above.
+  copywriter
 }
 
 model StaffProfile {
@@ -5427,6 +5434,62 @@ model ToolEntryCheck {
   missingItem      String?
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// NEWS — an economic release on the calendar, written in the CRM by staff with
+/// the copywriter role (`news_editor`). A published item is its own public page
+/// and appears in the learners' News Calendar. The legacy `NewsPost` is unrelated.
+model NewsItem {
+  id               String    @id @default(cuid())
+  /// The page address. Follows the text until the first publication, fixed after it.
+  slug             String    @unique
+  title            String
+  /// The lead, and the page's description for search engines.
+  summary          String
+  /// Plain text; paragraphs are separated by an empty line.
+  body             String    @default("")
+  /// A code from `NEWS_COUNTRIES`; it decides the currency.
+  country          String
+  currency         String
+  /// 1 low, 2 medium, 3 high.
+  importance       Int
+  /// The release instant, UTC.
+  releaseAt        DateTime
+  forecast         String?
+  previous         String?
+  actual           String?
+  sourceName       String?
+  sourceUrl        String?
+  /// draft | published
+  status           String    @default("draft")
+  publishedAt      DateTime?
+  firstPublishedAt DateTime?
+  createdById      Int?
+  updatedById      Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdBy        User?     @relation("NewsItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy        User?     @relation("NewsItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([status, releaseAt])
+}
+
+/// TOOLS-V2 — the learner's news plan (News Calendar, L30), kept in versions.
+model ToolNewsPlan {
+  id            String   @id @default(cuid())
+  userId        Int
+  /// The IANA time zone the learner reads the day in.
+  timeZone      String
+  /// 3: only high-importance releases close entry, 2: medium and high.
+  minImportance Int
+  minutesBefore Int
+  minutesAfter  Int
+  /// Currency codes joined by commas, in the order of `NEWS_CURRENCIES`.
+  currencies    String
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }

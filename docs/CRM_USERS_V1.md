@@ -277,11 +277,20 @@ decoder detail, raw Zod issue, filesystem path or database URL is ever exposed.
 
 ## Which roles may read this
 
-All nine staff roles may read the basic list. There is no `view_users`
-permission and none was invented. Roles differ only in the **email projection**,
-not in access. The same holds for the owner projection and every `owner` filter
-value (`all`/`mine`/`unassigned`): all nine roles may see the owner and use every
-filter, and `assign_owner` grants no extra list capability.
+Every role holding `view_users` may read the basic list. Roles differ only in
+the **email projection**, not in access. The same holds for the owner projection
+and every `owner` filter value (`all`/`mine`/`unassigned`): every such role may
+see the owner and use every filter, and `assign_owner` grants no extra list
+capability.
+
+**TOOLS-V2 NEWS (2026-09-21) named this read.** Until then any valid
+`StaffProfile` passed, on the argument that every staff role works with
+learners, and there was no `view_users` permission. The copywriter (writes the
+public news in the CRM) is the first role that does not work with learners, so
+the read got a name: `view_users` is granted to every role that existed before
+the copywriter — nobody lost anything — and not to the copywriter, who is
+refused with `403 crm.users.forbidden` right after the session is resolved,
+before any query parsing or data access.
 
 ## Which accounts are listed
 

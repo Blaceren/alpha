@@ -101,7 +101,11 @@ on for operation authorization, and `UserRole` grants nothing. Candidate
 **eligibility** is a separate domain rule (below), deliberately independent of
 `assign_owner`.
 
-### Operation matrices (all nine StaffRoles)
+### Operation matrices
+
+Viewing the owner needs `view_users` (TOOLS-V2 NEWS): every role below holds
+it, as do `progression_operator` (no owner operation beyond viewing) and not the
+`copywriter`, which is refused the owner read like every learner read.
 
 | Role | View owner | List candidates | Assign/Unassign | Eligible as owner |
 | --- | --- | --- | --- | --- |

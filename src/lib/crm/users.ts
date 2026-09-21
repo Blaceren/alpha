@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { CrmPermission } from "@/lib/crm/roles";
+import { canViewUsers, type CrmPermission } from "@/lib/crm/roles";
+import { CrmAuthError } from "@/lib/crm/session";
 
 // CRM Users v1 — the first truthful production CRM data read.
 //
@@ -370,4 +371,16 @@ export async function listCrmUsers(
     items: page.map((row) => toListItem(row, canSeeFullEmail)),
     nextCursor: hasMore && last ? encodeUsersCursor(last.createdAt, last.id) : null,
   };
+}
+
+/**
+ * TOOLS-V2 NEWS — the basic learner read has a name now, `view_users`. Every
+ * role that existed before the copywriter holds it, so nobody loses anything;
+ * the copywriter does not, so it never sees a learner. Refused with 403 right
+ * after the session is resolved and before any query parsing or data access,
+ * which is where the session's own refusal already happens. Used by the list,
+ * the account card and the current-owner read.
+ */
+export function assertCanViewUsers(permissions: readonly CrmPermission[]): void {
+  if (!canViewUsers(permissions)) throw new CrmAuthError(403, "crm.users.forbidden");
 }

@@ -134,8 +134,11 @@ body carries no account type, role, email or existence hint.
 | `403` | authenticated but no usable `StaffProfile` |
 | `200`/`404` | authenticated staff with a valid `StaffProfile` |
 
-All nine StaffRoles may read the detail foundation. There is no `view_user_detail`
-permission and none was invented. Roles differ only in the **email projection**,
+Every StaffRole holding `view_users` may read the detail foundation — every role
+but the copywriter (TOOLS-V2 NEWS, 2026-09-21; see CRM_USERS_V1.md). The
+copywriter is refused `403 crm.users.forbidden` before the id is parsed, so an
+existing and a missing learner look the same to it. There is no separate
+`view_user_detail` permission. Roles differ only in the **email projection**,
 not in access. `UserRole` is never interpreted as a `StaffRole`.
 
 ## Email projection

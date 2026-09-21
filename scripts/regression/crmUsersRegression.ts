@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
-import { CRM_STAFF_ROLES } from "../../src/lib/crm/roles";
+import { CRM_STAFF_ROLES, resolveEffectivePermissions } from "../../src/lib/crm/roles";
 import { crmUsersResponseSchema } from "../../src/lib/crm/schemas";
 import {
   decodeUsersCursor,
@@ -14,6 +14,9 @@ import {
   CRM_USERS_DISPLAY_NAME_FALLBACK,
 } from "../../src/lib/crm/users";
 import { EXPECTED_MIGRATION_COUNT } from "./support/migrationCount";
+
+/** TOOLS-V2 NEWS: the roles that may read learners, derived through `view_users`. */
+const LEARNER_READERS = CRM_STAFF_ROLES.filter((role) => resolveEffectivePermissions(role).includes("view_users"));
 
 // Real HTTP regression for GET /api/crm/v1/users. Runs an isolated next dev
 // server against a throwaway /tmp SQLite database. No deployed database, no
@@ -330,13 +333,22 @@ async function main() {
       await prisma.user.update({ where: { id: blocked.id }, data: { status: "active" } });
     });
 
-    await check("6. all nine StaffRoles can read the basic users list", async () => {
-      for (const role of CRM_STAFF_ROLES) {
+    await check("6. every StaffRole holding view_users reads the basic users list; the copywriter is refused", async () => {
+      // TOOLS-V2 NEWS named this read `view_users`. The readers are DERIVED from
+      // the grant map through that permission, never listed by name: every role
+      // that existed before the copywriter, and not the copywriter.
+      assert.deepEqual(LEARNER_READERS, CRM_STAFF_ROLES.filter((role) => role !== "copywriter"));
+      for (const role of LEARNER_READERS) {
         const client = await loginAs(staffByRole.get(role)!.email);
         const reply = await client.request("GET", "/api/crm/v1/users");
         assert.equal(reply.status, 200, `${role} expected 200, got ${reply.status}`);
         assert.ok(Array.isArray(reply.body.items), `${role} returned no items array`);
       }
+      const copywriter = await loginAs(staffByRole.get("copywriter")!.email);
+      const refused = await copywriter.request("GET", "/api/crm/v1/users");
+      assert.equal(refused.status, 403);
+      assert.equal(refused.body.messageKey, "crm.users.forbidden");
+      assert.ok(!("items" in refused.body), "a refusal carries no learner");
     });
 
     await check("7. StaffRole drives access, not UserRole (UserRole admin + StaffRole read_only reads fine)", async () => {
@@ -762,7 +774,8 @@ async function main() {
       // public route and holds no click, attribution or conversion data.
       /* `learner-ops`, `growth` and `community` joined with their own domains and
          are present on the deployed Backend. The ban list below is unchanged. */
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
+      /* `news` joined with TOOLS-V2 NEWS (the copywriter's items, `news_publish`). */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "news", "owner-candidates", "session", "users"]);
       // Notes v1 and Owner v1 ship NESTED users/[userId]/{notes,owner} routes. A
       // top-level /api/crm/v1/notes or /owner route must still never exist, so
       // both stay banned here — this check only looks at the CRM v1 top level.
@@ -1036,8 +1049,8 @@ async function main() {
 
     /* ========================================= OWNER: authorization ====== */
 
-    await check("82. all nine StaffRoles may use every owner filter value (200)", async () => {
-      for (const role of CRM_STAFF_ROLES) {
+    await check("82. every learner-reading StaffRole may use every owner filter value (200)", async () => {
+      for (const role of LEARNER_READERS) {
         const client = await loginAs(staffByRole.get(role)!.email);
         for (const value of ["all", "mine", "unassigned"]) {
           const reply = await client.request("GET", `/api/crm/v1/users?owner=${value}`);
@@ -1047,8 +1060,8 @@ async function main() {
       }
     });
 
-    await check("83. all nine StaffRoles see the owner projection on an assigned learner", async () => {
-      for (const role of CRM_STAFF_ROLES) {
+    await check("83. every learner-reading StaffRole sees the owner projection on an assigned learner", async () => {
+      for (const role of LEARNER_READERS) {
         const client = await loginAs(staffByRole.get(role)!.email);
         const reply = await client.request("GET", "/api/crm/v1/users?limit=100");
         const item = itemsOf(reply).find((i) => i.userId === String(ownedA.id));

@@ -758,9 +758,10 @@ async function main() {
     // v5 appended `community_moderate` (COMMUNITY-V1) and v6 appended
     // `curriculum_progress_override` (PHASE-1 ADMIN). So v4's entry is no longer
     // last — it is at index 24, exactly where v4 put it, which is the stronger
-    // statement and the one this check now makes.
-    assert.equal(CRM_SESSION_PERMISSION_CONTRACT_VERSION, 6);
-    assert.equal(CRM_SESSION_PERMISSION_CONTRACT.length, 27);
+    // statement and the one this check now makes. v7 (TOOLS-V2 NEWS) appended
+    // `view_users` and `news_publish`, and index 24 still did not move.
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT_VERSION, 7);
+    assert.equal(CRM_SESSION_PERMISSION_CONTRACT.length, 29);
     assert.equal(
       CRM_SESSION_PERMISSION_CONTRACT.indexOf("learner_ops_escalation_resolve"),
       24,
@@ -769,6 +770,8 @@ async function main() {
     assert.deepEqual(CRM_SESSION_PERMISSION_CONTRACT.slice(25), [
       "community_moderate",
       "curriculum_progress_override",
+      "view_users",
+      "news_publish",
     ]);
     // The first fifteen are untouched, in their original order.
     assert.deepEqual(CRM_SESSION_PERMISSION_CONTRACT.slice(0, 15), [
@@ -812,8 +815,9 @@ async function main() {
     // — so "zero permissions" is no longer the way to state this control. What
     // it always meant is that moderator gains nothing from LEARNER OPERATIONS,
     // and that is asserted directly now rather than via an empty list that a
-    // later, unrelated phase could falsify.
-    assert.deepEqual([...moderator], ["community_moderate"]);
+    // later, unrelated phase could falsify. TOOLS-V2 NEWS named the basic learner
+    // read every role already had, `view_users`, which is not an LO permission.
+    assert.deepEqual([...moderator], ["community_moderate", "view_users"]);
     assert.equal(
       moderator.some((permission) => permission.startsWith("learner_ops_")),
       false,

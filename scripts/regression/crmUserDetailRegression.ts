@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
-import { CRM_STAFF_ROLES, STAFF_ROLE_PERMISSIONS } from "../../src/lib/crm/roles";
+import { CRM_STAFF_ROLES, STAFF_ROLE_PERMISSIONS, resolveEffectivePermissions } from "../../src/lib/crm/roles";
 import { crmUserDetailResponseSchema } from "../../src/lib/crm/schemas";
 import { maskEmail } from "../../src/lib/crm/users";
 import { CRM_USER_DETAIL_DISPLAY_NAME_FALLBACK, PRISMA_INT_MAX } from "../../src/lib/crm/user-detail";
@@ -245,12 +245,22 @@ async function main() {
       assert.equal(adminReply.status, 200);
     });
 
-    await check("7. all nine StaffRoles can read a learner detail", async () => {
-      for (const role of CRM_STAFF_ROLES) {
+    await check("7. every StaffRole holding view_users reads a learner detail; the copywriter is refused", async () => {
+      // TOOLS-V2 NEWS: readers derived through `view_users`, never by name.
+      const readers = CRM_STAFF_ROLES.filter((role) => resolveEffectivePermissions(role).includes("view_users"));
+      assert.deepEqual(readers, CRM_STAFF_ROLES.filter((role) => role !== "copywriter"));
+      for (const role of readers) {
         const client = await loginAs(staffByRole.get(role)!.email);
         const reply = await client.request("GET", detailUrl(target.id));
         assert.equal(reply.status, 200, `${role} expected 200, got ${reply.status}`);
         assert.equal(reply.body.userId, String(target.id));
+      }
+      // Refused before the id is even parsed, so an existing and a missing id look the same.
+      const copywriter = await loginAs(staffByRole.get("copywriter")!.email);
+      for (const id of [target.id, 999_999]) {
+        const refused = await copywriter.request("GET", detailUrl(id));
+        assert.equal(refused.status, 403, `copywriter detail ${id}`);
+        assert.equal(refused.body.messageKey, "crm.users.forbidden");
       }
     });
 
@@ -540,7 +550,8 @@ async function main() {
       /* `learner-ops`, `growth` and `community` joined with their own domains
          and are present on the deployed Backend. All three are administrative
          namespaces; the nested-route assertions below are unchanged. */
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
+      /* `news` joined with TOOLS-V2 NEWS (the copywriter's items, `news_publish`). */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "news", "owner-candidates", "session", "users"]);
       // owner-candidates is a flat read-only route: exactly one route file.
       assert.deepEqual(fs.readdirSync(path.join(crmV1, "owner-candidates")).sort(), ["route.ts"]);
 

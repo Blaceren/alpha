@@ -8,6 +8,7 @@ import {
   parseCrmUserId,
   resolveCrmUserDetail,
 } from "@/lib/crm/user-detail";
+import { assertCanViewUsers } from "@/lib/crm/users";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -32,6 +33,7 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     // 401/403 resolved before the path parameter is even parsed.
     const session = await resolveCrmSession();
+    assertCanViewUsers(session.effectivePermissions);
 
     assertNoQueryParams(new URL(request.url).searchParams);
     const { userId } = await context.params;

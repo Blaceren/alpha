@@ -312,9 +312,10 @@ describe("Learner Operations permission matrix", () => {
     // and answering one had been fused into a single permission. v5 appends
     // `community_moderate` and v6 appends `curriculum_progress_override`;
     // neither belongs to a `learner_ops_*` family — the assertions below are
-    // unchanged because nothing before position 25 moved.
-    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(6);
-    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(27);
+    // unchanged because nothing before position 25 moved. v7 (TOOLS-V2 NEWS)
+    // appends `view_users` and `news_publish`, again after everything here.
+    expect(CRM_SESSION_PERMISSION_CONTRACT_VERSION).toBe(7);
+    expect(CRM_SESSION_PERMISSION_CONTRACT).toHaveLength(29);
     // The Learner Operations block still occupies exactly 15..24 — which is the
     // property this file owns, and the reason two later appends changed nothing
     // here.
@@ -348,7 +349,7 @@ describe("Learner Operations permission matrix", () => {
     // which is the actual property, so it is asserted as such rather than by
     // listing whatever happens to have been appended since.
     const after = CRM_SESSION_PERMISSION_CONTRACT.slice(15 + NEW_PERMISSIONS.length);
-    expect(after).toEqual(["community_moderate", "curriculum_progress_override"]);
+    expect(after).toEqual(["community_moderate", "curriculum_progress_override", "view_users", "news_publish"]);
     expect(after.some((permission) => permission.startsWith("learner_ops_"))).toBe(false);
   });
 
@@ -387,7 +388,9 @@ describe("Learner Operations permission matrix", () => {
     // the empty set. The property this test exists for is unchanged and is now
     // stated directly rather than as a side effect of holding nothing: the role
     // holds Community moderation and NOT ONE Learner Operations permission.
-    expect(moderator).toEqual(["community_moderate"]);
+    // TOOLS-V2 NEWS named the basic learner read every staff role already had
+    // (`view_users`); it is not a Learner Operations permission and grants no review.
+    expect(moderator).toEqual(["community_moderate", "view_users"]);
     expect(moderator.filter((p) => p.startsWith("learner_ops_"))).toEqual([]);
     expect(canPerformReportReview(moderator)).toBe(false);
     expect(canPerformMentorReview(moderator)).toBe(false);

@@ -348,9 +348,13 @@ async function main() {
     );
   });
 
-  await check("progression_operator holds exactly one permission and no others", () => {
+  await check("progression_operator holds exactly one power, plus the named learner read", () => {
+    // TOOLS-V2 NEWS named the basic learner read (`view_users`) that every staff
+    // role already had. This role needs it to find the learner it corrects —
+    // the "can LIST learners" check below — and it grants no other power.
     assert.deepEqual([...roles.STAFF_ROLE_PERMISSIONS.progression_operator], [
       "curriculum_progress_override",
+      "view_users",
     ]);
     assert.equal(roles.isEligibleOwnerRole("progression_operator"), false);
   });
@@ -366,7 +370,7 @@ async function main() {
   /* progression_operator — usable, and ONLY for this                   */
   /* ---------------------------------------------------------------- */
 
-  await check("a progression_operator session resolves with exactly one permission", async () => {
+  await check("a progression_operator session resolves with its one power and the learner read", async () => {
     await reset();
     const scenario = await createScenario();
     const session = await import("../../src/lib/crm/session");
@@ -377,6 +381,7 @@ async function main() {
     // The server-side resolver is the only thing that computes permissions.
     assert.deepEqual(roles.resolveEffectivePermissions(profile.staffRole), [
       "curriculum_progress_override",
+      "view_users",
     ]);
     void session;
   });

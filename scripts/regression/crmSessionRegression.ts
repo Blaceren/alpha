@@ -278,7 +278,10 @@ async function main() {
          domain (269dd69, which also brought migration 51). It is a read
          capability — "may look at operational work and learner context" — so it
          belongs to a read-only staff role. */
-      assert.deepEqual(reply.body.effectivePermissions, ["curriculum_read", "learner_ops_view"]);
+      /* `view_users` (TOOLS-V2 NEWS) names the basic learner read every staff
+         role had before the copywriter existed. A read, so it changes nothing
+         about what this test defends. */
+      assert.deepEqual(reply.body.effectivePermissions, ["curriculum_read", "learner_ops_view", "view_users"]);
       for (const forbidden of [
         "manage_settings",
         "reveal_pii",
@@ -336,7 +339,9 @@ async function main() {
          `community` with the discussion domain (022cbad). All three are
          administrative namespaces, and all three are present on the deployed
          Backend. The ban list below is the part that matters and is unchanged. */
-      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "owner-candidates", "session", "users"]);
+      /* `news` joined with TOOLS-V2 NEWS: the copywriter's news items, gated by
+         `news_publish`. Also administrative, and not a learner read. */
+      assert.deepEqual(fs.readdirSync(crmV1).sort(), ["affiliates", "community", "growth", "learner-ops", "news", "owner-candidates", "session", "users"]);
       // A top-level /api/crm/v1/notes or /owner route still must not exist:
       // notes and owner are nested under users/[userId] and asserted there.
       for (const banned of ["notes", "owner", "owners", "audit", "360", "user-360"]) {

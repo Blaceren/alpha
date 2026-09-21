@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CrmAuthError, crmRequestId, resolveCrmSession } from "@/lib/crm/session";
 import { crmOwnerResponseSchema } from "@/lib/crm/schemas";
 import { CrmUserDetailInputError, parseCrmUserId } from "@/lib/crm/user-detail";
+import { assertCanViewUsers } from "@/lib/crm/users";
 import {
   assertCanAssignOwner,
   assertNoOwnerQueryParams,
@@ -84,9 +85,11 @@ function errorResponse(error: unknown, requestId: string, headers: Record<string
 // GET /api/crm/v1/users/[userId]/owner
 //
 // Returns the learner's current owner (or null) plus the opaque ownerVersion.
-// Requires only a valid StaffProfile — NO Owner-specific permission — because
-// the current owner is visible to every authenticated employee. Absence of a
-// stored row is the pristine state: owner null, ownerVersion 0.
+// Requires `view_users` and NO Owner-specific permission: the current owner is
+// visible to every employee who may read learners at all. (Before TOOLS-V2 NEWS
+// any valid StaffProfile passed; `view_users` names that read, and every role
+// but the copywriter holds it.) Absence of a stored row is the pristine state:
+// owner null, ownerVersion 0.
 //
 // Contract: docs/CRM_USER_OWNER_V1.md
 export async function GET(request: Request, context: RouteContext) {
@@ -94,8 +97,9 @@ export async function GET(request: Request, context: RouteContext) {
   const headers = { "Cache-Control": "no-store", "X-Request-Id": requestId };
 
   try {
-    // 401/403 (session, StaffProfile) resolved before the path parameter.
-    await resolveCrmSession();
+    // 401/403 (session, StaffProfile, `view_users`) resolved before the path parameter.
+    const session = await resolveCrmSession();
+    assertCanViewUsers(session.effectivePermissions);
 
     assertNoOwnerQueryParams(new URL(request.url).searchParams);
     const { userId } = await context.params;

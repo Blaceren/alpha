@@ -137,3 +137,25 @@ presented as ready.
 - Role management API/UI, permission-override grants.
 - OpenAPI generation and generated frontend client.
 - Cross-subdomain cookie, PostgreSQL migration, deployed-database migration.
+
+## TOOLS-V2 NEWS (2026-09-21): the copywriter, `view_users`, `news_publish`
+
+The lists above are the Slice 1 record; the live vocabulary is
+`src/lib/crm/session-permission-contract.ts` (v7, twenty-nine permissions) and
+the live grants are `STAFF_ROLE_PERMISSIONS` in `src/lib/crm/roles.ts`.
+
+- **`copywriter`** (StaffRole, appended, code-only like `progression_operator`):
+  writes, edits, publishes and unpublishes the public news items in the CRM
+  (owner decision: news are entered in the CRM by a copywriter role, and each
+  item is its own public page). It holds exactly `news_publish`. A copywriter
+  account is created as `UserRole.news_editor` so it is never listed as a
+  learner (the lists filter on `UserRole = user`).
+- **`view_users`** names the basic learner read — the list, a learner's account
+  card, the current owner — which any `StaffProfile` used to pass with no
+  permission. Every role that existed before the copywriter holds it, so no one
+  lost anything; the copywriter does not, and is refused `403
+  crm.users.forbidden`.
+- **`news_publish`** is held by `copywriter` and `crm_admin` only. The news API
+  (`/api/crm/v1/news/**`) checks it on every call; writes also need CSRF, are
+  rate-limited per staff member and are audited (`NEWS_ITEM_CREATED`,
+  `NEWS_ITEM_UPDATED`, `NEWS_ITEM_PUBLISHED`, `NEWS_ITEM_UNPUBLISHED`).
