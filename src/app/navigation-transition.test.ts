@@ -185,6 +185,15 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/model/local-date.ts",
   "src/features/tool-windows/tools-client-core.ts",
   "src/server/tools/journal-read.ts",
+  /* TOOLS-V2 slice 3: the Risk Calculator. Its window, its proxy route and its
+     server read; a page of the shell like the other tools, with no loading
+     boundary. */
+  "src/app/api/backend/tools/risk-plan/route.ts",
+  "src/features/tool-windows/risk/risk-client.ts",
+  "src/features/tool-windows/risk/risk-model.ts",
+  "src/features/tool-windows/risk/risk-parts.tsx",
+  "src/features/tool-windows/risk/risk-workspace.tsx",
+  "src/server/tools/risk-read.ts",
   /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
      is length alone, and Profile gained a security area with a real change-
      password route. The proxy grew exactly one named operation — login-proxy

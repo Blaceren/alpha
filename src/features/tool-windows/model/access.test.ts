@@ -19,11 +19,12 @@ describe("resolveToolWindows — the Backend's verdict, joined to the catalogue"
   });
 
   it("opens a built tool the verdict unlocks, and says «soon» for an unbuilt one", () => {
-    expect(states(toolAccessOpening(["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"]))).toEqual({
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist"];
+    expect(states(toolAccessOpening(earned))).toEqual({
       "trade-card": "open",
       journal: "open",
-      "risk-calculator": "soon",
-      "entry-checklist": "locked",
+      "risk-calculator": "open",
+      "entry-checklist": "soon",
       stats: "locked",
       news: "locked",
     });

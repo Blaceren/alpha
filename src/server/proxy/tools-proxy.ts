@@ -2,7 +2,7 @@
  * Bounded same-origin proxy for the learner's TOOL routes (SERVER-ONLY).
  *
  * Like every other proxy in this directory it is NOT an arbitrary forwarder. It
- * exposes exactly six learner operations, each pinned to one HTTP method and
+ * exposes exactly eight learner operations, each pinned to one HTTP method and
  * one constant Backend path shape:
  *
  *   trade-card-state    GET   /api/tools/trade-cards
@@ -11,6 +11,8 @@
  *   journal-page        GET   /api/tools/journal?filter=…&before=…
  *   journal-create      POST  /api/tools/journal
  *   journal-change      PATCH /api/tools/journal/{entryId}
+ *   risk-state          GET   /api/tools/risk-plan
+ *   risk-save           POST  /api/tools/risk-plan
  *
  * THE ONLY CALLER-CONTROLLED INPUT IS A VALIDATED ID, and for a journal page a
  * filter from a closed list. No host, no absolute URL, no arbitrary path, and
@@ -32,7 +34,9 @@ export type ToolsProxyInput =
   | { operation: "trade-card-change"; cardId: string }
   | { operation: "journal-page" }
   | { operation: "journal-create" }
-  | { operation: "journal-change"; entryId: string };
+  | { operation: "journal-change"; entryId: string }
+  | { operation: "risk-state" }
+  | { operation: "risk-save" };
 
 /** A cuid, and nothing that could leave the path segment it belongs to. */
 const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
@@ -61,9 +65,11 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
   switch (operation) {
     case "trade-card-state":
     case "journal-page":
+    case "risk-state":
       return "GET";
     case "trade-card-fix":
     case "journal-create":
+    case "risk-save":
       return "POST";
     case "trade-card-change":
     case "journal-change":
@@ -128,6 +134,9 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
     case "journal-change":
       if (!CARD_ID_RE.test(input.entryId)) return null;
       return `/api/tools/journal/${encodeURIComponent(input.entryId)}`;
+    case "risk-state":
+    case "risk-save":
+      return "/api/tools/risk-plan";
     default:
       return null;
   }

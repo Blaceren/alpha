@@ -77,7 +77,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     description: "Сумма сделки и дневной лимит по капиталу, доле риска и payout.",
     unlockLevel: 15,
     releasedBy: "checkpoint",
-    built: false,
+    built: true,
   },
   {
     code: "tool.entry_checklist",

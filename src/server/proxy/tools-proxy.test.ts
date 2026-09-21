@@ -348,3 +348,38 @@ describe("tools proxy — the Trading Journal", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("tools proxy — the Risk Calculator", () => {
+  const risk = (method: string, path = "/api/backend/tools/risk-plan", body?: BodyInit) =>
+    request(method, path, { "content-type": "application/json", cookie: "s=1", "x-csrf-token": "t" }, body);
+
+  it("pins both operations to the one constant path", () => {
+    expect(resolveToolsTargetPath({ operation: "risk-state" })).toBe("/api/tools/risk-plan");
+    expect(resolveToolsTargetPath({ operation: "risk-save" })).toBe("/api/tools/risk-plan");
+  });
+
+  it("reads with GET and saves with POST, the token only on the save", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    await proxyTools(risk("GET"), { operation: "risk-state" });
+    await proxyTools(risk("POST", undefined, "{}"), { operation: "risk-save" });
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
+      [`${ORIGIN}/api/tools/risk-plan`, "GET"],
+      [`${ORIGIN}/api/tools/risk-plan`, "POST"],
+    ]);
+    expect((fetchMock.mock.calls[0]![1].headers as Headers).get("x-csrf-token")).toBeNull();
+    expect((fetchMock.mock.calls[1]![1].headers as Headers).get("x-csrf-token")).toBe("t");
+  });
+
+  it("refuses a query, a wrong method and an oversized plan without contacting Backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await proxyTools(risk("GET", "/api/backend/tools/risk-plan?userId=7"), { operation: "risk-state" })).status).toBe(400);
+    expect((await proxyTools(risk("DELETE"), { operation: "risk-state" })).status).toBe(405);
+    expect((await proxyTools(risk("PATCH", undefined, "{}"), { operation: "risk-save" })).status).toBe(405);
+    expect(
+      (await proxyTools(risk("POST", undefined, "x".repeat(MAX_TOOLS_BODY_BYTES + 1)), { operation: "risk-save" })).status,
+    ).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

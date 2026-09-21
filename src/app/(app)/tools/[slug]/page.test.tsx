@@ -45,6 +45,8 @@ const readTradeCard = vi.fn();
 vi.mock("@/server/tools/trade-card-read", () => ({ readTradeCardStateOnServer: () => readTradeCard() }));
 const readJournal = vi.fn();
 vi.mock("@/server/tools/journal-read", () => ({ readJournalOnServer: () => readJournal() }));
+const readRisk = vi.fn();
+vi.mock("@/server/tools/risk-read", () => ({ readRiskStateOnServer: () => readRisk() }));
 const workspaceProps = vi.fn();
 vi.mock("@/features/tool-windows/trade-card/trade-card-workspace", () => ({
   TradeCardWorkspace: (props: unknown) => {
@@ -57,6 +59,13 @@ vi.mock("@/features/tool-windows/journal/journal-workspace", () => ({
   JournalWorkspace: (props: unknown) => {
     journalProps(props);
     return <p>journal-workspace</p>;
+  },
+}));
+const riskProps = vi.fn();
+vi.mock("@/features/tool-windows/risk/risk-workspace", () => ({
+  RiskWorkspace: (props: unknown) => {
+    riskProps(props);
+    return <p>risk-workspace</p>;
   },
 }));
 
@@ -93,6 +102,12 @@ beforeEach(() => {
   workspaceProps.mockReset();
   readTradeCard.mockReset();
   readTradeCard.mockResolvedValue(null);
+  readJournal.mockReset();
+  readJournal.mockResolvedValue(null);
+  readRisk.mockReset();
+  readRisk.mockResolvedValue(null);
+  journalProps.mockReset();
+  riskProps.mockReset();
 });
 
 describe("the address", () => {
@@ -171,6 +186,27 @@ describe("the state", () => {
     }
   });
 
+  it("opens the Risk Calculator on an open verdict, with the server's plan, and reads nothing else", async () => {
+    const state = { plan: null, history: [], reference: { riskShares: [1, 2, 3, 5], streakLength: 5 } };
+    readRisk.mockResolvedValue(state);
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"];
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
+    render(await open("risk-calculator"));
+    expect(screen.getByRole("heading", { level: 1, name: "Risk Calculator" })).toBeInTheDocument();
+    expect(screen.getByText("risk-workspace")).toBeInTheDocument();
+    expect(riskProps).toHaveBeenCalledWith({ initialState: state });
+    expect(readTradeCard).not.toHaveBeenCalled();
+    expect(readJournal).not.toHaveBeenCalled();
+  });
+
+  it("locks the Risk Calculator until level 15 is completed", async () => {
+    readRisk.mockResolvedValue(null);
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 12));
+    render(await open("risk-calculator"));
+    expect(screen.queryByText("risk-workspace")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Откроется на уровне 15" })).toBeInTheDocument();
+  });
+
   it("locks the journal until level 10 is completed, whatever the read of it says", async () => {
     readJournal.mockResolvedValue(null);
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 9));
@@ -218,9 +254,9 @@ describe("the state", () => {
   });
 
   it("says plainly when an earned tool is not built yet", async () => {
-    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"];
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator", "tool.entry_checklist"];
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
-    render(await open("risk-calculator"));
-    expect(screen.getByRole("heading", { name: "Risk Calculator готовится" })).toBeInTheDocument();
+    render(await open("entry-checklist"));
+    expect(screen.getByRole("heading", { name: "Entry Checklist готовится" })).toBeInTheDocument();
   });
 });

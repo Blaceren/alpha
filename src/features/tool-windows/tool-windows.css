@@ -1574,6 +1574,370 @@
   }
 }
 
+/* ======================================================= risk calculator */
+
+.rk-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Below 900px the two columns dissolve, so the sections read in the order a
+   plan is made: the numbers, their arithmetic, the losing streak, the rules,
+   the save. From 900px the numbers and the rules stand on the left and the
+   arithmetic beside them. */
+.rk-col {
+  display: contents;
+}
+
+.rk-layout .tc-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-params {
+  order: 1;
+}
+
+.rk-results {
+  order: 2;
+}
+
+.rk-streak {
+  order: 3;
+}
+
+.rk-rules {
+  order: 4;
+}
+
+.rk-actions {
+  order: 5;
+}
+
+.rk-layout .rk-params {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Capital across the phone; payout and the limit side by side; the four
+   shares across. */
+.rk-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.rk-fields > [data-field="capital"],
+.rk-fields > [data-field="share"] {
+  grid-column: 1 / -1;
+}
+
+/* A figure still waiting for its inputs is not a loss yet. */
+.rk-series__value[data-empty] {
+  color: var(--tw-text-3);
+}
+
+/* One trade: the figure the whole plan turns on. */
+.rk-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rk-amount__label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-amount__value {
+  color: var(--tw-text-1);
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rk-amount__basis {
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rk-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.rk-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-fact__term {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-fact__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-fact[data-warn] .rk-fact__value {
+  color: var(--tw-negative);
+}
+
+.rk-fact__note {
+  display: block;
+  margin-top: 2px;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* THE STREAK. Each bar is the capital; the fill is what five losses take of
+   it. A bounded loss is drawn in the quiet text tone, doubling in the negative
+   one. The words carry every value; the bars only repeat them. */
+.rk-streak__of {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-series {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rk-series__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.rk-series__name {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.rk-series__value {
+  color: var(--tw-negative);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rk-bar {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--tw-line-2);
+  border-radius: 5px;
+  background: var(--tw-well);
+}
+
+.rk-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--tw-text-3);
+  transition: width 200ms var(--tw-ease);
+}
+
+.rk-series[data-kind="doubling"] .rk-bar__fill {
+  background: var(--tw-negative);
+}
+
+.rk-series__how {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-series[data-short] .rk-series__how {
+  color: var(--tw-negative);
+}
+
+.rk-ahead {
+  color: var(--tw-text-3);
+  font-weight: 500;
+}
+
+.rk-in-force {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.rk-in-force__since {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.rk-in-force__changed {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* Earlier versions: kept, never edited, folded away under the plan. */
+.rk-versions {
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-versions__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rk-versions__toggle:hover {
+  color: var(--tw-text-1);
+}
+
+.rk-versions__chevron {
+  transition: transform 140ms var(--tw-ease);
+}
+
+.rk-versions__toggle[aria-expanded="true"] .rk-versions__chevron {
+  transform: rotate(180deg);
+}
+
+.rk-versions__list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rk-versions__list[hidden] {
+  display: none;
+}
+
+.rk-version {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.rk-version:last-child {
+  border-bottom-color: transparent;
+}
+
+.rk-version__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0 0 4px;
+}
+
+.rk-version__no {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rk-version__when {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.rk-version__numbers {
+  margin: 0 0 10px;
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A tablet puts the capital beside the payout, and the limit beside the
+   shares: two rows of three columns. */
+@media (min-width: 600px) {
+  .rk-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rk-fields > [data-field="capital"],
+  .rk-fields > [data-field="share"] {
+    grid-column: span 2;
+  }
+
+  .rk-versions__toggle {
+    min-height: 0;
+  }
+}
+
+/* From 900px: the numbers and the rules on the left, the arithmetic, the
+   streak and the save beside them. */
+@media (min-width: 900px) {
+  .rk-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .rk-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rk-col[data-col="results"] {
+    padding-left: 36px;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .rk-col > .tc-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .rk-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rk-fields > [data-field="capital"],
+  .rk-fields > [data-field="share"] {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ====================================================== wider screens */
 
 @media (min-width: 600px) {
