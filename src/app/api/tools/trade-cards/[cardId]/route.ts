@@ -4,14 +4,15 @@
  *   PATCH /api/tools/trade-cards/:cardId
  *     { "action": "refix", "plan": {…} }                        "Изменить план"
  *     { "action": "save", "result": "profit"|"loss",
- *       "observation": "…" | null }                              "Сохранить карточку"
+ *       "observation": "…" | null, "tradeDate": "YYYY-MM-DD"? }   "Сохранить карточку"
+ *                                        (and, once L10 is done, a Trading Journal entry)
  *     { "action": "cancel" }                                     "Сделку не открывал"
  *
  * Only the owner's own card in state `fixed` can change. Anything else answers
  * TRADE_CARD_NOT_FOUND (not theirs, or not there) or TRADE_CARD_STATE_CONFLICT
  * (already saved or cancelled).
  */
-import { assertToolUnlocked } from "@/lib/tools/access";
+import { assertToolUnlocked, isToolUnlockedForUser } from "@/lib/tools/access";
 import {
   assertNoQueryParams,
   enforceToolRateLimit,
@@ -21,6 +22,7 @@ import {
   toolErrorResponse,
   validateCardId,
 } from "@/lib/tools/http";
+import { TRADING_JOURNAL_TOOL_CODE } from "@/lib/tools/journal";
 import { TRADE_CARD_TOOL_CODE, parseTradeCardChange, toTradeCardDto } from "@/lib/tools/trade-card";
 import { cancelTradeCard, refixTradeCard, saveTradeCard } from "@/lib/tools/trade-card-service";
 
@@ -41,7 +43,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
       change.action === "refix"
         ? await refixTradeCard(gate.userId, cardId, change.plan)
         : change.action === "save"
-          ? await saveTradeCard(gate.userId, cardId, change)
+          ? await saveTradeCard(gate.userId, cardId, {
+              result: change.result,
+              observation: change.observation,
+              // «Только новые»: a card saved once the journal is open becomes an entry.
+              journal: (await isToolUnlockedForUser(gate.userId, TRADING_JOURNAL_TOOL_CODE))
+                ? { tradeDate: change.tradeDate }
+                : null,
+            })
           : await cancelTradeCard(gate.userId, cardId);
 
     return toolData({ card: toTradeCardDto(card) });

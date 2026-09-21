@@ -13,7 +13,9 @@
  */
 import { Prisma, type PrismaClient, type ToolTradeCard } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import { utcDate } from "./dates";
 import { ToolError } from "./errors";
+import { createJournalEntryFromCard } from "./journal-service";
 import type { TradeCardPlan, TradeCardResult } from "./trade-card";
 
 type Db = Pick<PrismaClient, "toolTradeCard">;
@@ -82,20 +84,37 @@ export async function refixTradeCard(
   return readBack(userId, cardId, db);
 }
 
-/** "Сохранить карточку": record the result after expiry. Terminal. */
+/**
+ * "Сохранить карточку": record the result after expiry. Terminal.
+ *
+ * With `journal`, the Trading Journal is open for the learner, and the saved card
+ * becomes a journal entry IN THE SAME TRANSACTION: either both happen or
+ * neither does. `journal.tradeDate` is the learner's own calendar date; without
+ * it the UTC date of the plan's fixing stands in.
+ */
 export async function saveTradeCard(
   userId: number,
   cardId: string,
-  outcome: { readonly result: TradeCardResult; readonly observation: string | null },
-  db: Db = defaultPrisma,
+  outcome: {
+    readonly result: TradeCardResult;
+    readonly observation: string | null;
+    readonly journal?: { readonly tradeDate: string | null } | null;
+  },
+  db: Pick<PrismaClient, "toolTradeCard" | "$transaction"> = defaultPrisma,
   now: Date = new Date(),
 ): Promise<ToolTradeCard> {
-  const { count } = await db.toolTradeCard.updateMany({
-    where: { id: cardId, userId, status: "fixed" },
-    data: { status: "saved", result: outcome.result, observation: outcome.observation, savedAt: now },
+  return db.$transaction(async (tx) => {
+    const { count } = await tx.toolTradeCard.updateMany({
+      where: { id: cardId, userId, status: "fixed" },
+      data: { status: "saved", result: outcome.result, observation: outcome.observation, savedAt: now },
+    });
+    if (count !== 1) throw await refusalFor(userId, cardId, tx);
+    const card = await readBack(userId, cardId, tx);
+    if (outcome.journal) {
+      await createJournalEntryFromCard(tx, card, outcome.journal.tradeDate ?? utcDate(card.fixedAt));
+    }
+    return card;
   });
-  if (count !== 1) throw await refusalFor(userId, cardId, db);
-  return readBack(userId, cardId, db);
 }
 
 /** "Сделку не открывал": withdraw the open card. Terminal, never deleted. */

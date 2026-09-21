@@ -94,11 +94,11 @@ async function main() {
   });
 
   try {
-    await check("every migration applied, the Trade Card one last", async () => {
+    await check("every migration applied, the Trade Card one among them", async () => {
       const rows = await db.$queryRaw<{ migration_name: string }[]>`
         SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name`;
       assert.equal(rows.length, EXPECTED_MIGRATION_COUNT);
-      assert.equal(rows.at(-1)?.migration_name, "20260921120000_tool_trade_card");
+      assert.ok(rows.some((row) => row.migration_name === "20260921120000_tool_trade_card"));
     });
 
     let aliceCardId = "";

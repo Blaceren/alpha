@@ -112,16 +112,19 @@ describe("parseTradeCardChange", () => {
       action: "save",
       result: "profit",
       observation: "урок",
+      tradeDate: null,
     });
     expect(parseTradeCardChange({ action: "save", result: "loss", observation: "   " })).toEqual({
       action: "save",
       result: "loss",
       observation: null,
+      tradeDate: null,
     });
     expect(parseTradeCardChange({ action: "save", result: "loss" })).toEqual({
       action: "save",
       result: "loss",
       observation: null,
+      tradeDate: null,
     });
   });
 

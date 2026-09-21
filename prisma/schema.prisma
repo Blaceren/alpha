@@ -255,6 +255,7 @@ model User {
   userSessions                  UserSession[]
   /// TOOLS-V2. The learner's own trade cards. Private to the learner.
   toolTradeCards                ToolTradeCard[]
+  toolJournalEntries            ToolJournalEntry[]
 }
 
 model XpEvent {
@@ -5317,10 +5318,68 @@ model ToolTradeCard {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The journal entry this card became when it was saved after L10, if any.
+  journalEntry      ToolJournalEntry?
 
   @@index([userId, createdAt])
 
   /// ONE OPEN CARD PER LEARNER IS ENFORCED BY THE DATABASE. The migration creates
   /// `ToolTradeCard_userId_open_key`, a UNIQUE index on (userId) WHERE
   /// status = 'fixed'. Prisma cannot express a partial index.
+}
+
+/// TOOLS-V2 — Trading Journal (L10). One finished trade, as the learner reviews it.
+///
+/// Two sources: a Trade Card saved AFTER the journal opened (`trade_card`, one entry
+/// per card, its trade fields copied from the card and never edited here), or a
+/// trade the learner records by hand (`manual`). The review — plan followed or
+/// not, which violations, how it went, what to take from it — is the learner's
+/// own and editable. There is no delete: the owner decided the learner keeps the
+/// whole history.
+model ToolJournalEntry {
+  id            String                 @id @default(cuid())
+  userId        Int
+  /// trade_card | manual
+  source        String
+  /// Present exactly when `source` is trade_card.
+  tradeCardId   String?                @unique
+  /// "YYYY-MM-DD", the learner's own calendar date of the trade.
+  tradeDate     String
+  /// "HH:MM", the learner's own local entry time.
+  entryTime     String
+  assetCode     String
+  /// up | down
+  direction     String
+  /// The stake of this one trade in minor units. Never a balance.
+  amountMinor   Int
+  payoutPercent Int
+  expiryCode    String
+  /// profit | loss
+  result        String
+  /// The reason written BEFORE the trade.
+  plan          String?
+  /// How the trade actually went.
+  execution     String?
+  /// What to take from it for the next decision.
+  conclusion    String?
+  /// Marked by the learner: true = по плану, false = нарушен, null = not marked yet.
+  planFollowed  Boolean?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tradeCard     ToolTradeCard?         @relation(fields: [tradeCardId], references: [id], onDelete: Cascade)
+  violations    ToolJournalViolation[]
+
+  @@index([userId, tradeDate, entryTime])
+}
+
+/// A rule the learner says they broke on one journal entry. Codes come from
+/// `src/lib/tools/journal.ts`; present only when the entry is marked «нарушен».
+model ToolJournalViolation {
+  id      String           @id @default(cuid())
+  entryId String
+  code    String
+  entry   ToolJournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, code])
 }

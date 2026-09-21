@@ -25,6 +25,7 @@
 import { z } from "zod";
 import type { ToolTradeCard } from "@prisma/client";
 import { ToolError } from "./errors";
+import { isAcceptableTradeDate } from "./dates";
 import { expiryByCode, tradingAssetByCode } from "./reference";
 
 export const TRADE_CARD_TOOL_CODE = "tool.trade_card" as const;
@@ -142,16 +143,23 @@ const changeSchema = z.discriminatedUnion("action", [
     action: z.literal("save"),
     result: z.enum(TRADE_CARD_RESULTS),
     observation: z.string().max(TRADE_CARD_LIMITS.maxObservationLength * 2).nullable().optional(),
+    /** The learner's own calendar date, for the Trading Journal entry. Optional. */
+    tradeDate: z.string().max(10).nullable().optional(),
   }),
   z.strictObject({ action: z.literal("cancel") }),
 ]);
 
 export type TradeCardChange =
   | { readonly action: "refix"; readonly plan: TradeCardPlan }
-  | { readonly action: "save"; readonly result: TradeCardResult; readonly observation: string | null }
+  | {
+      readonly action: "save";
+      readonly result: TradeCardResult;
+      readonly observation: string | null;
+      readonly tradeDate: string | null;
+    }
   | { readonly action: "cancel" };
 
-export function parseTradeCardChange(input: unknown): TradeCardChange {
+export function parseTradeCardChange(input: unknown, now: Date = new Date()): TradeCardChange {
   const parsed = changeSchema.safeParse(input);
   if (!parsed.success) throw new ToolError("TOOL_VALIDATION", "invalid_change");
   const change = parsed.data;
@@ -161,7 +169,16 @@ export function parseTradeCardChange(input: unknown): TradeCardChange {
     if (observation.length > TRADE_CARD_LIMITS.maxObservationLength) {
       throw new ToolError("TOOL_VALIDATION", "invalid_observation");
     }
-    return { action: "save", result: change.result, observation: observation.length > 0 ? observation : null };
+    const tradeDate = change.tradeDate ?? null;
+    if (tradeDate !== null && !isAcceptableTradeDate(tradeDate, now)) {
+      throw new ToolError("TOOL_VALIDATION", "invalid_tradeDate");
+    }
+    return {
+      action: "save",
+      result: change.result,
+      observation: observation.length > 0 ? observation : null,
+      tradeDate,
+    };
   }
   return { action: "cancel" };
 }
