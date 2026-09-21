@@ -213,7 +213,8 @@
     "test:regression:learner-session-http": "tsx scripts/regression/learnerSessionHttpRegression.ts",
     "test:regression:tool-trade-card": "tsx scripts/regression/toolTradeCardRegression.ts",
     "test:regression:tool-trading-journal": "tsx scripts/regression/toolTradingJournalRegression.ts",
-    "test:regression:tool-risk-plan": "tsx scripts/regression/toolRiskPlanRegression.ts"
+    "test:regression:tool-risk-plan": "tsx scripts/regression/toolRiskPlanRegression.ts",
+    "test:regression:tool-entry-checklist": "tsx scripts/regression/toolEntryChecklistRegression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

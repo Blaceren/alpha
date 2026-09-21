@@ -19,12 +19,13 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
- * TOOLS-V2: 54 -> 57. Three additive migrations, one per tool slice, each
+ * TOOLS-V2: 54 -> 58. Four additive migrations, one per tool slice, each
  * bumping this constant in its own commit:
  *
  *   20260921120000_tool_trade_card        ToolTradeCard
  *   20260921180000_tool_trading_journal   ToolJournalEntry, ToolJournalViolation
  *   20260921200000_tool_risk_plan         ToolRiskPlan
+ *   20260921220000_tool_entry_check       ToolEntryCheck
  *
  * Each creates tables and indexes only, so a Backend built before it never
  * queries them and rollback is inert.
@@ -143,7 +144,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 57;
+export const EXPECTED_MIGRATION_COUNT = 58;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

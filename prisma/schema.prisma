@@ -257,6 +257,7 @@ model User {
   toolTradeCards                ToolTradeCard[]
   toolJournalEntries            ToolJournalEntry[]
   toolRiskPlans                 ToolRiskPlan[]
+  toolEntryChecks               ToolEntryCheck[]
 }
 
 model XpEvent {
@@ -5403,6 +5404,29 @@ model ToolRiskPlan {
   cancelCondition   String
   createdAt         DateTime @default(now())
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// TOOLS-V2 — Entry Checklist (L20): one check before one entry, kept as it was.
+/// The nine items are fixed; `answers` holds one "0"/"1" per item in list order.
+model ToolEntryCheck {
+  id               String   @id @default(cuid())
+  userId           Int
+  /// A code from `src/lib/tools/reference.ts`, e.g. EURUSD_OTC.
+  assetCode        String
+  /// The learner's own minimum payout, checked against in this check. Optional.
+  minPayoutPercent Int?
+  /// The version of the fixed item list the answers belong to.
+  listVersion      Int      @default(1)
+  /// Nine characters, "1" = the learner confirmed the item.
+  answers          String
+  /// enter | skip_stop | skip_condition — written by the server from the answers.
+  verdict          String
+  /// The item the verdict names when it says not to enter.
+  missingItem      String?
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
