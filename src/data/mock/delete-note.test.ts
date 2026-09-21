@@ -45,7 +45,8 @@ const OTHER_ACTOR = "emp_other_2";
 
 /** ROLE_PERMISSION_MATRIX §1 Edit → notes (D-53) — the SAME set that may addNote. */
 const ALLOWED: readonly CrmRole[] = ["crm_admin", "crm_manager", "retention_manager", "support"];
-const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only", "progression_operator"];
+// TOOLS-V2 NEWS added the copywriter, which holds no note right at all.
+const DENIED: readonly CrmRole[] = ["mentor", "moderator", "analyst", "content_manager", "read_only", "progression_operator", "copywriter"];
 
 function ctx(role: CrmRole = "crm_admin", actorId = AUTHOR): CrmContext {
   return { actorId, role, now: MOCK_NOW };

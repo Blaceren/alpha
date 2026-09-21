@@ -6,8 +6,10 @@ import { AppShell } from "./app-shell";
 
 // The pathname is what decides api-mode composition, so each case drives it.
 let pathname = "/users";
+// TOOLS-V2 NEWS: a session without the learner read is sent to its own section.
+const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ replace: navigation.replace, push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => pathname,
   // The analytics workspace reads its whole state from the query string.
   useSearchParams: () => new URLSearchParams(""),
@@ -18,6 +20,10 @@ vi.mock("next/navigation", () => ({
 // permissions must be settable per test. Default stays [] — the pre-existing
 // bounded-shell expectations depend on it.
 let stubPermissions: string[] = [];
+// TOOLS-V2 NEWS: every role but the copywriter holds `view_users`, the learner
+// read, so the stub session holds it too unless a case says otherwise. Without
+// it `/users` is not this session's to see.
+let learnerRead = true;
 
 vi.mock("@/application/session-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/application/session-client")>();
@@ -29,7 +35,7 @@ vi.mock("@/application/session-client", async (importOriginal) => {
         employeeId: "emp_stub_1",
         displayName: "Ирина Соколова",
         role: "support" as const,
-        effectivePermissions: stubPermissions as never,
+        effectivePermissions: [...(learnerRead ? ["view_users"] : []), ...stubPermissions] as never,
         permissionVersion: 1,
         expiresAt: "2099-12-31T23:59:59.000Z",
       },
@@ -96,6 +102,8 @@ vi.mock("@/application/api/affiliate-analytics-client", async (importOriginal) =
 
 beforeEach(() => {
   stubPermissions = [];
+  learnerRead = true;
+  navigation.replace.mockReset();
   resetClientRuntimeMode();
 });
 afterEach(() => resetClientRuntimeMode());
@@ -395,5 +403,52 @@ describe("mock mode is untouched", () => {
     renderAt("/today", "mock");
     await screen.findByText(FEATURE_CHILD);
     expect(screen.queryByText("Раздел ещё не подключён")).not.toBeInTheDocument();
+  });
+});
+
+/* ---------------------------------------------------------- news (TOOLS-V2) */
+
+describe("api mode — the copywriter's news", () => {
+  it("sends a session without the learner read from /users to its own first section", async () => {
+    learnerRead = false;
+    stubPermissions = ["news_publish"];
+    renderAt("/users", "api");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/news"));
+    expect(screen.queryByRole("heading", { name: "Пользователи", level: 1 })).not.toBeInTheDocument();
+  });
+
+  it("does the same for a learner card", async () => {
+    learnerRead = false;
+    stubPermissions = ["news_publish"];
+    renderAt("/users/1000", "api");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/news"));
+    expect(screen.queryByText("Detail Learner")).not.toBeInTheDocument();
+  });
+
+  it("shows the copywriter «Новости» and nothing else", async () => {
+    learnerRead = false;
+    stubPermissions = ["news_publish"];
+    renderAt("/news", "api");
+    await screen.findByRole("heading", { name: "Новости", level: 1 });
+    const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/news"]);
+  });
+
+  it("mounts «Новая новость» at /news/new, not as an item called new", async () => {
+    stubPermissions = ["news_publish"];
+    renderAt("/news/new", "api");
+    expect(await screen.findByRole("link", { name: "Все новости" })).toHaveAttribute("href", "/news");
+    expect(screen.queryByText(FEATURE_CHILD)).not.toBeInTheDocument();
+  });
+
+  it("hides «Новости» from a session without news_publish", async () => {
+    renderAt("/users", "api");
+    await screen.findByRole("heading", { name: "Пользователи", level: 1 });
+    const nav = screen.getByRole("navigation", { name: "Разделы CRM" });
+    expect(within(nav).queryByRole("link", { name: "Новости" })).not.toBeInTheDocument();
   });
 });

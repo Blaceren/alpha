@@ -49,10 +49,10 @@ describe("effectivePermissions is the UI authority", () => {
     // The role-based matrix would grant all twenty (AFD-5A appended
     // view_affiliate_analytics, LEARNER-OPERATIONS-V1 appended its nine,
     // contract v4 appended learner_ops_escalation_resolve, and COMMUNITY-V1
-    // appended community_moderate). The session grants none — which is the
-    // whole point: the count is incidental, the assertion below is the
-    // invariant.
-    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(20);
+    // appended community_moderate, TOOLS-V2 NEWS appended view_users and
+    // news_publish). The session grants none — which is the whole point: the
+    // count is incidental, the assertion below is the invariant.
+    expect(ROLE_PERMISSIONS.crm_admin.length).toBe(22);
     for (const permission of ROLE_PERMISSIONS.crm_admin) {
       expect(sessionGrants(session, permission)).toBe(false);
     }

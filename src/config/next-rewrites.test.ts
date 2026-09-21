@@ -33,8 +33,9 @@ describe("rewrites — api mode", () => {
     // Pinning the count is the point: a new proxied path must be a deliberate
     // change to this number, never a side effect. It fired on the four added
     // below, which is the guard working, and it is updated in the same commit.
-    // COMMUNITY-V1 adds ONE: the Community moderation surface.
-    expect(buildRewrites(env)).toHaveLength(64);
+    // COMMUNITY-V1 adds ONE: the Community moderation surface. TOOLS-V2 NEWS
+    // adds THREE: the news list, one item, and its publication.
+    expect(buildRewrites(env)).toHaveLength(67);
   });
 
   it("maps the exact session path to the backend", () => {
@@ -58,7 +59,7 @@ describe("rewrites — api mode", () => {
     });
   });
 
-  it("exposes exactly the sixty-four reviewed paths", () => {
+  it("exposes exactly the sixty-seven reviewed paths", () => {
     expect(PROXIED_PATHS).toEqual([
       "/api/crm/v1/session",
       "/api/crm/v1/users",
@@ -138,6 +139,10 @@ describe("rewrites — api mode", () => {
       // COMMUNITY-V1 — one path: GET reads the moderation queue, POST applies
       // one action. Both live at the same URL.
       "/api/crm/v1/community/moderation",
+      // TOOLS-V2 NEWS — the copywriter's news items.
+      "/api/crm/v1/news",
+      "/api/crm/v1/news/:newsId",
+      "/api/crm/v1/news/:newsId/status",
     ]);
     expect(SESSION_PATH).toBe("/api/crm/v1/session");
     expect(USERS_PATH).toBe("/api/crm/v1/users");
@@ -390,6 +395,10 @@ describe("rewrites — no wildcard exposure", () => {
       // COMMUNITY-V1 — one path: GET reads the moderation queue, POST applies
       // one action. Both live at the same URL.
       "/api/crm/v1/community/moderation",
+      // TOOLS-V2 NEWS — the copywriter's news items.
+      "/api/crm/v1/news",
+      "/api/crm/v1/news/:newsId",
+      "/api/crm/v1/news/:newsId/status",
     ]);
     for (const forbidden of [
       "/api/:path*",

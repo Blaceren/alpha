@@ -56,6 +56,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "financial", label: "Финансы", href: "/financial", icon: "Wallet" },
       { key: "communications", label: "Коммуникации", href: "/communications", icon: "MessageSquare" },
       { key: "automations", label: "Автоматизации", href: "/automations", icon: "Workflow" },
+      // TOOLS-V2 NEWS. The copywriter's section; the api shell's twin entry
+      // lives in `API_NAV_ITEMS`, gated by the same `news_publish`.
+      { key: "news", label: "Новости", href: "/news", icon: "Newspaper" },
     ],
   },
   {

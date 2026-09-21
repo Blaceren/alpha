@@ -14,9 +14,9 @@ import { CRM_ROLES } from "./roles";
 import { SECTION_ORDER } from "@/config/navigation";
 
 describe("permission matrix (ROLE_PERMISSION_MATRIX.md)", () => {
-  it("exposes exactly ten canonical roles", () => {
-    // PHASE-1 ADMIN appended `progression_operator`.
-    expect(CRM_ROLES).toHaveLength(10);
+  it("exposes exactly eleven canonical roles", () => {
+    // PHASE-1 ADMIN appended `progression_operator`; TOOLS-V2 NEWS the copywriter.
+    expect(CRM_ROLES).toHaveLength(11);
     expect(CRM_ROLES).toContain("crm_admin");
     expect(CRM_ROLES).toContain("read_only");
   });
@@ -46,10 +46,14 @@ describe("permission matrix (ROLE_PERMISSION_MATRIX.md)", () => {
 });
 
 describe("section visibility", () => {
-  it("shows Today to every role but hides Settings from most", () => {
+  it("shows Today to every role but the copywriter, and hides Settings from most", () => {
+    // TOOLS-V2 NEWS: Today is a learner-work dashboard, and the copywriter sees
+    // no learner. Its only section is «Новости».
     for (const role of CRM_ROLES) {
-      expect(canViewSection(role, "today")).toBe(true);
+      expect(canViewSection(role, "today")).toBe(role !== "copywriter");
     }
+    expect(canViewSection("copywriter", "news")).toBe(true);
+    expect(canViewSection("copywriter", "users")).toBe(false);
     expect(canViewSection("crm_admin", "settings")).toBe(true);
     expect(canViewSection("mentor", "settings")).toBe(false);
   });

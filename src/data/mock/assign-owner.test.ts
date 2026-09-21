@@ -42,6 +42,9 @@ const DENIED: readonly CrmRole[] = [
   // (`curriculum_progress_override`) and therefore none of the note or owner
   // rights this suite classifies. Denied, explicitly.
   "progression_operator",
+  // TOOLS-V2 NEWS: the copywriter holds only `news_publish` — no note, no
+  // owner, no learner at all. Denied, explicitly.
+  "copywriter",
 ];
 
 function ctx(role: CrmRole = "crm_admin", actorId = "emp_actor_1"): CrmContext {

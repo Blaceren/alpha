@@ -3,13 +3,14 @@
 import * as React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MockSessionProvider, useSession } from "./session-context";
 import { SessionBoundary } from "./session-boundary";
 import {
   ApiShell,
   ApiRouteDeferred,
   API_USERS_PATH,
+  homePathFor,
   AFFILIATES_PATH,
   AFFILIATE_ANALYTICS_PATH,
   AFFILIATE_ATLAS_PATH,
@@ -39,6 +40,10 @@ import { PostbackDeliveriesWorkspace } from "@/features/affiliate-commercial/pos
 import { AffiliateLeadsWorkspace } from "@/features/affiliate-leads/leads-workspace";
 import { AffiliateLeadDetailWorkspace } from "@/features/affiliate-leads/lead-detail-workspace";
 import { GrowthWorkspace } from "@/features/growth/growth-workspace";
+import { NewsWorkspace } from "@/features/news/news-workspace";
+import { NewsEditorWorkspace } from "@/features/news/news-editor-workspace";
+import { NEWS_NEW_PATH, NEWS_PATH } from "@/features/news/news-model";
+import { grants } from "@/domain/identity/access";
 import { resolveGrowthSurface } from "@/features/growth/growth-routes";
 import type { CrmRuntimeMode } from "@/config/runtime-mode";
 import { setClientRuntimeMode } from "@/config/client-runtime-mode";
@@ -205,6 +210,16 @@ function ApiModeLanding() {
     );
   }
 
+  // TOOLS-V2 NEWS. The learner reads assert `view_users`, which every role but
+  // the copywriter holds. A session without it is sent to its own first
+  // section instead of a workspace that could only answer 403 — which is also
+  // how a copywriter who signs in (landing on `/users` by default) starts in
+  // «Новости». The backend refusal stays the boundary; this is a courtesy.
+  const detail = /^\/users\/([^/]+)$/.exec(pathname ?? "");
+  if ((pathname === API_USERS_PATH || detail) && !grants(session.effectivePermissions, "view_users")) {
+    return <ReplaceWith href={homePathFor(session)} />;
+  }
+
   if (pathname === API_USERS_PATH) {
     return (
       <ApiShell session={session}>
@@ -214,7 +229,6 @@ function ApiModeLanding() {
   }
 
   // Exactly one segment after /users/ — `/users/123/notes` does not match.
-  const detail = /^\/users\/([^/]+)$/.exec(pathname ?? "");
   if (detail) {
     return (
       <ApiShell session={session}>
@@ -376,7 +390,46 @@ function ApiModeLanding() {
     );
   }
 
+  /* ------------------------------------------------------ News (TOOLS-V2)
+   *
+   * `/news/new` is matched BEFORE `/news/{id}`, or "new" is read as an id.
+   * Exact matches, like every route above: `/news/{id}/anything` stays
+   * deferred. Authorization is the backend's `news_publish` on every request;
+   * a role without it meets the workspace's bounded «Нет доступа».
+   */
+  if (pathname === NEWS_PATH) {
+    return (
+      <ApiShell session={session}>
+        <NewsWorkspace />
+      </ApiShell>
+    );
+  }
+  if (pathname === NEWS_NEW_PATH) {
+    return (
+      <ApiShell session={session}>
+        <NewsEditorWorkspace />
+      </ApiShell>
+    );
+  }
+  const newsItem = /^\/news\/([^/]+)$/.exec(pathname ?? "");
+  if (newsItem) {
+    return (
+      <ApiShell session={session}>
+        <NewsEditorWorkspace newsId={decodeURIComponent(newsItem[1] ?? "")} />
+      </ApiShell>
+    );
+  }
+
   return <ApiRouteDeferred session={session} />;
+}
+
+/** Replaces the current route once, rendering nothing meanwhile. */
+function ReplaceWith({ href }: { href: string }) {
+  const router = useRouter();
+  React.useEffect(() => {
+    router.replace(href);
+  }, [router, href]);
+  return null;
 }
 
 /** Sidebar + topbar + content region. Mock mode only, unchanged from Phase 1A. */

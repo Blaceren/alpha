@@ -160,6 +160,22 @@ export const CRM_SESSION_PERMISSION_CONTRACT = [
   // changed is owned by the curriculum domain: Learner Operations reads
   // progression and computes none of its own.
   "curriculum_progress_override",
+  // TOOLS-V2 NEWS, v7. Two names, appended and never inserted.
+  //
+  // `view_users` NAMES A READ THAT EVERY STAFF ROLE HELD WITHOUT A NAME. The
+  // basic learner list, a learner's account card and their current owner were
+  // readable by any StaffProfile at all, on the argument that every staff role
+  // works with learners. The copywriter is the first role that does not: it
+  // writes public news and has no business with a learner's name or level. So
+  // the read gets a name, every existing role receives it and keeps exactly
+  // what it had, and the copywriter is the one role that does not.
+  //
+  // `news_publish` is writing, editing, publishing and unpublishing a news item
+  // in the CRM. One name, not an author and an approver pair: the owner decided
+  // that the copywriter publishes their own pages, and a pair nobody holds
+  // separately would only describe a review that does not happen.
+  "view_users",
+  "news_publish",
 ] as const;
 
 export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[number];
@@ -170,9 +186,10 @@ export type CrmSessionPermission = (typeof CRM_SESSION_PERMISSION_CONTRACT)[numb
  * v3 appends the nine Learner Operations permissions, bringing the vocabulary
  * to twenty-four; v4 appends `learner_ops_escalation_resolve`, bringing it to
  * twenty-five; v5 appends `community_moderate`, bringing it to twenty-six;
- * v6 appends `curriculum_progress_override`, bringing it to twenty-seven.
+ * v6 appends `curriculum_progress_override`, bringing it to twenty-seven;
+ * v7 appends `view_users` and `news_publish`, bringing it to twenty-nine.
  */
-export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 6;
+export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 7;
 
 /**
  * `sha256(CRM_SESSION_PERMISSION_CONTRACT.join("\n"))`, lowercase hex.
@@ -182,4 +199,4 @@ export const CRM_SESSION_PERMISSION_CONTRACT_VERSION = 6;
  * contracts and the session boundary is unsafe again.
  */
 export const CRM_SESSION_PERMISSION_CONTRACT_DIGEST =
-  "0390279c448b184725daf5b88fb1febc78c99864b487bd038aed64bca3c6b761";
+  "903cb1febefa69fa8a8853947a7f2a5e6cec97f0e82b608b25ec4f0dc3ab972b";

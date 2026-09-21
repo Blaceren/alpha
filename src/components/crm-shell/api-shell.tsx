@@ -16,6 +16,7 @@ import {
 } from "@/features/learner-ops/inbox-workspace";
 import type { EmployeeSession } from "@/domain/identity/session";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { NEWS_PATH } from "@/features/news/news-model";
 
 /**
  * Bounded api-mode shell.
@@ -100,7 +101,11 @@ type ApiNavItem = {
 };
 
 export const API_NAV_ITEMS: readonly ApiNavItem[] = [
-  { href: API_USERS_PATH, label: "Пользователи", permissions: [] },
+  // TOOLS-V2 NEWS. `view_users` is the permission the three learner reads now
+  // assert. Every role that existed before the copywriter holds it, so this
+  // entry is where it always was for all of them; the copywriter, who holds
+  // only `news_publish`, no longer sees a section that would answer 403.
+  { href: API_USERS_PATH, label: "Пользователи", permissions: ["view_users"] },
   {
     href: AFFILIATES_PATH,
     label: "Аффилейты",
@@ -165,12 +170,25 @@ export const API_NAV_ITEMS: readonly ApiNavItem[] = [
     label: "Сообщество",
     permissions: ["community_moderate"],
   },
+  // TOOLS-V2 NEWS — the copywriter's section, and crm_admin's. `news_publish`
+  // is what every `/api/crm/v1/news` route asserts.
+  { href: NEWS_PATH, label: "Новости", permissions: ["news_publish"] },
 ];
 
 /** An entry with no permissions is open to every authenticated employee. */
 function isNavItemVisible(item: ApiNavItem, session: EmployeeSession): boolean {
   if (item.permissions.length === 0) return true;
   return item.permissions.some((permission) => grants(session.effectivePermissions, permission));
+}
+
+/**
+ * TOOLS-V2 NEWS — where this employee's CRM starts: the first section their
+ * permissions show. For every role but the copywriter that is «Пользователи»,
+ * exactly as before; the copywriter starts in «Новости». A session that can see
+ * nothing keeps the old answer and meets the backend's bounded refusal there.
+ */
+export function homePathFor(session: EmployeeSession): string {
+  return API_NAV_ITEMS.find((item) => isNavItemVisible(item, session))?.href ?? API_USERS_PATH;
 }
 
 export function ApiShell({
@@ -313,10 +331,10 @@ export function ApiRouteDeferred({ session }: { session: EmployeeSession }) {
           </div>
         </dl>
         <Link
-          href={API_USERS_PATH}
+          href={homePathFor(session)}
           className="mt-4 inline-flex h-9 items-center rounded bg-accent px-3.5 text-sm font-medium text-accent-foreground hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Перейти к пользователям
+          {homePathFor(session) === API_USERS_PATH ? "Перейти к пользователям" : "Перейти в свой раздел"}
         </Link>
       </div>
     </div>

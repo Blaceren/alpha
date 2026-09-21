@@ -106,6 +106,10 @@ export const SECTION_VISIBILITY: Record<SectionKey, readonly CrmRole[]> = {
     "moderator",
     "analyst",
   ],
+  // TOOLS-V2 NEWS. Exactly the two roles the backend grants `news_publish`.
+  // The copywriter appears in this section and in NO other: it writes public
+  // news and never reaches a learner, a case, a queue or a number.
+  news: ["crm_admin", "copywriter"],
   settings: ["crm_admin", "crm_manager"],
 };
 
@@ -149,6 +153,9 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     // the same trap as two navigation lists, and one of those already cost this
     // repository a section nobody could reach.
     "community_moderate",
+    // TOOLS-V2 NEWS — mirrors the backend: the named learner read, and news.
+    "view_users",
+    "news_publish",
   ],
   crm_manager: [
     "view_exact_financials",
@@ -166,6 +173,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_qa",
     "learner_ops_analytics",
     "learner_ops_escalation_resolve",
+    "view_users",
   ],
   retention_manager: [
     "view_exact_financials",
@@ -176,6 +184,7 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "edit_user_notes",
     "learner_ops_view",
     "learner_ops_handle",
+    "view_users",
   ],
   mentor: [
     "learner_ops_view",
@@ -184,29 +193,35 @@ export const ROLE_PERMISSIONS: Record<CrmRole, readonly Permission[]> = {
     "learner_ops_mentor_review",
     // Resolve, never raise — mirroring the backend matrix exactly.
     "learner_ops_escalation_resolve",
+    "view_users",
   ],
   support: [
     "edit_user_notes",
     "learner_ops_view",
     "learner_ops_handle",
     "learner_ops_escalate",
+    "view_users",
   ],
   // COMMUNITY-V1 — `moderator` receives its first permission here too, matching
   // the backend's grant exactly: Community moderation and nothing else.
-  moderator: ["community_moderate"],
+  moderator: ["community_moderate", "view_users"],
   // AFD-5A — analyst's first permission, mirroring the backend matrix. Read
   // only: no `manage_settings`, so every affiliate mutation is refused.
   analyst: [
     "view_affiliate_analytics",
     "learner_ops_analytics",
+    "view_users",
   ],
-  content_manager: [],
+  content_manager: ["view_users"],
   read_only: [
     "learner_ops_view",
+    "view_users",
   ],
   // PHASE-1 ADMIN — mirrors the backend grant exactly: one permission, nothing
   // else. Notably NOT `learner_ops_view`; the progression read gate accepts the
   // override permission on its own, so this role can inspect what it corrects
   // without gaining the Learner Operations workspace.
-  progression_operator: ["curriculum_progress_override"],
+  progression_operator: ["curriculum_progress_override", "view_users"],
+  // TOOLS-V2 NEWS — mirrors the backend exactly: news, and no learner at all.
+  copywriter: ["news_publish"],
 };

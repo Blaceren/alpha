@@ -327,6 +327,17 @@ export const LEARNER_OPS_VOC_CASES_PATH = "/api/crm/v1/learner-ops/voc/:signalId
  */
 export const COMMUNITY_MODERATION_PATH = "/api/crm/v1/community/moderation";
 
+/**
+ * TOOLS-V2 NEWS — the copywriter's news items.
+ *
+ * THREE paths, explicit: the list and «Новая новость» (GET, POST), one item
+ * (GET, PATCH), and its publication (POST). Every one re-checks `news_publish`
+ * on the backend; forwarding a path grants nothing by itself.
+ */
+export const NEWS_LIST_PATH = "/api/crm/v1/news";
+export const NEWS_ITEM_PATH = "/api/crm/v1/news/:newsId";
+export const NEWS_STATUS_PATH = "/api/crm/v1/news/:newsId/status";
+
 /** The complete set of backend paths the CRM origin may forward. */
 export const PROXIED_PATHS = [
   SESSION_PATH,
@@ -393,6 +404,9 @@ export const PROXIED_PATHS = [
   LEARNER_OPS_VOC_DETAIL_PATH,
   LEARNER_OPS_VOC_CASES_PATH,
   COMMUNITY_MODERATION_PATH,
+  NEWS_LIST_PATH,
+  NEWS_ITEM_PATH,
+  NEWS_STATUS_PATH,
 ];
 
 export function buildRewrites(envSource = process.env) {

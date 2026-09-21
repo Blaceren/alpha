@@ -22,8 +22,11 @@ export type CrmRole =
   | "content_manager"
   | "read_only"
   // PHASE-1 ADMIN — the dedicated administrative progression operator. Holds
-  // exactly one permission, `curriculum_progress_override`.
-  | "progression_operator";
+  // `curriculum_progress_override` and the named learner read, `view_users`.
+  | "progression_operator"
+  // TOOLS-V2 NEWS — writes and publishes the public news. Holds exactly
+  // `news_publish`, and never reads a learner.
+  | "copywriter";
 
 export const CRM_ROLES: readonly CrmRole[] = [
   "crm_admin",
@@ -36,6 +39,7 @@ export const CRM_ROLES: readonly CrmRole[] = [
   "content_manager",
   "read_only",
   "progression_operator",
+  "copywriter",
 ] as const;
 
 export const CRM_ROLE_LABEL: Record<CrmRole, string> = {
@@ -49,6 +53,7 @@ export const CRM_ROLE_LABEL: Record<CrmRole, string> = {
   content_manager: "Контент-менеджер",
   read_only: "Только просмотр",
   progression_operator: "Оператор прогресса",
+  copywriter: "Копирайтер",
 };
 
 /** Navigable sections (docs/CRM_INFORMATION_ARCHITECTURE.md §1). */
@@ -90,6 +95,12 @@ export type SectionKey =
    * Support because, like them, it is a backlog somebody works through.
    */
   | "community_moderation"
+  /**
+   * TOOLS-V2 NEWS — the copywriter's news items: each published item is a
+   * public page and a row in the learners' News Calendar. Its own section: it
+   * is public content, not learner work, and the copywriter sees nothing else.
+   */
+  | "news"
   | "settings";
 
 /**
@@ -205,7 +216,13 @@ export type Permission =
   // v6 — administrative forward progression correction. Its own axis: correcting
   // a learner's record is not handling a case, reviewing work, or changing rules.
   // See PHASE-1 ADMIN.
-  | "curriculum_progress_override";
+  | "curriculum_progress_override"
+  // v7 — TOOLS-V2 NEWS. `view_users` names the basic learner read (list, account
+  // card, current owner) that any staff session used to pass without a name;
+  // every role but the copywriter holds it. `news_publish` is writing and
+  // publishing news, held by the copywriter and crm_admin.
+  | "view_users"
+  | "news_publish";
 
 /**
  * Compile-time proof that this union and the canonical cross-repository session

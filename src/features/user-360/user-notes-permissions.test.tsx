@@ -58,11 +58,12 @@ describe("User 360 notes — permission across every role", () => {
     // PHASE-1 ADMIN added `progression_operator`, which holds exactly one
     // permission and no note rights — so the matrix grew by one on the DENIED
     // side and not at all on the allowed side.
-    expect(CRM_ROLES).toHaveLength(10);
+    // TOOLS-V2 NEWS added the copywriter, again on the DENIED side only.
+    expect(CRM_ROLES).toHaveLength(11);
     // The split is read from the canonical helper, not restated here: a literal
     // list in the test would be a second permission matrix to keep in sync.
     expect(CRM_ROLES.filter(canEditUserNotes)).toHaveLength(4);
-    expect(CRM_ROLES.filter((r) => !canEditUserNotes(r))).toHaveLength(6);
+    expect(CRM_ROLES.filter((r) => !canEditUserNotes(r))).toHaveLength(7);
   });
 
   for (const role of CRM_ROLES) {
