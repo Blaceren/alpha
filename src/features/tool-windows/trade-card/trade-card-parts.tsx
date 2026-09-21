@@ -3,7 +3,8 @@
 /**
  * The Trade Card's presentational parts: the steps, the plan form, the two
  * outcomes and the saved notice. No state and no effects; the workspace owns
- * both.
+ * both. The asset list, the direction toggle and the field error are shared
+ * with the Trading Journal's hand-recorded trade, so both forms read the same.
  *
  * A CLIENT MODULE ON PURPOSE. The form wires its own change handlers, and a
  * server component may not hand an element an event handler, so the handlers
@@ -105,7 +106,6 @@ export function TradeCardPlanForm({
   const errorId = (field: DraftField) => `tc-${field}-error`;
   const change = (field: DraftField) => (event: { target: { value: string } }) => onChange?.(field, event.target.value);
   const described = (field: DraftField) => (errors[field] ? errorId(field) : undefined);
-  const groups = [...new Set(reference.assets.map((asset) => asset.group))];
 
   return (
     <section className="tc-section" aria-labelledby="tc-plan-title">
@@ -130,20 +130,7 @@ export function TradeCardPlanForm({
             aria-invalid={errors.asset ? true : undefined}
             aria-describedby={described("asset")}
           >
-            <option value="" disabled>
-              Выберите актив
-            </option>
-            {groups.map((group) => (
-              <optgroup key={group} label={GROUP_LABELS[group] ?? group}>
-                {reference.assets
-                  .filter((asset) => asset.group === group)
-                  .map((asset) => (
-                    <option key={asset.code} value={asset.code}>
-                      {asset.label}
-                    </option>
-                  ))}
-              </optgroup>
-            ))}
+            <AssetOptions reference={reference} />
           </select>
           <FieldError id={errorId("asset")} message={errors.asset} />
         </div>
@@ -223,14 +210,7 @@ export function TradeCardPlanForm({
             aria-invalid={errors.expiry ? true : undefined}
             aria-describedby={described("expiry")}
           >
-            <option value="" disabled>
-              Выберите
-            </option>
-            {reference.expiries.map((expiry) => (
-              <option key={expiry.code} value={expiry.code}>
-                {expiry.label}
-              </option>
-            ))}
+            <ExpiryOptions reference={reference} />
           </select>
           <FieldError id={errorId("expiry")} message={errors.expiry} />
         </div>
@@ -275,7 +255,49 @@ export function TradeCardPlanForm({
   );
 }
 
-function DirectionToggle({
+/**
+ * The asset list, grouped the way the reference groups it. The empty option
+ * says «Выберите», as the expiry's does: the label above already names the
+ * field, and a longer word is cut off in a phone's half column.
+ */
+export function AssetOptions({ reference }: { reference: TradeCardReference }) {
+  const groups = [...new Set(reference.assets.map((asset) => asset.group))];
+  return (
+    <>
+      <option value="" disabled>
+        Выберите
+      </option>
+      {groups.map((group) => (
+        <optgroup key={group} label={GROUP_LABELS[group] ?? group}>
+          {reference.assets
+            .filter((asset) => asset.group === group)
+            .map((asset) => (
+              <option key={asset.code} value={asset.code}>
+                {asset.label}
+              </option>
+            ))}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
+export function ExpiryOptions({ reference }: { reference: TradeCardReference }) {
+  return (
+    <>
+      <option value="" disabled>
+        Выберите
+      </option>
+      {reference.expiries.map((expiry) => (
+        <option key={expiry.code} value={expiry.code}>
+          {expiry.label}
+        </option>
+      ))}
+    </>
+  );
+}
+
+export function DirectionToggle({
   value,
   labelledBy,
   describedBy,
@@ -318,7 +340,7 @@ function DirectionToggle({
   );
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
+export function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
     <span className="tc-error" id={id}>
@@ -329,13 +351,22 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 /* ------------------------------------------------------------------ saved */
 
-export function TradeCardSavedNotice({ summary }: { summary: string }) {
+/**
+ * `journalOpen`: the Trading Journal is open for this learner, so the Backend
+ * wrote the saved card into it in the same step. Before level 10 the notice
+ * says when that starts.
+ */
+export function TradeCardSavedNotice({ summary, journalOpen }: { summary: string; journalOpen: boolean }) {
   return (
     <div className="tc-done" role="status">
       <CircleCheck aria-hidden="true" size={18} strokeWidth={2} />
       <div>
         <p className="tc-done__title">Карточка сохранена</p>
-        <p className="tc-done__body">{summary}. С уровня 10 карточки попадают в Trading Journal.</p>
+        <p className="tc-done__body">
+          {journalOpen
+            ? `${summary}. Сделка записана в Trading Journal — там её можно разобрать.`
+            : `${summary}. С уровня 10 карточки попадают в Trading Journal.`}
+        </p>
       </div>
     </div>
   );

@@ -12,7 +12,11 @@
  *   fixed         → the plan, read-only, then
  *                   the result and observation  «Сохранить карточку»
  *                                               «Изменить план» · «Сделку не открывал»
- *   just saved    → the saved notice            «Новая карточка» · «Все инструменты»
+ *   just saved    → the saved notice            «Разобрать в журнале» · «Новая карточка»
+ *                                               (before L10: «Новая карточка» · «Все инструменты»)
+ *
+ * FROM LEVEL 10 A SAVED CARD IS ALSO A JOURNAL ENTRY. The Backend writes both in
+ * one step; this side only sends the trade's date on the learner's own clock.
  *
  * ATA OPENS NO TRADE. Nothing here talks to Pocket, and the copy says so at the
  * one moment the learner might wonder: under the fix button.
@@ -20,6 +24,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { NormalizedError } from "@/lib/api/errors";
+import { tradeDateNear } from "../model/local-date";
 import {
   changeTradeCard,
   fetchTradeCardState,
@@ -97,8 +102,17 @@ function useInBrowser(): boolean {
  * `initialState` is the server's first read of the card. With it, the tool
  * arrives already drawn; without it (the read failed, or fixture mode), the
  * tool reads from the browser as it always did.
+ *
+ * `journalOpen` is the Backend's verdict on the Trading Journal, read with the
+ * page: it only changes what the saved state says and offers.
  */
-export function TradeCardWorkspace({ initialState = null }: { initialState?: TradeCardState | null }) {
+export function TradeCardWorkspace({
+  initialState = null,
+  journalOpen = false,
+}: {
+  initialState?: TradeCardState | null;
+  journalOpen?: boolean;
+}) {
   const [phase, setPhase] = useState<Phase>(() =>
     initialState ? { kind: "ready", reference: initialState.reference } : { kind: "loading" },
   );
@@ -273,11 +287,18 @@ export function TradeCardWorkspace({ initialState = null }: { initialState?: Tra
     setBusy(true);
     setActionError(null);
     const note = observation.trim();
-    const response = await changeTradeCard(card.id, {
-      action: "save",
-      result,
-      observation: note.length > 0 ? note : null,
+    const save = { action: "save" as const, result, observation: note.length > 0 ? note : null };
+    // The trade's date, on the learner's clock: the day of the planned entry
+    // time nearest to when the plan was fixed.
+    let response = await changeTradeCard(card.id, {
+      ...save,
+      tradeDate: tradeDateNear(card.plan.entryTime, new Date(card.fixedAt)),
     });
+    // A date the Backend cannot place (a far-east time zone just after midnight)
+    // must never cost the card: without one, the Backend dates it by its own clock.
+    if (!response.ok && response.detail === "invalid_tradeDate") {
+      response = await changeTradeCard(card.id, save);
+    }
     setBusy(false);
     if (!response.ok) {
       handleFailure(response);
@@ -480,15 +501,30 @@ export function TradeCardWorkspace({ initialState = null }: { initialState?: Tra
 
           {view.kind === "saved" ? (
             <section className="tc-section tc-actions" aria-label="Карточка сохранена">
-              <TradeCardSavedNotice summary={savedSummary(view.card)} />
-              <div className="tc-actions__row">
-                <button type="button" className="tw-button" data-variant="primary" onClick={startNewCard}>
-                  Новая карточка
-                </button>
-                <Link className="tw-button" data-variant="outline" href="/tools">
-                  Все инструменты
-                </Link>
-              </div>
+              <TradeCardSavedNotice summary={savedSummary(view.card)} journalOpen={journalOpen} />
+              {journalOpen ? (
+                <div className="tc-actions__row">
+                  <Link
+                    className="tw-button"
+                    data-variant="primary"
+                    href={`/tools/journal?card=${encodeURIComponent(view.card.id)}`}
+                  >
+                    Разобрать в журнале
+                  </Link>
+                  <button type="button" className="tw-button" data-variant="outline" onClick={startNewCard}>
+                    Новая карточка
+                  </button>
+                </div>
+              ) : (
+                <div className="tc-actions__row">
+                  <button type="button" className="tw-button" data-variant="primary" onClick={startNewCard}>
+                    Новая карточка
+                  </button>
+                  <Link className="tw-button" data-variant="outline" href="/tools">
+                    Все инструменты
+                  </Link>
+                </div>
+              )}
             </section>
           ) : null}
         </div>

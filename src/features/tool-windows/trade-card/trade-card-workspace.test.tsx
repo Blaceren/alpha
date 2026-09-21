@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { NormalizedError } from "@/lib/api/errors";
 import type { TradeCard, TradeCardReference } from "./trade-card-model";
+import { tradeDateNear } from "../model/local-date";
 
 const fetchTradeCardState = vi.fn();
 const fixTradePlan = vi.fn();
@@ -162,6 +163,8 @@ describe("Trade Card — the fixed plan", () => {
       action: "save",
       result: "profit",
       observation: "вошёл по плану",
+      // The trade's day on the learner's clock, for the journal.
+      tradeDate: tradeDateNear("14:32", new Date("2026-09-21T11:32:00.000Z")),
     });
     const done = await screen.findByText("Карточка сохранена", { selector: ".tc-done__title" });
     expect(done.parentElement).toHaveTextContent("Прибыль · без наблюдения. С уровня 10 карточки попадают в Trading Journal.");
@@ -170,6 +173,37 @@ describe("Trade Card — the fixed plan", () => {
     await user.click(screen.getByRole("button", { name: "Новая карточка" }));
     expect(screen.getByRole("button", { name: "Зафиксировать план" })).toBeInTheDocument();
     expect(screen.getByLabelText("Сумма")).toHaveValue("");
+  });
+
+  it("from level 10 says the card went into the journal, and offers to review it there", async () => {
+    const user = userEvent.setup();
+    fetchTradeCardState.mockResolvedValue({ ok: true, data: { card: card(), reference: REFERENCE } });
+    changeTradeCard.mockResolvedValue({ ok: true, data: card({ status: "saved", result: "loss", savedAt: "2026-09-21T11:40:00.000Z" }) });
+    render(<TradeCardWorkspace journalOpen />);
+    await user.click(await screen.findByRole("radio", { name: "Убыток" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить карточку" }));
+    const done = await screen.findByText("Карточка сохранена", { selector: ".tc-done__title" });
+    expect(done.parentElement).toHaveTextContent("Убыток · без наблюдения. Сделка записана в Trading Journal — там её можно разобрать.");
+    expect(screen.getByRole("link", { name: "Разобрать в журнале" })).toHaveAttribute("href", "/tools/journal?card=cm3k9x2p10000abcdefghij");
+    expect(screen.getByRole("button", { name: "Новая карточка" })).toBeInTheDocument();
+  });
+
+  it("never loses a card over its date: a date the Backend refuses is dropped and the save repeated", async () => {
+    const user = userEvent.setup();
+    fetchTradeCardState.mockResolvedValue({ ok: true, data: { card: card(), reference: REFERENCE } });
+    changeTradeCard
+      .mockResolvedValueOnce(failure("TOOL_VALIDATION", "VALIDATION_ERROR", "invalid_tradeDate"))
+      .mockResolvedValueOnce({ ok: true, data: card({ status: "saved", result: "profit", savedAt: "2026-09-21T11:40:00.000Z" }) });
+    render(<TradeCardWorkspace journalOpen />);
+    await user.click(await screen.findByRole("radio", { name: "Прибыль" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить карточку" }));
+    await screen.findByText("Карточка сохранена", { selector: ".tc-done__title" });
+    expect(changeTradeCard).toHaveBeenCalledTimes(2);
+    expect(changeTradeCard).toHaveBeenLastCalledWith("cm3k9x2p10000abcdefghij", {
+      action: "save",
+      result: "profit",
+      observation: null,
+    });
   });
 
   it("re-fixes a changed plan through «Изменить план»", async () => {

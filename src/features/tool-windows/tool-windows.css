@@ -118,6 +118,19 @@
   font-weight: 500;
 }
 
+/* Said to assistive technology only. */
+.tw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ------------------------------------------------ the territory (panel) */
 
 .tw-territory {
@@ -853,6 +866,712 @@
   font-size: 13.5px;
   font-weight: 650;
   white-space: nowrap;
+}
+
+/* ======================================================= trading journal */
+
+/* The counts and «Новая запись»: stacked on a phone, one line from 600px. */
+.jr-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Counts of entries, never of money (DD-303/DD-304). One well split by lines,
+   the Trade Card's outcome box in three. */
+.jr-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-counts__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px 11px;
+}
+
+.jr-counts__cell + .jr-counts__cell {
+  border-left: 1px solid var(--tw-line-2);
+}
+
+.jr-counts__label {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.jr-counts__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.jr-counts__of {
+  color: var(--tw-text-3);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.jr-top__new svg {
+  flex: none;
+}
+
+/* The filter switches the view, so its selection is quieter than a form
+   answer's Signal fill: the pressed surface and the brightest text. Each
+   option is as wide as its words, so «План нарушен» keeps one line on a phone. */
+.jr-filters {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 2px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-filter {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 6px 8px;
+  white-space: nowrap;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.jr-filter:hover:not([aria-pressed="true"]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.jr-filter[aria-pressed="true"] {
+  background: var(--tw-surface-press);
+  color: var(--tw-text-1);
+}
+
+/* On a phone the three labels need the whole width; the counts return at 600px. */
+.jr-filter__count {
+  display: none;
+  color: var(--tw-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-filter[aria-pressed="true"] .jr-filter__count {
+  color: var(--tw-text-2);
+}
+
+/* ---------------------------------------------------------------- the list */
+
+.jr-list {
+  margin-top: 20px;
+}
+
+/* A filter's page on its way: the lines on screen stay, quieted, and wait. */
+.jr-list[data-stale] .jr-day {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 140ms var(--tw-ease);
+}
+
+.jr-list__note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 0 2px;
+}
+
+.jr-day + .jr-day {
+  margin-top: 22px;
+}
+
+/* A day is classified the way Lessons classifies a module: the index tick,
+   the mono date, the weekday in words. Structure only, never a state. */
+.jr-day__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0 0 2px;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.jr-day__date {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.jr-day__date::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 11px;
+  margin-right: 9px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background: var(--tw-index);
+}
+
+.jr-day__weekday {
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.jr-day__weekday::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--tw-line-3);
+}
+
+.jr-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jr-entry {
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.jr-entry:last-child {
+  border-bottom-color: transparent;
+}
+
+/* One trade, and the whole line opens it. Below 900px two lines — what it was
+   and how it ended; when, how much, and the mark — and from 900px one ledger
+   line whose columns line up down the day. */
+.jr-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto 16px;
+  grid-template-areas:
+    "asset asset asset result chevron"
+    "time dir stake mark chevron";
+  align-items: center;
+  gap: 5px 10px;
+  width: calc(100% + 20px);
+  margin-inline: -10px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.jr-row:hover {
+  background: var(--tw-surface-hover);
+}
+
+.jr-row:active {
+  background: var(--tw-surface-press);
+  transition-duration: 40ms;
+}
+
+.jr-row__time {
+  grid-area: time;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-row__asset {
+  grid-area: asset;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jr-row__dir {
+  grid-area: dir;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The arrow alone on a phone; the word stays for assistive technology. */
+.jr-row__dir-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.jr-row__stake {
+  grid-area: stake;
+  min-width: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.jr-row__result {
+  grid-area: result;
+  justify-self: end;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.jr-row__result[data-kind="gain"] {
+  color: var(--tw-positive);
+}
+
+.jr-row__result[data-kind="loss"] {
+  color: var(--tw-negative);
+}
+
+.jr-row__mark {
+  grid-area: mark;
+  justify-self: end;
+}
+
+.jr-row__chevron {
+  grid-area: chevron;
+  color: var(--tw-text-3);
+  transition: transform 140ms var(--tw-ease);
+}
+
+.jr-row[aria-expanded="true"] .jr-row__chevron {
+  transform: rotate(180deg);
+}
+
+/* The learner's own mark on the plan. The words carry it; the dot repeats it. */
+.jr-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jr-mark::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.jr-mark[data-mark="followed"] {
+  color: var(--tw-positive);
+}
+
+.jr-mark[data-mark="broken"] {
+  color: var(--tw-negative);
+}
+
+.jr-mark[data-mark="unmarked"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* ----------------------------------------------------------- an entry open */
+
+.jr-detail {
+  padding: 2px 0 18px;
+}
+
+.jr-detail[hidden] {
+  display: none;
+}
+
+.jr-notes {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.jr-note {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jr-note__term {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.jr-note__text {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.jr-note__none {
+  color: var(--tw-text-3);
+}
+
+.jr-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jr-rules-list li::before {
+  content: "—";
+  margin-right: 8px;
+  color: var(--tw-negative);
+}
+
+.jr-facts {
+  margin: 14px 0 0;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.jr-detail__actions {
+  margin-top: 14px;
+}
+
+.jr-detail__review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* -------------------------------------------------------------- the review */
+
+.jr-review {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.jr-rules {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.jr-rules > legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+/* The rules as checkboxes the size of a finger: one column on a phone. */
+.jr-chips {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.jr-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: border-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.jr-chip:hover {
+  border-color: var(--tw-line-olive-hover);
+  color: var(--tw-text-1);
+}
+
+.jr-chip__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The ring goes round the whole chip, not the hidden box. */
+.twp .jr-chip__input:focus-visible {
+  outline: none;
+}
+
+.jr-chip:has(.jr-chip__input:focus-visible) {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+.jr-chip__box {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--tw-line-3);
+  border-radius: 4px;
+  color: var(--tw-on-signal);
+}
+
+/* A broken rule takes the negative tone the result already uses. */
+.jr-chip[data-checked] {
+  border-color: var(--tw-negative);
+  background: rgba(215, 163, 168, 0.08);
+  color: var(--tw-text-1);
+}
+
+.jr-chip[data-checked] .jr-chip__box {
+  border-color: var(--tw-negative);
+  background: var(--tw-negative);
+}
+
+/* ---------------------------------------------------- «Новая запись» form */
+
+.jr-form__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jr-form__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Focused by the page when the form opens, so a screen reader lands on it; a
+   heading is not a control and draws no ring. */
+.twp .jr-form__title:focus-visible {
+  outline: none;
+}
+
+.jr-form__lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.jr-outcome {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-outcome__label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.jr-outcome__value {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.jr-outcome__value[data-kind="gain"] {
+  color: var(--tw-positive);
+}
+
+.jr-outcome__value[data-kind="loss"] {
+  color: var(--tw-negative);
+}
+
+.jr-empty__actions {
+  width: 100%;
+  max-width: 460px;
+  margin-top: 8px;
+}
+
+.jr-more {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (min-width: 600px) {
+  .jr-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+  }
+
+  .jr-counts {
+    flex: 0 1 480px;
+  }
+
+  .jr-filters {
+    width: max-content;
+    max-width: 100%;
+    padding: 3px;
+  }
+
+  .jr-filter {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+
+  .jr-filter__count {
+    display: inline;
+  }
+
+  .jr-row {
+    width: calc(100% + 24px);
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .jr-row__dir-word {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .jr-note {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .jr-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jr-chip {
+    min-height: 40px;
+  }
+
+  /* The review keeps a readable measure, and its two-way question stays a
+     compact control rather than a bar across the page. */
+  .jr-detail__review {
+    max-width: 680px;
+  }
+
+  .jr-review .tc-segmented {
+    max-width: 360px;
+  }
+
+  /* A lone action is as wide as its words, not a stretched bar. */
+  .jr-detail__actions > .tw-button {
+    flex: 0 0 auto;
+    min-width: 200px;
+  }
+
+  .jr-more {
+    align-items: flex-start;
+  }
+}
+
+/* From 900px a trade is one ledger line, and an open entry's notes start under
+   its asset, past the time column. */
+@media (min-width: 900px) {
+  .jr-row {
+    grid-template-columns: 52px minmax(0, 1fr) 84px 92px 104px 128px 16px;
+    grid-template-areas: "time asset dir stake result mark chevron";
+    gap: 0 12px;
+    padding-block: 11px;
+  }
+
+  .jr-row__time,
+  .jr-row__dir,
+  .jr-row__stake {
+    font-size: 13.5px;
+  }
+
+  .jr-row__stake {
+    text-align: right;
+  }
+
+  .jr-row__mark {
+    justify-self: start;
+  }
+
+  .jr-detail {
+    padding-left: 64px;
+  }
+
+  /* The form's review column is as tall as its fields, so it scrolls with the
+     page rather than sticking as the Trade Card's short outcome does. */
+  .jr-form .tc-aside {
+    position: static;
+  }
+
+  .jr-form__aside .jr-chips {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ====================================================== wider screens */

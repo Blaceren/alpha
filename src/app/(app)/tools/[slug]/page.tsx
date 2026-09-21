@@ -6,6 +6,7 @@ import { ToolPage } from "@/features/tool-windows/components/tool-page";
 import { ToolLocked } from "@/features/tool-windows/components/tool-locked";
 import { ToolSoon } from "@/features/tool-windows/components/tool-soon";
 import { TradeCardWorkspace } from "@/features/tool-windows/trade-card/trade-card-workspace";
+import { JournalWorkspace } from "@/features/tool-windows/journal/journal-workspace";
 import {
   RETIRED_TOOL_CODES,
   toolWindowByCode,
@@ -21,13 +22,16 @@ import {
   toolAccessOf,
   type ToolWindowState,
 } from "@/features/tool-windows/model/access";
+import type { AcademyToolAccess } from "@/lib/curriculum/academy-view";
 import { getPathProgress, resolvePathScenario } from "@/features/path/model/path-state";
 import { getLevel } from "@/data/curriculum/fixture";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer, shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import { readTradeCardStateOnServer } from "@/server/tools/trade-card-read";
+import { readJournalOnServer } from "@/server/tools/journal-read";
 import type { TradeCardState } from "@/features/tool-windows/trade-card/trade-card-client";
+import type { JournalPage } from "@/features/tool-windows/journal/journal-model";
 import "@/features/tool-windows/tool-windows.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -52,6 +56,15 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  *   open   → the working tool;
  *   locked → where the learner is, the level that opens it, and why;
  *   soon   → earned, but this build has no tool page for it yet.
+ *
+ * THE FIRST READ. A built tool's data is read here, alongside the verdict, so
+ * the tool arrives already drawn. A locked tool's read is refused by the
+ * Backend and comes back null, and a failed one leaves the tool to read again
+ * from the browser.
+ *
+ * `?card=<id>` on the journal is «Разобрать в журнале» from a saved Trade Card:
+ * the journal opens that card's entry for review. The id only selects among
+ * the learner's own entries the Backend already sent; it reaches no request.
  */
 export default async function ToolRoute({
   params,
@@ -66,15 +79,18 @@ export default async function ToolRoute({
     notFound();
   }
 
+  const sp = await searchParams;
+  const reviewCardId = tool.slug === "journal" ? cardIdOf(sp.card) : null;
+
   if (getAcademyConfig().mode === "api") {
-    /* The card is read alongside the verdict, so the tool arrives already drawn.
-       A locked tool's read is refused by the Backend and simply comes back null. */
-    const [viewer, result, tradeCard] = await Promise.all([
+    const [viewer, result, tradeCard, journal] = await Promise.all([
       getServerViewer(),
       getCurriculumView(),
       tool.slug === "trade-card" ? readTradeCardStateOnServer() : Promise.resolve(null),
+      tool.slug === "journal" ? readJournalOnServer() : Promise.resolve(null),
     ]);
-    const view = resolveToolWindow(tool.slug, toolAccessOf(result));
+    const access = toolAccessOf(result);
+    const view = resolveToolWindow(tool.slug, access);
     return (
       <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
         <ToolContent
@@ -83,16 +99,16 @@ export default async function ToolRoute({
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
           releasingLevelTitle={result.ok ? levelTitleOf(result.view, tool.unlockLevel) : null}
-          tradeCard={tradeCard}
+          data={{ tradeCard, journal, journalOpen: isOpen("journal", access), reviewCardId }}
         />
       </AppShell>
     );
   }
 
-  const sp = await searchParams;
   const rawScenario = sp.scenario;
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
-  const view = resolveToolWindow(tool.slug, fixtureToolAccess(scenario));
+  const access = fixtureToolAccess(scenario);
+  const view = resolveToolWindow(tool.slug, access);
   return (
     <AppShell userName={await shellViewerName()} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
       <ToolContent
@@ -101,10 +117,29 @@ export default async function ToolRoute({
         unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
         currentLevel={getPathProgress(scenario).currentLevel}
         releasingLevelTitle={getLevel(tool.unlockLevel).title}
-        tradeCard={null}
+        data={{ tradeCard: null, journal: null, journalOpen: isOpen("journal", access), reviewCardId }}
       />
     </AppShell>
   );
+}
+
+/** What the built tools read with the page. Null reads again from the browser. */
+type ToolData = {
+  readonly tradeCard: TradeCardState | null;
+  readonly journal: JournalPage | null;
+  /** Whether the Trading Journal is open: a saved card then goes into it. */
+  readonly journalOpen: boolean;
+  /** The Trade Card whose journal entry opens for review, from `?card=`. */
+  readonly reviewCardId: string | null;
+};
+
+/** A cuid-shaped id, or null: anything else in the address is ignored. */
+function cardIdOf(raw: string | string[] | undefined): string | null {
+  return typeof raw === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/.test(raw) ? raw : null;
+}
+
+function isOpen(slug: ToolWindowDefinition["slug"], access: AcademyToolAccess | null): boolean {
+  return resolveToolWindow(slug, access)?.state === "open";
 }
 
 function ToolContent({
@@ -113,20 +148,19 @@ function ToolContent({
   unlockLevel,
   currentLevel,
   releasingLevelTitle,
-  tradeCard,
+  data,
 }: {
   tool: ToolWindowDefinition;
   state: ToolWindowState;
   unlockLevel: number;
   currentLevel: number | null;
   releasingLevelTitle: string | null;
-  /** The server's first read of the Trade Card, or null to read from the browser. */
-  tradeCard: TradeCardState | null;
+  data: ToolData;
 }) {
   return (
     <ToolPage tool={tool} unlockLevel={unlockLevel}>
       {state === "open" ? (
-        workspaceFor(tool, tradeCard)
+        workspaceFor(tool, data)
       ) : state === "soon" ? (
         <ToolSoon tool={tool} />
       ) : (
@@ -142,10 +176,12 @@ function ToolContent({
 }
 
 /** The working tool of a built tool. One marked built without one here falls back to the not-built state. */
-function workspaceFor(tool: ToolWindowDefinition, tradeCard: TradeCardState | null) {
+function workspaceFor(tool: ToolWindowDefinition, data: ToolData) {
   switch (tool.slug) {
     case "trade-card":
-      return <TradeCardWorkspace initialState={tradeCard} />;
+      return <TradeCardWorkspace initialState={data.tradeCard} journalOpen={data.journalOpen} />;
+    case "journal":
+      return <JournalWorkspace initialPage={data.journal} reviewCardId={data.reviewCardId} />;
     default:
       return <ToolSoon tool={tool} />;
   }

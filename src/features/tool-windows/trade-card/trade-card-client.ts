@@ -1,16 +1,17 @@
 /**
- * The Trade Card client.
- *
- * Same shape as every learner client here: relative paths through the
- * `/api/backend` same-origin proxy, a CSRF token fetched per mutation, a bounded
- * JSON read, and a NORMALIZED error rather than a thrown exception.
- *
- * ONE ADDITION: the Backend names a refused plan field in `detail`
- * (`invalid_amount` …). The shared normalizer keeps only the code, so this
- * client reads `detail` itself and hands it to the form, which puts the message
- * under the right field.
+ * The Trade Card client: its paths and the shapes it guards. The transport —
+ * the proxy, the CSRF token, the bounded read, the refused field in `detail` —
+ * is the tools' shared one (`tools-client-core.ts`).
  */
-import { makeError, normalizeHttpError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/errors";
+import {
+  PROXY_BASE,
+  isNullableString,
+  isRecord,
+  toolGet,
+  toolSend,
+  type ToolFailure,
+  type ToolResult,
+} from "../tools-client-core";
 import type {
   TradeCard,
   TradeCardPlanInput,
@@ -19,120 +20,19 @@ import type {
   TradeResult,
 } from "./trade-card-model";
 
-const PROXY_BASE = "/api/backend";
-const MAX_RESPONSE_BYTES = 256 * 1024;
-
-export type TradeCardFailure = { ok: false; error: NormalizedError; detail: string | null };
-export type TradeCardResult<T> = { ok: true; data: T } | TradeCardFailure;
+export type TradeCardFailure = ToolFailure;
+export type TradeCardResult<T> = ToolResult<T>;
 
 export type TradeCardState = { card: TradeCard | null; reference: TradeCardReference };
 
 export type TradeCardChange =
   | { action: "refix"; plan: TradeCardPlanInput }
-  | { action: "save"; result: TradeResult; observation: string | null }
+  | { action: "save"; result: TradeResult; observation: string | null; tradeDate?: string | null }
   | { action: "cancel" };
-
-async function readBoundedJson(response: Response): Promise<{ ok: true; value: unknown } | { ok: false }> {
-  try {
-    const raw = await response.arrayBuffer();
-    if (raw.byteLength > MAX_RESPONSE_BYTES) return { ok: false };
-    if (raw.byteLength === 0) return { ok: true, value: undefined };
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(raw)) as unknown };
-  } catch {
-    return { ok: false };
-  }
-}
-
-function detailOf(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) return null;
-  const detail = (body as { detail?: unknown }).detail;
-  return typeof detail === "string" && /^[a-z][a-zA-Z_]{0,63}$/.test(detail) ? detail : null;
-}
-
-async function readEnvelope<T>(response: Response, guard: (value: unknown) => value is T): Promise<TradeCardResult<T>> {
-  const requestId = response.headers.get(REQUEST_ID_HEADER);
-  const parsed = await readBoundedJson(response);
-  if (!response.ok) {
-    const body = parsed.ok ? parsed.value : undefined;
-    return {
-      ok: false,
-      error: normalizeHttpError({ status: response.status, body, requestId }),
-      detail: detailOf(body),
-    };
-  }
-  if (!parsed.ok || typeof parsed.value !== "object" || parsed.value === null) {
-    return { ok: false, error: makeError("MALFORMED_RESPONSE", { requestId }), detail: null };
-  }
-  const data = (parsed.value as { data?: unknown }).data;
-  if (!guard(data)) return { ok: false, error: makeError("MALFORMED_RESPONSE", { requestId }), detail: null };
-  return { ok: true, data };
-}
-
-async function fetchCsrfToken(): Promise<{ ok: true; token: string } | TradeCardFailure> {
-  let response: Response;
-  try {
-    response = await fetch(`${PROXY_BASE}/csrf`, {
-      method: "GET",
-      headers: { accept: "application/json" },
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-  } catch {
-    return { ok: false, error: makeError("NETWORK_ERROR"), detail: null };
-  }
-  const requestId = response.headers.get(REQUEST_ID_HEADER);
-  const parsed = await readBoundedJson(response);
-  if (!response.ok) {
-    return {
-      ok: false,
-      error: normalizeHttpError({ status: response.status, body: parsed.ok ? parsed.value : undefined, requestId }),
-      detail: null,
-    };
-  }
-  const token =
-    parsed.ok && typeof parsed.value === "object" && parsed.value !== null
-      ? (parsed.value as { csrfToken?: unknown }).csrfToken
-      : undefined;
-  if (typeof token !== "string" || token.length === 0) {
-    return { ok: false, error: makeError("MALFORMED_RESPONSE"), detail: null };
-  }
-  return { ok: true, token };
-}
-
-async function send<T>(
-  method: "POST" | "PATCH",
-  path: string,
-  body: unknown,
-  guard: (value: unknown) => value is T,
-): Promise<TradeCardResult<T>> {
-  const csrf = await fetchCsrfToken();
-  if (!csrf.ok) return csrf;
-  let response: Response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrf.token },
-      credentials: "same-origin",
-      cache: "no-store",
-      body: JSON.stringify(body),
-    });
-  } catch {
-    return { ok: false, error: makeError("NETWORK_ERROR"), detail: null };
-  }
-  return readEnvelope(response, guard);
-}
 
 /* ------------------------------------------------------------------ guards */
 
 const STATUSES: readonly TradeCardStatus[] = ["fixed", "saved", "cancelled"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
-}
 
 export function isTradeCard(value: unknown): value is TradeCard {
   if (!isRecord(value) || !isRecord(value.plan) || !isRecord(value.outcomes)) return false;
@@ -192,30 +92,19 @@ function isCardEnvelope(value: unknown): value is { card: TradeCard } {
 /* ----------------------------------------------------------------- calls */
 
 /** The learner's open card (or none) and the lists the form picks from. */
-export async function fetchTradeCardState(): Promise<TradeCardResult<TradeCardState>> {
-  let response: Response;
-  try {
-    response = await fetch(`${PROXY_BASE}/tools/trade-cards`, {
-      method: "GET",
-      headers: { accept: "application/json" },
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-  } catch {
-    return { ok: false, error: makeError("NETWORK_ERROR"), detail: null };
-  }
-  return readEnvelope(response, isTradeCardState);
+export function fetchTradeCardState(): Promise<TradeCardResult<TradeCardState>> {
+  return toolGet(`${PROXY_BASE}/tools/trade-cards`, isTradeCardState);
 }
 
 /** «Зафиксировать план». */
 export async function fixTradePlan(plan: TradeCardPlanInput): Promise<TradeCardResult<TradeCard>> {
-  const result = await send("POST", `${PROXY_BASE}/tools/trade-cards`, { plan }, isCardEnvelope);
+  const result = await toolSend("POST", `${PROXY_BASE}/tools/trade-cards`, { plan }, isCardEnvelope);
   return result.ok ? { ok: true, data: result.data.card } : result;
 }
 
 /** «Изменить план», «Сохранить карточку», «Сделку не открывал». */
 export async function changeTradeCard(cardId: string, change: TradeCardChange): Promise<TradeCardResult<TradeCard>> {
-  const result = await send(
+  const result = await toolSend(
     "PATCH",
     `${PROXY_BASE}/tools/trade-cards/${encodeURIComponent(cardId)}`,
     change,

@@ -1,16 +1,19 @@
 /**
  * TOOLS-V2 — the bounded tools proxy.
  *
- * Three operations, each pinned to one method and one constant Backend path
+ * Six operations, each pinned to one method and one constant Backend path
  * shape. What these cases pin is the boundary, not the happy path: nothing a
- * caller sends can choose a host, leave the card-id segment, reach a staff
- * route, carry a query, or make a private answer cacheable.
+ * caller sends can choose a host, leave an id's segment, reach a staff route,
+ * carry a query other than a journal page's validated filter and cursor, or
+ * make a private answer cacheable.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MAX_JOURNAL_RESPONSE_BYTES,
   MAX_TOOLS_BODY_BYTES,
   MAX_TOOLS_RESPONSE_BYTES,
   proxyTools,
+  resolveToolsQuery,
   resolveToolsTargetPath,
 } from "@/server/proxy/tools-proxy";
 import { resetAcademyConfigCache } from "@/config/academy-config";
@@ -238,5 +241,110 @@ describe("tools proxy — the answer it returns", () => {
     );
     const response = await proxyTools(request("GET"), { operation: "trade-card-state" });
     expect(response.status).toBe(502);
+  });
+});
+
+describe("tools proxy — the Trading Journal", () => {
+  const ENTRY = "cm4j0urnal0000abcdefghij";
+  const journal = (method: string, path = "/api/backend/tools/journal", body?: BodyInit) =>
+    request(method, path, { "content-type": "application/json", cookie: "s=1", "x-csrf-token": "t" }, body);
+
+  it("pins its operations to the journal's own paths", () => {
+    expect(resolveToolsTargetPath({ operation: "journal-page" })).toBe("/api/tools/journal");
+    expect(resolveToolsTargetPath({ operation: "journal-create" })).toBe("/api/tools/journal");
+    expect(resolveToolsTargetPath({ operation: "journal-change", entryId: ENTRY })).toBe(`/api/tools/journal/${ENTRY}`);
+    for (const entryId of ["../../crm/v1/users", `${ENTRY}/x`, `${ENTRY}?a=1`, "//evil.invalid/x", "", "short"]) {
+      expect(resolveToolsTargetPath({ operation: "journal-change", entryId }), JSON.stringify(entryId)).toBeNull();
+    }
+  });
+
+  it("forwards a page's filter and cursor only, rebuilt from validated values", () => {
+    const page = { operation: "journal-page" } as const;
+    const query = (raw: string) => resolveToolsQuery(page, new URLSearchParams(raw));
+    expect(query("")).toBe("");
+    expect(query("filter=all")).toBe("?filter=all");
+    expect(query("filter=violated")).toBe("?filter=violated");
+    expect(query("filter=no_conclusion&before=" + ENTRY)).toBe(`?filter=no_conclusion&before=${ENTRY}`);
+    expect(query("before=" + ENTRY)).toBe(`?before=${ENTRY}`);
+    for (const raw of [
+      "filter=everything",
+      "filter=all&userId=7",
+      "filter=all&filter=violated",
+      `before=${ENTRY}&before=${ENTRY}`,
+      "before=../x",
+      "before=",
+      "userId=7",
+    ]) {
+      expect(query(raw), raw).toBeNull();
+    }
+    // No other operation carries a query at all.
+    expect(resolveToolsQuery({ operation: "journal-create" }, new URLSearchParams("filter=all"))).toBeNull();
+    expect(resolveToolsQuery({ operation: "trade-card-state" }, new URLSearchParams("filter=all"))).toBeNull();
+  });
+
+  it("reads a page with GET, records with POST and changes with PATCH", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proxyTools(journal("GET", `/api/backend/tools/journal?filter=violated&before=${ENTRY}`), {
+      operation: "journal-page",
+    });
+    await proxyTools(journal("POST", undefined, "{}"), { operation: "journal-create" });
+    await proxyTools(journal("PATCH", `/api/backend/tools/journal/${ENTRY}`, "{}"), {
+      operation: "journal-change",
+      entryId: ENTRY,
+    });
+
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
+      [`${ORIGIN}/api/tools/journal?filter=violated&before=${ENTRY}`, "GET"],
+      [`${ORIGIN}/api/tools/journal`, "POST"],
+      [`${ORIGIN}/api/tools/journal/${ENTRY}`, "PATCH"],
+    ]);
+    expect((fetchMock.mock.calls[0]![1].headers as Headers).get("x-csrf-token")).toBeNull();
+    expect((fetchMock.mock.calls[1]![1].headers as Headers).get("x-csrf-token")).toBe("t");
+  });
+
+  it("refuses a query it does not know, a wrong method and a hostile id, without contacting Backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const refused = [
+      await proxyTools(journal("GET", "/api/backend/tools/journal?filter=all&userId=7"), { operation: "journal-page" }),
+      await proxyTools(journal("POST", "/api/backend/tools/journal?filter=all", "{}"), { operation: "journal-create" }),
+      await proxyTools(journal("PATCH", "/api/backend/tools/journal/x", "{}"), {
+        operation: "journal-change",
+        entryId: "../../crm/v1/users",
+      }),
+    ];
+    expect(refused.map((response) => response.status)).toEqual([400, 400, 400]);
+    expect((await proxyTools(journal("DELETE"), { operation: "journal-page" })).status).toBe(405);
+    expect((await proxyTools(journal("GET"), { operation: "journal-create" })).status).toBe(405);
+    expect(
+      (await proxyTools(journal("DELETE", `/api/backend/tools/journal/${ENTRY}`), { operation: "journal-change", entryId: ENTRY }))
+        .status,
+    ).toBe(405);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("carries a whole page of long entries, and nothing past its own cap", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => new Response("x".repeat(MAX_TOOLS_RESPONSE_BYTES + 1), { status: 200 })),
+    );
+    expect((await proxyTools(journal("GET"), { operation: "journal-page" })).status).toBe(200);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => new Response("x".repeat(MAX_JOURNAL_RESPONSE_BYTES + 1), { status: 200 })),
+    );
+    expect((await proxyTools(journal("GET"), { operation: "journal-page" })).status).toBe(502);
+  });
+
+  it("takes an entry with every text at its longest", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ data: {} }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    // Three-byte characters, at each text's limit.
+    const entry = { plan: "設".repeat(1000), execution: "設".repeat(2000), conclusion: "設".repeat(2000) };
+    const response = await proxyTools(journal("POST", undefined, JSON.stringify({ entry })), { operation: "journal-create" });
+    expect(response.status).toBe(201);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

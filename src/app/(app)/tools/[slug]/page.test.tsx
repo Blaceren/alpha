@@ -43,11 +43,20 @@ vi.mock("@/components/shell/app-shell", () => ({
 }));
 const readTradeCard = vi.fn();
 vi.mock("@/server/tools/trade-card-read", () => ({ readTradeCardStateOnServer: () => readTradeCard() }));
+const readJournal = vi.fn();
+vi.mock("@/server/tools/journal-read", () => ({ readJournalOnServer: () => readJournal() }));
 const workspaceProps = vi.fn();
 vi.mock("@/features/tool-windows/trade-card/trade-card-workspace", () => ({
   TradeCardWorkspace: (props: unknown) => {
     workspaceProps(props);
     return <p>trade-card-workspace</p>;
+  },
+}));
+const journalProps = vi.fn();
+vi.mock("@/features/tool-windows/journal/journal-workspace", () => ({
+  JournalWorkspace: (props: unknown) => {
+    journalProps(props);
+    return <p>journal-workspace</p>;
   },
 }));
 
@@ -125,7 +134,49 @@ describe("the state", () => {
     readTradeCard.mockResolvedValue(state);
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 5));
     render(await open("trade-card"));
-    expect(workspaceProps).toHaveBeenCalledWith({ initialState: state });
+    expect(workspaceProps).toHaveBeenCalledWith({ initialState: state, journalOpen: false });
+    // Only the tool on screen is read.
+    expect(readJournal).not.toHaveBeenCalled();
+  });
+
+  it("tells the Trade Card when the journal is open, so a saved card says where it went", async () => {
+    readTradeCard.mockResolvedValue(null);
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 10));
+    render(await open("trade-card"));
+    expect(workspaceProps).toHaveBeenCalledWith({ initialState: null, journalOpen: true });
+  });
+
+  it("opens the Trading Journal on an open verdict, with the server's first page", async () => {
+    const page = { entries: [], nextCursor: null, summary: {}, filter: "all", reference: {} };
+    readJournal.mockResolvedValue(page);
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 10));
+    render(await open("journal"));
+    expect(screen.getByRole("heading", { level: 1, name: "Trading Journal" })).toBeInTheDocument();
+    expect(screen.getByText("journal-workspace")).toBeInTheDocument();
+    expect(journalProps).toHaveBeenCalledWith({ initialPage: page, reviewCardId: null });
+    expect(readTradeCard).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Все инструменты" })).toHaveAttribute("href", "/tools");
+  });
+
+  it("passes a saved card's id on to the journal, and ignores anything that is not an id", async () => {
+    readJournal.mockResolvedValue(null);
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 10));
+    const at = (card: unknown) =>
+      ToolRoute({ params: Promise.resolve({ slug: "journal" }), searchParams: Promise.resolve({ card } as never) });
+    render(await at("cm3k9x2p10000abcdefghij"));
+    expect(journalProps).toHaveBeenLastCalledWith({ initialPage: null, reviewCardId: "cm3k9x2p10000abcdefghij" });
+    for (const hostile of ["../x", "<script>", ["cm3k9x2p10000abcdefghij", "x"], "short"]) {
+      render(await at(hostile));
+      expect(journalProps).toHaveBeenLastCalledWith({ initialPage: null, reviewCardId: null });
+    }
+  });
+
+  it("locks the journal until level 10 is completed, whatever the read of it says", async () => {
+    readJournal.mockResolvedValue(null);
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 9));
+    render(await open("journal"));
+    expect(screen.queryByText("journal-workspace")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Откроется на уровне 10" })).toBeInTheDocument();
   });
 
   it("opens the Trade Card when the Backend says it is unlocked", async () => {
@@ -167,8 +218,9 @@ describe("the state", () => {
   });
 
   it("says plainly when an earned tool is not built yet", async () => {
-    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 11));
-    render(await open("journal"));
-    expect(screen.getByRole("heading", { name: "Trading Journal готовится" })).toBeInTheDocument();
+    const earned = ["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"];
+    getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
+    render(await open("risk-calculator"));
+    expect(screen.getByRole("heading", { name: "Risk Calculator готовится" })).toBeInTheDocument();
   });
 });

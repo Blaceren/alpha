@@ -172,6 +172,19 @@ describe("the authenticated route group", () => {
   "src/features/tools/tools.css",
   "src/server/proxy/tools-proxy.ts",
   "src/server/tools/trade-card-read.ts",
+  /* TOOLS-V2 slice 2: the Trading Journal. Its window, its two proxy routes and
+     its server read, the transport the two tools now share, and the learner's
+     calendar date the Trade Card sends when a saved card goes into the journal.
+     A page of the shell like the Trade Card's; it adds no loading boundary. */
+  "src/app/api/backend/tools/journal/[entryId]/route.ts",
+  "src/app/api/backend/tools/journal/route.ts",
+  "src/features/tool-windows/journal/journal-client.ts",
+  "src/features/tool-windows/journal/journal-model.ts",
+  "src/features/tool-windows/journal/journal-parts.tsx",
+  "src/features/tool-windows/journal/journal-workspace.tsx",
+  "src/features/tool-windows/model/local-date.ts",
+  "src/features/tool-windows/tools-client-core.ts",
+  "src/server/tools/journal-read.ts",
   /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
      is length alone, and Profile gained a security area with a real change-
      password route. The proxy grew exactly one named operation — login-proxy

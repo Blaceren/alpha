@@ -68,7 +68,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     description: "Ручной разбор отдельных сделок: план, исполнение и вывод.",
     unlockLevel: 10,
     releasedBy: "checkpoint",
-    built: false,
+    built: true,
   },
   {
     code: "tool.risk_calculator",

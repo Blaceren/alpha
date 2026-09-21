@@ -36,8 +36,8 @@ describe("TOOLS-V2 catalogue", () => {
     expect(fromCatalogue).toEqual(fromCheckpoints);
   });
 
-  it("builds only the Trade Card in this slice", () => {
-    expect(TOOL_WINDOWS.filter((tool) => tool.built).map((tool) => tool.slug)).toEqual(["trade-card"]);
+  it("builds the Trade Card and the Trading Journal so far, one tool at a time", () => {
+    expect(TOOL_WINDOWS.filter((tool) => tool.built).map((tool) => tool.slug)).toEqual(["trade-card", "journal"]);
   });
 
   it("has unique codes and slugs, and slugs that are safe path segments", () => {
