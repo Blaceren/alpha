@@ -167,11 +167,11 @@ async function main() {
   const bob = await learner("journal-bob@example.invalid", 12);
 
   try {
-    await check("every migration applied, the journal one last", async () => {
+    await check("every migration applied, the journal one among them", async () => {
       const rows = await db.$queryRaw<{ migration_name: string }[]>`
         SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name`;
       assert.equal(rows.length, EXPECTED_MIGRATION_COUNT);
-      assert.equal(rows.at(-1)?.migration_name, "20260921180000_tool_trading_journal");
+      assert.ok(rows.some((row) => row.migration_name === "20260921180000_tool_trading_journal"));
     });
 
     await check("«только новые»: a card saved while the journal is locked never arrives", async () => {

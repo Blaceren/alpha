@@ -256,6 +256,7 @@ model User {
   /// TOOLS-V2. The learner's own trade cards. Private to the learner.
   toolTradeCards                ToolTradeCard[]
   toolJournalEntries            ToolJournalEntry[]
+  toolRiskPlans                 ToolRiskPlan[]
 }
 
 model XpEvent {
@@ -5382,4 +5383,26 @@ model ToolJournalViolation {
   entry   ToolJournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@unique([entryId, code])
+}
+
+/// TOOLS-V2 — Risk Calculator (L15): the learner's Risk Plan, one row per saved
+/// version. The newest row is the plan in force; rows are never edited or deleted.
+model ToolRiskPlan {
+  id                String   @id @default(cuid())
+  userId            Int
+  /// The learner's own trading capital, typed as the plan's input, in minor units. Never a balance.
+  capitalMinor      Int
+  payoutPercent     Int
+  /// The share of capital one trade risks: 1, 2, 3 or 5 percent.
+  riskPercent       Int
+  /// The daily loss limit, percent of capital.
+  dailyLimitPercent Int
+  /// «Сценарий» — the only trades the plan allows, written in advance.
+  scenario          String
+  /// «Условие отмены» — when the plan says not to trade, written in advance.
+  cancelCondition   String
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
