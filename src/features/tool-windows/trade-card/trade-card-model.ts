@@ -144,9 +144,13 @@ export function hhmm(date: Date): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-/** A blank card. The entry time starts at "now", which is when most plans are written. */
-export function emptyDraft(now: Date): TradeCardDraft {
-  return { asset: "", direction: "", amount: "", payoutPercent: "", expiry: "", entryTime: hhmm(now), reason: "" };
+/**
+ * A blank card. With a clock, the entry time starts at "now", which is when most
+ * plans are written. Without one (the server's render, whose clock and time zone
+ * are not the learner's) it stays empty and the browser fills it in.
+ */
+export function emptyDraft(now: Date | null): TradeCardDraft {
+  return { asset: "", direction: "", amount: "", payoutPercent: "", expiry: "", entryTime: now ? hhmm(now) : "", reason: "" };
 }
 
 /** «Изменить план»: the form again, holding the fixed plan. */
@@ -252,11 +256,13 @@ export const TRADE_CARD_STEPS = ["Подготовка", "Открытие", "Э
  */
 export function tradeCardStep(
   card: Pick<TradeCard, "status" | "plan"> | null,
-  now: Date,
+  now: Date | null,
   pickedResult: TradeResult | null,
 ): number {
   if (!card || card.status !== "fixed") return 0;
   if (pickedResult !== null) return 4;
+  // No learner clock yet (the server's render): the trade is about to open.
+  if (now === null) return 1;
   const window = tradeWindow(card.plan.entryTime, card.plan.expiry.seconds, now);
   if (window === null) return 1;
   if (now.getTime() < window.opensAt.getTime()) return 1;

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Trade Card (L5) — the working window.
+ * Trade Card (L5) — the working tool.
  *
  * ONE CARD AT A TIME, KEPT BY THE BACKEND. The learner fixes a plan, opens the
  * trade in Pocket themselves, and comes back to record the result. The open
@@ -12,18 +12,20 @@
  *   fixed         → the plan, read-only, then
  *                   the result and observation  «Сохранить карточку»
  *                                               «Изменить план» · «Сделку не открывал»
- *   just saved    → the saved notice            «Новая карточка»
+ *   just saved    → the saved notice            «Новая карточка» · «Все инструменты»
  *
  * ATA OPENS NO TRADE. Nothing here talks to Pocket, and the copy says so at the
  * one moment the learner might wonder: under the fix button.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import type { NormalizedError } from "@/lib/api/errors";
 import {
   changeTradeCard,
   fetchTradeCardState,
   fixTradePlan,
   type TradeCardFailure,
+  type TradeCardState,
 } from "./trade-card-client";
 import {
   draftFromCard,
@@ -78,10 +80,32 @@ function messageFor(error: NormalizedError): string {
   }
 }
 
-export function TradeCardWorkspace() {
-  const [phase, setPhase] = useState<Phase>({ kind: "loading" });
-  const [view, setView] = useState<View>({ kind: "form", editing: null });
-  const [draft, setDraft] = useState<TradeCardDraft>(() => emptyDraft(new Date()));
+/* False during the server's render and hydration, true in the browser after it.
+   Everything that depends on the learner's clock or time zone — the default
+   entry time, the steps that follow it, «Зафиксировано HH:MM» — waits for it,
+   because the server's clock and zone are not the learner's. */
+const subscribeNever = () => () => {};
+function useInBrowser(): boolean {
+  return useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
+}
+
+/**
+ * `initialState` is the server's first read of the card. With it, the tool
+ * arrives already drawn; without it (the read failed, or fixture mode), the
+ * tool reads from the browser as it always did.
+ */
+export function TradeCardWorkspace({ initialState = null }: { initialState?: TradeCardState | null }) {
+  const [phase, setPhase] = useState<Phase>(() =>
+    initialState ? { kind: "ready", reference: initialState.reference } : { kind: "loading" },
+  );
+  const [view, setView] = useState<View>(() =>
+    initialState?.card ? { kind: "fixed", card: initialState.card } : { kind: "form", editing: null },
+  );
+  const [draft, setDraft] = useState<TradeCardDraft>(() => emptyDraft(null));
   const [errors, setErrors] = useState<DraftErrors>({});
   const [result, setResult] = useState<TradeResult | null>(null);
   const [observation, setObservation] = useState("");
@@ -122,13 +146,16 @@ export function TradeCardWorkspace() {
       setObservation("");
     } else {
       setView({ kind: "form", editing: null });
-      setDraft(emptyDraft(new Date()));
+      setDraft(emptyDraft(null));
     }
   }, []);
 
-  /* The first read. One that finishes after the window unmounted is dropped
-     by the `cancelled` flag, the same guard the other learner surfaces use. */
+  /* The first read, when the server could not make it. One that finishes after
+     the tool unmounted is dropped by the `cancelled` flag, the same guard the
+     other learner surfaces use. */
+  const serverRead = initialState !== null;
   useEffect(() => {
+    if (serverRead) return;
     let cancelled = false;
     void fetchTradeCardState().then((response) => {
       if (!cancelled) applyState(response);
@@ -136,7 +163,9 @@ export function TradeCardWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [applyState]);
+  }, [applyState, serverRead]);
+
+  const inBrowser = useInBrowser();
 
   /** «Повторить», and the re-read after another tab moved the card on. */
   const reload = useCallback(async () => {
@@ -170,23 +199,26 @@ export function TradeCardWorkspace() {
 
   if (phase.kind === "loading") {
     return (
-      <div className="tw-state" role="status">
-        <p className="tw-state__line">Загружаю карточку…</p>
+      <div className="tw-quiet" role="status">
+        <p className="tw-quiet__line">Загружаю карточку…</p>
       </div>
     );
   }
   if (phase.kind === "locked") {
     return (
-      <div className="tw-state">
-        <p className="tw-state__title">Инструмент закрыт</p>
-        <p className="tw-state__line">Trade Card открывается после урока L5. Вернитесь к пути, чтобы продолжить.</p>
+      <div className="tw-quiet">
+        <h2 className="tw-quiet__title">Инструмент закрыт</h2>
+        <p className="tw-quiet__line">Trade Card открывается после урока L5.</p>
+        <Link className="tw-button" data-variant="outline" href="/path">
+          Продолжить путь
+        </Link>
       </div>
     );
   }
   if (phase.kind === "failed") {
     return (
-      <div className="tw-state" role="alert">
-        <p className="tw-state__line">{phase.message}</p>
+      <div className="tw-quiet" role="alert">
+        <p className="tw-quiet__line">{phase.message}</p>
         <button type="button" className="tw-button" data-variant="outline" onClick={() => void reload()}>
           Повторить
         </button>
@@ -195,6 +227,10 @@ export function TradeCardWorkspace() {
   }
 
   const { reference } = phase;
+
+  /* Until the learner sets an entry time, it follows their clock. */
+  const formDraft: TradeCardDraft =
+    draft.entryTime === "" && inBrowser ? { ...draft, entryTime: hhmm(now) } : draft;
 
   const onField = (field: DraftField, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -209,7 +245,7 @@ export function TradeCardWorkspace() {
 
   const submitPlan = async () => {
     if (busy) return;
-    const checked = validateDraft(draft, reference);
+    const checked = validateDraft(formDraft, reference);
     if (!checked.ok) {
       setErrors(checked.errors);
       return;
@@ -268,7 +304,7 @@ export function TradeCardWorkspace() {
 
   const startNewCard = () => {
     setView({ kind: "form", editing: null });
-    setDraft(emptyDraft(new Date()));
+    setDraft(emptyDraft(null));
     setErrors({});
     setResult(null);
     setObservation("");
@@ -276,164 +312,190 @@ export function TradeCardWorkspace() {
   };
 
   const fixedCard = view.kind === "fixed" ? view.card : null;
-  const step = view.kind === "saved" ? 5 : tradeCardStep(fixedCard, now, fixedCard ? result : null);
-  const stepHint = fixedCard ? hintFor(fixedCard, now, result) : null;
+  const clock = inBrowser ? now : null;
+  const step = view.kind === "saved" ? 5 : tradeCardStep(fixedCard, clock, fixedCard ? result : null);
+  const stepHint = fixedCard && clock ? hintFor(fixedCard, clock, result) : null;
 
-  const shownDraft = view.kind === "form" ? draft : draftFromCard(view.card);
+  const shownDraft = view.kind === "form" ? formDraft : draftFromCard(view.card);
   const outcomes = view.kind === "form" ? draftOutcomes(draft) : view.card.outcomes;
+  const errorLine = actionError ? (
+    <p className="tc-error" role="alert">
+      {actionError}
+    </p>
+  ) : null;
 
   return (
-    <div className="tw-card">
-      <div className="tw-card__steps">
-        <TradeCardStepper step={step} />
-        {stepHint ? <p className="tw-card__hint">{stepHint}</p> : null}
-      </div>
+    <div className="tc">
+      <TradeCardStepper step={step} />
+      {stepHint ? <p className="tc-hint">{stepHint}</p> : null}
 
-      <TradeCardPlanForm
-        draft={shownDraft}
-        reference={reference}
-        errors={view.kind === "form" ? errors : {}}
-        disabled={view.kind !== "form" || busy}
-        onChange={onField}
-        fixedAtLabel={view.kind === "form" ? null : hhmm(new Date(view.card.fixedAt))}
-      />
+      {/* One column on a phone; from 900px the plan and its outcome stand side
+          by side, and the outcome with the next action stays in view. */}
+      <div className="tc-layout">
+        <div className="tc-main">
+          <TradeCardPlanForm
+            draft={shownDraft}
+            reference={reference}
+            errors={view.kind === "form" ? errors : {}}
+            disabled={view.kind !== "form" || busy}
+            onChange={onField}
+            fixedAtLabel={view.kind === "form" || !inBrowser ? null : hhmm(new Date(view.card.fixedAt))}
+          />
+        </div>
 
-      <TradeCardOutcomes outcomes={outcomes} />
+        <div className="tc-aside">
+          <TradeCardOutcomes outcomes={outcomes} />
 
-      {view.kind === "form" ? (
-        <section className="tw-section tw-actions" aria-label="Фиксация плана">
-          <button type="button" className="tw-button" data-variant="primary" data-wide onClick={() => void submitPlan()} disabled={busy}>
-            {busy ? "Фиксирую…" : view.editing ? "Зафиксировать новый план" : "Зафиксировать план"}
-          </button>
-          {view.editing ? (
-            <button
-              type="button"
-              className="tw-button"
-              data-variant="ghost"
-              onClick={() => setView({ kind: "fixed", card: view.editing! })}
-              disabled={busy}
-            >
-              Оставить прежний план
-            </button>
-          ) : null}
-          <p className="tw-caption">Сделку вы открываете сами в Pocket — ATA сделки не открывает.</p>
-          {actionError ? (
-            <p className="tw-field__error" role="alert">
-              {actionError}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {view.kind === "fixed" ? (
-        <>
-          <section className="tw-section" aria-labelledby="tc-result-title">
-            <h2 className="tw-label" id="tc-result-title">
-              Результат после экспирации
-            </h2>
-            <div className="tw-segmented" role="radiogroup" aria-labelledby="tc-result-title">
-              {(["profit", "loss"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={result === value}
-                  className="tw-segmented__option"
-                  data-selected={result === value || undefined}
-                  onClick={() => setResult(value)}
-                  disabled={busy}
-                >
-                  {value === "profit" ? "Прибыль" : "Убыток"}
-                </button>
-              ))}
-            </div>
-
-            <label className="tw-label" htmlFor="tc-observation">
-              Наблюдение после сделки
-            </label>
-            <textarea
-              id="tc-observation"
-              className="tw-input tw-textarea"
-              rows={3}
-              maxLength={TRADE_CARD_LIMITS.observationMax}
-              placeholder="Что произошло и что это значит для следующего решения"
-              value={observation}
-              onChange={(event) => setObservation(event.target.value)}
-              disabled={busy}
-            />
-          </section>
-
-          <section className="tw-section tw-actions" aria-label="Действия с карточкой">
-            <div className="tw-actions__row">
+          {view.kind === "form" ? (
+            <section className="tc-section tc-actions" aria-label="Фиксация плана">
               <button
                 type="button"
                 className="tw-button"
                 data-variant="primary"
-                onClick={() => void saveCard(view.card)}
-                disabled={busy || result === null}
-                aria-describedby={result === null ? "tc-save-hint" : undefined}
-              >
-                {busy ? "Сохраняю…" : "Сохранить карточку"}
-              </button>
-              <button
-                type="button"
-                className="tw-button"
-                data-variant="outline"
-                onClick={() => {
-                  setDraft(draftFromCard(view.card));
-                  setErrors({});
-                  setView({ kind: "form", editing: view.card });
-                }}
+                data-wide
+                onClick={() => void submitPlan()}
                 disabled={busy}
               >
-                Изменить план
+                {busy ? "Фиксирую…" : view.editing ? "Зафиксировать новый план" : "Зафиксировать план"}
               </button>
-            </div>
-            {result === null ? (
-              <p className="tw-caption" id="tc-save-hint">
-                Отметьте результат, чтобы сохранить карточку.
-              </p>
-            ) : null}
+              {view.editing ? (
+                <button
+                  type="button"
+                  className="tw-button"
+                  data-variant="ghost"
+                  onClick={() => setView({ kind: "fixed", card: view.editing! })}
+                  disabled={busy}
+                >
+                  Оставить прежний план
+                </button>
+              ) : null}
+              <p className="tc-caption">Сделку вы открываете сами в Pocket — ATA сделки не открывает.</p>
+              {errorLine}
+            </section>
+          ) : null}
 
-            {confirmCancel ? (
-              <div className="tw-confirm" role="group" aria-label="Закрыть карточку без сделки">
-                <p className="tw-caption">Карточка закроется без результата. План останется в истории.</p>
-                <div className="tw-actions__row">
-                  <button type="button" className="tw-button" data-variant="outline" onClick={() => void cancelCard(view.card)} disabled={busy}>
-                    Да, сделку не открывал
+          {view.kind === "fixed" ? (
+            <>
+              <section className="tc-section" aria-labelledby="tc-result-title">
+                <h2 className="tc-section__title" id="tc-result-title">
+                  Результат после экспирации
+                </h2>
+                <div className="tc-segmented" role="radiogroup" aria-labelledby="tc-result-title">
+                  {(["profit", "loss"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={result === value}
+                      className="tc-segmented__option"
+                      data-selected={result === value || undefined}
+                      onClick={() => setResult(value)}
+                      disabled={busy}
+                    >
+                      {value === "profit" ? "Прибыль" : "Убыток"}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="tc-label" htmlFor="tc-observation">
+                  Наблюдение после сделки
+                </label>
+                <textarea
+                  id="tc-observation"
+                  className="tc-input tc-textarea"
+                  rows={3}
+                  maxLength={TRADE_CARD_LIMITS.observationMax}
+                  placeholder="Что произошло и что это значит для следующего решения"
+                  value={observation}
+                  onChange={(event) => setObservation(event.target.value)}
+                  disabled={busy}
+                />
+              </section>
+
+              <section className="tc-section tc-actions" aria-label="Действия с карточкой">
+                <div className="tc-actions__row">
+                  <button
+                    type="button"
+                    className="tw-button"
+                    data-variant="primary"
+                    onClick={() => void saveCard(view.card)}
+                    disabled={busy || result === null}
+                    aria-describedby={result === null ? "tc-save-hint" : undefined}
+                  >
+                    {busy ? "Сохраняю…" : "Сохранить карточку"}
                   </button>
-                  <button type="button" className="tw-button" data-variant="ghost" onClick={() => setConfirmCancel(false)} disabled={busy}>
-                    Назад
+                  <button
+                    type="button"
+                    className="tw-button"
+                    data-variant="outline"
+                    onClick={() => {
+                      setDraft(draftFromCard(view.card));
+                      setErrors({});
+                      setView({ kind: "form", editing: view.card });
+                    }}
+                    disabled={busy}
+                  >
+                    Изменить план
                   </button>
                 </div>
+                {result === null ? (
+                  <p className="tc-caption" id="tc-save-hint">
+                    Отметьте результат, чтобы сохранить карточку.
+                  </p>
+                ) : null}
+
+                {confirmCancel ? (
+                  <div className="tc-confirm" role="group" aria-label="Закрыть карточку без сделки">
+                    <p className="tc-caption">Карточка закроется без результата. План останется в истории.</p>
+                    <div className="tc-actions__row">
+                      <button
+                        type="button"
+                        className="tw-button"
+                        data-variant="outline"
+                        onClick={() => void cancelCard(view.card)}
+                        disabled={busy}
+                      >
+                        Да, сделку не открывал
+                      </button>
+                      <button
+                        type="button"
+                        className="tw-button"
+                        data-variant="ghost"
+                        onClick={() => setConfirmCancel(false)}
+                        disabled={busy}
+                      >
+                        Назад
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="tw-link-button" onClick={() => setConfirmCancel(true)} disabled={busy}>
+                    Сделку не открывал
+                  </button>
+                )}
+                {errorLine}
+              </section>
+            </>
+          ) : null}
+
+          {view.kind === "saved" ? (
+            <section className="tc-section tc-actions" aria-label="Карточка сохранена">
+              <TradeCardSavedNotice summary={savedSummary(view.card)} />
+              <div className="tc-actions__row">
+                <button type="button" className="tw-button" data-variant="primary" onClick={startNewCard}>
+                  Новая карточка
+                </button>
+                <Link className="tw-button" data-variant="outline" href="/tools">
+                  Все инструменты
+                </Link>
               </div>
-            ) : (
-              <button type="button" className="tw-link-button" onClick={() => setConfirmCancel(true)} disabled={busy}>
-                Сделку не открывал
-              </button>
-            )}
-            {actionError ? (
-              <p className="tw-field__error" role="alert">
-                {actionError}
-              </p>
-            ) : null}
-          </section>
-        </>
-      ) : null}
+            </section>
+          ) : null}
+        </div>
+      </div>
 
-      {view.kind === "saved" ? (
-        <section className="tw-section tw-actions" aria-label="Карточка сохранена">
-          <TradeCardSavedNotice summary={savedSummary(view.card)} />
-          <div className="tw-actions__row">
-            <button type="button" className="tw-button" data-variant="outline" onClick={startNewCard}>
-              Новая карточка
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <div className="tw-toast" role="status" aria-live="polite">
-        {toast ? <span className="tw-toast__body">{toast}</span> : null}
+      <div className="tc-toast" role="status" aria-live="polite">
+        {toast ? <span className="tc-toast__body">{toast}</span> : null}
       </div>
     </div>
   );

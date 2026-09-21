@@ -163,8 +163,10 @@ describe("Trade Card — the fixed plan", () => {
       result: "profit",
       observation: "вошёл по плану",
     });
-    const done = await screen.findByText("Карточка сохранена", { selector: ".tw-done__title" });
+    const done = await screen.findByText("Карточка сохранена", { selector: ".tc-done__title" });
     expect(done.parentElement).toHaveTextContent("Прибыль · без наблюдения. С уровня 10 карточки попадают в Trading Journal.");
+    // The way back to every other tool, in the same tab.
+    expect(screen.getByRole("link", { name: "Все инструменты" })).toHaveAttribute("href", "/tools");
     await user.click(screen.getByRole("button", { name: "Новая карточка" }));
     expect(screen.getByRole("button", { name: "Зафиксировать план" })).toBeInTheDocument();
     expect(screen.getByLabelText("Сумма")).toHaveValue("");
@@ -212,6 +214,24 @@ describe("Trade Card — the fixed plan", () => {
     await user.click(screen.getByRole("button", { name: "Сохранить карточку" }));
     await waitFor(() => expect(fetchTradeCardState).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole("button", { name: "Зафиксировать план" })).toBeInTheDocument();
+  });
+});
+
+describe("Trade Card — the server's first read", () => {
+  it("arrives already drawn and does not read again", () => {
+    render(<TradeCardWorkspace initialState={{ card: card(), reference: REFERENCE }} />);
+    // No waiting: the fixed card is there on the first render.
+    expect(screen.getByText("Результат после экспирации")).toBeInTheDocument();
+    expect(screen.queryByText("Загружаю карточку…")).toBeNull();
+    expect(fetchTradeCardState).not.toHaveBeenCalled();
+  });
+
+  it("starts an empty plan at the learner's current minute", () => {
+    render(<TradeCardWorkspace initialState={{ card: null, reference: REFERENCE }} />);
+    expect(screen.getByLabelText("Время входа")).toHaveValue(
+      `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
+    );
+    expect(fetchTradeCardState).not.toHaveBeenCalled();
   });
 });
 

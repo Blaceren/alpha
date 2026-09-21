@@ -22,8 +22,12 @@ export const metadata: Metadata = {
  * (TOOLS-AUTHORITY-DIVERGENCE-1). Fixture mode keeps its scenario marker for
  * local development, and states its unlocks literally.
  *
- * Each open tool is a link into a NEW TAB at /tools/<slug>, rendered by the
- * `(tool)` route group without the Academy shell.
+ * Each open tool links to its own page, /tools/<slug>, in the SAME tab (owner
+ * decision 2026-09-21), and every tool page leads back here.
+ *
+ * `frozenSurface`: the page carries its own container geometry and paints the
+ * flat Ink field the product's other pages use; the shell's older decorative
+ * wash is not shown behind it.
  */
 export default async function ToolsPage({
   searchParams,
@@ -33,7 +37,7 @@ export default async function ToolsPage({
   if (getAcademyConfig().mode === "api") {
     const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
     return (
-      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" notificationPresence={<UnreadPresence />}>
+      <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
         <ToolsHub tools={resolveToolWindows(toolAccessOf(result))} />
       </AppShell>
     );
@@ -44,7 +48,7 @@ export default async function ToolsPage({
   const scenario = resolvePathScenario(Array.isArray(rawScenario) ? rawScenario[0] : rawScenario);
 
   return (
-    <AppShell userName={await shellViewerName()} activeId="tools" notificationPresence={<UnreadPresence />}>
+    <AppShell userName={await shellViewerName()} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
       <ToolsHub tools={resolveToolWindows(fixtureToolAccess(scenario))} />
     </AppShell>
   );

@@ -134,23 +134,20 @@ describe("the authenticated route group", () => {
   const AUTHORISED_VIEWER_IDENTITY = [
   /* TOOLS-V2 slice 1 (owner decision 2026-09-21): the nineteen-tool catalogue
      is replaced by the owner's six, and the Trade Card is the first one built.
-     A tool opens in a tab of its own through the new `(tool)` route group, which
-     carries its own session guard and no shell and adds no loading boundary. The
-     old tools and tools-fidelity features are deleted whole, so their files
-     appear here as deletions. The curriculum fixture retires the later
+     After the owner's review a tool opens in the SAME tab, as an ordinary page
+     of the shell at /tools/[slug] with «Все инструменты» as the way back; it
+     adds no loading boundary. The old tools and tools-fidelity features are
+     deleted whole, so their files appear here as deletions. The curriculum fixture retires the later
      checkpoint tools, and the Home mock names the tools the L18 scenario holds.
      The proxy is a separate bounded module, as Community's is. */
-  "src/app/(tool)/layout.tsx",
-  "src/app/(tool)/tools/[slug]/page.tsx",
+  "src/app/(app)/tools/[slug]/page.tsx",
   "src/app/api/backend/tools/trade-cards/[cardId]/route.ts",
   "src/app/api/backend/tools/trade-cards/route.ts",
   "src/data/curriculum/fixture.ts",
   "src/data/mock/home-scenarios.ts",
-  "src/features/tool-windows/components/tool-close-button.tsx",
   "src/features/tool-windows/components/tool-locked.tsx",
-  "src/features/tool-windows/components/tool-preview-toggle.tsx",
+  "src/features/tool-windows/components/tool-page.tsx",
   "src/features/tool-windows/components/tool-soon.tsx",
-  "src/features/tool-windows/components/tool-window-frame.tsx",
   "src/features/tool-windows/components/tools-hub.tsx",
   "src/features/tool-windows/model/access.ts",
   "src/features/tool-windows/model/catalog.ts",
@@ -158,7 +155,6 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/trade-card/trade-card-client.ts",
   "src/features/tool-windows/trade-card/trade-card-model.ts",
   "src/features/tool-windows/trade-card/trade-card-parts.tsx",
-  "src/features/tool-windows/trade-card/trade-card-preview.tsx",
   "src/features/tool-windows/trade-card/trade-card-workspace.tsx",
   "src/features/tools-fidelity/tools-fidelity-safety.css",
   "src/features/tools-fidelity/tools-fidelity.css",
@@ -175,6 +171,7 @@ describe("the authenticated route group", () => {
   "src/features/tools/model/tool-catalog.ts",
   "src/features/tools/tools.css",
   "src/server/proxy/tools-proxy.ts",
+  "src/server/tools/trade-card-read.ts",
   /* ATA-PROFILE-FOUNDATION-1: registration asks for a name, the password rule
      is length alone, and Profile gained a security area with a real change-
      password route. The proxy grew exactly one named operation — login-proxy

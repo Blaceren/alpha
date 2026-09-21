@@ -181,7 +181,7 @@ function isReference(value: unknown): value is TradeCardReference {
   );
 }
 
-function isState(value: unknown): value is TradeCardState {
+export function isTradeCardState(value: unknown): value is TradeCardState {
   return isRecord(value) && (value.card === null || isTradeCard(value.card)) && isReference(value.reference);
 }
 
@@ -204,7 +204,7 @@ export async function fetchTradeCardState(): Promise<TradeCardResult<TradeCardSt
   } catch {
     return { ok: false, error: makeError("NETWORK_ERROR"), detail: null };
   }
-  return readEnvelope(response, isState);
+  return readEnvelope(response, isTradeCardState);
 }
 
 /** «Зафиксировать план». */

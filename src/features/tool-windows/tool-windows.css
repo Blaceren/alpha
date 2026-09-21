@@ -1,394 +1,524 @@
 /*
- * TOOLS-V2 — the tools page and the tool windows.
+ * TOOLS-V2 — the tools page and a tool's own page.
  *
- * VISUAL AUTHORITY: the owner's presentation «Окна инструментов ATA»
- * (2026-09-21). The tools page lists the six tools in unlock order. Each tool
- * opens in a NEW BROWSER TAB (owner decision), as a narrow column the learner
- * can keep next to the Pocket chart. On a wide screen the same column stands
- * centred, so the layout the learner sees is the one they will dock.
+ * THE PRODUCT'S OWN LANGUAGE (owner review 2026-09-21). The first version
+ * borrowed the presentation's window look — serif headings, a narrow column
+ * on a darker ground, the shell's old decorative wash. The owner asked for the
+ * tones of the product's other pages instead, so these surfaces now carry the
+ * Lessons DNA, the most recent authenticated high-fi:
  *
- * TYPE, AS THE PRESENTATION USES IT:
- *   Manrope     — interface text;
- *   Plex Mono   — field labels and status marks, uppercase and spaced;
- *   Source Serif 4 — large state headings, the two amounts of a trade, and the
- *                    learner's own writing, so what they wrote reads as theirs.
+ *   flat Ink canvas (the frozen shell field) · one olive-black territory with
+ *   a short Signal segment on its top edge · Manrope-first type with a narrow
+ *   Mono precision layer · lines that each have a job · radius 8 · no shadows ·
+ *   Signal only for the one primary action, the active step and focus.
  *
- * EXISTING TOKENS FIRST. The only new values are the two outcome colours
- * (gain and loss), which no product token carries, and the ground behind the
- * centred column on wide screens.
+ * The values below are Lessons' own, restated under this scope rather than
+ * imported, exactly as Lessons restates them from the frozen Path system.
+ * Results follow the product's existing pair: positive = route-completed,
+ * negative = the desaturated rose Support and the old tools used.
  *
- * GROUND-USE CONTRACT: `--text-muted` carries text on Ink 900 / Ink 800 only.
+ * A TOOL OPENS IN THE SAME TAB (owner decision 2026-09-21), inside the shell,
+ * with «Все инструменты» as the way back. The page is built for every width:
+ * one column on a phone, the plan and the outcome side by side from 900px.
+ *
+ * GROUND-USE CONTRACT: text on the territory uses the territory's own ladder
+ * (--tw-text-1/2/3), designed for that surface, never --text-muted.
  */
 
-/* ============================== tools page ============================== */
+.twh,
+.twp {
+  color-scheme: dark;
 
-.twh {
+  --tw-surface: #131a0e;
+  --tw-surface-hover: #1b2412;
+  --tw-surface-press: #222e16;
+  --tw-well: #0d120a;
+
+  --tw-line-1: rgba(243, 244, 239, 0.07);
+  --tw-line-2: rgba(243, 244, 239, 0.13);
+  --tw-line-3: rgba(243, 244, 239, 0.27);
+  --tw-line-olive: rgba(199, 247, 109, 0.16);
+  --tw-line-olive-hover: rgba(199, 247, 109, 0.28);
+  --tw-index: rgba(183, 234, 93, 0.42);
+
+  --tw-text-1: #f3f4ef;
+  --tw-text-2: #c2c8bd;
+  --tw-text-3: #9aa396;
+  --tw-on-signal: #0b0d0a;
+
+  --tw-signal: #c7f76d;
+  --tw-signal-hover: #d3fa85;
+  --tw-positive: var(--route-completed);
+  --tw-negative: #d7a3a8;
+
+  --tw-radius: 8px;
+  --tw-ease: cubic-bezier(0.2, 0, 0, 1);
+
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  /* The measure and centring Support uses, so the two surfaces put their
-     content at the same x on the same screen. Below 900px the shell pads. */
-  max-width: 1080px;
+  width: min(100%, 1008px);
   margin-inline: auto;
-  color: var(--text-primary);
-  /* The bottom-nav clearance contract (DD-313). */
-  padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 44px);
+  /* Below 900px the shell's bottom navigation is fixed over the page, and a
+     frozen surface owns its own padding: the last control must scroll clear of
+     it (DD-313). */
+  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 32px);
+  color: var(--tw-text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.twh__title {
+.twh *,
+.twh *::before,
+.twh *::after,
+.twp *,
+.twp *::before,
+.twp *::after {
+  box-sizing: border-box;
+}
+
+.twh :focus-visible,
+.twp :focus-visible {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ page head */
+
+.tw-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+}
+
+.tw-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.tw-count {
+  margin-left: auto;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tw-orient {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  color: var(--tw-text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------ the territory (panel) */
+
+.tw-territory {
+  position: relative;
+  margin-top: 22px;
+  padding: 18px 16px 20px;
+  border-radius: var(--tw-radius);
+  background: var(--tw-surface);
+}
+
+/* ACTIVE-SURFACE CUE: one short Signal segment on the top edge, as on Lessons.
+   Never a progress bar: no track, fixed length, one per page. */
+.tw-territory::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  width: 28px;
+  height: 2px;
+  border-radius: 0 0 1px 1px;
+  background: var(--tw-signal);
+}
+
+.tw-footnote {
+  margin: 14px 0 0;
+  max-width: 62ch;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ============================================================ tools page */
+
+.twh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.twh-row {
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.twh-row:last-child {
+  border-bottom-color: transparent;
+}
+
+/* An open tool is ONE full-row link, like a Lessons material: the tool has
+   exactly one destination. A locked or unbuilt one is still text. */
+.twh-row__open,
+.twh-row__still {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 2px 12px;
+  padding: 13px 10px;
+  margin-inline: -10px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.twh-row__open {
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.twh-row__open:hover {
+  background: var(--tw-surface-hover);
+}
+
+.twh-row__open:active {
+  background: var(--tw-surface-press);
+  transition-duration: 40ms;
+}
+
+.twh-row__level {
+  grid-row: 1 / span 3;
+  padding-top: 2px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.twh-row__title {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.twh-row__still .twh-row__title {
+  color: var(--tw-text-2);
+  font-weight: 600;
+}
+
+.twh-row__desc {
+  color: var(--tw-text-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.twh-row__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.twh-row__open .twh-row__state {
+  color: var(--tw-text-1);
+}
+
+.twh-row__open:hover .twh-row__state {
+  color: var(--tw-signal);
+}
+
+.twh-row__soon {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ============================================================= tool page */
+
+/* «Все инструменты» — the way back, the same control on every tool page. */
+.twp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* 44px on a phone (touch), 40px from 600px. */
+  min-height: 44px;
+  margin-bottom: 18px;
+  padding: 8px 14px 8px 11px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.twp-back:hover {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+/* locked, soon, loading: quiet and in place, like Lessons' zero state */
+.tw-quiet {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 56ch;
+  padding: 6px 0 4px;
+}
+
+.tw-quiet__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tw-quiet__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.tw-quiet__line {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+/* ============================================================ trade card */
+
+.tc-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(4px, 1.2vw, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tc-step {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tc-step__bar {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--tw-line-2);
+}
+
+/* On a phone five labels cannot share the width without losing their endings,
+   so the bars stand alone and one line below names the current step. The labels
+   stay in the list for assistive technology. From 600px they are shown. */
+.tc-step__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  color: var(--tw-text-3);
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.twh__lead {
-  margin: 0 0 14px;
-  max-width: 40rem;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  line-height: 1.55;
+.tc-steps-now {
+  margin: 10px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
-.twh__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--divider);
+.tc-step[data-state="done"] .tc-step__bar {
+  background: var(--tw-index);
 }
 
-.twh-row {
+.tc-step[data-state="done"] .tc-step__label {
+  color: var(--tw-text-2);
+}
+
+.tc-step[data-state="current"] .tc-step__bar {
+  background: var(--tw-signal);
+}
+
+.tc-step[data-state="current"] .tc-step__label {
+  color: var(--tw-text-1);
+}
+
+.tc-hint {
+  margin: 12px 0 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.tc-layout {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr);
-  gap: 10px 12px;
-  padding: 16px 8px;
-  border-bottom: 1px solid var(--divider);
+  gap: 0;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--tw-line-1);
 }
 
-.twh-row__level {
-  padding-top: 3px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.tc-aside {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
 }
 
-.twh-row__title {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-}
-
-.twh-row[data-state="locked"] .twh-row__title {
-  color: var(--text-secondary);
-}
-
-.twh-row__desc {
-  margin: 3px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  line-height: 1.5;
-}
-
-.twh-row__action {
-  grid-column: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-}
-
-.twh-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid color-mix(in srgb, var(--signal-active) 60%, transparent);
-  border-radius: 999px;
-  color: var(--signal-active);
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: background-color var(--motion-fast) var(--ease-standard);
-}
-
-.twh-open:hover {
-  background: color-mix(in srgb, var(--signal-active) 12%, transparent);
-}
-
-.twh-open:focus-visible,
-.twh-peek:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.twh-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.twh-soon {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--divider-strong);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.twh-peek {
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.twh-peek:hover {
-  color: var(--text-primary);
-}
-
-.twh__note {
-  margin: 14px 0 0;
-  max-width: 40rem;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-
-@media (min-width: 600px) {
-  .twh-row {
-    grid-template-columns: 3.25rem minmax(0, 1fr) auto;
-    align-items: start;
-    padding: 18px 12px;
-  }
-
-  .twh-row__action {
-    grid-column: 3;
-    grid-row: 1;
-    justify-content: flex-end;
-    padding-top: 1px;
-  }
-}
-
-@media (min-width: 900px) {
-  /* The shell's main area carries no padding from here up. */
-  .twh {
-    padding: 48px clamp(24px, 4vw, 56px) 56px;
-  }
-}
-
-/* ============================== tool window ============================= */
-
-.tw-page {
-  display: flex;
-  justify-content: center;
-  min-height: 100dvh;
-  background: var(--background-base);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-}
-
-.tw {
-  --tw-gain: #9fdc8c;
-  --tw-loss: #f0907a;
-  --tw-line: rgba(237, 240, 234, 0.1);
-  --tw-line-strong: rgba(237, 240, 234, 0.18);
-
+.tc-section {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 30rem;
-  min-height: 100dvh;
-  background: var(--background-base);
+  gap: 12px;
 }
 
-.tw-head {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 0 12px 0 20px;
-  border-bottom: 1px solid var(--tw-line);
-  background: color-mix(in srgb, var(--background-base) 94%, transparent);
-  backdrop-filter: blur(6px);
+.tc-section + .tc-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
 }
 
-.tw-head__brand {
-  font-weight: 800;
-  letter-spacing: 0.03em;
-}
-
-.tw-head__title {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 1rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tw-chip {
-  margin-left: auto;
-  padding: 2px 7px;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-}
-
-.tw-close {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.tw-close:hover {
-  color: var(--text-primary);
-  background: var(--surface-subtle);
-}
-
-.tw-body {
-  flex: 1;
-  padding: 0 20px 28px;
-}
-
-.tw-foot {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  padding: 11px 20px calc(11px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--tw-line);
-  background: color-mix(in srgb, var(--background-base) 94%, transparent);
-  backdrop-filter: blur(6px);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
-.tw :focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-/* ------------------------------------------------------------ primitives */
-
-.tw-label {
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 400;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.tw-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 0;
-  border-top: 1px solid var(--tw-line);
-}
-
-.tw-section__head {
+.tc-section__head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: 6px 12px;
 }
 
-.tw-pill {
-  padding: 3px 9px;
-  border: 1px solid color-mix(in srgb, var(--signal-active) 45%, transparent);
-  border-radius: 999px;
-  color: var(--signal-active);
+.tc-section__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* «Зафиксировано 14:32» — the plan's current state: legitimate Signal. */
+.tc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--tw-signal);
   font-family: var(--font-mono);
-  font-size: 0.65625rem;
-  letter-spacing: 0.1em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.tw-grid {
+.tc-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tc-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px 12px;
 }
 
-.tw-field {
+.tc-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.tw-field[data-span="full"] {
+.tc-field[data-span="full"] {
   grid-column: 1 / -1;
 }
 
-.tw-field__error {
+.tc-label {
   margin: 0;
-  color: var(--tw-loss);
-  font-size: 0.8125rem;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tc-error {
+  margin: 0;
+  color: var(--tw-negative);
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.4;
 }
 
-.tw-input {
+.tc-input {
   width: 100%;
-  min-height: 44px;
+  /* 48px on a phone, so every field is a comfortable touch target and lines up
+     with the segmented controls; 44px from 600px. */
+  min-height: 48px;
   padding: 10px 12px;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 8px;
-  background: var(--background-field);
-  color: var(--text-primary);
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-1);
   font: inherit;
-  /* 16px keeps mobile browsers from zooming into a focused field. */
-  font-size: 1rem;
+  /* 16px keeps a phone's browser from zooming into a focused field. */
+  font-size: 16px;
+  font-weight: 500;
+  transition: border-color 140ms var(--tw-ease);
 }
 
-.tw-input::placeholder {
-  color: var(--text-muted);
+.tc-input::placeholder {
+  color: var(--tw-text-3);
 }
 
-.tw-input:focus-visible {
-  border-color: transparent;
-  outline-offset: 0;
+.tc-input:hover:not(:disabled) {
+  border-color: var(--tw-line-olive-hover);
 }
 
-.tw-input[aria-invalid="true"] {
-  border-color: color-mix(in srgb, var(--tw-loss) 70%, transparent);
+.tc-input:focus-visible {
+  border-color: var(--tw-signal);
+  outline-offset: 1px;
 }
 
-.tw-input:disabled {
-  opacity: 0.62;
+.tc-input[aria-invalid="true"] {
+  border-color: var(--tw-negative);
+}
+
+.tc-input:disabled {
+  border-color: var(--tw-line-1);
+  background: transparent;
+  color: var(--tw-text-2);
   cursor: default;
+  opacity: 1;
 }
 
-.tw-select {
+.tc-select {
   appearance: none;
   padding-right: 34px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
-    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--tw-text-3) 50%),
+    linear-gradient(135deg, var(--tw-text-3) 50%, transparent 50%);
   background-position:
     calc(100% - 18px) 50%,
     calc(100% - 13px) 50%;
@@ -396,241 +526,208 @@
   background-repeat: no-repeat;
 }
 
-.tw-select option,
-.tw-select optgroup {
-  background: var(--background-field);
-  color: var(--text-primary);
+.tc-select:disabled {
+  background-image: none;
 }
 
-.tw-textarea {
-  min-height: 88px;
+.tc-select option,
+.tc-select optgroup {
+  background: var(--tw-well);
+  color: var(--tw-text-1);
+}
+
+.tc-textarea {
+  min-height: 96px;
   resize: vertical;
-  font-family: var(--font-public-display);
-  font-size: 1.0625rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-.tw-affix {
+.tc-affix {
   position: relative;
   display: block;
 }
 
-.tw-affix__mark {
+.tc-affix__mark {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: var(--tw-text-3);
+  font-weight: 600;
   pointer-events: none;
 }
 
-.tw-affix[data-side="start"] .tw-affix__mark {
+.tc-affix[data-side="start"] .tc-affix__mark {
   left: 12px;
 }
 
-.tw-affix[data-side="start"] .tw-input {
+.tc-affix[data-side="start"] .tc-input {
   padding-left: 26px;
 }
 
-.tw-affix[data-side="end"] .tw-affix__mark {
+.tc-affix[data-side="end"] .tc-affix__mark {
   right: 12px;
 }
 
-.tw-affix[data-side="end"] .tw-input {
+.tc-affix[data-side="end"] .tc-input {
   padding-right: 30px;
 }
 
-.tw-segmented {
+.tc-segmented {
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
   gap: 4px;
+  min-height: 48px;
+  padding: 2px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.tc-segmented__option {
+  /* A 44px touch target on a phone; 36px inside a 44px control from 600px. */
   min-height: 44px;
-  padding: 3px;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 10px;
-  background: var(--background-field);
-}
-
-.tw-segmented__option {
-  min-height: 36px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--tw-text-2);
   font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
   cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
 }
 
-.tw-segmented__option:hover:not(:disabled) {
-  color: var(--text-primary);
+.tc-segmented__option:hover:not(:disabled):not([data-selected]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
 }
 
-.tw-segmented__option[data-selected] {
-  background: var(--signal-active);
-  color: var(--ata-ink-900);
+.tc-segmented__option[data-selected] {
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
 }
 
-.tw-segmented__option:disabled {
+.tc-segmented__option:disabled {
   cursor: default;
 }
 
-.tw-segmented__option:disabled:not([data-selected]) {
-  opacity: 0.55;
+.tc-segmented[data-disabled] {
+  border-color: var(--tw-line-1);
+  background: transparent;
 }
 
-.tw-section[data-disabled] .tw-segmented__option[data-selected] {
-  opacity: 0.75;
+.tc-segmented[data-disabled] .tc-segmented__option[data-selected] {
+  background: var(--tw-surface-press);
+  color: var(--tw-text-1);
 }
 
-/* --------------------------------------------------------------- stepper */
+/* ------------------------------------------------------------- outcomes */
 
-.tw-card__steps {
-  padding: 18px 0 16px;
-}
-
-.tw-steps {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: clamp(4px, 1.2vw, 6px);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tw-step {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-
-.tw-step__bar {
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--tw-line-strong);
-}
-
-.tw-step__label {
-  overflow: hidden;
-  color: var(--text-muted);
-  /* Five labels share a phone's width: they shrink a little rather than
-     lose their endings. The ellipsis is only a last resort. */
-  font-size: clamp(0.625rem, 2.8vw, 0.75rem);
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tw-step[data-state="done"] .tw-step__bar {
-  background: var(--ata-signal-700);
-}
-
-.tw-step[data-state="done"] .tw-step__label {
-  color: var(--text-secondary);
-}
-
-.tw-step[data-state="current"] .tw-step__bar {
-  background: var(--signal-active);
-  box-shadow: 0 0 10px var(--glow-current);
-}
-
-.tw-step[data-state="current"] .tw-step__label {
-  color: var(--signal-active);
-}
-
-.tw-card__hint {
-  margin: 12px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-/* -------------------------------------------------------------- outcomes */
-
-.tw-outcomes {
+.tc-outcomes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 10px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
 }
 
-.tw-outcome {
+.tc-outcome {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   padding: 12px 14px;
 }
 
-.tw-outcome + .tw-outcome {
-  border-left: 1px solid var(--tw-line-strong);
+.tc-outcome + .tc-outcome {
+  border-left: 1px solid var(--tw-line-2);
 }
 
-.tw-outcome__value {
+.tc-outcome__label {
+  color: var(--tw-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tc-outcome__value {
   margin: 0;
-  font-family: var(--font-public-display);
-  font-size: 1.75rem;
+  font-size: 22px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.tw-outcome[data-kind="gain"] .tw-outcome__value {
-  color: var(--tw-gain);
+.tc-outcome[data-kind="gain"] .tc-outcome__value {
+  color: var(--tw-positive);
 }
 
-.tw-outcome[data-kind="loss"] .tw-outcome__value {
-  color: var(--tw-loss);
+.tc-outcome[data-kind="loss"] .tc-outcome__value {
+  color: var(--tw-negative);
 }
 
-.tw-note {
+.tc-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.5;
 }
 
-.tw-note svg {
+.tc-note svg {
   flex: none;
   margin-top: 3px;
 }
 
-/* --------------------------------------------------------------- actions */
+/* -------------------------------------------------------------- actions */
 
-.tw-actions {
+.tc-actions {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.tw-actions__row {
+.tc-actions__row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.tw-caption {
+/* Side by side where they fit, each the full width where they do not. */
+.tc-actions__row > .tw-button {
+  flex: 1 1 180px;
+}
+
+.tc-caption {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.5;
 }
 
 .tw-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 18px;
+  padding: 11px 20px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--tw-radius);
   font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 650;
+  text-decoration: none;
   cursor: pointer;
-  transition: background-color var(--motion-fast) var(--ease-standard);
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
 }
 
 .tw-button[data-wide] {
@@ -638,195 +735,248 @@
 }
 
 .tw-button[data-variant="primary"] {
-  background: var(--signal-active);
-  color: var(--ata-ink-900);
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
 }
 
 .tw-button[data-variant="primary"]:hover:not(:disabled) {
-  background: var(--ata-signal-300);
+  background: var(--tw-signal-hover);
+}
+
+/* Unavailable, and still legible (the Support rule): the learner can read
+   what the control would do before it is available. */
+.tw-button[data-variant="primary"]:disabled {
+  border-color: var(--tw-line-2);
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: not-allowed;
 }
 
 .tw-button[data-variant="outline"] {
-  border-color: var(--tw-line-strong);
+  border-color: var(--tw-line-2);
   background: transparent;
-  color: var(--text-primary);
+  color: var(--tw-text-1);
 }
 
 .tw-button[data-variant="outline"]:hover:not(:disabled) {
-  background: var(--surface-subtle);
+  background: var(--tw-surface-hover);
 }
 
 .tw-button[data-variant="ghost"] {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--tw-text-2);
 }
 
-.tw-button:disabled {
-  opacity: 0.5;
+.tw-button[data-variant="ghost"]:hover:not(:disabled) {
+  color: var(--tw-text-1);
+}
+
+.tw-button:disabled:not([data-variant="primary"]) {
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
 .tw-link-button {
   align-self: flex-start;
-  padding: 6px 0;
+  min-height: 44px;
+  padding: 12px 0;
   border: 0;
   background: none;
-  color: var(--text-secondary);
+  color: var(--tw-text-2);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 13.5px;
+  font-weight: 600;
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-color: var(--tw-line-3);
+  text-underline-offset: 4px;
   cursor: pointer;
 }
 
 .tw-link-button:hover:not(:disabled) {
-  color: var(--text-primary);
+  color: var(--tw-text-1);
 }
 
-.tw-confirm {
+.tc-confirm {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 10px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
 }
 
-.tw-done {
+.tc-done {
+  display: flex;
+  gap: 10px;
   padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--signal-active) 50%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--signal-active) 8%, var(--background-base));
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
 }
 
-.tw-done__title {
-  margin: 0 0 4px;
-  color: var(--signal-active);
-  font-family: var(--font-public-display);
-  font-size: 1.3125rem;
+.tc-done svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--tw-signal);
 }
 
-.tw-done__body {
+.tc-done__title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tc-done__body {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.5;
 }
 
-.tw-toast {
+.tc-toast {
   position: fixed;
   left: 50%;
-  bottom: calc(60px + env(safe-area-inset-bottom));
+  bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
   z-index: 20;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
-.tw-toast__body {
+.tc-toast__body {
   display: inline-block;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: var(--text-primary);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  color: var(--ata-ink-900);
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: var(--tw-radius);
+  background: var(--tw-text-1);
+  color: var(--tw-on-signal);
+  font-size: 13.5px;
+  font-weight: 650;
   white-space: nowrap;
 }
 
-/* ------------------------------------------------ locked, soon, loading */
-
-.tw-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 56px 0 24px;
-  text-align: center;
-}
-
-.tw-state__title {
-  margin: 0;
-  font-family: var(--font-public-display);
-  font-size: 1.625rem;
-  line-height: 1.2;
-}
-
-.tw-state__line {
-  margin: 0;
-  max-width: 22rem;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  line-height: 1.55;
-}
-
-.tw-locked {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 44px 0 24px;
-  text-align: center;
-}
-
-.tw-locked__icon {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 6px;
-  border: 1px solid var(--tw-line-strong);
-  border-radius: 50%;
-  color: var(--text-secondary);
-}
-
-.tw-locked__title {
-  margin: 4px 0 0;
-  font-family: var(--font-public-display);
-  font-size: 1.875rem;
-  font-weight: 400;
-  line-height: 1.15;
-}
-
-.tw-locked__body {
-  margin: 0 0 8px;
-  max-width: 21rem;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  line-height: 1.55;
-}
-
-.tw-preview-cta {
-  display: flex;
-  justify-content: center;
-  padding-bottom: 24px;
-}
-
-.tw-preview {
-  border-top: 1px dashed var(--tw-line-strong);
-}
-
-.tw-preview__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 0 0;
-}
+/* ====================================================== wider screens */
 
 @media (min-width: 600px) {
-  .tw-page {
-    background: #080a07;
+  .twh,
+  .twp {
+    padding-top: 30px;
+    padding-inline: 24px;
   }
 
-  .tw {
-    border-inline: 1px solid var(--tw-line);
-    box-shadow: 0 0 80px rgba(0, 0, 0, 0.45);
+  .tw-title {
+    font-size: 22px;
+  }
+
+  .tw-territory {
+    margin-top: 26px;
+    padding: 24px 24px 28px;
+  }
+
+  .tw-territory::before {
+    left: 24px;
+  }
+
+  .twh-row__open,
+  .twh-row__still {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    column-gap: 16px;
+    padding: 13px 12px;
+    margin-inline: -12px;
+  }
+
+  .twh-row__state {
+    grid-column: 3;
+    grid-row: 1;
+    margin-top: 1px;
+  }
+
+  .tc-input {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .tc-segmented {
+    min-height: 44px;
+    padding: 3px;
+  }
+
+  .tc-segmented__option {
+    min-height: 36px;
+  }
+
+  .twp-back {
+    min-height: 40px;
+  }
+
+  .tw-link-button {
+    min-height: 0;
+    padding: 6px 0;
+  }
+
+  .tc-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tc-step__label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: hidden;
+    clip: auto;
+    text-overflow: ellipsis;
+  }
+
+  .tc-steps-now {
+    display: none;
   }
 }
 
+/* From 900px the shell's bottom navigation is gone, and the plan and its
+   outcome stand side by side: the outcome and the next action stay in view
+   while the plan is written. */
 @media (min-width: 900px) {
-  .tw-page {
-    padding: 0 24px;
+  .twh,
+  .twp {
+    padding: 34px 28px 72px;
+  }
+
+  .tw-territory {
+    padding: 26px 32px 30px;
+  }
+
+  .tw-territory::before {
+    left: 32px;
+  }
+
+  .tc-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .tc-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .tc-aside {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .tc-toast {
+    bottom: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .twh *,
+  .twp * {
+    transition: none !important;
   }
 }

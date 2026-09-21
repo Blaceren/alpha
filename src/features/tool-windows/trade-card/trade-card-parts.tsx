@@ -1,16 +1,15 @@
 "use client";
 
 /**
- * The Trade Card's presentational parts. No state and no effects: the live
- * workspace and the locked-page preview both render them, so the preview is
- * the real card with example values rather than a picture of one.
+ * The Trade Card's presentational parts: the steps, the plan form, the two
+ * outcomes and the saved notice. No state and no effects; the workspace owns
+ * both.
  *
- * A CLIENT MODULE ON PURPOSE. The form wires its own change handlers, and the
- * locked page renders the preview from the server: a server component may not
- * hand an element an event handler, so the handlers have to be created on this
- * side of the boundary. The server passes only plain values.
+ * A CLIENT MODULE ON PURPOSE. The form wires its own change handlers, and a
+ * server component may not hand an element an event handler, so the handlers
+ * are created on this side of the boundary and callers pass plain values.
  */
-import { Info } from "lucide-react";
+import { CircleCheck, Info } from "lucide-react";
 import {
   TRADE_CARD_STEPS,
   gainLabel,
@@ -25,18 +24,26 @@ import {
 /* ------------------------------------------------------------------ steps */
 
 export function TradeCardStepper({ step }: { step: number }) {
+  const current = TRADE_CARD_STEPS[step];
   return (
-    <ol className="tw-steps" aria-label="Этапы сделки">
-      {TRADE_CARD_STEPS.map((label, index) => {
-        const state = index < step ? "done" : index === step ? "current" : "upcoming";
-        return (
-          <li key={label} className="tw-step" data-state={state} aria-current={index === step ? "step" : undefined}>
-            <span className="tw-step__bar" aria-hidden="true" />
-            <span className="tw-step__label">{label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <>
+      <ol className="tc-steps" aria-label="Этапы сделки">
+        {TRADE_CARD_STEPS.map((label, index) => {
+          const state = index < step ? "done" : index === step ? "current" : "upcoming";
+          return (
+            <li key={label} className="tc-step" data-state={state} aria-current={index === step ? "step" : undefined}>
+              <span className="tc-step__bar" aria-hidden="true" />
+              <span className="tc-step__label">{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {/* A phone shows the bars and this one line; the list above already says
+          it to assistive technology. After the last step there is no current one. */}
+      <p className="tc-steps-now" aria-hidden="true">
+        {current ? `Шаг ${step + 1} из ${TRADE_CARD_STEPS.length} · ${current}` : "Все шаги пройдены"}
+      </p>
+    </>
   );
 }
 
@@ -44,21 +51,21 @@ export function TradeCardStepper({ step }: { step: number }) {
 
 export function TradeCardOutcomes({ outcomes }: { outcomes: { ifRight: string; ifWrong: string } | null }) {
   return (
-    <section className="tw-section" aria-labelledby="tc-outcomes-title">
-      <h2 className="tw-label" id="tc-outcomes-title">
+    <section className="tc-section" aria-labelledby="tc-outcomes-title">
+      <h2 className="tc-section__title" id="tc-outcomes-title">
         Возможные исходы
       </h2>
-      <dl className="tw-outcomes">
-        <div className="tw-outcome" data-kind="gain">
-          <dt className="tw-label">Прогноз верен</dt>
-          <dd className="tw-outcome__value">{outcomes ? gainLabel(outcomes.ifRight) : "—"}</dd>
+      <dl className="tc-outcomes">
+        <div className="tc-outcome" data-kind="gain">
+          <dt className="tc-outcome__label">Прогноз верен</dt>
+          <dd className="tc-outcome__value">{outcomes ? gainLabel(outcomes.ifRight) : "—"}</dd>
         </div>
-        <div className="tw-outcome" data-kind="loss">
-          <dt className="tw-label">Прогноз неверен</dt>
-          <dd className="tw-outcome__value">{outcomes ? lossLabel(outcomes.ifWrong) : "—"}</dd>
+        <div className="tc-outcome" data-kind="loss">
+          <dt className="tc-outcome__label">Прогноз неверен</dt>
+          <dd className="tc-outcome__value">{outcomes ? lossLabel(outcomes.ifWrong) : "—"}</dd>
         </div>
       </dl>
-      <p className="tw-note">
+      <p className="tc-note">
         <Info aria-hidden="true" size={14} strokeWidth={1.75} />
         <span>После открытия условия сделки не меняются, досрочного закрытия нет. Проверьте всё сейчас.</span>
       </p>
@@ -79,12 +86,11 @@ type FormProps = {
   draft: TradeCardDraft;
   reference: TradeCardReference;
   errors?: DraftErrors;
-  /** Fixed plans and the preview show the plan without letting it change. */
+  /** A fixed plan is shown without letting it change. */
   disabled?: boolean;
   onChange?: (field: DraftField, value: string) => void;
-  /** «ЗАФИКСИРОВАНО 14:32», shown once the plan is fixed. */
+  /** «Зафиксировано 14:32», shown once the plan is fixed. */
   fixedAtLabel?: string | null;
-  idPrefix?: string;
 };
 
 export function TradeCardPlanForm({
@@ -94,31 +100,30 @@ export function TradeCardPlanForm({
   disabled = false,
   onChange,
   fixedAtLabel = null,
-  idPrefix = "tc",
 }: FormProps) {
-  const id = (field: DraftField) => `${idPrefix}-${field}`;
-  const errorId = (field: DraftField) => `${idPrefix}-${field}-error`;
+  const id = (field: DraftField) => `tc-${field}`;
+  const errorId = (field: DraftField) => `tc-${field}-error`;
   const change = (field: DraftField) => (event: { target: { value: string } }) => onChange?.(field, event.target.value);
   const described = (field: DraftField) => (errors[field] ? errorId(field) : undefined);
   const groups = [...new Set(reference.assets.map((asset) => asset.group))];
 
   return (
-    <section className="tw-section" aria-labelledby={`${idPrefix}-plan-title`} data-disabled={disabled || undefined}>
-      <div className="tw-section__head">
-        <h2 className="tw-label" id={`${idPrefix}-plan-title`}>
+    <section className="tc-section" aria-labelledby="tc-plan-title">
+      <div className="tc-section__head">
+        <h2 className="tc-section__title" id="tc-plan-title">
           Параметры до входа
         </h2>
-        {fixedAtLabel ? <span className="tw-pill">Зафиксировано {fixedAtLabel}</span> : null}
+        {fixedAtLabel ? <span className="tc-status">Зафиксировано {fixedAtLabel}</span> : null}
       </div>
 
-      <div className="tw-grid">
-        <div className="tw-field">
-          <label className="tw-label" htmlFor={id("asset")}>
+      <div className="tc-fields">
+        <div className="tc-field">
+          <label className="tc-label" htmlFor={id("asset")}>
             Актив
           </label>
           <select
             id={id("asset")}
-            className="tw-input tw-select"
+            className="tc-input tc-select"
             value={draft.asset}
             onChange={change("asset")}
             disabled={disabled}
@@ -143,8 +148,8 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("asset")} message={errors.asset} />
         </div>
 
-        <div className="tw-field">
-          <span className="tw-label" id={id("direction")}>
+        <div className="tc-field">
+          <span className="tc-label" id={id("direction")}>
             Направление
           </span>
           <DirectionToggle
@@ -157,17 +162,17 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("direction")} message={errors.direction} />
         </div>
 
-        <div className="tw-field">
-          <label className="tw-label" htmlFor={id("amount")}>
+        <div className="tc-field">
+          <label className="tc-label" htmlFor={id("amount")}>
             Сумма
           </label>
-          <span className="tw-affix" data-side="start">
-            <span className="tw-affix__mark" aria-hidden="true">
+          <span className="tc-affix" data-side="start">
+            <span className="tc-affix__mark" aria-hidden="true">
               $
             </span>
             <input
               id={id("amount")}
-              className="tw-input"
+              className="tc-input"
               type="text"
               inputMode="decimal"
               autoComplete="off"
@@ -181,14 +186,14 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("amount")} message={errors.amount} />
         </div>
 
-        <div className="tw-field">
-          <label className="tw-label" htmlFor={id("payoutPercent")}>
+        <div className="tc-field">
+          <label className="tc-label" htmlFor={id("payoutPercent")}>
             Payout
           </label>
-          <span className="tw-affix" data-side="end">
+          <span className="tc-affix" data-side="end">
             <input
               id={id("payoutPercent")}
-              className="tw-input"
+              className="tc-input"
               type="text"
               inputMode="numeric"
               autoComplete="off"
@@ -198,20 +203,20 @@ export function TradeCardPlanForm({
               aria-invalid={errors.payoutPercent ? true : undefined}
               aria-describedby={described("payoutPercent")}
             />
-            <span className="tw-affix__mark" aria-hidden="true">
+            <span className="tc-affix__mark" aria-hidden="true">
               %
             </span>
           </span>
           <FieldError id={errorId("payoutPercent")} message={errors.payoutPercent} />
         </div>
 
-        <div className="tw-field">
-          <label className="tw-label" htmlFor={id("expiry")}>
+        <div className="tc-field">
+          <label className="tc-label" htmlFor={id("expiry")}>
             Экспирация
           </label>
           <select
             id={id("expiry")}
-            className="tw-input tw-select"
+            className="tc-input tc-select"
             value={draft.expiry}
             onChange={change("expiry")}
             disabled={disabled}
@@ -230,13 +235,13 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("expiry")} message={errors.expiry} />
         </div>
 
-        <div className="tw-field">
-          <label className="tw-label" htmlFor={id("entryTime")}>
+        <div className="tc-field">
+          <label className="tc-label" htmlFor={id("entryTime")}>
             Время входа
           </label>
           <input
             id={id("entryTime")}
-            className="tw-input"
+            className="tc-input"
             type="time"
             value={draft.entryTime}
             onChange={change("entryTime")}
@@ -247,13 +252,13 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("entryTime")} message={errors.entryTime} />
         </div>
 
-        <div className="tw-field" data-span="full">
-          <label className="tw-label" htmlFor={id("reason")}>
+        <div className="tc-field" data-span="full">
+          <label className="tc-label" htmlFor={id("reason")}>
             Причина входа до сделки
           </label>
           <textarea
             id={id("reason")}
-            className="tw-input tw-textarea"
+            className="tc-input tc-textarea"
             rows={3}
             maxLength={1000}
             placeholder="Что вы видите на графике и почему входите именно сейчас"
@@ -288,14 +293,20 @@ function DirectionToggle({
     { value: "down", label: "Ниже", mark: "▼" },
   ];
   return (
-    <div className="tw-segmented" role="radiogroup" aria-labelledby={labelledBy} aria-describedby={describedBy}>
+    <div
+      className="tc-segmented"
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      data-disabled={disabled || undefined}
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           role="radio"
           aria-checked={value === option.value}
-          className="tw-segmented__option"
+          className="tc-segmented__option"
           data-selected={value === option.value || undefined}
           disabled={disabled}
           onClick={() => onChange(option.value)}
@@ -310,7 +321,7 @@ function DirectionToggle({
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
-    <span className="tw-field__error" id={id}>
+    <span className="tc-error" id={id}>
       {message}
     </span>
   );
@@ -320,9 +331,12 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 export function TradeCardSavedNotice({ summary }: { summary: string }) {
   return (
-    <div className="tw-done" role="status">
-      <p className="tw-done__title">Карточка сохранена</p>
-      <p className="tw-done__body">{summary}. С уровня 10 карточки попадают в Trading Journal.</p>
+    <div className="tc-done" role="status">
+      <CircleCheck aria-hidden="true" size={18} strokeWidth={2} />
+      <div>
+        <p className="tc-done__title">Карточка сохранена</p>
+        <p className="tc-done__body">{summary}. С уровня 10 карточки попадают в Trading Journal.</p>
+      </div>
     </div>
   );
 }
