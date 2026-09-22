@@ -1236,7 +1236,7 @@ html.ph-smooth-scroll {
       transform 360ms var(--ease);
   }
 
-  .ph .evidence-track > li[data-reveal] {
+  .ph .evidence-track > li {
     transition-delay: 0s;
   }
 
@@ -1854,7 +1854,17 @@ html.ph-smooth-scroll {
    moving through review. It rides the existing reveal observer, so it fires
    once, never replays on reverse scroll, and is already switched off below
    920px and under prefers-reduced-motion. */
-.ph .evidence-track > li[data-reveal] {
+.ph.has-js .evidence-track > li {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.ph.has-js .evidence-track.is-visible > li {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ph .evidence-track > li {
   transition:
     opacity 240ms var(--ease),
     transform 240ms var(--ease);
@@ -2084,10 +2094,8 @@ html.ph-smooth-scroll {
  * the product's, scoped to the window. Every selector stays inside `.ph`.
  * ====================================================================== */
 
-.ph .route {
-  /* The surface's `overflow: hidden` would likewise unpin the window. */
-  overflow: clip;
-  padding: var(--section-pad) 0;
+.ph .route,
+.ph .review-proof {
   --pw-field: #11140f;
   --pw-surface: #131a0e;
   --pw-well: #0d120a;
@@ -2100,6 +2108,12 @@ html.ph-smooth-scroll {
   --pw-signal-700: #a8d84f;
   --pw-negative: #d7a3a8;
   --route-x: 20px;
+}
+
+.ph .route {
+  /* The surface's `overflow: hidden` would likewise unpin the window. */
+  overflow: clip;
+  padding: var(--section-pad) 0;
 }
 
 .ph .route__grid {
@@ -3894,5 +3908,425 @@ html.ph-smooth-scroll {
 
   .ph .learning-loop.is-visible::after {
     animation-name: ph-draw-y;
+  }
+}
+
+/* =========================================================================
+ * THE EVIDENCE WINDOW (2026-09-22) — #review in the product's own frame.
+ *
+ * The report workspace of L3 with its real entries and fields, moved through
+ * four states; the strip of words beneath it is what the tests read and what
+ * a reader without motion gets. Every selector stays inside `.ph`.
+ * ====================================================================== */
+
+.ph .review {
+  margin-top: 44px;
+}
+
+.ph .pw--review {
+  min-height: 0;
+}
+
+.ph .rw {
+  display: grid;
+  gap: 18px;
+  padding: 20px 24px 24px;
+}
+
+.ph .rw__head {
+  display: grid;
+  gap: 4px;
+}
+
+.ph .rw__crumb {
+  margin: 0;
+  color: var(--pw-text-3);
+  font-size: 12px;
+}
+
+.ph .rw__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ph .rw__title em {
+  padding: 2px 9px;
+  border: 1px solid var(--pw-line-2);
+  border-radius: 999px;
+  color: var(--pw-text-2);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.ph .rw__req {
+  margin: 0;
+  color: var(--pw-text-3);
+  font-size: 12.5px;
+}
+
+.ph .rw__req strong {
+  color: var(--pw-text-2);
+  font-weight: 600;
+}
+
+.ph .rw__grid {
+  display: grid;
+  align-items: start;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.85fr);
+}
+
+.ph .rw__entries {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--pw-line-1);
+  list-style: none;
+}
+
+.ph .rw__entry {
+  display: grid;
+  align-items: center;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--pw-line-1);
+  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  font-size: 13px;
+}
+
+.ph .rw__entry > .pw-mono {
+  white-space: nowrap;
+}
+
+.ph .rw__entry > span:nth-child(3) {
+  color: var(--pw-text-2);
+}
+
+.ph .rw__chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(243, 244, 239, 0.06);
+  color: var(--pw-text-3);
+  font-family: var(--font-data);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ph .rw__entry--open {
+  display: block;
+  padding: 12px 12px 14px;
+  border: 1px solid var(--pw-line-2);
+  border-left: 3px solid var(--pw-signal-700);
+  border-radius: 8px;
+  margin: 6px 0;
+  background: var(--pw-surface);
+  transition: border-color 240ms var(--ease);
+}
+
+.ph .rw__entry--open.is-flagged {
+  border-color: rgba(215, 163, 168, 0.55);
+  border-left-color: var(--pw-negative);
+}
+
+.ph .rw__entry--open.is-flagged .rw__chip {
+  background: rgba(215, 163, 168, 0.14);
+  color: var(--pw-negative);
+}
+
+.ph .rw__entry--open.is-corrected .rw__chip {
+  background: rgba(199, 247, 109, 0.14);
+  color: var(--pw-signal);
+}
+
+.ph .rw__entry-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ph .rw__entry-head strong {
+  font-weight: 600;
+}
+
+.ph .rw__entry-head .rw__chip {
+  margin-left: auto;
+}
+
+.ph .rw__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  color: var(--pw-text-3);
+  font-size: 12px;
+}
+
+.ph .rw__meta b {
+  color: var(--pw-text-2);
+  font-weight: 500;
+}
+
+.ph .rw__meta--after {
+  margin: 8px 0 0;
+}
+
+.ph .rw__field {
+  display: grid;
+  gap: 5px;
+}
+
+.ph .rw__field > span {
+  color: var(--pw-text-3);
+  font-size: 11.5px;
+}
+
+.ph .rw__field > strong {
+  display: block;
+  min-height: 62px;
+  padding: 9px 12px;
+  border: 1px solid var(--pw-line-2);
+  border-radius: 8px;
+  background: var(--pw-well);
+  color: var(--pw-text-1);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  transition: border-color 240ms var(--ease), box-shadow 240ms var(--ease);
+}
+
+.ph .rw__field > strong i {
+  display: inline-block;
+  font-style: normal;
+}
+
+.ph .rw__entry--open.is-flagged .rw__field > strong {
+  border-color: rgba(215, 163, 168, 0.7);
+  box-shadow: 0 0 0 3px rgba(215, 163, 168, 0.14);
+}
+
+.ph .rw__entry--open.is-corrected .rw__field > strong {
+  border-color: rgba(199, 247, 109, 0.6);
+  box-shadow: 0 0 0 3px rgba(199, 247, 109, 0.12);
+}
+
+/* the status panel */
+.ph .rw__status {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--pw-line-1);
+  border-radius: 8px;
+  background: var(--pw-surface);
+}
+
+.ph .rw__state {
+  margin: 0;
+  color: var(--pw-text-2);
+  font-size: 13px;
+}
+
+.ph .rw__feedback {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(215, 163, 168, 0.5);
+  border-left-width: 3px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.ph .rw__feedback p {
+  margin: 0;
+  color: var(--pw-text-2);
+}
+
+.ph .rw__feedback p span {
+  color: var(--pw-text-3);
+}
+
+.ph .rw__feedback-title {
+  color: var(--pw-text-1) !important;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ph .rw__verdict {
+  margin: 0;
+  color: var(--pw-signal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ph .rw__arc {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--pw-line-2);
+  list-style: none;
+  color: var(--pw-text-3);
+  font-size: 12.5px;
+}
+
+.ph .rw__arc li {
+  position: relative;
+}
+
+.ph .rw__arc li::before {
+  position: absolute;
+  top: 7px;
+  left: -17px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pw-text-3);
+  content: "";
+}
+
+.ph .rw__arc li.is-accepted {
+  color: var(--pw-signal);
+}
+
+.ph .rw__arc li.is-accepted::before {
+  background: var(--pw-signal);
+}
+
+.ph .pw-button--quiet {
+  background: var(--pw-line-2);
+  color: var(--pw-text-2);
+}
+
+.ph .rw__done {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(199, 247, 109, 0.4);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ph .rw__done p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ph .rw__next {
+  color: var(--pw-signal);
+  font-size: 12.5px;
+}
+
+/* the strip: the same four states as words, compact under the window */
+.ph .review .evidence-track {
+  margin-top: 18px;
+}
+
+.ph .review .evidence-track > li {
+  padding: 18px 20px 20px;
+  transition:
+    opacity 240ms var(--ease),
+    transform 240ms var(--ease),
+    background-color 240ms var(--ease);
+}
+
+.ph .review .evidence-track > li.is-active {
+  background: var(--ink-900);
+}
+
+.ph .review .evidence-track > li.is-active .evidence__index {
+  background: var(--signal-400);
+  color: var(--ink-950);
+}
+
+.ph .review .evidence-track h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.ph .evidence__button {
+  padding: 8px 0;
+  margin: -8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms var(--ease);
+}
+
+.ph .evidence__button:hover {
+  color: var(--signal-300);
+}
+
+.ph .review .evidence__object {
+  padding: 12px 12px 13px;
+}
+
+.ph .review .evidence__object .dframe__value {
+  font-size: 13.5px;
+}
+
+.ph .review .evidence__action {
+  font-size: 12.5px;
+}
+
+.ph .review .evidence__accepted {
+  font-size: 15px;
+}
+
+.ph .review .evidence__note {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1180px) {
+  .ph .rw__grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
+  }
+}
+
+@media (max-width: 920px) {
+  .ph .review {
+    margin-top: 32px;
+  }
+
+  .ph .rw {
+    padding: 16px 16px 18px;
+  }
+
+  /* The evidence window is not pinned on phones: it takes the height its
+     states need, unlike the route's window above it. */
+  .ph .pw--review {
+    height: auto;
+    max-height: none;
+  }
+
+  .ph .rw__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ph .rw__entry:not(.rw__entry--open) > span:nth-child(3),
+  .ph .rw__crumb {
+    display: none;
+  }
+
+  .ph .rw__entry {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .ph .rw__title {
+    font-size: 19px;
   }
 }

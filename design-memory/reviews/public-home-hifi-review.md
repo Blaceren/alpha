@@ -108,6 +108,24 @@ Reduced-motion: the existing rule caps every animation at 0.01ms and every keyfr
 
 Guards: the phone-reveal test now asserts the light lift; a new test asserts the three triggers exist, no animation loops, durations ≤ 900ms and delays ≤ 800ms; a new test asserts the JS gate.
 
+## The evidence window (2026-09-22, the owner: «этому блоку тоже нужен хай фай»)
+
+`#review` used to carry four authored cards. It now carries the product's own frame — the report workspace of L3, «Первые пять demo-сделок», with the real assignment's five entries and its real field «Причина входа до сделки» (`trade3-pre-trade-reason`), the real status panel and the learner's real words: «Отчёт отправлен и ожидает проверки наставника», «↩︎ Наставник запросил доработку» with «Причина: Требуется доработка» (the rubric's one rejection reason) and the criterion «Причина до сделки» (rubric `r2`), «Есть изменения после вердикта — можно отправить на проверку повторно», «✓ Работа принята», «✓ Отчёт принят — уровень завершён», the arc «Версия 1 отправлена → Получен разбор → Версия 2 отправлена → Работа принята». The window moves through the four states; the strip beneath keeps them as words and drives the window (buttons with `aria-pressed`).
+
+Motion: when the window is reached the sequence plays once — 1.5s a state, 4.5s in all, the page's one cinematic moment — and any click on a state stops it. Reduced motion: no autoplay (measured: still `v1` after 3.5s). Without a script: the first state and the strip.
+
+| # | Viewport | Problem | Severity | Status |
+|---|---|---|---|---|
+| 1 | all | Two siblings in the status panel shared `key={stage}`, so React kept a stale line beside the new one («Отчёт отправлен…» above the feedback box). | major | fixed — distinct keys |
+| 2 | 390 | The sequence never started: the observer watched the block with the strip, taller than a phone screen, so 45 % of it was never visible. | major | fixed — the window itself is observed, threshold 0.3 |
+| 3 | 390 | The window inherited the route window's `52vh` cap and cut its status panel. | major | fixed — `height: auto` for the evidence window |
+| 4 | all | «01 EUR/USD» read as an amount to the no-learner-data guard (`\d+\s?EUR`). | minor | fixed — «01 ·» with a 34px column |
+| 5 | 1440 | The typing wipe of the corrected reason clips every line at once mid-animation. | minor | accepted — settles in 840ms; the same device as the Trade Card |
+
+Frames: `design-memory/screenshots/public-home-hifi/review/<viewport>-<state>.png` at 1440, 1024 and 390, and `before-1440.png`. Console: 0 errors at all three widths; no sideways scroll; every capture's `data-stage` matched the expected state, the click held against the autoplay.
+
+Anti-generic, this section: the object is the product's real report with its real field and verdict (product meaning 15/15); the strip and the window are one composition, not a card grid; the section's score holds with the page's 87.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.

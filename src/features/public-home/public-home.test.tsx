@@ -241,10 +241,10 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("marks every synthetic panel as a demonstration", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    // Hero frame, decide frame, evidence track, and the product window — one
-    // badge in its bar covers every state it shows.
+    // Hero frame, decide frame, and the two product windows — one badge in
+    // each bar covers every state the window shows.
     expect(container.querySelectorAll(".demo-badge").length).toBe(4);
-    for (const selector of ["#top .dframe", "#decide .dframe", "#product .pw__bar"]) {
+    for (const selector of ["#top .dframe", "#decide .dframe", "#review .pw__bar", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
@@ -343,6 +343,28 @@ describe("Public Home — signature evidence", () => {
     );
     expect(accepted).toContain("Условия уровня выполнены");
     expect(accepted).toContain("не результат сделок");
+  });
+
+  it("shows the evidence in the product's own frame, and the strip drives it", async () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    const window = review.querySelector("#review-window") as HTMLElement;
+    expect(window.getAttribute("data-stage")).toBe("v1");
+    // The real assignment: the report of L3, its third entry, the real field.
+    expect(text(window)).toContain("Первые пять demo-сделок");
+    expect(text(window)).toContain("Запись 3");
+    expect(text(window)).toContain("Отчёт отправлен и ожидает проверки наставника");
+    const buttons = Array.from(review.querySelectorAll(".evidence-track .evidence__button"));
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
+    await userEvent.click(buttons[1] as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("feedback");
+    expect(text(window)).toContain("Наставник запросил доработку");
+    expect(text(window)).toContain("Опишите условие, которое вы определили заранее");
+    await userEvent.click(buttons[3] as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("accepted");
+    expect(text(window)).toContain("Работа принята");
+    expect(text(window)).toContain("уровень завершён");
+    expect(buttons[3]!.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("stops the Decision Frame after the evidence", () => {
@@ -605,7 +627,7 @@ describe("Public Home — stylesheet holds its contract", () => {
     const durations = Array.from((rule?.[1] ?? "").matchAll(/(\d+)ms/g)).map((m) => Number(m[1]));
     expect(durations.length).toBeGreaterThan(0);
     expect(Math.max(...durations)).toBeLessThanOrEqual(400);
-    expect(block).toMatch(/\.evidence-track > li\[data-reveal\] \{[^}]*transition-delay:\s*0s/);
+    expect(block).toMatch(/\.evidence-track > li \{[^}]*transition-delay:\s*0s/);
   });
 
   it("plays each motion sequence once and settles inside a second", () => {

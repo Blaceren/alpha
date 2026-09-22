@@ -286,6 +286,8 @@ describe("the authenticated route group", () => {
   "src/features/public-home/product-route-data.ts",
   "src/features/public-home/product-route.tsx",
   "src/features/public-home/product-window-states.tsx",
+  "src/features/public-home/review-data.ts",
+  "src/features/public-home/review-window.tsx",
   "src/features/report/components/report-status-panel.tsx",
   "src/features/report/report.css",
   "src/features/tools-fidelity/tool-fidelity-surface.tsx",

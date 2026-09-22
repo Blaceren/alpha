@@ -3,6 +3,8 @@ import { PublicHomeHeader } from "@/features/public-home/public-home-header";
 import { PublicHomeEffects } from "@/features/public-home/public-home-effects";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { ProductRoute } from "@/features/public-home/product-route";
+import { ReviewWindow } from "@/features/public-home/review-window";
+import { DECISION_FIELD, DECISION_STRONG, DECISION_UNSET } from "@/features/public-home/review-data";
 
 /**
  * PUBLIC HOME — the brand-evolution composition.
@@ -56,14 +58,6 @@ import { ProductRoute } from "@/features/public-home/product-route";
  * It reads NO learner data and performs no request. The only thing it knows
  * about the visitor is whether a session exists.
  */
-
-/** The one decision object the Frame carries, in its two settled readings. */
-const DECISION_FIELD = "Причина входа до сделки";
-const DECISION_UNSET = "Ещё не сформулировано";
-const DECISION_WEAK = "Вошёл, потому что показалось, что цена развернётся.";
-const DECISION_STRONG =
-  "До сделки зафиксировал условие: вход только после подтверждения заранее " +
-  "отмеченного уровня. Дождался его выполнения и не менял план во время сделки.";
 
 export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) {
   const account = authenticated
@@ -267,62 +261,9 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </p>
             </div>
 
-            <p className="demo-badge demo-badge--block" data-reveal>
-              Демонстрационный пример структуры работы
-            </p>
-
-            <ol className="evidence-track" data-evidence aria-label="Цикл проверки практической работы">
-              <li data-reveal data-frame-stage="v1">
-                <p className="evidence__index">V1</p>
-                <h3>Работа отправлена</h3>
-                <div className="evidence__object">
-                  <p className="dframe__field">{DECISION_FIELD}</p>
-                  <p className="dframe__value">{DECISION_WEAK}</p>
-                </div>
-                <p className="evidence__note">
-                  Учащийся фиксирует решение и его основание в отчёте уровня.
-                </p>
-              </li>
-
-              <li data-reveal data-frame-stage="feedback">
-                <p className="evidence__index">Разбор</p>
-                <h3>Получен разбор</h3>
-                <div className="evidence__object evidence__object--flagged">
-                  <p className="dframe__field">Критерий · Причина до сделки</p>
-                  <p className="evidence__verdict">Требуется доработка</p>
-                  <p className="evidence__action">
-                    Опишите условие, которое вы определили заранее, а не ощущение в момент входа.
-                  </p>
-                </div>
-                <p className="evidence__note">
-                  Проверяющий возвращает работу по конкретному критерию рубрики.
-                </p>
-              </li>
-
-              <li data-reveal data-frame-stage="v2">
-                <p className="evidence__index">V2</p>
-                <h3>Замечание исправлено</h3>
-                <div className="evidence__object evidence__object--corrected">
-                  <p className="dframe__field">{DECISION_FIELD}</p>
-                  <p className="dframe__value">{DECISION_STRONG}</p>
-                </div>
-                <p className="evidence__note">
-                  Меняется то же самое место — основание решения, а не оформление.
-                </p>
-              </li>
-
-              <li data-reveal data-frame-stage="accepted">
-                <p className="evidence__index">✓</p>
-                <h3>Работа принята</h3>
-                <div className="evidence__object evidence__object--accepted">
-                  <p className="evidence__accepted">Условия уровня выполнены</p>
-                  <p className="evidence__action">Следующий уровень открывается.</p>
-                </div>
-                <p className="evidence__note">
-                  Принятие подтверждает выполненную работу — не результат сделок.
-                </p>
-              </li>
-            </ol>
+            {/* The product's own report workspace, moved through the four
+                states, with the strip of words beneath it. review-window.tsx */}
+            <ReviewWindow />
           </div>
         </section>
 
