@@ -500,7 +500,7 @@ function NewsEditor({ back, initial, onReload }: { back: React.ReactNode; initia
               <span className="text-xs text-text-secondary">
                 {changed
                   ? "Сначала сохраните правки — публикуется сохранённая версия."
-                  : "Страница откроется для всех, новость появится в News Calendar учеников."}
+                  : "Страница откроется ученикам после входа, новость появится в их News Calendar."}
               </span>
             </div>
           ) : confirmUnpublish ? (
