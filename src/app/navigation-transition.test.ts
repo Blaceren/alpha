@@ -280,6 +280,12 @@ describe("the authenticated route group", () => {
   "src/features/public-home/public-home-header.tsx",
   "src/features/public-home/public-home-screen.tsx",
   "src/features/public-home/public-home.css",
+  /* PUBLIC HOME HI-FI (2026-09-22): the FAQ list, and the route with its
+     window — all of it the public page, none of it a signed-in surface. */
+  "src/features/public-home/public-home-faq.ts",
+  "src/features/public-home/product-route-data.ts",
+  "src/features/public-home/product-route.tsx",
+  "src/features/public-home/product-window-states.tsx",
   "src/features/report/components/report-status-panel.tsx",
   "src/features/report/report.css",
   "src/features/tools-fidelity/tool-fidelity-surface.tsx",

@@ -5,6 +5,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
+import { TOOL_WINDOWS } from "@/features/tool-windows/model/catalog";
 
 /**
  * Public Home — brand-evolution gates.
@@ -55,7 +56,9 @@ const screenSource = readFileSync(
 );
 
 function sections(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll("main > section[id]")).map((s) => s.id);
+  // `#path` and `#tools` are sections inside `#product` since the route
+  // (2026-09-22); document order is what the menu and the deep links follow.
+  return Array.from(container.querySelectorAll("main section[id]")).map((s) => s.id);
 }
 
 function text(container: HTMLElement): string {
@@ -67,6 +70,19 @@ describe("Public Home — architecture", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     expect(container.querySelectorAll("header").length).toBe(1);
     expect(sections(container)).toEqual([...SECTION_IDS]);
+  });
+
+  it("carries #path and #tools as segments of the route, inside #product", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const route = container.querySelector("#product") as HTMLElement;
+    expect(route.classList.contains("route")).toBe(true);
+    for (const id of ["path", "tools"]) {
+      const segment = container.querySelector(`#${id}`) as HTMLElement;
+      expect(segment.closest("#product"), `#${id} must sit inside the route`).toBe(route);
+      expect(segment.classList.contains("route__segment")).toBe(true);
+    }
+    // One window for the whole route, pinned beside the three segments.
+    expect(route.querySelectorAll("#route-window").length).toBe(1);
   });
 
   it("opens on the opportunity, not on a negated category", () => {
@@ -176,12 +192,17 @@ describe("Public Home — the claim never outruns the product", () => {
     }
   });
 
-  it("shows only the two tools that exist, and no roadmap", () => {
+  it("shows the six built tools from the catalogue, in unlock order, and no roadmap", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const tools = container.querySelector("#tools") as HTMLElement;
-    expect(tools.querySelectorAll(".tool-card").length).toBe(2);
-    const names = Array.from(tools.querySelectorAll(".tool-card h3")).map((h) => h.textContent);
-    expect(names).toEqual(["Trading Journal", "Risk Calculator"]);
+    const built = TOOL_WINDOWS.filter((tool) => tool.built)
+      .slice()
+      .sort((a, b) => a.unlockLevel - b.unlockLevel);
+    expect(built.length).toBe(6);
+    const labels = Array.from(tools.querySelectorAll(".rstep__label")).map((el) => el.textContent ?? "");
+    expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${tool.unlockLevel}`));
+    const nodes = Array.from(tools.querySelectorAll(".rstep__node")).map((el) => el.textContent);
+    expect(nodes).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
     const copy = text(tools);
     for (const roadmap of ["скоро", "в разработке", "появится", "планируется", "roadmap"]) {
       expect(copy.toLowerCase()).not.toContain(roadmap);
@@ -220,14 +241,13 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("marks every synthetic panel as a demonstration", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    // Hero frame, decide frame, evidence track, product panel, two tool panels.
-    expect(container.querySelectorAll(".demo-badge").length).toBe(6);
-    for (const selector of ["#top .dframe", "#decide .dframe", "#product .product-panel"]) {
+    // Hero frame, decide frame, evidence track, and the product window — one
+    // badge in its bar covers every state it shows.
+    expect(container.querySelectorAll(".demo-badge").length).toBe(4);
+    for (const selector of ["#top .dframe", "#decide .dframe", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
-    const tools = container.querySelector("#tools") as HTMLElement;
-    expect(within(tools).getAllByText(/Демонстрационный пример/).length).toBe(2);
   });
 
   it("carries no learner data — the demonstration is authored, not captured", () => {
@@ -455,7 +475,12 @@ describe("Public Home — stylesheet holds its contract", () => {
   });
 
   it("lets no selector escape the .ph namespace", () => {
-    const stripped = rules.replace(/@(media|supports)[^{]*\{/g, "");
+    // `@keyframes` blocks hold keyframe selectors (`from`, `to`, percentages),
+    // not element selectors: they cannot escape the namespace, so they are
+    // removed whole before the rule scan.
+    const stripped = rules
+      .replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "")
+      .replace(/@(media|supports)[^{]*\{/g, "");
     const escaped: string[] = [];
     const rule = /(^|\})\s*([^{}@]+)\{/g;
     let m: RegExpExecArray | null;
