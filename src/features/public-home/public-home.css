@@ -761,18 +761,18 @@ html.ph-smooth-scroll {
   content: "";
 }
 
-.ph .learning-loop li {
+.ph .learning-loop > li {
   position: relative;
   min-height: 310px;
   padding: 72px 28px 34px 0;
   border-right: 1px solid var(--line-dark);
 }
 
-.ph .learning-loop li:last-child {
+.ph .learning-loop > li:last-child {
   border-right: 0;
 }
 
-.ph .learning-loop li > span {
+.ph .learning-loop > li > span {
   position: absolute;
   top: 25px;
   left: 0;
@@ -788,14 +788,14 @@ html.ph-smooth-scroll {
   font-size: 7px;
 }
 
-.ph .learning-loop h3 {
+.ph .learning-loop > li > h3 {
   max-width: 150px;
   margin-bottom: 16px;
   font-size: 20px;
   line-height: 1.15;
 }
 
-.ph .learning-loop p {
+.ph .learning-loop > li > p {
   max-width: 170px;
   margin-bottom: 0;
   color: var(--text-on-dark-muted);
@@ -1141,12 +1141,12 @@ html.ph-smooth-scroll {
     display: none;
   }
 
-  .ph .learning-loop li {
+  .ph .learning-loop > li {
     min-height: 250px;
     border-top: 1px solid var(--line-dark);
   }
 
-  .ph .learning-loop li > span {
+  .ph .learning-loop > li > span {
     top: -12px;
   }
 
@@ -1434,14 +1434,14 @@ html.ph-smooth-scroll {
     grid-template-columns: 1fr;
   }
 
-  .ph .learning-loop li {
+  .ph .learning-loop > li {
     min-height: 220px;
     padding: 70px 0 30px;
     border-right: 0;
   }
 
-  .ph .learning-loop h3,
-.ph .learning-loop p {
+  .ph .learning-loop > li > h3,
+.ph .learning-loop > li > p {
     max-width: 430px;
   }
 
@@ -2052,7 +2052,8 @@ html.ph-smooth-scroll {
 
 .ph .route,
 .ph .review-proof,
-.ph .recognition {
+.ph .recognition,
+.ph .mechanism {
   --pw-field: #11140f;
   --pw-surface: #131a0e;
   --pw-well: #0d120a;
@@ -3822,16 +3823,16 @@ html.ph-smooth-scroll {
   animation: ph-draw-x 760ms var(--ease) 80ms both;
 }
 
-.ph .learning-loop.is-visible li > span {
+.ph .learning-loop.is-visible > li > span {
   animation: ph-node-on 240ms var(--ease) both;
 }
 
-.ph .learning-loop.is-visible li:nth-child(1) > span { animation-delay: 60ms; }
-.ph .learning-loop.is-visible li:nth-child(2) > span { animation-delay: 190ms; }
-.ph .learning-loop.is-visible li:nth-child(3) > span { animation-delay: 320ms; }
-.ph .learning-loop.is-visible li:nth-child(4) > span { animation-delay: 450ms; }
-.ph .learning-loop.is-visible li:nth-child(5) > span { animation-delay: 580ms; }
-.ph .learning-loop.is-visible li:nth-child(6) > span { animation-delay: 710ms; }
+.ph .learning-loop.is-visible > li:nth-child(1) > span { animation-delay: 60ms; }
+.ph .learning-loop.is-visible > li:nth-child(2) > span { animation-delay: 190ms; }
+.ph .learning-loop.is-visible > li:nth-child(3) > span { animation-delay: 320ms; }
+.ph .learning-loop.is-visible > li:nth-child(4) > span { animation-delay: 450ms; }
+.ph .learning-loop.is-visible > li:nth-child(5) > span { animation-delay: 580ms; }
+.ph .learning-loop.is-visible > li:nth-child(6) > span { animation-delay: 710ms; }
 
 /* --- the corrected place (#review) -------------------------------------- */
 
@@ -3851,8 +3852,12 @@ html.ph-smooth-scroll {
     transform-origin: center top;
     animation-name: ph-draw-y;
   }
+}
 
-  /* The cycle stands in a column: the line runs down the node centres. */
+/* The cycle stands in a column only under 680px (its layout breakpoint):
+   there the line runs down the node centres. Between 680 and 920 the cycle
+   still has three columns, and a vertical line would cut the first one. */
+@media (max-width: 680px) {
   .ph .learning-loop::after {
     top: 36px;
     right: auto;
@@ -4403,5 +4408,237 @@ html.ph-smooth-scroll {
   .ph .dc__foot {
     display: grid;
     gap: 6px;
+  }
+}
+
+/* =========================================================================
+ * THE CYCLE'S OBJECTS (2026-09-22) — #mechanism, one product object per step.
+ *
+ * Six shapes, not one card six times: a lesson with its progress, a field,
+ * a next action, a question, a return, a completed level with the next one
+ * opening. They stand under the titles in the columns the line already
+ * divides, and each appears when its node lights.
+ * ====================================================================== */
+
+.ph .learning-loop > li {
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.ph .cyc {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 12px 12px 13px;
+  border: 1px solid var(--pw-line-2);
+  border-radius: 8px;
+  background: var(--pw-surface);
+  color: var(--pw-text-2);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 210px;
+}
+
+.ph .cyc .pw-mono {
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.ph .cyc__title {
+  margin: 0;
+  color: var(--pw-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ph .cyc__sub {
+  margin: 0;
+  color: var(--pw-text-3);
+  font-size: 11.5px;
+}
+
+.ph .cyc__progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--pw-line-2);
+}
+
+.ph .cyc__progress i {
+  display: block;
+  width: var(--v);
+  height: 100%;
+  background: var(--pw-signal);
+  transform-origin: left;
+  animation: pw-fill 600ms var(--ease) both;
+  animation-delay: 300ms;
+}
+
+.ph .cyc__field {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(199, 247, 109, 0.45);
+  border-radius: 6px;
+  background: var(--pw-well);
+  color: var(--pw-text-1);
+  font-family: var(--font-display);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ph .pw-button--sm {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  justify-self: start;
+}
+
+.ph .cyc__q {
+  margin: 0;
+  color: var(--pw-text-1);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ph .cyc__options {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ph .cyc__options li {
+  position: relative;
+  padding: 5px 8px 5px 24px;
+  border: 1px solid var(--pw-line-2);
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+.ph .cyc__options li::before {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--pw-text-3);
+  border-radius: 50%;
+  content: "";
+}
+
+.ph .cyc__options li.is-on {
+  border-color: rgba(199, 247, 109, 0.5);
+  color: var(--pw-text-1);
+}
+
+.ph .cyc__options li.is-on::before {
+  border-color: var(--pw-signal);
+  background: var(--pw-signal);
+  box-shadow: inset 0 0 0 2px var(--pw-surface);
+}
+
+.ph .cyc__feedback {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(215, 163, 168, 0.5);
+  border-left-width: 3px;
+  border-radius: 6px;
+  color: var(--pw-text-1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ph .cyc__done {
+  margin: 0;
+  color: var(--pw-signal);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ph .cyc__path {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  color: var(--pw-text-3);
+}
+
+.ph .cyc__path::before {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  left: 14px;
+  height: 2px;
+  background: var(--pw-line-2);
+  content: "";
+}
+
+.ph .cyc__path li {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.ph .cyc__path li::before {
+  z-index: 1;
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--pw-line-2);
+  border-radius: 50%;
+  background: var(--pw-surface);
+  content: "";
+}
+
+.ph .cyc__path li.is-done::before {
+  border-color: var(--pw-signal-700);
+  background: var(--pw-signal-700);
+}
+
+.ph .cyc__path li.is-current {
+  color: var(--pw-signal);
+}
+
+.ph .cyc__path li.is-current::before {
+  border-color: var(--pw-signal);
+  background: var(--pw-signal);
+  box-shadow: 0 0 0 4px rgba(199, 247, 109, 0.18);
+}
+
+/* Each object appears as its node lights. */
+.ph .learning-loop.is-visible > li .cyc {
+  animation: pw-in 320ms var(--ease) both;
+}
+
+.ph .learning-loop.is-visible > li:nth-child(1) .cyc { animation-delay: 140ms; }
+.ph .learning-loop.is-visible > li:nth-child(2) .cyc { animation-delay: 270ms; }
+.ph .learning-loop.is-visible > li:nth-child(3) .cyc { animation-delay: 400ms; }
+.ph .learning-loop.is-visible > li:nth-child(4) .cyc { animation-delay: 530ms; }
+.ph .learning-loop.is-visible > li:nth-child(5) .cyc { animation-delay: 660ms; }
+.ph .learning-loop.is-visible > li:nth-child(6) .cyc { animation-delay: 790ms; }
+
+@media (max-width: 920px) {
+  .ph .cyc {
+    margin-top: 12px;
+    max-width: 320px;
+  }
+}
+
+/* One column: the step keeps only the room its node needs. */
+@media (max-width: 680px) {
+  .ph .learning-loop > li {
+    min-height: 0;
+    padding: 56px 0 26px;
   }
 }

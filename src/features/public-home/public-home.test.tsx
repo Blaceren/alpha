@@ -150,6 +150,19 @@ describe("Public Home — the claim never outruns the product", () => {
     expect(text(mechanism)).toContain("Сформулировать собственное решение и назвать его основание");
   });
 
+  it("puts a product object under each of the six steps, each its own shape", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const mechanism = container.querySelector("#mechanism") as HTMLElement;
+    const objects = Array.from(mechanism.querySelectorAll(".learning-loop > li .cyc"));
+    expect(objects.map((el) => el.getAttribute("data-step"))).toEqual(["1", "2", "3", "4", "5", "6"]);
+    // Six different objects, not one card six times.
+    expect(new Set(objects.map((el) => el.className)).size).toBe(6);
+    const copy = text(mechanism);
+    for (const real of ["Выполните практический шаг", "Наставник запросил доработку", "Уровень завершён", "Для завершения — 100 %"]) {
+      expect(copy).toContain(real);
+    }
+  });
+
   it("carries the qualifier as visible copy, not as a footnote", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const mechanism = text(container.querySelector("#mechanism") as HTMLElement);

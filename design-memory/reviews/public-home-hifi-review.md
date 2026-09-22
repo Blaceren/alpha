@@ -137,8 +137,22 @@ Anti-generic, this section: the object is the product's real report with its rea
 
 Frames: `design-memory/screenshots/public-home-hifi/decide/` at 1440 (0/300/600/1500ms), 1024, 768 and 390; `before-1440.png`. Windows measured inside their columns at 1440 (478px), 1024 (672px) and 768 (684px); no sideways scroll; console clean; no-JS: 0 of 28 hidden.
 
+## The cycle's objects (2026-09-22, the owner: «тут нужно сделай хай фай»)
+
+`#mechanism` used to carry six titled steps with a sentence each. Each step now ends in the object where it happens in the product — six objects of six shapes, in the product's materials and words: the lesson of L5 «Жизненный цикл сделки» with its reading progress («Прочитано 2 из 4 разделов»); the field «Причина входа до сделки» with the basis written and «● Зафиксировано»; the Home's next action «Выполните практический шаг» with «Открыть уровень»; the assessment «Вопрос 3 из 5» with its options and «Для завершения — 100 %»; the returned report «↩︎ Наставник запросил доработку» with «Создать исправленную версию»; the completed level «✓ Уровень завершён» with the path L5 → L6 → L7 and «Открылся L6 · Экспирация и payout». Nothing captured from a learner, no sum of money.
+
+Motion: each object appears as its node lights — 240ms, delays 140…790ms after the loop's `is-visible`, once, `both`; the lesson's progress fills once. Reduced motion: the final states (the global cap). Without a script: nothing hidden (0 of 28).
+
+| # | Viewport | Problem | Severity | Status |
+|---|---|---|---|---|
+| 1 | 1440 / 1024 / 768 | The sixth object's level path is a nested list, and the cycle's `li` rules (72px top padding, column borders) reached it: lines hung from the nodes. | major | fixed — every cycle rule addresses its direct children (`.learning-loop > li`, `> li > h3`, `> li > p`) |
+| 2 | 768 | The cycle's vertical line and the phone step padding lived at 920px while the one-column layout starts at 680px: at 768 the line cut through the first column and the objects touched the dividers. Present since the motion slice. | major | fixed — both moved to the 680px breakpoint |
+| 3 | all | `.cyc__sub` at 11.5px is the smallest running text on the page. | minor | accepted — the product's tertiary size inside a window, never body copy |
+
+Frames: `design-memory/screenshots/public-home-hifi/cycle/` — 1440 at 0/300/600/1500ms, 390 (viewport and the whole section), 1024, 768, the sixth object alone, `before-1440.png` and the two findings (`found-*.png`). Measured on the same build: no sideways scroll at four widths; the six objects 184 / 210 / 199 / 320px wide and none overflowing; the nested list's padding and borders 0; console 0 errors at every width.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.
-- 2 623 tests pass, including the rewritten guards (six tools from the catalogue, four demonstration badges, keyframes outside the selector scan, the new files authorised in the viewer-identity guard).
+- 2 627 tests pass, including the rewritten guards (six tools from the catalogue, four demonstration badges, keyframes outside the selector scan, the new files authorised in the viewer-identity guard).
 - Ready for the owner's review before release to PREPROD, together with slice 0.

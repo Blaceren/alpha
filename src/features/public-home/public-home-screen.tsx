@@ -5,6 +5,7 @@ import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { ProductRoute } from "@/features/public-home/product-route";
 import { ReviewWindow } from "@/features/public-home/review-window";
 import { DecisionWindow } from "@/features/public-home/decision-window";
+import { CycleObject } from "@/features/public-home/cycle-objects";
 import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-data";
 
 /**
@@ -202,31 +203,37 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                 <span>01</span>
                 <h3>Понять</h3>
                 <p>Изучить принцип и увидеть его в контексте.</p>
+                <CycleObject step={1} />
               </li>
               <li data-reveal>
                 <span>02</span>
                 <h3>Решить</h3>
                 <p>Сформулировать собственное решение и назвать его основание.</p>
+                <CycleObject step={2} />
               </li>
               <li data-reveal>
                 <span>03</span>
                 <h3>Действовать</h3>
                 <p>Перевести решение в конкретную практическую работу.</p>
+                <CycleObject step={3} />
               </li>
               <li data-reveal>
                 <span>04</span>
                 <h3>Проверить</h3>
                 <p>Подтвердить понимание проверкой знаний, а работу — разбором.</p>
+                <CycleObject step={4} />
               </li>
               <li data-reveal>
                 <span>05</span>
                 <h3>Исправить</h3>
                 <p>Учесть замечания и, если требуется, отправить новую версию.</p>
+                <CycleObject step={5} />
               </li>
               <li data-reveal>
                 <span>06</span>
                 <h3>Продвинуться</h3>
                 <p>После выполнения условий открывается следующий уровень.</p>
+                <CycleObject step={6} />
               </li>
             </ol>
           </div>
