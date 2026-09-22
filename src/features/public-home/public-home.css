@@ -630,7 +630,7 @@ html.ph-smooth-scroll {
 
 .ph .reframe {
   display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) 64px minmax(280px, 1.2fr);
+  grid-template-columns: minmax(150px, 0.5fr) 44px minmax(300px, 1.5fr);
   align-items: center;
 }
 
@@ -1704,50 +1704,6 @@ html.ph-smooth-scroll {
   width: 28%;
 }
 
-.ph .dframe--set .dframe__object {
-  border-color: rgba(199, 247, 109, 0.42);
-}
-
-.ph .dframe__statement {
-  margin: 20px 0 0;
-  color: var(--text-on-dark-muted);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-/* `#decide` renders the Frame on the signal surface. */
-.ph .recognition .dframe {
-  border-color: rgba(11, 13, 10, 0.16);
-  background:
-    linear-gradient(rgba(11, 13, 10, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(11, 13, 10, 0.05) 1px, transparent 1px),
-    rgba(248, 249, 245, 0.72);
-  background-size: 72px 72px;
-}
-
-.ph .recognition .dframe::before,
-.ph .recognition .dframe::after {
-  border-color: var(--olive-800);
-}
-
-.ph .recognition .dframe__object {
-  border-color: rgba(48, 66, 30, 0.32);
-  background: rgba(248, 249, 245, 0.9);
-}
-
-.ph .recognition .dframe__field,
-.ph .recognition .dframe__stage {
-  color: rgba(11, 13, 10, 0.62);
-}
-
-.ph .recognition .dframe__value {
-  color: var(--text-primary);
-}
-
-.ph .recognition .dframe__statement {
-  color: rgba(11, 13, 10, 0.72);
-}
-
 /* --- Signature Evidence ------------------------------------------------- */
 
 /* Dense by construction. The old sequence spent four 205px empty slots and
@@ -2095,7 +2051,8 @@ html.ph-smooth-scroll {
  * ====================================================================== */
 
 .ph .route,
-.ph .review-proof {
+.ph .review-proof,
+.ph .recognition {
   --pw-field: #11140f;
   --pw-surface: #131a0e;
   --pw-well: #0d120a;
@@ -2334,6 +2291,7 @@ html.ph-smooth-scroll {
 .ph .pw {
   display: grid;
   min-height: 600px;
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--line-dark);
   border-radius: 14px;
@@ -3840,7 +3798,7 @@ html.ph-smooth-scroll {
   animation: ph-write 540ms steps(30, end) 300ms both;
 }
 
-.ph .reframe.is-visible .dframe__statement {
+.ph .reframe.is-visible .decision__statement {
   animation: ph-appear 240ms var(--ease) 720ms both;
 }
 
@@ -4328,5 +4286,122 @@ html.ph-smooth-scroll {
 
   .ph .rw__title {
     font-size: 19px;
+  }
+}
+
+/* =========================================================================
+ * THE DECISION WINDOW (2026-09-22) — #decide in the product's own frame.
+ *
+ * The Trade Card at the moment the reason is written. The window is the
+ * same frame as the route's and the evidence's; on the Signal surface it is
+ * the one dark object, which is the point: many pale answers, one product.
+ * ====================================================================== */
+
+.ph .decision {
+  min-width: 0;
+}
+
+.ph .pw--decide {
+  min-height: 0;
+}
+
+/* The column is narrow: the bar keeps the active item, the level and the
+   badge, nothing else. */
+.ph .pw--decide .pw__bar {
+  gap: 12px;
+}
+
+.ph .pw--decide .pw__nav li:not(.is-active) {
+  display: none;
+}
+
+.ph .dc {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px 20px;
+}
+
+.ph .dc .pw-tool__head {
+  margin-bottom: 0;
+}
+
+.ph .dc__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--pw-text-3);
+  font-size: 12.5px;
+}
+
+.ph .dc__params b {
+  color: var(--pw-text-1);
+  font-weight: 500;
+}
+
+.ph .dc__field {
+  display: grid;
+  gap: 6px;
+}
+
+.ph .dc__field .dframe__field {
+  margin: 0;
+  color: var(--pw-text-3);
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ph .dc__field .dframe__value {
+  min-height: 92px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(199, 247, 109, 0.5);
+  border-radius: 8px;
+  background: var(--pw-well);
+  box-shadow: 0 0 0 3px rgba(199, 247, 109, 0.1);
+  color: var(--pw-text-1);
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.ph .dc__foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ph .dc__fixed {
+  white-space: nowrap;
+  animation: ph-appear 240ms var(--ease) 800ms both;
+}
+
+.ph .dc__note {
+  margin: 0;
+  color: var(--pw-text-3);
+  font-size: 12.5px;
+}
+
+.ph .decision__statement {
+  max-width: 44ch;
+  margin: 18px 0 0;
+  color: rgba(11, 13, 10, 0.72);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (max-width: 920px) {
+  .ph .dc {
+    padding: 14px 16px 16px;
+  }
+
+  .ph .dc__field .dframe__value {
+    font-size: 15.5px;
+  }
+
+  .ph .dc__foot {
+    display: grid;
+    gap: 6px;
   }
 }

@@ -126,6 +126,17 @@ Frames: `design-memory/screenshots/public-home-hifi/review/<viewport>-<state>.pn
 
 Anti-generic, this section: the object is the product's real report with its real field and verdict (product meaning 15/15); the strip and the window are one composition, not a card grid; the section's score holds with the page's 87.
 
+## The decision window (2026-09-22, the owner: «вот этот блок теперь»)
+
+`#decide` used to resolve the hero's frame as an authored card. It now resolves it in the product: the Trade Card (L5, «План сделки до входа») at the moment the reason is written — the four parameters, the field «Причина входа до сделки» with the same string the evidence's V2 carries, «● Зафиксировано 17:20», «После открытия условия сделки не меняются». The «many → one» sequence is unchanged: the chips recede, the axis draws to the window, the reason is written into the product's field, the statement follows.
+
+| # | Viewport | Problem | Severity | Status |
+|---|---|---|---|---|
+| 1 | 1440 | The window overflowed its column by 210px and was cut by the section: the frame's one grid track sized to the bar's no-wrap content. | major | fixed — `grid-template-columns: minmax(0, 1fr)` on every window, the reframe gives the window 1.5fr of its width, the decide bar keeps only the active item, the level and the badge |
+| 2 | all | The last beat («Зафиксировано») started at 860ms, past the 800ms guard. | minor | fixed — 800ms |
+
+Frames: `design-memory/screenshots/public-home-hifi/decide/` at 1440 (0/300/600/1500ms), 1024, 768 and 390; `before-1440.png`. Windows measured inside their columns at 1440 (478px), 1024 (672px) and 768 (684px); no sideways scroll; console clean; no-JS: 0 of 28 hidden.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.

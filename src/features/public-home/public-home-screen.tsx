@@ -4,7 +4,8 @@ import { PublicHomeEffects } from "@/features/public-home/public-home-effects";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { ProductRoute } from "@/features/public-home/product-route";
 import { ReviewWindow } from "@/features/public-home/review-window";
-import { DECISION_FIELD, DECISION_STRONG, DECISION_UNSET } from "@/features/public-home/review-data";
+import { DecisionWindow } from "@/features/public-home/decision-window";
+import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-data";
 
 /**
  * PUBLIC HOME — the brand-evolution composition.
@@ -173,25 +174,9 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </div>
               <div className="reframe__axis" aria-hidden="true" />
 
-              {/* Decision Frame — stage 2: the same object, now determinate. */}
-              <figure className="dframe dframe--set" data-frame-stage="set">
-                <figcaption className="dframe__label">
-                  <span className="demo-badge">Демонстрационный пример</span>
-                  <span className="dframe__stage">Основание сформулировано</span>
-                </figcaption>
-                <div className="dframe__object">
-                  <p className="dframe__field">{DECISION_FIELD}</p>
-                  <p className="dframe__value">
-                    {/* The wrapper is what the «many → one» sequence writes into;
-                        the string is the same one #review carries. */}
-                    <i className="dframe__type">{DECISION_STRONG}</i>
-                  </p>
-                </div>
-                <p className="dframe__statement">
-                  Собственное решение — не чужой вывод. Это действие, основание которого вы можете
-                  объяснить.
-                </p>
-              </figure>
+              {/* The same object, now determinate — in the Trade Card, where
+                  the product holds it. decision-window.tsx */}
+              <DecisionWindow />
             </div>
           </div>
         </section>

@@ -234,9 +234,14 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("resolves that same object in #decide", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const decided = container.querySelector("#decide .dframe") as HTMLElement;
+    // Since 2026-09-22 the object sits in the product's own frame: the Trade
+    // Card, where the reason is written before the trade.
+    const decided = container.querySelector("#decide .decision") as HTMLElement;
+    expect(decided).not.toBeNull();
+    expect(text(decided)).toContain("Trade Card");
     expect(text(decided)).toContain("Причина входа до сделки");
     expect(text(decided)).toContain("До сделки зафиксировал условие");
+    expect(text(decided)).toContain("Зафиксировано");
   });
 
   it("marks every synthetic panel as a demonstration", () => {
@@ -244,7 +249,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     // Hero frame, decide frame, and the two product windows — one badge in
     // each bar covers every state the window shows.
     expect(container.querySelectorAll(".demo-badge").length).toBe(4);
-    for (const selector of ["#top .dframe", "#decide .dframe", "#review .pw__bar", "#product .pw__bar"]) {
+    for (const selector of ["#top .dframe", "#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
@@ -325,7 +330,7 @@ describe("Public Home — signature evidence", () => {
 
   it("carries one identical decision string through #decide and #review", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const decide = container.querySelector("#decide .dframe .dframe__value") as HTMLElement;
+    const decide = container.querySelector("#decide .decision .dframe__value") as HTMLElement;
     const v2 = container.querySelector(
       '[data-frame-stage="v2"] .dframe__value',
     ) as HTMLElement;
