@@ -161,6 +161,8 @@ Frames: `design-memory/screenshots/public-home-hifi/cycle/` — 1440 at 0/300/60
 
 Cause: `.surface { overflow: hidden }` made the FAQ section the scroll container of its `position: sticky` heading, so the heading was positioned against the section instead of the viewport — every opened answer pushed it down with the row (1440: +65px per answer, +120px after two), and at 1024 it rested 120px below the list before any click. Fix: the FAQ surface clips with `overflow: clip` (rounded corners kept, no scrollport). Measured in Chromium at 1440, 1512 and 1024 on the fixed build: the heading rests at the grid's top (140 = 140) and moves 0px when two answers open; on scroll it sticks at 120px for as long as the row allows. Guard: the CSS test pins `.faq__heading` sticky and `.faq.surface { overflow: clip }`.
 
+Second report, the same day («по мере открытия вопросов текст слева съезжает вниз»): the scrollport fix was not enough. The heading is almost as tall as the closed list (632 vs 629px at 1440), so sticky at 120px had no room to engage until answers opened — and then it jumped to its stuck position as each answer added room (live, grid top at 60px: 62 → 120px after one answer at 1440; 64 → 903 → 304px at 1512). A heading that scrolls with the page never moves on its own, so `.faq__heading` is `position: static` now; the surface keeps `overflow: clip`. Measured on the fixed build at 1440 and 1512 with the grid top at 60px and at 140px: 0px of movement over two opened answers. Guard: the CSS test now asserts the heading is not sticky.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.

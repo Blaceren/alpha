@@ -699,11 +699,12 @@ describe("Public Home — stylesheet holds its contract", () => {
 });
 
 describe("Public Home — the FAQ heading holds its place", () => {
-  it("keeps the FAQ surface from being the sticky heading's scrollport", () => {
-    // `.surface` clips with `overflow: hidden`, which makes a section the scroll
-    // container of a sticky child: the heading then moved down with every opened
-    // answer. The FAQ surface clips with `clip` instead, which creates no scrollport.
-    expect(css).toMatch(/\.ph \.faq__heading\s*\{[^}]*position:\s*sticky/);
+  it("never sticks the heading: it is as tall as the closed list and would jump as answers open", () => {
+    // Sticky at 120px had no room until answers opened, then jumped down with
+    // every click. The heading scrolls with the page; the surface clips with
+    // `clip` so no section is ever a scrollport for a sticky child.
+    expect(css).not.toMatch(/\.ph \.faq__heading\s*\{[^}]*position:\s*sticky/);
+    expect(css).toMatch(/\.ph \.faq__heading\s*\{[^}]*position:\s*static/);
     expect(css).toMatch(/\.ph \.faq\.surface\s*\{[^}]*overflow:\s*clip/);
   });
 });

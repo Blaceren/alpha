@@ -952,9 +952,13 @@ html.ph-smooth-scroll {
   gap: clamp(80px, 10vw, 150px);
 }
 
+/* The heading is not sticky. It was, at 120px — but it is almost as tall as
+   the closed list, so it had no room to stick until answers opened, and then
+   it jumped to its stuck position as each answer added room: the text «moved
+   down» on every click (owner, 2026-09-22, twice). A heading that scrolls
+   with the page never moves on its own. */
 .ph .faq__heading {
-  position: sticky;
-  top: 120px;
+  position: static;
 }
 
 /* The heading sticks to the viewport, so the section must not be a scroll
