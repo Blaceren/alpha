@@ -957,6 +957,15 @@ html.ph-smooth-scroll {
   top: 120px;
 }
 
+/* The heading sticks to the viewport, so the section must not be a scroll
+   container. `overflow: hidden` on every surface made this section the
+   heading's scrollport, and each opened answer pushed the heading down with
+   the row (owner, 2026-09-22: «надпись съезжает вниз»). `clip` keeps the
+   rounded corners and creates no scrollport. */
+.ph .faq.surface {
+  overflow: clip;
+}
+
 .ph .faq__heading > p:last-child {
   max-width: 500px;
   margin-top: 32px;

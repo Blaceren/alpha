@@ -698,6 +698,16 @@ describe("Public Home — stylesheet holds its contract", () => {
   });
 });
 
+describe("Public Home — the FAQ heading holds its place", () => {
+  it("keeps the FAQ surface from being the sticky heading's scrollport", () => {
+    // `.surface` clips with `overflow: hidden`, which makes a section the scroll
+    // container of a sticky child: the heading then moved down with every opened
+    // answer. The FAQ surface clips with `clip` instead, which creates no scrollport.
+    expect(css).toMatch(/\.ph \.faq__heading\s*\{[^}]*position:\s*sticky/);
+    expect(css).toMatch(/\.ph \.faq\.surface\s*\{[^}]*overflow:\s*clip/);
+  });
+});
+
 describe("Public Home — no way to the news", () => {
   it("links no news page: the news are product content for signed-in learners (DD-326)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);

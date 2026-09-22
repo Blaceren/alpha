@@ -157,6 +157,10 @@ Motion: each object appears as its node lights — 240ms, delays 140…790ms aft
 
 Frames: `design-memory/screenshots/public-home-hifi/cycle/` — 1440 at 0/300/600/1500ms, 390 (viewport and the whole section), 1024, 768, the sixth object alone, `before-1440.png` and the two findings (`found-*.png`). Measured on the same build: no sideways scroll at four widths; the six objects 184 / 210 / 199 / 320px wide and none overflowing; the nested list's padding and borders 0; console 0 errors at every width.
 
+### The FAQ heading holds its place (2026-09-22, the owner: «когда открывается тут надпись съезжает вниз»)
+
+Cause: `.surface { overflow: hidden }` made the FAQ section the scroll container of its `position: sticky` heading, so the heading was positioned against the section instead of the viewport — every opened answer pushed it down with the row (1440: +65px per answer, +120px after two), and at 1024 it rested 120px below the list before any click. Fix: the FAQ surface clips with `overflow: clip` (rounded corners kept, no scrollport). Measured in Chromium at 1440, 1512 and 1024 on the fixed build: the heading rests at the grid's top (140 = 140) and moves 0px when two answers open; on scroll it sticks at 120px for as long as the row allows. Guard: the CSS test pins `.faq__heading` sticky and `.faq.surface { overflow: clip }`.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.
