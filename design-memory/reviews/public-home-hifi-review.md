@@ -126,6 +126,12 @@ Frames: `design-memory/screenshots/public-home-hifi/review/<viewport>-<state>.pn
 
 Anti-generic, this section: the object is the product's real report with its real field and verdict (product meaning 15/15); the strip and the window are one composition, not a card grid; the section's score holds with the page's 87.
 
+### The card is the target (2026-09-22, the owner: «переключение работает лишь когда нажимаешь на текст названия»)
+
+The strip's button in each title stays the control — focusable, `aria-pressed`, the keyboard's way in — but a pointer now lands anywhere on the card: the index, the note, the empty surface. The object inside the card (the field, the criterion, the accepted note) is content, not a control: a click on it changes nothing, and the reading pointer stays over it (`cursor: auto` inside `cursor: pointer`). A drag that selected text is not a click. Hovering the card lights the title the way hovering the button did; hovering the object does not (`li:hover:not(:has(.evidence__object:hover))`).
+
+Measured in Chromium at 1440 and 390: note → `v2`, index → `feedback`, the empty corner and the left padding of the fourth card → `accepted`; the first card's object, its text and the second card's verdict → unchanged; the title area → `v1`; cursors `pointer` / `auto`; title colour on card hover rgb(221,255,160), on object hover and off the card rgb(243,244,239); console 0 errors. Frames: `review/1440-card-hover.png`, `review/390-card-clicks.png`. Guard: the new test clicks the note, the index, the card itself and the three objects and reads `data-stage` and `aria-pressed`.
+
 ## The decision window (2026-09-22, the owner: «вот этот блок теперь»)
 
 `#decide` used to resolve the hero's frame as an authored card. It now resolves it in the product: the Trade Card (L5, «План сделки до входа») at the moment the reason is written — the four parameters, the field «Причина входа до сделки» with the same string the evidence's V2 carries, «● Зафиксировано 17:20», «После открытия условия сделки не меняются». The «many → one» sequence is unchanged: the chips recede, the axis draws to the window, the reason is written into the product's field, the statement follows.

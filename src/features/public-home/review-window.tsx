@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   DECISION_FIELD,
   DECISION_STRONG,
@@ -33,6 +33,13 @@ import {
  * nothing plays: the window shows the first state and the strip is the
  * control. Without a script the window shows the first state and the strip
  * reads as it always did.
+ *
+ * THE CARD IS THE TARGET. The button in the title is the control — focusable,
+ * `aria-pressed`, the keyboard's way in — but a pointer may land anywhere on
+ * the card: the index, the note, the empty surface. Only the object inside
+ * the card (the field, the criterion, the accepted note) is content, not a
+ * control: it is there to be read, and a click on it changes nothing. A drag
+ * that selected text is not a click either.
  */
 
 const HOLD_MS = 1500;
@@ -91,6 +98,17 @@ export function ReviewWindow() {
       setStage(id);
     },
     [stop],
+  );
+
+  const chooseFromCard = useCallback(
+    (event: MouseEvent<HTMLLIElement>, id: ReviewStageId) => {
+      const target = event.target as HTMLElement;
+      // The button handles itself; the object inside the card is not a control.
+      if (target.closest(".evidence__button") || target.closest(".evidence__object")) return;
+      if (window.getSelection()?.toString()) return;
+      choose(id);
+    },
+    [choose],
   );
 
   const at = reviewStageIndex(stage);
@@ -214,6 +232,7 @@ export function ReviewWindow() {
             key={item.id}
             data-frame-stage={item.id}
             className={`${item.id === stage ? "is-active" : ""}${index <= at ? " is-reached" : ""}`}
+            onClick={(event) => chooseFromCard(event, item.id)}
           >
             <p className="evidence__index">{item.index}</p>
             <h3>

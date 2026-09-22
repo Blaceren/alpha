@@ -4201,10 +4201,21 @@ html.ph-smooth-scroll {
     opacity 240ms var(--ease),
     transform 240ms var(--ease),
     background-color 240ms var(--ease);
+  cursor: pointer;
 }
 
 .ph .review .evidence-track > li.is-active {
   background: var(--ink-900);
+}
+
+/* The whole card answers the pointer as the title does; the object inside
+   the card is content, so the pointer over it is the reading pointer. */
+.ph .review .evidence-track > li:hover:not(:has(.evidence__object:hover)) .evidence__button {
+  color: var(--signal-300);
+}
+
+.ph .review .evidence__object {
+  cursor: auto;
 }
 
 .ph .review .evidence-track > li.is-active .evidence__index {

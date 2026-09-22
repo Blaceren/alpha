@@ -385,6 +385,31 @@ describe("Public Home — signature evidence", () => {
     expect(buttons[3]!.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("switches the window from anywhere on a card except the object inside it", async () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    const window = review.querySelector("#review-window") as HTMLElement;
+    const cards = Array.from(review.querySelectorAll(".evidence-track > li")) as HTMLElement[];
+    expect(cards).toHaveLength(4);
+    // The note, the index and the card's own surface all switch.
+    await userEvent.click(cards[2]!.querySelector(".evidence__note") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("v2");
+    await userEvent.click(cards[1]!.querySelector(".evidence__index") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("feedback");
+    await userEvent.click(cards[3]!);
+    expect(window.getAttribute("data-stage")).toBe("accepted");
+    // The object inside a card is content, not a control.
+    await userEvent.click(cards[0]!.querySelector(".evidence__object") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("accepted");
+    await userEvent.click(cards[0]!.querySelector(".evidence__object .dframe__value") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("accepted");
+    await userEvent.click(cards[1]!.querySelector(".evidence__verdict") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("accepted");
+    // The button still carries the state for the keyboard and assistive tech.
+    const pressed = Array.from(review.querySelectorAll(".evidence__button")).map((b) => b.getAttribute("aria-pressed"));
+    expect(pressed).toEqual(["false", "false", "false", "true"]);
+  });
+
   it("stops the Decision Frame after the evidence", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     for (const id of ["path", "tools", "fit", "boundaries", "faq"]) {
