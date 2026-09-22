@@ -1086,7 +1086,9 @@ html.ph-smooth-scroll {
   font-size: 8px;
 }
 
-.ph [data-reveal] {
+/* Gated on the JS marker: without a script there is no observer, and a page
+   that hid its content waiting for one would stay blank. */
+.ph.has-js [data-reveal] {
   opacity: 0;
   transform: translateY(24px);
   transition:
@@ -1094,7 +1096,7 @@ html.ph-smooth-scroll {
     transform 620ms var(--ease);
 }
 
-.ph [data-reveal].is-visible {
+.ph.has-js [data-reveal].is-visible {
   opacity: 1;
   transform: translateY(0);
 }
@@ -1224,10 +1226,18 @@ html.ph-smooth-scroll {
 }
 
 @media (max-width: 920px) {
-  .ph [data-reveal] {
-    opacity: 1;
-    transform: none;
-    transition: none;
+  /* A light reveal on phones (2026-09-22): 12px and 360ms instead of the
+     desktop's 24px and 620ms, no delays. Content is never held back — the
+     observer reveals everything at once when IntersectionObserver is missing. */
+  .ph.has-js [data-reveal] {
+    transform: translateY(12px);
+    transition:
+      opacity 360ms var(--ease),
+      transform 360ms var(--ease);
+  }
+
+  .ph .evidence-track > li[data-reveal] {
+    transition-delay: 0s;
   }
 
   .ph .hero__facts {
@@ -3699,5 +3709,190 @@ html.ph-smooth-scroll {
 
   .ph .pw-node--current strong {
     display: block;
+  }
+}
+
+/* =========================================================================
+ * MOTION SLICE (2026-09-22) — three sequences, each once, each bounded.
+ *
+ * They ride the reveal observer: `is-visible` on the section's own element
+ * is the trigger, so a sequence fires when the section is reached and never
+ * replays on reverse scroll. Every keyframe runs once with `both`, so the
+ * reduced-motion rule above (0.01ms durations) lands on the final states.
+ * ====================================================================== */
+
+/* --- «многое → одно» (#decide) ------------------------------------------ */
+
+/* The six borrowed answers recede toward the axis and dim; the axis draws
+   to its point; the learner's own basis is written into the frame; the
+   statement follows. ≈ 950ms in all. */
+@keyframes ph-chip-recede {
+  to {
+    opacity: 0.55;
+    transform: translateX(10px);
+  }
+}
+
+@keyframes ph-chip-recede-down {
+  to {
+    opacity: 0.55;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes ph-draw-x {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ph-draw-y {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ph-appear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ph-write {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes ph-node-on {
+  to {
+    background: var(--signal-400);
+    color: var(--ink-950);
+    box-shadow: 0 0 0 5px rgba(199, 247, 109, 0.14);
+  }
+}
+
+@keyframes ph-pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(199, 247, 109, 0.55);
+  }
+
+  to {
+    box-shadow: 0 0 0 12px rgba(199, 247, 109, 0);
+  }
+}
+
+.ph .reframe.is-visible .source-cloud span {
+  animation: ph-chip-recede 420ms var(--ease) both;
+}
+
+.ph .reframe.is-visible .source-cloud span:nth-child(2) { animation-delay: 45ms; }
+.ph .reframe.is-visible .source-cloud span:nth-child(3) { animation-delay: 90ms; }
+.ph .reframe.is-visible .source-cloud span:nth-child(4) { animation-delay: 135ms; }
+.ph .reframe.is-visible .source-cloud span:nth-child(5) { animation-delay: 180ms; }
+.ph .reframe.is-visible .source-cloud span:nth-child(6) { animation-delay: 225ms; }
+
+.ph .reframe.is-visible .reframe__axis {
+  transform-origin: left center;
+  animation: ph-draw-x 460ms var(--ease) 180ms both;
+}
+
+.ph .reframe.is-visible .reframe__axis::after {
+  animation: ph-appear 200ms var(--ease) 600ms both;
+}
+
+.ph .dframe__type {
+  display: inline-block;
+  font-style: normal;
+}
+
+.ph .reframe.is-visible .dframe__type {
+  animation: ph-write 540ms steps(30, end) 300ms both;
+}
+
+.ph .reframe.is-visible .dframe__statement {
+  animation: ph-appear 240ms var(--ease) 720ms both;
+}
+
+/* --- the cycle (#mechanism) -------------------------------------------- */
+
+/* The Signal line is drawn over the hairline, left to right, and the six
+   nodes light in order as it reaches them. ≈ 850ms. */
+.ph .learning-loop::after {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--signal-400);
+  transform: scaleX(0);
+  transform-origin: left center;
+  content: "";
+}
+
+.ph .learning-loop.is-visible::after {
+  animation: ph-draw-x 760ms var(--ease) 80ms both;
+}
+
+.ph .learning-loop.is-visible li > span {
+  animation: ph-node-on 240ms var(--ease) both;
+}
+
+.ph .learning-loop.is-visible li:nth-child(1) > span { animation-delay: 60ms; }
+.ph .learning-loop.is-visible li:nth-child(2) > span { animation-delay: 190ms; }
+.ph .learning-loop.is-visible li:nth-child(3) > span { animation-delay: 320ms; }
+.ph .learning-loop.is-visible li:nth-child(4) > span { animation-delay: 450ms; }
+.ph .learning-loop.is-visible li:nth-child(5) > span { animation-delay: 580ms; }
+.ph .learning-loop.is-visible li:nth-child(6) > span { animation-delay: 710ms; }
+
+/* --- the corrected place (#review) -------------------------------------- */
+
+/* V2 marks the same field V1 was returned on; when V2 arrives, that place
+   pulses once — after the stagger that brings V2 in. */
+.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected {
+  animation: ph-pulse 720ms var(--ease) 660ms both;
+}
+
+@media (max-width: 920px) {
+  /* The axis stands vertical here and the chips sit above it. */
+  .ph .reframe.is-visible .source-cloud span {
+    animation-name: ph-chip-recede-down;
+  }
+
+  .ph .reframe.is-visible .reframe__axis {
+    transform-origin: center top;
+    animation-name: ph-draw-y;
+  }
+
+  /* The cycle stands in a column: the line runs down the node centres. */
+  .ph .learning-loop::after {
+    top: 36px;
+    right: auto;
+    bottom: 40px;
+    left: 11px;
+    width: 1px;
+    height: auto;
+    transform: scaleY(0);
+    transform-origin: center top;
+  }
+
+  .ph .learning-loop.is-visible::after {
+    animation-name: ph-draw-y;
   }
 }

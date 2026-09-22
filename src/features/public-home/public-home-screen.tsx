@@ -187,7 +187,11 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                 </figcaption>
                 <div className="dframe__object">
                   <p className="dframe__field">{DECISION_FIELD}</p>
-                  <p className="dframe__value">{DECISION_STRONG}</p>
+                  <p className="dframe__value">
+                    {/* The wrapper is what the «many → one» sequence writes into;
+                        the string is the same one #review carries. */}
+                    <i className="dframe__type">{DECISION_STRONG}</i>
+                  </p>
                 </div>
                 <p className="dframe__statement">
                   Собственное решение — не чужой вывод. Это действие, основание которого вы можете
@@ -212,7 +216,9 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </p>
             </div>
 
-            <ol className="learning-loop" aria-label="Шесть этапов цикла ATA">
+            {/* The list itself reveals too: its `is-visible` is what draws the
+                line and lights the nodes, once, in order. */}
+            <ol className="learning-loop" aria-label="Шесть этапов цикла ATA" data-reveal>
               <li data-reveal>
                 <span>01</span>
                 <h3>Понять</h3>

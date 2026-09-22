@@ -589,9 +589,47 @@ describe("Public Home — stylesheet holds its contract", () => {
     expect(rules).not.toMatch(/animation:[^;]*infinite/);
   });
 
-  it("keeps the reveal switched off below 920px, so mobile is static", () => {
+  it("hides nothing without a script: the reveal is gated on the JS marker", () => {
+    expect(css).toMatch(/\.ph\.has-js \[data-reveal\] \{[^}]*opacity:\s*0/);
+    expect(css).not.toMatch(/\n\.ph \[data-reveal\] \{/);
+  });
+
+  it("keeps the reveal light below 920px: a short lift, no delays", () => {
+    // Owner, 2026-09-22: motion on phones too — but lighter than the desktop's
+    // 24px/620ms, and never a stagger that holds a card back while scrolling.
     const mobileBlock = /@media \(max-width: 920px\) \{([\s\S]*?)\n\}/.exec(css);
-    expect(mobileBlock?.[1]).toMatch(/\[data-reveal\][\s\S]*?transition:\s*none/);
+    const block = mobileBlock?.[1] ?? "";
+    const rule = /\.ph\.has-js \[data-reveal\] \{([^}]*)\}/.exec(block);
+    expect(rule, "the phone reveal rule is missing").not.toBeNull();
+    expect(rule?.[1]).toMatch(/translateY\(12px\)/);
+    const durations = Array.from((rule?.[1] ?? "").matchAll(/(\d+)ms/g)).map((m) => Number(m[1]));
+    expect(durations.length).toBeGreaterThan(0);
+    expect(Math.max(...durations)).toBeLessThanOrEqual(400);
+    expect(block).toMatch(/\.evidence-track > li\[data-reveal\] \{[^}]*transition-delay:\s*0s/);
+  });
+
+  it("plays each motion sequence once and settles inside a second", () => {
+    // The three sequences ride `is-visible`, run with `both`, and nothing loops.
+    for (const trigger of [
+      ".ph .reframe.is-visible .source-cloud span",
+      ".ph .learning-loop.is-visible::after",
+      '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
+    ]) {
+      expect(css, `${trigger} must be a sequence`).toContain(trigger);
+    }
+    // Shorthand: the first time is the duration, the second (if any) the delay.
+    const durations: number[] = [];
+    const delays: number[] = [];
+    for (const m of css.matchAll(/animation:\s*([^;]*);/g)) {
+      const times = Array.from(m[1]!.matchAll(/(\d+)ms/g)).map((t) => Number(t[1]));
+      if (times[0] !== undefined) durations.push(times[0]);
+      if (times[1] !== undefined) delays.push(times[1]);
+    }
+    for (const m of css.matchAll(/animation-delay:\s*(\d+)ms/g)) delays.push(Number(m[1]));
+    expect(Math.max(...durations)).toBeLessThanOrEqual(900);
+    expect(Math.max(...delays)).toBeLessThanOrEqual(800);
+    expect(css).not.toMatch(/animation-iteration-count:\s*infinite/);
+    expect(css).not.toMatch(/animation:[^;]*infinite/);
   });
 });
 

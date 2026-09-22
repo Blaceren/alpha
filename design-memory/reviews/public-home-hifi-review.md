@@ -90,6 +90,24 @@ Top fixes for later, ranked:
 2. The window could replay a state's moment on hover, on desktop.
 3. The video slot in the hero: poster, click-to-play, the 2–5 minute platform film — when the film exists.
 
+## Motion slice (2026-09-22, the same day, after the release of slices 0–1)
+
+Three sequences, each once, each bounded, all riding the reveal observer's `is-visible`:
+
+| Where | Sequence | Length |
+|---|---|---|
+| `#decide` | six borrowed answers recede toward the axis and dim (45ms stagger, 420ms), the axis draws to its point (460ms from 180ms), the learner's own basis is written into the frame (540ms from 300ms), the statement follows (from 720ms) | ≈ 960ms |
+| `#mechanism` | a Signal line is drawn over the hairline left to right (760ms from 80ms) and the six nodes light in order as it reaches them (from 60 to 710ms); on phones the line runs down the node centres | ≈ 950ms |
+| `#review` | when V2 arrives, the corrected field pulses once (720ms from 660ms, after the card's own stagger) | ≈ 1.4s from the card's entry |
+
+Also: the reveal is now gated on the JS marker (`.ph.has-js [data-reveal]`) — without a script every element was at `opacity: 0` and the page would have been blank; measured with JavaScript off: 0 of 32 reveal elements hidden. And a light reveal on phones (12px, 360ms, no stagger) replaces the static mobile.
+
+Frames: `design-memory/screenshots/public-home-hifi/motion/<viewport>-<section>-<ms>.png` — 0, 300, 600 and 1500ms after each section entered, at 1440 and 390. Console: 0 errors. Final states measured: chips at opacity 0.55, nodes filled Signal, axis at scale 1.
+
+Reduced-motion: the existing rule caps every animation at 0.01ms and every keyframe runs with `both`, so the final states apply at once — dimmed chips, lit nodes, the written basis.
+
+Guards: the phone-reveal test now asserts the light lift; a new test asserts the three triggers exist, no animation loops, durations ≤ 900ms and delays ≤ 800ms; a new test asserts the JS gate.
+
 ## Sign-off
 - Critical and major findings closed; the minor ones too.
 - Real renders of the real route on the same code, at four widths, console clean.
