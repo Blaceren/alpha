@@ -1,10 +1,10 @@
 /**
  * NEWS — the public news, read on the server (SERVER-ONLY).
  *
- * ANONYMOUS ON PURPOSE. These pages are for everyone, signed in or not, and in
- * production for search engines. So no cookie is ever forwarded: the Backend's
- * `/api/public/news*` answers anyone with published items and nothing else,
- * and the page a signed-in learner sees is exactly the page a crawler sees.
+ * NO COOKIE ON PURPOSE. The Backend's `/api/public/news*` answers with
+ * published items and nothing else, so nothing about the learner is forwarded.
+ * The pages themselves are for signed-in learners since 2026-09-22 (DD-326);
+ * the data behind them is not personal, so the read stays anonymous.
  *
  * FAILURE IS NOT ABSENCE. An unreachable Backend is `unavailable`, which the
  * page renders as a temporary error (not indexed, like every 5xx); only the
@@ -70,19 +70,4 @@ export async function readPublicNewsItem(slug: string): Promise<PublicRead<Publi
   if (!isPublicNewsItemAnswer(read.data)) return { status: "unavailable" };
   const answer: PublicNewsItemAnswer = read.data;
   return { status: "ok", data: { ...answer, released: Date.parse(answer.item.releaseAt) <= Date.now() } };
-}
-
-/** Every published address for the sitemap; an empty list when the Backend cannot say. */
-export async function readNewsSitemap(): Promise<{ slug: string; updatedAt: string }[]> {
-  const read = await readPublic("/api/public/news-sitemap");
-  if (read.status !== "ok" || typeof read.data !== "object" || read.data === null) return [];
-  const items = (read.data as { items?: unknown }).items;
-  if (!Array.isArray(items)) return [];
-  return items.filter(
-    (item): item is { slug: string; updatedAt: string } =>
-      typeof item === "object" &&
-      item !== null &&
-      typeof (item as { slug?: unknown }).slug === "string" &&
-      typeof (item as { updatedAt?: unknown }).updatedAt === "string",
-  );
 }

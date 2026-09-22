@@ -1,10 +1,13 @@
 /**
  * SEARCH INDEXING — which pages search engines may index, and where.
  *
- * THE OWNER'S DECISION (2026-09-21). In production, search engines index the
- * news pages and the public home page — the Academy's story, with the way to
- * login and registration — and nothing else. On PREPROD nothing at all is
- * indexed: «на пред проде мы ничего не индексируем».
+ * THE OWNER'S DECISION (2026-09-21, narrowed 2026-09-22). In production,
+ * search engines index the public home page — the Academy's story, with the way
+ * to login and registration — and nothing else. The news pages were indexable
+ * for one day; on 2026-09-22 the owner took them off the public surface («эти
+ * новости всё-таки не индексируем и убираем с публичной страницы»): they are
+ * product content for signed-in learners now and never indexed (DD-326). On
+ * PREPROD nothing at all is indexed: «на пред проде мы ничего не индексируем».
  *
  * WHY THIS IS AN ENVIRONMENT VARIABLE, when `feature-visibility.ts` refuses
  * one. That file decides what the PRODUCT is, and two deployments of one commit
@@ -20,7 +23,7 @@
  *
  * WHAT "OFF" MEANS. Every page answers with `X-Robots-Tag: noindex, nofollow`
  * (the middleware sets it on every response but an indexable page on an
- * indexing host), the two indexable pages also say `noindex` in their own
+ * indexing host), the one indexable page also says `noindex` in its own
  * metadata, and there is no sitemap. robots.txt still lets crawlers in: a page
  * they may not fetch is a page whose `noindex` they never read, and an address
  * known from elsewhere would stay in the index.
@@ -59,9 +62,9 @@ export function searchIndexing(): SearchIndexing {
   return resolveSearchIndexing(process.env as EnvSource);
 }
 
-/** The public home, the news list and a news page — the only indexable paths. */
+/** The public home — the only indexable path. The news are product content (DD-326). */
 export function isIndexablePath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/news" || /^\/news\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname);
+  return pathname === "/";
 }
 
 export const NOINDEX_HEADER_VALUE = "noindex, nofollow";

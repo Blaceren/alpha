@@ -698,11 +698,10 @@ describe("Public Home — stylesheet holds its contract", () => {
   });
 });
 
-describe("Public Home — the way to the news", () => {
-  it("links the public news pages from the menu, as a route and not an anchor", () => {
+describe("Public Home — no way to the news", () => {
+  it("links no news page: the news are product content for signed-in learners (DD-326)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const nav = container.querySelector("nav#primary-nav") as HTMLElement;
-    const news = Array.from(nav.querySelectorAll("a")).find((a) => a.textContent === "Новости");
-    expect(news?.getAttribute("href")).toBe("/news");
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href") ?? "");
+    expect(hrefs.filter((href) => href === "/news" || href.startsWith("/news/") || href.startsWith("/news?"))).toEqual([]);
   });
 });

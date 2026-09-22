@@ -214,13 +214,14 @@ describe("the authenticated route group", () => {
   "src/server/tools/stats-read.ts",
   /* TOOLS-V2 slice 6: the News Calendar — its window, its proxy route and its
      server read, a page of the shell like the other tools with no loading
-     boundary — and the public news it reads: `/news` and `/news/<slug>`
-     outside the route group, like Public Home, read anonymously on the
-     server. SEARCH INDEXING (owner, 2026-09-21): only Public Home and the news
-     are indexable, in production only; everything else, PREPROD included, is
-     noindex — so Public Home's metadata, robots.txt and the sitemap move with
-     it; the root layout does not (the noindex default is the middleware's
-     header on every page). */
+     boundary — and the news it reads: `/news` and `/news/<slug>` outside the
+     route group, read without a cookie on the server. SEARCH INDEXING (owner,
+     2026-09-21, narrowed 2026-09-22 — DD-326): only Public Home is indexable,
+     in production only; the news are product content for signed-in learners
+     and never indexed; everything else, PREPROD included, is noindex — so
+     Public Home's metadata, robots.txt and the sitemap move with it; the root
+     layout does not (the noindex default is the middleware's header on every
+     page). */
   "src/app/api/backend/tools/news-calendar/route.ts",
   "src/app/news/[slug]/page.tsx",
   "src/app/news/page.tsx",

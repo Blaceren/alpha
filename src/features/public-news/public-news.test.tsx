@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import {
   groupByDay,
-  inlineJson,
   isPublicNewsItemAnswer,
   isPublicNewsListAnswer,
-  newsArticleJsonLd,
   parseNewsPage,
   releaseDayWords,
   releaseTimeUtc,
@@ -75,12 +73,6 @@ describe("the public news model", () => {
     expect(groups[0]!.label).toBe("21 сентября · понедельник");
   });
 
-  it("escapes structured data so no text can close its script tag", () => {
-    expect(inlineJson({ a: "</script><script>alert(1)</script>" })).not.toContain("</script>");
-    const json = newsArticleJsonLd(ITEM.item, "https://alfatrade.media/news/x", "https://alfatrade.media");
-    expect(json).toMatchObject({ "@type": "NewsArticle", datePublished: ITEM.item.publishedAt, url: "https://alfatrade.media/news/x" });
-    expect(JSON.stringify(json)).not.toMatch(/staff|createdBy/);
-  });
 });
 
 describe("the public news pages", () => {
@@ -107,7 +99,7 @@ describe("the public news pages", () => {
   });
 
   it("shows one article: its figures, its text in paragraphs, and its source outside the Academy", () => {
-    const { container } = render(<NewsItemScreen answer={{ ...ITEM, released: false }} authenticated={false} jsonLd={null} />);
+    const { container } = render(<NewsItemScreen answer={{ ...ITEM, released: false }} authenticated={false} />);
     expect(screen.getByRole("heading", { level: 1, name: "Базовый индекс потребительских цен, м/м" })).toBeInTheDocument();
     expect(screen.getByText("21 сентября 2026, 12:30 UTC")).toBeInTheDocument();
     const figures = container.querySelector(".pn-figures")!;
@@ -120,13 +112,5 @@ describe("the public news pages", () => {
     expect(source).toHaveAttribute("target", "_blank");
     expect(screen.getByRole("heading", { name: "Другие новости" })).toBeInTheDocument();
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
-  });
-
-  it("carries structured data only when it is given, escaped", () => {
-    const jsonLd = newsArticleJsonLd({ ...ITEM.item, title: "</script>" }, "https://alfatrade.media/news/x", "https://alfatrade.media");
-    const { container } = render(<NewsItemScreen answer={{ ...ITEM, released: true }} authenticated={false} jsonLd={jsonLd} />);
-    const script = container.querySelector('script[type="application/ld+json"]')!;
-    expect(script.innerHTML).not.toContain("</script>");
-    expect(JSON.parse(script.innerHTML.replace(/\\u003c/g, "<")).headline).toContain("</script>");
   });
 });

@@ -1,9 +1,8 @@
 import { cache } from "react";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { NewsItemScreen } from "@/features/public-news/public-news-screens";
-import { NEWS_SLUG_RE, newsArticleJsonLd, newsPath, releaseDayWords } from "@/features/public-news/public-news-model";
-import { indexableRobots, searchIndexing } from "@/config/search-indexing";
+import { NEWS_SLUG_RE, newsPath, releaseDayWords } from "@/features/public-news/public-news-model";
 import { getServerViewer } from "@/server/auth/server-session";
 import { readPublicNewsItem } from "@/server/news/public-news-read";
 import "@/features/public-home/public-home.css";
@@ -12,8 +11,10 @@ import "@/features/public-news/public-news.css";
 /**
  * NEWS — one public news page, `/news/<slug>`.
  *
- * Each published item is its own page (owner, 2026-09-21), indexed by search
- * engines in production. A draft, an unpublished item and an unknown address
+ * Each published item is its own page (owner, 2026-09-21) — for signed-in
+ * learners and never for search engines since 2026-09-22 (DD-326): the
+ * middleware bounces anonymous visitors to /login, and this page checks the
+ * session itself as well. A draft, an unpublished item and an unknown address
  * are the same 404. The address is checked for its shape before anything is
  * asked of the Backend.
  */
@@ -29,40 +30,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const read = await readItem(slug);
   if (!read || read.status !== "ok") return { robots: { index: false, follow: false } };
   const { item } = read.data;
-  const indexing = searchIndexing();
-  const title = `${item.title} — ${item.countryLabel}, ${releaseDayWords(item.releaseAt)} — Alfa Trade Academy`;
-  const url = indexing.enabled ? `${indexing.origin}${newsPath(item.slug)}` : null;
   return {
-    title,
+    title: `${item.title} — ${item.countryLabel}, ${releaseDayWords(item.releaseAt)} — Alfa Trade Academy`,
     description: item.summary,
-    robots: indexableRobots(indexing),
-    ...(url
-      ? {
-          alternates: { canonical: url },
-          openGraph: {
-            type: "article",
-            url,
-            title: `${item.countryLabel}: ${item.title}`,
-            description: item.summary,
-            siteName: "Alfa Trade Academy",
-            locale: "ru_RU",
-            publishedTime: item.publishedAt,
-            modifiedTime: item.updatedAt,
-          },
-        }
-      : {}),
+    robots: { index: false, follow: false },
   };
 }
 
 export default async function NewsItemPage({ params }: Props) {
   const { slug } = await params;
+  const viewer = await getServerViewer();
+  if (viewer === null) redirect(`/login?next=${encodeURIComponent(newsPath(slug))}`);
   const read = await readItem(slug);
   if (!read || read.status === "not_found") notFound();
   if (read.status === "unavailable") throw new Error("news: the Backend could not be read");
-  const viewer = await getServerViewer();
-  const indexing = searchIndexing();
-  const jsonLd = indexing.enabled
-    ? newsArticleJsonLd(read.data.item, `${indexing.origin}${newsPath(read.data.item.slug)}`, indexing.origin)
-    : null;
-  return <NewsItemScreen answer={read.data} authenticated={viewer !== null} jsonLd={jsonLd} />;
+  return <NewsItemScreen answer={read.data} authenticated />;
 }

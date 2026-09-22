@@ -109,10 +109,6 @@ export function PublicHomeHeader({ authenticated }: { authenticated: boolean }) 
           <a href="#path">Путь</a>
           <a href="#tools">Инструменты</a>
           <a href="#faq">Вопросы</a>
-          {/* TOOLS-V2 NEWS — the one route in this menu: the public news pages,
-              indexed with this page in production. The in-page anchors above
-              keep the document's order; this leaves the page. */}
-          <Link href="/news">Новости</Link>
           <div className="nav-actions" aria-label="Действия с аккаунтом">
             {authenticated ? null : (
               <Link className="button button--login" href="/login">

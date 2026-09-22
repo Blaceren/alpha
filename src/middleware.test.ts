@@ -172,11 +172,11 @@ describe("matcher — static brand assets", () => {
   });
 });
 
-describe("TOOLS-V2 NEWS — public news and crawler files", () => {
-  it("lets an anonymous visitor reach the news list and a news page", () => {
-    expect(redirectTarget(middleware(request("/news")))).toBeNull();
-    expect(redirectTarget(middleware(request("/news?page=2")))).toBeNull();
-    expect(redirectTarget(middleware(request("/news/ssha-bazovyy-ipts-2026-09-21")))).toBeNull();
+describe("TOOLS-V2 NEWS — guarded news and crawler files", () => {
+  it("guards the news list and a news page like the rest of the product (DD-326)", () => {
+    expect(redirectTarget(middleware(request("/news")))).toContain("/login");
+    expect(redirectTarget(middleware(request("/news?page=2")))).toContain("/login");
+    expect(redirectTarget(middleware(request("/news/ssha-bazovyy-ipts-2026-09-21")))).toContain("/login");
   });
 
   it("lets crawlers fetch robots.txt and the sitemap", () => {
@@ -212,13 +212,11 @@ describe("search indexing — the X-Robots-Tag header", () => {
     expect(middleware(request("/")).headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
 
-  it("leaves only the home and the news indexable in production", () => {
+  it("leaves only the home indexable in production — the news say noindex too", () => {
     process.env.ACADEMY_SEARCH_INDEXING = "on";
     process.env.ACADEMY_PUBLIC_ORIGIN = "https://alfatrade.media";
-    for (const path of ["/", "/news", "/news/ssha-ipts-2026-09-21"]) {
-      expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBeNull();
-    }
-    for (const path of ["/login", "/register", "/home", "/tools/news", "/news/Bad_Slug", "/robots.txt"]) {
+    expect(middleware(request("/")).headers.get("x-robots-tag")).toBeNull();
+    for (const path of ["/news", "/news/ssha-ipts-2026-09-21", "/login", "/register", "/home", "/tools/news", "/news/Bad_Slug", "/robots.txt"]) {
       expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
     }
   });

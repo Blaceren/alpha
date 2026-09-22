@@ -162,31 +162,3 @@ export function groupByDay<T extends PublicNewsEvent>(items: readonly T[]): { ke
 }
 
 /* ----------------------------------------------------- structured data */
-
-/**
- * schema.org NewsArticle for a published page. The publisher is the Academy;
- * no staff member is ever named.
- */
-export function newsArticleJsonLd(item: PublicNewsItem, url: string, origin: string) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "NewsArticle",
-    headline: `${item.countryLabel}: ${item.title}`.slice(0, 110),
-    description: item.summary,
-    datePublished: item.publishedAt,
-    dateModified: item.updatedAt,
-    mainEntityOfPage: url,
-    url,
-    inLanguage: "ru",
-    author: { "@type": "Organization", name: "Alfa Trade Academy", url: origin },
-    publisher: { "@type": "Organization", name: "Alfa Trade Academy", url: origin },
-  };
-}
-
-/** JSON for an inline <script>: `<` is escaped, so no text can close the tag. */
-export function inlineJson(value: unknown): string {
-  return JSON.stringify(value)
-    .replace(/</g, "\\u003c")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}

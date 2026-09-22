@@ -22,11 +22,9 @@ describe("search indexing", () => {
     expect(parsePublicOrigin(undefined)).toBeNull();
   });
 
-  it("names exactly the home and the news as indexable", () => {
+  it("names exactly the home as indexable — the news are product content (DD-326)", () => {
     expect(isIndexablePath("/")).toBe(true);
-    expect(isIndexablePath("/news")).toBe(true);
-    expect(isIndexablePath("/news/ssha-bazovyy-ipts-2026-09-21")).toBe(true);
-    for (const path of ["/login", "/register", "/home", "/tools/news", "/news/", "/news/a/b", "/news/Upper", "/newsletter"]) {
+    for (const path of ["/news", "/news/ssha-bazovyy-ipts-2026-09-21", "/login", "/register", "/home", "/tools/news", "/news/", "/news/a/b", "/newsletter"]) {
       expect(isIndexablePath(path), path).toBe(false);
     }
   });

@@ -54,14 +54,11 @@ const ANONYMOUS_ROUTES = ["/login", "/register"] as const;
 const PUBLIC_HOME_PATH = "/";
 
 /**
- * TOOLS-V2 NEWS — public content: the news list and each news page.
- *
- * Their whole audience includes people who have never signed in, and in
- * production search engines. Exact-or-subpath like `ANONYMOUS_ROUTES`, so
- * `/newsletter` stays guarded. They render published news only, which the
- * Backend already serves to anyone; no learner data is behind them.
+ * TOOLS-V2 NEWS — `/news` and `/news/<slug>` were public content for one day
+ * (2026-09-21). On 2026-09-22 the owner took the news off the public surface:
+ * they are product content for signed-in learners now, guarded like every
+ * other page of the product and never indexed (DD-326).
  */
-const PUBLIC_CONTENT_ROUTES = ["/news"] as const;
 
 /** Files crawlers ask for by name. Exact matches only. */
 const CRAWLER_FILES = new Set(["/robots.txt", "/sitemap.xml"]);
@@ -69,7 +66,7 @@ const CRAWLER_FILES = new Set(["/robots.txt", "/sitemap.xml"]);
 function isAnonymousRoute(pathname: string): boolean {
   if (pathname === PUBLIC_HOME_PATH) return true;
   if (CRAWLER_FILES.has(pathname)) return true;
-  return [...ANONYMOUS_ROUTES, ...PUBLIC_CONTENT_ROUTES].some(
+  return ANONYMOUS_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }

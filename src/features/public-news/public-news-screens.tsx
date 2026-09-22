@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LocalReleaseTime } from "./local-release-time";
 import { Importance, NewsDays, OtherNews, PublicNewsFooter, PublicNewsHeader } from "./public-news-parts";
-import { NEWS_LIST_PATH, inlineJson, type PublicNewsItemView, type PublicNewsListAnswer } from "./public-news-model";
+import { NEWS_LIST_PATH, type PublicNewsItemView, type PublicNewsListAnswer } from "./public-news-model";
 
 /**
  * NEWS — the two public pages: the list (`/news`) and one news page
@@ -91,15 +91,7 @@ export function NewsListScreen({ answer, authenticated }: { answer: PublicNewsLi
   );
 }
 
-export function NewsItemScreen({
-  answer,
-  authenticated,
-  jsonLd,
-}: {
-  answer: PublicNewsItemView;
-  authenticated: boolean;
-  jsonLd: object | null;
-}) {
+export function NewsItemScreen({ answer, authenticated }: { answer: PublicNewsItemView; authenticated: boolean }) {
   const { item, others, released } = answer;
   const figures: [string, string | null, string][] = [
     ["Прогноз", item.forecast, "—"],
@@ -108,7 +100,6 @@ export function NewsItemScreen({
   ];
   return (
     <div className="ph pn">
-      {jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: inlineJson(jsonLd) }} /> : null}
       <a className="skip-link" href="#main">
         Перейти к содержанию
       </a>
