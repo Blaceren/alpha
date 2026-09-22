@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
+import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 
 /**
  * Public Home — brand-evolution gates.
@@ -158,6 +159,20 @@ describe("Public Home — the claim never outruns the product", () => {
       const hits = body.split(forbidden).length - 1;
       const allowed = forbidden === "прибыл" ? 1 : 0;
       expect(hits, `"${forbidden}" appears ${hits} times`).toBeLessThanOrEqual(allowed);
+    }
+  });
+
+  it("renders the FAQ from the one list the structured data also reads, and names the cost", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const items = container.querySelectorAll(".faq-list details");
+    expect(items).toHaveLength(PUBLIC_HOME_FAQ.length);
+    const body = text(container);
+    // Owner, 2026-09-22: tuition is free, and the page says so in the FAQ.
+    expect(body).toContain("Сколько стоит обучение?");
+    expect(body).toContain("Обучение в ATA бесплатно");
+    // And still nothing about the broker, deposits or checkpoint amounts.
+    for (const forbidden of ["Pocket", "депозит", "баланс", "$"]) {
+      expect(body, `"${forbidden}" must not appear on the public page`).not.toContain(forbidden);
     }
   });
 

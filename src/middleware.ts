@@ -140,6 +140,13 @@ function route(request: NextRequest): NextResponse {
  * route: H-STALE-2 removed the QA board and its media rather than restyling a
  * board nobody ships, so there is no longer an anonymous surface under
  * `public/showcase/` for the matcher to miss.
+ *
+ * `og/` joins them for the same reason (2026-09-22): it holds the social
+ * preview of the public home, `public/og/home.png`, which is fetched by the
+ * link-preview crawlers of messengers and social networks — clients that hold
+ * no session cookie by definition. Measured the same way: without the
+ * exemption `/og/home.png` answered `307 → /login?next=%2Fog%2Fhome.png`, and
+ * a shared link would have shown no picture.
  */
 export const config = {
   /* `icon.svg` used to be exempted here for a file-based icon that does not
@@ -152,6 +159,6 @@ export const config = {
      unprompted on every visit, and letting that run the auth middleware would
      turn a cheap 404 into a redirect on a path no one asked for. */
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|fonts/|brand/).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|fonts/|brand/|og/).*)",
   ],
 };

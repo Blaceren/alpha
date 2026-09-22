@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PublicHomeHeader } from "@/features/public-home/public-home-header";
 import { PublicHomeEffects } from "@/features/public-home/public-home-effects";
+import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 
 /**
  * PUBLIC HOME — the brand-evolution composition.
@@ -643,49 +644,12 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
             </div>
 
             <div className="faq-list" data-reveal>
-              <details>
-                <summary>С чего начинается путь?</summary>
-                <p>
-                  С создания аккаунта ATA и первого уровня, связанного с подготовкой внешней
-                  торговой среды.
-                </p>
-              </details>
-              <details>
-                <summary>Нужен ли опыт в трейдинге?</summary>
-                <p>
-                  Нет. ATA рассчитана на непрофессиональных пользователей и строит путь
-                  последовательно.
-                </p>
-              </details>
-              <details>
-                <summary>Когда начинается практика?</summary>
-                <p>Первая практическая работа и отчёт появляются уже на уровне L3.</p>
-              </details>
-              <details>
-                <summary>Что происходит, если не пройти проверку знаний?</summary>
-                <p>Проверку можно пройти повторно. Для её завершения требуется результат 100%.</p>
-              </details>
-              <details>
-                <summary>Кто проверяет практические работы?</summary>
-                <p>
-                  На предусмотренных уровнях работу проверяет человек. При необходимости
-                  пользователь исправляет её и отправляет повторно.
-                </p>
-              </details>
-              <details>
-                <summary>Можно ли пропустить уровень?</summary>
-                <p>
-                  Нет. Путь последовательный: следующий уровень открывается после выполнения
-                  условий текущего.
-                </p>
-              </details>
-              <details>
-                <summary>Что такое контрольная точка?</summary>
-                <p>
-                  Это отдельный уровень, который проверяет выполнение определённого условия через
-                  доступные авторитетные данные.
-                </p>
-              </details>
+              {PUBLIC_HOME_FAQ.map((item) => (
+                <details key={item.question}>
+                  <summary>{item.question}</summary>
+                  <p>{item.answer}</p>
+                </details>
+              ))}
             </div>
           </div>
 

@@ -139,6 +139,14 @@ describe("matcher — static brand assets", () => {
     expect(pattern.test("/brand/ata-logo.svg")).toBe(false);
   });
 
+  it("does not run the guard on the social preview image", () => {
+    // Fetched by link-preview crawlers, which never hold a session cookie:
+    // guarded, `/og/home.png` answered 307 → /login and a shared link showed
+    // no picture.
+    expect(pattern.test("/og/home.png")).toBe(false);
+    expect(pattern.test("/og-something")).toBe(true);
+  });
+
   it("still runs the guard on every product route", () => {
     for (const path of [
       "/",

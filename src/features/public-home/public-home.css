@@ -2405,19 +2405,107 @@ html.ph-smooth-scroll {
     padding: 30px 20px 24px;
   }
 
-  .ph .dframe::before,
+  /* Per side, never the shorthand: the product's global reset gives every
+     pseudo-element `border-style: solid`, so `border-width: 6px` here used to
+     draw all four sides — two 38px squares instead of two corners. */
+  .ph .dframe::before {
+    width: 38px;
+    height: 38px;
+    border-width: 6px 0 0 6px;
+  }
+
   .ph .dframe::after {
     width: 38px;
     height: 38px;
-    border-width: 6px;
+    border-width: 0 6px 6px 0;
   }
 
+  /* Clear of the corner's vertical arm (22px + 6px from the frame's edge). */
   .ph .dframe__label {
-    padding-left: 0;
+    padding-left: 18px;
   }
 
   .ph .final-step__actions .button {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* =========================================================================
+ * READINESS, SLICE 0 (2026-09-22) — defects found by the pre-hi-fi audit.
+ * Every rule stays inside `.ph`; no token is redefined.
+ * ====================================================================== */
+
+/* K2. «Уже клиент? Войти» sits on the paper surface but was coloured for ink:
+   the strong word was #f3f4ef on #f1f3ec — invisible — and the rest 11px at
+   2.3:1. Paper gets the paper text colours, at a readable size. */
+.ph .surface--paper .client-entry {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* The link is inline-flex, which drops the space before <strong>: without a
+   gap it renders «Уже клиент?Войти». */
+.ph .client-entry {
+  gap: 0.35em;
+}
+
+.ph .surface--paper .client-entry strong {
+  color: var(--text-primary);
+}
+
+.ph .surface--paper .client-entry:hover,
+.ph .surface--paper .client-entry:hover strong {
+  color: var(--olive-800);
+}
+
+/* M1. The list mark is the frame's bottom-left corner in miniature. At 8px
+   with 2px strokes it read as a stray glyph; a 10px mark with a hairline
+   reads as a mark. The items themselves were 13px — the smallest running
+   text on the page. */
+.ph .plain-list li {
+  font-size: 14px;
+}
+
+.ph .plain-list li::before {
+  top: 19px;
+  width: 10px;
+  height: 10px;
+  border-width: 0 0 1.5px 1.5px;
+  border-color: var(--ink-950);
+  opacity: 0.85;
+}
+
+/* M2. An answer the visitor opened was smaller and paler than its question. */
+.ph .faq-list details p {
+  color: var(--text-primary);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+/* Compact header. The controller has always toggled `is-compact` past 32px
+   of scroll and the frozen sheet never styled it. The pill gets denser and a
+   little shorter; every target keeps 44px. */
+.ph .site-header__inner {
+  transition:
+    min-height 220ms var(--ease),
+    padding 220ms var(--ease),
+    background-color 220ms var(--ease),
+    box-shadow 220ms var(--ease);
+}
+
+.ph .wordmark {
+  transition: width 220ms var(--ease);
+}
+
+.ph .site-header.is-compact .site-header__inner {
+  min-height: 56px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: rgba(11, 13, 10, 0.96);
+  box-shadow: var(--shadow-low);
+}
+
+.ph .site-header.is-compact .wordmark {
+  width: 62px;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
-import { indexableRobots, searchIndexing } from "@/config/search-indexing";
+import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
+import { indexableRobots, searchIndexing, type SearchIndexing } from "@/config/search-indexing";
 import { getServerViewer } from "@/server/auth/server-session";
 import "@/features/public-home/public-home.css";
 
@@ -23,6 +24,15 @@ const DESCRIPTION =
   "Alfa Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.";
 
 /**
+ * THE SOCIAL PREVIEW. A static 1200×630 render of the hero's own words in the
+ * page's own faces, under `public/og/`. It is named only on the indexing host,
+ * because a preview needs an absolute address and the pre-production host has
+ * none to give: the same rule that keeps the canonical and Open Graph tags off
+ * PREPROD keeps the image off it too.
+ */
+const OG_IMAGE = { path: "/og/home.png", width: 1200, height: 630 } as const;
+
+/**
  * SEARCH INDEXING (owner, 2026-09-21): in production this page is indexed —
  * the Academy's story, with the way to login and registration — and it names
  * its canonical address. Everywhere else, PREPROD included, it is noindex like
@@ -30,27 +40,70 @@ const DESCRIPTION =
  */
 export function generateMetadata(): Metadata {
   const indexing = searchIndexing();
+  if (!indexing.enabled) {
+    return { title: TITLE, description: DESCRIPTION, robots: indexableRobots(indexing) };
+  }
+  const image = {
+    url: `${indexing.origin}${OG_IMAGE.path}`,
+    width: OG_IMAGE.width,
+    height: OG_IMAGE.height,
+    alt: "Alfa Trade Academy — Возможности не приходят с готовыми ответами.",
+  };
   return {
     title: TITLE,
     description: DESCRIPTION,
     robots: indexableRobots(indexing),
-    ...(indexing.enabled
-      ? {
-          alternates: { canonical: `${indexing.origin}/` },
-          openGraph: {
-            type: "website",
-            url: `${indexing.origin}/`,
-            title: TITLE,
-            description: DESCRIPTION,
-            siteName: "Alfa Trade Academy",
-            locale: "ru_RU",
-          },
-        }
-      : {}),
+    alternates: { canonical: `${indexing.origin}/` },
+    openGraph: {
+      type: "website",
+      url: `${indexing.origin}/`,
+      title: TITLE,
+      description: DESCRIPTION,
+      siteName: "Alfa Trade Academy",
+      locale: "ru_RU",
+      images: [image],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: TITLE,
+      description: DESCRIPTION,
+      images: [image.url],
+    },
   };
 }
 
 export const viewport = { themeColor: "#0B0D0A" };
+
+/**
+ * STRUCTURED DATA, on the indexing host only — the same condition as the
+ * canonical address, because both name an absolute origin.
+ *
+ * Two objects and no more. `Organization` says who publishes the page.
+ * `FAQPage` repeats the visible FAQ from the one list the screen renders, so
+ * the search snippet can never claim an answer the page does not show. Nothing
+ * here describes a course, a rating, a price or an outcome: the page promises
+ * none, and the markup must not either.
+ */
+function structuredData(indexing: SearchIndexing & { enabled: true }) {
+  const organization = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Alfa Trade Academy",
+    url: `${indexing.origin}/`,
+    logo: `${indexing.origin}/brand/ata-logo.svg`,
+  };
+  const faq = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: PUBLIC_HOME_FAQ.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  };
+  // `<` is escaped so no text in the list could ever close the script element.
+  return JSON.stringify([organization, faq]).replace(/</g, "\\u003c");
+}
 
 /**
  * PUBLIC HOME — `/`.
@@ -74,5 +127,13 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicHomePage() {
   const viewer = await getServerViewer();
-  return <PublicHomeScreen authenticated={viewer !== null} />;
+  const indexing = searchIndexing();
+  return (
+    <>
+      {indexing.enabled ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData(indexing) }} />
+      ) : null}
+      <PublicHomeScreen authenticated={viewer !== null} />
+    </>
+  );
 }
