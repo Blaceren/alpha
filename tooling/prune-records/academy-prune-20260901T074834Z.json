@@ -1,0 +1,47 @@
+{
+ "schema": "ata.prune.record/1",
+ "recorded_at_utc": "2026-09-01T07:48:34.190146+00:00",
+ "authorised_by": "owner, explicit nine-path authorisation 2026-09-01",
+ "protected": {
+  "academy_active": [
+   "99ef76971447774274462f708cd52c951ae6b944",
+   "GRcbjjLpdEwQNtTkuqB4-"
+  ],
+  "academy_anchor": [
+   "209345dc72ac9a045db62256aa2b83c76e62393a",
+   "LsSHe29G6qI5MgPhVIinw"
+  ],
+  "backend_active": [
+   "b740774d5c101ba3580aaf9c6a22fc3609ab1494",
+   "P3imVM6ZTXfQz-nNgA0_Z"
+  ],
+  "backend_anchor": [
+   "378db2b0b6672f67bec0db37a7dca52382396463",
+   "2rhJIZ3xFHchg--FZkZTM"
+  ],
+  "qa_held": [
+   "3d85b10b8ba5537f141342246d20247ba1706b26",
+   "91549bc40dd37c343de31a41223736eb1b41a452"
+  ],
+  "not_authorised": [
+   "99b2b72fe599c6502552a60fd0945e2ac1fa3b25"
+  ]
+ },
+ "entries": [
+  {
+   "path": "/srv/ata/releases/academy/f118a6b44842d62c05f776bc3a809641c55001d2",
+   "commit": "f118a6b44842d62c05f776bc3a809641c55001d2",
+   "tree": "db95ae938c1b9b11666b529a1f9b5b3245439b1a",
+   "build_id": "OjnNT7ToTqLVIvg9E0VxG",
+   "published_at_utc": "2026-08-16T15:33:10Z",
+   "bytes": 976171008,
+   "mib": 931
+  }
+ ],
+ "total_mib": 931,
+ "deleted": true,
+ "df_free_before_bytes": 9090957312,
+ "deleted_at_utc": "2026-09-01T07:48:34.844209+00:00",
+ "freed_bytes_du": 976171008,
+ "df_free_after_bytes": 10067124224
+}

@@ -1,0 +1,104 @@
+{
+  "schema": "ata.prune.record/1",
+  "recorded_at_utc": "2026-08-30T21:10:58.254711Z",
+  "authorised_by": "owner, explicit nine-prefix authorisation",
+  "protected": {
+    "active": [
+      "6487cf8bcd549e0f7c665a04d8766cb127642b43",
+      "DsZXvHXZZ5xmmt8JcUq3N"
+    ],
+    "rollback_anchor": [
+      "ed5d2f81f02925c06359a9b2532698c8d12f1812",
+      "7HJOlQLFjukigswso4dFy"
+    ]
+  },
+  "entries": [
+    {
+      "path": "/srv/ata/releases/academy/f8b5706e2c5d244a7b151e194bf28e6eae3f381f",
+      "commit": "f8b5706e2c5d244a7b151e194bf28e6eae3f381f",
+      "tree": "a3ab857a96ca2e240dbde8251cdcbd761eac99c3",
+      "build_id": "zvcY8g-7QiwQ1AsdVjnrd",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/310b5881ab8985674f7f6dcef06ae9d6d279b2c0",
+      "commit": "310b5881ab8985674f7f6dcef06ae9d6d279b2c0",
+      "tree": "3715045943c12d9ff1e7b435f172ae185ee265ab",
+      "build_id": "xoCcqIikGkPI_5Fv7PrkS",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/ae2e42e3fd463bc55a8e8ae4fc4aa93c6d2f039e",
+      "commit": "ae2e42e3fd463bc55a8e8ae4fc4aa93c6d2f039e",
+      "tree": "52a8d0df0237a1975ff94f592836d2cb78f38887",
+      "build_id": "RhDfrztp8lU1Ubj8TxhEs",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/0f453467c13f3c288d48f6bc9b7edf0cdd2cc741",
+      "commit": "0f453467c13f3c288d48f6bc9b7edf0cdd2cc741",
+      "tree": "25dc42f5a6171d88419e23bab237ce15068bd206",
+      "build_id": "YxTU6SqN-tWL5b2x8ZC05",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/545d877289c1d6b297e6b03e67d24a8f874c93f9",
+      "commit": "545d877289c1d6b297e6b03e67d24a8f874c93f9",
+      "tree": "5abf8f818d17ae5335f150b97ef2f96562f811ad",
+      "build_id": "pF3Ddl5R4wFuEANrRRnKk",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/bdb1f4289eff634028fdfb336804f89a2a2e0005",
+      "commit": "bdb1f4289eff634028fdfb336804f89a2a2e0005",
+      "tree": "40a5ee30e744b073d2d6af1ea23f1da93ec21b46",
+      "build_id": "Qoe6zIos2zeAwdQoP6910",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/58d13a187f87bd7d671f35b0f3a0d4e64384f2be",
+      "commit": "58d13a187f87bd7d671f35b0f3a0d4e64384f2be",
+      "tree": "7e2cfc18d1325704e908f3d23ef38391bbee83f0",
+      "build_id": "h5AK61kwNX2BLA6l2bMDc",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/f24148be53881b068c81da9317d185399c6d0263",
+      "commit": "f24148be53881b068c81da9317d185399c6d0263",
+      "tree": "a9e957068f053146d6c4ead6d248d13398ae5e03",
+      "build_id": "Xwp705o12c9GmdL_8OlXn",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    },
+    {
+      "path": "/srv/ata/releases/academy/86ade64cc5c26ea5c96f5fd1d49e7bc44fffc50d",
+      "commit": "86ade64cc5c26ea5c96f5fd1d49e7bc44fffc50d",
+      "tree": "dcff60ef5ab80e8de155a7659b5d32f4e151ba29",
+      "build_id": "4IRS3BK7AqfYVer2Oma9E",
+      "size_mib": 937,
+      "activated": false,
+      "referenced_by_receipts": []
+    }
+  ],
+  "total_mib": 8433,
+  "deleted": true,
+  "deleted_at_utc": "2026-08-30T21:11:38.587720+00:00",
+  "freed_mib_du": 8433,
+  "df_free_before_mib": 2187,
+  "df_free_after_mib": 10615
+}
