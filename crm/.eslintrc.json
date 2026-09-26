@@ -1,0 +1,29 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/data/mock/*", "**/data/mock/*"],
+            "message": "UI/components must not import mock fixtures directly. Go through the CrmDataProvider / application layer (Phase 1A boundary)."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/application/**",
+        "src/data/**",
+        "src/test/**",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ],
+  "ignorePatterns": ["node_modules/", ".next/", "playwright-report/", "test-results/"]
+}
