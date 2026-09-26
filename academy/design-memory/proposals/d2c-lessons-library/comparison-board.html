@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>D2C-A — сравнение направлений «Библиотека уроков»</title>
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../src/styles/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    padding: 30px 40px;
+    background:
+      radial-gradient(120% 90% at 38% 30%, color-mix(in srgb, var(--signal-active) 5%, transparent), transparent 55%),
+      radial-gradient(90% 120% at 88% 8%, color-mix(in srgb, var(--gate-boundary) 6%, transparent), transparent 60%),
+      var(--background-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  .board-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--divider); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: 25px; letter-spacing: -0.4px; margin: 0; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin: 5px 0 0; }
+  .meta { font-size: 12.5px; color: var(--text-muted); text-align: right; margin: 0; line-height: 1.6; }
+  .meta b { color: var(--signal-active); font-weight: 600; }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; padding-top: 20px; }
+  .col { display: flex; flex-direction: column; }
+
+  .shot { border: 1px solid var(--divider-strong); border-radius: 8px; overflow: hidden; background: var(--background-field); }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  .name { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 0; }
+  .letter { font-family: var(--font-mono); font-size: 12px; color: #06120e; background: var(--signal-active); border-radius: 4px; padding: 2px 7px; font-weight: 700; }
+  .title { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 0; }
+
+  dl { margin: 12px 0 0; }
+  dt { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-top: 12px; }
+  dd { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  dd.risk { color: var(--text-secondary); }
+  dt.s { color: var(--signal-active); }
+  dt.r { color: var(--gate-boundary); }
+
+  .foot { position: absolute; left: 40px; right: 40px; bottom: 22px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--divider); padding-top: 12px; }
+  .foot p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+  .nowin { color: var(--text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="board-head">
+    <div>
+      <h1>D2C-A — «Библиотека уроков»: три направления</h1>
+      <p class="sub">Один сценарий во всех трёх: Артём · модуль 04 «Чтение графика» · уровень 18 «Поддержка и сопротивление» · 2 из 5 · контрольная точка $200. Desktop 1440×900.</p>
+    </div>
+    <p class="meta">
+      Low-fidelity · реальный shell, токены и curriculum fixtures<br>
+      Production React не написан · <b>победитель не выбран — выбирает пользователь</b>
+    </p>
+  </div>
+
+  <div class="cols">
+    <!-- A -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d2c-lessons-library/concepts/concept-a-desktop-1440x900.png" alt="Concept A — Module Desk, desktop 1440×900"></div>
+      <div class="name"><span class="letter">A</span><p class="title">Module Desk</p></div>
+      <dl>
+        <dt>Идея</dt>
+        <dd>Узкая именованная рейка из 20 модулей + одна доминирующая рабочая поверхность. Модуль открыт как лист на столе; текущий уровень не «карточка покрупнее» — строка списка сама разворачивается в рабочую плоскость.</dd>
+        <dt class="s">Сильная сторона</dt>
+        <dd>Больше всего похоже на профессиональное учебное рабочее место: один объект в фокусе, все 20 модулей видны и подписаны без единого клика, переключение модуля стоит один клик.</dd>
+        <dt class="r">Главный риск</dt>
+        <dd>Рейка + рабочая область — самая узнаваемая связка admin/IDE-интерфейсов: без дисциплины материалов легко скатывается в generic-панель. Рейка отнимает ~250px ширины у самого содержания.</dd>
+      </dl>
+    </div>
+
+    <!-- B -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d2c-lessons-library/concepts/concept-b-desktop-1440x900.png" alt="Concept B — Curriculum Index, desktop 1440×900"></div>
+      <div class="name"><span class="letter">B</span><p class="title">Curriculum Index</p></div>
+      <dl>
+        <dt>Идея</dt>
+        <dd>Curriculum читается как содержание книги: моноширинные номера, отточия, состояния по правому краю, ни одной карточки. Текущий урок выделен типографикой и ритмом, а не размером контейнера.</dd>
+        <dt class="s">Сильная сторона</dt>
+        <dd>Самый масштабируемый под 20/100: строка стоит ~30px, добавление уровней ничего не ломает. Плотность без веса; ни одной lock-иконки; состояние читается по одному столбцу.</dd>
+        <dt class="r">Главный риск</dt>
+        <dd>Самый «сухой» из трёх: близок к документации/спецификации. Слабее всех отвечает на вопрос «зачем я это учу», и премиальность держится только на дисциплине типографики.</dd>
+      </dl>
+    </div>
+
+    <!-- C -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d2c-lessons-library/concepts/concept-c-desktop-1440x900.png" alt="Concept C — Learning Brief, desktop 1440×900"></div>
+      <div class="name"><span class="letter">C</span><p class="title">Learning Brief</p></div>
+      <dl>
+        <dt>Идея</dt>
+        <dd>Страница как аргумент, а не каталог. Сверху — бриф текущего обучения и цепочка из трёх ролей: «изучаю сейчас» → «затем применю» → «и это откроет». Остальные 19 модулей — вторым уровнем ниже.</dd>
+        <dt class="s">Сильная сторона</dt>
+        <dd>Единственный, кто объясняет учебную логику: уровень 19 и контрольная точка перестают быть «закрытым будущим» и работают как обоснование текущего урока. Затухание акцента встроено в композицию.</dd>
+        <dt class="r">Главный риск</dt>
+        <dd>Ближе всех подходит к Главной (текущий урок + CTA + будущая контрольная точка) — риск, что «Уроки» станут второй Главной. Обзор всей программы уезжает ниже первого экрана.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p>Alfa Trade Academy · Web V2 · фаза D2C-A (art direction) · baseline eea3c1f</p>
+    <p class="nowin">Победитель не выбран. Реализация не начинается до явного выбора направления.</p>
+  </div>
+</body>
+</html>

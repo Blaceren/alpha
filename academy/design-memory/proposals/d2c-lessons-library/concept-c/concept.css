@@ -1,0 +1,328 @@
+/* ============================================================================
+   CONCEPT C — «Learning Brief» (Phase D2C-A, prototype-only, NOT production)
+   ----------------------------------------------------------------------------
+   Spatial system: an argument, not a catalogue. The top of the page is a BRIEF
+   that states what is being studied now and why; its signature object is the
+   BRIEF CHAIN — three links carrying three learning ROLES (изучаю → применю →
+   откроет). Emphasis decays along the chain, so the locked steps EXPLAIN the
+   current lesson instead of competing with it. The remaining 19 modules live on
+   a second, quieter level below.
+
+   Reused from the product: shell (home.css), .cta, .sep, .mono, tokens.
+   ============================================================================ */
+
+.lib-page .mono { font-family: var(--font-mono); }
+
+/* ---------------------------------------------------------------- page head */
+.bp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+.bp-h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  font-size: clamp(23px, 2.2vw, 28px);
+  margin: 0;
+  color: var(--text-primary);
+}
+.bp-scale { margin: 0; font-size: 13px; color: var(--text-muted); }
+.bp-scale b { color: var(--text-primary); font-weight: 600; }
+
+/* ---------------------------------------------------------------- the brief */
+.brief { padding: 4px 0 6px; }
+.brief-k {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--gate-boundary);
+}
+.brief-h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+  font-size: clamp(28px, 5.4vw, 38px);
+  margin: 8px 0 0;
+  color: var(--text-primary);
+}
+.brief-d {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 68ch;
+}
+
+/* ---------------------------------------------------------------- brief chain */
+.chain {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.link { position: relative; padding: 0 0 0 22px; }
+.link-k {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.link.now .link-k { color: var(--signal-active); }
+.link.opens .link-k { color: var(--gate-boundary); }
+
+/* the connective tissue: one vertical rule per link, carrying the chain's
+   state in its own colour — this is the chain, not a decorative timeline */
+.link::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--divider-strong);
+}
+.link.now::before { background: linear-gradient(180deg, var(--signal-active), color-mix(in srgb, var(--signal-active) 30%, transparent)); }
+.link.then::before { background: color-mix(in srgb, var(--route-upcoming) 55%, transparent); }
+.link.opens::before { background: linear-gradient(180deg, color-mix(in srgb, var(--gate-boundary) 55%, transparent), transparent); }
+.link:last-child::before { bottom: 18px; }
+
+/* node marker: geometry differs per role (not colour only) */
+.link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--background-field);
+  border: 2px solid var(--route-upcoming);
+}
+.link.now::after {
+  width: 11px;
+  height: 11px;
+  left: -1px;
+  border-color: var(--signal-active);
+  box-shadow: 0 0 0 5px var(--glow-current);
+}
+.link.opens::after {
+  border-radius: 2px;
+  transform: rotate(45deg);
+  border-color: var(--gate-boundary);
+}
+
+.link-b { padding-bottom: 22px; }
+.link-t {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.15;
+  font-size: 17px;
+  color: var(--text-primary);
+}
+.link-n { font-size: 12.5px; font-weight: 500; color: var(--text-muted); font-family: var(--font-mono); }
+.link-g {
+  margin: 7px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 58ch;
+}
+.link-m {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.link-m b { color: var(--text-secondary); font-weight: 600; }
+.link-s { margin: 8px 0 0; font-size: 12.5px; color: var(--route-locked); }
+.link-r {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.link-r b { color: var(--text-secondary); font-weight: 600; }
+
+/* The quiet links carry metadata too long to sit on one line in their narrow
+   column, and a wrapped inline list strands its separator dot at the end of the
+   line as debris («Практическое задание •»). They stack instead, and a stacked
+   list needs no separators at all. */
+.link.then .link-m,
+.link.opens .link-r {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.link.then .link-m .sep,
+.link.opens .link-r .sep { display: none; }
+
+/* the current link is the only one carrying a working surface and the CTA */
+/* The working surface has to actually read as a surface: at 90%-of-a-near-black
+   token over a near-black field the first pass showed no material at all, so the
+   one link that carries the action looked like the two that do not. Lifted with
+   a cold layer + a hairline, still without becoming a bordered card. */
+.link.now .link-b {
+  padding: 14px 18px 18px;
+  margin-left: -4px;
+  border-radius: 0 12px 12px 0;
+  border-top: 1px solid var(--divider);
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--surface-context) 96%, transparent) 0%,
+    color-mix(in srgb, var(--surface-context) 72%, transparent) 55%,
+    color-mix(in srgb, var(--surface-context) 30%, transparent) 100%
+  );
+}
+.link.now .link-t { font-size: clamp(20px, 4.4vw, 24px); }
+.link.now .cta { margin-top: 14px; }
+.link.now .cta .go { width: 30px; height: 30px; }
+.link.now .cta .go .ic { width: 16px; height: 16px; stroke: #06120e; }
+
+/* emphasis decays: the further along the chain, the quieter the type */
+.link.then .link-t { font-size: 16px; color: var(--text-secondary); }
+.link.opens .link-t { font-size: 16px; color: var(--text-secondary); }
+
+/* ---------------------------------------------------------------- studied strip */
+.studied {
+  margin-top: 4px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--divider);
+}
+.studied-k { margin: 0; font-size: 12px; color: var(--text-muted); }
+.studied-v {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 7px 0 0;
+  font-size: 13.5px;
+}
+.studied-v a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--divider-strong);
+  padding-bottom: 1px;
+}
+.studied-v a:hover { color: var(--text-primary); border-color: var(--signal-active); }
+.studied-v .mono { color: var(--text-muted); font-size: 12px; margin-right: 3px; }
+
+/* ---------------------------------------------------------------- programme */
+.prog { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--divider-strong); }
+.prog-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.prog-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+.prog-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+
+.mods { list-style: none; margin: 12px 0 0; padding: 0; }
+.md a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 6px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--divider);
+}
+.md a:hover { background: var(--surface-subtle); }
+.md-n { flex: 0 0 auto; font-size: 11.5px; color: var(--text-muted); }
+.md-t { flex: 1 1 auto; font-size: 13.5px; color: var(--text-secondary); min-width: 0; }
+.md-s { flex: 0 0 auto; font-size: 11.5px; color: var(--text-muted); }
+
+.md.done .md-s { color: var(--signal-soft); }
+.md.lock .md-n, .md.lock .md-t, .md.lock .md-s { color: var(--route-locked); }
+.md.cur a { box-shadow: inset 2px 0 0 var(--signal-active); background: color-mix(in srgb, var(--signal-active) 7%, transparent); }
+.md.cur .md-t { color: var(--text-primary); font-weight: 600; }
+.md.cur .md-s { color: var(--text-secondary); }
+.md.cur .md-s b { color: var(--signal-active); }
+
+/* ================================================================
+   DESKTOP / TABLET (≥900px)
+   The chain turns HORIZONTAL: three roles read left→right as one sentence,
+   and the programme becomes two text columns — never a card grid.
+   ================================================================ */
+@media (min-width: 900px) {
+  .brief-page {
+    padding: 24px clamp(28px, 4vw, 60px) 56px;
+    max-width: 1320px;
+    margin: 0 auto;
+  }
+
+  .chain {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    margin-top: 24px;
+  }
+  .link {
+    flex: 1 1 0;
+    padding: 26px 26px 0 0;
+    border-left: none;
+  }
+  .link.now { flex: 1.55 1 0; }
+
+  /* the chain's connective tissue becomes a HORIZONTAL rule above each link */
+  .link::before {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: auto;
+    width: auto;
+    height: 1.5px;
+  }
+  .link:last-child::before { bottom: auto; }
+  .link::after { top: -4.5px; left: 0; }
+  .link.now::after { top: -5.5px; }
+  .link.opens::after { top: -4px; }
+  .link-k { margin-top: 0; }
+
+  .link.now .link-b { margin-left: 0; padding: 16px 24px 20px 20px; border-radius: 12px; }
+  .link.then .link-b, .link.opens .link-b { padding-right: 12px; }
+
+  .studied { margin-top: 10px; }
+
+  .prog { margin-top: 30px; }
+  .mods {
+    columns: 2;
+    column-gap: clamp(40px, 5vw, 80px);
+  }
+  .md { break-inside: avoid; }
+  .md a { min-height: 32px; padding: 3px 4px; }
+}
+
+/* ================================================================
+   SHORT-HEIGHT (≤560px: landscape phones, 200% zoom)
+   ================================================================ */
+@media (max-height: 560px) {
+  .brief-h { font-size: clamp(22px, 3.4vw, 27px); }
+  .brief-d { font-size: 13.5px; }
+  .chain { margin-top: 14px; }
+  .link.now .link-t { font-size: clamp(18px, 3vw, 21px); }
+  .link-g { font-size: 13px; }
+}

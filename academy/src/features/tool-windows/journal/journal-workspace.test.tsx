@@ -1,0 +1,486 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { NormalizedError } from "@/lib/api/errors";
+import type { JournalEntry, JournalPage, JournalReference } from "./journal-model";
+
+const fetchJournalPage = vi.fn();
+const createJournalEntry = vi.fn();
+const changeJournalEntry = vi.fn();
+vi.mock("./journal-client", () => ({
+  fetchJournalPage: (filter: string, before?: string | null) => fetchJournalPage(filter, before ?? null),
+  createJournalEntry: (entry: unknown) => createJournalEntry(entry),
+  changeJournalEntry: (id: string, change: unknown) => changeJournalEntry(id, change),
+}));
+
+import { JournalWorkspace } from "./journal-workspace";
+
+const REFERENCE: JournalReference = {
+  assets: [
+    { code: "EURUSD_OTC", label: "EUR/USD OTC", group: "currency_otc" },
+    { code: "BTCUSD_OTC", label: "BTC/USD OTC", group: "crypto_otc" },
+    { code: "GBPUSD_OTC", label: "GBP/USD OTC", group: "currency_otc" },
+  ],
+  expiries: [
+    { code: "M1", label: "1 мин", seconds: 60 },
+    { code: "M3", label: "3 мин", seconds: 180 },
+  ],
+  violations: [
+    { code: "no_reason", label: "Вход без записанной причины" },
+    { code: "revenge", label: "Хотел отыграться после убытка" },
+    { code: "amount_above_plan", label: "Сумма больше плана" },
+  ],
+};
+
+const FROM_CARD: JournalEntry = {
+  id: "cm4j0urnal0001abcdefghij",
+  source: "trade_card",
+  tradeCardId: "cm3k9x2p10000abcdefghij",
+  tradeDate: "2026-09-21",
+  entryTime: "14:32",
+  asset: { code: "EURUSD_OTC", label: "EUR/USD OTC" },
+  direction: "up",
+  amount: "8.00",
+  payoutPercent: 90,
+  expiry: { code: "M3", label: "3 мин", seconds: 180 },
+  result: "profit",
+  resultAmount: "7.20",
+  plan: "Отскок от уровня, отмеченного до сессии",
+  execution: null,
+  conclusion: null,
+  planFollowed: null,
+  violations: [],
+  createdAt: "2026-09-21T11:40:00.000Z",
+  updatedAt: "2026-09-21T11:40:00.000Z",
+};
+const BROKEN: JournalEntry = {
+  ...FROM_CARD,
+  id: "cm4j0urnal0002abcdefghij",
+  source: "manual",
+  tradeCardId: null,
+  entryTime: "14:02",
+  asset: { code: "BTCUSD_OTC", label: "BTC/USD OTC" },
+  direction: "down",
+  amount: "16.00",
+  result: "loss",
+  resultAmount: "16.00",
+  plan: null,
+  execution: "Вход через минуту после убытка, сумма удвоена.",
+  conclusion: "Хотел отыграться. После убытка пауза 10 минут.",
+  planFollowed: false,
+  violations: ["revenge", "amount_above_plan"],
+};
+const YESTERDAY: JournalEntry = {
+  ...FROM_CARD,
+  id: "cm4j0urnal0003abcdefghij",
+  tradeDate: "2026-09-20",
+  entryTime: "10:15",
+  asset: { code: "GBPUSD_OTC", label: "GBP/USD OTC" },
+  planFollowed: true,
+  conclusion: null,
+};
+
+function page(overrides: Partial<JournalPage> = {}): JournalPage {
+  return {
+    entries: [FROM_CARD, BROKEN, YESTERDAY],
+    nextCursor: null,
+    summary: { total: 3, onPlan: 1, violated: 1, unmarked: 1, withoutConclusion: 2 },
+    filter: "all",
+    reference: REFERENCE,
+    ...overrides,
+  };
+}
+
+function failure(code: string | null, category: NormalizedError["category"] = "VALIDATION_ERROR", detail: string | null = null) {
+  return {
+    ok: false as const,
+    error: { category, status: 400, code, messageKey: "x", requestId: null, retryable: false },
+    detail,
+  };
+}
+
+const row = (asset: RegExp) => screen.getByRole("button", { name: asset });
+
+beforeEach(() => {
+  fetchJournalPage.mockReset();
+  createJournalEntry.mockReset();
+  changeJournalEntry.mockReset();
+  // The learner's clock: only Date is faked, so user-event's timers stay real.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 8, 21, 15, 0));
+});
+afterEach(() => vi.useRealTimers());
+
+describe("Trading Journal — the list", () => {
+  it("arrives already drawn from the server's read: counts, days, and each trade on a line", () => {
+    render(<JournalWorkspace initialPage={page()} />);
+    expect(fetchJournalPage).not.toHaveBeenCalled();
+    expect(screen.queryByText("Загружаю журнал…")).toBeNull();
+
+    const counts = screen.getByText("Записей").closest("dl")!;
+    expect(counts).toHaveTextContent("Записей3");
+    expect(counts).toHaveTextContent("По плану1 из 3");
+    expect(counts).toHaveTextContent("Без вывода2");
+
+    const days = screen.getAllByRole("heading", { level: 2 });
+    expect(days.map((day) => day.textContent)).toEqual(["21 сентябряпонедельник", "20 сентябрявоскресенье"]);
+
+    const card = row(/EUR\/USD OTC/);
+    expect(card).toHaveTextContent("14:32");
+    expect(card).toHaveTextContent("Выше");
+    expect(card).toHaveTextContent("$8.00");
+    expect(card).toHaveTextContent("+$7.20");
+    expect(card).toHaveTextContent("Не отмечено");
+    expect(row(/BTC\/USD OTC/)).toHaveTextContent("−$16.00");
+    expect(row(/BTC\/USD OTC/)).toHaveTextContent("Нарушен");
+    expect(row(/GBP\/USD OTC/)).toHaveTextContent("По плану");
+  });
+
+  it("adds no money up: one trade's stake and result, and counts of entries only", () => {
+    const { container } = render(<JournalWorkspace initialPage={page()} />);
+    expect(container.textContent).not.toMatch(/итого|баланс|P\/L|прибыль за|win rate/i);
+  });
+
+  it("opens an entry in place: ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, the broken rules and the facts", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    const line = row(/BTC\/USD OTC/);
+    expect(line).toHaveAttribute("aria-expanded", "false");
+    await user.click(line);
+    expect(line).toHaveAttribute("aria-expanded", "true");
+    const detail = document.getElementById(line.getAttribute("aria-controls")!)!;
+    expect(detail).toBeVisible();
+    expect(within(detail).getByText("Причина входа не записана")).toBeInTheDocument();
+    expect(within(detail).getByText("Вход через минуту после убытка, сумма удвоена.")).toBeInTheDocument();
+    expect(within(detail).getByText("Хотел отыграться после убытка")).toBeInTheDocument();
+    expect(within(detail).getByText("Сумма больше плана")).toBeInTheDocument();
+    expect(within(detail).getByText("Payout 90% · Экспирация 3 мин · Записано вручную")).toBeInTheDocument();
+    // Reviewed already, and recorded by hand: both changes are offered.
+    expect(within(detail).getByRole("button", { name: "Изменить разбор" })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Изменить запись" })).toBeInTheDocument();
+    await user.click(line);
+    expect(line).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("offers a card's trade for review but never for editing", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    const detail = document.getElementById(row(/EUR\/USD OTC/).getAttribute("aria-controls")!)!;
+    expect(within(detail).getByText("Payout 90% · Экспирация 3 мин · Из Trade Card")).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Разобрать сделку" })).toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Изменить запись" })).toBeNull();
+  });
+
+  it("reads from the browser when the server could not, and retries after a failure", async () => {
+    const user = userEvent.setup();
+    fetchJournalPage.mockResolvedValueOnce(failure(null, "NETWORK_ERROR")).mockResolvedValueOnce({ ok: true, data: page() });
+    render(<JournalWorkspace />);
+    expect(await screen.findByText("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Повторить" }));
+    expect(await screen.findByRole("button", { name: /EUR\/USD OTC/ })).toBeInTheDocument();
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
+  });
+
+  it("says the tool is closed when the Backend says so, and where to go", async () => {
+    fetchJournalPage.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
+    render(<JournalWorkspace />);
+    expect(await screen.findByRole("heading", { name: "Инструмент закрыт" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Продолжить путь" })).toHaveAttribute("href", "/path");
+  });
+
+  it("explains an empty journal and offers both ways in", () => {
+    const empty = page({ entries: [], summary: { total: 0, onPlan: 0, violated: 0, unmarked: 0, withoutConclusion: 0 } });
+    render(<JournalWorkspace initialPage={empty} />);
+    expect(screen.getByRole("heading", { name: "Журнал пока пуст" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Записать сделку" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Открыть Trade Card" })).toHaveAttribute("href", "/tools/trade-card");
+    expect(screen.queryByText("Записей")).toBeNull();
+  });
+});
+
+describe("Trading Journal — filter and pages", () => {
+  it("asks the Backend for a filter's own first page", async () => {
+    const user = userEvent.setup();
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page({ entries: [BROKEN], filter: "violated" }) });
+    render(<JournalWorkspace initialPage={page()} />);
+    const violated = screen.getByRole("button", { name: /План нарушен/ });
+    expect(screen.getByRole("button", { name: /^Все/ })).toHaveAttribute("aria-pressed", "true");
+    await user.click(violated);
+    expect(fetchJournalPage).toHaveBeenCalledWith("violated", null);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /EUR\/USD OTC/ })).toBeNull());
+    expect(violated).toHaveAttribute("aria-pressed", "true");
+    expect(row(/BTC\/USD OTC/)).toBeInTheDocument();
+  });
+
+  it("keeps the lines on screen, quieted, while a filter's page is on its way", async () => {
+    const user = userEvent.setup();
+    let arrive: (value: unknown) => void = () => {};
+    fetchJournalPage.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
+    const { container } = render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: /План нарушен/ }));
+    const list = container.querySelector(".jr-list")!;
+    expect(list).toHaveAttribute("aria-busy", "true");
+    expect(list).toHaveAttribute("data-stale");
+    expect(row(/EUR\/USD OTC/)).toBeInTheDocument();
+    // Said to assistive technology; the eye sees the quieted lines.
+    expect(screen.getByText("Загружаю записи…")).toHaveClass("tw-sr-only");
+    arrive({ ok: true, data: page({ entries: [BROKEN], filter: "violated" }) });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /EUR\/USD OTC/ })).toBeNull());
+    expect(list).not.toHaveAttribute("data-stale");
+  });
+
+  it("says so plainly when a filter has nothing, and leads back to everything", async () => {
+    const user = userEvent.setup();
+    fetchJournalPage
+      .mockResolvedValueOnce({ ok: true, data: page({ entries: [], filter: "no_conclusion" }) })
+      .mockResolvedValueOnce({ ok: true, data: page() });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: /Нет вывода/ }));
+    expect(await screen.findByText("Вывод записан у каждой сделки.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Показать все записи" }));
+    expect(fetchJournalPage).toHaveBeenLastCalledWith("all", null);
+    expect(await screen.findByRole("button", { name: /EUR\/USD OTC/ })).toBeInTheDocument();
+  });
+
+  it("brings the next page after the last line on screen", async () => {
+    const user = userEvent.setup();
+    const older: JournalEntry = { ...YESTERDAY, id: "cm4j0urnal0009abcdefghij", tradeDate: "2026-09-02", asset: { code: "M1", label: "Old trade" } };
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page({ entries: [older], nextCursor: null }) });
+    render(<JournalWorkspace initialPage={page({ nextCursor: YESTERDAY.id })} />);
+    await user.click(screen.getByRole("button", { name: "Показать ещё" }));
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", YESTERDAY.id);
+    expect(await screen.findByRole("button", { name: /Old trade/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Показать ещё" })).toBeNull();
+    expect(screen.getByRole("heading", { name: /2 сентября/ })).toBeInTheDocument();
+  });
+});
+
+describe("Trading Journal — arriving from a saved card", () => {
+  it("opens that card's entry straight into its review, and clears the address", () => {
+    window.history.pushState({}, "", "/tools/journal?card=cm3k9x2p10000abcdefghij");
+    render(<JournalWorkspace initialPage={page()} reviewCardId="cm3k9x2p10000abcdefghij" />);
+    const line = row(/EUR\/USD OTC/);
+    expect(line).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("radio", { name: "По плану" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Сохранить разбор" })).toBeInTheDocument();
+    expect(window.location.pathname + window.location.search).toBe("/tools/journal");
+  });
+
+  it("finds it after the browser's own first read, too", async () => {
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page() });
+    render(<JournalWorkspace reviewCardId="cm3k9x2p10000abcdefghij" />);
+    expect(await screen.findByRole("button", { name: "Сохранить разбор" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "По плану" })).toHaveFocus();
+  });
+
+  it("opens nothing for a card that is not on the page", () => {
+    render(<JournalWorkspace initialPage={page()} reviewCardId="cm9other000000abcdefghij" />);
+    expect(screen.queryByRole("button", { name: "Сохранить разбор" })).toBeNull();
+  });
+});
+
+describe("Trading Journal — the review", () => {
+  it("records the mark, the broken rules, and the conclusion, and updates the line and counts", async () => {
+    const user = userEvent.setup();
+    const reviewed = { ...FROM_CARD, planFollowed: false, violations: ["revenge"], conclusion: "Пауза после убытка" };
+    changeJournalEntry.mockResolvedValue({ ok: true, data: reviewed });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
+
+    // Focus moves into the review, and the plan stays in view above it.
+    expect(screen.getByRole("radio", { name: "По плану" })).toHaveFocus();
+    const detail = document.getElementById(row(/EUR\/USD OTC/).getAttribute("aria-controls")!)!;
+    expect(within(detail).getByText("Отскок от уровня, отмеченного до сессии")).toBeVisible();
+    // The rules appear only for a broken plan.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    await user.click(screen.getByRole("radio", { name: "Нарушен" }));
+    await user.click(screen.getByRole("checkbox", { name: "Хотел отыграться после убытка" }));
+    await user.type(screen.getByLabelText("Вывод"), "  Пауза после убытка ");
+    await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
+
+    expect(changeJournalEntry).toHaveBeenCalledWith(FROM_CARD.id, {
+      kind: "review",
+      planFollowed: false,
+      violations: ["revenge"],
+      execution: null,
+      conclusion: "Пауза после убытка",
+    });
+    expect(await screen.findByText("Разбор сохранён")).toBeInTheDocument();
+    expect(row(/EUR\/USD OTC/)).toHaveTextContent("Нарушен");
+    expect(row(/EUR\/USD OTC/)).toHaveFocus();
+    const counts = screen.getByText("Записей").closest("dl")!;
+    expect(counts).toHaveTextContent("Без вывода1");
+    expect(counts).toHaveTextContent("По плану1 из 3");
+    expect(screen.getByRole("button", { name: /План нарушен/ })).toHaveTextContent("План нарушен 2");
+  });
+
+  it("drops the rules when the plan is marked followed after all", async () => {
+    const user = userEvent.setup();
+    changeJournalEntry.mockResolvedValue({ ok: true, data: { ...FROM_CARD, planFollowed: true } });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
+    await user.click(screen.getByRole("radio", { name: "Нарушен" }));
+    await user.click(screen.getByRole("checkbox", { name: "Вход без записанной причины" }));
+    await user.click(screen.getByRole("radio", { name: "По плану" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
+    expect(changeJournalEntry).toHaveBeenCalledWith(FROM_CARD.id, expect.objectContaining({ planFollowed: true, violations: [] }));
+  });
+
+  it("keeps the review in place and says why when the Backend refuses a field", async () => {
+    const user = userEvent.setup();
+    changeJournalEntry.mockResolvedValue(failure("TOOL_VALIDATION", "VALIDATION_ERROR", "invalid_conclusion"));
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
+    await user.type(screen.getByLabelText("Вывод"), "Итог");
+    await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
+    expect(await screen.findByText("Вывод — не длиннее 2000 символов.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить разбор" })).toBeInTheDocument();
+  });
+
+  it("shows the journal as it is now when the entry changed elsewhere", async () => {
+    const user = userEvent.setup();
+    changeJournalEntry.mockResolvedValue(failure("JOURNAL_ENTRY_NOT_FOUND", "UNKNOWN_ERROR"));
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page() });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
+    expect(await screen.findByText("Запись изменилась — показываю актуальный журнал.")).toBeInTheDocument();
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
+  });
+});
+
+describe("Trading Journal — a trade recorded by hand", () => {
+  async function fillTrade(user: ReturnType<typeof userEvent.setup>) {
+    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-09-20" } });
+    fireEvent.change(screen.getByLabelText("Время входа"), { target: { value: "10:05" } });
+    await user.selectOptions(screen.getByLabelText("Актив"), "GBPUSD_OTC");
+    await user.click(screen.getByRole("radio", { name: /Ниже/ }));
+    await user.type(screen.getByLabelText("Сумма"), "5");
+    await user.type(screen.getByLabelText("Payout"), "88");
+    await user.selectOptions(screen.getByLabelText("Экспирация"), "M1");
+    await user.click(screen.getByRole("radio", { name: "Убыток" }));
+  }
+
+  it("opens a form of its own, on the learner's today, focused on its heading", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: "Новая запись" }));
+    expect(screen.getByRole("heading", { name: "Новая запись" })).toHaveFocus();
+    expect(screen.getByLabelText("Дата")).toHaveValue("2026-09-21");
+    expect(screen.getByLabelText("Дата")).toHaveAttribute("max", "2026-09-21");
+    expect(screen.getByLabelText("Время входа")).toHaveValue("15:00");
+    expect(screen.queryByRole("button", { name: /EUR\/USD OTC/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("button", { name: "Новая запись" })).toHaveFocus();
+  });
+
+  it("names every missing field, sends nothing, and takes the learner to the first one", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: "Новая запись" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
+    expect(screen.getByText("Выберите актив из списка.")).toBeInTheDocument();
+    expect(screen.getByText("Отметьте результат: прибыль или убыток.")).toBeInTheDocument();
+    expect(createJournalEntry).not.toHaveBeenCalled();
+    // The date and time are filled in already, so the asset is the first one missing.
+    expect(screen.getByLabelText("Актив")).toHaveFocus();
+    await user.selectOptions(screen.getByLabelText("Актив"), "GBPUSD_OTC");
+    await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
+    expect(screen.getByRole("radio", { name: /Выше/ })).toHaveFocus();
+  });
+
+  it("records the trade and its review, then shows it open in its place", async () => {
+    const user = userEvent.setup();
+    const saved: JournalEntry = {
+      ...FROM_CARD,
+      id: "cm4j0urnal0004abcdefghij",
+      source: "manual",
+      tradeCardId: null,
+      tradeDate: "2026-09-20",
+      entryTime: "10:05",
+      asset: { code: "GBPUSD_OTC", label: "GBP/USD OTC new" },
+      direction: "down",
+      amount: "5.00",
+      payoutPercent: 88,
+      expiry: { code: "M1", label: "1 мин", seconds: 60 },
+      result: "loss",
+      resultAmount: "5.00",
+      plan: null,
+      planFollowed: false,
+      violations: ["no_reason"],
+      conclusion: null,
+      createdAt: "2026-09-21T13:00:00.000Z",
+    };
+    createJournalEntry.mockResolvedValue({ ok: true, data: saved });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: "Новая запись" }));
+    await fillTrade(user);
+    expect(screen.getByText("Итог сделки").parentElement).toHaveTextContent("−$5.00");
+    await user.click(screen.getByRole("radio", { name: "Нарушен" }));
+    await user.click(screen.getByRole("checkbox", { name: "Вход без записанной причины" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
+
+    expect(createJournalEntry).toHaveBeenCalledWith({
+      tradeDate: "2026-09-20",
+      entryTime: "10:05",
+      asset: "GBPUSD_OTC",
+      direction: "down",
+      amount: "5.00",
+      payoutPercent: 88,
+      expiry: "M1",
+      result: "loss",
+      plan: null,
+      planFollowed: false,
+      violations: ["no_reason"],
+      execution: null,
+      conclusion: null,
+    });
+    expect(await screen.findByText("Запись добавлена")).toBeInTheDocument();
+    const added = row(/GBP\/USD OTC new/);
+    expect(added).toHaveAttribute("aria-expanded", "true");
+    expect(added).toHaveFocus();
+    expect(screen.getByText("Записей").closest("dl")).toHaveTextContent("Записей4");
+  });
+
+  it("puts a refused date under the date field", async () => {
+    const user = userEvent.setup();
+    createJournalEntry.mockResolvedValue(failure("TOOL_VALIDATION", "VALIDATION_ERROR", "invalid_tradeDate"));
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(screen.getByRole("button", { name: "Новая запись" }));
+    await fillTrade(user);
+    await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
+    expect(await screen.findByText("Дата сделки — не раньше 2020 года и не позже сегодняшнего дня.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Дата")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Дата")).toHaveFocus();
+  });
+
+  it("changes a hand-recorded entry as a whole", async () => {
+    const user = userEvent.setup();
+    changeJournalEntry.mockResolvedValue({ ok: true, data: { ...BROKEN, amount: "12.00", resultAmount: "12.00" } });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/BTC\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Изменить запись" }));
+    expect(screen.getByRole("heading", { name: "Изменить запись" })).toHaveFocus();
+    expect(screen.getByLabelText("Сумма")).toHaveValue("16.00");
+    await user.clear(screen.getByLabelText("Сумма"));
+    await user.type(screen.getByLabelText("Сумма"), "12");
+    await user.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+    expect(changeJournalEntry).toHaveBeenCalledWith(
+      BROKEN.id,
+      expect.objectContaining({
+        kind: "manual",
+        amount: "12.00",
+        planFollowed: false,
+        violations: ["revenge", "amount_above_plan"],
+        conclusion: "Хотел отыграться. После убытка пауза 10 минут.",
+      }),
+    );
+    expect(await screen.findByText("Запись изменена")).toBeInTheDocument();
+    expect(row(/BTC\/USD OTC/)).toHaveTextContent("−$12.00");
+  });
+});

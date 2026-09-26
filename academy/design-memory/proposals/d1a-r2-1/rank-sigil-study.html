@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>ATA — Route Sigil study</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  .study{position:absolute;inset:0;padding:64px 60px 40px;}
+  .study h1{font-size:30px;font-weight:700;margin:0 0 6px;}
+  .study .lead{color:var(--ink-2);font-size:14.5px;max-width:900px;margin-bottom:34px;}
+  .states{display:flex;gap:22px;}
+  .st{flex:1;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--field-2),var(--field-1));
+    padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;min-height:230px;justify-content:space-between;}
+  .st .cap{color:var(--ink-3);font-size:12px;text-align:center;}
+  .st .big{font-size:15px;font-weight:600;color:var(--ink);}
+  .navmock{display:flex;align-items:center;gap:9px;border:1px solid var(--line-2);border-radius:999px;padding:6px 12px;}
+  .navmock .avatar{width:26px;height:26px;font-size:11px;}
+  .row2{display:flex;gap:40px;margin-top:34px;border-top:1px solid var(--line);padding-top:26px;}
+  .mono-test{flex:0 0 460px;}
+  .mono-test h2,.scale h2{font-size:16px;margin:0 0 10px;}
+  .silh{display:flex;gap:30px;align-items:center;}
+  .scale{flex:1;}
+  .tiers{display:flex;gap:30px;align-items:flex-end;}
+  .tier{text-align:center;color:var(--ink-3);font-size:12px;}
+  .rules{margin-top:8px;color:var(--ink-3);font-size:12.5px;line-height:1.7;}
+  .rules b{color:var(--ink-2);}
+</style>
+</head><body>
+<div class="canvas desktop">
+ <div class="study">
+  <h1>Route Sigil — Наблюдатель (провизорно)</h1>
+  <p class="lead">Завершённые участки маршрута складываются в устойчивый знак статуса — не график результата,
+  а <b>след пройденного обучения</b>. Составные части: центральный anchor · один continuous trace · 1–4
+  структурных слоя · family contour · точка текущей ступени. Не sparkline/график, не hexagon/медаль/щит,
+  не буква A/пирамида, не стрелка вверх, не монета/доллар.</p>
+
+  <div class="states">
+    <div class="st">
+      <div class="cap">1 · 22px — навигация / профиль</div>
+      <div class="navmock"><img src="assets/route-sigil-3.svg" width="22" height="22" alt=""><span style="font-size:12px;color:var(--ink-2)">Наблюдатель III</span><span class="avatar">А</span></div>
+      <div class="cap">силуэт читается в 22px</div>
+    </div>
+    <div class="st">
+      <div class="cap">2 · 44px — Главная</div>
+      <img src="assets/route-sigil-3.svg" width="44" height="44" alt="">
+      <div class="big">Наблюдатель III</div>
+    </div>
+    <div class="st">
+      <div class="cap">3 · 108px — премиальный знак</div>
+      <img src="assets/route-sigil-3.svg" width="108" height="108" alt="">
+      <div class="big">Наблюдатель III</div>
+    </div>
+    <div class="st" style="background:radial-gradient(120% 80% at 50% 34%,rgba(57,211,166,.12),transparent 60%),linear-gradient(180deg,var(--field-2),var(--field-1))">
+      <div class="cap">4 · transition — сборка IV</div>
+      <svg width="112" height="112" viewBox="0 0 100 100">
+        <path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3" stroke-linecap="round"/>
+        <path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M63 57 V61 A4 4 0 0 1 59 65 H45" fill="none" stroke="#39d3a6" stroke-width="4" stroke-dasharray="3 3" stroke-linecap="round"/>
+        <circle cx="47" cy="55" r="3.6" fill="#39d3a6"/><circle cx="31" cy="33" r="3" fill="#39d3a6"/>
+        <circle cx="47" cy="55" r="10" fill="none" stroke="#39d3a6" stroke-opacity=".35" stroke-width="2"/>
+      </svg>
+      <div class="big" style="color:var(--signal)">IV собирается…</div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="mono-test">
+      <h2>Monochrome / силуэт-тест</h2>
+      <p class="svc" style="margin:0 0 16px">Если без цвета знак теряет форму — решение не проходит. Ниже — чистый силуэт (mask) в 22px и 48px.</p>
+      <div class="silh">
+        <svg width="22" height="22" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#e7ecf3" stroke-width="3"/><path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57" fill="none" stroke="#e7ecf3" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47" cy="55" r="3.6" fill="#e7ecf3"/></svg>
+        <svg width="48" height="48" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#e7ecf3" stroke-width="3"/><path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57" fill="none" stroke="#e7ecf3" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47" cy="55" r="3.6" fill="#e7ecf3"/></svg>
+        <div style="filter:grayscale(1) brightness(1.5)"><img src="assets/route-sigil-3.svg" width="48" height="48" alt=""></div>
+        <span class="svc">✓ форма сохраняется без цвета</span>
+      </div>
+    </div>
+    <div class="scale">
+      <h2>Развитие внутри семьи — I → IV (число слоёв)</h2>
+      <div class="tiers">
+        <div class="tier"><svg width="58" height="58" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3"/><path d="M36 62 H62 A4 4 0 0 1 66 58 V44" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="52" cy="54" r="3.4" fill="#39d3a6"/></svg><div>I</div></div>
+        <div class="tier"><svg width="58" height="58" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3"/><path d="M33 66 H67 A4 4 0 0 1 71 62 V42 A4 4 0 0 1 67 38 H48" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="52" r="3.4" fill="#39d3a6"/></svg><div>II</div></div>
+        <div class="tier"><svg width="58" height="58" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3"/><path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47" cy="55" r="3.4" fill="#39d3a6"/></svg><div style="color:var(--signal)">III · сейчас</div></div>
+        <div class="tier"><svg width="58" height="58" viewBox="0 0 100 100"><path d="M50 14 H30 A16 16 0 0 0 14 30 V70 A16 16 0 0 0 30 86 H70 A16 16 0 0 0 86 70 V30 A16 16 0 0 0 70 14 H58" fill="none" stroke="#6f9ad8" stroke-width="3"/><path d="M31 33 H67 A4 4 0 0 1 71 37 V67 A4 4 0 0 1 67 71 H33 A4 4 0 0 1 29 67 V45 A4 4 0 0 1 33 41 H59 A4 4 0 0 1 63 45 V57 A4 4 0 0 1 59 61 H47" fill="none" stroke="#39d3a6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47" cy="52" r="3.4" fill="#39d3a6"/></svg><div>IV</div></div>
+      </div>
+      <div class="rules"><b>Правила:</b> один continuous trace, свёрнутый в знак · слой = ступень · anchor в центре ·
+      family contour + notch · без суммы · не chart/sparkline/hexagon/медаль/буква A/пирамида · читается в 22px ·
+      references provisional (финальные значения не фиксируются).</div>
+    </div>
+  </div>
+ </div>
+</div>
+</body></html>

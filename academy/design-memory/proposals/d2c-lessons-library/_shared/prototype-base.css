@@ -1,0 +1,59 @@
+/* PROTOTYPE-ONLY base — Phase D2C-A (Lessons Library art direction).
+ *
+ * This file exists ONLY because src/styles/globals.css uses Tailwind directives
+ * (@tailwind base/components/utilities) that cannot be resolved when a static
+ * prototype is opened over file://. The rules below reproduce the @layer base
+ * block of globals.css verbatim in meaning — nothing is invented here and every
+ * value resolves to src/styles/tokens.css.
+ *
+ * The prototypes link the REAL token file and the REAL shell CSS:
+ *   src/styles/tokens.css            → provisional semantic tokens
+ *   src/features/home/home.css       → app bar / mobile top bar / bottom nav
+ * so the shell in every screenshot is the product's own shell, not a redrawn one.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--background-field);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal-active) 34%, transparent);
+  color: var(--text-primary);
+}
+
+/* Prototype stand-ins for the real <Icon> (lucide) and <BrandMark> React
+   components: inline SVG with the same geometry role. Icons stay SECONDARY
+   metadata next to text — never the identity (ata-brand-language). */
+.ic {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

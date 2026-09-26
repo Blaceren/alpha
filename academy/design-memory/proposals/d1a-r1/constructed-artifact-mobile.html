@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Constructed Artifact — mobile</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas mobile">
+
+  <div class="topstrip" style="height:50px;padding:0 16px;gap:10px">
+    <span class="wordmark" style="font-size:13px">Alfa Trade Academy</span>
+    <span class="topright"><span class="avatar" style="width:26px;height:26px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- artifact simplified to a focused object; route becomes a compact axis around it -->
+  <svg width="390" height="330" style="position:absolute;left:0;top:80px" aria-hidden="true">
+    <!-- compact orbital axis -->
+    <ellipse cx="195" cy="170" rx="150" ry="70" fill="none" stroke="#2b3542" stroke-width="1" stroke-dasharray="4 6"/>
+    <!-- checkpoint marker on the orbit -->
+    <circle cx="195" cy="100" r="4" fill="#5b8bd0"/>
+    <!-- artifact triangle (focused) -->
+    <polygon points="195,90 135,250 255,250" fill="none" stroke="#5b8bd0" stroke-width="1.5"/>
+    <polygon points="147,226 243,226 255,250 135,250" fill="rgba(52,214,172,.18)" stroke="#34d6ac" stroke-width="1"/>
+    <polygon points="159,196 231,196 243,226 147,226" fill="rgba(52,214,172,.12)" stroke="#34d6ac" stroke-width="1"/>
+    <polygon points="171,166 219,166 231,196 159,196" fill="none" stroke="#34d6ac" stroke-width="2"/>
+  </svg>
+  <div class="label mono cold" style="left:210px;top:172px">▲ L20 · от $200</div>
+
+  <!-- active fragment + priority CTA -->
+  <div class="plane" style="left:24px;top:430px;width:342px">
+    <div class="eyebrow">Активный фрагмент · сборка 2/5 · Ранг Набл. III</div>
+    <div class="h1" style="font-size:20px">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика»</div>
+    <div style="margin-top:12px"><span class="cta" style="width:100%;justify-content:center">Продолжить урок →</span></div>
+  </div>
+
+  <div class="label" style="position:absolute;left:24px;top:600px;color:var(--faint)">
+    тап по объекту → детали (XP 2 480 · Серия 6 · Alex · инструменты)
+  </div>
+
+  <div class="bottomnav">
+    <span class="active">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Ещё</span>
+  </div>
+</div>
+</body></html>

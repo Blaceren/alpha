@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Learning Spine — mobile</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas mobile">
+
+  <div class="topstrip" style="height:50px;padding:0 16px;gap:10px">
+    <span class="wordmark" style="font-size:13px">Alfa Trade Academy</span>
+    <span class="topright"><span class="avatar" style="width:26px;height:26px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- current SEGMENT of the spine = main screen (not a long timeline) -->
+  <svg width="390" height="700" style="position:absolute;left:0;top:70px" aria-hidden="true">
+    <line x1="60" y1="0" x2="60" y2="70" stroke="#5b6576" stroke-width="1.5" stroke-dasharray="5 7"/>
+    <line x1="60" y1="70" x2="60" y2="430" stroke="#34d6ac" stroke-width="2"/>
+    <line x1="60" y1="430" x2="60" y2="520" stroke="#5b6576" stroke-width="1.5" stroke-dasharray="5 7"/>
+  </svg>
+
+  <!-- adjacent step above (future) partially -->
+  <div class="checkpoint" style="left:49px;top:96px"></div>
+  <div class="label mono cold" style="left:86px;top:92px">▲ Контрольная точка L20 · от $200</div>
+
+  <!-- current node = focused segment -->
+  <div class="node active" style="left:45px;top:250px"></div>
+  <div class="plane" style="left:96px;top:210px;width:270px">
+    <div class="eyebrow">Уровень 18 · текущий</div>
+    <div class="h1" style="font-size:20px">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 · 2/5</div>
+    <div class="alex" style="margin-top:10px">зоны реакции рынка, не точки.</div>
+    <div style="margin-top:12px"><span class="cta" style="width:100%;justify-content:center">Продолжить урок →</span></div>
+  </div>
+
+  <!-- adjacent step below (completed) partially -->
+  <div class="node done" style="left:53px;top:500px"></div>
+  <div class="label mono dim" style="left:86px;top:494px">▼ L17 завершён · Ранг: Наблюдатель III</div>
+
+  <div style="position:absolute;left:24px;top:560px;display:flex;gap:14px">
+    <span class="instrument mono">2 480 <b>XP</b></span>
+    <span class="instrument">Серия <b>6</b></span>
+  </div>
+  <div class="label" style="position:absolute;left:24px;top:600px;color:var(--faint)">
+    тап по узлу → focused layer с деталями
+  </div>
+
+  <div class="bottomnav">
+    <span class="active">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Ещё</span>
+  </div>
+</div>
+</body></html>

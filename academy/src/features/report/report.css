@@ -1,0 +1,448 @@
+/* L3 learner report — uses existing Academy tokens only (no new global tokens).
+   Functional mode: readable, calm surfaces, five navigable trade groups, no
+   43-field wall, no horizontal overflow at 390px, works at 200% zoom. */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CASCADE LAYER — added by the Workspace form fidelity pass. NOTHING ELSE HERE
+   CHANGED: not one selector, not one declaration, not one value. The file's own
+   internal order is untouched, so its cascade against itself is identical.
+
+   WHY. The Workspace restores the frozen form composition through a
+   presentation seam — additive classes on this markup plus a scoped stylesheet.
+   Both sheets style the same classes, and specificity alone cannot express
+   "inside the restored Workspace the frozen rules win, everywhere else this file
+   is unchanged": `.wsp .rf__label` and `.rf__label` are not comparable in a way
+   that stays true as either file grows.
+
+   A layer says it once and says it structurally. Layered rules lose to unlayered
+   ones, so the scoped Workspace sheet wins inside `.wsp` — and nowhere else,
+   because it is the only other sheet in the product that mentions these classes.
+   Verified: `.rf*` and `.rpt*` appear in exactly two stylesheets, this one and
+   the Workspace fidelity sheet. `.sr-only` is the one shared name, and
+   home.css's copy carries `!important` and already won.
+
+   The alternative was to re-declare all 226 of this file's declarations in the
+   scoped sheet to out-specify them one by one. That is the same effect written
+   226 times, and it silently rots the first time a declaration is added here.
+   ───────────────────────────────────────────────────────────────────────────── */
+@layer ata-report-base {
+.rpt {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.rpt__head {
+  margin-bottom: 16px;
+}
+.rpt__heading {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 640;
+  margin: 0 0 8px;
+}
+.rpt__heading:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.rpt__instructions {
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+.rpt__criteria {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: 0.95rem;
+}
+.rpt__criteria-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.rpt__status {
+  color: var(--text-secondary);
+  margin: 8px 0 12px;
+  min-height: 1.2em;
+}
+.rpt__status:focus {
+  outline: none;
+}
+
+/* --- trade groups --- */
+.rpt-group {
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 0 16px;
+  background: var(--background-field);
+}
+.rpt-group__legend {
+  font-family: var(--font-display);
+  font-weight: 620;
+  padding: 0 6px;
+  color: var(--text-primary);
+}
+.rpt-group__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+/* --- single field --- */
+.rf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rf__label {
+  font-weight: 600;
+  line-height: 1.4;
+}
+.rf__req {
+  color: var(--signal-active);
+}
+.rf__help {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+.rf__error {
+  color: var(--route-locked);
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 600;
+}
+.rf__input,
+.rf__textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  background: var(--background-base);
+  color: var(--text-primary);
+  font: inherit;
+}
+.rf__textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+.rf__input:focus-visible,
+.rf__textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.rf[data-invalid="true"] .rf__input,
+.rf[data-invalid="true"] .rf__textarea {
+  border-color: var(--route-locked);
+}
+.rf__group {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rf__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px; /* touch target */
+}
+.rf__option input {
+  width: 20px;
+  height: 20px;
+}
+.rf--unknown {
+  border: 1px dashed var(--route-locked);
+  border-radius: 8px;
+  padding: 12px;
+}
+.rf__unknown-note {
+  color: var(--route-locked);
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
+
+/* --- actions --- */
+.rpt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+.rpt__btn {
+  padding: 10px 18px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  background: var(--surface-context);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+.rpt__btn:hover:not([disabled]) {
+  border-color: var(--focus-ring);
+}
+.rpt__btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.rpt__btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rpt__btn--primary {
+  background: var(--signal-active);
+  border-color: var(--signal-active);
+  color: var(--background-base);
+}
+
+/* --- summary / notices --- */
+.rpt-summary {
+  border: 1px solid var(--route-locked);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  background: var(--background-field);
+}
+.rpt-summary:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.rpt-summary__title {
+  font-weight: 640;
+  margin: 0 0 8px;
+}
+.rpt-summary__server {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+.rpt-summary__list {
+  margin: 0;
+  padding-left: 18px;
+}
+.rpt-summary__list a {
+  color: var(--text-primary);
+}
+.rpt__notice {
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  background: var(--background-field);
+  color: var(--text-secondary);
+}
+
+/* --- status panel: feedback + timeline --- */
+.rpt-status {
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.rpt-feedback {
+  border: 1px solid var(--divider-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--background-field);
+}
+.rpt-feedback__title {
+  font-weight: 640;
+  margin: 0 0 8px;
+}
+.rpt-feedback__reason,
+.rpt-feedback__comment,
+.rpt-feedback__action,
+.rpt-feedback__which {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.rpt-feedback__label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.rpt-timeline__title {
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+.rpt-timeline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rpt-timeline__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+.rpt-timeline__num {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.rpt-timeline__badge[data-kind="approved"] {
+  color: var(--route-completed);
+  font-weight: 600;
+}
+
+/* --- the evidence arc --- */
+
+/* The result of the work, stated once. Not a badge and not a colour: the words
+   carry the state, and the tick beside them is decorative. */
+.rpt-verdict {
+  margin: 0;
+  font-weight: 640;
+  color: var(--route-completed);
+}
+
+.rpt-arc__title {
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+
+/* The disclosure is a real 44px target. A `summary` is about twenty pixels tall
+   by default, which is a fine thing to read and a poor thing to hit. */
+.rpt-arc__summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+  list-style-position: inside;
+}
+.rpt-arc__summary:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.rpt-arc[open] > .rpt-arc__summary {
+  margin-bottom: 4px;
+}
+
+.rpt-arc__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rpt-arc__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  line-height: 1.5;
+}
+.rpt-arc__at {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* --- done / completed --- */
+.rpt__done {
+  border: 1px solid var(--route-completed);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  background: var(--background-field);
+}
+.rpt__done-title {
+  font-family: var(--font-display);
+  font-weight: 640;
+  color: var(--route-completed);
+  margin: 0 0 8px;
+}
+.rpt__next {
+  color: var(--signal-active);
+  font-weight: 600;
+}
+.rpt__next-pending {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.rpt__revision {
+  margin: 12px 0;
+}
+
+/* --- read-only submitted view --- */
+.rpt-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 12px 0;
+}
+.rpt-readonly__group {
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--background-field);
+}
+.rpt-readonly__legend {
+  font-family: var(--font-display);
+  font-weight: 620;
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.rpt-readonly__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--divider);
+}
+.rpt-readonly__row dt {
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin: 0;
+}
+.rpt-readonly__row dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 560px) {
+  .rpt-readonly__row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rpt *,
+  .rpt *::before,
+  .rpt *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+}

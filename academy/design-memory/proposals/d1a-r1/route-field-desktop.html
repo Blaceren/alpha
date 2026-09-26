@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Route Field — desktop</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas desktop">
+
+  <!-- Navigation: compact TOP COMMAND STRIP (not a sidebar) -->
+  <div class="topstrip">
+    <span class="wordmark">Alfa Trade Academy</span>
+    <nav class="navitems">
+      <span class="active">Главная</span><span>Путь</span><span>Уроки</span>
+      <span>Инструменты</span><span>Сообщество</span><span>Новости</span>
+      <span>Рефералы</span><span>Ментор</span><span>Поддержка</span>
+    </nav>
+    <span class="topright">◔ уведомления <span class="avatar">А</span></span>
+  </div>
+
+  <!-- SIGNATURE: horizontal Luminous Route Trace = the whole canvas -->
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <!-- completed segment -->
+    <line x1="110" y1="600" x2="690" y2="600" stroke="#34d6ac" stroke-width="2"/>
+    <!-- active->locked segment (dashed) -->
+    <line x1="690" y1="600" x2="1120" y2="600" stroke="#5b6576" stroke-width="1.5" stroke-dasharray="5 7"/>
+    <line x1="1120" y1="600" x2="1380" y2="600" stroke="#2b3542" stroke-width="1.5" stroke-dasharray="5 7"/>
+    <!-- connector from active node to context -->
+    <line x1="680" y1="585" x2="680" y2="470" stroke="#34d6ac" stroke-width="1"/>
+    <!-- connector to Alex annotation -->
+    <line x1="680" y1="616" x2="680" y2="690" stroke="#2b3542" stroke-width="1"/>
+    <!-- connector to checkpoint label -->
+    <line x1="1120" y1="585" x2="1120" y2="520" stroke="#5b8bd0" stroke-width="1"/>
+  </svg>
+
+  <!-- Nodes on the route -->
+  <div class="checkpoint" style="left:110px;top:589px"></div>
+  <div class="label mono" style="left:96px;top:620px">L15 ✓</div>
+  <div class="node done" style="left:293px;top:593px"></div>
+  <div class="label mono dim" style="left:286px;top:620px">L16</div>
+  <div class="node done" style="left:493px;top:593px"></div>
+  <div class="label mono dim" style="left:486px;top:620px">L17</div>
+  <div class="node active" style="left:665px;top:585px"></div>
+  <div class="label mono sig" style="left:668px;top:620px">L18</div>
+  <div class="node locked" style="left:893px;top:593px"></div>
+  <div class="label mono dim" style="left:886px;top:620px">L19</div>
+  <div class="checkpoint" style="left:1109px;top:589px"></div>
+
+  <!-- Current lesson context unfolds directly from the active node -->
+  <div class="plane" style="left:500px;top:330px;width:360px">
+    <div class="eyebrow">Текущий шаг · из активного узла</div>
+    <div class="h1">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика» · прогресс 2/5</div>
+    <div style="margin-top:14px"><span class="cta">Продолжить урок →</span></div>
+  </div>
+
+  <!-- Route instrumentation (rank / XP / streak) — gauges on the line, not KPI cards -->
+  <div style="position:absolute;left:110px;top:548px;display:flex;gap:26px">
+    <span class="instrument">Ранг <b>Наблюдатель III</b></span>
+    <span class="instrument mono">2 480 <b>XP</b></span>
+    <span class="instrument">Серия обучения <b>6</b></span>
+  </div>
+
+  <!-- Alex as a contextual annotation tethered to the path -->
+  <div class="alex" style="position:absolute;left:560px;top:700px">
+    уровни — это зоны реакции рынка, а не точные точки. Досмотри урок и переходи к разметке.
+  </div>
+
+  <!-- Checkpoint further down the line = structural obstacle + embedded reward -->
+  <div style="position:absolute;left:1000px;top:470px;width:300px">
+    <span class="tag gate">Контрольная точка · Уровень 20</span>
+    <div class="sub" style="margin-top:8px">Для следующего модуля требуется баланс Pocket от <b class="hi">$200</b></div>
+    <div style="margin-top:8px"><span class="tag reward">Награда: Chart Markup Tool</span></div>
+  </div>
+
+  <!-- Return-to-current control -->
+  <div style="position:absolute;right:28px;bottom:26px">
+    <span class="tag" style="border-color:var(--cold);color:var(--cold)">⟲ К текущему уровню</span>
+  </div>
+
+  <div class="label" style="position:absolute;left:28px;bottom:24px;color:var(--faint)">
+    Direction A · Route Field — low-fi wireframe (design-only)
+  </div>
+</div>
+</body></html>

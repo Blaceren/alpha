@@ -1,0 +1,656 @@
+/*
+ * LEVEL DETAIL — the visual repair.
+ *
+ * WHAT WAS WRONG. This route is the only surface in the Lessons family still
+ * wearing the provisional `.ax` system: a navy field (#060b18), cyan signal
+ * (#4fe0c0), blue-white ink (#eaf1ff) and navy gradients. That palette predates
+ * the frozen Ink/Signal canon. A learner walking /lessons → level → /material
+ * crossed out of the Academy into a different blue application and back again.
+ *
+ * WHY THIS FILE EXISTS RATHER THAN AN EDIT TO experience.css. Those `--ax-*`
+ * tokens are defined on `.ax`, and `.ax` is still the live root of four other
+ * reachable things — the (app) loading, error and not-found screens, and the
+ * fixture-mode Home/Path/Lessons screens. Editing the shared sheet would repaint
+ * surfaces nobody asked me to touch. So the seam is a route-exclusive root:
+ * level detail renders `class="ax ld"`, and everything below is scoped to it.
+ *
+ * TWO MECHANISMS, DELIBERATELY.
+ *
+ *   1. `.ax.ld` REDEFINES every legacy token in ATA terms. Custom properties
+ *      inherit, so every `var(--ax-…)` anywhere inside this subtree — including
+ *      rules in this and other files that I do not restate below, and including
+ *      mentor-feedback.css, which consumes the tokens without defining them —
+ *      computes to an ATA value. That is what drives the legacy palette count to
+ *      zero rather than a list of overrides I hoped was complete.
+ *
+ *   2. Explicit rules for the chrome, because the repair is not a recolour. The
+ *      page had one 1124px measure for everything, cards inside cards, and a
+ *      blue status strip. Those are shape problems and need shape answers.
+ *
+ * SPECIFICITY IS DECIDED, NOT INHERITED FROM IMPORT ORDER. The legacy rules are
+ * single class selectors (`.ax-lvlhead`, not `.ax .ax-lvlhead`). Every rule here
+ * carries the `.ld` root as a second class, so it wins at 0-2-0 against 0-1-0 no
+ * matter which stylesheet the bundler emits first. Nothing here uses !important.
+ *
+ * CLASS NAMES ARE UNTOUCHED. `.ax-done__cta` and `.ax-feedback` are asserted by
+ * existing tests, the assessment's whole DOM is asserted by its own suite, and
+ * `#task` is the anchor the reader's end-of-lesson CTA links to. This file adds
+ * one class to one wrapper and changes nothing else about the markup.
+ */
+
+.ax.ld {
+  /* ---- the legacy palette, restated in ATA terms ------------------------ */
+  --ax-field: var(--background-field);
+  --ax-field-deep: var(--background-base);
+  --ax-line: var(--divider);
+  --ax-line-strong: var(--divider-strong);
+  --ax-ink: var(--text-primary);
+  --ax-ink-muted: var(--text-secondary);
+  --ax-ink-faint: var(--text-muted);
+  --ax-signal: var(--signal-active);
+  --ax-signal-deep: var(--ata-signal-700);
+  /* No new decorative hue. The amber warn tone existed to colour
+     `checkpoint_unverified`; that state now reads from its own words and a
+     quiet border, which is what it always should have done. */
+  --ax-warn: var(--text-secondary);
+  /* Flat, because the brief forbids gradients and because a gradient behind a
+     status line was never carrying information. */
+  --ax-lit-bg: var(--surface-subtle);
+  --ax-cold-bg: var(--surface-subtle);
+  --ax-unlit-bg: transparent;
+  --ax-radius-field: 8px;
+  --ax-radius-tight: 4px;
+
+  /* ---- measures --------------------------------------------------------- */
+  /* Outer rhythm and left edge are the Lessons index's own, so the two pages
+     line up when a learner moves between them. */
+  /* border-box, as the Lessons index sets on `.lsn`. Without it the 28px gutter
+     is ADDED to a 100% width and the surface runs 56px past its own column —
+     invisible, because the shell clips overflow-x, which is how it survived. */
+  box-sizing: border-box;
+  /* 1064, not 1008, because that is what the Lessons index actually occupies:
+     its `.lsn` sets `width: min(100%, 1008px)` but scopes `box-sizing` to
+     `.lsn *`, so the element itself stays content-box and its border box is
+     1008 + 2x28. Measured at 1440 both surfaces now start their text at x=216;
+     at 390 both start at 16. Matching its declared rule would have left this
+     page 28px inboard of the page it continues. */
+  width: min(100%, 1064px);
+  max-width: none;
+  margin-inline: auto;
+  padding: 34px 28px 72px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+
+  /* Prose sits at the Reader's measure, not the page's. 720px is inside the
+     680–760 band and one step above the Reader's 680 because this page carries
+     short blocks rather than continuous reading. */
+  --ld-measure: 720px;
+  /* The assessment is allowed to be wider — only as wide as a long answer
+     option needs, not as wide as the page. */
+  --ld-task-measure: 860px;
+  --ld-rule: 1px solid var(--divider);
+}
+
+/* Every block starts on the same left edge; only the right edge differs. */
+.ld > article > header,
+.ld > article > .ax-statestrip,
+.ld > article > .ax-lvlsec,
+.ld > article > nav {
+  max-width: var(--ld-measure);
+}
+.ld > article > .ax-lvlsec:has(.ax-task) { max-width: var(--ld-task-measure); }
+
+/* ---------------------------------------------------------------- header -- */
+
+/* The coordinate is a system fact, so it is set in the system face. */
+.ld .ax-coord {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+.ld .ax-coord b { color: var(--text-secondary); font-weight: 600; }
+
+/* Reader parity: the same size, weight and tracking the material page uses for
+   its title, so the two read as one document rather than two products. */
+.ld .ax-lvlhead { margin: 0 0 18px; }
+.ld .ax-lvlhead__title {
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.ld .ax-lvlhead__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.ld .ax-lvlhead__obj {
+  font-size: 15.5px; line-height: 1.6; color: var(--text-secondary);
+  margin: 0; max-width: 62ch;
+}
+
+/* The state mark stays NEUTRAL in every state. Signal is reserved for a real
+   available action, a chosen answer and focus; spending it on "В процессе"
+   would make the page's one meaningful colour mean nothing. The state's own
+   words carry the state — the mark is never colour alone. */
+.ld .ax-mark,
+.ld .ax-mark[data-state] {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--divider);
+  color: var(--text-secondary);
+  background: transparent;
+}
+.ld .ax-mark[data-state="completed"] {
+  color: var(--text-primary);
+  border-color: var(--divider-strong);
+}
+
+/* ---- the threshold ----------------------------------------------------- */
+/* Was a blue strip with a glowing dot. Now one quiet truthful line, closed by
+   the rule that separates understanding from checking. */
+.ld .ax-statestrip,
+.ld .ax-statestrip[data-posture] {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  padding: 0 0 20px;
+  margin: 0 0 26px;
+  background: none;
+  border: 0;
+  border-bottom: var(--ld-rule);
+  border-radius: 0;
+}
+.ld .ax-statestrip__dot,
+.ld .ax-statestrip[data-posture] .ax-statestrip__dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: none;
+  align-self: center;
+  animation: none;
+}
+.ld .ax-statestrip__text {
+  font-size: 14px; line-height: 1.55; color: var(--text-secondary); margin: 0;
+}
+
+/* --------------------------------------------------------------- section -- */
+
+.ld .ax-lvlsec { margin: 0 0 34px; padding: 0; }
+.ld .ax-lvlsec + .ax-lvlsec { padding-top: 30px; border-top: var(--ld-rule); }
+.ld .ax-lvlsec > h2 {
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 500; color: var(--text-muted); margin: 0 0 16px;
+}
+.ld .ax-lvlsec__note {
+  font-size: 14px; color: var(--text-muted); line-height: 1.6; margin: 0;
+  max-width: 62ch;
+}
+
+/* -------------------------------------------------------------- material -- */
+
+.ld .cur-content__title {
+  font-size: 18px; line-height: 1.35; font-weight: 650;
+  color: var(--text-primary); margin: 14px 0 4px;
+}
+.ld .cur-content__subtitle {
+  font-size: 14px; color: var(--text-secondary); margin: 0 0 8px;
+}
+.ld .cur-content__summary {
+  font-size: 15px; line-height: 1.6; color: var(--text-secondary);
+  margin: 0; max-width: 62ch;
+}
+.ld .ax-lvlsec .cur-content__material {
+  margin: 18px 0 0; padding-top: 0; border-top: 0;
+}
+.ld .ax-lvlsec .cur-content__shape {
+  font-family: var(--font-mono);
+  font-size: 11.5px; letter-spacing: 0.04em;
+  color: var(--text-muted); margin: 0 0 14px;
+}
+
+/* The one lit action of this zone. */
+.ld .ax-lvlsec .cur-content__open {
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding: 11px 20px;
+  border-radius: 8px; border: 1px solid transparent;
+  background: var(--signal-active); color: var(--background-base);
+  font-size: 14.5px; font-weight: 650; text-decoration: none;
+  transition: background-color 140ms var(--ease-standard);
+}
+.ld .ax-lvlsec .cur-content__open:hover { background: var(--ata-signal-300); }
+.ld .ax-lvlsec .cur-content__open:focus-visible {
+  outline: 2px solid var(--signal-active); outline-offset: 3px;
+}
+
+/* Honest, not a prototype box: the dashed border said "unfinished UI" when the
+   sentence is about unfinished VIDEO. */
+.ld .cur-content__media-pending {
+  margin: 16px 0 0; padding: 12px 0 0;
+  border: 0; border-top: var(--ld-rule); border-radius: 0;
+  background: none;
+  font-size: 13.5px; line-height: 1.55; color: var(--text-muted);
+  max-width: 62ch;
+}
+
+/* ------------------------------------------------------------ task shell -- */
+
+/* Containment only where it marks a functional group. The task IS one, so it
+   keeps a boundary — but a hairline and a calm field, not a lit card. */
+.ld .ax-task,
+.ld .ax-task[data-posture] {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.ld .ax-task a { color: var(--text-primary); }
+.ld .ax-task a:hover { color: var(--signal-active); }
+
+/* ------------------------------------------------------------ assessment -- */
+
+/* One calm container. Was: a rounded tinted card holding rounded bordered
+   cards, one per question. */
+.ld .asmt {
+  margin-top: 0;
+  padding: 22px 22px 24px;
+  border: var(--ld-rule);
+  border-radius: 8px;
+  background: var(--background-field);
+}
+.ld .asmt__heading {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 650; line-height: 1.3;
+  color: var(--text-primary); margin: 0 0 6px;
+}
+.ld .asmt__status { font-size: 13.5px; color: var(--text-secondary); margin: 0 0 18px; }
+.ld .asmt__questions { gap: 0; }
+
+/* Questions are separated by rhythm and a hairline. */
+.ld .asmt__fieldset {
+  border: 0; border-radius: 0; background: none;
+  padding: 0; margin: 0;
+}
+.ld .asmt__questions > li + li {
+  margin-top: 22px; padding-top: 22px; border-top: var(--ld-rule);
+}
+.ld .asmt__legend {
+  font-size: 15px; line-height: 1.45; font-weight: 600;
+  color: var(--text-primary); padding: 0; margin: 0 0 10px;
+}
+.ld .asmt__qnum {
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.08em;
+  color: var(--text-muted); margin-right: 8px;
+}
+
+/* A full row, not a label beside a dot. */
+.ld .asmt__option {
+  align-items: stretch;
+  gap: 12px;
+  min-height: 44px;
+  padding: 7px 12px;
+  margin: 0 -12px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+  transition: background-color 120ms var(--ease-standard);
+}
+.ld .asmt__option:hover { background: var(--surface-subtle); }
+.ld .asmt__option:has(input:checked) {
+  background: var(--surface-subtle);
+  border-left-color: var(--signal-active);
+}
+.ld .asmt__option input[type="radio"] {
+  margin: 0; width: 18px; height: 18px; align-self: center;
+  accent-color: var(--signal-active);
+}
+/* The label fills the row. A radio is 18px, and a learner presses the words —
+   so the words have to BE the target, not sit inside one. */
+.ld .asmt__option label {
+  display: flex; align-items: center; min-height: 30px;
+  font-size: 14.5px; line-height: 1.5; color: var(--text-secondary);
+  flex: 1 1 auto;
+}
+.ld .asmt__option:has(input:checked) label { color: var(--text-primary); }
+.ld .asmt__option input[type="radio"]:focus-visible {
+  outline: 2px solid var(--signal-active); outline-offset: 2px;
+}
+
+.ld .asmt__btn {
+  margin-top: 22px; padding: 11px 20px;
+  border-radius: 8px; min-height: 44px;
+  font-size: 14.5px; font-weight: 650;
+}
+.ld .asmt__btn--primary {
+  background: var(--signal-active); color: var(--background-base);
+  border-color: transparent;
+}
+.ld .asmt__btn:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 2px; }
+
+/* Outcome is never colour alone: the title says what happened, the score says
+   how, and the edge is a second channel rather than the only one. */
+.ld .asmt__result,
+.ld .asmt__done,
+.ld .asmt__notice {
+  border-radius: 6px; padding: 12px 14px;
+  border: var(--ld-rule); background: var(--surface-subtle);
+}
+.ld .asmt__result { border-left: 2px solid var(--divider-strong); }
+.ld .asmt__result--fail { border-left-color: var(--text-muted); }
+.ld .asmt__done { border-left: 2px solid var(--signal-active); }
+.ld .asmt__result-title, .ld .asmt__done-title {
+  font-size: 14.5px; font-weight: 700; color: var(--text-primary);
+}
+.ld .asmt__result-score { font-size: 13.5px; color: var(--text-secondary); }
+.ld .asmt__next {
+  border-radius: 8px; min-height: 44px;
+  display: inline-flex; align-items: center;
+  background: var(--signal-active); color: var(--background-base);
+  font-size: 14.5px; font-weight: 650;
+}
+.ld .asmt__next:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 2px; }
+
+/* ------------------------------------------------------- level metadata -- */
+
+.ld .ax-lvlmeta { border-top: var(--ld-rule); margin: 0; }
+.ld .ax-lvlmeta > div { padding: 14px 20px 14px 0; }
+.ld .ax-lvlmeta > div + div { border-left: var(--ld-rule); }
+.ld .ax-lvlmeta dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text-muted); margin: 0 0 6px; font-weight: 500;
+}
+.ld .ax-lvlmeta dd { font-size: 14.5px; color: var(--text-primary); margin: 0; }
+
+/* ----------------------------------------------------------- level nav --- */
+
+.ld .ax-lvlnav { padding-top: 24px; border-top: var(--ld-rule); }
+.ld .ax-lvlnav a {
+  display: inline-flex; align-items: center; min-height: 44px;
+  font-size: 14px; color: var(--text-secondary); text-decoration: none;
+  transition: color 140ms var(--ease-standard);
+}
+.ld .ax-lvlnav a:hover { color: var(--text-primary); }
+.ld .ax-lvlnav a:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+
+/* ------------------------------------------------------------ narrower --- */
+
+@media (max-width: 860px) {
+  .ax.ld { padding: 26px 20px 64px; }
+  .ld .ax-lvlhead__title { font-size: 27px; }
+  .ld .ax-lvlmeta > div + div { border-left: 0; border-top: var(--ld-rule); }
+  .ld .asmt { padding: 18px 16px 20px; }
+  .ld .asmt__option { margin: 0 -8px; padding: 7px 8px; }
+}
+
+@media (max-width: 420px) {
+  .ax.ld { padding: 22px 16px 56px; }
+  .ld .ax-lvlhead__title { font-size: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld .ax-lvlsec .cur-content__open,
+  .ld .asmt__option,
+  .ld .ax-lvlnav a { transition-duration: 1ms; }
+}
+
+/* ------------------------------------------------------------ level start -- */
+
+/* The same container language as the assessment, because they are the same kind
+   of object: the one place on the page where an action lives. */
+.ld .lvl-start {
+  margin-top: 0;
+  padding: 20px 22px 22px;
+  border: var(--ld-rule);
+  border-radius: 8px;
+  background: var(--background-field);
+}
+.ld .lvl-start__title {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 650; line-height: 1.3;
+  color: var(--text-primary); margin: 0 0 6px;
+}
+.ld .lvl-start__explain {
+  font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 16px;
+  max-width: 62ch;
+}
+/* On an available level this IS the real action, so it is the lit one — and it
+   was 41px tall, which is not a target. */
+.ld .lvl-start__action {
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding: 11px 20px;
+  border-radius: 8px; border: 1px solid transparent;
+  background: var(--signal-active); color: var(--background-base);
+  font-size: 14.5px; font-weight: 650;
+  transition: background-color 140ms var(--ease-standard);
+}
+.ld .lvl-start__action:hover:not(:disabled) { background: var(--ata-signal-300); border-color: transparent; }
+.ld .lvl-start__action:disabled { opacity: 0.5; }
+.ld .lvl-start__action:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .lvl-start__status { font-size: 13.5px; color: var(--text-secondary); }
+
+/* --------------------------------------------------------------- player --- */
+
+/*
+ * The lesson player is a shared component with its own stylesheet, and that
+ * sheet says in as many words that this must not restyle it. So nothing here
+ * touches one of its rules: it redefines four of its own custom properties, the
+ * same seam the player already uses to read Academy tokens. Its geometry, its
+ * controls, its behaviour and every other token are untouched, and the override
+ * is scoped to `.ld`, so the player's showcase route keeps exactly what it has.
+ *
+ * These four were the only hardcoded values left in it that belong to the blue
+ * family: everything else already reads `var(--text-…)`, `var(--divider…)` and
+ * `var(--focus-ring)` with a blue-ish literal only as a fallback that never
+ * fires inside the Academy.
+ */
+.ld .avp {
+  --avp-btn-dark: rgba(11, 13, 10, 0.86);
+  --avp-btn-dark-hover: rgba(26, 31, 24, 0.94);
+  --avp-btn-border: rgba(237, 240, 234, 0.28);
+  --avp-btn-ink: var(--text-primary);
+}
+/* The shade exists so white controls stay legible over an arbitrary video
+   frame — it is functional, not decoration, so it stays. What changes is its
+   colour: the same two stops, in ink rather than navy. */
+.ld .avp__shade {
+  background:
+    linear-gradient(180deg, rgba(11, 13, 10, 0.25), transparent 30%),
+    linear-gradient(0deg, rgba(11, 13, 10, 0.93) 0%, rgba(11, 13, 10, 0.5) 19%, transparent 54%);
+}
+
+/* Its control size token was 42px, so every transport button missed a 44px
+   target by two pixels. Raising the token moves the bar from 88px to 90px and
+   nothing else — measured: same player width, no overflow inside the bar or the
+   page. Still a token, still scoped to this route. */
+.ld .avp { --avp-control-size: 44px; }
+/* The volume slider is left exactly as the player draws it. Raising it to a
+   44px box inflates the painted track into a pill — the control stops looking
+   like a slider. It stays 90x31 and is reported as the one control on this
+   route under the target size, rather than made ugly to satisfy a number. */
+
+/* ------------------------------------------------------- completion ------- */
+
+/*
+ * The completion moment. Its own comment in experience.css says "no gradient
+ * that reads as a prize" — and then it painted a navy gradient. The intent was
+ * right; the material was the provisional one. The intent is what is kept here:
+ * the surface settles, the signal that meant "act here" becomes one quiet edge
+ * meaning "this is behind you", and the only lit thing left is the link forward.
+ */
+.ld .ax-done {
+  padding: 24px 24px 26px;
+  border-radius: 8px;
+  background: var(--background-field);
+  border: var(--ld-rule);
+  border-left: 2px solid var(--signal-active);
+}
+.ld .ax-done__kicker {
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 500; color: var(--text-muted); margin: 0 0 10px;
+}
+.ld .ax-done__title {
+  font-size: 21px; line-height: 1.25; letter-spacing: -0.012em;
+  font-weight: 700; color: var(--text-primary); margin: 0 0 20px;
+}
+.ld .ax-done__facts { border-bottom: var(--ld-rule); }
+.ld .ax-done__facts dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 500;
+}
+.ld .ax-done__facts dd { font-size: 15px; color: var(--text-primary); }
+/* The number says what the level was worth. It is not a payout, so it is not lit. */
+.ld .ax-done__xp { color: var(--text-primary); font-weight: 650; }
+.ld .ax-done__nextTitle { font-size: 16px; font-weight: 650; color: var(--text-primary); }
+.ld .ax-done__nextWhy { font-size: 14.5px; color: var(--text-secondary); }
+/* The one lit thing left: the link forward. */
+.ld .ax-done__cta {
+  border-radius: 8px; padding: 12px 22px;
+  background: var(--signal-active); color: var(--background-base);
+  border: 1px solid transparent; font-size: 14.5px; font-weight: 650;
+}
+.ld .ax-done__cta:hover { background: var(--ata-signal-300); }
+.ld .ax-done__cta:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .ax-done__cta--quiet {
+  background: transparent; color: var(--text-primary); border-color: var(--divider-strong);
+}
+.ld .ax-done__cta--quiet:hover { background: var(--surface-subtle); }
+
+/*
+ * VOLUME — a 44px target with a 3px track.
+ *
+ * MEASURED, NOT ASSUMED. The player draws the volume slider by styling the
+ * `input[type=range]` ELEMENT as the track: `height: 3px`, a rounded background,
+ * and a 12px thumb that overflows it. Raw hit-testing with elementFromPoint puts
+ * the input's real interaction zone at 78x13 — the thumb's overflow, not the
+ * 31px the label around it occupies. The label's 14px vertical padding is not
+ * part of it: above and below the input, elementFromPoint returns the LABEL, and
+ * a click forwarded from a label to a range input focuses it without setting a
+ * value at that position. So the drag zone was 13px tall.
+ *
+ * THE FIX IS THE SHAPE OF THE ELEMENT, NOT ITS PAINT. The input becomes 44px
+ * tall and transparent — that box IS the interaction target, natively, for
+ * pointer and drag alike — and the 3px track it used to be moves to the track
+ * pseudo-elements, one for Blink and one for Gecko, with the same height, the
+ * same radius and the same colour. Nothing about the drawn control changes: the
+ * track stays 3px, the thumb stays 12px, and it is not turned into a pill.
+ *
+ * The label loses its vertical padding because the height now comes from the
+ * input; it keeps `Громкость` and the input keeps its `aria-valuetext`, so the
+ * accessible name and the announced value are untouched.
+ */
+.ld .avp__volume-slider {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+}
+.ld .avp__volume-slider input[type="range"] {
+  height: 44px;
+  background: transparent;
+  border-radius: 0;
+}
+/* Blink/WebKit: the track is a pseudo-element, and the thumb is positioned
+   against it, so it needs centring by hand — (3 - 12) / 2. */
+.ld .avp__volume-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--avp-border-strong);
+}
+.ld .avp__volume-slider input[type="range"]::-webkit-slider-thumb {
+  margin-top: -4.5px;
+}
+/* Gecko: it centres the thumb on the track itself. */
+.ld .avp__volume-slider input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--avp-border-strong);
+}
+
+/* -------------------------------------------------- bounded state screens -- */
+
+/* When the bounded state IS the page it carries the document's `h1`, so it is
+   set at the page's own title size rather than the section size it uses inside
+   a surface that already has one. The copy, the centred layout, the retry rule
+   and the request id are untouched. */
+.ld .cur-state { margin: 56px auto; }
+.ld .cur-state h1.cur-state__title {
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.014em;
+  font-weight: 750;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+.ld .cur-state__message { font-size: 15px; line-height: 1.6; }
+
+/* ===================================================================== */
+/* CORRECTIVE PASS — two findings from the post-cutover verification.    */
+/* ===================================================================== */
+
+/*
+ * ANSWER ROW TARGET.
+ *
+ * WHAT I GOT WRONG THE FIRST TIME. I reported zero targets under 44px. That
+ * scan ran on a harness that inlined the source stylesheets and stripped the
+ * Tailwind preflight, so it had no `*{box-sizing:border-box}`. Without it the
+ * row's `min-height: 44px` applied to the CONTENT box and the stretched label
+ * came out 44px tall. With border-box — which is what ships — the row is 44px
+ * INCLUDING its 14px of padding, so the label is 30px and the padding band
+ * belongs to a `div` that does nothing when clicked.
+ *
+ * THE ROW IS ALREADY BIG ENOUGH. Measured on the served bytes: 44px at 1440,
+ * 58px at 390. So nothing needs to grow — the label's activation area has to
+ * reach the edges of a row that is already the right size. A transparent
+ * ::before stretched to the row's padding box does exactly that and changes no
+ * geometry: same row height, same text position, same radio, same rhythm.
+ *
+ * STACKING. The overlay belongs to the label, which follows the input in the
+ * DOM, so it would paint over the radio and swallow direct clicks on it. The
+ * input is lifted one layer so a click on the radio still lands on the radio.
+ * Neither is focusable, so Tab still reaches the input and `:focus-visible`
+ * still draws on the real control.
+ *
+ * The overlay is `inset: 0` against the row's padding box, so it stops exactly
+ * at the row's own bounds — adjacent options cannot overlap each other.
+ */
+.ld .asmt__option { position: relative; }
+.ld .asmt__option label::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.ld .asmt__option input[type="radio"] {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * TAIL CLEARANCE.
+ *
+ * Below 900px the shell renders a fixed bottom navigation, and this surface
+ * passes `frozenSurface`, so `main` reserves nothing and the surface owns its
+ * own gutter. It reserved 56px against a 60px bar, which put the last 4px of
+ * the level navigation under it at the end of the document.
+ *
+ * The reservation is now the shell's own formula, the one `.home-main` uses
+ * when it is not frozen: the bar's height token, plus the safe-area inset, plus
+ * a 24px visual margin. Same breakpoint as `.bottomnav`'s own, so the padding
+ * exists exactly where the bar does. Desktop geometry is untouched.
+ *
+ * This block is last so it wins the bottom edge from the 860px and 420px blocks
+ * above, which keep everything else they set.
+ */
+@media (max-width: 899.98px) {
+  .ax.ld {
+    padding-bottom: calc(
+      var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px
+    );
+  }
+}

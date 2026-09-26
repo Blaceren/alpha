@@ -1,0 +1,554 @@
+/*
+ * AUTHENTICATED HOME — the frozen Home design system, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: HomeAuthATA @ a6bfdf5ecc2f361ca36b3eca192890b39afdba30 —
+ * `design/phase3/system/tokens.css`, `design/phase3/system/home.css` and
+ * `design/phase4/page/page-composition.css`, in the order the frozen page links
+ * them. The transform changed NOTHING: 201 declarations in, 201 out, ZERO
+ * removed, ZERO added, zero font rebindings. 40 selectors, 0 escaping the
+ * namespace, 0 remote URLs, no !important on either side.
+ *
+ * WHY EVEN THE FONT BINDING WAS UNCHANGED. The frozen source already names the
+ * family "ATA Manrope" rather than "Manrope", and says why: a Home-scoped
+ * binding must not silently claim the global family name. The product vendors
+ * the same four woff2 faces — the frozen provenance note records them as
+ * byte-identical to the release snapshot, verified by `cmp` — so the binding
+ * already pointed at the right thing.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. Every selector is namespaced under `.ahm`, and `.home-scope` — the frozen
+ *    surface's own root class — IS that namespace: `.home-scope` becomes `.ahm`.
+ *    The class name is not kept because `home` is already taken in this document
+ *    by the shell's own root, and two things called `.home*` on one page is how
+ *    a shell rule and a surface rule start fighting.
+ *
+ * 2. `design/phase3/system/fonts.css` is NOT included. It is four `@font-face`
+ *    declarations for faces the product already loads from its own vendored
+ *    copies — the same files, byte for byte. Including it would declare the same
+ *    family twice from two paths.
+ *
+ * 3. `.ahm :where(.home-field a, .home-field button):focus-visible` survived as
+ *    ONE selector. The transform splits a selector list on top-level commas
+ *    only; splitting inside `:where()` would have produced two broken fragments
+ *    and a parity report that still said 201.
+ *
+ * Adding `.ahm ` raises every rule's specificity by the same amount, so the
+ * cascade order between the three layers is preserved exactly.
+ */
+
+/* --- design/phase3/system/tokens.css --- */
+/* ATA AUTHENTICATED HOME — PHASE 3 — HOME-SCOPED TOKEN LAYER
+   =====================================================================
+   PHASE-3 DESIGN-SYSTEM CANDIDATE. NOT ACCEPTED. NOT FROZEN.
+
+   SCOPE: AUTHENTICATED HOME ONLY.
+   Nothing declared here is canonical for Public Home, Path, Lessons, Reader,
+   Workspace, Tools, Notifications, Profile or the Academy as a whole. Every
+   token is namespaced `--h-` for exactly that reason: a Home token cannot be
+   consumed elsewhere by accident, and cross-surface reconciliation is a later,
+   separately authorised step.
+
+   THE ONE PLACE RAW VALUES ARE ALLOWED. Literal values live in this file and
+   nowhere else. `system/home.css` consumes tokens only; QA fails if a raw px
+   value or hex colour appears outside this layer without a documented
+   exception.
+
+   WHAT THIS LAYER IS NOT: it is not a spacing scale, not a type scale, and not
+   a palette. It is a set of SEMANTIC ROLES for one surface. There is
+   deliberately no `--h-space-4`, no `--h-size-lg`: a numbered ramp invites
+   consumption by meaning-free arithmetic, which is how a Home system becomes a
+   global one by accident.
+   ===================================================================== */
+
+.ahm {
+
+  /* ---------------------------------------------------------- SURFACE ----
+     Carried unchanged from the ATA brand foundation. Home does not redefine
+     the page ground. */
+  --h-ink:              #0B0D0A;
+
+  /* ------------------------------------------------------------ TEXT ----
+     A four-step ramp by SEMANTIC WEIGHT, not by lightness convenience.
+     Contrast is measured against --h-ink and recorded in
+     ATA-AUTH-HOME-PHASE3-RESPONSIVE-ACCESSIBILITY.md.
+
+       --h-text-focus     16.96:1   the current consequence
+       --h-text-subject    8.46:1   work identity · holding authority value
+       --h-text-context    5.47:1   causal basis · posture label
+       --h-text-meta       4.52:1   surface identity role · authority key
+
+     TWO STEPS ARE DELIBERATELY LIGHTER THAN THE PHASE-2 PROTOTYPE. The frozen
+     prototype rendered the causal basis in --text-500 (4.15:1) and metadata in
+     --text-700 (2.46:1); both are below 4.5:1 for text at these sizes. Phase 3
+     repairs that HOME-SCOPED, and records the finding about the shared ramp as
+     AH3-H-01 rather than silently changing a shared asset. */
+  --h-text-focus:       #EDF0EA;
+  --h-text-subject:     #A6ADA0;
+  --h-text-context:     #828A7E;
+  --h-text-meta:        #757C6F;
+
+  /* -------------------------------------------------------- BOUNDARY ----
+     The closing expression. Carried at the frozen quietness: this hairline
+     carries NO information — remove it and no content is lost — so it is not
+     an informational boundary under the non-text contrast rule and is not
+     claimed to meet 3:1. It measures 1.35:1 against the page, deliberately. */
+  --h-boundary:         rgba(255,255,255,.12);
+  --h-boundary-weight:  1px;
+
+  /* ---------------------------------------------------------- SIGNAL ----
+     Semantically scarce: the ACTION primary handoff fill, and nothing else.
+     Never completion, never status, never progress, never decoration. */
+  --h-signal:           #C7F76D;
+  --h-signal-hover:     #D9FF91;
+  --h-on-signal:        #0B0D0A;   /* 15.75:1 on the fill */
+
+  /* --------------------------------------------------------- CONTROL ----
+     The neutral retry edge. The prototype used rgba(255,255,255,.20) = 1.79:1,
+     below the 3:1 a control boundary needs. .36 is the quietest step that
+     clears it at 3.28:1. */
+  --h-control-edge:     rgba(255,255,255,.36);
+  --h-control-text:     #EDF0EA;
+  --h-control-radius:   8px;
+  --h-control-target:   48px;      /* >= 44x44; measured, not asserted */
+  --h-control-pad-y:    14px;
+  --h-control-pad-x:    26px;
+
+  /* ----------------------------------------------------- FOCUS-VISIBLE ---
+     AH2-H-05. No single colour clears 3:1 against BOTH the ink page and the
+     Signal fill — measured: Signal-on-Signal is 1.00:1, light-on-Signal is
+     1.08:1. The indicator is therefore TWO RINGS, so that whichever surface it
+     lands on, one member is high-contrast:
+
+       inner  --h-focus-inner  on the Signal fill   15.75:1
+       outer  --h-focus-outer  on the ink page      16.96:1
+       inner vs outer                               16.96:1  */
+  --h-focus-inner:      #0B0D0A;
+  --h-focus-outer:      #EDF0EA;
+  --h-focus-ring:       2px;
+  --h-focus-gap:        2px;
+
+  /* ------------------------------------------------------ TYPEFACES ----
+     Home-scoped binding. Manrope is bound from local, byte-verified assets.
+     The precision-metadata face is NOT bound: see
+     ATA-AUTH-HOME-PHASE3-TYPOGRAPHY.md. AH2-I-01 stays OPEN. */
+  --h-face-ui:          "ATA Manrope", -apple-system, BlinkMacSystemFont,
+                        "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --h-face-meta:        ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ------------------------------------------------------ TYPE ROLES ----
+     One role per semantic job. Sizes are chosen for the job, not stepped off a
+     scale, and every one of them is a CANDIDATE. */
+  --h-type-identity:    600 11px/1.45 var(--h-face-meta);
+  --h-type-posture:     400 12px/1.45 var(--h-face-meta);
+  --h-type-subject:     550 17px/1.4  var(--h-face-ui);
+  --h-type-consequence: 620 clamp(30px, 3.2vw, 44px)/1.1 var(--h-face-ui);
+  --h-type-basis:       400 16px/1.6  var(--h-face-ui);
+  --h-type-authority:   620 17px/1.4  var(--h-face-ui);
+  --h-type-action:      650 15px/1.2  var(--h-face-ui);
+  --h-track-identity:   .1em;
+  --h-track-posture:    .08em;
+  --h-track-consequence:-.02em;
+
+  /* ------------------------------------------------------- MEASURES ----
+     Reading measure, expressed in characters so it follows the face. */
+  --h-measure-subject:  44ch;
+  --h-measure-basis:    56ch;
+
+  /* ------------------------------------------------- FIELD GEOMETRY ----
+     Named by RELATIONSHIP, never by size. There is no reserved row: the
+     rhythm below the consequence is content-driven, which is how AH2-H-02 is
+     systemised without adding content and without pinning coordinates. */
+  --h-field-max:            1120px;
+  --h-inset:                64px;
+  --h-rail:                 200px;
+  --h-rail-gap:             56px;
+  --h-identity-to-field:    30px;   /* rail top block -> field top block      */
+  --h-subject-to-focus:     20px;   /* work identity -> current consequence   */
+  --h-focus-to-boundary:    26px;   /* LAST LINE of the consequence -> hairline */
+  --h-boundary-to-context:  28px;   /* hairline -> causal basis               */
+  --h-context-to-resolution:42px;   /* causal basis -> resolution condition   */
+  --h-field-top:            76px;
+  --h-field-bottom:         104px;
+
+  /* ---------------------------------------------------- BREAKPOINTS ----
+     Declared here so the values have one place of record, even though a CSS
+     media-query prelude cannot consume a custom property. QA cross-checks every
+     @media width in the system stylesheet against these declarations. */
+  --h-breakpoint-desktop: 1023px;
+  --h-breakpoint-tablet:  767px;
+  --h-breakpoint-mobile:  599px;
+
+  /* ------------------------------------------------------- MOTION ----
+     There is no movement UI on Home and no loading theatre. The only motion is
+     a control's own colour response, and it is suppressed entirely under
+     prefers-reduced-motion. */
+  --h-motion-control:   140ms;
+  --h-ease:             cubic-bezier(.2, 0, 0, 1);
+}
+
+/* Narrower widths change the FIELD, never the semantics. */
+@media (max-width:1023px){
+  .ahm {
+    --h-inset:              40px;
+    --h-rail:               168px;
+    --h-rail-gap:           40px;
+    --h-field-top:          60px;
+    --h-field-bottom:       88px;
+  }
+}
+@media (max-width:767px){
+  .ahm { --h-inset: 28px; }
+}
+@media (max-width:599px){
+  .ahm {
+    --h-inset:                20px;
+    --h-field-top:            40px;
+    --h-field-bottom:         72px;
+    --h-identity-to-field:    34px;
+    --h-subject-to-focus:     12px;
+    --h-focus-to-boundary:    20px;
+    --h-boundary-to-context:  22px;
+    --h-context-to-resolution:44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ahm { --h-motion-control: 0ms; }
+}
+
+/* --- design/phase3/system/home.css --- */
+/* ATA AUTHENTICATED HOME — PHASE 3 — HOME SYSTEM
+   =====================================================================
+   PHASE-3 DESIGN-SYSTEM CANDIDATE. NOT ACCEPTED. NOT FROZEN. HOME-SCOPED.
+
+   Consumes the token layer and nothing else: no raw colour, no raw px, no
+   magic number lives in this file. That is the property QA enforces, and it is
+   what makes the system reviewable — every value in the rendered page can be
+   traced to one named semantic role.
+
+   THE FROZEN THESIS, IMPLEMENTED
+   Home is a stable current-priority field in which one authoritative current
+   consequence is stated, minimally grounded, and resolved according to posture.
+
+   AH2-H-02 — THE RESERVED GAP, SYSTEMISED
+   The Phase-2 prototype reserved a fixed row so that the causal basis landed on
+   the same y in every posture. Direct CPD ruled that geometric invariance is
+   NOT a Product requirement and that space must not be held open for coordinate
+   parity. So the reserve is GONE. What is invariant now is the RHYTHM: the
+   hairline always sits --h-focus-to-boundary below the LAST LINE of the
+   consequence, whatever that consequence is. A one-line consequence no longer
+   opens a 94px hole; a three-line one no longer feels cramped. Stability comes
+   from a constant interval, not a constant coordinate.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- field --- */
+.ahm .home-field {
+  padding: var(--h-field-top) 0 var(--h-field-bottom);
+  color: var(--h-text-focus);
+  background: var(--h-ink);
+}
+.ahm .home-field__inner {
+  max-width: var(--h-field-max);
+  margin: 0 auto;
+  padding: 0 var(--h-inset);
+  display: grid;
+  grid-template-columns: var(--h-rail) minmax(0, 1fr);
+  column-gap: var(--h-rail-gap);
+  align-items: start;
+}
+
+/* --------------------------------------------------- registration rail --- */
+.ahm .home-rail { grid-column: 1; }
+
+.ahm .home-identity {
+  margin: 0;
+  font: var(--h-type-identity);
+  letter-spacing: var(--h-track-identity);
+  text-transform: uppercase;
+  color: var(--h-text-subject);
+}
+.ahm .home-identity__role {
+  display: block;
+  color: var(--h-text-meta);
+}
+
+.ahm .home-posture {
+  margin: var(--h-identity-to-field) 0 0;
+  font: var(--h-type-posture);
+  letter-spacing: var(--h-track-posture);
+  text-transform: uppercase;
+  color: var(--h-text-context);
+}
+
+/* ------------------------------------------------------------- field ---- */
+.ahm .home-truth { grid-column: 2; }
+
+.ahm .home-subject {
+  margin: 0 0 var(--h-subject-to-focus);
+  max-width: var(--h-measure-subject);
+  font: var(--h-type-subject);
+  color: var(--h-text-subject);
+}
+
+.ahm .home-consequence {
+  margin: 0;
+  padding-bottom: var(--h-focus-to-boundary);
+  border-bottom: var(--h-boundary-weight) solid var(--h-boundary);
+  font: var(--h-type-consequence);
+  letter-spacing: var(--h-track-consequence);
+  color: var(--h-text-focus);
+}
+
+.ahm .home-basis {
+  margin: var(--h-boundary-to-context) 0 0;
+  max-width: var(--h-measure-basis);
+  font: var(--h-type-basis);
+  color: var(--h-text-context);
+}
+
+.ahm .home-resolution { margin: var(--h-context-to-resolution) 0 0; }
+
+/* ------------------------------------------------------------ controls --- */
+.ahm .home-handoff {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--h-control-target);
+  padding: var(--h-control-pad-y) var(--h-control-pad-x);
+  border: 0; border-radius: var(--h-control-radius);
+  background: var(--h-signal);
+  color: var(--h-on-signal);
+  font: var(--h-type-action);
+  text-decoration: none;
+  transition: background var(--h-motion-control) var(--h-ease);
+}
+.ahm .home-handoff:hover { background: var(--h-signal-hover); }
+.ahm .home-handoff:active { background: var(--h-signal); }
+
+.ahm .home-retry {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--h-control-target);
+  padding: var(--h-control-pad-y) var(--h-control-pad-x);
+  border: var(--h-boundary-weight) solid var(--h-control-edge);
+  border-radius: var(--h-control-radius);
+  background: none;
+  color: var(--h-control-text);
+  font: var(--h-type-action);
+  cursor: pointer;
+  transition: border-color var(--h-motion-control) var(--h-ease);
+}
+.ahm .home-retry:hover { border-color: var(--h-text-context); }
+
+/* AH2-H-05 — the two-ring indicator. Whichever surface it lands on, one member
+   is high-contrast: the inner ring against a Signal fill, the outer against the
+   ink page. Applied to every interactive descendant of the field. */
+.ahm :where(.home-field a, .home-field button):focus-visible {
+  outline: var(--h-focus-ring) solid var(--h-focus-outer);
+  outline-offset: var(--h-focus-gap);
+  box-shadow: 0 0 0 var(--h-focus-ring) var(--h-focus-inner);
+  border-radius: var(--h-control-radius);
+}
+
+/* ------------------------------------------------- holding authority ---- */
+.ahm .home-authority { margin: 0; }
+.ahm .home-authority__key {
+  display: block;
+  font: var(--h-type-identity);
+  letter-spacing: var(--h-track-identity);
+  text-transform: uppercase;
+  color: var(--h-text-meta);
+}
+.ahm .home-authority__value {
+  display: block;
+  margin-top: var(--h-subject-to-focus);
+  font: var(--h-type-authority);
+  color: var(--h-text-subject);
+}
+.ahm .home-noaction {
+  margin: var(--h-boundary-to-context) 0 0;
+  max-width: var(--h-measure-basis);
+  font: var(--h-type-basis);
+  color: var(--h-text-context);
+}
+
+/* --------------------------------------------------------- LOADING ------
+   AH2-H-04. LOADING is not a posture and does not enter the focus slot. There
+   is no consequence, so there is nothing to close: the hairline is absent by
+   the same rule that puts it there in the four real postures. Nothing is
+   skeletoned, because a skeleton would fabricate a hierarchy the system does
+   not yet know. */
+.ahm .home-pending {
+  margin: 0;
+  max-width: var(--h-measure-basis);
+  font: var(--h-type-basis);
+  color: var(--h-text-context);
+}
+
+/* ------------------------------------------------------------ mobile ---- */
+@media (max-width:599px){
+  .ahm .home-field__inner {
+    display: block;
+  }
+  .ahm .home-posture { margin-bottom: var(--h-subject-to-focus); }
+  .ahm .home-authority__value { margin-top: 0; }
+}
+
+/* --- design/phase4/page/page-composition.css --- */
+/* ATA AUTHENTICATED HOME — PHASE 4 — PAGE COMPOSITION
+   =====================================================================
+   PHASE-4 PAGE-DESIGN CANDIDATE. AWAITING DIRECT CPD. NOT FROZEN.
+   HOME-SCOPED. NOT PRODUCTION.
+
+   THIS FILE ADDS NOTHING TO THE HOME CURRENT-PRIORITY FIELD.
+   Every ACTION / WAIT / NONE / UNKNOWN / LOADING page is rendered entirely by
+   the frozen Phase-3 system — tokens.css and home.css, linked in place, never
+   copied, never overridden. Search this file for `.home-` and you will find no
+   rule that restyles one: the field is consumed exactly as frozen.
+
+   WHAT IS HERE, AND WHY IT IS ALLOWED TO BE
+   -------------------------------------------------------------------------
+   1. THE ROUTE-LEVEL PAGE_FAILURE COMPOSITION.
+      PAGE_FAILURE is OUTSIDE the Home current-priority field. The Phase-4 entry
+      authority authorises exactly one page-local, route-layer composition for
+      it. It deliberately uses NONE of the `.home-*` classes, because reusing
+      them would make the failure page speak with the Home field's voice — which
+      is the one thing the boundary forbids. It consumes frozen TOKENS, because
+      those are semantic roles whose meaning stays truthful outside the field.
+
+   2. ONE DECLARED PAGE-ONLY COMPOSITION VALUE — the failure heading type.
+      Registered below as PF-X-01, and the only one in this phase.
+
+   3. ONE NON-VISUAL UTILITY — the page-level polite announcer.
+      Registered below as P4-X-01. It paints nothing.
+
+   Nothing here is reusable, global, cross-surface or canonical. Nothing here is
+   a token. Nothing here is a component contract. Signal is not used, anywhere
+   in this file, at all.
+   ===================================================================== */
+
+
+/* ==========================================================================
+   REGISTER OF DECLARED PAGE-ONLY VALUES
+   ==========================================================================
+
+   PF-X-01  620 clamp(24px, 2.4vw, 32px)/1.22 var(--h-face-ui)
+   ---------------------------------------------------------------------------
+   CONSUMER   .route-failure__heading — the single h1 of the route-level
+              PAGE_FAILURE page. One consumer. No other rule may use it.
+   RATIONALE  No frozen role fits. `--h-type-consequence` is THE CURRENT
+              CONSEQUENCE — the Constant Field focus assertion itself — and §11
+              forbids that assertion appearing on this page: rendering a failure
+              heading at consequence weight would make the route layer speak as
+              though Home had resolved a priority. The next quietest frozen
+              roles, `--h-type-subject` and `--h-type-authority`, are 17px roles
+              for a work identity and a holding authority; a page h1 set in
+              either is both semantically wrong and too quiet to be the page's
+              primary text. The declared value therefore sits deliberately
+              BELOW the consequence role and ABOVE the subject role: large
+              enough to be a page heading, small enough that it cannot be
+              mistaken for a Home current-priority claim. It reuses the frozen
+              `--h-face-ui` rather than naming a family.
+   SCOPE      PAGE-ONLY. Not a token. Not exported. Not reusable. Not canonical.
+              Not cross-surface. Declared inline at its single consumer, with no
+              custom property, precisely so that nothing can consume it by name.
+
+   P4-X-01  the visually-hidden announcer
+   ---------------------------------------------------------------------------
+   CONSUMER   .p4-announce — one per interactive proof page, OUTSIDE the Home
+              field, empty on load.
+   RATIONALE  §15 requires the announcement behaviour of asynchronous state
+              changes to be defined and proved. The frozen LOADING contract's
+              own live region carries LOADING status only; a resolved outcome
+              needs one short polite message or a screen-reader user cannot tell
+              that a retry finished. This element carries it.
+   VISUAL     NONE. It paints nothing at any width, in any state. The values
+              below are the standard clip-based hiding recipe; they are not
+              visual design values and no frozen role expresses them.
+   SCOPE      PAGE-ONLY, non-visual, not a token, not a component contract.
+   ========================================================================== */
+
+
+/* ---------------------------------------------- P4-X-01 · the announcer --- */
+.ahm .p4-announce {
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap;
+  border:0;
+}
+
+
+/* =================================================== PAGE_FAILURE ==========
+   OUTSIDE THE HOME CURRENT-PRIORITY FIELD.
+
+   No `.home-field`. No posture label. No current consequence. No work identity.
+   No closing expression. No Signal. No stale ACTION. The authenticated shell
+   above it remains, because the learner's session is valid and their routes are
+   intact — the surface simply could not be produced.
+   ========================================================================== */
+
+.ahm .route-failure {
+  /* The frozen field rhythm, consumed as page rhythm. Meaning is unchanged:
+     these roles name the breathing above and below a route's main content. */
+  padding: var(--h-field-top) 0 var(--h-field-bottom);
+  color: var(--h-text-focus);
+  background: var(--h-ink);
+}
+
+.ahm .route-failure__inner {
+  max-width: var(--h-field-max);
+  margin: 0 auto;
+  padding: 0 var(--h-inset);
+}
+
+/* PF-X-01 — declared page-only value, inlined at its single consumer. */
+.ahm .route-failure__heading {
+  margin: 0;
+  font: 620 clamp(24px, 2.4vw, 32px)/1.22 var(--h-face-ui);
+  letter-spacing: var(--h-track-consequence);
+  color: var(--h-text-focus);
+}
+
+.ahm .route-failure__explanation {
+  margin: var(--h-boundary-to-context) 0 0;
+  max-width: var(--h-measure-basis);
+  font: var(--h-type-basis);
+  color: var(--h-text-context);
+}
+
+.ahm .route-failure__resolution {
+  margin: var(--h-context-to-resolution) 0 0;
+}
+
+/* The neutral route retry. The frozen NEUTRAL CONTROL roles, arranged — the
+   same edge, target, padding, radius, label type and motion the Home retry
+   uses, because a neutral control means the same thing on either side of the
+   boundary. It is NOT `.home-retry`: that class belongs to the Home field. */
+.ahm .route-failure__retry {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--h-control-target);
+  padding: var(--h-control-pad-y) var(--h-control-pad-x);
+  border: var(--h-boundary-weight) solid var(--h-control-edge);
+  border-radius: var(--h-control-radius);
+  background: none;
+  color: var(--h-control-text);
+  font: var(--h-type-action);
+  cursor: pointer;
+  transition: border-color var(--h-motion-control) var(--h-ease);
+}
+.ahm .route-failure__retry:hover { border-color: var(--h-text-context); }
+
+/* The frozen two-ring focus indicator does not reach outside `.home-field`, so
+   the boundary page arranges the same frozen focus roles for its own control.
+   Identical values, identical behaviour — no new focus treatment is invented. */
+.ahm .route-failure__retry:focus-visible {
+  outline: var(--h-focus-ring) solid var(--h-focus-outer);
+  outline-offset: var(--h-focus-gap);
+  box-shadow: 0 0 0 var(--h-focus-ring) var(--h-focus-inner);
+  border-radius: var(--h-control-radius);
+}
+
+/* The reference code. Subordinate by role and by contrast: the quietest text
+   role in the frozen ramp, which is exactly what a support reference is. */
+.ahm .route-failure__reference {
+  margin: var(--h-boundary-to-context) 0 0;
+  font: var(--h-type-posture);
+  color: var(--h-text-meta);
+}

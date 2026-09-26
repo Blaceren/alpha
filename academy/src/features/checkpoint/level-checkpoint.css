@@ -1,0 +1,183 @@
+/**
+ * Backend-driven checkpoint gate (L4HG-1). Existing tokens only — dark navy
+ * surface, white primary text, cool gray secondary, mint accent. No new
+ * palette, no redesign, nothing borrowed from the Home layout.
+ *
+ * The financial hierarchy stays calm (DD-203/DD-212): the target is ordinary
+ * ink at body size, never the largest element, never glowing, never green.
+ */
+
+.cp-gate {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--divider);
+  border-left: 2px solid var(--gate-boundary);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+}
+
+.cp-gate__title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+}
+
+/* Near / boundary / far. Stacks on narrow viewports so nothing is clipped. */
+.cp-gate__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.7fr);
+  align-items: center;
+  gap: 20px;
+}
+
+.cp-gate__near > * + * {
+  margin-top: 10px;
+}
+
+.cp-gate__condition {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem; /* never larger than the heading */
+}
+
+.cp-gate__condition b {
+  font-weight: 620;
+}
+
+.cp-gate__note,
+.cp-gate__explain,
+.cp-gate__saved {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cp-gate__saved {
+  color: var(--text-muted);
+}
+
+/* The honest state. Mint marks it as the live status line; the meaning is
+   carried by the words, never by the colour alone. */
+.cp-gate__status {
+  margin: 0;
+  color: var(--signal-active);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* The wait line. Muted, ordinary body size — a countdown must never read as
+   urgency or pressure. It is a duration, never an amount. */
+.cp-gate__wait {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The single verification control (L4VC-1). Present only when the Backend
+   permits the learner to ask; never styled as a deposit or trade CTA. */
+.cp-gate__verify {
+  appearance: none;
+  display: inline-block;
+  max-width: 100%;
+  padding: 10px 18px;
+  border: 1px solid var(--gate-boundary);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* Wraps rather than overflows at 320px / 200% zoom. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cp-gate__verify:hover:not(:disabled) {
+  border-color: var(--signal-active);
+}
+
+/* Focus is always visible and never removed — the control is reachable and
+   operable by keyboard alone. */
+.cp-gate__verify:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 2px;
+}
+
+.cp-gate__verify:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The status line is a programmatic focus target, so it needs a visible ring
+   when focus lands on it after a verdict. */
+.cp-gate__status:focus-visible {
+  outline: 2px solid var(--signal-active);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* The shared decorative gate, re-anchored: the Home stylesheet positions it
+   absolutely, which does not apply in this document flow. */
+.cp-gate .checkpoint-gate {
+  position: static;
+  transform: none;
+  height: 132px;
+  pointer-events: none;
+}
+
+.cp-gate .checkpoint-gate svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+
+.cp-gate__far-label,
+.cp-gate__rewards {
+  margin: 0;
+}
+
+.cp-gate__far-label {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.cp-gate__rewards {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .cp-gate__body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: 16px;
+  }
+
+  .cp-gate .checkpoint-gate {
+    height: 84px;
+  }
+}
+
+/* 200% zoom on a 640px-wide viewport lands here; the gate ornament is dropped
+   rather than allowed to squeeze the text it decorates. */
+@media (max-width: 400px) {
+  .cp-gate {
+    padding: 16px;
+  }
+
+  .cp-gate .checkpoint-gate {
+    display: none;
+  }
+}

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>D3-A — сравнение направлений «Отчёт» (уровень 3)</title>
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../src/styles/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    padding: 26px 40px;
+    background:
+      radial-gradient(120% 90% at 38% 30%, color-mix(in srgb, var(--signal-active) 5%, transparent), transparent 55%),
+      radial-gradient(90% 120% at 88% 8%, color-mix(in srgb, var(--gate-boundary) 6%, transparent), transparent 60%),
+      var(--background-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  .board-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: 25px; letter-spacing: -0.4px; margin: 0; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin: 5px 0 0; }
+  .meta { font-size: 12.5px; color: var(--text-muted); text-align: right; margin: 0; line-height: 1.6; }
+  .meta b { color: var(--signal-active); font-weight: 600; }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; padding-top: 18px; }
+  .col { display: flex; flex-direction: column; min-width: 0; }
+
+  .shot { border: 1px solid var(--divider-strong); border-radius: 8px; overflow: hidden; background: var(--background-field); }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  .name { display: flex; align-items: baseline; gap: 10px; margin: 13px 0 0; }
+  .letter { font-family: var(--font-mono); font-size: 12px; color: #06120e; background: var(--signal-active); border-radius: 4px; padding: 2px 7px; font-weight: 700; }
+  .title { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 0; }
+
+  dl { margin: 12px 0 0; display: grid; grid-template-columns: 106px 1fr; gap: 8px 12px; }
+  dt { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.3px; padding-top: 1px; }
+  dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+  dd b { color: var(--text-primary); font-weight: 600; }
+  .good { color: var(--route-completed); }
+  .warn { color: var(--route-upcoming); }
+
+  .fit { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; }
+  .bar { display: inline-flex; gap: 3px; }
+  .bar i { width: 16px; height: 5px; border-radius: 2px; background: var(--route-locked); }
+  .bar i.on { background: var(--signal-active); }
+  .bar i.mid { background: var(--route-upcoming); }
+
+  .foot { position: absolute; left: 40px; right: 40px; bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+          border-top: 1px solid var(--divider); padding-top: 12px; font-size: 12.5px; color: var(--text-muted); }
+  .foot b { color: var(--signal-active); }
+</style>
+</head>
+<body>
+  <div class="board-head">
+    <div>
+      <h1>D3-A · Отчёт — три направления</h1>
+      <p class="sub">Уровень 3 «Первые пять demo-сделок» · артефакт «Отчёт по 5 demo-сделкам» · модуль 01 «Первое знакомство» · данные из curriculum fixture</p>
+    </div>
+    <p class="meta">
+      Кадры: настоящий Chromium, <b>1440×900</b>, точный клип<br>
+      Shell, токены и шрифты — <b>продуктовые</b><br>
+      Состояние: <b>draft</b> (3 из 5) · lifecycle — на отдельной доске
+    </p>
+  </div>
+
+  <div class="cols">
+
+    <!-- ============ A ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-report/concepts/concept-a-desktop-1440x900.png" alt="Concept A — Report Desk, desktop 1440×900"></div>
+      <div class="name"><span class="letter">A</span><h2 class="title">Report Desk</h2></div>
+      <dl>
+        <dt>КОМПОЗИЦИЯ</dt>
+        <dd>Один непрерывный <b>учебный документ</b>. Слева световая ось-спайн с узлами 01–05, справа доминирующая писчая поверхность. Разделы — правила внутри одного листа, не карточки. Submit в конце работы.</dd>
+        <dt>СИЛЬНАЯ СТОРОНА</dt>
+        <dd class="good">Ощущается как <b>работа</b>, а не как форма. Спайн отвечает «что заполнено / что осталось» геометрией, без процентов и колец.</dd>
+        <dt>ГЛАВНЫЙ РИСК</dt>
+        <dd class="warn">Дрейф в <b>Notion / document editor</b>: чем свободнее писчая поверхность, тем меньше в ней курса.</dd>
+        <dt>ПРИГОДНОСТЬ L3</dt>
+        <dd><span class="fit"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span> высокая</span><br>Разделы работают, но артефакт «5 сделок» не выражен структурой.</dd>
+        <dt>БУДУЩИЕ REPORT-LEVEL</dt>
+        <dd><span class="fit"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span> высшая</span><br>Разделы есть у любого артефакта — от «Risk Plan» до «финального экзамена».</dd>
+      </dl>
+    </div>
+
+    <!-- ============ B ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-report/concepts/concept-b-desktop-1440x900.png" alt="Concept B — Evidence Ledger, desktop 1440×900"></div>
+      <div class="name"><span class="letter">B</span><h2 class="title">Evidence Ledger</h2></div>
+      <dl>
+        <dt>КОМПОЗИЦИЯ</dt>
+        <dd>Артефакт раскрыт <b>собственной структурой</b>: пять записей-строк, одна развёрнута в рабочую плоскость. Итоговое наблюдение — отдельный материал. Ноль карточек, ноль колонок.</dd>
+        <dt>СИЛЬНАЯ СТОРОНА</dt>
+        <dd class="good">Структура <b>выведена из данных курса</b> (артефакт требует ровно 5), а не из макета. Пять signal-точек — сами по себе шкала.</dd>
+        <dt>ГЛАВНЫЙ РИСК</dt>
+        <dd class="warn">Не масштабируется на <b>неперечислимые артефакты</b>; при добавлении котировок мгновенно станет trading terminal.</dd>
+        <dt>ПРИГОДНОСТЬ L3</dt>
+        <dd><span class="fit"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span> высшая</span><br>Единственное направление, где форма экрана = форма артефакта.</dd>
+        <dt>БУДУЩИЕ REPORT-LEVEL</dt>
+        <dd><span class="fit"><span class="bar"><i class="mid"></i><i class="mid"></i><i></i><i></i></span> низкая-средняя</span><br>У «Risk Plan» и «плана вокруг новостей» нет кардинальности.</dd>
+      </dl>
+    </div>
+
+    <!-- ============ C ============ -->
+    <div class="col">
+      <div class="shot"><img src="../../screenshots/d3-report/concepts/concept-c-desktop-1440x900.png" alt="Concept C — Submission Contract, desktop 1440×900"></div>
+      <div class="name"><span class="letter">C</span><h2 class="title">Submission Contract</h2></div>
+      <dl>
+        <dt>КОМПОЗИЦИЯ</dt>
+        <dd><b>Две встречные плоскости</b>: слева работа, справа устойчивая плита-соглашение с apertura-кромкой (геометрия CheckpointGate). Четыре утверждения, submit как следствие.</dd>
+        <dt>СИЛЬНАЯ СТОРОНА</dt>
+        <dd class="good">Единственное направление, где <b>lifecycle объяснён до отправки</b>: пользователь заранее знает, что путь остановится.</dd>
+        <dt>ГЛАВНЫЙ РИСК</dt>
+        <dd class="warn">Статус <b>доминирует над работой</b>; плита может съехать в admin dashboard / колонку KPI-плиток.</dd>
+        <dt>ПРИГОДНОСТЬ L3</dt>
+        <dd><span class="fit"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span> высокая</span><br>Работает, но артефакт снова не выражен структурой.</dd>
+        <dt>БУДУЩИЕ REPORT-LEVEL</dt>
+        <dd><span class="fit"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span> высокая</span><br>Соглашение универсально — оно про lifecycle, а не про артефакт.</dd>
+      </dl>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <span>Ключевой компромисс: пригодность для <b>L3</b> и для <b>остальных 21 report/practical-уровней</b> расходятся — B выигрывает первое, A второе, C относится к тому, что делает фазу трудной (<b>pending-review</b>).</span>
+    <span><b>Победитель не выбран.</b> Выбор — за пользователем. Допустимо объединение названных элементов.</span>
+  </div>
+</body>
+</html>

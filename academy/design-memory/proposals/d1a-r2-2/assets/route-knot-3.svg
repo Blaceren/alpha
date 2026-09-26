@@ -1,0 +1,16 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ранг Наблюдатель III">
+  <!-- Route Knot: one continuous trace folded into a compact asymmetric knot.
+       No enclosing frame, no complete circle, no chart direction. Tier III = 3 captured nodes. -->
+  <path d="M22 80 C 20 58, 34 50, 54 54 C 76 58, 78 28, 54 26 C 38 24.5, 36 44, 54 48 C 68 50, 66 72, 46 72 C 37 72, 33 66, 36 58"
+        fill="none" stroke="#39d3a6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- central anchor (where the trace crosses itself) -->
+  <circle cx="54" cy="49" r="4" fill="#39d3a6"/>
+  <!-- captured nodes (tier = 3) -->
+  <circle cx="54" cy="54" r="2.6" fill="#0a0f19" stroke="#39d3a6" stroke-width="2"/>
+  <circle cx="54" cy="26" r="2.6" fill="#0a0f19" stroke="#39d3a6" stroke-width="2"/>
+  <circle cx="46" cy="72" r="2.6" fill="#0a0f19" stroke="#39d3a6" stroke-width="2"/>
+  <!-- open endpoint (loose end) -->
+  <circle cx="22" cy="80" r="3" fill="none" stroke="#6f9ad8" stroke-width="2"/>
+  <!-- closed endpoint (family accent) -->
+  <circle cx="36" cy="58" r="2.4" fill="#6f9ad8"/>
+</svg>

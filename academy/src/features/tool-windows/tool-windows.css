@@ -1,0 +1,3164 @@
+/*
+ * TOOLS-V2 — the tools page and a tool's own page.
+ *
+ * THE PRODUCT'S OWN LANGUAGE (owner review 2026-09-21). The first version
+ * borrowed the presentation's window look — serif headings, a narrow column
+ * on a darker ground, the shell's old decorative wash. The owner asked for the
+ * tones of the product's other pages instead, so these surfaces now carry the
+ * Lessons DNA, the most recent authenticated high-fi:
+ *
+ *   flat Ink canvas (the frozen shell field) · one olive-black territory with
+ *   a short Signal segment on its top edge · Manrope-first type with a narrow
+ *   Mono precision layer · lines that each have a job · radius 8 · no shadows ·
+ *   Signal only for the one primary action, the active step and focus.
+ *
+ * The values below are Lessons' own, restated under this scope rather than
+ * imported, exactly as Lessons restates them from the frozen Path system.
+ * Results follow the product's existing pair: positive = route-completed,
+ * negative = the desaturated rose Support and the old tools used.
+ *
+ * A TOOL OPENS IN THE SAME TAB (owner decision 2026-09-21), inside the shell,
+ * with «Все инструменты» as the way back. The page is built for every width:
+ * one column on a phone, the plan and the outcome side by side from 900px.
+ *
+ * GROUND-USE CONTRACT: text on the territory uses the territory's own ladder
+ * (--tw-text-1/2/3), designed for that surface, never --text-muted.
+ */
+
+.twh,
+.twp {
+  color-scheme: dark;
+
+  --tw-surface: #131a0e;
+  --tw-surface-hover: #1b2412;
+  --tw-surface-press: #222e16;
+  --tw-well: #0d120a;
+
+  --tw-line-1: rgba(243, 244, 239, 0.07);
+  --tw-line-2: rgba(243, 244, 239, 0.13);
+  --tw-line-3: rgba(243, 244, 239, 0.27);
+  --tw-line-olive: rgba(199, 247, 109, 0.16);
+  --tw-line-olive-hover: rgba(199, 247, 109, 0.28);
+  --tw-index: rgba(183, 234, 93, 0.42);
+
+  --tw-text-1: #f3f4ef;
+  --tw-text-2: #c2c8bd;
+  --tw-text-3: #9aa396;
+  --tw-on-signal: #0b0d0a;
+
+  --tw-signal: #c7f76d;
+  --tw-signal-hover: #d3fa85;
+  --tw-positive: var(--route-completed);
+  --tw-negative: #d7a3a8;
+
+  --tw-radius: 8px;
+  --tw-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  box-sizing: border-box;
+  width: min(100%, 1008px);
+  margin-inline: auto;
+  /* Below 900px the shell's bottom navigation is fixed over the page, and a
+     frozen surface owns its own padding: the last control must scroll clear of
+     it (DD-313). */
+  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 32px);
+  color: var(--tw-text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.twh *,
+.twh *::before,
+.twh *::after,
+.twp *,
+.twp *::before,
+.twp *::after {
+  box-sizing: border-box;
+}
+
+.twh :focus-visible,
+.twp :focus-visible {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ page head */
+
+.tw-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+}
+
+.tw-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.tw-count {
+  margin-left: auto;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tw-orient {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  color: var(--tw-text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Said to assistive technology only. */
+.tw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------ the territory (panel) */
+
+.tw-territory {
+  position: relative;
+  margin-top: 22px;
+  padding: 18px 16px 20px;
+  border-radius: var(--tw-radius);
+  background: var(--tw-surface);
+}
+
+/* ACTIVE-SURFACE CUE: one short Signal segment on the top edge, as on Lessons.
+   Never a progress bar: no track, fixed length, one per page. */
+.tw-territory::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  width: 28px;
+  height: 2px;
+  border-radius: 0 0 1px 1px;
+  background: var(--tw-signal);
+}
+
+.tw-footnote {
+  margin: 14px 0 0;
+  max-width: 62ch;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ============================================================ tools page */
+
+.twh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.twh-row {
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.twh-row:last-child {
+  border-bottom-color: transparent;
+}
+
+/* An open tool is ONE full-row link, like a Lessons material: the tool has
+   exactly one destination. A locked or unbuilt one is still text. */
+.twh-row__open,
+.twh-row__still {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 2px 12px;
+  padding: 13px 10px;
+  margin-inline: -10px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.twh-row__open {
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.twh-row__open:hover {
+  background: var(--tw-surface-hover);
+}
+
+.twh-row__open:active {
+  background: var(--tw-surface-press);
+  transition-duration: 40ms;
+}
+
+.twh-row__level {
+  grid-row: 1 / span 3;
+  padding-top: 2px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.twh-row__title {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.twh-row__still .twh-row__title {
+  color: var(--tw-text-2);
+  font-weight: 600;
+}
+
+.twh-row__desc {
+  color: var(--tw-text-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.twh-row__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.twh-row__open .twh-row__state {
+  color: var(--tw-text-1);
+}
+
+.twh-row__open:hover .twh-row__state {
+  color: var(--tw-signal);
+}
+
+.twh-row__soon {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ============================================================= tool page */
+
+/* «Все инструменты» — the way back, the same control on every tool page. */
+.twp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* 44px on a phone (touch), 40px from 600px. */
+  min-height: 44px;
+  margin-bottom: 18px;
+  padding: 8px 14px 8px 11px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.twp-back:hover {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+/* locked, soon, loading: quiet and in place, like Lessons' zero state */
+.tw-quiet {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 56ch;
+  padding: 6px 0 4px;
+}
+
+.tw-quiet__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tw-quiet__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.tw-quiet__line {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+/* ============================================================ trade card */
+
+.tc-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(4px, 1.2vw, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tc-step {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tc-step__bar {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--tw-line-2);
+}
+
+/* On a phone five labels cannot share the width without losing their endings,
+   so the bars stand alone and one line below names the current step. The labels
+   stay in the list for assistive technology. From 600px they are shown. */
+.tc-step__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  color: var(--tw-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tc-steps-now {
+  margin: 10px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tc-step[data-state="done"] .tc-step__bar {
+  background: var(--tw-index);
+}
+
+.tc-step[data-state="done"] .tc-step__label {
+  color: var(--tw-text-2);
+}
+
+.tc-step[data-state="current"] .tc-step__bar {
+  background: var(--tw-signal);
+}
+
+.tc-step[data-state="current"] .tc-step__label {
+  color: var(--tw-text-1);
+}
+
+.tc-hint {
+  margin: 12px 0 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.tc-layout {
+  display: grid;
+  gap: 0;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.tc-aside {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.tc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tc-section + .tc-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.tc-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.tc-section__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* «Зафиксировано 14:32» — the plan's current state: legitimate Signal. */
+.tc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--tw-signal);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tc-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tc-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 12px;
+}
+
+.tc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tc-field[data-span="full"] {
+  grid-column: 1 / -1;
+}
+
+.tc-label {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tc-error {
+  margin: 0;
+  color: var(--tw-negative);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.tc-input {
+  width: 100%;
+  /* 48px on a phone, so every field is a comfortable touch target and lines up
+     with the segmented controls; 44px from 600px. */
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-1);
+  font: inherit;
+  /* 16px keeps a phone's browser from zooming into a focused field. */
+  font-size: 16px;
+  font-weight: 500;
+  transition: border-color 140ms var(--tw-ease);
+}
+
+.tc-input::placeholder {
+  color: var(--tw-text-3);
+}
+
+.tc-input:hover:not(:disabled) {
+  border-color: var(--tw-line-olive-hover);
+}
+
+.tc-input:focus-visible {
+  border-color: var(--tw-signal);
+  outline-offset: 1px;
+}
+
+.tc-input[aria-invalid="true"] {
+  border-color: var(--tw-negative);
+}
+
+.tc-input:disabled {
+  border-color: var(--tw-line-1);
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: default;
+  opacity: 1;
+}
+
+.tc-select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--tw-text-3) 50%),
+    linear-gradient(135deg, var(--tw-text-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.tc-select:disabled {
+  background-image: none;
+}
+
+.tc-select option,
+.tc-select optgroup {
+  background: var(--tw-well);
+  color: var(--tw-text-1);
+}
+
+.tc-textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.tc-affix {
+  position: relative;
+  display: block;
+}
+
+.tc-affix__mark {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--tw-text-3);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.tc-affix[data-side="start"] .tc-affix__mark {
+  left: 12px;
+}
+
+.tc-affix[data-side="start"] .tc-input {
+  padding-left: 26px;
+}
+
+.tc-affix[data-side="end"] .tc-affix__mark {
+  right: 12px;
+}
+
+.tc-affix[data-side="end"] .tc-input {
+  padding-right: 30px;
+}
+
+.tc-segmented {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+  min-height: 48px;
+  padding: 2px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.tc-segmented__option {
+  /* A 44px touch target on a phone; 36px inside a 44px control from 600px. */
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tc-segmented__option:hover:not(:disabled):not([data-selected]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.tc-segmented__option[data-selected] {
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
+}
+
+.tc-segmented__option:disabled {
+  cursor: default;
+}
+
+.tc-segmented[data-disabled] {
+  border-color: var(--tw-line-1);
+  background: transparent;
+}
+
+.tc-segmented[data-disabled] .tc-segmented__option[data-selected] {
+  background: var(--tw-surface-press);
+  color: var(--tw-text-1);
+}
+
+/* ------------------------------------------------------------- outcomes */
+
+.tc-outcomes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.tc-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.tc-outcome + .tc-outcome {
+  border-left: 1px solid var(--tw-line-2);
+}
+
+.tc-outcome__label {
+  color: var(--tw-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tc-outcome__value {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.tc-outcome[data-kind="gain"] .tc-outcome__value {
+  color: var(--tw-positive);
+}
+
+.tc-outcome[data-kind="loss"] .tc-outcome__value {
+  color: var(--tw-negative);
+}
+
+.tc-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.tc-note svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+/* -------------------------------------------------------------- actions */
+
+.tc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tc-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Side by side where they fit, each the full width where they do not. */
+.tc-actions__row > .tw-button {
+  flex: 1 1 180px;
+}
+
+.tc-caption {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.tw-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--tw-radius);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tw-button[data-wide] {
+  width: 100%;
+}
+
+.tw-button[data-variant="primary"] {
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
+}
+
+.tw-button[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--tw-signal-hover);
+}
+
+/* Unavailable, and still legible (the Support rule): the learner can read
+   what the control would do before it is available. */
+.tw-button[data-variant="primary"]:disabled {
+  border-color: var(--tw-line-2);
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: not-allowed;
+}
+
+.tw-button[data-variant="outline"] {
+  border-color: var(--tw-line-2);
+  background: transparent;
+  color: var(--tw-text-1);
+}
+
+.tw-button[data-variant="outline"]:hover:not(:disabled) {
+  background: var(--tw-surface-hover);
+}
+
+.tw-button[data-variant="ghost"] {
+  background: transparent;
+  color: var(--tw-text-2);
+}
+
+.tw-button[data-variant="ghost"]:hover:not(:disabled) {
+  color: var(--tw-text-1);
+}
+
+.tw-button:disabled:not([data-variant="primary"]) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tw-link-button {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--tw-line-3);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.tw-link-button:hover:not(:disabled) {
+  color: var(--tw-text-1);
+}
+
+.tc-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.tc-done {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.tc-done svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--tw-signal);
+}
+
+.tc-done__title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tc-done__body {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.tc-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
+  z-index: 20;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.tc-toast__body {
+  display: inline-block;
+  padding: 9px 14px;
+  border-radius: var(--tw-radius);
+  background: var(--tw-text-1);
+  color: var(--tw-on-signal);
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* ======================================================= trading journal */
+
+/* The counts and «Новая запись»: stacked on a phone, one line from 600px. */
+.jr-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Counts of entries, never of money (DD-303/DD-304). One well split by lines,
+   the Trade Card's outcome box in three. */
+.jr-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-counts__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px 11px;
+}
+
+.jr-counts__cell + .jr-counts__cell {
+  border-left: 1px solid var(--tw-line-2);
+}
+
+.jr-counts__label {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.jr-counts__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.jr-counts__of {
+  color: var(--tw-text-3);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.jr-top__new svg {
+  flex: none;
+}
+
+/* The filter switches the view, so its selection is quieter than a form
+   answer's Signal fill: the pressed surface and the brightest text. Each
+   option is as wide as its words, so «План нарушен» keeps one line on a phone. */
+.jr-filters {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 2px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-filter {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 6px 8px;
+  white-space: nowrap;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.jr-filter:hover:not([aria-pressed="true"]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.jr-filter[aria-pressed="true"] {
+  background: var(--tw-surface-press);
+  color: var(--tw-text-1);
+}
+
+/* On a phone the three labels need the whole width; the counts return at 600px. */
+.jr-filter__count {
+  display: none;
+  color: var(--tw-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-filter[aria-pressed="true"] .jr-filter__count {
+  color: var(--tw-text-2);
+}
+
+/* ---------------------------------------------------------------- the list */
+
+.jr-list {
+  margin-top: 20px;
+}
+
+/* A filter's page on its way: the lines on screen stay, quieted, and wait. */
+.jr-list[data-stale] .jr-day {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 140ms var(--tw-ease);
+}
+
+.jr-list__note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 0 2px;
+}
+
+.jr-day + .jr-day {
+  margin-top: 22px;
+}
+
+/* A day is classified the way Lessons classifies a module: the index tick,
+   the mono date, the weekday in words. Structure only, never a state. */
+.jr-day__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0 0 2px;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.jr-day__date {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.jr-day__date::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 11px;
+  margin-right: 9px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background: var(--tw-index);
+}
+
+.jr-day__weekday {
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.jr-day__weekday::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--tw-line-3);
+}
+
+.jr-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jr-entry {
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.jr-entry:last-child {
+  border-bottom-color: transparent;
+}
+
+/* One trade, and the whole line opens it. Below 900px two lines — what it was
+   and how it ended; when, how much, and the mark — and from 900px one ledger
+   line whose columns line up down the day. */
+.jr-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto 16px;
+  grid-template-areas:
+    "asset asset asset result chevron"
+    "time dir stake mark chevron";
+  align-items: center;
+  gap: 5px 10px;
+  width: calc(100% + 20px);
+  margin-inline: -10px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.jr-row:hover {
+  background: var(--tw-surface-hover);
+}
+
+.jr-row:active {
+  background: var(--tw-surface-press);
+  transition-duration: 40ms;
+}
+
+.jr-row__time {
+  grid-area: time;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-row__asset {
+  grid-area: asset;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jr-row__dir {
+  grid-area: dir;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The arrow alone on a phone; the word stays for assistive technology. */
+.jr-row__dir-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.jr-row__stake {
+  grid-area: stake;
+  min-width: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.jr-row__result {
+  grid-area: result;
+  justify-self: end;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.jr-row__result[data-kind="gain"] {
+  color: var(--tw-positive);
+}
+
+.jr-row__result[data-kind="loss"] {
+  color: var(--tw-negative);
+}
+
+.jr-row__mark {
+  grid-area: mark;
+  justify-self: end;
+}
+
+.jr-row__chevron {
+  grid-area: chevron;
+  color: var(--tw-text-3);
+  transition: transform 140ms var(--tw-ease);
+}
+
+.jr-row[aria-expanded="true"] .jr-row__chevron {
+  transform: rotate(180deg);
+}
+
+/* The learner's own mark on the plan. The words carry it; the dot repeats it. */
+.jr-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jr-mark::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.jr-mark[data-mark="followed"] {
+  color: var(--tw-positive);
+}
+
+.jr-mark[data-mark="broken"] {
+  color: var(--tw-negative);
+}
+
+.jr-mark[data-mark="unmarked"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* ----------------------------------------------------------- an entry open */
+
+.jr-detail {
+  padding: 2px 0 18px;
+}
+
+.jr-detail[hidden] {
+  display: none;
+}
+
+.jr-notes {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.jr-note {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jr-note__term {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.jr-note__text {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.jr-note__none {
+  color: var(--tw-text-3);
+}
+
+.jr-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jr-rules-list li::before {
+  content: "—";
+  margin-right: 8px;
+  color: var(--tw-negative);
+}
+
+.jr-facts {
+  margin: 14px 0 0;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.jr-detail__actions {
+  margin-top: 14px;
+}
+
+.jr-detail__review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* -------------------------------------------------------------- the review */
+
+.jr-review {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.jr-rules {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.jr-rules > legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+/* The rules as checkboxes the size of a finger: one column on a phone. */
+.jr-chips {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.jr-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: border-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.jr-chip:hover {
+  border-color: var(--tw-line-olive-hover);
+  color: var(--tw-text-1);
+}
+
+.jr-chip__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The ring goes round the whole chip, not the hidden box. */
+.twp .jr-chip__input:focus-visible {
+  outline: none;
+}
+
+.jr-chip:has(.jr-chip__input:focus-visible) {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+.jr-chip__box {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--tw-line-3);
+  border-radius: 4px;
+  color: var(--tw-on-signal);
+}
+
+/* A broken rule takes the negative tone the result already uses. */
+.jr-chip[data-checked] {
+  border-color: var(--tw-negative);
+  background: rgba(215, 163, 168, 0.08);
+  color: var(--tw-text-1);
+}
+
+.jr-chip[data-checked] .jr-chip__box {
+  border-color: var(--tw-negative);
+  background: var(--tw-negative);
+}
+
+/* ---------------------------------------------------- «Новая запись» form */
+
+.jr-form__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jr-form__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Focused by the page when the form opens, so a screen reader lands on it; a
+   heading is not a control and draws no ring. */
+.twp .jr-form__title:focus-visible {
+  outline: none;
+}
+
+.jr-form__lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.jr-outcome {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.jr-outcome__label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.jr-outcome__value {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.jr-outcome__value[data-kind="gain"] {
+  color: var(--tw-positive);
+}
+
+.jr-outcome__value[data-kind="loss"] {
+  color: var(--tw-negative);
+}
+
+.jr-empty__actions {
+  width: 100%;
+  max-width: 460px;
+  margin-top: 8px;
+}
+
+.jr-more {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (min-width: 600px) {
+  .jr-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+  }
+
+  .jr-counts {
+    flex: 0 1 480px;
+  }
+
+  .jr-filters {
+    width: max-content;
+    max-width: 100%;
+    padding: 3px;
+  }
+
+  .jr-filter {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+
+  .jr-filter__count {
+    display: inline;
+  }
+
+  .jr-row {
+    width: calc(100% + 24px);
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .jr-row__dir-word {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .jr-note {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .jr-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jr-chip {
+    min-height: 40px;
+  }
+
+  /* The review keeps a readable measure, and its two-way question stays a
+     compact control rather than a bar across the page. */
+  .jr-detail__review {
+    max-width: 680px;
+  }
+
+  .jr-review .tc-segmented {
+    max-width: 360px;
+  }
+
+  /* A lone action is as wide as its words, not a stretched bar. */
+  .jr-detail__actions > .tw-button {
+    flex: 0 0 auto;
+    min-width: 200px;
+  }
+
+  .jr-more {
+    align-items: flex-start;
+  }
+}
+
+/* From 900px a trade is one ledger line, and an open entry's notes start under
+   its asset, past the time column. */
+@media (min-width: 900px) {
+  .jr-row {
+    grid-template-columns: 52px minmax(0, 1fr) 84px 92px 104px 128px 16px;
+    grid-template-areas: "time asset dir stake result mark chevron";
+    gap: 0 12px;
+    padding-block: 11px;
+  }
+
+  .jr-row__time,
+  .jr-row__dir,
+  .jr-row__stake {
+    font-size: 13.5px;
+  }
+
+  .jr-row__stake {
+    text-align: right;
+  }
+
+  .jr-row__mark {
+    justify-self: start;
+  }
+
+  .jr-detail {
+    padding-left: 64px;
+  }
+
+  /* The form's review column is as tall as its fields, so it scrolls with the
+     page rather than sticking as the Trade Card's short outcome does. */
+  .jr-form .tc-aside {
+    position: static;
+  }
+
+  .jr-form__aside .jr-chips {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ======================================================= risk calculator */
+
+.rk-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Below 900px the two columns dissolve, so the sections read in the order a
+   plan is made: the numbers, their arithmetic, the losing streak, the rules,
+   the save. From 900px the numbers and the rules stand on the left and the
+   arithmetic beside them. */
+.rk-col {
+  display: contents;
+}
+
+.rk-layout .tc-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-params {
+  order: 1;
+}
+
+.rk-results {
+  order: 2;
+}
+
+.rk-streak {
+  order: 3;
+}
+
+.rk-rules {
+  order: 4;
+}
+
+.rk-actions {
+  order: 5;
+}
+
+.rk-layout .rk-params {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Capital across the phone; payout and the limit side by side; the four
+   shares across. */
+.rk-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.rk-fields > [data-field="capital"],
+.rk-fields > [data-field="share"] {
+  grid-column: 1 / -1;
+}
+
+/* A figure still waiting for its inputs is not a loss yet. */
+.rk-series__value[data-empty] {
+  color: var(--tw-text-3);
+}
+
+/* One trade: the figure the whole plan turns on. */
+.rk-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rk-amount__label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-amount__value {
+  color: var(--tw-text-1);
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rk-amount__basis {
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rk-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.rk-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-fact__term {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-fact__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-fact[data-warn] .rk-fact__value {
+  color: var(--tw-negative);
+}
+
+.rk-fact__note {
+  display: block;
+  margin-top: 2px;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* THE STREAK. Each bar is the capital; the fill is what five losses take of
+   it. A bounded loss is drawn in the quiet text tone, doubling in the negative
+   one. The words carry every value; the bars only repeat them. */
+.rk-streak__of {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rk-series {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rk-series__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.rk-series__name {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.rk-series__value {
+  color: var(--tw-negative);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rk-bar {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--tw-line-2);
+  border-radius: 5px;
+  background: var(--tw-well);
+}
+
+.rk-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--tw-text-3);
+  transition: width 200ms var(--tw-ease);
+}
+
+.rk-series[data-kind="doubling"] .rk-bar__fill {
+  background: var(--tw-negative);
+}
+
+.rk-series__how {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-series[data-short] .rk-series__how {
+  color: var(--tw-negative);
+}
+
+.rk-ahead {
+  color: var(--tw-text-3);
+  font-weight: 500;
+}
+
+.rk-in-force {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.rk-in-force__since {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.rk-in-force__changed {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* Earlier versions: kept, never edited, folded away under the plan. */
+.rk-versions {
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.rk-versions__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rk-versions__toggle:hover {
+  color: var(--tw-text-1);
+}
+
+.rk-versions__chevron {
+  transition: transform 140ms var(--tw-ease);
+}
+
+.rk-versions__toggle[aria-expanded="true"] .rk-versions__chevron {
+  transform: rotate(180deg);
+}
+
+.rk-versions__list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rk-versions__list[hidden] {
+  display: none;
+}
+
+.rk-version {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.rk-version:last-child {
+  border-bottom-color: transparent;
+}
+
+.rk-version__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0 0 4px;
+}
+
+.rk-version__no {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rk-version__when {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.rk-version__numbers {
+  margin: 0 0 10px;
+  color: var(--tw-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A tablet puts the capital beside the payout, and the limit beside the
+   shares: two rows of three columns. */
+@media (min-width: 600px) {
+  .rk-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rk-fields > [data-field="capital"],
+  .rk-fields > [data-field="share"] {
+    grid-column: span 2;
+  }
+
+  .rk-versions__toggle {
+    min-height: 0;
+  }
+}
+
+/* From 900px: the numbers and the rules on the left, the arithmetic, the
+   streak and the save beside them. */
+@media (min-width: 900px) {
+  .rk-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .rk-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rk-col[data-col="results"] {
+    padding-left: 36px;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .rk-col > .tc-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .rk-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rk-fields > [data-field="capital"],
+  .rk-fields > [data-field="share"] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ======================================================= entry checklist */
+
+.ck-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.ck-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.ck-col[data-col="verdict"] {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+/* What the check is for: the asset, and the learner's own minimum payout. */
+.ck-subject {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 12px;
+}
+
+/* «EUR/USD OTC · перед входом», the count, and nine segments, one per item. */
+.ck-progress {
+  margin-top: 18px;
+}
+
+.ck-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+
+.ck-progress__what {
+  color: var(--tw-text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ck-progress__count {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-progress__bars {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ck-progress__bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tw-line-2);
+  transition: background-color 140ms var(--tw-ease);
+}
+
+.ck-progress__bar[data-on] {
+  background: var(--tw-positive);
+}
+
+.ck-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.ck-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A group is classified the way Lessons classifies a module. */
+.ck-group__name {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ck-group__name::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 11px;
+  margin-right: 9px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background: var(--tw-index);
+}
+
+.ck-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One item, the size of a finger. A confirmed item takes the completed tone;
+   a stop factor says so in the negative one. */
+.ck-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  cursor: pointer;
+  transition: border-color 140ms var(--tw-ease);
+}
+
+.ck-item:hover {
+  border-color: var(--tw-line-olive-hover);
+}
+
+.ck-item__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.twp .ck-item__input:focus-visible {
+  outline: none;
+}
+
+.ck-item:has(.ck-item__input:focus-visible) {
+  outline: 2px solid var(--tw-signal);
+  outline-offset: 2px;
+}
+
+.ck-item__box {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--tw-line-3);
+  border-radius: 5px;
+  color: var(--tw-on-signal);
+}
+
+.ck-item[data-on] {
+  border-color: color-mix(in srgb, var(--tw-positive) 45%, transparent);
+}
+
+.ck-item[data-on] .ck-item__box {
+  border-color: var(--tw-positive);
+  background: var(--tw-positive);
+}
+
+.ck-item__text {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ck-item__stop {
+  grid-column: 2;
+  color: var(--tw-negative);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* THE VERDICT: the one conclusion of the check, in its outcome's tone. */
+.ck-verdict {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.ck-verdict svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.ck-verdict[data-verdict="enter"] {
+  border-color: color-mix(in srgb, var(--tw-positive) 55%, transparent);
+}
+
+.ck-verdict[data-verdict="enter"] svg,
+.ck-verdict[data-verdict="enter"] .ck-verdict__title {
+  color: var(--tw-positive);
+}
+
+.ck-verdict[data-verdict="skip"] {
+  border-color: color-mix(in srgb, var(--tw-negative) 55%, transparent);
+}
+
+.ck-verdict[data-verdict="skip"] svg,
+.ck-verdict[data-verdict="skip"] .ck-verdict__title {
+  color: var(--tw-negative);
+}
+
+.ck-verdict[data-verdict="none"] svg {
+  color: var(--tw-text-3);
+}
+
+.ck-verdict__title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.ck-verdict__body {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ck-actions {
+  margin-top: 16px;
+}
+
+/* The checks already kept, newest first. */
+.ck-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+.ck-recent__empty {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.ck-recent__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ck-check {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.ck-check:last-child {
+  border-bottom-color: transparent;
+}
+
+.ck-check__what {
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-check__verdict {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.ck-check[data-verdict="enter"] .ck-check__verdict {
+  color: var(--tw-positive);
+}
+
+.ck-check[data-verdict="skip"] .ck-check__verdict {
+  color: var(--tw-negative);
+}
+
+@media (min-width: 600px) {
+  .ck-subject {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .ck-item {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    min-height: 44px;
+  }
+
+  .ck-item__box {
+    grid-row: auto;
+  }
+
+  .ck-item__stop {
+    grid-column: 3;
+  }
+}
+
+/* From 900px the verdict stands beside the items and stays in view while they
+   are ticked. */
+@media (min-width: 900px) {
+  .ck-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .ck-col[data-col="verdict"] {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .ck-check {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: baseline;
+    gap: 16px;
+  }
+}
+
+/* ======================================================== personal stats */
+
+.st-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-top .jr-filters {
+  margin-top: 0;
+}
+
+.st-top__range {
+  margin: 0;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.st-body {
+  margin-top: 18px;
+}
+
+/* Another period on its way: the figures on screen stay, quieted. */
+.st-body[data-stale] > :not([role="status"]) {
+  opacity: 0.45;
+  transition: opacity 140ms var(--tw-ease);
+}
+
+.st-sample {
+  margin: 0 0 12px;
+}
+
+/* The presentation's four figures: one well, two by two on a phone. */
+.st-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.st-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.st-figure:nth-child(2n) {
+  border-left: 1px solid var(--tw-line-2);
+}
+
+.st-figure:nth-child(n + 3) {
+  border-top: 1px solid var(--tw-line-2);
+}
+
+.st-figure__label {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.st-figure__value {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.st-figure__basis {
+  margin: 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.st-sections {
+  display: flex;
+  flex-direction: column;
+  margin-top: 22px;
+}
+
+.st-split__mark-label {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* THE SIGNATURE: each group's win rate on a 0–100% track, break-even marked
+   across both. Above the mark the fill takes the completed tone, below it the
+   negative one; the words carry every value. */
+.st-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.st-row__name {
+  color: var(--tw-text-1);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.st-row__value {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-row[data-standing="above"] .st-row__value {
+  color: var(--tw-positive);
+}
+
+.st-row[data-standing="below"] .st-row__value {
+  color: var(--tw-negative);
+}
+
+.st-track {
+  position: relative;
+  display: block;
+  height: 12px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: 6px;
+  background: var(--tw-well);
+}
+
+.st-track__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 5px;
+  background: var(--tw-text-3);
+}
+
+.st-row[data-standing="above"] .st-track__fill {
+  background: var(--tw-positive);
+}
+
+.st-row[data-standing="below"] .st-track__fill {
+  background: var(--tw-negative);
+}
+
+/* Too few trades on this side to say anything: no tone at all. */
+.st-row__few {
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.st-track__mark {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tw-text-1);
+}
+
+.st-rules__total {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.st-rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.st-rule__label {
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.st-rule__count {
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rule__bar {
+  display: block;
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--tw-line-1);
+}
+
+.st-rule__fill {
+  display: block;
+  height: 100%;
+  background: var(--tw-negative);
+}
+
+@media (min-width: 600px) {
+  .st-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+  }
+}
+
+/* From 900px the four figures stand in one row, and the split sits beside the
+   rules broken. */
+@media (min-width: 900px) {
+  .st-figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .st-figure:nth-child(n + 3) {
+    border-top: 0;
+  }
+
+  .st-figure + .st-figure {
+    border-left: 1px solid var(--tw-line-2);
+  }
+
+  .st-sections {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .st-sections > .tc-section + .tc-section {
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+}
+
+/* ========================================================= news calendar */
+
+/* The day and its releases, and beside them from 900px the learner's plan. */
+.nc-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.nc-aside {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tw-line-1);
+}
+
+/* THE STATUS LINE: where the plan stands right now, in its outcome's tone. */
+.nc-now {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--tw-line-2);
+  border-left: 3px solid var(--tw-text-3);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.nc-now[data-tone="closed"] {
+  border-left-color: var(--tw-negative);
+}
+
+.nc-now[data-tone="open"] {
+  border-left-color: var(--tw-positive);
+}
+
+.nc-now__title {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nc-now[data-tone="closed"] .nc-now__title {
+  color: var(--tw-negative);
+}
+
+.nc-now[data-tone="open"] .nc-now__title {
+  color: var(--tw-positive);
+}
+
+.nc-now__line {
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nc-now__currency {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.nc-now__rule {
+  margin: 2px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* The day: ‹ 21 сентября · понедельник › and a way back to today. */
+.nc-daynav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-daynav__step {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.nc-daynav__step:hover:not(:disabled) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-daynav__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nc-daynav__day {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--tw-text-1);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.nc-daynav__today {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: transparent;
+  color: var(--tw-text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.nc-daynav__today:hover {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-day__plan {
+  margin-top: 2px;
+}
+
+/* THE SIGNATURE: the day on one track, midnight to midnight, each window the
+   plan closes hatched in the negative tone, the releases as marks, «сейчас» in
+   Signal — the current moment, Signal's own role. */
+.nc-timeline {
+  margin-top: 26px;
+}
+
+.nc-track {
+  position: relative;
+  height: 44px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+}
+
+.nc-track__window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 3px;
+  border-inline: 1px solid rgba(215, 163, 168, 0.62);
+  background: repeating-linear-gradient(135deg, rgba(215, 163, 168, 0.4) 0 2px, transparent 2px 7px);
+}
+
+.nc-track__mark {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--tw-text-3);
+}
+
+.nc-track__mark[data-importance="3"] {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+
+.nc-track__mark[data-covered] {
+  background: var(--tw-text-1);
+  box-shadow: 0 0 0 2px var(--tw-well);
+}
+
+.nc-track__now {
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tw-signal);
+}
+
+.nc-track__now-label {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 1px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--tw-surface);
+  color: var(--tw-signal);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.nc-hours {
+  position: relative;
+  height: 18px;
+  margin-top: 5px;
+}
+
+.nc-hours__tick {
+  position: absolute;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+.nc-hours__tick:first-child {
+  transform: none;
+}
+
+.nc-hours__tick:last-child {
+  transform: translateX(-100%);
+}
+
+.nc-hours__tick:not([data-major]) {
+  display: none;
+}
+
+.nc-timeline__words {
+  margin: 8px 0 0;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* The day's releases: time · currency · name and values · прошло / скоро. */
+.nc-events {
+  margin: 16px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--tw-line-1);
+  list-style: none;
+}
+
+.nc-events__none {
+  margin-top: 16px;
+}
+
+.nc-event {
+  display: grid;
+  grid-template-columns: 46px 46px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--tw-line-1);
+}
+
+.nc-event__time {
+  color: var(--tw-text-1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.nc-cur {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: 999px;
+  color: var(--tw-text-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+.nc-event__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nc-event__title {
+  color: var(--tw-text-1);
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.nc-event__title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.nc-event__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: var(--tw-text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nc-event__imp {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+}
+
+.nc-event__imp[data-importance="3"] {
+  color: var(--tw-text-1);
+}
+
+.nc-event__values {
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-event__closes {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  color: var(--tw-negative);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.nc-event__closes::before {
+  content: "";
+  width: 12px;
+  height: 10px;
+  border-inline: 1px solid rgba(215, 163, 168, 0.62);
+  background: repeating-linear-gradient(135deg, rgba(215, 163, 168, 0.55) 0 2px, transparent 2px 5px);
+}
+
+.nc-event__outside {
+  margin-top: 3px;
+  color: var(--tw-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nc-event__state {
+  grid-column: 3;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.nc-event[data-state="soon"] .nc-event__state {
+  color: var(--tw-signal);
+}
+
+.nc-event[data-state="past"] .nc-event__time,
+.nc-event[data-state="past"] .nc-event__title {
+  color: var(--tw-text-2);
+}
+
+/* The plan: segmented choices that may run to two lines, and currency chips. */
+.nc-plan .tc-segmented__option {
+  padding: 6px 8px;
+  line-height: 1.25;
+}
+
+.nc-select {
+  appearance: auto;
+}
+
+.nc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nc-chip {
+  min-width: 62px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--tw-line-olive);
+  border-radius: var(--tw-radius);
+  background: var(--tw-well);
+  color: var(--tw-text-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.nc-chip:hover:not(:disabled):not([data-on]) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.nc-chip[data-on] {
+  border-color: var(--tw-signal);
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
+}
+
+.nc-draft {
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.nc-plan__actions {
+  flex-wrap: wrap;
+}
+
+@media (min-width: 600px) {
+  .nc-hours__tick:not([data-major]) {
+    display: inline;
+  }
+
+  .nc-event {
+    grid-template-columns: 50px 50px minmax(0, 1fr) auto;
+    column-gap: 14px;
+  }
+
+  .nc-event__state {
+    grid-column: 4;
+    grid-row: 1;
+    margin-top: 2px;
+  }
+
+  .nc-chip {
+    min-height: 40px;
+  }
+}
+
+/* From 900px the plan stands beside the day and stays in view. */
+@media (min-width: 900px) {
+  .nc-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .nc-aside {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+}
+
+/* ====================================================== wider screens */
+
+@media (min-width: 600px) {
+  .twh,
+  .twp {
+    padding-top: 30px;
+    padding-inline: 24px;
+  }
+
+  .tw-title {
+    font-size: 22px;
+  }
+
+  .tw-territory {
+    margin-top: 26px;
+    padding: 24px 24px 28px;
+  }
+
+  .tw-territory::before {
+    left: 24px;
+  }
+
+  .twh-row__open,
+  .twh-row__still {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    column-gap: 16px;
+    padding: 13px 12px;
+    margin-inline: -12px;
+  }
+
+  .twh-row__state {
+    grid-column: 3;
+    grid-row: 1;
+    margin-top: 1px;
+  }
+
+  .tc-input {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .tc-segmented {
+    min-height: 44px;
+    padding: 3px;
+  }
+
+  .tc-segmented__option {
+    min-height: 36px;
+  }
+
+  .twp-back {
+    min-height: 40px;
+  }
+
+  .tw-link-button {
+    min-height: 0;
+    padding: 6px 0;
+  }
+
+  .tc-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tc-step__label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: hidden;
+    clip: auto;
+    text-overflow: ellipsis;
+  }
+
+  .tc-steps-now {
+    display: none;
+  }
+}
+
+/* From 900px the shell's bottom navigation is gone, and the plan and its
+   outcome stand side by side: the outcome and the next action stay in view
+   while the plan is written. */
+@media (min-width: 900px) {
+  .twh,
+  .twp {
+    padding: 34px 28px 72px;
+  }
+
+  .tw-territory {
+    padding: 26px 32px 30px;
+  }
+
+  .tw-territory::before {
+    left: 32px;
+  }
+
+  .tc-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  .tc-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .tc-aside {
+    position: sticky;
+    top: 24px;
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 36px;
+    border-top: 0;
+    border-left: 1px solid var(--tw-line-1);
+  }
+
+  .tc-toast {
+    bottom: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .twh *,
+  .twp * {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfa Trade Academy — Главная · контрольная точка</title>
+<link rel="stylesheet" href="shared.css">
+</head><body>
+
+<!-- ============ DESKTOP 1440×900 ============ -->
+<div class="canvas desktop">
+  <div class="band">
+    <span class="wordmark">
+      <svg class="glyph" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="7" fill="#0e1524" stroke="rgba(150,175,210,.22)"/><polyline points="6,17 11,11 14,14 19,7" fill="none" stroke="#3fe0b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Alfa Trade Academy
+    </span>
+    <nav class="nav"><span class="on">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Ещё</span></nav>
+    <span class="right"><span class="bell">уведомления</span><span class="avatar">А</span></span>
+  </div>
+
+  <!-- the route compresses INTO the central checkpoint gate -->
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <defs>
+      <filter id="g2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9"/></filter>
+      <radialGradient id="gatefocus" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#3fe0b2" stop-opacity=".5"/><stop offset="1" stop-color="#3fe0b2" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <!-- completed route (stays visible), arriving from lower-left and compressing INTO the gate -->
+    <path d="M60 820 C 300 800, 520 772, 720 722" stroke="#1f7d64" stroke-width="10" opacity=".45" filter="url(#g2)" fill="none"/>
+    <path d="M60 820 C 300 800, 520 772, 720 722" stroke="#3fe0b2" stroke-width="2.4" fill="none"/>
+    <circle cx="250" cy="796" r="5" fill="#3fe0b2"/><circle cx="470" cy="764" r="5" fill="#3fe0b2"/><circle cx="618" cy="742" r="5" fill="#3fe0b2"/>
+    <!-- distant continuation (locked, faded) beyond the gate -->
+    <path d="M720 220 C 790 190, 900 178, 1040 172" stroke="#5f6b80" stroke-width="1.6" stroke-dasharray="2 9" opacity=".5" fill="none"/>
+    <!-- GATE: structural vertical boundary; the composition center + the one glow focus -->
+    <circle cx="720" cy="450" r="150" fill="url(#gatefocus)"/>
+    <line x1="720" y1="150" x2="720" y2="748" stroke="#5f8fd6" stroke-width="2.5" opacity=".85"/>
+    <line x1="700" y1="168" x2="740" y2="168" stroke="#5f8fd6" stroke-width="2.5"/>
+    <!-- route → gate junction (route compresses into the gate) -->
+    <line x1="694" y1="722" x2="746" y2="722" stroke="#3fe0b2" stroke-width="3.5"/>
+    <circle cx="720" cy="722" r="4" fill="#3fe0b2"/>
+    <!-- distant locked marker above -->
+    <line x1="702" y1="220" x2="738" y2="220" stroke="#5f8fd6" stroke-width="2.5"/>
+  </svg>
+
+  <div class="mono" style="position:absolute;left:96px;top:792px;font-size:11px;color:var(--ink-3)">Пройдено · уровни 16–20</div>
+
+  <!-- gate plane: condition + primary action (centered on the gate axis) -->
+  <div class="plane glow" style="left:406px;top:322px;width:470px;height:296px">
+    <div class="eyebrow sig">Текущая контрольная точка · Уровень 20</div>
+    <div class="h1" style="font-size:30px;margin:10px 0 6px">Требуется баланс<br>Pocket от <span style="color:var(--signal)">$200</span></div>
+    <div class="sub" style="font-size:14px">Учитывается только реальный баланс. Demo не засчитывается.</div>
+    <div style="margin-top:20px;display:flex;align-items:center;gap:18px">
+      <a class="cta">Проверить выполнение <span class="arrow">→</span></a>
+      <span class="sub" style="font-size:12.5px;color:var(--ink-3)">Проверка обычно<br>занимает немного времени</span>
+    </div>
+  </div>
+
+  <!-- reward + next rank = part of the gate (one object, not two badges) -->
+  <div style="position:absolute;left:882px;top:322px;width:300px">
+    <div class="eyebrow">За воротами · что откроется</div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <svg width="46" height="46" viewBox="0 0 100 100" aria-hidden="true">
+          <!-- Наблюдатель IV forming: 3 solid segments + 4th ghost, focal node hollow -->
+          <path d="M18 34 V18 H34" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M82 66 V82 H66" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+          <polyline points="26,75 42,60 57,66 72,39" fill="none" stroke="#3fe0b2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="72,39 86,26" fill="none" stroke="#3fe0b2" stroke-width="3" stroke-dasharray="3 3" stroke-linecap="round" opacity=".7"/>
+          <circle cx="72" cy="39" r="4.5" fill="none" stroke="#3fe0b2" stroke-width="2"/>
+        </svg>
+        <div><div class="eyebrow">Следующий ранг</div><div style="font-weight:600;font-size:16px">Наблюдатель IV</div></div>
+      </div>
+      <span class="tag reward" style="align-self:flex-start">◇ Новый инструмент: Chart Markup Tool</span>
+    </div>
+  </div>
+
+  <!-- Alex: explains the condition, no financial pressure (right column, clear of the route) -->
+  <div class="alex" style="position:absolute;left:882px;top:474px;width:300px">
+    <div class="frame"><small>Alex</small></div>
+    <div>
+      <div class="who">Alex Curie · наставник курса</div>
+      <div class="q" style="font-size:13.5px">Контрольная точка подтверждает, что ты готов идти дальше. Проверка выполнится сама — спешить не нужно.</div>
+    </div>
+  </div>
+
+  <div class="caption">D1A-R2 · Route Field · State B — current checkpoint (design-only)</div>
+</div>
+
+<!-- ============ MOBILE 390×844 ============ -->
+<div class="canvas mobile">
+  <div class="band" style="height:52px;padding:0 16px;gap:10px">
+    <span class="wordmark" style="font-size:13px">
+      <svg class="glyph" viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="7" fill="#0e1524" stroke="rgba(150,175,210,.22)"/><polyline points="6,17 11,11 14,14 19,7" fill="none" stroke="#3fe0b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Alfa Trade Academy
+    </span>
+    <span class="right"><span class="avatar" style="width:28px;height:28px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- gate = central object; past route partially visible below -->
+  <svg width="390" height="250" style="position:absolute;left:0;top:66px" aria-hidden="true">
+    <defs><filter id="g2m" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
+      <radialGradient id="gfm" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#3fe0b2" stop-opacity=".45"/><stop offset="1" stop-color="#3fe0b2" stop-opacity="0"/></radialGradient></defs>
+    <path d="M-10 250 C 80 210, 150 180, 195 150" stroke="#1f7d64" stroke-width="9" opacity=".45" filter="url(#g2m)" fill="none"/>
+    <path d="M-10 250 C 80 210, 150 180, 195 150" stroke="#3fe0b2" stroke-width="2.2" fill="none"/>
+    <circle cx="195" cy="120" r="70" fill="url(#gfm)"/>
+    <line x1="195" y1="20" x2="195" y2="210" stroke="#5f8fd6" stroke-width="2.4" opacity=".85"/>
+    <line x1="178" y1="30" x2="212" y2="30" stroke="#5f8fd6" stroke-width="2.4"/>
+    <line x1="168" y1="150" x2="222" y2="150" stroke="#3fe0b2" stroke-width="3"/>
+  </svg>
+  <div class="mono" style="position:absolute;left:16px;top:290px;font-size:11px;color:var(--ink-3)">Пройдено 16–20 ↙</div>
+
+  <div class="plane glow" style="left:20px;top:316px;width:350px;padding:18px 20px">
+    <div class="eyebrow sig">Контрольная точка · Уровень 20</div>
+    <div class="h1" style="font-size:23px;margin:6px 0">Баланс Pocket от <span style="color:var(--signal)">$200</span></div>
+    <div class="sub" style="font-size:13px">Учитывается только реальный баланс. Demo не засчитывается.</div>
+    <a class="cta" style="width:100%;justify-content:center;margin-top:16px">Проверить выполнение <span class="arrow">→</span></a>
+    <div class="sub" style="font-size:11.5px;color:var(--ink-3);margin-top:8px;text-align:center">Проверка занимает немного времени</div>
+  </div>
+
+  <!-- reward + rank preview (one object) -->
+  <div style="position:absolute;left:20px;top:566px;display:flex;align-items:center;gap:12px">
+    <svg width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M18 34 V18 H34" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M82 66 V82 H66" fill="none" stroke="#5f8fd6" stroke-width="2.4" stroke-linecap="round"/>
+      <polyline points="26,75 42,60 57,66 72,39" fill="none" stroke="#3fe0b2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="72,39 86,26" fill="none" stroke="#3fe0b2" stroke-width="3" stroke-dasharray="3 3" opacity=".7"/>
+      <circle cx="72" cy="39" r="4.5" fill="none" stroke="#3fe0b2" stroke-width="2"/>
+    </svg>
+    <div style="font-size:12.5px"><span class="eyebrow">За воротами</span><br><b>Наблюдатель IV</b> · Chart Markup Tool</div>
+  </div>
+
+  <div class="alex" style="position:absolute;left:20px;top:626px;width:350px">
+    <div class="frame" style="width:44px;height:44px;flex-basis:44px"><small>Alex</small></div>
+    <div class="q" style="font-size:12.5px">Это про твою систему и дисциплину — проверка выполнится сама, спешить не нужно.</div>
+  </div>
+
+  <nav class="bottomnav">
+    <a class="on"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10l8-6 8 6v10" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Главная</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M4 18c4 0 4-12 8-12s4 12 8 12" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Путь</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Уроки</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M8 6H6v2M18 16v2h-2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Инструменты</a>
+    <a><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></svg>Ещё</a>
+  </nav>
+</div>
+</body></html>

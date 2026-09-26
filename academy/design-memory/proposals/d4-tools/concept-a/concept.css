@@ -1,0 +1,178 @@
+/* Direction A — Operational Ledger (PROTOTYPE-ONLY, D4-A).
+ *
+ * Signature system: ONE continuous chronological tape. A luminous vertical
+ * time-thread runs down the left edge and threads every line — tools on the hub
+ * (ordered by unlock level) and trade entries in the journal (ordered by time).
+ * There are almost no separate containers: the thread is the structure, entries
+ * are marks on it. Adding a new entry happens at the HEAD of the tape, in flow.
+ *
+ * Stable DNA: #2 luminous line used as structure, #6 fine contextual metadata,
+ * #5 chaos→system (a running stream of decisions becoming legible discipline).
+ */
+
+.la-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* ---- page head ---- */
+.la-head { padding-top: 4px; }
+.la-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 2px 0 6px;
+  color: var(--text-primary);
+  font-size: 26px;
+}
+@media (min-width: 900px) { .la-title { font-size: 30px; } }
+.la-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* ---- the tape: a single thread with a running rail ---- */
+.la-tape {
+  position: relative;
+  margin-top: 26px;
+  padding-left: 30px;
+}
+/* the luminous time-thread itself */
+.la-tape::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--route-current) 70%, transparent),
+    color-mix(in srgb, var(--route-upcoming) 40%, transparent) 42%,
+    var(--route-locked) 70%,
+    color-mix(in srgb, var(--route-locked) 40%, transparent)
+  );
+}
+
+/* a line on the tape */
+.la-line {
+  position: relative;
+  padding: 16px 4px 16px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.la-line:last-child { border-bottom: 0; }
+
+/* node on the thread */
+.la-node {
+  position: absolute;
+  left: -30px;
+  top: 20px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--background-field);
+  border: 2px solid var(--route-locked);
+  display: grid;
+  place-items: center;
+}
+.la-line.is-current .la-node {
+  border-color: var(--route-current);
+  box-shadow: 0 0 0 4px var(--glow-current);
+}
+.la-line.is-current .la-node::after {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--route-current);
+}
+.la-line.is-open .la-node { border-color: var(--route-upcoming); }
+.la-line.is-locked .la-node { border-style: dashed; }
+
+/* node caption (unlock level on hub, time on journal) */
+.la-when {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+}
+
+/* ---- hub: tool line ---- */
+.la-toolrow { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.la-toolname {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: 17px;
+  color: var(--text-primary);
+}
+.la-line.is-locked .la-toolname { color: var(--text-muted); font-weight: 550; }
+.la-toolmeta { font-size: 12.5px; color: var(--text-muted); }
+.la-tooldesc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 56ch;
+}
+.la-line.is-current {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface-context) 55%, transparent), transparent 70%);
+  border-radius: 0 12px 12px 0;
+}
+.la-toolcta { margin-top: 12px; }
+.la-open-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--route-completed);
+  letter-spacing: 0.4px;
+}
+
+/* ---- journal: entry on the tape ---- */
+.la-erow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.la-lesson { font-size: 15px; margin: 8px 0 0; max-width: 64ch; }
+.la-plan {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.la-plan b { color: var(--text-secondary); font-weight: 600; }
+.la-emeta { margin-top: 9px; }
+
+/* ---- inline add-form at the head of the tape ---- */
+.la-add {
+  position: relative;
+  margin-top: 4px;
+  padding: 16px 16px 16px 0;
+  border-bottom: 1px solid var(--divider-strong);
+}
+.la-add .la-node { border-color: var(--route-current); border-style: solid; background: var(--surface-context); }
+.la-add .la-node::after { content: "+"; color: var(--route-current); font-size: 13px; line-height: 1; font-weight: 700; }
+.la-add-h { display: flex; align-items: center; gap: 10px; }
+.la-add-t { font-weight: 650; font-size: 15px; color: var(--text-primary); }
+.la-add-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (min-width: 900px) {
+  .la-add-grid { grid-template-columns: 150px 150px 1fr; align-items: end; }
+}
+.la-field { display: flex; flex-direction: column; gap: 5px; }
+.la-field label { font-size: 11.5px; color: var(--text-muted); letter-spacing: 0.2px; }
+.la-in, .la-ta {
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-context) 60%, transparent);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 9px 11px;
+  width: 100%;
+}
+.la-ta { resize: none; line-height: 1.5; }
+.la-add-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+
+.la-notice { margin: 18px 0 0; }

@@ -1,0 +1,427 @@
+/* Урок — Learning Spine (Phase D2B).
+
+   One vertical spine threads the stages of a single learning step:
+   video → проверка понимания → завершение → переходы. Главная is the current
+   moment and Путь is the spatial map; the lesson is one step followed through,
+   so there is no route field, no map and no dashboard here.
+
+   The media stage is the one dominant object. The rail is thin metadata and is
+   placed by grid, never by a second copy of the markup — source order IS the
+   mobile learning order. Bottom-nav compensation comes from the canonical token
+   (D1B.2). */
+
+/* ---------- page frame ---------- */
+.lesson-page { position: relative;
+  padding: 22px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 28px); }
+
+/* ---------- header ---------- */
+.lhd { margin: 0 0 22px; }
+.lhd-back { display: inline-flex; align-items: center; gap: 7px; min-height: 44px;
+  font-size: 13.5px; font-weight: 600; color: var(--text-secondary); text-decoration: none; }
+.lhd-back:hover { color: var(--text-primary); }
+.lhd-eyebrow { margin: 2px 0 6px; font-size: 12.5px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted); }
+.lhd-h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.4px; margin: 0;
+  font-size: clamp(25px, 3vw, 34px); line-height: 1.14; color: var(--text-primary); }
+.lhd-goal { margin: 9px 0 0; max-width: 62ch; font-size: 14.5px; line-height: 1.5;
+  color: var(--text-secondary); }
+.lhd-state { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 0;
+  font-size: 13px; color: var(--text-muted); }
+.lhd-state b { color: var(--text-primary); font-weight: 600; }
+.lhd-sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--route-current);
+  box-shadow: 0 0 0 4px var(--glow-current); }
+.lhd-sdot.locked { background: var(--route-locked); box-shadow: none; }
+
+/* ---------- the spine ---------- */
+.lesson-body { position: relative; display: grid; gap: 26px; }
+/* the continuous axis every stage hangs from */
+.lesson-body::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px;
+  border-radius: 1px; pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--route-current) 55%, transparent) 0%,
+    var(--divider-strong) 22%, var(--divider) 76%, transparent 100%); }
+.lesson-body > * { position: relative; padding-left: 30px; min-width: 0; }
+
+.stage-node { position: absolute; left: -0.5px; top: 7px; width: 11px; height: 11px;
+  border-radius: 50%; background: var(--background-field);
+  border: 1.5px solid var(--route-locked); }
+.stage-node.current { border-color: var(--route-current); background: var(--route-current);
+  box-shadow: 0 0 0 4px var(--glow-current); }
+.stage-node.done { border-color: var(--route-completed); background: var(--route-completed); }
+.stage-node.locked { border-color: var(--route-locked); }
+
+/* ---------- media stage — the dominant object ----------
+   The frame is WIDE and capped, not a 16:9 slab: at 16:9 it swallowed the whole
+   first viewport and pushed the watch progress, the controls and the assessment
+   below the fold (D2B visual QA, findings 1–2). */
+.lvs-frame { position: relative; border-radius: 14px; overflow: hidden;
+  background: radial-gradient(120% 130% at 50% 0%, #0d1420 0%, var(--background-base) 68%);
+  border: 1px solid var(--divider-strong);
+  /* narrow: the width drives the height. From tablet up the height is capped
+     directly — aspect-ratio + max-height would shrink the WIDTH to keep the
+     ratio and leave the column half empty. */
+  aspect-ratio: 2 / 1; }
+.ls-schematic { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.ls-grid line { stroke: rgba(150, 175, 210, 0.06); stroke-width: 1; }
+
+/* the bands ARE the subject — they carry the weight, the path stays quiet */
+.ls-zone rect { fill: var(--gate-boundary); opacity: .14;
+  transition: opacity var(--motion-base) var(--ease-standard); }
+.ls-zone line { stroke: var(--gate-boundary); stroke-width: 1.25; stroke-dasharray: 6 5; opacity: .62;
+  transition: opacity var(--motion-base) var(--ease-standard); }
+.ls-zone-sup rect, .ls-zone-sup line { fill: var(--route-completed); stroke: var(--route-completed); }
+.ls-zone.on rect { opacity: .26; }
+.ls-zone.on line { opacity: 1; }
+
+.ls-path { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-linejoin: round;
+  stroke-linecap: round; opacity: .5; }
+
+.ls-react circle { fill: var(--background-base); stroke: var(--text-muted); stroke-width: 1.5;
+  transition: stroke var(--motion-base) var(--ease-standard); }
+.ls-react.on circle { stroke: var(--route-current); stroke-width: 2.5; }
+
+.ls-pending { opacity: 0; transition: opacity var(--motion-base) var(--ease-standard); }
+.ls-pending.on { opacity: 1; }
+.ls-pending circle { fill: none; stroke: var(--route-current); stroke-width: 1.5; }
+.ls-pending line { stroke: var(--route-current); stroke-width: 1; opacity: .5; }
+
+/* honest media state — never a fake "loaded stream". Small: it is a disclosure,
+   not a headline (D2B visual QA, finding 9). */
+.lvs-demo { position: absolute; top: 9px; right: 10px; margin: 0; display: inline-flex;
+  align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px; font-size: 10.5px;
+  font-weight: 600; letter-spacing: .02em; color: var(--text-muted);
+  background: rgba(7, 11, 18, 0.7); border: 1px solid var(--divider); }
+.lvs-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); }
+
+/* one compact line under the frame — no longer an overlay covering the drawing */
+.lvs-chapter { display: flex; align-items: baseline; gap: 9px; margin: 10px 0 0; min-width: 0; }
+.lvs-chapter-k { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text-muted); }
+.lvs-chapter-v { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  overflow-wrap: anywhere; }
+
+.lvs-caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; margin: 0;
+  width: min(88%, 62ch); padding: 8px 12px; border-radius: 8px; text-align: center;
+  font-size: 12.5px; line-height: 1.4; color: var(--text-primary);
+  background: rgba(7, 11, 18, 0.88); border: 1px solid var(--divider); }
+
+/* ---------- player controls ---------- */
+.lmc { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.lmc-play { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 16px;
+  border-radius: 9px; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--background-base); background: var(--route-current); border: 1px solid transparent; }
+.lmc-play:hover { filter: brightness(1.07); }
+.lmc-glyph { font-size: 11px; line-height: 1; }
+.lmc-seek { flex: 1 1 180px; display: flex; min-width: 120px; }
+.lmc-seek input { width: 100%; height: 44px; accent-color: var(--route-current); cursor: pointer;
+  background: transparent; }
+.lmc-time { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted);
+  white-space: nowrap; }
+.lmc-now { color: var(--text-primary); }
+.lmc-tog { display: inline-flex; align-items: center; justify-content: center; min-width: 44px;
+  min-height: 44px; padding: 0 12px; border-radius: 9px; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--text-secondary);
+  background: var(--surface-subtle); border: 1px solid var(--divider); }
+.lmc-tog:hover { color: var(--text-primary); border-color: var(--divider-strong); }
+.lmc-tog[aria-pressed="true"] { color: var(--background-base); background: var(--route-upcoming);
+  border-color: transparent; }
+
+/* ---------- legend & media note ---------- */
+.lvs-legend { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap;
+  gap: 6px 20px; }
+.lvs-legend li { display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+  color: var(--text-muted); }
+/* the swatch mirrors a BAND (top+bottom edge, filled between), so it reads as the
+   zone it stands for rather than as a stray dash (D2B visual QA, finding 11) */
+.lg-sw { width: 20px; height: 11px; border-radius: 2px; flex: none;
+  border-top: 1.25px dashed var(--gate-boundary);
+  border-bottom: 1.25px dashed var(--gate-boundary);
+  background: color-mix(in srgb, var(--gate-boundary) 20%, transparent); }
+.lg-sw.sup { border-top-color: var(--route-completed); border-bottom-color: var(--route-completed);
+  background: color-mix(in srgb, var(--route-completed) 20%, transparent); }
+.lvs-note { margin: 10px 0 0; font-size: 12px; color: var(--text-muted); }
+
+/* ---------- watch progress ---------- */
+.lw { margin-top: 18px; }
+.lw-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.lw-title { margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted); }
+.lw-val { margin: 0; display: inline-flex; align-items: baseline; gap: 10px; }
+.lw-val b { font-family: var(--font-mono); font-size: 17px; color: var(--text-primary); }
+.lw-time { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+
+.lw-track { position: relative; height: 8px; margin-top: 8px; border-radius: 999px;
+  background: rgba(150, 175, 210, 0.12); overflow: visible; }
+.lw-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
+  background: var(--route-upcoming); transition: width var(--motion-base) linear; }
+.lw-track.open .lw-fill { background: var(--route-current); }
+/* the 50% condition as a place on the bar, not only a sentence */
+.lw-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px;
+  background: var(--text-secondary); }
+.lw-track.open .lw-mark { background: var(--route-completed); }
+
+.lw-note { display: flex; align-items: baseline; gap: 8px; margin: 9px 0 0; font-size: 12.5px;
+  line-height: 1.45; color: var(--text-muted); }
+.lw-marklabel { flex: none; width: 2px; height: 11px; border-radius: 1px; margin-top: 2px;
+  background: var(--text-secondary); }
+
+/* ---------- contextual rail ---------- */
+.lctx { display: flex; flex-direction: column; gap: 20px; }
+.lctx-sec { display: flex; flex-direction: column; gap: 9px; }
+.lctx-k { margin: 0; font-size: 11.5px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text-muted); }
+
+.lol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.lol li { display: grid; grid-template-columns: 12px 1fr auto; align-items: baseline; gap: 8px;
+  padding: 6px 8px; border-radius: 7px; font-size: 13px; color: var(--text-muted); }
+.lol li.on { background: var(--surface-subtle); color: var(--text-primary); }
+.lol-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--route-locked);
+  align-self: center; }
+.lol li.on .lol-dot { background: var(--route-current); }
+.lol-title { min-width: 0; }
+.lol-at { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+.lol-now { grid-column: 2 / -1; font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--route-current); }
+.lctx-dur { margin: 2px 0 0 8px; font-size: 12.5px; color: var(--text-muted); }
+.lctx-dur b { font-family: var(--font-mono); color: var(--text-secondary); font-weight: 600; }
+
+.lctx-reqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lctx-reqs li { display: grid; grid-template-columns: 14px 1fr; gap: 8px; font-size: 13px;
+  line-height: 1.4; color: var(--text-secondary); }
+.lctx-rg { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.lctx-reqs li.ok .lctx-rg { color: var(--route-completed); }
+.lctx-rs { grid-column: 2; font-size: 11.5px; color: var(--text-muted); }
+.lctx-reqs li.ok .lctx-rs { color: var(--route-completed); }
+
+.lctx-cp { margin: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px;
+  font-weight: 600; color: var(--text-secondary); }
+.lctx-cpv { font-size: 12.5px; font-weight: 400; color: var(--text-muted); }
+.lctx-cpnote { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+
+/* ---------- assessment ---------- */
+.la-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--divider); }
+.la-head h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.2px; margin: 0;
+  font-size: clamp(18px, 1.8vw, 22px); color: var(--text-primary); }
+.la-state { margin: 0; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.la-state.shut { color: var(--text-muted); background: var(--surface-subtle);
+  border: 1px solid var(--divider); }
+.la-state.open { color: var(--route-current);
+  background: color-mix(in srgb, var(--route-current) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--route-current) 34%, transparent); }
+
+/* locked — visible, explained, contents never revealed */
+.la-locked { margin-top: 14px; }
+.la-lockline { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 14.5px;
+  font-weight: 600; color: var(--text-primary); }
+.la-lockglyph { color: var(--text-muted); font-size: 13px; }
+.la-facts { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column;
+  gap: 7px; }
+.la-facts li { font-size: 13.5px; line-height: 1.45; color: var(--text-secondary);
+  padding-left: 15px; position: relative; }
+.la-facts li::before { content: ""; position: absolute; left: 0; top: 8px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--route-locked); }
+.la-facts b { color: var(--text-primary); }
+.la-hint { margin: 12px 0 0; font-size: 12.5px; color: var(--text-muted); }
+
+.la-ready { margin-top: 14px; }
+.la-readytext { margin: 0 0 14px; max-width: 66ch; font-size: 14px; line-height: 1.5;
+  color: var(--text-secondary); }
+.la-cta, .lq-cta { display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 44px; padding: 0 18px; border-radius: 9px; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 600; color: var(--background-base);
+  background: var(--route-current); border: 1px solid transparent; }
+.la-cta:hover, .lq-cta:hover { filter: brightness(1.07); }
+
+/* ---------- question ---------- */
+.lq { margin-top: 16px; }
+.lq-set { margin: 0; padding: 0; border: 0; min-width: 0; }
+.lq-legend { display: flex; flex-direction: column; gap: 7px; padding: 0; margin-bottom: 14px; }
+.lq-count { font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--route-current); }
+.lq-prompt { font-family: var(--font-display); font-weight: 600; letter-spacing: -.2px;
+  font-size: clamp(17px, 1.7vw, 20px); line-height: 1.3; color: var(--text-primary);
+  max-width: 60ch; }
+
+.lq-options { display: flex; flex-direction: column; gap: 9px; }
+.lao { position: relative; display: grid; grid-template-columns: 20px 1fr; align-items: start;
+  gap: 12px; padding: 13px 15px; border-radius: 10px; cursor: pointer;
+  background: var(--surface-subtle); border: 1px solid var(--divider);
+  transition: border-color var(--motion-fast) var(--ease-standard); }
+.lao:hover { border-color: var(--divider-strong); }
+.lao input { position: absolute; opacity: 0; width: 20px; height: 20px; margin: 0; cursor: pointer; }
+.lao-box { width: 18px; height: 18px; margin-top: 1px; border-radius: 50%;
+  border: 1.5px solid var(--route-locked); }
+.lao.sel .lao-box { border-color: var(--route-current); border-width: 6px; }
+.lao.sel { border-color: color-mix(in srgb, var(--route-current) 45%, transparent); }
+.lao-text { font-size: 14px; line-height: 1.45; color: var(--text-primary); overflow-wrap: anywhere; }
+.lao input:focus-visible ~ .lao-box { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.lao:has(input:disabled) { cursor: default; }
+
+/* verdict is a glyph AND words — never colour alone */
+.lao-verdict { grid-column: 2; display: inline-flex; align-items: center; gap: 6px; margin-top: 7px;
+  font-size: 12px; font-weight: 600; }
+.lao-verdict.correct { color: var(--route-completed); }
+.lao-verdict.wrong { color: var(--text-secondary); }
+.lao.correct { border-color: color-mix(in srgb, var(--route-completed) 50%, transparent); }
+.lao.correct .lao-box { border-color: var(--route-completed); }
+/* a wrong choice must not keep the "current/active" green dot — it read as a
+   success marker sitting next to the words "не тот ответ" (D2B visual QA) */
+.lao.wrong { border-color: var(--divider-strong); }
+.lao.wrong .lao-box { border-color: var(--text-muted); }
+
+.lq-need { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.lq-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+
+/* ---------- feedback ---------- */
+.lfb { margin-top: 14px; padding: 14px 16px; border-radius: 10px;
+  background: var(--surface-context); border: 1px solid var(--divider);
+  border-left: 2px solid var(--text-muted); }
+.lfb.ok { border-left-color: var(--route-completed); }
+.lfb.no { border-left-color: var(--route-upcoming); }
+.lfb-head { display: flex; align-items: center; gap: 9px; margin: 0 0 7px; font-size: 14px;
+  font-weight: 700; color: var(--text-primary); }
+.lfb-glyph { font-size: 13px; }
+.lfb.ok .lfb-glyph { color: var(--route-completed); }
+.lfb.no .lfb-glyph { color: var(--route-upcoming); }
+.lfb-text { margin: 0; max-width: 68ch; font-size: 13.5px; line-height: 1.55;
+  color: var(--text-secondary); }
+.lfb-calm { margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted); }
+
+/* ---------- completion — a step taken, not a prize ---------- */
+.lcp h2 { display: flex; align-items: center; gap: 10px; font-family: var(--font-display);
+  font-weight: 700; letter-spacing: -.3px; margin: 0; font-size: clamp(19px, 2vw, 24px);
+  color: var(--text-primary); }
+.lcp-glyph { display: inline-flex; align-items: center; justify-content: center; width: 24px;
+  height: 24px; border-radius: 50%; font-size: 12px; color: var(--background-base);
+  background: var(--route-completed); }
+.lcp-sub { margin: 9px 0 0; font-size: 14px; color: var(--text-secondary); }
+.lcp-reqs { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column;
+  gap: 8px; }
+.lcp-reqs li { display: grid; grid-template-columns: 16px 1fr auto; align-items: baseline; gap: 10px;
+  font-size: 13.5px; color: var(--text-secondary); }
+.lcp-check { color: var(--route-completed); font-size: 12px; }
+.lcp-rstate { font-size: 12px; color: var(--route-completed); }
+.lcp-ahead { margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-muted); }
+.lcp-honest { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+
+/* ---------- navigation ---------- */
+.lnav-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.lnav-back, .lnav-next { display: inline-flex; align-items: center; gap: 9px; min-height: 44px;
+  padding: 0 16px; border-radius: 9px; font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.lnav-back { color: var(--text-secondary); background: var(--surface-subtle);
+  border: 1px solid var(--divider); }
+.lnav-back:hover { color: var(--text-primary); border-color: var(--divider-strong); }
+.lnav-next { color: var(--background-base); background: var(--route-current);
+  border: 1px solid transparent; }
+.lnav-next:hover { filter: brightness(1.07); }
+.lnav-gate { margin: 12px 0 0; max-width: 70ch; font-size: 12.5px; line-height: 1.5;
+  color: var(--text-muted); }
+
+/* ---------- completed assessment review ---------- */
+.la-done { margin-top: 14px; }
+.la-donetext { margin: 0 0 12px; font-size: 13.5px; color: var(--text-secondary); }
+.la-review { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.la-review li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 13px;
+  line-height: 1.45; color: var(--text-muted); }
+.la-rnum { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted);
+  line-height: 1.5; }
+.la-rtext { color: var(--text-secondary); }
+.la-rok { grid-column: 2; font-size: 11.5px; font-weight: 600; color: var(--route-completed); }
+
+/* ---------- locked / unknown lesson ----------
+   A constrained measure: full-width prose ran to ~1040px on desktop. */
+.llk { max-width: 66ch; }
+.llk-sec { margin-top: 18px; }
+.llk-k { margin: 0 0 8px; font-size: 11.5px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text-muted); }
+.llk-sec ul { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 6px; }
+.llk-sec li { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+.llk-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); }
+.llk .lnav-row { margin-top: 22px; }
+
+/* ================= tablet ================= */
+@media (min-width: 720px) {
+  .lesson-page { padding: 26px 26px 34px; }
+  .lesson-body { gap: 30px; }
+  /* the rail becomes a context ROW under the stage — not a squeezed column */
+  .lctx { flex-direction: row; flex-wrap: wrap; gap: 26px 40px; }
+  .lctx-sec { flex: 1 1 200px; min-width: 0; }
+  .lvs-legend { gap: 6px 26px; }
+  /* full column width, height capped so the test stays in the first viewport */
+  .lvs-frame { aspect-ratio: auto; height: min(34vh, 300px); }
+  .lvs-note { margin-top: 6px; }
+  .lw { margin-top: 14px; }
+}
+
+/* ================= desktop ================= */
+@media (min-width: 1080px) {
+  .lesson-page { padding: 28px clamp(26px, 3vw, 46px) 44px; }
+  .lesson-body {
+    grid-template-columns: minmax(0, 1fr) clamp(220px, 19vw, 264px);
+    grid-template-areas:
+      "video rail"
+      "test  rail"
+      "done  rail"
+      "nav   rail";
+    column-gap: clamp(28px, 3vw, 48px); row-gap: 30px; align-items: start; }
+  .lvs-wrap { grid-area: video; }
+  .lctx { grid-area: rail; flex-direction: column; gap: 22px; padding-left: 0;
+    padding-top: 4px; border-left: 1px solid var(--divider); padding-left: 22px; }
+  .la { grid-area: test; }
+  .lcp { grid-area: done; }
+  .lnav { grid-area: nav; }
+  .lctx-sec { flex: none; }
+  /* the spine only threads the stage column */
+  .lesson-body::before { bottom: 6px; }
+}
+
+/* ================= short / landscape =================
+   The header alone was eating 210 of 390px (D2B visual QA, finding 8): the goal
+   and the eyebrow go, the title shrinks, and the stage is capped hard so the
+   controls and the test state stay one short scroll away. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .lesson-page { padding-top: 10px; }
+  .lhd { margin-bottom: 12px; }
+  .lhd-goal { display: none; }
+  .lhd-back { min-height: 30px; }
+  .lhd-h1 { font-size: 21px; }
+  .lhd-eyebrow { margin-bottom: 3px; }
+  .lhd-state { margin-top: 6px; font-size: 12px; }
+  .lvs-frame { aspect-ratio: auto; height: min(34vh, 128px); }
+  .lvs-legend { display: none; }
+  .lvs-note { display: none; }
+  .lesson-body { gap: 18px; }
+}
+
+/* ================= narrow =================
+   Two rows, not three: play + time + mute + captions on one line, the timeline
+   on its own full-width line (D2B visual QA, finding 10). */
+@media (max-width: 460px) {
+  .lmc { gap: 9px 8px; }
+  .lmc-play { padding: 0 14px; order: 1; }
+  .lmc-tog { order: 2; }
+  .lmc-seek { order: 3; flex: 1 1 150px; }
+  .lmc-time { order: 4; }
+  .lvs-legend { gap: 4px 16px; }
+  .lvs-legend li { font-size: 12px; }
+  .lvs-note { margin-top: 7px; }
+}
+
+@media (max-width: 380px) {
+  .lesson-page { padding-left: 12px; padding-right: 12px; }
+  .lesson-body > * { padding-left: 24px; }
+  .lao { padding: 12px 13px; gap: 10px; }
+  .lhd-h1 { font-size: 23px; }
+  /* play + звук + субтитры must share one row at 320 (they overran it by ~2px) */
+  .lmc { gap: 9px 6px; }
+  .lmc-play { padding: 0 11px; gap: 7px; }
+  .lmc-tog { padding: 0 9px; font-size: 12px; }
+}
+
+/* ================= reduced motion ================= */
+@media (prefers-reduced-motion: reduce) {
+  .lw-fill, .ls-zone rect, .ls-zone line, .ls-react circle, .ls-pending, .lao {
+    transition: none !important; }
+}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Constructed Artifact — desktop</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas desktop">
+
+  <!-- navigation: top-oriented + radial controls around the artifact (not a sidebar) -->
+  <div class="topstrip">
+    <span class="wordmark">Alfa Trade Academy</span>
+    <nav class="navitems">
+      <span class="active">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Сообщество</span>
+    </nav>
+    <span class="topright">◔ уведомления <span class="avatar">А</span></span>
+  </div>
+
+  <!-- SIGNATURE: one central Constructed Market Artifact (assembled from layers) -->
+  <svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+    <!-- route enters (chaos) from left, exits (structure) right -->
+    <g stroke="#5b6576" stroke-width="1.5">
+      <line x1="120" y1="620" x2="220" y2="620"/><line x1="235" y1="620" x2="255" y2="612"/>
+      <line x1="270" y1="616" x2="300" y2="620"/><line x1="315" y1="620" x2="600" y2="620"/>
+    </g>
+    <line x1="840" y1="620" x2="1320" y2="620" stroke="#34d6ac" stroke-width="2"/>
+    <!-- artifact triangle outline -->
+    <polygon points="720,320 600,620 840,620" fill="none" stroke="#5b8bd0" stroke-width="1.5"/>
+    <!-- assembled bottom layers (2/5) -->
+    <polygon points="612,592 828,592 840,620 600,620" fill="rgba(52,214,172,.18)" stroke="#34d6ac" stroke-width="1"/>
+    <polygon points="636,536 804,536 828,592 612,592" fill="rgba(52,214,172,.12)" stroke="#34d6ac" stroke-width="1"/>
+    <!-- active fragment (current lesson) highlighted -->
+    <polygon points="660,480 780,480 804,536 636,536" fill="none" stroke="#34d6ac" stroke-width="2"/>
+    <!-- ghost (not-yet-assembled) upper layers -->
+    <polygon points="684,424 756,424 780,480 660,480" fill="none" stroke="#5b6576" stroke-width="1" stroke-dasharray="4 5"/>
+    <polygon points="720,320 684,424 756,424" fill="none" stroke="#5b6576" stroke-width="1" stroke-dasharray="4 5"/>
+    <!-- next construction phase (checkpoint) ghost above apex -->
+    <line x1="720" y1="320" x2="720" y2="250" stroke="#5b8bd0" stroke-width="1" stroke-dasharray="4 5"/>
+    <!-- connector to active fragment label -->
+    <line x1="780" y1="508" x2="900" y2="470" stroke="#34d6ac" stroke-width="1"/>
+    <!-- tool capability connectors -->
+    <line x1="600" y1="620" x2="470" y2="660" stroke="#2b3542" stroke-width="1"/>
+    <line x1="840" y1="620" x2="970" y2="660" stroke="#2b3542" stroke-width="1"/>
+  </svg>
+
+  <div class="label mono dim" style="left:120px;top:596px">хаос ▪ входит</div>
+  <div class="label mono sig" style="left:1230px;top:596px">→ система</div>
+
+  <!-- rank = the artifact's overall form -->
+  <div class="label" style="position:absolute;left:640px;top:290px">Ранг: <b class="hi">Наблюдатель III</b> (форма артефакта)</div>
+
+  <!-- next construction phase = checkpoint -->
+  <div style="position:absolute;left:560px;top:210px;width:340px;text-align:center">
+    <span class="tag gate">Контрольная точка · Уровень 20 · от $200</span>
+    <div class="label" style="margin-top:6px;color:var(--faint)">открывает следующий слой сборки</div>
+  </div>
+  <!-- reward = new functional element, not yet attached -->
+  <div style="position:absolute;left:930px;top:250px"><span class="tag reward">▢ Chart Markup Tool (пристыкуется на L20)</span></div>
+
+  <!-- active fragment = current lesson, CTA attached -->
+  <div class="plane" style="left:900px;top:430px;width:360px">
+    <div class="eyebrow">Активный фрагмент · сборка 2/5</div>
+    <div class="h1">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика»</div>
+    <div class="alex" style="margin-top:10px">этот фрагмент — зоны реакции рынка.</div>
+    <div style="margin-top:14px"><span class="cta">Продолжить урок →</span></div>
+  </div>
+
+  <!-- tools = connected capabilities (parts of the object), not cards -->
+  <div class="label" style="position:absolute;left:360px;top:650px">─○ Trading Journal <span class="sig">открыт</span></div>
+  <div class="label" style="position:absolute;left:980px;top:650px">Risk Calculator ○─ <span class="sig">открыт</span></div>
+
+  <div style="position:absolute;left:600px;top:700px;text-align:center;width:240px">
+    <span class="instrument mono">2 480 <b>XP</b></span> · <span class="instrument">собрано <b>2/5</b></span> · <span class="instrument">Серия <b>6</b></span>
+  </div>
+
+  <div class="label" style="position:absolute;left:28px;bottom:24px;color:var(--faint)">
+    Direction C · Constructed Artifact — low-fi wireframe (design-only)
+  </div>
+</div>
+</body></html>

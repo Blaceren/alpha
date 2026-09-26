@@ -1,0 +1,195 @@
+/* Concept C — «Submission Contract». PROTOTYPE-ONLY (Phase D3-A).
+ *
+ * Visual thesis: the screen is an AGREEMENT between the task and the submission —
+ * work on the left, a standing contract plane on the right that permanently
+ * answers: what is required · what is saved · readiness · what happens after submit.
+ *
+ * Provisional idea under test (REFERENCE_MANIFEST §B): «объёмная буква A как
+ * signature-объект» — taken NOT as a monument but as GEOMETRY: the Λ angle where
+ * two planes meet. The contract is literally where work meets consequence. The
+ * aperture edge inherits the geometry of the production CheckpointGate component
+ * (two offset vertical planes with a light aperture) because it does the same
+ * job: it marks a boundary that action alone cannot cross.
+ *
+ * Deliberately absent: KPI tiles (the rejected D1A product-portal), nested cards,
+ * a status that outshouts the work, countdown, avatar.
+ */
+
+.rpc-head { padding-top: 4px; }
+.rpc-crumb { font-size: 13px; color: var(--text-muted); }
+
+/* ---------------- two facing planes ---------------- */
+
+.rpc-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 14px;
+}
+@media (min-width: 900px) {
+  .rpc-split {
+    /* capped: at full width the left work column ran to ~950px (~110 characters
+       per line), which is a form measure, not a writing measure */
+    max-width: 1280px;
+    grid-template-columns: minmax(0, 1fr) 372px;
+    gap: 34px;
+    align-items: start;
+  }
+}
+
+/* --- left: the work --- */
+.rpc-work { min-width: 0; }
+.rpc-sec { padding-bottom: 16px; }
+.rpc-rule {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 9px;
+}
+.rpc-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14.5px;
+  margin: 0;
+}
+.is-empty .rpc-h { color: var(--text-muted); }
+.rpc-state { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+.rpc-w {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--surface-context);
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 13px;
+  resize: none;
+  min-height: 46px;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(150, 175, 210, 0.05);
+}
+.rpc-w::placeholder { color: var(--route-locked); }
+.is-open .rpc-w { min-height: 88px; box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, var(--signal-active) 30%, transparent); }
+.is-empty .rpc-w { background: color-mix(in srgb, var(--surface-context) 55%, transparent); }
+
+/* --- right: THE CONTRACT PLANE --- */
+
+.rpc-plane {
+  position: relative;
+  background: var(--surface-context);
+  border-radius: 12px;
+  padding: 18px 20px 20px 24px;
+  /* NOT overflow:hidden — it clipped the aperture light at the left edge
+     (first-pass finding); the aperture is the point of the object */
+}
+@media (min-width: 900px) {
+  .rpc-plane { position: sticky; top: 22px; }
+}
+
+/* the aperture edge: two offset planes with light between them — the same
+   geometry language as the production CheckpointGate, because it marks the same
+   kind of boundary. This is the A-angle, used as structure, not as a logo. */
+.rpc-ap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  pointer-events: none;
+}
+.rpc-ap::before,
+.rpc-ap::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 2px;
+}
+.rpc-ap::before { left: 0; background: var(--gate-boundary); opacity: 0.9; }
+.rpc-ap::after { left: 6px; top: 40px; bottom: 40px; background: var(--gate-boundary); opacity: 0.45; }
+.rpc-glow {
+  position: absolute;
+  left: -6px;
+  top: 20%;
+  width: 22px;
+  height: 60%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow-current), transparent);
+  pointer-events: none;
+}
+
+.rpc-plane-t {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  margin: 0 0 2px;
+  letter-spacing: -0.2px;
+}
+.rpc-plane-s { font-size: 12px; color: var(--text-muted); margin: 0 0 14px; }
+
+/* four assertions, hairline-separated. NOT tiles, NOT nested cards. */
+.rpc-as {
+  padding: 12px 0;
+  border-top: 1px solid var(--divider);
+}
+.rpc-as-k {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 5px;
+  letter-spacing: 0.3px;
+}
+/* the CONTENT of an assertion is normal-size text — important information is
+   never tiny tracked type (REFERENCE_MANIFEST §C) */
+.rpc-as-v {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+.rpc-as-v.soft { color: var(--text-secondary); font-size: 13.5px; }
+.rpc-as ul { margin: 6px 0 0; padding: 0 0 0 16px; }
+.rpc-as li { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin-bottom: 3px; }
+.rpc-as li b { color: var(--text-primary); font-weight: 600; }
+
+/* the $50 threshold is a TARGET of the next level and is deliberately NOT larger
+   than the level title — otherwise the screen becomes financial advertising */
+.rpc-thr { font-family: var(--font-mono); color: var(--text-primary); }
+
+.rpc-ready b { color: var(--signal-active); font-family: var(--font-mono); }
+
+.rpc-do {
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rpc-do .rp-submit { width: 100%; }
+.rpc-miss { font-size: 12.5px; color: var(--text-muted); margin: 0; text-align: center; }
+
+.rpc-exits { padding-top: 4px; }
+
+/* ---------------- mobile: the plane DISASSEMBLES ---------------- */
+
+.rpc-req-m { display: none; }
+
+@media (max-width: 899px) {
+  /* the short requirement moves up to the head… */
+  .rpc-req-m {
+    display: block;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 10px 0 0;
+  }
+  .rpc-req-m b { color: var(--text-primary); font-weight: 600; }
+
+  /* …and the full contract becomes an INLINE summary right before submit,
+     at the natural point of decision. Never a sticky half-screen panel. */
+  .rpc-plane { position: static; }
+  .rpc-plane-req { display: none; }
+}

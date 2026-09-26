@@ -1,0 +1,52 @@
+/* Concept A — «Margin Review» (Полоса пометок). PROTOTYPE-ONLY.
+ *
+ * The verdict is a LAYER over the D3-B ledger: a calm annotation band above the
+ * work, and a thin margin rail beside it connecting the comment to the flagged
+ * places. The ledger itself is untouched — no reordering, no dimming, no second
+ * column. NOT a right-hand dashboard column, NOT Google-Docs comment bubbles.
+ */
+
+/* The annotation band: the same edge construction as the product's own
+   rl-archive / rl-before — a left boundary edge, no card frame. */
+.rva-comment {
+  border-left: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--surface-context) 70%, transparent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px 14px;
+  margin-bottom: 14px;
+}
+
+/* The margin rail — desktop only: mobile has no margin to annotate, and the
+   pointers in the band take over its role there (direction A.14). */
+@media (min-width: 900px) {
+  .rva-rail {
+    position: relative;
+  }
+  .rva-rail::before {
+    content: "";
+    position: absolute;
+    left: -18px;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    /* Raised from --divider-strong after the first-pass capture: at 0.24 alpha
+       the rail — the signature object of this direction — read as noise. Still
+       unlit and 1px: present, not glowing. */
+    background: color-mix(in srgb, var(--gate-boundary) 45%, transparent);
+  }
+  /* Hollow node beside each flagged place. Static, unlit: the rail is the
+     review's trace over the work, not a glowing spine (manifest §C). */
+  .rva-flag { position: relative; }
+  .rva-flag::before {
+    content: "";
+    position: absolute;
+    left: -22px;
+    top: 16px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid var(--gate-boundary);
+    background: var(--background-field);
+    z-index: 1;
+  }
+}

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept A «Report Desk» — состояние «На проверке»</title>
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/manrope/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/inter/index.css">
+<link rel="stylesheet" href="../../../../node_modules/@fontsource-variable/jetbrains-mono/index.css">
+<link rel="stylesheet" href="../../../../src/styles/tokens.css">
+<link rel="stylesheet" href="../../../../src/features/home/home.css">
+<link rel="stylesheet" href="../_shared/prototype-base.css">
+<link rel="stylesheet" href="concept.css">
+<style>
+  /* pending in A: the spine COMPLETES and the document goes quiet.
+     The status sits where the save notice was — same slot, new truth. */
+  .rpa-desk.is-pending { background-image: linear-gradient(to bottom, transparent 0, var(--route-completed) 6%, var(--route-completed) 94%, transparent 100%); }
+  .rpa-pendbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 0 16px; border-bottom: 1px solid var(--divider); margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="home">
+  <header class="appbar">
+    <a class="brand" href="#" aria-label="Alfa Trade Academy — на главную">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="none" stroke="var(--gate-boundary)" stroke-width="1.5"/>
+        <polyline points="6,16 10,11 13,13.5 18,7" fill="none" stroke="var(--signal-active)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Alfa Trade Academy
+    </a>
+    <nav class="rnav" aria-label="Основная навигация">
+      <a href="#">Главная</a><a href="#">Путь</a><a href="#" aria-current="page">Уроки</a>
+      <button type="button" aria-disabled="true" title="Скоро">Инструменты</button>
+      <button type="button" aria-disabled="true" title="Скоро">Ещё</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button class="iconbtn" type="button" aria-label="Уведомления">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="dot"></span>
+      </button>
+      <button class="avatar" type="button" aria-label="Профиль — Артём"><span aria-hidden="true">А</span></button>
+    </div>
+  </header>
+
+  <main class="home-main rp-main" id="main">
+   <div class="rpa-wrap">
+    <header class="rpa-head">
+      <a class="rp-back" href="#"><span aria-hidden="true">←</span> Уроки <span class="sep" aria-hidden="true">·</span> <span class="rpa-crumb">Модуль 01 · Первое знакомство</span></a>
+      <div class="rp-id">
+        <span class="rp-num">03</span>
+        <h1 class="rp-title">Первые пять demo-сделок</h1>
+        <span class="rp-kind">Отчёт</span>
+      </div>
+    </header>
+
+    <!-- status replaces the save notice in the SAME slot: one truth at a time -->
+    <div class="rpa-pendbar">
+      <span class="rp-status">На проверке</span>
+      <p class="rp-wait">Обычно проверка занимает до одного дня.</p>
+    </div>
+
+    <section class="rpa-desk is-pending" aria-label="Отчёт — отправлен, только для чтения">
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">01</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Наблюдение</h2><span class="rpa-state">отправлено</span></div>
+        <textarea class="rpa-w rp-ro" rows="2" readonly aria-label="Раздел 01 — наблюдение">Провёл пять demo-сделок на разных активах в течение недели, каждую записывал сразу после закрытия, чтобы не полагаться на память.</textarea>
+      </div>
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">02</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Что делал</h2><span class="rpa-state">отправлено</span></div>
+        <textarea class="rpa-w rp-ro" rows="2" readonly aria-label="Раздел 02 — что делал">В двух случаях дождался условия и вошёл, в одном отказался от входа, ещё в двух вошёл раньше, чем собирался.</textarea>
+      </div>
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">03</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Что заметил</h2><span class="rpa-state">отправлено</span></div>
+        <textarea class="rpa-w rp-ro" rows="2" readonly aria-label="Раздел 03 — что заметил">Решение принимал быстрее, когда заранее записывал условие входа. Там, где условия не было, вход случался сам собой.</textarea>
+      </div>
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">04</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Вывод</h2><span class="rpa-state">отправлено</span></div>
+        <textarea class="rpa-w rp-ro" rows="2" readonly aria-label="Раздел 04 — вывод">Записанное заранее условие — единственное, что отличало обдуманные входы от случайных.</textarea>
+      </div>
+      <div class="rpa-node is-done"><span class="rpa-dot" aria-hidden="true"></span><span class="rpa-n">05</span></div>
+      <div class="rpa-sec is-done">
+        <div class="rpa-rule"><h2 class="rpa-h">Что изменю</h2><span class="rpa-state">отправлено</span></div>
+        <textarea class="rpa-w rp-ro" rows="2" readonly aria-label="Раздел 05 — что изменю">Перед следующей серией буду записывать условие до открытия сделки, а не после.</textarea>
+      </div>
+
+      <div class="rpa-end">
+        <div class="rpa-endtxt">
+          <p class="rp-blocked">Уровень 04 «Контрольная точка $50» откроется <b>после результата проверки</b>. Всё, что уже открыто, остаётся доступным.</p>
+        </div>
+        <div class="rp-exits">
+          <a class="rp-exit" href="#"><span aria-hidden="true">←</span> К списку уроков</a>
+          <a class="rp-exit" href="#">Посмотреть путь</a>
+        </div>
+      </div>
+    </section>
+   </div>
+  </main>
+</div>
+</body>
+</html>

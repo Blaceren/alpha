@@ -1,0 +1,502 @@
+/* Route Field Home — responsive layout (Phase D1B).
+   Single content DOM per scenario (one <h1>); the decorative route SVG carries
+   wide/narrow geometry groups toggled by CSS. No page horizontal overflow.
+   Values reference semantic tokens in tokens.css. */
+
+.skip { position: absolute; left: 8px; top: 8px; z-index: 100; display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 8px;
+  background: var(--surface-context); color: var(--text-primary); text-decoration: none;
+  border: 1px solid var(--divider-strong); transform: translateY(-160%); transition: transform var(--motion-fast) var(--ease-standard); }
+.skip:focus { transform: translateY(0); }
+
+.home { position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  background:
+    radial-gradient(120% 90% at 38% 42%, color-mix(in srgb, var(--signal-active) 6%, transparent), transparent 55%),
+    radial-gradient(90% 120% at 88% 8%, color-mix(in srgb, var(--gate-boundary) 7%, transparent), transparent 60%);
+}
+
+/* =========================================================
+   THE SHARED AUTHENTICATED SHELL
+   =========================================================
+   One authority for every authenticated route — Главная, Путь, Уроки, the
+   Reader, the Workspace, Инструменты, Уведомления, Профиль, Сообщество and
+   Поддержка. There is one bar, one navigation landmark, one mark and one
+   `aria-current`; a surface never styles its own chrome.
+
+   WHAT CHANGED IN THE POLISH PASS, AND WHY:
+
+   * THE MARK IS THE REAL ONE. The brand slot used to hold a hand-drawn chart
+     glyph and the words "Alfa Trade Academy" — two lockups, neither of them the
+     asset of record. It is now `/brand/ata-logo.svg` at its natural ratio.
+
+   * THE ACTIVE INDICATOR IS A LINE, NOT A GLOW. It used to be a gradient that
+     faded to transparent at both ends: soft-edged, wider than the word, and
+     reading as a light leak rather than a mark. It is now a hard 2px Signal
+     line bounded by the item's own inner box.
+
+   * THE BAR IS TWO GROUPS. The learning route and the two support destinations
+     are separated by a hairline instead of sitting in one undifferentiated row.
+
+   * HEIGHT IS UNCHANGED at 60px, deliberately. Every authenticated body sits
+     directly under it, and moving it would move all ten of them for a cosmetic
+     reason.
+   ========================================================= */
+
+/* ---------- app bar (desktop/tablet) ---------- */
+.appbar { display: none; align-items: center; gap: clamp(16px, 2.4vw, 28px);
+  height: 60px; padding: 0 clamp(20px, 3vw, 34px); border-bottom: 1px solid var(--divider); }
+
+/* ---------- the mark ----------
+   A sizing box for the real SVG, and nothing else: no frame, no badge, no
+   background, no second glyph. `object-fit: contain` and `height: auto` keep
+   the 362 × 200 ratio whatever the box does, so the mark can never be stretched.
+
+   The link around it is the only focusable home control. Its box is the mark's,
+   which is shorter than 44px, so the target is extended to 44 in the block
+   direction WITHOUT changing the drawn size — the same technique the rest of the
+   product uses for a short control. */
+.brand { display: inline-flex; align-items: center; width: 48px; flex: 0 0 auto; }
+.brand img { width: 100%; height: auto; object-fit: contain; display: block; }
+.brand--compact { width: 44px; }
+
+a:has(> .brand) { position: relative; display: inline-flex; align-items: center;
+  min-height: 44px; border-radius: 10px; text-decoration: none; }
+a:has(> .brand)::after { content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  min-height: 44px; height: 100%; transform: translateY(-50%); }
+a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+/* ---------- route navigation ----------
+   Two groups in one nav. The rule between them is a hairline at the shell's own
+   divider tone — quiet enough to read as a seam rather than as a border. */
+.rnav { display: flex; align-items: center; gap: 14px; }
+.rnav__group { display: flex; align-items: center; gap: 2px; }
+.rnav__rule { width: 1px; height: 18px; background: var(--divider); flex: 0 0 auto; }
+
+.rnav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color var(--motion-fast) var(--ease-standard),
+              background-color var(--motion-fast) var(--ease-standard);
+}
+
+/* The secondary group sits one step back in the type hierarchy — it is where a
+   learner goes when they need something, not where they work. */
+.rnav__group--secondary a { color: var(--text-muted); }
+
+.rnav a:hover { color: var(--text-primary); background-color: var(--surface-subtle); }
+.rnav a:active { background-color: color-mix(in srgb, var(--text-primary) 9%, transparent); }
+.rnav a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* WEIGHT IS RESERVED SO IT CANNOT SHIFT LAYOUT. The active item is heavier; if
+   the label simply got bolder, every item after it would move. The label's own
+   box is sized from the BOLD text by an invisible copy, so the row is identical
+   in every state and the indicator never slides. */
+.rnav__label { display: inline-grid; }
+.rnav__label > span { grid-area: 1 / 1; }
+.rnav__label::before {
+  content: attr(data-label);
+  grid-area: 1 / 1;
+  font-weight: 650;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.rnav [aria-current="page"] { color: var(--text-primary); font-weight: 650; }
+
+/* THE ONE CHARACTERISTIC DETAIL: a precise Signal line under the current route.
+   Hard-edged, exactly the item's inner box, no blur and no shadow. It is drawn
+   at full width always and revealed by opacity, so it cannot animate its own
+   geometry and cannot move anything around it. */
+.rnav a::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 2px;
+  background: var(--signal-active);
+  opacity: 0;
+  transform: scaleX(0.6);
+  transform-origin: 50% 50%;
+  transition: opacity 170ms var(--ease-standard), transform 170ms var(--ease-standard);
+}
+.rnav [aria-current="page"]::after { opacity: 1; transform: scaleX(1); }
+
+.appbar .spacer { margin-left: auto; }
+.appbar .actions { display: inline-flex; align-items: center; gap: 12px; }
+/* The utility current-line sits just below its control, so the row that holds
+   the utilities must not clip it. */
+.appbar .actions, .mtop .actions { overflow: visible; }
+
+/* ---------- mobile top ---------- */
+.mtop { display: flex; align-items: center; gap: 12px;
+  height: 54px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
+/* Where the learner is, in the section's own canonical label. No new word is
+   introduced — it is the same string the navigation uses. */
+.mtop__context { font-family: var(--font-mono, inherit); font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.mtop .actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---------- shared chrome bits ---------- */
+.iconbtn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
+  color: var(--text-muted); background: transparent; border: 0; cursor: pointer; position: relative;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
+.iconbtn:hover { color: var(--text-primary); background-color: var(--surface-subtle); }
+.iconbtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ---------- the current route, on a utility control ----------
+   THE SAME GRAMMAR THE BAR USES, at the size a utility is drawn.
+
+   The bell and the avatar are visible links to routes, so on their route they
+   read as current the way every other link does: primary foreground, a quiet
+   surface behind, and one precise 2px Signal line under the control. Nothing
+   glows, nothing grows, nothing blurs — a utility that announced itself louder
+   than the navigation would be the loudest thing on the calmest bar.
+
+   THE INDICATOR IS A SEPARATE ELEMENT FROM THE FOCUS RING, deliberately. The
+   ring is an outline drawn outside the box; the current line is inside it. They
+   can be true at once and read as two facts, which is exactly what they are:
+   "this is the page you are on" and "this is where your keyboard is". */
+.iconbtn[aria-current="page"] { color: var(--text-primary); background-color: var(--surface-subtle); }
+.iconbtn[aria-current="page"]::before,
+.avatar[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 20px;
+  height: 2px;
+  margin-left: -10px;
+  background: var(--signal-active);
+  transition: opacity 170ms var(--ease-standard);
+}
+
+/* The avatar is a filled disc, so its current state is the ring of ground
+   around it rather than a fill behind it — the same quiet surface, read as a
+   halo because the control itself is already solid. */
+.avatar[aria-current="page"] { box-shadow: 0 0 0 3px var(--surface-subtle); }
+.iconbtn .dot { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--signal-active); box-shadow: 0 0 0 2px var(--background-field); }
+.avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  font-weight: 600; font-size: 13px; color: #06120e; text-decoration: none;
+  background: linear-gradient(135deg, var(--gate-boundary), var(--signal-active)); }
+/* The avatar IS the link. It draws at 34px, which is the right size for a
+   34px avatar and the wrong size for a target, so the hit area is extended to
+   44 x 44 around it without redrawing anything. */
+a.avatar { position: relative; }
+a.avatar::after { content: ""; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; }
+a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+/* ---------- bottom nav (mobile) ---------- */
+.bottomnav { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; display: block;
+  min-height: var(--mobile-bottom-nav-height);
+  border-top: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--background-base) 88%, transparent); backdrop-filter: blur(6px);
+  padding-bottom: env(safe-area-inset-bottom); }
+.bottomnav ul { display: flex; justify-content: space-around; margin: 0; padding: 0 4px; list-style: none; }
+.bottomnav a, .bottomnav button { min-width: 56px; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; font-size: 10.5px; color: var(--text-muted); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard); }
+.bottomnav a:focus-visible, .bottomnav button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 10px; }
+.bottomnav [aria-disabled="true"] { cursor: default; }
+.bottomnav [aria-current="page"] { color: var(--text-primary); }
+.bottomnav [aria-current="page"] .lbl { position: relative; }
+/* The same hard Signal line as the desktop bar, at the bar's scale. */
+.bottomnav [aria-current="page"] .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px;
+  height: 2px; background: var(--signal-active); }
+/* "Ещё" marks itself when the open section lives inside it, so the bar never
+   shows every slot inactive while the learner is plainly somewhere. */
+.bottomnav button.is-active { color: var(--text-primary); }
+.bottomnav button.is-active .lbl { position: relative; }
+.bottomnav button.is-active .lbl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px;
+  height: 2px; background: var(--signal-active); }
+/* The overflow sheet. It sits ABOVE the bar and is bounded by the viewport, so
+   it can never become the thing that overflows. */
+.bottomnav__sheet { position: absolute; left: 0; right: 0; bottom: 100%;
+  background: var(--surface-context); border-top: 1px solid var(--divider-strong);
+  box-shadow: 0 -18px 40px -24px rgba(0,0,0,.9); max-height: 60vh; overflow-y: auto;
+  overscroll-behavior: contain; }
+.bottomnav__sheet ul { display: block; padding: 6px 0; }
+.bottomnav__sheet li + li { border-top: 1px solid var(--divider); }
+/* The same primary/secondary seam the desktop bar draws, in a vertical list. */
+.bottomnav__sheet li[data-group="secondary"]:first-of-type { border-top: 1px solid var(--divider-strong); }
+.bottomnav__sheet a { flex-direction: row; justify-content: flex-start; gap: 12px;
+  min-height: 52px; padding: 0 18px; font-size: 15px; color: var(--text-primary); width: 100%; }
+.bottomnav__sheet li[data-group="secondary"] a { color: var(--text-secondary); }
+.bottomnav__sheet a[aria-current="page"] { color: var(--text-primary); font-weight: 650;
+  box-shadow: inset 2px 0 0 var(--signal-active); }
+
+/* ---------- restraint ----------
+   Under a stated preference for less motion the shell still reads exactly the
+   same — the indicator is present or absent, the colours are what they are —
+   it simply stops travelling to get there. */
+@media (prefers-reduced-motion: reduce) {
+  .rnav a, .rnav a::after, .iconbtn, .iconbtn[aria-current="page"]::before,
+  .avatar[aria-current="page"]::before, .bottomnav a, .bottomnav button { transition-duration: 1ms; }
+  .rnav a::after { transform: none; }
+  .rnav [aria-current="page"]::after { transform: none; }
+}
+
+/* ---------- main / stage ----------
+   overflow-x: clip contains the decorative route SVG horizontally WITHOUT turning
+   .home-main into a nested scroll container — the window stays the single scroller,
+   so scroll-padding / scroll-margin (below) work against one predictable scroller. */
+.home-main { position: relative; flex: 1; overflow-x: clip; }
+.routebg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Route geometry groups: each breakpoint reveals only its own group (mobile→tablet→desktop).
+   Groups are scenario-scoped (a-* active, c-* checkpoint) so the two SVGs never collide. */
+.routebg .rg { display: none; }
+.routebg .a-narrow, .routebg .c-narrow { display: inline; }
+.route-line { fill: none; vector-effect: non-scaling-stroke; }
+.rc-completed { stroke: var(--route-completed); stroke-width: 2.4; }
+.rc-glow { stroke: var(--signal-soft); stroke-width: 10; opacity: .5; filter: blur(6px); }
+.rc-upcoming { stroke: var(--route-upcoming); stroke-width: 2.2; opacity: .72; }
+.rc-fade { stroke: var(--route-upcoming); stroke-width: 2; opacity: .6; stroke-dasharray: 3 8; }
+.rc-boundary { stroke: var(--gate-boundary); stroke-width: 2.4; }
+.rc-distant { stroke: var(--route-locked); stroke-width: 1.7; opacity: .62; stroke-dasharray: 2 9; }
+
+/* current-node glow (single DOM marker inside the lesson anchor) */
+.rnode { position: relative; width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+  border: 2.5px solid var(--signal-active); background: var(--background-field);
+  box-shadow: 0 0 0 8px var(--glow-current), 0 0 26px 4px var(--glow-current); }
+.rnode::after { content: ""; position: absolute; inset: 0; margin: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--signal-active); }
+@media (prefers-reduced-motion: no-preference) {
+  .rnode { animation: node-pulse 3.2s var(--ease-standard) infinite; }
+  @keyframes node-pulse { 0%,100% { box-shadow: 0 0 0 7px var(--glow-current), 0 0 20px 3px var(--glow-current); }
+    50% { box-shadow: 0 0 0 10px var(--glow-current), 0 0 30px 6px var(--glow-current); } }
+}
+
+/* ---------- type roles ---------- */
+.action-ctx { font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--signal-active); font-weight: 600; margin: 0; }
+.action-ctx.cold { color: var(--gate-boundary); }
+.lesson-title { font-family: var(--font-display); font-weight: 700; letter-spacing: -.4px; line-height: 1.06;
+  font-size: clamp(28px, 3.4vw, 40px); margin: 8px 0 6px; color: var(--text-primary); }
+.route-meta { font-size: 14px; color: var(--text-secondary); margin: 0; }
+.cp-cond { font-size: 15px; color: var(--text-primary); margin: 0; }
+.cp-note { font-size: 12.5px; color: var(--text-secondary); margin: 8px 0 0; }
+.svc { font-size: 12.5px; color: var(--text-secondary); }
+.svc.mut { color: var(--text-muted); }
+.mono { font-family: var(--font-mono); }
+
+/* ---------- lesson anchor + open plane ---------- */
+.lesson-anchor { position: relative; display: flex; flex-direction: column; gap: 22px; z-index: 2; }
+.lesson-plane { position: relative; align-self: start; max-width: 560px;
+  border-top: 1.6px solid var(--divider-strong); border-left: 1.6px solid color-mix(in srgb, var(--signal-active) 55%, transparent);
+  border-top-left-radius: 14px; padding: 20px 40px 26px 26px;
+  background: linear-gradient(138deg, color-mix(in srgb, var(--surface-context) 82%, transparent) 0%,
+    color-mix(in srgb, var(--surface-context) 40%, transparent) 58%, transparent 92%); }
+/* node at the plane's top-left corner (wide); above the plane in a route zone (narrow) */
+.node-wide { position: absolute; top: -13px; left: -13px; display: none; }
+.node-narrow { display: flex; align-items: flex-end; height: 100px; padding-left: 10px; }
+
+/* module mini progress (learning-spine fragment) */
+.modline { display: inline-flex; align-items: center; margin-top: 14px; }
+.modline i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); opacity: .5; }
+.modline i.done { background: var(--signal-soft); opacity: 1; }
+.modline i.cur { width: 11px; height: 11px; background: transparent; border: 2px solid var(--signal-active); }
+.modline i.cp { width: 9px; height: 9px; border-radius: 2px; transform: rotate(45deg); border: 2px solid var(--gate-boundary); background: transparent; }
+.modline s { width: 22px; height: 1px; background: var(--divider-strong); }
+.modline s.done { background: var(--signal-soft); }
+
+/* ---------- primary action (belongs to the route; not the brightest object) ---------- */
+.cta { display: inline-flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 6px 0 18px;
+  border-radius: 10px; text-decoration: none; cursor: pointer; font-size: 15px; font-weight: 600;
+  color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--signal-active) 42%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 14%, transparent), color-mix(in srgb, var(--signal-active) 6%, transparent));
+  transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast); }
+.cta:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--signal-active) 22%, transparent), color-mix(in srgb, var(--signal-active) 10%, transparent)); }
+.cta .go { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--signal-active); color: #06120e; font-weight: 800; }
+.cta.block { width: 100%; justify-content: space-between; }
+/* keyboard focus must not scroll the CTA under the fixed bottom nav */
+.cta { scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 20px); }
+.cta-wrap { margin-top: 20px; }
+
+/* ---------- instrumentation ---------- */
+.instr-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; z-index: 2; }
+.instr { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-secondary); }
+.instr b { color: var(--text-primary); font-weight: 600; }
+.sep { width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); opacity: .6; }
+
+/* ---------- mentor ---------- */
+.mentor { display: flex; align-items: center; gap: 16px; z-index: 2; max-width: 580px; }
+.mentor-frame { flex: 0 0 auto; position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--divider-strong); }
+.mentor-frame::after { content: ""; position: absolute; left: 6px; top: 6px; width: 11px; height: 11px;
+  border-left: 1.5px solid color-mix(in srgb, var(--gate-boundary) 70%, transparent); border-top: 1.5px solid color-mix(in srgb, var(--gate-boundary) 70%, transparent); border-top-left-radius: 3px; }
+.mentor .who { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0 0 5px; }
+.mentor .who span { color: var(--text-muted); font-weight: 400; }
+.mentor .quote { font-size: 14.5px; line-height: 1.5; color: var(--text-secondary); font-style: italic; margin: 0; }
+
+/* ---------- provisional rank mark ---------- */
+.rankmark { flex: 0 0 auto; }
+
+/* ---------- future checkpoint (active) ---------- */
+.fcp { display: flex; gap: 14px; z-index: 2; }
+.fcp .txt .cp { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
+.fcp .txt .res { font-size: 12.5px; color: var(--text-secondary); margin: 6px 0 0; line-height: 1.55; }
+.fcp .txt .res b { color: var(--text-primary); font-weight: 600; }
+
+/* ---------- checkpoint gate (near / boundary / far) ---------- */
+.checkpoint-gate { position: absolute; left: 50%; transform: translateX(-50%); top: 8px; height: 190px; z-index: 1; pointer-events: none; }
+.checkpoint-gate svg { height: 100%; width: auto; display: block; }
+.gate-far .lbl { font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 18px; }
+
+/* ---------- checkpoint results (split) ---------- */
+.results { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: center; z-index: 2; }
+.result { display: flex; align-items: center; gap: 14px; }
+.result-txt { display: flex; flex-direction: column; gap: 2px; }
+.result .k { font-size: 12px; color: var(--text-muted); }
+.result .v { font-size: 15px; color: var(--text-primary); font-weight: 600; }
+.result-div { width: 1px; height: 34px; background: var(--divider); }
+.tool-glyph { flex: 0 0 auto; }
+
+/* ---------- screen-reader route alternative ---------- */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* =========================================================
+   NARROW (mobile) composition  — default; wider overrides below.
+   Bottom-nav compensation is defined ONCE here from the canonical token, so the
+   last content element is fully scrollable above the fixed bar. The window is the
+   scroller, so scroll-padding lives on the root element (focus/scrollIntoView).
+   ========================================================= */
+html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px); }
+.home-main { padding: 20px 16px calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 24px); }
+.content { position: relative; display: flex; flex-direction: column; gap: 22px; }
+
+/* active mobile: node sits above the plane (safe gap, no route/title overlap) */
+.content--active .lesson-anchor { margin-top: 8px; }
+.content--active .lesson-plane { max-width: none; }
+
+/* checkpoint mobile: gate zone on top */
+.content--checkpoint .near { margin-top: 200px; }
+.content--checkpoint .gate-far { margin-top: 4px; }
+
+.fcp { border-left: 1.5px solid var(--gate-boundary); padding-left: 14px; }
+
+/* =========================================================
+   NAV breakpoint — desktop app bar replaces the mobile bars at ≥900px.
+   From here up, the current node lives at the plane's top-left corner.
+   ========================================================= */
+@media (min-width: 900px) {
+  .appbar { display: flex; }
+  .mtop { display: none; }
+  .bottomnav { display: none; }
+  html { scroll-padding-bottom: 0; }
+  .node-wide { display: block; }
+  .node-narrow { display: none; }
+}
+
+/* =========================================================
+   TABLET (900–1199) — a dedicated tablet state (not a shrunk desktop):
+   Active is a two-region composition — lesson plane (wide) + checkpoint
+   preview beside it, with the route as one diagonal node→preview trajectory;
+   instrumentation under the plane, Alex spanning the full width below.
+   Checkpoint stays stacked with the gate on top.
+   ========================================================= */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .routebg .a-narrow, .routebg .c-narrow { display: none; }
+  .routebg .a-tablet, .routebg .c-tablet { display: inline; }
+  .home-main { padding: 0; }
+  .lesson-title { font-size: clamp(30px, 4vw, 38px); }
+
+  .content--active {
+    display: grid; align-content: start; min-height: calc(100dvh - 60px);
+    padding: clamp(44px, 9vh, 104px) clamp(40px, 6vw, 80px) 56px; gap: 24px 44px;
+    grid-template-columns: minmax(0, 1fr) clamp(210px, 30%, 320px);
+    grid-template-areas:
+      "plane   fcp"
+      "instr   fcp"
+      "mentor  mentor";
+  }
+  .content--active .lesson-anchor { display: contents; }
+  .content--active .lesson-plane { grid-area: plane; max-width: none; align-self: start; }
+  .content--active .instr-line { grid-area: instr; align-self: start; }
+  .content--active .mentor { grid-area: mentor; max-width: 760px; }
+  .content--active .fcp { grid-area: fcp; align-self: start; justify-self: start; max-width: 300px; }
+
+  .content--checkpoint { padding: 34px clamp(40px, 7vw, 96px) 56px; gap: 26px; }
+  .content--checkpoint .near { margin-top: 224px; max-width: 720px; }
+  .content--checkpoint .mentor { max-width: 720px; }
+}
+
+/* =========================================================
+   DESKTOP (≥1200) — the full Route Field grid composition.
+   ========================================================= */
+@media (min-width: 1200px) {
+  .routebg .a-narrow, .routebg .c-narrow, .routebg .a-tablet, .routebg .c-tablet { display: none; }
+  .routebg .a-wide, .routebg .c-wide { display: inline; }
+  .home-main { padding: 0; }
+
+  .content { display: grid; align-content: center; min-height: calc(100dvh - 60px);
+    padding: clamp(28px, 4vw, 72px) clamp(28px, 5vw, 84px); gap: clamp(20px, 3vw, 40px); }
+
+  /* active: empty left column (route lives here) · lesson (centre) · future-checkpoint (right) */
+  .content--active { grid-template-columns: 24% minmax(340px, 1.25fr) minmax(190px, .8fr);
+    grid-template-areas: ".  lesson  fcp" ".  lesson  ."; }
+  .content--active .lesson-anchor { display: flex; grid-area: lesson; margin-top: 0; align-self: center; }
+  .content--active .fcp { grid-area: fcp; align-self: start; justify-self: end; max-width: 320px; }
+
+  /* checkpoint: near (left) + far (right); the gate is drawn by the route SVG between them */
+  .content--checkpoint { grid-template-columns: minmax(340px, 1fr) minmax(300px, 1fr);
+    grid-template-areas: "near far"; column-gap: clamp(80px, 12vw, 200px); }
+  .content--checkpoint .near { grid-area: near; align-self: center; margin-top: 0; max-width: 480px; }
+  .content--checkpoint .gate-far { grid-area: far; align-self: center; margin-top: 0; }
+  .content--checkpoint .results { flex-direction: column; align-items: stretch; }
+  .content--checkpoint .result-div { width: 100%; height: 1px; }
+  .content--checkpoint .checkpoint-gate { top: 50%; transform: translate(-50%, -50%); height: min(62vh, 500px); }
+}
+
+/* =========================================================
+   SHORT-HEIGHT mode (≤560px tall) — landscape phones and 200% zoom.
+   The fixed mobile vertical rhythm (compact top bar + node zone + gaps) is tightened
+   so the current node, title, module progress and the primary CTA fit in the first
+   viewport ABOVE the fixed bottom nav. Vertical centering (grid) collapses to the
+   start of flow; scrolling stays natural; nothing is hidden with overflow.
+   Placed last so it overrides the width-based blocks when a short viewport also
+   matches them. Text stays readable (title floor 21px).
+   ========================================================= */
+@media (max-height: 560px) {
+  .mtop { height: 46px; }
+  .home-main { padding-top: 10px; }
+  .content { gap: 12px; }
+
+  /* active: compact the route/node zone and header so the CTA rises above the fold.
+     Priority order kept: node → title → progress → CTA; Alex/checkpoint fall below. */
+  .content--active .lesson-anchor { margin-top: 0; }
+  .content--active .node-narrow { height: 44px; }
+  .lesson-plane { padding: 12px 24px 16px 20px; }
+  .lesson-title { font-size: clamp(21px, 4.4vw, 27px); margin: 4px 0 4px; }
+  .route-meta { font-size: 13px; }
+  .modline { margin-top: 8px; }
+  .cta-wrap { margin-top: 12px; }
+
+  /* any grid composition (tablet/desktop) that is also short: start-align, no forced
+     min-height, so tall content scrolls instead of being vertically clipped. */
+  .content { align-content: start !important; min-height: 0 !important; }
+}
+
+/* ---------- restored frozen surfaces ----------
+   A surface restored from a frozen *ATA design carries its OWN container
+   geometry: in the frozen document `main` held the width, the inline centring
+   and the padding, and the scoping transform collapses that onto the surface
+   root. So the shell must stop supplying its own, or the surface is inset
+   twice and matches nothing that was accepted.
+
+   The field changes with it. The frozen system paints the page ground #0B0D0A
+   — HomeAuthATA's token layer carries it "unchanged from the ATA brand
+   foundation" — which the product already holds as --background-base. The
+   surface paints that ground opaquely inside its container, so the decorative
+   wash below would survive only in the margins and read as a seam around the
+   content. Flattening it to the same ground removes the seam and introduces no
+   new colour. Applied ONLY under .home--frozen, so Community and Support keep
+   the field they were accepted with. */
+.home--frozen { background: var(--background-base); }
+.home-main--frozen { padding: 0; }

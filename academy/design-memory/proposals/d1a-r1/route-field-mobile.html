@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Route Field — mobile</title>
+<link rel="stylesheet" href="lowfi.css">
+</head><body>
+<div class="canvas mobile">
+
+  <!-- minimal top strip; profile via avatar -->
+  <div class="topstrip" style="height:50px;padding:0 16px;gap:10px">
+    <span class="wordmark" style="font-size:13px">Alfa Trade Academy</span>
+    <span class="topright"><span class="avatar" style="width:26px;height:26px;font-size:12px">А</span></span>
+  </div>
+
+  <!-- neighbors partially visible → horizontal swipe -->
+  <div class="label mono dim" style="left:10px;top:150px">‹ L17</div>
+  <div class="label mono cold" style="right:8px;top:150px;position:absolute">L19 · ◇ L20 ›</div>
+
+  <!-- route through the current node -->
+  <svg width="390" height="220" style="position:absolute;left:0;top:170px" aria-hidden="true">
+    <line x1="0" y1="70" x2="60" y2="70" stroke="#34d6ac" stroke-width="2"/>
+    <line x1="330" y1="70" x2="390" y2="70" stroke="#5b6576" stroke-width="1.5" stroke-dasharray="5 7"/>
+  </svg>
+
+  <!-- current node = central screen -->
+  <div class="node active" style="left:180px;top:225px"></div>
+  <div class="plane" style="left:24px;top:270px;width:342px">
+    <div class="eyebrow">Текущий уровень 18</div>
+    <div class="h1" style="font-size:22px">Поддержка и сопротивление</div>
+    <div class="sub">Модуль 4 «Чтение графика» · 2/5</div>
+    <div style="margin-top:12px"><span class="cta" style="width:100%;justify-content:center">Продолжить урок →</span></div>
+  </div>
+
+  <!-- secondary info revealed as a layer -->
+  <div style="position:absolute;left:24px;top:452px;width:342px">
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <span class="instrument">Ранг <b>Наблюдатель III</b></span>
+      <span class="instrument mono">2 480 <b>XP</b></span>
+      <span class="instrument">Серия <b>6</b></span>
+    </div>
+    <div class="alex" style="margin-top:12px">уровни — это зоны реакции рынка, а не точные точки.</div>
+    <div style="margin-top:12px">
+      <span class="tag gate">Контрольная точка · Уровень 20 · от $200</span>
+      <div style="margin-top:8px"><span class="tag reward">Награда: Chart Markup Tool</span></div>
+    </div>
+    <div class="label" style="margin-top:14px;color:var(--faint)">↔ свайп двигает маршрут · ⟲ к текущему уровню</div>
+  </div>
+
+  <!-- bottom navigation -->
+  <div class="bottomnav">
+    <span class="active">Главная</span><span>Путь</span><span>Уроки</span><span>Инструменты</span><span>Ещё</span>
+  </div>
+</div>
+</body></html>

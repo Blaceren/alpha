@@ -1,0 +1,122 @@
+/* Alfa Trade Academy — D1A-R2.1 Route Field visual correction (design-only).
+   Route forms the interface. No generic central card. CTA belongs to the route.
+   One glow focus. Provisional values (not final brand HEX). */
+
+:root{
+  --field-0:#070b12; --field-1:#0a0f19; --field-2:#0e1524;
+  --ink:#eef2f8; --ink-2:#c2ccdb; --ink-3:#8c96a8;    /* ink-2 raised for readable service text */
+  --line:rgba(150,175,210,.14); --line-2:rgba(150,175,210,.24);
+  --cold:#6f9ad8;            /* cold blue — structure / boundary */
+  --cold-deep:#3c5f96;
+  --signal:#39d3a6;          /* cyan/green — active trace (slightly less neon than R2) */
+  --signal-soft:#1f7d64;
+  --font:"Manrope","Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;} html,body{margin:0;padding:0;}
+body{background:var(--field-1);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow:hidden;}
+.canvas{position:relative;overflow:hidden;}
+.canvas.desktop{width:1440px;height:900px;
+  background:radial-gradient(120% 90% at 40% 46%,rgba(57,211,166,.05),transparent 55%),
+    radial-gradient(90% 120% at 88% 12%,rgba(111,154,216,.06),transparent 60%),
+    linear-gradient(180deg,var(--field-1),var(--field-0));}
+.canvas.mobile{width:390px;height:844px;
+  background:radial-gradient(120% 55% at 46% 34%,rgba(57,211,166,.06),transparent 60%),
+    linear-gradient(180deg,var(--field-1),var(--field-0));}
+@media (max-width:600px){.canvas.desktop{display:none;}}
+@media (min-width:601px){.canvas.mobile{display:none;}}
+
+/* ---- navigation that supports Route Field (current section = a route segment) ---- */
+.band{position:absolute;left:0;right:0;top:0;height:58px;display:flex;align-items:center;gap:24px;padding:0 30px;}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:.2px;}
+.brand .mark{width:20px;height:20px;}
+.rnav{display:flex;align-items:center;gap:2px;font-size:13.5px;}
+.rnav a{color:#9aa6ba;text-decoration:none;padding:6px 12px;position:relative;}
+.rnav a.on{color:var(--ink);}
+/* current section rendered as a small segment of the route */
+.rnav a.on::before{content:"";position:absolute;left:8px;right:8px;bottom:2px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--signal),transparent);}
+.band .right{margin-left:auto;display:flex;align-items:center;gap:16px;color:var(--ink-3);font-size:13px;}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;
+  color:#06120e;background:linear-gradient(135deg,var(--cold),var(--signal));}
+.bell{position:relative;} .bell::after{content:"";position:absolute;top:-3px;right:-3px;width:6px;height:6px;border-radius:50%;background:var(--signal);}
+
+/* ---- type roles (strong distinction) ---- */
+.action-ctx{font-size:12.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--signal);font-weight:600;}
+.lesson-title{font-size:40px;line-height:1.05;font-weight:700;letter-spacing:-.6px;}
+.lesson-title.sm{font-size:27px;}
+.route-meta{font-size:14px;color:var(--ink-2);}
+.cp-cond{font-size:15px;color:var(--ink);}     /* checkpoint condition — calm, ink (not giant green) */
+.cp-cond b{font-weight:600;}
+.milestone{font-size:13px;color:var(--ink-2);}
+.mentor{font-size:15px;line-height:1.5;color:var(--ink-2);font-style:italic;}
+.svc{font-size:12.5px;color:var(--ink-2);}      /* service labels — readable, not tiny/low-contrast */
+.mono{font-family:var(--mono);}
+
+/* ---- lesson context: an OPEN asymmetric field carved from the route (not a card) ---- */
+.field{position:absolute;}
+.field.open{
+  /* carved from the current node: bounded only on top + left by a route-derived edge,
+     OPEN toward the bottom-right — not a full card, no uniform perimeter */
+  border-left:1.6px solid rgba(57,211,166,.55);
+  border-top:1.6px solid var(--line-2);
+  background:linear-gradient(138deg,rgba(16,23,38,.74) 0%,rgba(16,23,38,.30) 58%,transparent 92%);
+  border-top-left-radius:14px;padding:20px 40px 30px 26px;
+}
+
+/* ---- CTA as a route action marker (belongs to the route; not the brightest object) ---- */
+.route-cta{display:inline-flex;align-items:center;gap:12px;min-height:46px;padding:0 6px 0 18px;
+  border-radius:10px;text-decoration:none;cursor:pointer;
+  color:var(--ink);font-size:15px;font-weight:600;
+  background:linear-gradient(180deg,rgba(57,211,166,.14),rgba(57,211,166,.06));
+  border:1px solid rgba(57,211,166,.42);}
+.route-cta .go{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+  background:var(--signal);color:#06120e;font-weight:800;} /* small solid action node = route continues */
+
+/* ---- instrumentation clipped to the route (rank/xp/streak) ---- */
+.instr-line{display:flex;align-items:center;gap:16px;}
+.instr{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);}
+.instr b{color:var(--ink);font-weight:600;}
+.sep{width:4px;height:4px;border-radius:50%;background:var(--ink-3);opacity:.6;}
+
+/* ---- mini module context (learning-spine fragment) ---- */
+.modline{display:inline-flex;align-items:center;gap:0;}
+.modline i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);opacity:.55;}
+.modline i.done{background:var(--signal-soft);opacity:1;}
+.modline i.cur{width:11px;height:11px;background:transparent;border:2px solid var(--signal);}
+.modline i.cp{width:9px;height:9px;border-radius:2px;transform:rotate(45deg);border:2px solid var(--cold);background:transparent;}
+.modline s{width:22px;height:1px;background:var(--line-2);display:inline-block;}
+.modline s.done{background:var(--signal-soft);}
+
+/* ---- Alex — editorial voice strip embedded in the route (reserved media frame) ---- */
+.alexstrip{display:flex;align-items:center;gap:16px;}
+/* provisional cinematic media frame — directional light, abstract silhouette (no face),
+   explicit asset-layer boundary marker for future replacement */
+.alexstrip .frame{flex:0 0 auto;border-radius:14px;border:1px solid var(--line-2);position:relative;overflow:hidden;}
+.alexstrip .frame::after{content:"";position:absolute;left:6px;top:6px;width:11px;height:11px;
+  border-left:1.5px solid rgba(160,185,220,.6);border-top:1.5px solid rgba(160,185,220,.6);border-top-left-radius:3px;}
+.alexstrip .who{font-size:13px;color:var(--ink);margin-bottom:5px;font-weight:600;}
+.alexstrip .who span{color:var(--ink-3);font-weight:400;}
+
+/* structural future-checkpoint preview (Active) — not two pills */
+.fcp{border-left:1.5px solid var(--cold);padding-left:14px;}
+.fcp .cp{font-size:13px;color:var(--ink);font-weight:600;}
+.fcp .res{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.5;}
+.fcp .res b{color:var(--ink);font-weight:600;}
+
+/* split checkpoint results (rank vs tool) — shared structural line, minimal dividers */
+.result{display:flex;flex-direction:column;gap:2px;}
+.result .k{font-size:12px;color:var(--ink-3);}
+.result .v{font-size:15px;color:var(--ink);font-weight:600;}
+
+/* ---- gate far-field (reward + rank behind the boundary) ---- */
+.farfield .lbl{font-size:12.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-3);}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);}
+
+/* ---- bottom nav ---- */
+.bottomnav{position:absolute;left:0;right:0;bottom:0;height:60px;display:flex;justify-content:space-around;align-items:center;
+  border-top:1px solid var(--line);background:rgba(8,12,20,.86);}
+.bottomnav a{min-width:56px;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  font-size:10.5px;color:var(--ink-3);text-decoration:none;}
+.bottomnav a.on{color:var(--signal);} .bottomnav .ic{width:20px;height:20px;}
+.caption{position:absolute;left:30px;bottom:14px;font-size:11px;color:rgba(150,175,210,.34);font-family:var(--mono);}

@@ -1,0 +1,220 @@
+/* PROTOTYPE-ONLY base — Phase D4-A (Tools + Trading Journal art direction).
+ *
+ * Same rationale as the D2C-A / D3-A bases: src/styles/globals.css uses Tailwind
+ * directives that cannot resolve over file://, so the @layer base block is
+ * reproduced here verbatim in meaning. Nothing is invented — every value resolves
+ * to src/styles/tokens.css.
+ *
+ * The prototypes link the REAL product assets:
+ *   src/styles/tokens.css          → provisional semantic tokens
+ *   src/features/home/home.css     → app bar / mobile top bar / bottom nav
+ * so the shell in every screenshot is the product's own shell, not a redrawn one.
+ * The shell breakpoint (900px) is the product's own, not a prototype invention.
+ *
+ * NOTHING in this directory is production code. Every RU field label below the
+ * curriculum layer is PROTOTYPE-ONLY and is not canonical content
+ * (D4_TOOLS_SCOPE.md §4.2). Nothing here writes localStorage.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--background-field);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal-active) 34%, transparent);
+  color: var(--text-primary);
+}
+
+/* Prototype stand-in for the real <Icon> (lucide) / <BrandMark> React components:
+   inline SVG with the same geometry role. Icons stay SECONDARY metadata next to
+   text — never the identity (ata-brand-language). */
+.ic {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared Tools primitives — the parts that MUST read identically across the
+   three directions because they are product-canonical, not art direction:
+   the breadcrumb, the honest manual-entry notice, the locked-preview copy,
+   and the never-aggregated manual result. Composition diverges per concept.
+   --------------------------------------------------------------------------- */
+
+.tp-main {
+  padding: 0 clamp(16px, 4vw, 28px);
+  padding-bottom: calc(var(--mobile-bottom-nav-height) + 24px);
+}
+
+@media (min-width: 900px) {
+  .tp-main {
+    padding: 0 40px 48px;
+  }
+}
+
+/* breadcrumb back-link — same affordance as the lesson/report header */
+.tp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 10px 0;
+  min-height: 44px;
+}
+.tp-back:hover { color: var(--text-secondary); }
+.tp-back .sep { color: var(--route-locked); }
+
+.mono { font-family: var(--font-mono); }
+
+/* prototype-only marker — every invented RU field label carries it */
+.tp-proto {
+  font-size: 11.5px;
+  color: var(--route-locked);
+  font-style: italic;
+}
+
+/* the honest, canonical manual-entry notice (D4_TOOLS_SCOPE.md §4.1).
+   Calm, present, not alarming — the product never pretends to sync a broker. */
+.tp-manual {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.tp-manual .ic {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  stroke: var(--route-upcoming);
+}
+.tp-manual b { color: var(--text-primary); font-weight: 600; }
+
+/* Manual per-trade result — a mark in the MARGIN of a decision, never a headline
+   (D4_TOOLS_SCOPE.md §5). Secondary type, mono figure, sign coloured only faintly;
+   no currency symbol (a plain number, not Pocket money); NEVER summed. */
+.tp-result {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tp-result .fig {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.tp-result.is-pos .fig { color: color-mix(in srgb, var(--route-completed) 70%, var(--text-secondary)); }
+.tp-result.is-neg .fig { color: color-mix(in srgb, var(--route-upcoming) 55%, var(--text-secondary)); }
+.tp-result .lbl { letter-spacing: 0.2px; }
+/* the "no monetary result" state is a first-class, calm outcome — never an error */
+.tp-noresult {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* direction chip on an entry — buy / sell / observation-without-entry */
+.tp-dir {
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  border: 1px solid var(--divider-strong);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.tp-dir.is-obs { color: var(--text-muted); border-style: dashed; }
+
+/* instrument tag — text, not a ticker widget */
+.tp-instr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+/* the lesson text is the STATEMENT of every entry — largest thing in the row */
+.tp-lesson {
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------------------
+   Locked-preview primitives (shared copy, NOT shared composition).
+   Canonical copy only: «Откроется на уровне N». No CTA, no countdown,
+   no "X levels left". Muted, but still part of the Tools shell.
+   --------------------------------------------------------------------------- */
+.tp-lockline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--route-locked);
+}
+.tp-lockline .ic {
+  width: 14px;
+  height: 14px;
+  stroke: var(--route-locked);
+}
+
+/* the single primary action (add / open); disabled explains itself in adjacent
+   text, never in a tooltip */
+.tp-primary {
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #06120e;
+  background: var(--signal-active);
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 22px;
+  min-height: 46px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.tp-primary .ic { stroke: #06120e; width: 17px; height: 17px; }
+.tp-primary.is-ghost {
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--divider-strong);
+}
+.tp-primary.is-ghost .ic { stroke: var(--signal-active); }
+.tp-primary.is-ghost:hover { border-color: var(--route-upcoming); }

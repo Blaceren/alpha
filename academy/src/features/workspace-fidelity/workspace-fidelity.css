@@ -1,0 +1,1133 @@
+/*
+ * WORKSPACE — the frozen Workspace stylesheet, namespaced for the product.
+ *
+ * SOURCE OF TRUTH: WorkspaceATA @ 14e37895f83791e7a53a61e62b588c9969715e59,
+ * `hifi/prototype/hifi.css` (1059 lines). Every value is carried across
+ * UNCHANGED: 327 selectors, 0 escaping the namespace, 0 remote URLs, no
+ * !important on either side, and the only two changed declarations are the font
+ * bindings below.
+ *
+ * WHAT CHANGED, AND ONLY THIS:
+ *
+ * 1. The Google Fonts @import is deleted and the two families are bound to the
+ *    product's locally vendored faces — "ATA Manrope", "ATA IBM Plex Mono".
+ *
+ * 2. Every selector is namespaced under `.wsp`.
+ *
+ * 3. `html.wsp-root-scope`, the `.wsp .topbar*` rules and the `.wsp .qa*` rules
+ *    are carried across and are dead: the product keeps the accepted AppShell,
+ *    and the QA strip is evidence tooling rather than product UI — the frozen
+ *    source says so itself.
+ *
+ * WHAT IS CARRIED BUT NOT YET APPLIED, AND WHY IT IS STILL HERE.
+ * The `.rpt-*`, `.eng-*` and `.sub-*` rules are the frozen vocabulary for the
+ * report FORM and its engines. This restoration applies the page FRAME
+ * (`.ws-*`) and leaves the form in the product's own markup, because that form
+ * is the protected mutation surface — the submit/resubmit machine, the
+ * duplicate-submit guard, the auth-loss recovery that must never resubmit
+ * automatically, and the live-region adapter all hang off it, and its tests
+ * assert on its markup. The rules stay in this file so the next pass, made with
+ * authority to touch the mutation surface, does not have to re-derive them.
+ * That is a deliberate, recorded stopping point rather than an oversight.
+ *
+ * Adding `.wsp ` raises every rule's specificity by the same amount, so the
+ * cascade order inside the surface is preserved exactly.
+ */
+
+/* ATA LEVEL WORKSPACE — PHASE-3 DESKTOP HIGH-FI
+ *
+ * One stylesheet, three visual DIRECTIONS (A/B/C) over the frozen Phase-2 DOM.
+ * Directions differ ONLY in spatial grammar, rule hierarchy, containment and
+ * state emphasis. They share this file's tokens, type families, copy, scenarios
+ * and decision semantics — that is what makes the comparison a visual-system
+ * comparison rather than three product concepts (brief §28).
+ *
+ * No token below is new to ATA: every colour is inherited from the frozen
+ * sibling evidence (PuthATA/styles.css, LessonsATA/hifi/styles.css,
+ * LessonsATA/Reader/hifi/desktop/prototype/styles.css).
+ */
+
+/* ══ 1. INHERITED ATA ACADEMY TOKENS — no new hue, no new font ══════════════ */
+
+.wsp {
+  color-scheme: dark;
+
+  --bg-app: #0b0d0a;            /* Ink — shared app ground */
+  --surface-1: #11140f;         /* contained region */
+  --surface-2: #1a1f18;         /* raised interaction */
+
+  --line-1: rgba(243, 244, 239, 0.07);
+  --line-2: rgba(243, 244, 239, 0.13);
+  --line-3: rgba(243, 244, 239, 0.27);
+
+  --text-primary: #f3f4ef;
+  --text-body: #c9cfc3;         /* long-form authored prose */
+  --text-secondary: #c2c8bd;
+  --text-muted: #9aa396;
+  --text-on-signal: #0b0d0a;
+
+  --signal: #c7f76d;
+  --signal-hover: #d3fa85;
+
+  --radius: 8px;
+  --font-ui: "ATA Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "ATA IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-fast: 140ms;
+
+  /* ── Workspace-local measures. Execution prose is read once and acted on,
+     so it sits tighter than Reader's 680px editorial measure. ── */
+  --measure-req: 640px;         /* authored requirement prose */
+  --measure-state: 560px;       /* state + authority statement */
+  --page: 1120px;               /* execution field */
+  --gutter: 40px;
+}
+
+@media (max-width: 1339px) { .wsp { --page: 1000px; --gutter: 32px; } }
+@media (min-width: 1560px) { .wsp { --page: 1180px; } }
+
+.wsp * { box-sizing: border-box; }
+
+html.wsp-root-scope,
+.wsp {
+  margin: 0; padding: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ══ 2. SHARED ACADEMY SHELL — adjacent infrastructure, reproduced not designed */
+
+.wsp .topbar {
+  display: flex; align-items: center; gap: 30px;
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--line-1);
+}
+.wsp .topbar__wordmark { flex: 0 0 auto; width: 46px; line-height: 0; }
+.wsp .topbar__wordmark img { width: 100%; height: auto; }
+.wsp .topbar__context { display: none; }
+.wsp .topbar__nav { display: flex; align-items: center; gap: 4px; }
+.wsp .topbar__nav a {
+  padding: 9px 12px 10px; color: var(--text-muted);
+  font-size: 13px; font-weight: 550; text-decoration: none; white-space: nowrap;
+  transition: color var(--motion-fast) var(--ease);
+}
+.wsp .topbar__nav a:hover { color: var(--text-primary); }
+.wsp .topbar__nav a.is-active {
+  box-shadow: inset 0 -2px 0 var(--signal);
+  color: var(--text-primary); font-weight: 650;
+}
+
+/* ══ 3. QA METADATA — NEVER PRODUCT UI ═════════════════════════════════════ */
+
+.wsp .qa {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+  padding: 9px 32px; background: #05070a; border-bottom: 1px solid #1d2740;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em;
+  color: #7f93bf;
+}
+.wsp .qa b { color: #cfe0ff; font-weight: 600; }
+.wsp .qa-tag { color: #4e5f80; text-transform: uppercase; letter-spacing: .12em; }
+.wsp .qa-note {
+  padding: 7px 32px; background: #0f0c04; border-bottom: 1px solid #33280d;
+  font-family: var(--font-mono); font-size: 10.5px; color: #b79445;
+}
+.wsp .qa-inline {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+  color: #b79445; border: 1px solid #4a3a12; border-radius: 2px;
+  padding: 1px 5px; vertical-align: 1px; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.wsp [data-mode="body-only"] .topbar,
+.wsp [data-mode="body-only"] .qa,
+.wsp [data-mode="body-only"] .qa-note { display: none; }
+.wsp [data-mode="grayscale"] { filter: grayscale(1); }
+/* QA-ONLY safe-area simulation. Chromium resolves env(safe-area-inset-*) to 0,
+   so representative insets are injected to prove that no critical control, exit
+   or terminal bar depends on a zero inset. This is a SIMULATION — it is not
+   physical-device acceptance and no such claim is made. */
+.wsp [data-mode="safe-area"] { --sa-top: 44px; --sa-bottom: 34px; }
+/* Signal-off: the hue is removed, the STRUCTURE is not. Anything that carried
+   Signal falls back to a neutral of equivalent weight, so the board answers
+   "does hierarchy survive without the hue" rather than "does the page break". */
+.wsp [data-mode="signal-off"] {
+  --signal: #c2c8bd;
+  --signal-hover: #f3f4ef;
+  --text-on-signal: #0b0d0a;
+}
+
+/* ══ 4. THE EXECUTION FIELD ════════════════════════════════════════════════ */
+
+.wsp .ws {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 56px var(--gutter) 120px;
+}
+
+/* ── A1 execution identity ── */
+.wsp .ws-id { margin: 0 0 36px; }
+.wsp .ws-id__coord {
+  margin: 0 0 12px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 450;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--text-muted);
+}
+.wsp .ws-id__coord b { color: var(--text-secondary); font-weight: 600; }
+.wsp .ws-id__title {
+  margin: 0; max-width: 20ch;
+  font-size: 34px; line-height: 1.14; font-weight: 700; letter-spacing: -.017em;
+  color: var(--text-primary);
+}
+
+/* ── region stamps: the mono label that opens every region ── */
+.wsp .ws-req__label,
+.wsp .ws-state__label,
+.wsp .ws-host__label,
+.wsp .ws-mat__label,
+.wsp .ws-crit__label,
+.wsp .eng-record__label,
+.wsp .eng-fb__label {
+  margin: 0 0 14px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--text-muted);
+}
+
+/* ── A2 execution requirement ── */
+.wsp .ws-req { margin: 0 0 40px; max-width: var(--measure-req); }
+.wsp .ws-req__title {
+  margin: 0 0 10px;
+  font-size: 21px; line-height: 1.32; font-weight: 650; letter-spacing: -.008em;
+  color: var(--text-primary);
+}
+.wsp .ws-req__lead {
+  margin: 0 0 16px;
+  font-size: 16px; line-height: 1.62; color: var(--text-body);
+}
+.wsp .ws-req__steps {
+  margin: 0 0 18px; padding: 0; list-style: none;
+  counter-reset: step;
+}
+.wsp .ws-req__steps li {
+  counter-increment: step;
+  position: relative; padding: 0 0 0 34px; margin: 0 0 13px;
+  font-size: 15.5px; line-height: 1.6; color: var(--text-body);
+}
+.wsp .ws-req__steps li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute; left: 0; top: .18em;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .04em; color: var(--text-muted);
+}
+.wsp .ws-req__meta {
+  margin: 0 0 10px;
+  font-size: 13.5px; line-height: 1.55; color: var(--text-muted);
+}
+.wsp .ws-req__where {
+  margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line-1);
+  font-size: 14px; line-height: 1.55; color: var(--text-secondary);
+}
+.wsp .ws-req__unstated {
+  margin: 0; font-size: 15px; line-height: 1.6; color: var(--text-muted);
+  font-style: italic;
+}
+
+/* The single action of the "no workspace" state.
+ *
+ * The exit row at the foot of the page still carries both routes; this is the
+ * same destination raised to the weight of a main action, because in this state
+ * it is the only thing to do. Bordered rather than filled: Signal stays for
+ * progression and state, not for a way back. 44px is the target height, met by
+ * padding rather than a fixed size so the label can wrap on a narrow screen. */
+.wsp .ws-req__cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; margin: 20px 0 0; padding: 11px 20px;
+  border: 1px solid var(--line-3); border-radius: var(--radius);
+  font-size: 15px; font-weight: 600; color: var(--text-primary);
+  text-decoration: none;
+  transition: border-color var(--motion-fast) var(--ease),
+              background-color var(--motion-fast) var(--ease);
+}
+.wsp .ws-req__cta:hover { border-color: var(--text-muted); background: var(--surface-2); }
+.wsp .ws-req__more { margin: 6px 0 0; }
+.wsp .ws-req__more > summary {
+  cursor: pointer; list-style: none; display: inline-block;
+  font-size: 14px; font-weight: 600; color: var(--text-secondary);
+  border-bottom: 1px solid var(--line-2);
+  transition: color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+}
+.wsp .ws-req__more > summary::-webkit-details-marker { display: none; }
+.wsp .ws-req__more > summary::after { content: " ↓"; font-family: var(--font-mono); font-size: 11px; }
+.wsp .ws-req__more[open] > summary::after { content: " ↑"; }
+.wsp .ws-req__more > summary:hover { color: var(--text-primary); border-color: var(--line-3); }
+.wsp .ws-req__more[open] > summary { margin-bottom: 20px; }
+
+/* authored criteria — rendered in their own authored shape */
+.wsp .ws-crit { margin: 22px 0 0; padding-top: 20px; border-top: 1px solid var(--line-1); }
+.wsp .ws-crit__p { margin: 0 0 12px; font-size: 15px; line-height: 1.62; color: var(--text-body); }
+.wsp .ws-crit__k { color: var(--text-primary); font-weight: 650; }
+.wsp .ws-crit__list { margin: 0 0 12px; padding-left: 20px; }
+.wsp .ws-crit__list li { margin: 0 0 8px; font-size: 15px; line-height: 1.6; color: var(--text-body); }
+.wsp .ws-crit__none { margin: 0; font-size: 14px; color: var(--text-muted); }
+.wsp .ws-crit__wrap { overflow-x: auto; margin: 0 0 14px; }
+.wsp .ws-crit__table { border-collapse: collapse; min-width: 100%; font-size: 14px; }
+.wsp .ws-crit__table th,
+.wsp .ws-crit__table td {
+  padding: 10px 16px 10px 0; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line-1); line-height: 1.5;
+}
+.wsp .ws-crit__table th {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted);
+  border-bottom-color: var(--line-2);
+}
+.wsp .ws-crit__table td { color: var(--text-body); }
+
+/* ── A3+A4 execution state + primary decision ── */
+.wsp .ws-state { margin: 0 0 40px; }
+.wsp .ws-state__line {
+  margin: 0 0 8px; max-width: var(--measure-state);
+  font-size: 18px; line-height: 1.44; font-weight: 600; letter-spacing: -.004em;
+  color: var(--text-primary);
+}
+.wsp .ws-state__owner {
+  margin: 0; max-width: var(--measure-state);
+  font-size: 15px; line-height: 1.55; color: var(--text-secondary);
+}
+.wsp .ws-state__note {
+  margin: 10px 0 0; max-width: var(--measure-state);
+  font-size: 14px; line-height: 1.55; color: var(--text-muted);
+}
+.wsp .ws-quiet {
+  margin: 16px 0 0;
+  font-size: 14px; color: var(--text-muted);
+}
+.wsp .ws-act__hint {
+  margin: 12px 0 0; max-width: 46ch;
+  font-size: 13.5px; line-height: 1.5; color: var(--text-muted);
+}
+
+/* ── the primary control ── */
+.wsp .ws-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin: 22px 0 0; min-height: 48px; padding: 0 26px;
+  border: 0; border-radius: var(--radius);
+  background: var(--signal); color: var(--text-on-signal);
+  font-family: var(--font-ui); font-size: 15px; font-weight: 700; letter-spacing: -.005em;
+  cursor: pointer; text-decoration: none;
+  transition: background var(--motion-fast) var(--ease);
+}
+.wsp .ws-act:hover { background: var(--signal-hover); }
+.wsp .ws-act:active { background: #b9ef58; }
+
+.wsp .btn-2 {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 18px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: none; color: var(--text-secondary);
+  font-family: var(--font-ui); font-size: 14px; font-weight: 600;
+  cursor: pointer; text-decoration: none;
+  transition: color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+}
+.wsp .btn-2:hover { color: var(--text-primary); border-color: var(--line-3); }
+
+.wsp :focus-visible {
+  outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 3px;
+}
+
+/* Effective target ≥44px on every text link without changing its visual size —
+   the same invisible hit-extension the frozen Academy shell already uses
+   (LessonsATA/Reader `.strip__btn::after`). Phase-2 principle 16: the target is
+   the statement, not the glyph. */
+.wsp .ws-exit a,
+.wsp .ws-sup a,
+.wsp .ws-mat__link,
+.wsp .sub-head__back,
+.wsp .ws-req__more > summary {
+  position: relative;
+  display: inline-block;
+}
+.wsp .ws-exit a::after,
+.wsp .ws-sup a::after,
+.wsp .ws-mat__link::after,
+.wsp .sub-head__back::after {
+  content: ""; position: absolute; left: 0; right: 0;
+  top: 50%; height: 44px; transform: translateY(-50%);
+}
+/* the disclosure marker is drawn by its own ::after, so this one reaches 44px
+   through padding instead of an overlay */
+.wsp .ws-req__more > summary { padding: 13px 0; }
+
+/* ── A5 execution host ── */
+.wsp .ws-host { margin: 0 0 40px; scroll-margin-top: 24px; }
+.wsp .ws-host:has(> .eng-record) > .ws-host__label,
+.wsp .ws-host:has(> .eng-fb) > .ws-host__label { display: none; }
+
+/* ── A6 supporting material — subordinate by construction ── */
+.wsp .ws-mat { margin: 0 0 36px; max-width: var(--measure-req); }
+.wsp .ws-mat__title { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.wsp .ws-mat__sum { margin: 0 0 12px; font-size: 14px; line-height: 1.58; color: var(--text-muted); }
+.wsp .ws-mat__link {
+  font-size: 14px; font-weight: 600; color: var(--text-secondary);
+  text-decoration: none; border-bottom: 1px solid var(--line-2);
+  padding-bottom: 2px;
+  transition: color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+}
+.wsp .ws-mat__link:hover { color: var(--text-primary); border-color: var(--line-3); }
+
+/* ── A7 completion boundary ── */
+.wsp .ws-done { margin: 0 0 36px; max-width: var(--measure-state); }
+.wsp .ws-done__line { margin: 0; font-size: 15px; line-height: 1.6; color: var(--text-secondary); }
+
+/* ── A8 exits ── */
+.wsp .ws-exit { display: flex; flex-wrap: wrap; gap: 26px; padding-top: 26px; border-top: 1px solid var(--line-1); }
+.wsp .ws-exit a {
+  font-size: 14px; color: var(--text-muted); text-decoration: none;
+  transition: color var(--motion-fast) var(--ease);
+}
+.wsp .ws-exit a:hover { color: var(--text-primary); }
+.wsp .ws-sup { display: flex; flex-wrap: wrap; gap: 26px; margin: 0 0 20px; }
+.wsp .ws-sup a { font-size: 14px; color: var(--text-secondary); text-decoration: none; border-bottom: 1px solid var(--line-2); padding-bottom: 2px; }
+.wsp .ws-sup a:hover { color: var(--text-primary); }
+
+/* ── page-level message (locked, request failure) ── */
+.wsp .ws-page-msg { max-width: var(--measure-state); }
+.wsp .ws-page-msg__title { margin: 0 0 10px; font-size: 19px; font-weight: 650; color: var(--text-primary); }
+.wsp .ws-page-msg__body { margin: 0 0 22px; font-size: 15px; line-height: 1.6; color: var(--text-secondary); }
+
+/* ══ 5. ENGINES — shared containment, family-specific inside ════════════════ */
+
+.wsp .eng-notice {
+  margin: 0 0 24px; padding: 18px 22px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.wsp .eng-notice--block { border-color: var(--text-primary); border-width: 2px; }
+.wsp .eng-notice__head { margin: 0 0 6px; font-size: 15.5px; font-weight: 650; color: var(--text-primary); }
+.wsp .eng-notice__body { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); }
+.wsp .eng-notice__body + .eng-notice__body { margin-top: 10px; }
+.wsp .eng-notice__act { margin-top: 16px; }
+.wsp .eng-notice--block:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
+
+/* assessment */
+.wsp .eng-q { margin: 0 0 28px; padding: 0; border: 0; }
+.wsp .eng-q__num {
+  padding: 0; margin: 0 0 10px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted);
+}
+.wsp .eng-q__prompt { margin: 0 0 16px; font-size: 17px; line-height: 1.45; font-weight: 600; color: var(--text-primary); }
+.wsp .eng-opt {
+  display: flex; align-items: flex-start; gap: 14px;
+  min-height: 48px; padding: 13px 18px; margin: 0 0 8px;
+  border: 1px solid var(--line-1); border-radius: var(--radius);
+  font-size: 15px; line-height: 1.5; color: var(--text-body); cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease), background var(--motion-fast) var(--ease);
+}
+.wsp .eng-opt:hover { border-color: var(--line-2); background: var(--surface-2); }
+.wsp .eng-opt:focus-within { border-color: var(--signal); }
+.wsp .eng-opt input { margin: 3px 0 0; accent-color: var(--signal); width: 17px; height: 17px; flex: 0 0 auto; }
+.wsp .eng-result {
+  margin: 0 0 28px; padding: 18px 22px;
+  border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface-1);
+}
+.wsp .eng-result__head { margin: 0 0 6px; font-size: 16px; font-weight: 650; color: var(--text-primary); }
+.wsp .eng-result__body { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); }
+
+/* attestation — manual + mentor */
+.wsp .eng-attest {
+  padding: 24px 26px; border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.wsp .eng-attest__warn { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); }
+.wsp .eng-attest__confirm {
+  display: flex; align-items: flex-start; gap: 14px;
+  max-width: var(--measure-state);
+  min-height: 48px; padding: 13px 16px; margin: 0 0 4px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  font-size: 15px; line-height: 1.5; color: var(--text-primary); cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease), background var(--motion-fast) var(--ease);
+}
+.wsp .eng-attest__confirm:hover { border-color: var(--line-3); background: var(--surface-2); }
+.wsp .eng-attest__confirm:focus-within { border-color: var(--signal); }
+.wsp .eng-attest__confirm input { margin: 2px 0 0; accent-color: var(--signal); width: 18px; height: 18px; flex: 0 0 auto; }
+/* the declaration is two deliberate acts, so the control starts its own line */
+.wsp .eng-attest .ws-act { display: flex; margin-top: 18px; }
+
+/* record / feedback — inspectable history */
+.wsp .eng-record,
+.wsp .eng-fb {
+  padding: 20px 24px; border: 1px solid var(--line-1); border-radius: var(--radius);
+}
+.wsp .eng-record__more,
+.wsp .eng-fb__body {
+  margin: 0; font-size: 14.5px; line-height: 1.62; color: var(--text-secondary);
+}
+.wsp .eng-record__more + .eng-record__more { margin-top: 10px; }
+.wsp .eng-fb__author {
+  margin: 0 0 8px; font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted);
+}
+/* ── PHASE-3 FINAL CLOSURE (V-5) — the report read-only record ──────────────
+   One grammar for every non-editable report state. A submitted value is a
+   VALUE, never an inert control: no disabled input, no greyed select, no
+   readonly-looking field. Structure comes from type, rhythm and a hairline per
+   row — not from a box, because the frozen WORK SLAB rule is containment where
+   you touch, and a record is what you no longer touch.
+
+   The label stays quiet and holds a fixed column so repeated pairs build a
+   scannable rhythm; the value carries the reading ink. Long authored prose
+   drops to its own line at full measure so a learner's observation stays
+   readable instead of being squeezed into a value column. Nothing here is
+   Signal — a historical record is never "active".
+
+   The predecessor of this block was `.eng-rec-dl`, a hook that never matched
+   the markup: the renderer emitted a classless <dl>, so the record had been
+   rendering with browser defaults. That mismatch is the mechanical root of V-5.
+*/
+
+.wsp .rec { margin: 0; }
+
+.wsp .rec__row {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 8px 28px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--line-1);
+}
+.wsp .rec__row:first-child { border-top: 0; padding-top: 2px; }
+
+.wsp .rec__label {
+  margin: 0;
+  font-size: 13.5px; line-height: 1.45; font-weight: 500;
+  color: var(--text-muted);
+}
+.wsp .rec__value {
+  margin: 0;
+  font-size: 15.5px; line-height: 1.55;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* a long authored value is prose: it takes the full measure on its own line and
+   reads at body weight rather than as a short inspectable token */
+.wsp .rec__row--long { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.wsp .rec__row--long .rec__value {
+  font-size: 15px; line-height: 1.62; color: var(--text-body);
+  max-width: var(--measure-req);
+}
+
+/* :not(--long) — the narrow-width rule has the same specificity as the long-row
+   rule and comes later, so without this exclusion it silently pulled long
+   authored values back into the value column at 1280 and under zoom. */
+@media (max-width: 1339px) {
+  .wsp .rec__row:not(.rec__row--long) { grid-template-columns: 190px minmax(0, 1fr); gap: 8px 24px; }
+}
+
+/* the approved sub-surface reuses the group frame but holds a record, not a form */
+.wsp [data-direction="C"] .rpt-group--rec .rec { padding: 0 0 22px; }
+
+/* ══ 6. REPORT SUB-SURFACE ═════════════════════════════════════════════════ */
+
+/* padding-bottom is a floor only: hifi.js replaces it with the bar's measured
+   height so the document always reserves exactly what the control occupies. */
+.wsp .sub-wrap { max-width: var(--page); margin: 0 auto; padding: 40px var(--gutter) 120px; }
+.wsp .sub-head { margin: 0 0 32px; padding-bottom: 24px; border-bottom: 1px solid var(--line-2); }
+.wsp .sub-head__back {
+  display: inline-block; margin: 0 0 20px;
+  font-size: 14px; color: var(--text-muted); text-decoration: none;
+  transition: color var(--motion-fast) var(--ease);
+}
+.wsp .sub-head__back:hover { color: var(--text-primary); }
+.wsp .sub-head__id {
+  margin: 0 0 10px; font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--text-muted);
+}
+.wsp .sub-head__title { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -.014em; }
+.wsp .sub-qa {
+  margin: 0 0 24px; padding: 9px 12px;
+  border: 1px solid #33280d; border-radius: 3px; background: #0f0c04;
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.55; color: #b79445;
+}
+.wsp .sub-ro-note { margin: 0 0 24px; max-width: 70ch; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); }
+.wsp .sub-body { max-width: 860px; }
+
+.wsp .rpt-group { margin: 0 0 12px; border: 1px solid var(--line-1); border-radius: var(--radius); overflow: hidden; }
+.wsp .rpt-group__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 20px;
+  padding: 15px 22px; background: var(--surface-1);
+  font-size: 15.5px; font-weight: 650; color: var(--text-primary);
+}
+.wsp .rpt-group__count { font-family: var(--font-mono); font-size: 11px; font-weight: 400; letter-spacing: .06em; color: var(--text-muted); }
+.wsp .rpt-group--err > .rpt-group__head { box-shadow: inset 3px 0 0 var(--text-primary); }
+.wsp .rpt-group__err { font-family: var(--font-ui); font-weight: 650; color: var(--text-primary); letter-spacing: 0; }
+.wsp .rpt-group__body { padding: 22px; border-top: 1px solid var(--line-1); }
+
+/* ── PHASE-5 STAGE B1.5 — report field-group disclosure affordance ──────────
+   SURGICAL STATIC ERRATUM against the Phase-4 freeze, authorised by CPD after
+   B1 found the group collapse had no operable control at all. Phase 2 accepted
+   progressive disclosure and named an operable mechanism; Phase 3 and Phase 4
+   both recorded "the accordion mechanism" as still open, so the composition
+   shipped a collapsed state the learner could not act on.
+
+   The scope is the trigger territory and nothing else. The head keeps its
+   geometry, type, colour, padding and layout exactly; it becomes a <button> and
+   gains an indicator.
+
+   THE INDICATOR IS NOT NEW. It is the disclosure grammar this product already
+   owns — the same mono arrow at the same 11px the requirement disclosure draws
+   at `.ws-req__more > summary::after`. A learner on a report level has already
+   met it on the same page. Introducing a chevron was compared and rejected: it
+   would have been a new glyph in the family, earning nothing a familiar one does
+   not already do.
+
+   The colour is NOT inherited from that marker, deliberately. The frozen one has
+   no colour of its own — it takes --text-secondary from the summary it trails.
+   A group head is --text-primary at weight 650, so inheriting here would draw a
+   much louder marker. --text-muted is the token already on this row: it is what
+   the field count beside it uses. The marker matches its own row.
+
+   Placement mirrors the requirement disclosure too — trailing the title, where
+   reading starts, rather than at the far right beside the count. Measured, the
+   two placements are identical under a long-title stress at 360 and 390 (three
+   lines, 20px gap, no collision, no clipping), so legibility decided it.
+
+   NO Signal, no fill, no chevron, no rotation, no card, no motion. */
+.wsp button.rpt-group__head {
+  /* The head was a <div>; as a control it must render identically.
+   * This reset neutralises what the UA button style forces and NOTHING else.
+   * It deliberately does not restate background, colour, size, weight, padding
+   * or layout: those already come from `.rpt-group__head` and its 599px
+   * override, and restating them here would raise the specificity above the
+   * mobile rule and silently reintroduce the desktop type size on phones. */
+  appearance: none; -webkit-appearance: none;
+  /* a button's width is shrink-to-fit in Chromium whatever its display value,
+   * so the full-width head has to be asked for explicitly or `space-between`
+   * pulls the field count in against the title */
+  width: 100%; margin: 0; border: 0; border-radius: 0;
+  font-family: inherit; line-height: inherit;
+  text-align: left; cursor: pointer;
+}
+/* keyed to `aria-expanded`, not to the name span: a head with no disclosure
+   state — the submitted record — must never draw a disclosure indicator */
+.wsp .rpt-group__head[aria-expanded] .rpt-group__name::after {
+  content: " ↓";
+  font-family: var(--font-mono); font-size: 11px; font-weight: 400;
+  letter-spacing: .06em; color: var(--text-muted);
+}
+.wsp .rpt-group__head[aria-expanded="true"] .rpt-group__name::after { content: " ↑"; }
+/* hover is a confirmation, never the affordance: the indicator carries it */
+.wsp button.rpt-group__head:hover .rpt-group__name::after { color: var(--text-secondary); }
+
+.wsp .rpt-f { margin: 0 0 20px; }
+.wsp .rpt-f__label { display: block; margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.wsp .rpt-f__req { color: var(--text-muted); font-weight: 400; }
+.wsp .rpt-f__in {
+  width: 100%; min-height: 46px; padding: 12px 14px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--bg-app); color: var(--text-primary);
+  font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+  transition: border-color var(--motion-fast) var(--ease);
+}
+.wsp .rpt-f__in:hover { border-color: var(--line-3); }
+.wsp .rpt-f__in:focus-visible { border-color: var(--signal); outline: 2px solid var(--signal); outline-offset: 1px; }
+.wsp textarea.rpt-f__in { min-height: 96px; resize: vertical; }
+.wsp .rpt-f__in[readonly] { background: var(--surface-1); color: var(--text-body); border-color: var(--line-1); }
+.wsp .rpt-f__ro {
+  margin: 0; display: block; background: var(--surface-1); color: var(--text-body);
+  border-color: var(--line-1); user-select: text;
+}
+.wsp .rpt-f--err .rpt-f__in { border-color: var(--text-primary); border-width: 2px; }
+.wsp .rpt-f__err { display: block; margin: 8px 0 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+
+.wsp .rpt-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: flex-end; gap: 16px;
+  /* full-bleed surface, content aligned to the execution field */
+  padding: 16px max(var(--gutter), calc((100vw - var(--page)) / 2 + var(--gutter)));
+  background: rgba(11, 13, 10, .94);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line-2);
+}
+.wsp .rpt-bar__state { margin-right: auto; font-size: 14px; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. VISUAL DIRECTIONS
+   Same tokens, same type, same copy, same DOM, same decision semantics.
+   What differs: spatial grammar, rule hierarchy, containment, state emphasis.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── DIRECTION A — «STATE PLANE» ────────────────────────────────────────────
+   Containment means liveness. The obligation is stated openly on the Ink
+   ground; the part of the contract that is CURRENTLY LIVE — the state, the
+   decision and the engine — sits on a single raised plane. There is never more
+   than one plane, so the page cannot become a card wall, and the plane's
+   treatment encodes the decision without needing Signal to do it:
+
+     ACTION  raised, fill + firmer edge   — live, and the control is inside it
+     WAIT    raised, fill + hairline edge — live, but not yours; no control
+     NONE    unfilled, hairline edge      — receded; a record, not a task
+   ──────────────────────────────────────────────────────────────────────── */
+
+.wsp [data-direction="A"] .ws-state,
+.wsp [data-direction="A"] .ws-host:not(:empty) {
+  padding: 26px 30px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.wsp [data-direction="A"] .ws[data-decision="action"] .ws-state { border-color: var(--line-2); }
+.wsp [data-direction="A"] .ws[data-decision="none"] .ws-state { background: none; }
+.wsp [data-direction="A"] .ws[data-decision="none"] .ws-host:not(:empty) { background: none; }
+
+/* the state block and the engine it introduces are ONE plane, not two cards */
+.wsp [data-direction="A"] .ws-state:has(+ .ws-host) {
+  margin-bottom: 0;
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.wsp [data-direction="A"] .ws-state:has(+ .ws-host) + .ws-host {
+  border-radius: 0 0 var(--radius) var(--radius);
+  border-top: 1px solid var(--line-1);
+}
+.wsp [data-direction="A"] .ws-req { margin-bottom: 44px; }
+.wsp [data-direction="A"] .eng-attest,
+.wsp [data-direction="A"] .eng-record,
+.wsp [data-direction="A"] .eng-result,
+.wsp [data-direction="A"] .eng-notice { background: none; padding-left: 0; padding-right: 0; border-left: 0; border-right: 0; border-radius: 0; }
+.wsp [data-direction="A"] .eng-attest { border: 0; padding: 0; }
+.wsp [data-direction="A"] .eng-record { border: 0; padding: 0; }
+
+/* ── DIRECTION B — «CONTRACT REGISTER» ──────────────────────────────────────
+   The contract and its register are read side by side. The wide column carries
+   what is required and what supports it; a narrow right-hand register carries
+   what the state is, whose move it is, and the one decision — and stays with
+   the learner as they read a long task. Engines break out to full width because
+   the work is not a sidebar concern.
+
+   The register is the whole direction: it makes «чей сейчас ход» a permanent
+   fact rather than something found by scrolling.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.wsp [data-direction="B"] .ws {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  column-gap: 60px;
+  align-items: start;
+}
+.wsp [data-direction="B"] .ws-id { grid-column: 1 / -1; }
+.wsp [data-direction="B"] .ws-req,
+.wsp [data-direction="B"] .ws-mat,
+.wsp [data-direction="B"] .ws-done { grid-column: 1; }
+.wsp [data-direction="B"] .ws-host { grid-column: 1 / -1; }
+.wsp [data-direction="B"] .ws-exit { grid-column: 1 / -1; }
+.wsp [data-direction="B"] .ws-state {
+  grid-column: 2; grid-row: 2 / span 5;
+  align-self: start; position: sticky; top: 24px;
+  padding: 24px 24px 26px;
+  border-top: 2px solid var(--line-3);
+  border-bottom: 1px solid var(--line-1);
+}
+.wsp [data-direction="B"] .ws[data-decision="action"] .ws-state { border-top-color: var(--signal); }
+.wsp [data-direction="B"] .ws-state__line { font-size: 17px; max-width: none; }
+.wsp [data-direction="B"] .ws-state__owner,
+.wsp [data-direction="B"] .ws-state__note { font-size: 14px; max-width: none; }
+.wsp [data-direction="B"] .ws-state .ws-act { width: 100%; }
+/* the engine breaks out to full width; the WORK inside it keeps a measure */
+.wsp [data-direction="B"] .ws-host > * { max-width: 760px; }
+.wsp [data-direction="B"] .ws-req { max-width: 100%; }
+.wsp [data-direction="B"] .ws-page-msg,
+.wsp [data-direction="B"] .ws--msg { grid-column: 1 / -1; }
+
+/* ── DIRECTION C — «WORK SLAB» ──────────────────────────────────────────────
+   No fills at all. The field is governed by rules that run the FULL WIDTH of
+   the execution field while the text stays in a narrow left-anchored measure —
+   a worked specification, not a reading column and not a set of cards. Rule
+   weight encodes rank: the contract opens on the firmest rule on the page, its
+   parts on hairlines. The decision closes the state region on its own rule.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.wsp [data-direction="C"] .ws-req,
+.wsp [data-direction="C"] .ws-state,
+.wsp [data-direction="C"] .ws-host:not(:empty),
+.wsp [data-direction="C"] .ws-mat,
+.wsp [data-direction="C"] .ws-done {
+  padding-top: 22px;
+  border-top: 1px solid var(--line-1);
+}
+.wsp [data-direction="C"] .ws-req {
+  border-top: 2px solid var(--text-primary);
+  padding-top: 26px;
+}
+.wsp [data-direction="C"] .ws-state {
+  border-top: 1px solid var(--line-3);
+  padding-top: 26px;
+}
+/* When the requirement is withheld (locked), there is no A2 to open the
+   contract, so the contract rule moves to the first region that exists. The
+   page always opens on the firmest rule. */
+.wsp [data-direction="C"] .ws-id + .ws-state {
+  border-top: 2px solid var(--text-primary);
+}
+/* Signal marks the active-execution region, and nothing else. On an ACTION frame exactly
+   two elements carry it — this rule and the control — so the direction can be
+   read with Signal removed and still keep its hierarchy: the rule reverts to
+   line-3, which is still the firmest rule beneath the contract rule. */
+.wsp [data-direction="C"] .ws[data-decision="action"] .ws-state { border-top-color: var(--signal); }
+.wsp [data-direction="C"] .ws-req,
+.wsp [data-direction="C"] .ws-state,
+.wsp [data-direction="C"] .ws-mat,
+.wsp [data-direction="C"] .ws-done { max-width: none; }
+.wsp [data-direction="C"] .ws-req > *:not(.ws-req__more):not(.ws-crit),
+.wsp [data-direction="C"] .ws-state > *,
+.wsp [data-direction="C"] .ws-mat > *,
+.wsp [data-direction="C"] .ws-done > *,
+.wsp [data-direction="C"] .ws-host > * { max-width: var(--measure-req); }
+.wsp [data-direction="C"] .ws-req__more > summary { max-width: var(--measure-req); }
+/* The execution measure is applied to DIRECT children of .ws-req, and the
+   disclosure is excluded there. Moving the report requirement inside it would
+   therefore have released the prose to the full field width — the cause of a
+   52px desktop shift. Cap the disclosure's own contents to the same measure so
+   the composition is unchanged. On mobile the measure is 100%, so this is inert. */
+.wsp [data-direction="C"] .ws-req__more--report > *:not(summary) { max-width: var(--measure-req); }
+.wsp [data-direction="C"] .ws-crit { max-width: var(--measure-req); }
+.wsp [data-direction="C"] .eng-attest,
+.wsp [data-direction="C"] .eng-record,
+.wsp [data-direction="C"] .eng-result,
+.wsp [data-direction="C"] .eng-notice,
+.wsp [data-direction="C"] .rpt-group { background: none; }
+.wsp [data-direction="C"] .eng-attest { border: 0; border-left: 0; padding: 0; }
+.wsp [data-direction="C"] .eng-record { border: 0; padding: 0; }
+.wsp [data-direction="C"] .eng-result { border: 0; border-left: 0; padding: 0 0 0 0; border-top: 1px solid var(--line-2); padding-top: 16px; }
+/* The report sub-surface inherits the direction's grammar: groups are separated
+   by rules, not stacked as boxes, so a 43-field form does not become the card
+   wall the root surface refuses to be. */
+.wsp [data-direction="C"] .rpt-group {
+  border: 0; border-top: 1px solid var(--line-2); border-radius: 0;
+  margin: 0; overflow: visible;
+}
+.wsp [data-direction="C"] .rpt-group:last-of-type { border-bottom: 1px solid var(--line-2); }
+.wsp [data-direction="C"] .rpt-group__head { background: none; padding: 18px 0; }
+.wsp [data-direction="C"] .rpt-group__body { border-top: 0; padding: 4px 0 26px; }
+.wsp [data-direction="C"] .rpt-group--err > .rpt-group__head { box-shadow: none; }
+.wsp [data-direction="C"] .rpt-group--err { border-top-color: var(--text-primary); border-top-width: 2px; }
+.wsp [data-direction="C"] .sub-body { max-width: none; }
+.wsp [data-direction="C"] .rpt-f { max-width: 560px; }
+.wsp [data-direction="C"] .sub-qa,
+.wsp [data-direction="C"] .sub-ro-note { max-width: 100%; }
+.wsp [data-direction="C"] .eng-q { border-bottom: 1px solid var(--line-1); padding-bottom: 20px; }
+.wsp [data-direction="C"] .eng-q:last-of-type { border-bottom: 0; }
+
+/* ── PHASE-3 CLOSURE (V-3) — semantic wrappers, zero visual change ──────────
+   The work region became a named <form> landmark; the provisional field groups
+   became named `group`s via role + aria-labelledby. Neither changes an element
+   or a box, so every report frame renders byte-identically to the pre-closure
+   evidence. The only rule needed is the form's margin reset. */
+
+.wsp form.sub-body { margin: 0; }
+
+/* ── PHASE-4 CLOSURE (M-1) — the report requirement is condensed ON MOBILE ONLY
+   The renderer emits one DOM at every width: on a non-ACTION report state the
+   requirement body sits inside the registered disclosure. Desktop is frozen, so
+   above the mobile breakpoint that disclosure is held open and its summary
+   hidden — the desktop composition is byte-identical to Phase 3.
+
+   Scoped to family D. Families B and C are condensed on desktop too; that is
+   frozen Phase-2 behaviour and is untouched here.
+
+   MECHANISM NOTE: holding a closed <details> open from CSS depends on how the
+   engine implements the closed state, and engines have used two mechanisms.
+   BOTH are neutralised here, in that order:
+
+     - older engines hide the non-summary children with `display: none`;
+     - current Chromium hides ::details-content with `content-visibility`.
+
+   Only the second does anything in the pinned browser — the first was measured
+   at 0 effect, and the children are block-level already, so it is inert rather
+   than cosmetic. It is present so the desktop guarantee does not rest on a
+   single recent feature: if ::details-content were unsupported, the requirement
+   body would silently disappear from desktop, which is the one outcome this
+   rule exists to prevent. Recorded as a PRESENTATION CANDIDATE, not frozen; a
+   production implementation will choose its own mechanism. */
+@media (min-width: 600px) {
+  .wsp .ws[data-family="D"] .ws-req__more--report > summary { display: none; }
+  .wsp .ws[data-family="D"] .ws-req__more--report:not([open]) > *:not(summary) { display: block; }
+  .wsp .ws[data-family="D"] .ws-req__more--report:not([open])::details-content {
+    content-visibility: visible;
+  }
+  .wsp .ws[data-family="D"] .ws-req__more--report { margin: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHASE 4 — RESPONSIVE COMPOSITION / MOBILE HIGH-FI
+   ══════════════════════════════════════════════════════════════════════════
+
+   ONE PRODUCT, ONE DOM, ONE STATE SYSTEM. Everything below is a responsive
+   adaptation of the frozen WORK SLAB desktop system — no mobile mode, no mobile
+   markup branch, no mobile-only semantics, no second component system. The
+   renderer, the fixtures, the decision logic and every string are shared.
+
+   BREAKPOINT: 599px, inherited from the Academy family — Path, Lessons and
+   Reader all switch there, so the shell and the body change together. It is the
+   only Workspace mobile breakpoint: one boundary, one reason.
+
+   EVERY RULE IS SCOPED INSIDE THE MEDIA QUERY. Desktop is frozen, and a
+   responsive pass must not reach it through specificity, source order or a
+   shared custom property. Verified by pixel comparison against the Phase-3
+   baseline.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 599px) {
+
+  /* ── 1. Field geometry ────────────────────────────────────────────────────
+     The execution field becomes the viewport. Desktop caps prose at a 640px
+     measure because a 1120px field would otherwise run long lines; at 360–430
+     the viewport is already narrower than that measure, so keeping it would
+     only subtract width from Russian text that is already wrapping hard.
+     Measures therefore release to 100%, and the 16px gutter matches the family
+     while leaving the widest usable execution column. */
+  .wsp {
+    --page: 100%;
+    --gutter: 16px;
+    --measure-req: 100%;
+    --measure-state: 100%;
+  }
+
+  .wsp .ws {
+    padding: 22px var(--gutter) 56px;
+    padding-bottom: calc(56px + var(--sa-bottom, env(safe-area-inset-bottom)));
+  }
+
+  /* ── 2. Shared Academy shell — adjacent infrastructure, reproduced ────────
+     Identical to the frozen family treatment (PuthATA, LessonsATA/Reader):
+     wordmark shrinks, global nav collapses, page context appears, and the top
+     inset is respected. Final shell integration remains an adjacent hold. */
+  .wsp .topbar {
+    gap: 12px; justify-content: space-between;
+    padding: 10px 16px;
+    padding-top: max(10px, var(--sa-top, env(safe-area-inset-top)));
+  }
+  .wsp .topbar__wordmark { width: 42px; }
+  .wsp .topbar__nav { display: none; }
+  .wsp .topbar__context {
+    display: inline-block;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--text-secondary);
+  }
+
+  /* ── 3. Type — role hierarchy preserved, magnitudes compressed ────────────
+     Body stays at 16px: it is the reading size and the one value that must not
+     absorb width pressure. Mono stays at its desktop size — it is already a
+     precision layer and shrinking it further would make it decorative. What
+     compresses is the display end of the ramp, where the desktop sizes were
+     tuned against a 1120px field. */
+  .wsp .ws-id { margin: 0 0 26px; }
+  .wsp .ws-id__coord { font-size: 10.5px; letter-spacing: .11em; margin: 0 0 10px; }
+  .wsp .ws-id__title { font-size: 26px; line-height: 1.16; letter-spacing: -.012em; max-width: none; }
+
+  .wsp .ws-req { margin: 0 0 30px; }
+  .wsp .ws-req__title { font-size: 19px; line-height: 1.34; }
+  .wsp .ws-req__lead { font-size: 16px; line-height: 1.6; }
+  .wsp .ws-req__steps li { font-size: 15.5px; padding-left: 30px; margin: 0 0 12px; }
+  .wsp .ws-req__where { font-size: 14px; }
+
+  .wsp .ws-state { margin: 0 0 30px; }
+  .wsp .ws-state__line { font-size: 17px; line-height: 1.42; }
+  .wsp .ws-state__owner { font-size: 15px; }
+
+  .wsp .ws-host { margin: 0 0 30px; }
+  .wsp .ws-mat { margin: 0 0 28px; }
+  .wsp .ws-done { margin: 0 0 28px; }
+  .wsp .ws-crit__p,
+.wsp .ws-crit__list li { font-size: 15px; }
+
+  /* ── 4. Rules — hierarchy preserved, geometry unchanged ───────────────────
+     The ladder is frozen: the contract rule stays 2px and stays the firmest
+     mark on the page; the active-execution and structural rules stay 1px. They
+     run the full content width, which on mobile IS the field. Nothing becomes a
+     bracket, a corner or an ornament. */
+  .wsp [data-direction="C"] .ws-req { padding-top: 22px; }
+  .wsp [data-direction="C"] .ws-state { padding-top: 22px; }
+
+  /* ── 5. ACTION geometry ───────────────────────────────────────────────────
+     Full width is NOT assumed. The control sizes to its label with a comfortable
+     floor, so a short action does not become a banner and a long Russian label
+     wraps instead of truncating — «Отправить на проверку» and «Загрузить
+     актуальную версию» must never lose meaning to an ellipsis. */
+  .wsp .ws-act {
+    min-height: 50px; padding: 13px 22px;
+    max-width: 100%; white-space: normal; text-align: center;
+    line-height: 1.3;
+  }
+  .wsp .btn-2 { min-height: 46px; padding: 11px 16px; white-space: normal; line-height: 1.3; }
+
+  .wsp .ws-exit { gap: 18px 24px; padding-top: 22px; }
+  .wsp .ws-sup { gap: 18px 24px; }
+
+  /* ── 6. Engines ───────────────────────────────────────────────────────────
+     Option rows keep the whole row as the target and gain height, because a
+     wrapped Russian answer must stay comfortably tappable. */
+  .wsp .eng-q { margin: 0 0 24px; }
+  .wsp .eng-q__prompt { font-size: 16.5px; line-height: 1.4; }
+  .wsp .eng-opt { padding: 14px 16px; font-size: 15px; gap: 12px; min-height: 52px; }
+  .wsp .eng-attest { padding: 20px 18px; }
+  .wsp .eng-attest__confirm { padding: 14px 14px; min-height: 52px; max-width: none; }
+  .wsp .eng-notice { padding: 16px 18px; }
+  .wsp .eng-record,
+.wsp .eng-fb { padding: 18px 0; border-left: 0; border-right: 0; border-radius: 0; }
+
+  /* ── 7. Report sub-surface ────────────────────────────────────────────────
+     Same grammar, released to the viewport. */
+  .wsp .sub-wrap { padding: 20px var(--gutter) 120px; }
+  .wsp .sub-head { margin: 0 0 24px; padding-bottom: 18px; }
+  .wsp .sub-head__title { font-size: 22px; line-height: 1.22; }
+  .wsp .sub-head__id { font-size: 10.5px; }
+  .wsp .sub-body { max-width: none; }
+  .wsp [data-direction="C"] .sub-body { max-width: none; }
+  .wsp .rpt-group__head { padding: 15px 0; font-size: 15px; }
+  .wsp .rpt-group__count { font-size: 10.5px; }
+  .wsp .rpt-f { margin: 0 0 18px; max-width: none; }
+  .wsp [data-direction="C"] .rpt-f { max-width: none; }
+  .wsp .rpt-f__label { font-size: 14px; line-height: 1.4; }
+  .wsp .rpt-f__in { font-size: 16px; min-height: 50px; padding: 13px 14px; }
+  .wsp textarea.rpt-f__in { min-height: 104px; }
+
+  /* ── 8. Report terminal controls — IN FLOW ON MOBILE ──────────────────────
+     Desktop keeps the bar viewport-fixed; there it costs 7.3% of the viewport
+     and the derived reservation covers it. Mobile was evaluated separately, as
+     the brief requires, and the fixed mechanism failed on measurement:
+
+         390 x 844  bar 181px = 21.4% of the viewport
+         390 x 600  bar 181px = 30.2%
+         390 x 400  bar 181px = 45.3%  AND it covered the focused field
+
+     A control that hides the field being typed into is not a reachability
+     aid. The labels cannot shrink to fix it either — «Отправить на проверку»
+     and «Загрузить актуальную версию» must wrap rather than truncate — so the
+     bar is three rows tall by necessity, and a persistent three-row bar cannot
+     coexist with a software keyboard on a 390px phone.
+
+     The controls therefore sit IN FLOW at the end of the form. Submit is a
+     terminal act performed after the work, so arriving at it by finishing the
+     form is the natural gesture rather than a compromise; save is engine-local
+     and supporting. Collapsed groups keep the distance short — from any open
+     group the end of the form is roughly one screen away.
+
+     This removes the obstruction, the reservation and the safe-area conflict at
+     once. The SEMANTICS are unchanged: save outline, submit filled, never two
+     equal bright buttons, one primary decision.
+
+     MECHANISM = MOBILE HIGH-FI PRESENTATION CANDIDATE, browser-validated.
+     Physical-device acceptance remains an external hold. */
+  .wsp .rpt-bar {
+    position: static;
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin: 28px 0 0;
+    padding: 22px 0 0;
+    border-top: 1px solid var(--line-2);
+    background: none; backdrop-filter: none;
+  }
+  .wsp .rpt-bar { justify-content: flex-start; }
+  .wsp .rpt-bar__state { flex: 1 0 100%; margin-right: 0; font-size: 13.5px; }
+  /* natural width, not stretched: the root surface's primary control sizes to
+     its label, and the report's terminal controls follow the same geometry so
+     one product does not grow two action languages. They wrap when they cannot
+     share a row, which at 360 they cannot. */
+  .wsp .rpt-bar .btn-2,
+.wsp .rpt-bar .ws-act { flex: 0 1 auto; }
+  /* nothing is fixed, so nothing needs reserving beyond the page's own inset */
+  .wsp .sub-wrap { padding-bottom: calc(40px + var(--sa-bottom, env(safe-area-inset-bottom))); }
+
+  /* ── 8b. The one exception: the revision conflict ─────────────────────────
+     The fixed bar failed on mobile because it collided with a software
+     keyboard. The conflict state has NO editable field — every value is
+     read-only — so that collision cannot occur there. And the reload is the
+     only exit from a blocking state: every group is open so unsaved work can be
+     copied, which makes the page ~6,800px, and requiring the learner to
+     traverse all of it to escape the block would be worse than the bar.
+
+     So the conflict keeps the fixed bar, at 125px (state row + one control) =
+     14.8% of a 390x844 viewport. Selected by `:has(.eng-notice--block)` — a
+     state the renderer already emits — so there is no mobile markup branch and
+     no second state system. The JS reservation keys off the computed position
+     and therefore applies here and nowhere else. */
+  .wsp .sub-wrap:has(.eng-notice--block) .rpt-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    margin: 0; border-top: 1px solid var(--line-2);
+    padding: 12px var(--gutter);
+    padding-bottom: calc(12px + var(--sa-bottom, env(safe-area-inset-bottom)));
+    background: rgba(11, 13, 10, .96); backdrop-filter: blur(8px);
+  }
+
+  /* ── 9. The read-only record — label OVER value ───────────────────────────
+     Desktop pairs a 210px label column against the value. At 328–414px of
+     content that column would leave under 120px for the value, which is not a
+     record, it is a squeeze. The pair therefore stacks: label above, value
+     below, one hairline per row. The semantics are unchanged — the same <dl>,
+     the same term/definition pairs — and short raw H-16 codes stay at value
+     size so `up` never reads as a status badge. */
+  /* `.rec > .rec__row` deliberately: the ≤1339px desktop rule is written
+     `.rec__row:not(.rec__row--long)` and therefore outranks a bare `.rec__row`
+     here, which silently kept the two-column pair at every mobile width. The
+     child combinator ties that specificity and wins on source order. */
+  .wsp .rec > .rec__row,
+.wsp .rec > .rec__row--long {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 12px 0;
+  }
+  .wsp .rec__label { font-size: 13px; line-height: 1.4; }
+  .wsp .rec__value { font-size: 15.5px; line-height: 1.55; }
+  .wsp .rec__row--long .rec__value { font-size: 15px; line-height: 1.6; max-width: none; }
+
+  /* ── 10. Page-level messages ──────────────────────────────────────────────*/
+  .wsp .ws-page-msg { max-width: none; }
+  .wsp .ws-page-msg__title { font-size: 18px; }
+  .wsp .ws-page-msg__body { font-size: 15px; }
+
+  /* ── 11. Focus on large surfaces ──────────────────────────────────────────
+     PHASE-4 CLOSURE (M-2). A focus indication tuned for a compact control does
+     not stay proportionate when the same rule is applied to a surface that
+     occupies a third of the viewport. Two mobile surfaces are that large:
+     the report field (326x104 measured, 83.6% x 17.3% of a 390x844 viewport)
+     and the conflict notice (326x282, 83.6% x 33.4%). Both showed TWO bright
+     perimeters when focused:
+
+       - the field, because the rule recoloured the component's own boundary to
+         Signal AND drew a Signal outline 1px outside it — the same colour
+         twice, reading as a doubled stroke;
+       - the conflict notice, because its 2px --text-primary boundary is a
+         severity encoding that is present whether or not the notice is focused,
+         and the Signal outline sat 4px outside it, so the gap made the two read
+         as two frames rather than one edge.
+
+     The treatment here is the same for both: ONE Signal perimeter, 2px, drawn
+     flush at the component's own edge. Focus ADDS an indication; it never
+     restates or replaces what the component already encodes, so each variant
+     keeps exactly the boundary it rests with — --line-2 writable, --line-1
+     read-only, 2px --text-primary in error and on the blocking notice.
+
+     No glow, no fill, no second ring, no new token, no new breakpoint. The
+     thickness and the colour are unchanged; only the offset and the redundant
+     recolour are. Compact controls are untouched: they carry no bright boundary
+     of their own, so the global rule was never disproportionate there, and it
+     still governs them at every width. Desktop is untouched at every width.
+
+     Restating the resting colours is not decoration. This block sits after
+     `.rpt-f--err .rpt-f__in`, `.rpt-f__in[readonly]` and `.rpt-f__ro` in source
+     order, so a bare `.rpt-f__in:focus-visible` here would outrank all three
+     and flatten an errored or read-only boundary to the writable one. */
+  .wsp .rpt-f__in:focus-visible { border-color: var(--line-2); outline-offset: 0; }
+  .wsp .rpt-f__in[readonly]:focus-visible { border-color: var(--line-1); }
+  .wsp .rpt-f__ro:focus-visible { border-color: var(--line-1); }
+  .wsp .rpt-f--err .rpt-f__in:focus-visible { border-color: var(--text-primary); }
+  .wsp .eng-notice--block:focus-visible { outline-offset: 0; }
+
+  /* ── 12. QA strip — evidence tooling, never product ───────────────────────
+     It may wrap and scroll on its own; it must not widen the document or touch
+     the product's safe-area budget. */
+  .wsp .qa,
+.wsp .qa-note { padding-left: 12px; padding-right: 12px; }
+  .wsp .qa { font-size: 9.5px; gap: 2px 8px; }
+  .wsp .qa-note { font-size: 9.5px; }
+}

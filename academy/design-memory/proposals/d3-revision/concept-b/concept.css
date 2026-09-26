@@ -1,0 +1,50 @@
+/* Concept B — «Revision Pass» (Рабочий проход). PROTOTYPE-ONLY.
+ *
+ * The comment defines a sequential pass over ONLY the flagged places; everything
+ * else recedes to a second plane but remains reachable — the user's own records
+ * are never taken away, only unlit. NOT a wizard: no percentages, no stepper
+ * cards, no modal flow — the pass is built from the ledger's own rows and
+ * surfaces; only the distribution of attention changes.
+ */
+
+.rvb-comment {
+  border-left: 2px solid var(--gate-boundary);
+  background: color-mix(in srgb, var(--surface-context) 70%, transparent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px 14px;
+  margin-bottom: 12px;
+}
+
+/* The pass line: words, not a meter (DD-274 applied to revision). */
+.rvb-passline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.rvb-passline b { color: var(--text-primary); font-weight: 600; }
+
+/* Receded rows: lower text intensity, softened signal — but never below the
+   AA-readable muted level, and still fully interactive. */
+.rvb-dim .rl-sum { color: var(--text-muted); }
+.rvb-dim .rl-state,
+.rvb-dim .rl-act { color: var(--route-locked); }
+.rvb-dim .rl-sig.is-filled {
+  background: var(--signal-soft);
+  border-color: var(--signal-soft);
+}
+
+/* In-flow movement of the pass — a link in the text, not a step control. */
+.rvb-next {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.rvb-next a {
+  color: var(--route-upcoming);
+  text-decoration: none;
+}
+.rvb-next a:hover { color: var(--text-primary); }
+
+/* No side agreement block in this direction — the reflection takes the full
+   working width and the consequences live beside the resubmit action. */
+.rvb-close { grid-template-columns: 1fr; }

@@ -1,0 +1,46 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Node / build
+node_modules/
+.next/
+# Generated build cache. `.next/` above never covered this sibling path — that is how
+# 447 MiB of webpack packs plus rotating Next preview/RSC signing keys reached the
+# Backend repository and then every immutable Backend release (ATA-CACHE-SEED-IN-GIT-1).
+.next-cache-seed/
+out/
+dist/
+build/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+.eslintcache
+
+# Test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Scratch
+/tmp/
+scratchpad/
