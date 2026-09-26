@@ -1,0 +1,308 @@
+{
+  "schema": "ata.acceptance-manifest/1",
+  "phase": "AFD-5B2A",
+  "defaultTimeoutMs": 900000,
+  "runnable": [
+    {
+      "script": "test:regression:sql-audit"
+    },
+    {
+      "script": "test:regression:withdrawal"
+    },
+    {
+      "script": "test:regression:pocket-security"
+    },
+    {
+      "script": "test:regression:curriculum-schema"
+    },
+    {
+      "script": "test:regression:curriculum-domain"
+    },
+    {
+      "script": "test:regression:curriculum-authoring"
+    },
+    {
+      "script": "test:regression:curriculum-admin-api"
+    },
+    {
+      "script": "test:regression:curriculum-definitions-api"
+    },
+    {
+      "script": "test:regression:curriculum-upgrade"
+    },
+    {
+      "script": "test:regression:curriculum-phase1",
+      "timeoutMs": 1200000
+    },
+    {
+      "script": "test:regression:curriculum-enrollment-schema"
+    },
+    {
+      "script": "test:regression:curriculum-enrollment-command"
+    },
+    {
+      "script": "test:regression:curriculum-level-state"
+    },
+    {
+      "script": "test:regression:curriculum-resolver"
+    },
+    {
+      "script": "test:regression:curriculum-read-api"
+    },
+    {
+      "script": "test:regression:curriculum-xp-schema"
+    },
+    {
+      "script": "test:regression:curriculum-xp-ledger"
+    },
+    {
+      "script": "test:regression:curriculum-xp-level-state"
+    },
+    {
+      "script": "test:regression:curriculum-level-completion"
+    },
+    {
+      "script": "test:regression:curriculum-promocode-xp"
+    },
+    {
+      "script": "test:regression:curriculum-xp-api"
+    },
+    {
+      "script": "test:regression:curriculum-content-schema"
+    },
+    {
+      "script": "test:regression:curriculum-content-lifecycle"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-lifecycle"
+    },
+    {
+      "script": "test:regression:curriculum-lesson-progress-schema"
+    },
+    {
+      "script": "test:regression:curriculum-report-schema"
+    },
+    {
+      "script": "test:regression:curriculum-report-authoring"
+    },
+    {
+      "script": "test:regression:curriculum-report-submission"
+    },
+    {
+      "script": "test:regression:curriculum-report-review"
+    },
+    {
+      "script": "test:regression:curriculum-report-required-when"
+    },
+    {
+      "script": "test:regression:curriculum-first-slice-r2"
+    },
+    {
+      "script": "test:regression:curriculum-report-approval"
+    },
+    {
+      "script": "test:regression:curriculum-report-zero-reward"
+    },
+    {
+      "script": "test:regression:curriculum-report-zero-reward-e2e"
+    },
+    {
+      "script": "test:regression:curriculum-report-attachments"
+    },
+    {
+      "script": "test:regression:curriculum-content-read-progress"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-runtime"
+    },
+    {
+      "script": "test:regression:curriculum-phase4-http"
+    },
+    {
+      "script": "test:regression:curriculum-report-api"
+    },
+    {
+      "script": "test:regression:curriculum-phase4",
+      "timeoutMs": 2400000
+    },
+    {
+      "script": "test:regression:curriculum-phase5",
+      "timeoutMs": 2400000
+    },
+    {
+      "script": "test:regression:curriculum-phase2",
+      "timeoutMs": 1200000
+    },
+    {
+      "script": "test:regression:curriculum-phase3",
+      "timeoutMs": 1200000
+    },
+    {
+      "script": "test:regression:curriculum-package"
+    },
+    {
+      "script": "test:regression:curriculum-package-roundtrip"
+    },
+    {
+      "script": "test:regression:curriculum-assessment-contract"
+    },
+    {
+      "script": "test:regression:curriculum-zero-reward-completion"
+    },
+    {
+      "script": "test:regression:curriculum-checkpoint-honest-gate"
+    },
+    {
+      "script": "test:regression:curriculum-checkpoint-verification"
+    },
+    {
+      "script": "test:regression:pocket-direct-postback-e2e"
+    },
+    {
+      "script": "test:regression:pocket-legacy-hardening"
+    },
+    {
+      "script": "test:regression:pocket-direct-postback"
+    },
+    {
+      "script": "test:regression:pocket-partner-adapter"
+    },
+    {
+      "script": "test:regression:pocket-trader-identity"
+    },
+    {
+      "script": "test:regression:pocket-partner-checkpoint-e2e"
+    },
+    {
+      "script": "test:regression:crm-staff-identity"
+    },
+    {
+      "script": "test:regression:crm-session"
+    },
+    {
+      "script": "test:regression:crm-users"
+    },
+    {
+      "script": "test:regression:crm-user-detail"
+    },
+    {
+      "script": "test:regression:crm-user-notes"
+    },
+    {
+      "script": "test:regression:crm-user-owner"
+    },
+    {
+      "script": "test:regression:crm-user-owner-history"
+    },
+    {
+      "script": "test:regression:checkpoint-dev-simulator"
+    },
+    {
+      "script": "test:regression:pocket-deposit-events"
+    },
+    {
+      "script": "test:regression:pocket-first-deposit"
+    },
+    {
+      "script": "test:regression:pocket-first-deposit-e2e",
+      "requiredEnv": [
+        "AFD4_TURNSTILE_TEST_SECRET"
+      ]
+    },
+    {
+      "script": "test:regression:pocket-l1-owner"
+    },
+    {
+      "script": "test:regression:curriculum-level-start"
+    },
+    {
+      "script": "test:regression:public-referral-url"
+    },
+    {
+      "script": "test:regression:pocket-affiliate-url"
+    },
+    {
+      "script": "test:regression:affiliate-foundation"
+    },
+    {
+      "script": "test:regression:affiliate-attribution"
+    },
+    {
+      "script": "test:regression:affiliate-acquisition-http"
+    },
+    {
+      "script": "test:regression:affiliate-attribution-e2e"
+    },
+    {
+      "script": "test:regression:affiliate-crm-management-e2e"
+    },
+    {
+      "script": "test:regression:captcha-turnstile"
+    },
+    {
+      "script": "test:regression:login-turnstile"
+    },
+    {
+      "script": "test:regression:login-turnstile-e2e",
+      "requiredEnv": [
+        "AFD3A3_ACADEMY_ROOT",
+        "AFD3A3_CRM_ROOT",
+        "AFD3A3_TURNSTILE_TEST_SECRET",
+        "AFD3A3_TURNSTILE_TEST_SECRET_SPENT",
+        "AFD3A3_TURNSTILE_TEST_SITE_KEY"
+      ],
+      "timeoutMs": 1800000
+    },
+    {
+      "script": "test:regression:registration-referral"
+    },
+    {
+      "script": "test:regression:affiliate-analytics"
+    },
+    {
+      "script": "test:regression:affiliate-analytics-e2e"
+    },
+    {
+      "script": "test:regression:affiliate-cohorts"
+    },
+    {
+      "script": "test:regression:affiliate-cohorts-e2e"
+    },
+    {
+      "script": "test:regression:acceptance-manifest"
+    }
+  ],
+  "excluded": [
+    {
+      "script": "smoke:integration",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:mvp",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:production",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:ci",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    },
+    {
+      "script": "smoke:pocket-progression",
+      "classification": "excluded_by_environment",
+      "reason": "Requires an already-deployed running server; it is a deployment smoke test, not a source-level regression. Fails identically on the untouched base commit."
+    }
+  ],
+  "forbidden": [
+    {
+      "script": "test:regression:pocketcta-disposable-e2e",
+      "reason": "Reads the live POSTBACK_SECRET, sends a real callback to the live DEV backend and creates a live account. Never run by an acceptance sweep."
+    }
+  ]
+}
