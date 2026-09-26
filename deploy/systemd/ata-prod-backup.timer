@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily ATA prod SQLite backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=ata-prod-backup.service
+
+[Install]
+WantedBy=timers.target

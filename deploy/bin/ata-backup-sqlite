@@ -1,0 +1,249 @@
+#!/bin/bash
+#
+# ATA PROD local scheduled SQLite backup (copied from PREPROD; only EXPECTED_DB changed).
+#
+# Mechanism: SQLite Online Backup API via "sqlite3 -readonly ... .backup".
+# The live database is opened READ-ONLY and is never copied, moved, removed or
+# written by this script. There is no cp/copyFile path anywhere in this file.
+#
+# Target safety: DATABASE_URL is read from the runtime env file, never printed,
+# never passed in argv, and the resolved path must equal EXPECTED_DB exactly.
+# There is deliberately no environment override and no bypass switch: a
+# mismatch exits non-zero BEFORE any SQLite handle is opened.
+#
+# Every backup is fully verified BEFORE it is published under its final name.
+# A run that fails verification publishes nothing and prunes nothing.
+#
+set -euo pipefail
+umask 077
+
+readonly SCRIPT_ID="ata-backup-sqlite/1.0.0"
+readonly ENV_FILE="/srv/ata/config/backend.env"
+readonly EXPECTED_DB="/srv/ata-data/data/ata-prod.sqlite"
+readonly DEST_DIR="/srv/ata-data/backups/scheduled"
+readonly RELEASE_LINK="/srv/ata/current/backend"
+# The migration floor a healthy database must meet.
+#
+# It used to be a hand-maintained constant, and it went stale: it still said 41
+# while live had been at 47 for two accepted cutovers. A stale FLOOR is not a
+# cosmetic problem - it is the guard silently ceasing to guard, because a
+# database that had regressed to 42 would still have passed it.
+#
+# So it is now DERIVED from the release that is actually deployed: the migration
+# set a release ships is the schema it requires, and it is immutable per release.
+# A rollback to an older backend lowers the floor with it, which is correct.
+# MIN_EXPECTED_MIGRATIONS remains as a fail-closed backstop for the case where
+# the release tree cannot be read at all - never 0, never "skip the check".
+readonly MIN_EXPECTED_MIGRATIONS=47
+readonly MIN_SIZE_BYTES=102400
+readonly KEEP_DAILY=14
+readonly KEEP_WEEKLY=8
+readonly KEEP_MONTHLY=6
+readonly MIN_KEEP=3
+
+tmp_db=""
+
+info() { printf "ata-backup-sqlite: %s\n" "$1"; }
+fail() { printf "ata-backup-sqlite: FAILED: %s\n" "$1" >&2; exit 1; }
+
+cleanup() {
+  if [ -n "$tmp_db" ] && [ -e "$tmp_db" ]; then rm -f -- "$tmp_db" || true; fi
+}
+trap cleanup EXIT
+
+quarantine_and_fail() {
+  local reason="$1"
+  local q="${DEST_DIR}/${base}.FAILED.sqlite"
+  if [ -n "$tmp_db" ] && [ -e "$tmp_db" ] && [ ! -e "$q" ]; then
+    if mv -- "$tmp_db" "$q"; then
+      chmod 0600 "$q" || true
+      printf "ata-backup-sqlite: quarantined failed artifact as %s\n" "${base}.FAILED.sqlite" >&2
+      tmp_db=""
+    fi
+  fi
+  fail "$reason"
+}
+
+# ---------------------------------------------------------- target resolution
+[ -r "$ENV_FILE" ] || fail "runtime env file is not readable"
+
+url_count=$(grep -c "^DATABASE_URL=" "$ENV_FILE" || true)
+[ "$url_count" = "1" ] || fail "expected exactly one DATABASE_URL entry, found ${url_count}"
+
+db_url=$(sed -n "s/^DATABASE_URL=//p" "$ENV_FILE")
+case "$db_url" in
+  file:*) ;;
+  *) fail "DATABASE_URL does not use the file: scheme" ;;
+esac
+db_path="${db_url#file:}"
+unset db_url
+
+if [ "$db_path" != "$EXPECTED_DB" ]; then
+  unset db_path
+  fail "TARGET_MISMATCH - resolved database path is not the approved PREPROD target"
+fi
+unset db_path
+
+[ -f "$EXPECTED_DB" ] || fail "live database not present at the approved path"
+[ -r "$EXPECTED_DB" ] || fail "live database is not readable"
+info "TARGET_OK"
+
+# ------------------------------------------------------------- destination
+[ -d "$DEST_DIR" ] || fail "destination directory is missing"
+[ -w "$DEST_DIR" ] || fail "destination directory is not writable"
+
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+base="ata-preprod-${ts}"
+final_db="${DEST_DIR}/${base}.sqlite"
+final_sha="${final_db}.sha256"
+final_json="${DEST_DIR}/${base}.json"
+tmp_db="${DEST_DIR}/.tmp-${base}.sqlite"
+
+for f in "$final_db" "$final_sha" "$final_json" "$tmp_db"; do
+  if [ -e "$f" ]; then fail "refusing to overwrite an existing artifact"; fi
+done
+
+# ------------------------------------------------------------ online backup
+info "creating online backup (source opened read-only)"
+sqlite3 -readonly "$EXPECTED_DB" ".backup \"$tmp_db\"" || fail "sqlite online backup failed"
+[ -f "$tmp_db" ] || fail "backup artifact was not created"
+
+# ------------------------------------------- verification (temp artifact only)
+size=$(stat -c %s "$tmp_db")
+[ "$size" -ge "$MIN_SIZE_BYTES" ] || quarantine_and_fail "backup size ${size} below floor ${MIN_SIZE_BYTES}"
+
+integrity=$(sqlite3 -readonly "$tmp_db" "PRAGMA integrity_check;" 2>/dev/null || echo ERROR)
+[ "$integrity" = "ok" ] || quarantine_and_fail "integrity_check returned ${integrity}"
+
+quick=$(sqlite3 -readonly "$tmp_db" "PRAGMA quick_check;" 2>/dev/null || echo ERROR)
+[ "$quick" = "ok" ] || quarantine_and_fail "quick_check returned ${quick}"
+
+fk_out=$(sqlite3 -readonly "$tmp_db" "PRAGMA foreign_key_check;" 2>/dev/null || echo ERROR)
+if [ -n "$fk_out" ]; then quarantine_and_fail "foreign_key_check reported violations"; fi
+
+user_version=$(sqlite3 -readonly "$tmp_db" "PRAGMA user_version;")
+schema_version=$(sqlite3 -readonly "$tmp_db" "PRAGMA schema_version;")
+
+# Migration lineage only. No business table, no User column, no PII is selected.
+migration_count=$(sqlite3 -readonly "$tmp_db" "SELECT COUNT(*) FROM _prisma_migrations WHERE rolled_back_at IS NULL;")
+newest_migration=$(sqlite3 -readonly "$tmp_db" "SELECT migration_name FROM _prisma_migrations WHERE rolled_back_at IS NULL ORDER BY migration_name DESC LIMIT 1;")
+
+[ -n "$newest_migration" ] || quarantine_and_fail "no applied migrations found"
+
+# A count BELOW the expected baseline means the wrong or an older database and
+# is fatal. A count ABOVE it is a legitimate forward migration: it is recorded
+# and warned about, but must not stop backups from being taken - refusing to
+# back up after a migration would remove protection exactly when it matters.
+release_migrations_dir="$(readlink -f "$RELEASE_LINK")/prisma/migrations"
+if [ -d "$release_migrations_dir" ]; then
+  release_migration_count=$(find "$release_migrations_dir" -mindepth 1 -maxdepth 1 -type d | wc -l)
+else
+  release_migration_count=0
+fi
+
+expected_migrations="$MIN_EXPECTED_MIGRATIONS"
+if [ "$release_migration_count" -gt "$expected_migrations" ]; then
+  expected_migrations="$release_migration_count"
+fi
+
+if [ "$migration_count" -lt "$expected_migrations" ]; then
+  quarantine_and_fail "applied migration count ${migration_count} is below the expected baseline ${expected_migrations}"
+fi
+if [ "$migration_count" -gt "$expected_migrations" ]; then
+  printf "ata-backup-sqlite: NOTE: applied migrations %s exceeds expected baseline %s\n" "$migration_count" "$expected_migrations" >&2
+fi
+
+sha=$(sha256sum "$tmp_db" | cut -d" " -f1)
+release=$(basename "$(readlink -f "$RELEASE_LINK")" 2>/dev/null || echo unknown)
+created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# ------------------------------------------------------------------ publish
+chmod 0600 "$tmp_db"
+mv -- "$tmp_db" "$final_db"
+tmp_db=""
+
+printf "%s  %s\n" "$sha" "${base}.sqlite" > "$final_sha"
+chmod 0600 "$final_sha"
+
+cat > "$final_json" <<JSON
+{
+  "format": "ata-backup-manifest",
+  "format_version": 1,
+  "environment": "preprod",
+  "created_at": "${created}",
+  "mechanism": "sqlite_online_backup",
+  "backup_filename": "${base}.sqlite",
+  "backup_size_bytes": ${size},
+  "backup_sha256": "${sha}",
+  "integrity_check": "${integrity}",
+  "quick_check": "${quick}",
+  "foreign_key_check": "no_violations",
+  "foreign_key_violations": 0,
+  "user_version": ${user_version},
+  "schema_version": ${schema_version},
+  "applied_migration_count": ${migration_count},
+  "expected_migration_baseline": ${expected_migrations},
+  "newest_migration": "${newest_migration}",
+  "backend_release": "${release}",
+  "script_id": "${SCRIPT_ID}",
+  "verification": "passed"
+}
+JSON
+chmod 0600 "$final_json"
+
+info "published ${base}.sqlite (${size} bytes)"
+
+# ---------------------------------------------------------------- retention
+# Only complete, verification-passed triplets are pruning candidates. Anything
+# incomplete, quarantined or temporary is left strictly alone.
+mapfile -t candidates < <(ls -1 "$DEST_DIR" 2>/dev/null | grep -E "^ata-preprod-[0-9]{8}T[0-9]{6}Z\.sqlite$" | sort -r || true)
+
+verified=()
+for f in "${candidates[@]:-}"; do
+  [ -n "$f" ] || continue
+  b="${f%.sqlite}"
+  [ -f "${DEST_DIR}/${f}.sha256" ] || continue
+  [ -f "${DEST_DIR}/${b}.json" ] || continue
+  grep -q "\"verification\": \"passed\"" "${DEST_DIR}/${b}.json" || continue
+  verified+=("$f")
+done
+
+total=${#verified[@]}
+if [ "$total" -eq 0 ]; then
+  info "retention: nothing to evaluate"
+  exit 0
+fi
+
+declare -A keep
+i=0
+for f in "${verified[@]}"; do
+  i=$((i + 1))
+  if [ "$i" -le "$KEEP_DAILY" ]; then keep["$f"]=1; fi
+done
+
+w=0
+m=0
+for f in "${verified[@]}"; do
+  d="${f#ata-preprod-}"
+  d="${d%%T*}"
+  iso="${d:0:4}-${d:4:2}-${d:6:2}"
+  dow=$(date -u -d "$iso" +%u 2>/dev/null || echo 0)
+  dom="${d:6:2}"
+  if [ "$dow" = "7" ] && [ "$w" -lt "$KEEP_WEEKLY" ]; then keep["$f"]=1; w=$((w + 1)); fi
+  if [ "$dom" = "01" ] && [ "$m" -lt "$KEEP_MONTHLY" ]; then keep["$f"]=1; m=$((m + 1)); fi
+done
+
+newest="${verified[0]}"
+deleted=0
+for f in "${verified[@]}"; do
+  if [ -n "${keep[$f]:-}" ]; then continue; fi
+  if [ "$f" = "$newest" ]; then continue; fi
+  if [ $((total - deleted)) -le "$MIN_KEEP" ]; then break; fi
+  b="${f%.sqlite}"
+  rm -f -- "${DEST_DIR}/${f}" "${DEST_DIR}/${f}.sha256" "${DEST_DIR}/${b}.json"
+  deleted=$((deleted + 1))
+  info "pruned ${b}"
+done
+
+info "retention: kept $((total - deleted)), pruned ${deleted}"
+exit 0

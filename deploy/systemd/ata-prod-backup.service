@@ -1,0 +1,53 @@
+[Unit]
+Description=ATA prod SQLite backup (online backup API, verified)
+Documentation=file:/srv/ata/bin/ata-backup-sqlite
+After=local-fs.target
+RequiresMountsFor=/srv/ata-data
+
+[Service]
+Type=oneshot
+User=ata
+Group=ata
+UMask=0077
+ExecStart=/srv/ata/bin/ata-backup-sqlite
+
+# --- filesystem: the live database is read-only at the namespace level -------
+# ProtectSystem=strict makes the whole hierarchy read-only; the single
+# ReadWritePaths entry below is the ONLY writable location. It deliberately
+# does not include /srv/ata-data/data, so this service cannot mutate the live
+# database even if the script were replaced.
+ProtectSystem=strict
+ReadWritePaths=/srv/ata-data/backups/scheduled
+ReadOnlyPaths=/srv/ata/config /srv/ata-data/data /srv/ata/current /srv/ata/releases
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
+ProcSubset=pid
+
+# --- no network is required for a local backup ------------------------------
+PrivateNetwork=true
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+
+# --- privilege and kernel surface -------------------------------------------
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=600

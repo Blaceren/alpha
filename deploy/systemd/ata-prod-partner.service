@@ -1,0 +1,39 @@
+# ATA PREPROD partner console (loopback only).
+#
+# AFFILIATE-PLATFORM-V1 §31/§32. A SEPARATE APPLICATION, on its own port, with
+# its own systemd unit — the same shape as academy (3050), crm (3010) and
+# backend (3100). It is NOT a route tree inside an existing app, because §16
+# forbids turning the staff CRM into the partner portal and a shared origin
+# would fuse two principals that must never be confusable.
+#
+# BINDS TO LOOPBACK ONLY. nginx is the only thing that reaches it, exactly as
+# for the other three services.
+[Unit]
+Description=ATA prod partner console (loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ata
+Group=ata
+WorkingDirectory=/srv/ata/current/partner
+EnvironmentFile=/srv/ata/config/partner.env
+ExecStart=/opt/node-v22.14.0-linux-x64/bin/node node_modules/next/dist/bin/next start -p 3110 -H 127.0.0.1
+Restart=on-failure
+RestartSec=3
+
+# The service reads its release tree and writes nothing outside it.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/srv/ata-data/logs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
