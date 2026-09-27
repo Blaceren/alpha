@@ -326,11 +326,18 @@ crm `3404dc2`). Если `git subtree split` дал другие SHA, значи
 Дальше обновления делаются так: `git -C ~/alpha pull`, снова `git subtree split`, затем
 `git -C ~/learner-ops-v1/<c> pull ~/alpha split/<c>`.
 
-### 4.5 Зависимости для сборки
+### 4.5 Зависимости для сборки, и почему собирать только через tooling
 
-`build-release.sh` ставит зависимости сам (`npm ci`) внутри рабочей копии; заранее
-нужно только один раз прогреть кэш npm под `ubuntu`, чтобы первая сборка не упёрлась в
-сеть:
+`build-release.sh` ставит зависимости сам (`npm ci`) внутри рабочей копии и собирает
+**в каноническом окружении**: `NODE_ENV=production`, `NODE_OPTIONS=--max-old-space-size=6144`
+(бэкенд с кучей по умолчанию падает на сборке с OOM — проверено), плюс переменные, которые
+Next.js впаивает в сборку и читает из `/srv/ata/config/<component>.env`: для академии
+`ACADEMY_MODE` и `BACKEND_ORIGIN`, для CRM `CRM_MODE` и `CRM_BACKEND_ORIGIN`, для партнёра
+`PARTNER_BACKEND_ORIGIN`; бэкенду на время сборки подставляется временная база. Без этих
+переменных сборка CRM и партнёра **останавливается с ошибкой** («CRM_MODE must be exactly
+mock or api», «PARTNER_BACKEND_ORIGIN is missing»). Отсюда порядок: env-файлы (раздел 6)
+должны существовать **до** первой сборки. Заранее нужно только один раз прогреть кэш npm
+под `ubuntu`, чтобы первая сборка не упёрлась в сеть:
 
 ```bash
 cd ~/learner-ops-v1/backend && npm ci && cd ~/learner-ops-v1/academy && npm ci \
@@ -406,6 +413,7 @@ sudo -e /srv/ata/config/backend.env      # редактор, а не echo: зн�
 | `POSTBACK_SECRET` | backend | новый для PROD, `openssl rand -hex 32`; это же значение владелец вписывает в URL постбэка в кабинете Pocket (раздел 12) |
 | `TURNSTILE_SECRET_KEY` (backend), `TURNSTILE_SITE_KEY` (academy, crm) | backend / academy / crm | владелец создаёт виджет Cloudflare Turnstile для хостов `alfatrade.media` и `crm.alfatrade.media`; `TURNSTILE_EXPECTED_HOSTNAMES` перечисляет эти хосты |
 | `POCKET_AFFILIATE_BASE_URL` | backend | партнёрская ссылка регистрации Pocket владельца (с UTM-параметрами); содержит `&` — поэтому и нельзя `source` |
+| `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_LOGIN_ENFORCED=true` | backend | обязательны: без провайдера бэкенд отвечает 503 на вход и регистрацию; `CAPTCHA_DEV_BYPASS` из старого `.env.example` не действует |
 | `ACADEMY_SEARCH_INDEXING=on` + `ACADEMY_PUBLIC_ORIGIN=https://alfatrade.media` | academy | включают индексацию **только публичной главной**; без любой из двух весь хост отвечает `noindex` — так устроено намеренно |
 
 После заполнения: `sudo chmod 600 /srv/ata/config/*.env && sudo chown ata:ata /srv/ata/config/*.env`.
@@ -520,6 +528,26 @@ sudo systemd-run --uid=ata --gid=ata -p EnvironmentFile=/srv/ata/config/backend.
 ```
 
 Подробности и гарантии — `backend/docs/CURRICULUM_PACKAGES.md`.
+
+**Импорт ≠ публикация.** После импорта версия программы и всё её содержимое (уроки,
+проверки знаний, рубрики, задания отчётов) лежат в статусе `draft`, и ученики её не видят;
+регистрация с автозачислением (`CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED=true`)
+требует **ровно одну опубликованную** версию. Путь к публикации на PROD:
+
+1. содержимое проходит редакционный цикл (черновик → на проверку → утверждено, «четыре
+   глаза»: утверждает не автор и не отправитель) — это делают сотрудники с правами
+   авторинга через CRM/API авторинга (`backend/docs/AUTHORING_FOUNDATION.md`);
+2. администратор публикует версию: `POST /api/admin/curriculum/versions/<id>/publish`
+   (реальная доменная команда `publishCurriculumVersion`; она же проверяет целостность
+   графа и откажет, если что-то из привязанного ещё черновик).
+
+Для **локальной проверки и стендов** есть помощник `backend/scripts/local/publishImportedCurriculum.ts`:
+он переводит импортированные черновики в `published` напрямую и вызывает ту же доменную
+команду публикации; на PROD он **не запускается** (отказывает при `NODE_ENV=production`)
+и не заменяет редакционный цикл. Рядом `enrollLocalLearners.ts` — зачислить локальных
+demo-учеников. Так был проверен клон с GitHub 27.09.2026: чистая база → 59 миграций → импорт
+`ata-v2-canonical-100.v4.rev2.draft.json` → публикация помощником → регистрация ученика с
+автозачислением.
 
 ### 9.3 Первый сотрудник CRM (`crm_admin`)
 
@@ -728,6 +756,46 @@ AWS CLI на сервере: `curl -fsSLo /tmp/awscli.zip https://awscli.amazona
 - [ ] Точки отката записаны; у владельца и инженера есть этот документ и `README.md`.
 
 ---
+
+## Приложение В. Проверка клона с GitHub на чистой машине (сделано 27.09.2026)
+
+Ровно из того, что лежит в этом репозитории, продукт был поднят на отдельном порту и
+проверен в браузере. Рецепт повторяем — им же можно проверять любой будущий коммит:
+
+1. `git clone https://github.com/Blaceren/alpha.git` → `npm ci` в четырёх папках.
+2. Сборка как в tooling: env-файл компонента + `NODE_OPTIONS=--max-old-space-size=6144`
+   (без этого бэкенд падает по памяти, CRM и партнёр — без своих переменных).
+3. Чистая база: `npm run prisma:migrate` → 59 миграций, `integrity_check` = ok.
+4. Пакет `curriculum/packages/ata-v2-canonical-100.v4.rev2.draft.json`: `--validate-only` →
+   `--dry-run` → импорт (версия `ata-v2` v4, статус `draft`).
+5. Публикация для стенда: `NODE_ENV=development npm run prisma:seed` (demo-админ) и
+   `npx tsx scripts/local/publishImportedCurriculum.ts` → версия `published`
+   (77 уроков, 57 проверок). На PROD этот шаг заменяет редакционный цикл (раздел 9.2).
+6. Четыре сервера `npm run start` на loopback; `/api/health` ok, `/api/readiness` ok.
+7. Браузером: публичная главная → регистрация ученика → автозачисление в программу →
+   вход → `/home` (первое действие «Пройдите регистрацию» во внешней торговой среде),
+   `/path`, `/lessons`, `/tools`, `/news`, `/profile`; страницы входа CRM и партнёра.
+
+Что показала проверка и что из этого важно для PROD:
+
+- **Капча — явный контракт, без обходов.** `CAPTCHA_DEV_BYPASS` из старого
+  `backend/.env.example` больше не действует; бэкенд требует `CAPTCHA_PROVIDER` и без него
+  отвечает 503 `CAPTCHA_CONFIGURATION_ERROR` на регистрацию и вход. На PROD:
+  `CAPTCHA_PROVIDER=turnstile`, настоящие `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY`,
+  `TURNSTILE_EXPECTED_HOSTNAMES=alfatrade.media,crm.alfatrade.media`,
+  `CAPTCHA_LOGIN_ENFORCED=true`. Для стенда есть тестовый провайдер:
+  `ATA_ENVIRONMENT=dev`, `CAPTCHA_PROVIDER=turnstile_test`,
+  `CAPTCHA_TEST_MODE=unsafe-official-turnstile-test-keys-isolated-only`, официальные
+  тестовые ключи Cloudflare (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`)
+  и **без** `TURNSTILE_EXPECTED_HOSTNAMES` (тестовые ответы Cloudflare всегда называют
+  `example.com`). Это не обход: запрос всё равно ходит в Cloudflare.
+- **Readiness строгий по адресу.** `PUBLIC_APP_URL` должен быть `https://` и не loopback —
+  иначе `/api/readiness` отвечает `ok:false`, хотя `/api/health` в порядке. На PROD это
+  `https://alfatrade.media`; readiness — это и есть гейт после переключения.
+- **Импорт программы ≠ публикация** (раздел 9.2): ученик видит программу и автоматически
+  зачисляется только после публикации версии.
+- Публичные страницы и защита маршрутов ведут себя как на PREPROD: `/news` и `/home` без
+  входа — 307 на `/login`; весь хост `noindex`, пока не включена индексация.
 
 ## Приложение А. Соответствие PREPROD → PROD
 
