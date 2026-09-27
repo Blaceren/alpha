@@ -1,0 +1,62 @@
+# ATA Academy — learner-facing site.  academy.__DOMAIN__ -> 127.0.0.1:3120
+#
+# Placeholders (__DOMAIN__) are substituted by deploy/aws/bootstrap.sh.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name academy.__DOMAIN__;
+
+    # Left open on :80 so certbot --webroot can renew without a downtime window.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name academy.__DOMAIN__;
+
+    ssl_certificate     /etc/letsencrypt/live/academy.__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/academy.__DOMAIN__/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # HSTS. Set here and nowhere else: it is only meaningful at the TLS
+    # terminator, and neither app emits it. Start without `preload` — preload
+    # submission is effectively irreversible for the whole domain.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    access_log /var/log/nginx/academy.access.log;
+    error_log  /var/log/nginx/academy.error.log;
+
+    # --- GHSA-2xp9-vwfh-vxw4 mitigation (unauthenticated RCE, AVIF path) -----
+    # Verified safe: `next/image` is imported in ZERO source files across all
+    # three apps — the only matches are middleware matcher exclusions and one
+    # comment. Closing this endpoint costs no functionality.
+    # Remove once Next.js is upgraded AND next/image is actually adopted.
+    location /_next/image {
+        return 404;
+    }
+
+    # ZAP low finding: the app's middleware matcher excludes `_next/static`, so
+    # the nosniff header it otherwise sets never reaches these responses. Added
+    # here precisely because the app does NOT set it on this path.
+    location /_next/static/ {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        include /etc/nginx/snippets/ata-proxy.conf;
+        proxy_pass http://127.0.0.1:3120;
+    }
+
+    location / {
+        include /etc/nginx/snippets/ata-proxy.conf;
+        proxy_pass http://127.0.0.1:3120;
+    }
+}

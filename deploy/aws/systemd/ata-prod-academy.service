@@ -1,0 +1,47 @@
+[Unit]
+Description=ATA Academy (learner web) — production
+Documentation=file:///home/ubuntu/learner-ops-v1/deploy/aws/README.md
+# Ordering only, not Requires=: Academy resolves its config lazily, per request,
+# so it can boot while Backend is still starting and recover on its own.
+After=network-online.target ata-prod-backend.service
+Wants=network-online.target
+
+# [Unit], not [Service] — in [Service] systemd ignores these with a warning.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ata
+Group=ata
+
+WorkingDirectory=/srv/ata/current/academy
+
+EnvironmentFile=/srv/ata/config/academy.env
+ExecStart=/usr/local/bin/npm run start
+
+Restart=on-failure
+RestartSec=5s
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ata-academy
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+# Academy owns no data of its own — it proxies to Backend over loopback.
+# No ReadWritePaths outside its release directory.
+
+[Install]
+WantedBy=multi-user.target

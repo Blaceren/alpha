@@ -1,0 +1,17 @@
+[Unit]
+Description=Daily ATA database backup
+Documentation=file:///home/ubuntu/learner-ops-v1/deploy/aws/README.md
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+# Not on the hour, and not at 03:00. Spreading off the round numbers keeps the
+# backup from colliding with unattended-upgrades, log rotation and every other
+# cron job on the box that was also written as "3am".
+RandomizedDelaySec=300
+
+# If the instance was asleep or rebooting at the scheduled time, run on the next
+# boot rather than silently skipping a day.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

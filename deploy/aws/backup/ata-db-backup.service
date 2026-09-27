@@ -1,0 +1,27 @@
+[Unit]
+Description=ATA production database backup (SQLite online backup + verify + S3)
+Documentation=file:///home/ubuntu/learner-ops-v1/deploy/aws/README.md
+RequiresMountsFor=/srv/ata-data
+
+[Service]
+Type=oneshot
+User=ata
+Group=ata
+
+# Optional: set to an s3:// URI to keep an off-instance copy. Without it the
+# backup lands on the same volume as the database it is backing up, which
+# protects against "someone deleted rows" but not against losing the volume.
+# Environment=ATA_BACKUP_S3_BUCKET=s3://your-ata-backups
+Environment=ATA_BACKUP_RETAIN_DAYS=14
+
+ExecStart=/usr/local/sbin/ata-db-backup.sh
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ata-db-backup
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/ata-data/backups

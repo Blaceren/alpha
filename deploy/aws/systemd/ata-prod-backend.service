@@ -1,0 +1,60 @@
+[Unit]
+Description=ATA Backend (trading-learning-platform) — production
+Documentation=file:///home/ubuntu/learner-ops-v1/deploy/aws/README.md
+After=network-online.target
+Wants=network-online.target
+# Refuse to start before the data volume is mounted. Without this, a boot race
+# lets Next start against an empty /srv/ata-data and create a fresh, empty
+# SQLite file over the mountpoint — the database then "disappears" the moment
+# the real volume mounts on top.
+RequiresMountsFor=/srv/ata-data
+
+# These belong in [Unit], not [Service]. In [Service] modern systemd logs
+# "Unknown key name ... ignoring" and the rate limit silently does nothing.
+# SQLite means one writer: a flapping unit in a tight restart loop competes with
+# itself for the same database file, so back off rather than hammer it.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ata
+Group=ata
+
+# A symlink, swapped atomically by tools/cutover.sh. systemd resolves it at
+# start, so a restart after the swap is what moves the process to the new
+# release. Never edit the target in place.
+WorkingDirectory=/srv/ata/current/backend
+
+EnvironmentFile=/srv/ata/config/backend.env
+ExecStart=/usr/local/bin/npm run start
+
+Restart=on-failure
+RestartSec=5s
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ata-backend
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+# `full` rather than `strict`: /usr, /boot and /etc become read-only, but /srv
+# stays writable. `strict` would make the release directory read-only too, and
+# `next start` writes into .next/cache.
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+# The database and uploads. The only paths this service legitimately writes to
+# outside its own release directory.
+ReadWritePaths=/srv/ata-data
+
+[Install]
+WantedBy=multi-user.target

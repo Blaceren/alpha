@@ -1,0 +1,66 @@
+# ATA CRM — internal staff workspace.  crm.__DOMAIN__ -> 127.0.0.1:3130
+#
+# Placeholders (__DOMAIN__) are substituted by deploy/aws/bootstrap.sh.
+#
+# This is an INTERNAL tool. If you have a fixed office/VPN egress range, the
+# commented allow/deny block below turns "internet-facing with a login form"
+# into "not reachable at all from outside" — a meaningful reduction in exposure
+# for a surface no learner ever needs.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name crm.__DOMAIN__;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name crm.__DOMAIN__;
+
+    ssl_certificate     /etc/letsencrypt/live/crm.__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/crm.__DOMAIN__/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Staff tooling should never be indexed.
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+    access_log /var/log/nginx/crm.access.log;
+    error_log  /var/log/nginx/crm.error.log;
+
+    # --- OPTIONAL IP ALLOWLIST -----------------------------------------------
+    # Uncomment and set your real egress ranges to take the CRM off the public
+    # internet entirely. Keep the ACME location above outside this restriction.
+    # allow 203.0.113.0/24;   # office
+    # allow 198.51.100.7/32;  # VPN egress
+    # deny all;
+
+    # See academy.conf.template for why these two blocks exist.
+    location /_next/image {
+        return 404;
+    }
+
+    location /_next/static/ {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        include /etc/nginx/snippets/ata-proxy.conf;
+        proxy_pass http://127.0.0.1:3130;
+    }
+
+    location / {
+        include /etc/nginx/snippets/ata-proxy.conf;
+        proxy_pass http://127.0.0.1:3130;
+    }
+}

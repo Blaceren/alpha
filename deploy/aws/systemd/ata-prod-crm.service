@@ -1,0 +1,46 @@
+[Unit]
+Description=ATA CRM (internal operations workspace) — production
+Documentation=file:///home/ubuntu/learner-ops-v1/deploy/aws/README.md
+After=network-online.target ata-prod-backend.service
+Wants=network-online.target
+
+# [Unit], not [Service] — in [Service] systemd ignores these with a warning.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ata
+Group=ata
+
+WorkingDirectory=/srv/ata/current/crm
+
+# NOTE: CRM_BACKEND_ORIGIN is also required AT BUILD TIME — Next bakes the
+# rewrite table into .next/routes-manifest.json when `rewrites()` runs during
+# `next build`. Setting it here only is not enough; see deploy/aws/README.md.
+EnvironmentFile=/srv/ata/config/crm.env
+ExecStart=/usr/local/bin/npm run start
+
+Restart=on-failure
+RestartSec=5s
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ata-crm
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

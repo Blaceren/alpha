@@ -5,3 +5,15 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Provisioning state: identifies live, billable AWS resources.
+deploy/aws/.provision-state
+
+# OWASP ZAP scan output (7.5 MB). Deliberately NOT committed: this repository is
+# public, and these reports describe, in detail, unpatched weaknesses in a system
+# that is live. Publishing them hands an attacker the reconnaissance for free.
+# The findings summary belongs in a private tracker, not in git.
+_phase/zap-scan/
+
+# macOS
+.DS_Store
