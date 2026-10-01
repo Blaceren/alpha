@@ -546,6 +546,22 @@ describe("changing the address", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).pendingEmail).toBeNull();
   });
 
+  it("is what the profile reads: the address, its state, and what can be done", async () => {
+    const user = await makeUser("account@example.invalid", "Password-1");
+    const { GET } = await import("@/app/api/me/account/route");
+    session.user = null;
+    expect((await GET(request("GET", "http://backend.invalid/api/me/account", undefined))).status).toBe(401);
+    session.user = { id: user.id, role: "user", status: "active" };
+    await ask(user.id, { newEmail: "account-next@example.invalid", currentPassword: "Password-1" });
+    const body = await (await GET(request("GET", "http://backend.invalid/api/me/account", undefined))).json();
+    expect(body).toEqual({
+      account: { email: "account@example.invalid", emailVerified: false, pendingEmail: "account-next@example.invalid" },
+      capabilities: { passwordRecovery: true, emailVerification: true, emailChange: true },
+    });
+    // Three fields about the address and nothing else about the account.
+    expect(Object.keys(body.account).sort()).toEqual(["email", "emailVerified", "pendingEmail"]);
+  });
+
   it("is no longer something PATCH /api/me does", async () => {
     const user = await makeUser("patch@example.invalid", "Password-1");
     session.user = { id: user.id, role: "user", status: "active" };
