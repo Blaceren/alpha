@@ -23,6 +23,9 @@ import { isEnrollmentDomainError } from "@/lib/curriculum/enrollment";
 import { autoEnrollNewRegistrationInTransaction } from "@/lib/curriculum/registration-enrollment";
 import { ACADEMY_REGISTER_SURFACE } from "@/lib/captcha/surface";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
+import { runDetached } from "@/lib/account/background";
+import { accountCapabilities } from "@/lib/account/capabilities";
+import { sendVerificationMail } from "@/lib/account/emailChange";
 import { prisma } from "@/lib/prisma";
 import {
   resolveRegistrationReferral,
@@ -460,6 +463,13 @@ export async function POST(request: Request) {
 
   const user = committed.created;
   const verificationRequired = isEmailVerificationRequired();
+  /* ACCOUNT RECOVERY — where mail can be sent, the new address is asked to
+     confirm itself. Detached: a slow mail provider must not hold a
+     registration, and a failed message must not undo one (it is audited). */
+  if (accountCapabilities().emailVerification) {
+    const account = { id: user.id, email: user.email, name: user.name };
+    runDetached(() => sendVerificationMail(account));
+  }
   const verificationToken = verificationRequired
     ? await createEmailVerificationToken(user.id)
     : null;

@@ -178,12 +178,15 @@ export async function GET() {
   }
 }
 
+/* ACCOUNT RECOVERY (2026-10-01): this endpoint used to accept `email` and write
+   it to `pendingEmail` for anyone holding a session — with no password, no
+   confirmation and nothing that ever resolved it. An address now changes
+   through `/api/me/email-change`, which asks for the current password and
+   takes effect only when the new mailbox answers. `.strict()` makes a request
+   that still sends `email` a loud 400 rather than a silently ignored field. */
 const profileUpdateSchema = z.object({
-  name: z.string().trim().min(2).max(50).optional(),
-  email: z.string().trim().email().toLowerCase().optional(),
-}).refine((value) => value.name !== undefined || value.email !== undefined, {
-  message: "Нет изменений",
-});
+  name: z.string().trim().min(2).max(50),
+}).strict();
 
 export async function PATCH(request: Request) {
   if (!validateCsrfToken(request)) return csrfFailureResponse(request);
@@ -193,34 +196,18 @@ export async function PATCH(request: Request) {
     const parsed = await validateJsonBody(request, profileUpdateSchema);
     if (!parsed.success) return parsed.response;
 
-    if (parsed.data.email) {
-      const conflict = await prisma.user.findFirst({
-        where: {
-          id: { not: currentUser.id },
-          OR: [{ email: parsed.data.email }, { pendingEmail: parsed.data.email }],
-        },
-        select: { id: true },
-      });
-      if (conflict) {
-        return NextResponse.json({ error: "EMAIL_IN_USE", message: "Этот email уже используется" }, { status: 409 });
-      }
-    }
-
     const user = await prisma.user.update({
       where: { id: currentUser.id },
-      data: {
-        ...(parsed.data.name ? { name: parsed.data.name } : {}),
-        ...(parsed.data.email ? { pendingEmail: parsed.data.email, pendingEmailRequestedAt: new Date() } : {}),
-      },
+      data: { name: parsed.data.name },
       select: { id: true, name: true, email: true, pendingEmail: true, pendingEmailRequestedAt: true, emailVerifiedAt: true },
     });
 
     await createAuditLog({
       userId: currentUser.id,
-      action: parsed.data.email ? "PROFILE_EMAIL_CHANGE_REQUESTED" : "PROFILE_UPDATED",
+      action: "PROFILE_UPDATED",
       entityType: "User",
       entityId: currentUser.id,
-      metadata: { nameChanged: Boolean(parsed.data.name), pendingEmail: parsed.data.email ?? undefined },
+      metadata: { nameChanged: true },
       request,
     });
 

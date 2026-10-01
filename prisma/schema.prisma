@@ -151,6 +151,7 @@ model User {
   testerFeedback                  TesterFeedback[]             @relation("TesterFeedbackAuthor")
   resolvedFeedback                TesterFeedback[]             @relation("TesterFeedbackResolver")
   emailVerificationTokens         EmailVerificationToken[]
+  accountActionTokens             AccountActionToken[]
   dailyRewards                    DailyLoginReward[]
   promocodeRedemptions            PromocodeRedemption[]
   promocodeRedemptionRequests     PromocodeRedemptionRequest[]
@@ -287,6 +288,34 @@ model EmailVerificationToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+}
+
+/// ACCOUNT RECOVERY — the one-time links a learner receives by email: a password
+/// reset, or the confirmation of a new address. Email verification keeps its own
+/// table (`EmailVerificationToken`), which predates this one and is unchanged.
+///
+/// The raw token exists only in the email. Here is its SHA-256, so a copy of the
+/// database cannot be turned into a working link. A row is used once (`usedAt`),
+/// and a newer link of the same kind, or a cancelled request, retires the older
+/// ones (`revokedAt`) — at most one link of a kind is ever live for a learner.
+/// The database checks the kind, the hash's shape, and that `newEmail` is set
+/// exactly for `email_change`.
+model AccountActionToken {
+  id        String    @id @default(cuid())
+  userId    Int
+  /// password_reset | email_change
+  kind      String
+  tokenHash String    @unique
+  /// The address being confirmed. Set for email_change, null for password_reset.
+  newEmail  String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([expiresAt])
 }
 
 model Level {
@@ -5285,14 +5314,14 @@ model UserSession {
   revokedAt DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([expiresAt])
-
   /// ONE LIVE SESSION PER USER IS ENFORCED BY THE DATABASE, not by this file.
   /// The migration creates `UserSession_userId_active_key`, a UNIQUE index on
   /// (userId) WHERE revokedAt IS NULL. Prisma cannot express a partial index,
   /// so it lives in SQL — but it is a real constraint, and a second live row
   /// fails at the database no matter which writer attempts it.
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 /// TOOLS-V2 — Trade Card (L5). The plan of ONE binary-options trade, written by
@@ -5301,7 +5330,7 @@ model UserSession {
 /// (fixed → saved | cancelled) and the money rules live in
 /// `src/lib/tools/trade-card.ts`. Every CHECK is in the migration.
 model ToolTradeCard {
-  id                String    @id @default(cuid())
+  id                String            @id @default(cuid())
   userId            Int
   /// fixed | saved | cancelled
   status            String
@@ -5318,23 +5347,23 @@ model ToolTradeCard {
   entryTime         String
   reason            String
   fixedAt           DateTime
-  planRevisionCount Int       @default(0)
+  planRevisionCount Int               @default(0)
   /// profit | loss, present exactly when the card is saved.
   result            String?
   observation       String?
   savedAt           DateTime?
   cancelledAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// The journal entry this card became when it was saved after L10, if any.
   journalEntry      ToolJournalEntry?
-
-  @@index([userId, createdAt])
 
   /// ONE OPEN CARD PER LEARNER IS ENFORCED BY THE DATABASE. The migration creates
   /// `ToolTradeCard_userId_open_key`, a UNIQUE index on (userId) WHERE
   /// status = 'fixed'. Prisma cannot express a partial index.
+
+  @@index([userId, createdAt])
 }
 
 /// TOOLS-V2 — Trading Journal (L10). One finished trade, as the learner reviews it.
