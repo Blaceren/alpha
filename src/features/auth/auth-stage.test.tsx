@@ -12,6 +12,7 @@ import { render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import ForgotPasswordPage from "@/app/forgot-password/page";
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
 
@@ -194,6 +195,26 @@ describe("the way between the two pages", () => {
     const register = renderPage(await page(RegisterPage));
     expect(register.container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
     register.unmount();
+  });
+});
+
+describe("the reset request page says only what is true of this deployment", () => {
+  it("promises nothing where no mail can be sent: no form, and a lead that does not say «отправим»", async () => {
+    const { container } = renderPage(await page(ForgotPasswordPage));
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector('[data-role="recovery-unavailable"]')!.textContent).toContain("Пока недоступно");
+    expect(container.querySelector(".auth__lead")!.textContent).toBe("Пароль сбрасывается по ссылке из письма.");
+    expect(container.textContent).not.toMatch(/отправим/);
+    expect(within(container).getByRole("link", { name: "Вернуться ко входу" }).getAttribute("href")).toBe("/login");
+  });
+
+  it("asks for the address where a message can be sent", async () => {
+    const { readAccountCapabilities } = await import("@/server/auth/account-read");
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce({ passwordRecovery: true, emailVerification: true, emailChange: true });
+    const { container } = renderPage(await page(ForgotPasswordPage));
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector('[data-role="recovery-unavailable"]')).toBeNull();
+    expect(container.querySelector(".auth__lead")!.textContent).toContain("мы отправим на неё ссылку");
   });
 });
 

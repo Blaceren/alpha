@@ -22,6 +22,11 @@ export const dynamic = "force-dynamic";
  * for one. Where it cannot, the page says so and offers the way back — the
  * login page does not link here in that case, so this is what a bookmarked or
  * typed address finds.
+ *
+ * THE LEAD FOLLOWS THE STATE. «Мы отправим на неё ссылку» above «Пока
+ * недоступно» is a promise and its refusal in one frame — seen on PREPROD the
+ * day this was released. Where nothing can be sent the lead says what the page
+ * is for, and the block under it says that it does not work here.
  */
 export default async function ForgotPasswordPage() {
   const { turnstileSiteKey } = getAcademyConfig();
@@ -32,7 +37,11 @@ export default async function ForgotPasswordPage() {
       headingId="forgot-heading"
       eyebrow="ATA / ВОССТАНОВЛЕНИЕ"
       title="Сбросить пароль."
-      lead="Укажите почту аккаунта — мы отправим на неё ссылку для нового пароля."
+      lead={
+        capabilities.passwordRecovery
+          ? "Укажите почту аккаунта — мы отправим на неё ссылку для нового пароля."
+          : "Пароль сбрасывается по ссылке из письма."
+      }
     >
       {capabilities.passwordRecovery ? (
         <ForgotPasswordForm turnstileSiteKey={turnstileSiteKey} />

@@ -176,6 +176,12 @@ to a functional page: it earns its place by being exact, not by being memorable.
 
 ## Sign-off
 
-Critical and major findings are closed and re-captured; the two accepted minors are stated. Open,
-and the owner's: whether the old mailbox should be able to undo a completed change of address
-(`docs/ACCOUNT_RECOVERY_V1.md` in the Backend, «Not in this version»).
+Critical and major findings are closed and re-captured; the two accepted minors are stated.
+
+**Owner, 2026-10-01, after this review:** released to PREPROD («Выкатывай»); the old mailbox will
+NOT be able to undo a completed change of address («Нет»); the mail channel is set up on PROD by the
+engineer from the deployment manual, and the transport is added after that.
+
+**Found on the released PREPROD the same day** (finding 12, minor, fixed in the next commit): on a
+deployment that cannot send mail `/forgot-password` kept the lead «…мы отправим на неё ссылку»
+above «Пока недоступно». The lead now follows the state.
