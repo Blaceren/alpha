@@ -88,6 +88,13 @@ Half-configured mail is a startup error (`validateRuntimeEnv`), like CAPTCHA.
 PREPROD sets none of these: nothing is offered there, and nothing changed for
 its learners.
 
+## Status
+
+Released to PREPROD on 2026-10-01 (`eb30a65`, migration 60). PREPROD sets no
+mail variables, so every capability is false there. On PROD the engineer sets
+up the sending side from the «Почта» section of the deployment manual and hands
+back what it asks for; the transport below is written against that.
+
 ## Connecting the channel on PROD
 
 1. Choose the provider (Amazon SES is the natural one on AWS; SMTP relay of the
@@ -112,14 +119,14 @@ administrator. A Polish set of messages. Making confirmation mandatory
 connected it can be turned on, but existing learners would have to confirm
 before their next sign-in).
 
-**Undoing a completed change of address from the old mailbox.** If someone who
-has the password requests a change AND confirms it before the owner reacts, the
-account is on their mailbox and the owner's only path is support. A "return the
-address" link in the message to the old mailbox would close that — and would
-also let whoever reads the OLD mailbox pull the account back for as long as the
-link lives, which is the wrong direction when the address was changed because
-the old mailbox was lost. It is a product decision with a cost either way, so
-it is the owner's, and it is open.
+**Undoing a completed change of address from the old mailbox — decided: no.** If
+someone who has the password requests a change AND confirms it before the owner
+reacts, the account is on their mailbox and the owner's only path is support. A
+"return the address" link in the message to the old mailbox would close that —
+and would also let whoever reads the OLD mailbox pull the account back for as
+long as the link lives, which is the wrong direction when the address was
+changed because the old mailbox was lost. The owner decided on 2026-10-01 not
+to build it; the case goes through support.
 
 ## Running it locally
 
