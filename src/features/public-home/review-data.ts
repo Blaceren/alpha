@@ -33,8 +33,6 @@ export type ReviewStageId = "v1" | "feedback" | "v2" | "accepted";
 
 export type ReviewStage = {
   readonly id: ReviewStageId;
-  /** The badge on the strip: V1 · Разбор · V2 · ✓ */
-  readonly index: string;
   readonly title: string;
   readonly note: string;
 };
@@ -42,25 +40,21 @@ export type ReviewStage = {
 export const REVIEW_STAGES: ReadonlyArray<ReviewStage> = [
   {
     id: "v1",
-    index: "V1",
     title: "Работа отправлена",
     note: "Учащийся фиксирует решение и его основание в отчёте уровня.",
   },
   {
     id: "feedback",
-    index: "Разбор",
     title: "Получен разбор",
     note: "Проверяющий возвращает работу по конкретному критерию рубрики.",
   },
   {
     id: "v2",
-    index: "V2",
     title: "Замечание исправлено",
     note: "Меняется то же самое место — основание решения, а не оформление.",
   },
   {
     id: "accepted",
-    index: "✓",
     title: "Работа принята",
     note: "Принятие подтверждает выполненную работу — не результат сделок.",
   },

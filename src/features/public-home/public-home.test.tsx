@@ -391,10 +391,10 @@ describe("Public Home — signature evidence", () => {
     const window = review.querySelector("#review-window") as HTMLElement;
     const cards = Array.from(review.querySelectorAll(".evidence-track > li")) as HTMLElement[];
     expect(cards).toHaveLength(4);
-    // The note, the index and the card's own surface all switch.
+    // The note, the heading around the button and the card's own surface all switch.
     await userEvent.click(cards[2]!.querySelector(".evidence__note") as HTMLElement);
     expect(window.getAttribute("data-stage")).toBe("v2");
-    await userEvent.click(cards[1]!.querySelector(".evidence__index") as HTMLElement);
+    await userEvent.click(cards[1]!.querySelector("h3") as HTMLElement);
     expect(window.getAttribute("data-stage")).toBe("feedback");
     await userEvent.click(cards[3]!);
     expect(window.getAttribute("data-stage")).toBe("accepted");
@@ -695,6 +695,101 @@ describe("Public Home — stylesheet holds its contract", () => {
     expect(Math.max(...delays)).toBeLessThanOrEqual(800);
     expect(css).not.toMatch(/animation-iteration-count:\s*infinite/);
     expect(css).not.toMatch(/animation:[^;]*infinite/);
+  });
+});
+
+describe("Public Home — the owner's review of 2026-10-01", () => {
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  /** The body of the first rule with exactly this selector, outside or inside a media block. */
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(rules)?.[1] ?? null;
+  };
+
+  describe("the review strip carries no badges", () => {
+    it("opens each card with its title: no «V1», «Разбор», «V2» or tick above it", () => {
+      const { container } = render(<PublicHomeScreen authenticated={false} />);
+      const track = container.querySelector(".evidence-track") as HTMLElement;
+      expect(track.querySelector(".evidence__index")).toBeNull();
+      for (const card of Array.from(track.querySelectorAll(":scope > li"))) {
+        expect(card.firstElementChild?.tagName, "a card starts with its heading").toBe("H3");
+      }
+      const copy = text(track);
+      expect(copy).not.toMatch(/\bV[12]\b/);
+      expect(copy).not.toContain("✓");
+      expect(rules).not.toContain("evidence__index");
+    });
+
+    it("says the order with the strip's own rail: lit as far as the state on show", async () => {
+      const { container } = render(<PublicHomeScreen authenticated={false} />);
+      const cards = Array.from(container.querySelectorAll(".evidence-track > li")) as HTMLElement[];
+      const reached = () => cards.map((card) => card.classList.contains("is-reached"));
+      expect(reached()).toEqual([true, false, false, false]);
+      await userEvent.click(cards[2]!.querySelector(".evidence__button") as HTMLElement);
+      expect(reached()).toEqual([true, true, true, false]);
+      expect(cards.map((card) => card.classList.contains("is-active"))).toEqual([false, false, true, false]);
+      expect(rule(".ph .review .evidence-track > li.is-reached::before")).toMatch(/background:/);
+      expect(rule(".ph .review .evidence-track > li.is-active::before")).toMatch(/var\(--signal-400\)/);
+    });
+  });
+
+  describe("the route's line never crosses a level's label", () => {
+    it("draws both parts of the line in the container's FIRST child, so every node is painted over it", () => {
+      // The drawn part used to be `::after` — the last child — and ran through
+      // «L1», «L2» and every node the route had passed.
+      expect(rules).not.toMatch(/\.route__steps::after/);
+      const line = rule(".ph .route__steps::before");
+      expect(line, "the route's line rule is missing").not.toBeNull();
+      expect(line).toMatch(/var\(--route-drawn/);
+      expect(line).toMatch(/var\(--signal-400\)/);
+      expect(line).toMatch(/var\(--line-dark\)/);
+    });
+
+    it("keeps the nodes opaque, and their labels large enough to be labels", () => {
+      const shared = rule(".ph .rstart__node,\n.ph .rstep__node");
+      expect(shared).toMatch(/background:\s*var\(--ink-950\)/);
+      const sizes = Array.from(rules.matchAll(/\.ph \.(?:rstart|rstep)__node \{([^}]*)\}/g))
+        .flatMap((m) => Array.from((m[1] ?? "").matchAll(/font-size:\s*([\d.]+)px/g)).map((f) => Number(f[1])));
+      expect(sizes.length).toBeGreaterThanOrEqual(4);
+      // 8px in a 26px ring was not a label.
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(9.5);
+    });
+  });
+
+  describe("the cycle stands centred under one line", () => {
+    it("centres each step and its object, and fences no column", () => {
+      const step = rule(".ph .learning-loop > li");
+      expect(step).toMatch(/align-items:\s*center/);
+      expect(step).toMatch(/text-align:\s*center/);
+      // The vertical rules ran through the nodes and along the objects' edges.
+      expect(step).not.toMatch(/border-(right|left)/);
+      const object = rule(".ph .cyc");
+      expect(object).toMatch(/justify-items:\s*center/);
+      expect(object).toMatch(/text-align:\s*center/);
+    });
+
+    it("sets the numbers large, on nodes that hide the line behind them", () => {
+      const node = rule(".ph .learning-loop > li > span");
+      expect(Number(/font-size:\s*([\d.]+)px/.exec(node ?? "")?.[1])).toBeGreaterThanOrEqual(13);
+      expect(node).toMatch(/z-index:\s*1/);
+      expect(node).toMatch(/background:\s*var\(--ink-950\)/);
+      // Node centre to node centre, not edge to edge — the faint line and the drawn one alike.
+      for (const pseudo of ["before", "after"]) {
+        expect(rules, `::${pseudo}`).toMatch(
+          new RegExp(`\\.ph \\.learning-loop::${pseudo} \\{[^}]*left:\\s*calc\\(\\(100% - 5 \\* var\\(--loop-gap\\)\\) / 12\\)`),
+        );
+      }
+    });
+
+    it("goes to three columns at its own step, and to one column without a line through the words", () => {
+      const three = /@media \(max-width: 1340px\) \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(three).toMatch(/\.ph \.learning-loop \{[^}]*repeat\(3,/);
+      expect(three).toMatch(/\.ph \.learning-loop::before,\s*\.ph \.learning-loop::after \{[^}]*display:\s*none/);
+      // On a phone the line used to run down the left edge at 11px, through
+      // the first letters of every paragraph.
+      expect(rules).not.toMatch(/\.learning-loop::after \{[^}]*left:\s*11px/);
+      expect(rules).toMatch(/\.ph \.learning-loop > li:nth-child\(n\)::before \{[^}]*left:\s*50%/);
+    });
   });
 });
 

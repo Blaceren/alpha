@@ -742,64 +742,85 @@ html.ph-smooth-scroll {
   padding: var(--section-pad) 0;
 }
 
+/*
+ * THE CYCLE — six steps under one line (owner's review, 2026-10-01).
+ *
+ * Each step is a centred column: its node ON the line, the word, what it
+ * means, and the product object it happens in. The line runs from the first
+ * node to the last, behind the nodes, and nothing else crosses the section.
+ *
+ * What this replaced: columns fenced by vertical rules that ran through the
+ * nodes and along the edges of the objects, 23px nodes whose numbers were set
+ * at 7px, and everything pushed to the left edge of its column.
+ */
 .ph .learning-loop {
+  --loop-gap: 20px;
+  --loop-node: 44px;
   position: relative;
   display: grid;
-  margin: 96px 0 0;
+  margin: 80px 0 0;
   padding: 0;
   list-style: none;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: var(--loop-gap);
 }
 
+/* The line, from the centre of the first node to the centre of the last. */
 .ph .learning-loop::before {
   position: absolute;
-  top: 36px;
-  right: 0;
-  left: 0;
-  height: 1px;
+  top: calc(var(--loop-node) / 2 - 1px);
+  right: calc((100% - 5 * var(--loop-gap)) / 12);
+  left: calc((100% - 5 * var(--loop-gap)) / 12);
+  height: 2px;
   background: var(--line-dark);
   content: "";
 }
 
 .ph .learning-loop > li {
   position: relative;
-  min-height: 310px;
-  padding: 72px 28px 34px 0;
-  border-right: 1px solid var(--line-dark);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--loop-node) + 24px) 0 0;
+  text-align: center;
 }
 
-.ph .learning-loop > li:last-child {
-  border-right: 0;
-}
-
+/* The node stands on the line and hides it: the number is never crossed. */
 .ph .learning-loop > li > span {
   position: absolute;
-  top: 25px;
-  left: 0;
+  z-index: 1;
+  top: 0;
+  left: 50%;
   display: grid;
-  width: 23px;
-  height: 23px;
+  width: var(--loop-node);
+  height: var(--loop-node);
+  margin-left: calc(var(--loop-node) / -2);
   place-items: center;
-  border: 1px solid var(--signal-400);
+  border: 1.5px solid var(--signal-400);
   border-radius: 50%;
   background: var(--ink-950);
   color: var(--signal-400);
   font-family: var(--font-data);
-  font-size: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .ph .learning-loop > li > h3 {
-  max-width: 150px;
-  margin-bottom: 16px;
-  font-size: 20px;
+  margin: 0 0 12px;
+  font-size: 21px;
   line-height: 1.15;
 }
 
 .ph .learning-loop > li > p {
-  max-width: 170px;
-  margin-bottom: 0;
+  /* Three lines are reserved, so the six objects start on one line. */
+  min-height: calc(3 * 1.55em);
+  max-width: 24ch;
+  margin: 0;
   color: var(--text-on-dark-muted);
   font-size: 13px;
+  line-height: 1.55;
 }
 
 .ph .review-proof__heading {
@@ -1114,6 +1135,59 @@ html.ph-smooth-scroll {
   transform: translateY(0);
 }
 
+/* THE CYCLE'S OWN STEP: six columns to three.
+ *
+ * Six objects stand in a row only while a column can hold one. Below a 1244px
+ * shell a column is narrower than 190px, and the objects start to break: the
+ * longest action, «Создать исправленную версию», goes to three lines and the
+ * mono labels to two (measured at 1280: 177px columns). That is a property of
+ * the objects, not of the shell's ladder, so it has a step of its own — and it
+ * stands before the 1180px block so that the narrower blocks after it still
+ * win. */
+@media (max-width: 1340px) {
+  /* Two rows of three. One line cannot serve two rows, so each cell carries
+     its own piece of the row's line: from the node of the first cell to the
+     node of the last. */
+  .ph .learning-loop {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 56px;
+  }
+
+  .ph .learning-loop::before,
+.ph .learning-loop::after {
+    display: none;
+  }
+
+  .ph .learning-loop > li::before {
+    position: absolute;
+    top: calc(var(--loop-node) / 2 - 1px);
+    right: calc(var(--loop-gap) / -2);
+    left: calc(var(--loop-gap) / -2);
+    height: 2px;
+    background: var(--line-dark);
+    content: "";
+    transition: background-color 240ms var(--ease);
+  }
+
+  .ph .learning-loop > li:nth-child(3n + 1)::before {
+    left: 50%;
+  }
+
+  .ph .learning-loop > li:nth-child(3n)::before {
+    right: 50%;
+  }
+
+  .ph .learning-loop.is-visible > li::before {
+    background: var(--signal-400);
+  }
+
+  .ph .learning-loop > li:nth-child(2)::before { transition-delay: 100ms; }
+  .ph .learning-loop > li:nth-child(3)::before { transition-delay: 200ms; }
+  .ph .learning-loop > li:nth-child(4)::before { transition-delay: 300ms; }
+  .ph .learning-loop > li:nth-child(5)::before { transition-delay: 400ms; }
+  .ph .learning-loop > li:nth-child(6)::before { transition-delay: 500ms; }
+}
+
 @media (max-width: 1180px) {
   .ph .shell {
     width: min(calc(100% - 64px), var(--shell));
@@ -1146,22 +1220,6 @@ html.ph-smooth-scroll {
     margin-bottom: -10px;
   }
 
-  .ph .learning-loop {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .ph .learning-loop::before {
-    display: none;
-  }
-
-  .ph .learning-loop > li {
-    min-height: 250px;
-    border-top: 1px solid var(--line-dark);
-  }
-
-  .ph .learning-loop > li > span {
-    top: -12px;
-  }
 
   .ph .faq__grid {
     grid-template-columns: 1fr 1.15fr;
@@ -1442,20 +1500,40 @@ html.ph-smooth-scroll {
     font-size: 24px;
   }
 
+  /* One column: a chain of centred steps. The line joins the end of one step
+     to the node of the next THROUGH THE GAP between them — it used to run down
+     the left edge, through the first letters of every paragraph. */
   .ph .learning-loop {
-    margin-top: 64px;
-    grid-template-columns: 1fr;
+    margin-top: 56px;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
   }
 
   .ph .learning-loop > li {
-    min-height: 220px;
-    padding: 70px 0 30px;
-    border-right: 0;
+    padding-bottom: 52px;
   }
 
-  .ph .learning-loop > li > h3,
-.ph .learning-loop > li > p {
-    max-width: 430px;
+  .ph .learning-loop > li:last-child {
+    padding-bottom: 0;
+  }
+
+  .ph .learning-loop > li:nth-child(n)::before {
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 50%;
+    width: 2px;
+    height: 36px;
+    margin-left: -1px;
+  }
+
+  .ph .learning-loop > li:last-child::before {
+    display: none;
+  }
+
+  .ph .learning-loop > li > p {
+    min-height: 0;
+    max-width: 34ch;
   }
 
   .ph .fit__columns {
@@ -1739,24 +1817,6 @@ html.ph-smooth-scroll {
   flex-direction: column;
   padding: 26px 24px 28px;
   background: var(--ink-950);
-}
-
-.ph .evidence__index {
-  display: inline-flex;
-  min-width: 34px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  padding-inline: 10px;
-  margin: 0 0 16px;
-  border-radius: var(--radius-pill);
-  background: rgba(243, 244, 239, 0.08);
-  color: var(--text-on-dark-muted);
-  font-family: var(--font-data);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .ph .evidence-track h3 {
@@ -2103,25 +2163,29 @@ html.ph-smooth-scroll {
   padding-left: 56px;
 }
 
-/* The whole line, faint; the drawn part, Signal, grows to the active node. */
-.ph .route__steps::before,
-.ph .route__steps::after {
+/* The whole line, faint; the drawn part, Signal, grows to the active node.
+ *
+ * ONE ELEMENT, AND THE FIRST ONE (owner's review, 2026-10-01). The drawn part
+ * used to be the container's `::after` — its last child — and was therefore
+ * painted over everything before it: straight through «L1», «L2» and every
+ * node the route had passed. Lifting the nodes with `z-index` does not help the
+ * first three: their list is revealed with a transform, which makes it a
+ * stacking context of its own, and the line was painted over the whole list.
+ * So both parts are now one `::before`, the container's FIRST child: whatever
+ * comes after it in the document is painted over it, and the nodes — opaque —
+ * hide the line where they stand. The drawn part is the Signal layer of its
+ * background, as tall as `--route-drawn`. */
+.ph .route__steps::before {
   position: absolute;
   top: var(--route-top, 0px);
+  bottom: 0;
   left: calc(var(--route-x) - 1px);
   width: 2px;
+  background:
+    linear-gradient(var(--signal-400), var(--signal-400)) top center / 100% var(--route-drawn, 0px) no-repeat,
+    var(--line-dark);
   content: "";
-}
-
-.ph .route__steps::before {
-  bottom: 0;
-  background: var(--line-dark);
-}
-
-.ph .route__steps::after {
-  height: var(--route-drawn, 0px);
-  background: var(--signal-400);
-  transition: height 420ms var(--ease);
+  transition: background-size 420ms var(--ease);
 }
 
 .ph .route__segment + .route__segment {
@@ -2165,31 +2229,38 @@ html.ph-smooth-scroll {
   padding: 4px 0;
 }
 
+/* THE NODES STAND OVER THE LINE (owner's review, 2026-10-01): a node is opaque
+   and the line is painted before it (see the line's own rule), so the line
+   arrives at a node and leaves it and the label is never crossed. The labels
+   grew with the fix: 8px in a 26px ring was not a label. */
 .ph .rstart__node,
 .ph .rstep__node {
   position: absolute;
+  z-index: 1;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: var(--ink-950);
   font-family: var(--font-data);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
+/* A passed node is tinted, not empty: Signal at 12% over the ground. */
 .ph .rstart__node {
-  top: 5px;
-  left: calc(-56px + var(--route-x) - 13px);
-  width: 26px;
-  height: 26px;
+  top: 3px;
+  left: calc(-56px + var(--route-x) - 15px);
+  width: 30px;
+  height: 30px;
   border: 1.5px solid var(--signal-400);
+  background: #222916;
   color: var(--signal-400);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .ph .rstart--origin .rstart__node::after {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--signal-400);
   content: "";
@@ -2219,13 +2290,13 @@ html.ph-smooth-scroll {
 }
 
 .ph .rstep__node {
-  top: 24px;
-  left: calc(-56px + var(--route-x) - 21px);
-  width: 42px;
-  height: 42px;
+  top: 23px;
+  left: calc(-56px + var(--route-x) - 22px);
+  width: 44px;
+  height: 44px;
   border: 1.5px solid var(--line-dark);
   color: var(--text-on-dark-muted);
-  font-size: 11px;
+  font-size: 12px;
   transition:
     border-color 240ms var(--ease),
     background-color 240ms var(--ease),
@@ -2235,6 +2306,7 @@ html.ph-smooth-scroll {
 
 .ph .rstep.is-reached .rstep__node {
   border-color: var(--signal-400);
+  background: #222916;
   color: var(--signal-400);
 }
 
@@ -3483,17 +3555,19 @@ html.ph-smooth-scroll {
   }
 
   .ph .rstart__node {
-    left: calc(-44px + var(--route-x) - 12px);
-    width: 24px;
-    height: 24px;
+    top: 4px;
+    left: calc(-44px + var(--route-x) - 14px);
+    width: 28px;
+    height: 28px;
+    font-size: 9.5px;
   }
 
   .ph .rstep__node {
-    top: 20px;
-    left: calc(-44px + var(--route-x) - 17px);
-    width: 34px;
-    height: 34px;
-    font-size: 10px;
+    top: 18px;
+    left: calc(-44px + var(--route-x) - 19px);
+    width: 38px;
+    height: 38px;
+    font-size: 11px;
   }
 
   .ph .rstep {
@@ -3818,14 +3892,15 @@ html.ph-smooth-scroll {
 
 /* --- the cycle (#mechanism) -------------------------------------------- */
 
-/* The Signal line is drawn over the hairline, left to right, and the six
-   nodes light in order as it reaches them. ≈ 850ms. */
+/* The Signal line is drawn over the faint one, from the first node to the
+   last, and the six nodes light in order as it reaches them. ≈ 850ms. It lies
+   under the nodes, like the faint line it covers. */
 .ph .learning-loop::after {
   position: absolute;
-  top: 36px;
-  right: 0;
-  left: 0;
-  height: 1px;
+  top: calc(var(--loop-node) / 2 - 1px);
+  right: calc((100% - 5 * var(--loop-gap)) / 12);
+  left: calc((100% - 5 * var(--loop-gap)) / 12);
+  height: 2px;
   background: var(--signal-400);
   transform: scaleX(0);
   transform-origin: left center;
@@ -3867,25 +3942,9 @@ html.ph-smooth-scroll {
   }
 }
 
-/* The cycle stands in a column only under 680px (its layout breakpoint):
-   there the line runs down the node centres. Between 680 and 920 the cycle
-   still has three columns, and a vertical line would cut the first one. */
-@media (max-width: 680px) {
-  .ph .learning-loop::after {
-    top: 36px;
-    right: auto;
-    bottom: 40px;
-    left: 11px;
-    width: 1px;
-    height: auto;
-    transform: scaleY(0);
-    transform-origin: center top;
-  }
-
-  .ph .learning-loop.is-visible::after {
-    animation-name: ph-draw-y;
-  }
-}
+/* Below 1340px the cycle is two rows of three, and under 680px a column: the
+   one drawn line gives way to the cells' own pieces of it, which turn Signal
+   in order (see the cycle's responsive rules). */
 
 /* =========================================================================
  * THE EVIDENCE WINDOW (2026-09-22) — #review in the product's own frame.
@@ -4208,13 +4267,37 @@ html.ph-smooth-scroll {
   margin-top: 18px;
 }
 
+/* NO BADGES (owner's review, 2026-10-01). Each card used to open with a chip —
+   «V1», «Разбор», «V2», «✓» — that said again, in code, what the title under it
+   says in words. The order is carried by the strip itself: one rail along its
+   top edge, lit as far as the state the window is showing. */
 .ph .review .evidence-track > li {
-  padding: 18px 20px 20px;
+  position: relative;
+  padding: 24px 20px 20px;
   transition:
     opacity 240ms var(--ease),
     transform 240ms var(--ease),
     background-color 240ms var(--ease);
   cursor: pointer;
+}
+
+.ph .review .evidence-track > li::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
+  content: "";
+  transition: background-color 240ms var(--ease);
+}
+
+.ph .review .evidence-track > li.is-reached::before {
+  background: rgba(199, 247, 109, 0.42);
+}
+
+.ph .review .evidence-track > li.is-active::before {
+  background: var(--signal-400);
 }
 
 .ph .review .evidence-track > li.is-active {
@@ -4231,14 +4314,9 @@ html.ph-smooth-scroll {
   cursor: auto;
 }
 
-.ph .review .evidence-track > li.is-active .evidence__index {
-  background: var(--signal-400);
-  color: var(--ink-950);
-}
-
 .ph .review .evidence-track h3 {
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: 12px;
+  font-size: 17px;
 }
 
 .ph .evidence__button {
@@ -4273,8 +4351,11 @@ html.ph-smooth-scroll {
   font-size: 15px;
 }
 
+/* The four notes share one line at the foot of the strip, whatever the height
+   of the object above each. */
 .ph .review .evidence__note {
-  margin-top: 10px;
+  margin-top: auto;
+  padding-top: 12px;
   font-size: 12.5px;
 }
 
@@ -4444,24 +4525,33 @@ html.ph-smooth-scroll {
  * divides, and each appears when its node lights.
  * ====================================================================== */
 
-.ph .learning-loop > li {
-  min-height: 0;
-  padding-bottom: 8px;
-}
-
+/* Centred in its column and centred inside: the label, the title, the action.
+   What is a control by nature — a progress bar, a field, a list of answers, a
+   path of levels — takes the object's full width instead. */
 .ph .cyc {
   display: grid;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 12px 12px 13px;
+  width: 100%;
+  max-width: 216px;
+  gap: 9px;
+  margin-top: 22px;
+  padding: 14px 14px 15px;
+  justify-items: center;
   border: 1px solid var(--pw-line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--pw-surface);
   color: var(--pw-text-2);
   font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.4;
-  max-width: 210px;
+  text-align: center;
+}
+
+.ph .cyc__progress,
+.ph .cyc__field,
+.ph .cyc__options,
+.ph .cyc__feedback,
+.ph .cyc__path {
+  justify-self: stretch;
 }
 
 .ph .cyc .pw-mono {
@@ -4520,6 +4610,21 @@ html.ph-smooth-scroll {
   justify-self: start;
 }
 
+/* In the cycle the action is centred, and a long one («Создать исправленную
+   версию») takes the object's width and breaks in the middle, not at its end. */
+.ph .cyc .pw-button--sm {
+  justify-content: center;
+  justify-self: center;
+  padding: 7px 14px;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ph .cyc--fix .pw-button--sm {
+  justify-self: stretch;
+}
+
 .ph .cyc__q {
   margin: 0;
   color: var(--pw-text-1);
@@ -4536,12 +4641,14 @@ html.ph-smooth-scroll {
   list-style: none;
 }
 
+/* A list of answers reads from the left, like the test it is taken from. */
 .ph .cyc__options li {
   position: relative;
   padding: 5px 8px 5px 24px;
   border: 1px solid var(--pw-line-2);
   border-radius: 6px;
   font-size: 11.5px;
+  text-align: left;
 }
 
 .ph .cyc__options li::before {
@@ -4652,17 +4759,15 @@ html.ph-smooth-scroll {
 .ph .learning-loop.is-visible > li:nth-child(5) .cyc { animation-delay: 660ms; }
 .ph .learning-loop.is-visible > li:nth-child(6) .cyc { animation-delay: 790ms; }
 
-@media (max-width: 920px) {
+@media (max-width: 1340px) {
   .ph .cyc {
-    margin-top: 12px;
-    max-width: 320px;
+    max-width: 260px;
   }
 }
 
-/* One column: the step keeps only the room its node needs. */
 @media (max-width: 680px) {
-  .ph .learning-loop > li {
-    min-height: 0;
-    padding: 56px 0 26px;
+  .ph .cyc {
+    max-width: 320px;
+    margin-top: 16px;
   }
 }

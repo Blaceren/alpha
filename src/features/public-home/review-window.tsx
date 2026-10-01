@@ -27,6 +27,11 @@ import {
  * without motion and the tests that pin it (one criterion, one reason, one
  * action, the same field corrected, no financial win) still read the strip.
  *
+ * NO BADGES ON THE STRIP (owner, 2026-10-01). The cards opened with «V1»,
+ * «Разбор», «V2», «✓» — a code for what each title already says. The order is
+ * the strip's own: a rail along its top edge, lit up to the state on show
+ * (`is-reached`, `is-active`).
+ *
  * MOTION. When the window is reached the sequence plays once — 1.5s a state,
  * 4.5s in all, the page's one cinematic moment, on the emotional side of the
  * motion rules — and any click on a state stops it. Under reduced motion
@@ -36,7 +41,7 @@ import {
  *
  * THE CARD IS THE TARGET. The button in the title is the control — focusable,
  * `aria-pressed`, the keyboard's way in — but a pointer may land anywhere on
- * the card: the index, the note, the empty surface. Only the object inside
+ * the card: the note, the empty surface. Only the object inside
  * the card (the field, the criterion, the accepted note) is content, not a
  * control: it is there to be read, and a click on it changes nothing. A drag
  * that selected text is not a click either.
@@ -234,7 +239,6 @@ export function ReviewWindow() {
             className={`${item.id === stage ? "is-active" : ""}${index <= at ? " is-reached" : ""}`}
             onClick={(event) => chooseFromCard(event, item.id)}
           >
-            <p className="evidence__index">{item.index}</p>
             <h3>
               <button
                 type="button"
