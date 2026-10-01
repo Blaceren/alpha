@@ -4,6 +4,7 @@ import { isAcceptableTradeDate, parseTradeDate } from "./dates";
 import { ToolError } from "./errors";
 import {
   JOURNAL_VIOLATIONS,
+  entryDiffersFromCard,
   parseJournalChange,
   parseJournalManualEntry,
   parseJournalQuery,
@@ -104,9 +105,13 @@ describe("parseJournalChange", () => {
     });
   });
 
-  it("replaces a hand-recorded entry whole", () => {
-    const change = parseJournalChange({ kind: "manual", ...ENTRY }, NOW);
-    expect(change.kind).toBe("manual");
+  it("replaces an entry whole, and still reads the name that kind had before", () => {
+    const change = parseJournalChange({ kind: "entry", ...ENTRY, planFollowed: true }, NOW);
+    expect(change).toMatchObject({ kind: "entry", entry: { assetCode: "EURUSD_OTC", amountMinor: 800, planFollowed: true } });
+    // An Academy build from before 2026-10-01 says `manual`.
+    expect(parseJournalChange({ kind: "manual", ...ENTRY }, NOW)).toEqual(parseJournalChange({ kind: "entry", ...ENTRY }, NOW));
+    // The whole entry is validated like a new one: a refusal names its field.
+    expect(refusal(() => parseJournalChange({ kind: "entry", ...ENTRY, amount: "0" }, NOW))).toBe("invalid_amount");
   });
 
   it("refuses anything else", () => {
@@ -159,6 +164,7 @@ describe("toJournalEntryDto", () => {
     createdAt: new Date("2026-09-21T12:33:00.000Z"),
     updatedAt: new Date("2026-09-21T12:40:00.000Z"),
     violations: [{ code: "tired" }, { code: "revenge" }],
+    tradeCard: null,
   };
 
   it("states the money of this one trade and the rules in list order", () => {
@@ -192,6 +198,67 @@ describe("toJournalEntryDto", () => {
       updatedAt: new Date(),
     } as ToolTradeCard;
     expect(tradeFromCard(card, "2026-09-21")).toMatchObject({ plan: "Отскок", conclusion: "Вошёл по плану", result: "profit" });
+  });
+
+  describe("an entry made from a card, and what its card says", () => {
+    const cardTrade = {
+      entryTime: "14:32",
+      assetCode: "EURUSD_OTC",
+      direction: "up",
+      amountMinor: 800,
+      payoutPercent: 90,
+      expiryCode: "M3",
+      result: "profit",
+      reason: "Отскок",
+    };
+    const fromCard: JournalRow = {
+      ...row,
+      source: "trade_card",
+      tradeCardId: "clcard00000001",
+      direction: "up",
+      amountMinor: 800,
+      expiryCode: "M3",
+      result: "profit",
+      plan: "Отскок",
+      tradeCard: cardTrade,
+    };
+
+    it("is the card's entry until the learner corrects the trade", () => {
+      expect(entryDiffersFromCard(fromCard)).toBe(false);
+      expect(toJournalEntryDto(fromCard).editedAfterCard).toBe(false);
+      // The review was always the learner's: it never makes the entry "edited".
+      expect(entryDiffersFromCard({ ...fromCard, planFollowed: true, execution: "x", conclusion: "y", violations: [] })).toBe(false);
+      // Nor does the date: a card has none.
+      expect(entryDiffersFromCard({ ...fromCard, tradeDate: "2026-09-20" })).toBe(false);
+    });
+
+    it("says so when any part of the trade no longer matches — and stops saying so when it matches again", () => {
+      const changes: Partial<JournalRow>[] = [
+        { result: "loss" },
+        { amountMinor: 900 },
+        { payoutPercent: 85 },
+        { direction: "down" },
+        { assetCode: "GBPUSD_OTC" },
+        { expiryCode: "M5" },
+        { entryTime: "14:33" },
+        { plan: "Другая причина" },
+        { plan: null },
+      ];
+      for (const change of changes) {
+        expect(entryDiffersFromCard({ ...fromCard, ...change }), JSON.stringify(change)).toBe(true);
+        expect(toJournalEntryDto({ ...fromCard, ...change }).editedAfterCard).toBe(true);
+      }
+      const corrected = { ...fromCard, result: "loss" };
+      expect(entryDiffersFromCard({ ...corrected, result: "profit" })).toBe(false);
+    });
+
+    it("is never said of a hand-recorded entry, and the card's trade never leaves the Backend", () => {
+      expect(toJournalEntryDto(row).editedAfterCard).toBe(false);
+      expect(entryDiffersFromCard({ ...row, tradeCard: cardTrade })).toBe(false);
+      const sent = JSON.stringify(toJournalEntryDto({ ...fromCard, result: "loss" }));
+      expect(sent).not.toContain("tradeCard\"");
+      expect(sent).not.toContain("reason");
+    });
   });
 
   it("has a code and a label for every rule", () => {

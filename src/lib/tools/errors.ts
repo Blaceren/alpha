@@ -15,8 +15,6 @@ export const TOOL_ERROR_STATUS = {
   TRADE_CARD_OPEN_EXISTS: 409,
   TRADE_CARD_STATE_CONFLICT: 409,
   JOURNAL_ENTRY_NOT_FOUND: 404,
-  /** A journal entry made from a Trade Card keeps the card's trade; only the review is edited. */
-  JOURNAL_TRADE_FROM_CARD: 409,
   TOOL_RATE_LIMITED: 429,
   TOOL_INTERNAL: 500,
 } as const;
