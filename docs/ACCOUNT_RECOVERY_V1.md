@@ -84,7 +84,8 @@ makes the change.
 | `MAIL_OUTBOX_DIR` | absolute directory for `outbox`. |
 | `PUBLIC_APP_URL` | the origin every link is built from. Required with a transport. |
 
-Half-configured mail is a startup error (`validateRuntimeEnv`), like CAPTCHA.
+Half-configured mail fails the environment check (`validateRuntimeEnv`), like CAPTCHA:
+readiness answers 503 and anything that needs the session secret throws.
 PREPROD sets none of these: nothing is offered there, and nothing changed for
 its learners.
 
@@ -97,19 +98,39 @@ back what it asks for; the transport below is written against that.
 
 ## Connecting the channel on PROD
 
-1. Choose the provider (Amazon SES is the natural one on AWS; SMTP relay of the
-   domain's mail works too). The owner supplies credentials through the env
-   file, never through chat.
-2. Add one `MailTransport` implementation in `src/lib/mail/transport.ts`, its
-   name in `MAIL_TRANSPORTS` and its settings in `resolveMailConfig`. Nothing in
-   `src/lib/account/` or the routes changes.
-3. DNS for the sender's domain: DKIM (and SPF/custom MAIL FROM if the provider
-   needs them). The domain's MX, SPF and DKIM for the existing mailboxes belong
-   to the workspace mail and are not replaced — records are added beside them.
-4. Set `MAIL_TRANSPORT`, `MAIL_FROM`, keep `PUBLIC_APP_URL=https://alfatrade.media`.
-5. Verify with a real mailbox on PROD: register → confirmation arrives; forgot
+The AWS side is the engineer's, and it is written down step by step in the
+deployment manual (`docs/DEPLOY_AWS.md` of the monorepo, section 13 «Почта»):
+a domain identity for `alfatrade.media` in Amazon SES (`eu-central-1`) with
+Easy DKIM — three CNAME records beside the workspace mail's own, nothing
+replaced; production access; the account-level suppression list and SNS
+notifications for bounces and complaints; and ONE permission on the instance
+role, `ses:SendEmail` from `no-reply@alfatrade.media` on that identity. No
+access keys and no SMTP credentials exist in this design. The engineer hands
+back seven non-secret facts (region, identity status, production access, the
+sender, where replies go, the role's permission proved by a CLI send, the
+feedback mailbox), and the owner said on 2026-10-01 that the work continues
+from there.
+
+What is written against those facts:
+
+1. One `MailTransport` in `src/lib/mail/transport.ts` named `ses`: the SES API
+   v2 `SendEmail` operation with **Simple** content (subject, text, HTML) — the
+   same call the engineer's CLI check makes, so the same permission covers it —
+   authenticated by the instance role through the SDK's default credential
+   chain. `ReplyToAddresses` if the owner wants replies to reach support.
+2. Its name in `MAIL_TRANSPORTS` and its settings in `resolveMailConfig`:
+   `MAIL_SES_REGION` (required with `ses`), and a reply-to address if chosen.
+   Nothing in `src/lib/account/` or the routes changes.
+3. On PROD: `MAIL_TRANSPORT=ses`, `MAIL_FROM=Alfa Trade Academy
+   <no-reply@alfatrade.media>`, `MAIL_SES_REGION=eu-central-1`;
+   `PUBLIC_APP_URL=https://alfatrade.media` is already there. Until that
+   release these variables must NOT be set: a transport this build does not
+   know fails the environment check — readiness answers 503 and every session
+   read throws.
+4. Verify with a real mailbox on PROD: register → confirmation arrives; forgot
    password → link → new password → old session is gone; change address →
-   both mailboxes receive their message → link → sign in with the new address.
+   both mailboxes receive their message → link → sign in with the new address;
+   `DKIM: PASS` and `DMARC: PASS` in the message source.
 
 ## Not in this version
 
