@@ -577,6 +577,138 @@ describe("changing the address", () => {
   });
 });
 
+/* ------------------------------------------------------- across the flows */
+
+describe("what one change does to the links mailed before it", () => {
+  const principal = (id: number) => ({ id, role: "user", status: "active" });
+
+  async function ask(userId: number, newEmail: string, currentPassword: string) {
+    session.user = principal(userId);
+    const { POST } = await import("@/app/api/me/email-change/route");
+    return call(POST, request("POST", "http://backend.invalid/api/me/email-change", { newEmail, currentPassword }, { csrf: true }));
+  }
+  async function confirmChange(token: string) {
+    const { POST } = await import("@/app/api/auth/email-change/confirm/route");
+    return call(POST, request("POST", "http://backend.invalid/api/auth/email-change/confirm", { token }));
+  }
+  async function changePassword(userId: number, currentPassword: string, newPassword: string) {
+    session.user = principal(userId);
+    const { POST } = await import("@/app/api/auth/change-password/route");
+    const result = await call(POST, request("POST", "http://backend.invalid/api/auth/change-password", { currentPassword, newPassword }, { csrf: true }));
+    await settle();
+    return result;
+  }
+  async function pendingOf(userId: number) {
+    session.user = principal(userId);
+    const { GET } = await import("@/app/api/me/account/route");
+    const body = await (await GET(request("GET", "http://backend.invalid/api/me/account", undefined))).json();
+    return body.account.pendingEmail as string | null;
+  }
+  const linkIn = (kind: string, path: string) => tokenFrom(sent.filter((m) => m.kind === kind).at(-1)!, path);
+  const row = (id: number) => db.user.findUniqueOrThrow({ where: { id } });
+
+  it("a pending change of address does not survive a password reset", async () => {
+    const user = await makeUser("victim@example.invalid", "Known-password-1");
+    // Someone who has the password asks for the account to move to THEIR mailbox…
+    expect((await ask(user.id, "stranger@example.invalid", "Known-password-1")).status).toBe(200);
+    const changeToken = linkIn("email_change_confirm", "/confirm-email");
+    // …and the owner, told at the old address, resets the password.
+    await requestReset("victim@example.invalid");
+    expect((await confirmReset(linkIn("password_reset", "/reset-password"), "Owner-password-2")).status).toBe(200);
+
+    const after = await row(user.id);
+    expect([after.email, after.pendingEmail, after.pendingEmailRequestedAt]).toEqual(["victim@example.invalid", null, null]);
+    // The stranger's link needs no session. Opened afterwards, it moves nothing.
+    const late = await confirmChange(changeToken);
+    expect([late.status, late.body.error]).toEqual([400, "INVALID_TOKEN"]);
+    expect((await row(user.id)).email).toBe("victim@example.invalid");
+  });
+
+  it("nor a change of password in the profile — and the account's address is told", async () => {
+    const user = await makeUser("profile-owner@example.invalid", "Known-password-1");
+    await ask(user.id, "stranger-two@example.invalid", "Known-password-1");
+    const changeToken = linkIn("email_change_confirm", "/confirm-email");
+    sent.length = 0;
+
+    expect((await changePassword(user.id, "Known-password-1", "Owner-password-2")).status).toBe(200);
+    expect(sent.map((m) => [m.kind, m.to])).toEqual([["password_changed", "profile-owner@example.invalid"]]);
+    expect(await pendingOf(user.id)).toBeNull();
+    expect((await confirmChange(changeToken)).status).toBe(400);
+    const after = await row(user.id);
+    expect([after.email, after.pendingEmail]).toEqual(["profile-owner@example.invalid", null]);
+  });
+
+  it("says nothing by mail about a password change where no mail can be sent", async () => {
+    mailOff();
+    const user = await makeUser("silent@example.invalid", "Known-password-1");
+    expect((await changePassword(user.id, "Known-password-1", "Owner-password-2")).status).toBe(200);
+    expect(sent).toEqual([]);
+    expect(await db.auditLog.count({ where: { userId: user.id, action: { in: ["MAIL_SENT", "MAIL_SEND_FAILED"] } } })).toBe(0);
+  });
+
+  it("a reset link does not survive a change of address", async () => {
+    const user = await makeUser("moving@example.invalid", "Password-1");
+    await requestReset("moving@example.invalid"); // the link is in the OLD mailbox
+    const resetToken = linkIn("password_reset", "/reset-password");
+    await ask(user.id, "moved@example.invalid", "Password-1");
+    expect((await confirmChange(linkIn("email_change_confirm", "/confirm-email"))).status).toBe(200);
+
+    const late = await confirmReset(resetToken, "Old-mailbox-password-2");
+    expect([late.status, late.body.error]).toEqual([400, "INVALID_TOKEN"]);
+    const after = await row(user.id);
+    expect(after.email).toBe("moved@example.invalid");
+    expect(await bcrypt.compare("Password-1", after.passwordHash)).toBe(true);
+  });
+
+  it("nor a change of password in the profile", async () => {
+    const user = await makeUser("settled@example.invalid", "Password-1");
+    await requestReset("settled@example.invalid");
+    const resetToken = linkIn("password_reset", "/reset-password");
+    expect((await changePassword(user.id, "Password-1", "Chosen-password-2")).status).toBe(200);
+    expect((await confirmReset(resetToken, "Other-password-3")).status).toBe(400);
+    expect(await bcrypt.compare("Chosen-password-2", (await row(user.id)).passwordHash)).toBe(true);
+  });
+
+  it("a confirmation link mailed to the old address is spent when the address changes", async () => {
+    const user = await makeUser("unconfirmed-old@example.invalid", "Password-1");
+    session.user = { ...principal(user.id), emailVerifiedAt: null };
+    const { POST: resend } = await import("@/app/api/auth/resend-verification/route");
+    await call(resend, request("POST", "http://backend.invalid/api/auth/resend-verification", {}, { csrf: true }));
+    const verifyToken = linkIn("verify_email", "/verify-email");
+
+    await ask(user.id, "confirmed-new@example.invalid", "Password-1");
+    expect((await confirmChange(linkIn("email_change_confirm", "/confirm-email"))).status).toBe(200);
+    const { POST: verify } = await import("@/app/api/auth/verify-email/route");
+    expect((await call(verify, request("POST", "http://backend.invalid/api/auth/verify-email", { token: verifyToken }))).status).toBe(400);
+  });
+
+  it("a pending address is held only while its link can be opened", async () => {
+    const holder = await makeUser("holder@example.invalid", "Password-1");
+    const seeker = await makeUser("seeker@example.invalid", "Password-1");
+    await ask(holder.id, "shared-wish@example.invalid", "Password-1");
+    // While the link lives, the address is held and the profile says so.
+    expect((await ask(seeker.id, "shared-wish@example.invalid", "Password-1")).status).toBe(409);
+    expect(await pendingOf(holder.id)).toBe("shared-wish@example.invalid");
+
+    // A day later nobody has opened it.
+    await db.user.update({ where: { id: holder.id }, data: { pendingEmailRequestedAt: new Date(Date.now() - 24 * 60 * 60 * 1000 - 1000) } });
+    await db.accountActionToken.updateMany({ where: { userId: holder.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect(await pendingOf(holder.id)).toBeNull();
+    expect((await ask(seeker.id, "shared-wish@example.invalid", "Password-1")).status).toBe(200);
+    const rows = await db.user.findMany({ where: { id: { in: [holder.id, seeker.id] } }, orderBy: { id: "asc" } });
+    expect(rows.map((r) => r.pendingEmail)).toEqual([null, "shared-wish@example.invalid"]);
+  });
+
+  it("a request recorded before links existed is not a pending address", async () => {
+    // The old PATCH wrote `pendingEmail` and nothing could ever confirm it.
+    const legacy = await makeUser("legacy@example.invalid", "Password-1", { pendingEmail: "legacy-wish@example.invalid", pendingEmailRequestedAt: null });
+    const other = await makeUser("legacy-seeker@example.invalid", "Password-1");
+    expect(await pendingOf(legacy.id)).toBeNull();
+    expect((await ask(other.id, "legacy-wish@example.invalid", "Password-1")).status).toBe(200);
+    expect((await row(legacy.id)).pendingEmail).toBeNull();
+  });
+});
+
 /* -------------------------------------------------------------- the audit */
 
 describe("what the audit keeps", () => {

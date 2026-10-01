@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { accountCapabilities } from "@/lib/account/capabilities";
+import { livePendingEmail } from "@/lib/account/lifecycle";
 import { apiAuthErrorResponse, requireUser, unauthorizedResponse } from "@/lib/apiAuth";
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +12,9 @@ import { prisma } from "@/lib/prisma";
  * can send the messages those actions need. `GET /api/me` carries the same
  * three fields inside a much larger learner document; the profile's email row
  * has no use for the rest and should not have to receive it.
+ *
+ * An address is "waiting" only while its link can still be opened: a request
+ * nobody confirmed in time is reported as no request at all.
  */
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,7 +24,7 @@ export async function GET(request: Request) {
     const current = await requireUser();
     const user = await prisma.user.findUnique({
       where: { id: current.id },
-      select: { email: true, emailVerifiedAt: true, pendingEmail: true },
+      select: { email: true, emailVerifiedAt: true, pendingEmail: true, pendingEmailRequestedAt: true },
     });
     if (!user) return unauthorizedResponse();
     return NextResponse.json(
@@ -28,7 +32,7 @@ export async function GET(request: Request) {
         account: {
           email: user.email,
           emailVerified: user.emailVerifiedAt !== null,
-          pendingEmail: user.pendingEmail,
+          pendingEmail: livePendingEmail(user),
         },
         capabilities: accountCapabilities(),
       },

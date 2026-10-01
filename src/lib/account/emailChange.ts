@@ -19,15 +19,19 @@
  *
  * A change cannot be requested where mail cannot be sent: a pending address
  * with no link to confirm it would be pending for ever.
+ *
+ * What a change does to the links of the other flows, and how long a pending
+ * address is held, is `account/lifecycle.ts`.
  */
 import bcrypt from "bcryptjs";
 import { createAuditLog } from "@/lib/audit";
-import { accountLink } from "@/lib/account/links";
 import {
-  consumeAccountActionToken,
-  issueAccountActionToken,
-  revokeAccountActionTokens,
-} from "@/lib/account/tokens";
+  dropPendingEmailChange,
+  pendingEmailStaleBefore,
+  retireLinksOnEmailChange,
+} from "@/lib/account/lifecycle";
+import { accountLink } from "@/lib/account/links";
+import { consumeAccountActionToken, issueAccountActionToken } from "@/lib/account/tokens";
 import { createEmailVerificationToken } from "@/lib/emailVerification";
 import { resolveMailConfig } from "@/lib/mail/config";
 import { sendMail, type MailSendResult } from "@/lib/mail/send";
@@ -103,10 +107,20 @@ export async function requestEmailChange(
 
   if (input.newEmail === user.email) return { ok: false, code: "SAME_EMAIL" };
 
+  /* One clock for the request: the moment written on the account and the
+     moment the link's lifetime is counted from are the same moment. */
+  const now = new Date();
+  const staleBefore = pendingEmailStaleBefore(now);
+
+  /* Another account holds the address when it IS that account's address, or
+     when that account is waiting for it and its link can still be opened. */
   const holder = await prisma.user.findFirst({
     where: {
       id: { not: user.id },
-      OR: [{ email: input.newEmail }, { pendingEmail: input.newEmail }],
+      OR: [
+        { email: input.newEmail },
+        { pendingEmail: input.newEmail, pendingEmailRequestedAt: { gt: staleBefore } },
+      ],
     },
     select: { id: true },
   });
@@ -115,14 +129,26 @@ export async function requestEmailChange(
   let token: string;
   try {
     token = await prisma.$transaction(async (tx) => {
+      /* A request whose link has died still occupies the unique slot. Release
+         it — only the dead ones: a live request that appeared since the check
+         above keeps its slot, and the write below loses to it. */
+      await tx.user.updateMany({
+        where: {
+          id: { not: user.id },
+          pendingEmail: input.newEmail,
+          OR: [{ pendingEmailRequestedAt: null }, { pendingEmailRequestedAt: { lte: staleBefore } }],
+        },
+        data: { pendingEmail: null, pendingEmailRequestedAt: null },
+      });
       await tx.user.update({
         where: { id: user.id },
-        data: { pendingEmail: input.newEmail, pendingEmailRequestedAt: new Date() },
+        data: { pendingEmail: input.newEmail, pendingEmailRequestedAt: now },
       });
       return issueAccountActionToken(tx, {
         userId: user.id,
         kind: "email_change",
         newEmail: input.newEmail,
+        now,
       });
     });
   } catch (error) {
@@ -200,6 +226,7 @@ export async function confirmEmailChange(
           emailVerifiedAt: now,
         },
       });
+      await retireLinksOnEmailChange(tx, user.id, now);
       return {
         kind: "done" as const,
         userId: user.id,
@@ -246,13 +273,7 @@ export async function confirmEmailChange(
 
 /** Withdraw a pending change: the address is forgotten and its link stops working. */
 export async function cancelEmailChange(userId: number, request?: Request): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: userId },
-      data: { pendingEmail: null, pendingEmailRequestedAt: null },
-    });
-    await revokeAccountActionTokens(tx, userId, "email_change");
-  });
+  await prisma.$transaction((tx) => dropPendingEmailChange(tx, userId));
   await createAuditLog({
     userId,
     action: "PROFILE_EMAIL_CHANGE_CANCELLED",

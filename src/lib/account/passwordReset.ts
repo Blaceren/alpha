@@ -23,9 +23,14 @@
  * THE LINK PROVES THE MAILBOX. Whoever opened it received mail at the account's
  * address, which is exactly what email verification establishes. An unverified
  * address becomes verified by a completed reset.
+ *
+ * A RESET ALSO STOPS A PENDING CHANGE OF ADDRESS (`account/lifecycle.ts`): the
+ * person who lost control of the account must not have to find a second
+ * button for the link a stranger is still holding.
  */
 import bcrypt from "bcryptjs";
 import { createAuditLog } from "@/lib/audit";
+import { retireLinksOnPasswordChange } from "@/lib/account/lifecycle";
 import { accountLink } from "@/lib/account/links";
 import {
   ACCOUNT_TOKEN_TTL_MS,
@@ -126,6 +131,7 @@ export async function confirmPasswordReset(
       where: { userId: user.id, revokedAt: null },
       data: { revokedAt: now },
     });
+    await retireLinksOnPasswordChange(tx, user.id, now);
     return user;
   });
 

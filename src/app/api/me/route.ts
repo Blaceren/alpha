@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { livePendingEmail } from "@/lib/account/lifecycle";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
@@ -61,6 +62,9 @@ export async function GET() {
 
     const trainingLevel = getTrainingLevelFromProgress(user.taskProgress);
     const firstDeposit = await resolveFirstDepositConfirmation(prisma, user.id);
+    /* ACCOUNT RECOVERY: an address is "pending" only while its link can still
+       be opened — the same answer `/api/me/account` gives. */
+    const pendingEmail = livePendingEmail(user);
 
     return NextResponse.json({
       user: {
@@ -69,14 +73,14 @@ export async function GET() {
           id: user.id,
           name: user.name,
           email: user.email,
-          pendingEmail: user.pendingEmail,
+          pendingEmail,
           emailVerified: Boolean(user.emailVerifiedAt),
         },
         name: user.name,
         email: user.email,
         role: user.role,
-        pendingEmail: user.pendingEmail,
-        pendingEmailRequestedAt: user.pendingEmailRequestedAt,
+        pendingEmail,
+        pendingEmailRequestedAt: pendingEmail ? user.pendingEmailRequestedAt : null,
         emailVerified: Boolean(user.emailVerifiedAt),
         level: trainingLevel,
         currentLevel: trainingLevel,
@@ -211,7 +215,15 @@ export async function PATCH(request: Request) {
       request,
     });
 
-    return NextResponse.json({ user: { ...user, emailVerified: Boolean(user.emailVerifiedAt) } });
+    const pendingEmail = livePendingEmail(user);
+    return NextResponse.json({
+      user: {
+        ...user,
+        pendingEmail,
+        pendingEmailRequestedAt: pendingEmail ? user.pendingEmailRequestedAt : null,
+        emailVerified: Boolean(user.emailVerifiedAt),
+      },
+    });
   } catch (error) {
     return apiAuthErrorResponse(error, request);
   }
