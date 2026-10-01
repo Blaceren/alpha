@@ -32,7 +32,19 @@ function isApiMode(): boolean {
  * Kept as an exact-or-subpath match so a route that merely starts with the same
  * letters (`/registers-something`) is NOT exempted.
  */
-const ANONYMOUS_ROUTES = ["/login", "/register"] as const;
+const ANONYMOUS_ROUTES = [
+  "/login",
+  "/register",
+  /* ACCOUNT RECOVERY (2026-10-01). The request for a reset link and the three
+     pages a link from an email opens. A person who forgot a password has no
+     session by definition, and a confirmation link may be opened on a device
+     that is not signed in. None of them renders learner data: the token in the
+     link's fragment is the only thing they act on. */
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/confirm-email",
+] as const;
 
 /**
  * Public Home, and ONLY Public Home.

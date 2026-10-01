@@ -857,3 +857,63 @@ html.pf-root-scope,
   .pf .p-edit,
   .pf .p-edit--link { justify-content: flex-start; }
 }
+
+
+/* ── ACCOUNT RECOVERY — the email row, where mail can be sent ───────────────
+   The address is a value like the name; its state is said after it in the
+   quiet tone, not as a badge. The rows under it (a pending change, the request
+   to confirm) are notes about the same address: no label of their own, the
+   value column, one affordance. */
+.pf .p-row__state {
+  color: var(--p-ink-quiet);
+  font-size: var(--p-type-constraint);
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  /* The empty label would take a line of its own on a phone. */
+  .pf .p-row--note .p-row__label { display: none; }
+}
+
+/* A note keeps the height of a row with an affordance. «Отправить письмо» is
+   replaced by a sentence once the message is sent; without this floor the row
+   lost the button's 44px and everything under it jumped up beneath the pointer
+   that had just pressed it. Where rows wrap (the phone) the floor is not held:
+   the affordance sits on a line of its own there. */
+@media (min-width: 600px) {
+  .pf .p-row--note { min-height: calc(44px + 2 * var(--p-rhythm-tight)); }
+}
+
+/* ── A FIELD IS NOT THE IDENTITY, AND IT HAS A BOUNDARY ─────────────────────
+   The name is edited ON the locus: identity scale, and the locus rule is the
+   control's only boundary. The password form reused the name control for its
+   three fields WITHOUT a locus, so those fields had no boundary at all — a
+   label followed by empty ground until focus drew a ring. That is the state
+   `--p-locus-rule-edit` exists to prevent ("the rule genuinely is the input's
+   only boundary"), and an email address made a second defect visible: at
+   identity scale in a 345px control an address was cut off after 25
+   characters, in the one form where a typo sends the link to a stranger.
+
+   So a field inside `.p-field` — in both forms — carries the edit rule, spans
+   the operable measure, and is set at FIELD scale: what is typed there is a
+   credential or an address, not the page's subject. 18px stays above the 16px
+   floor under which a phone zooms into a focused field, and shows a
+   34-character address whole at 390px.
+
+   The hint under a field clears the focus ring (2px ring at a 6px offset): it
+   used to sit directly under the control, and the ring was drawn through it. */
+.pf .p-profile { --p-type-field: 18px; --p-type-field-lh: 1.35; }
+.pf .p-field .p-name-control {
+  display: block;
+  box-sizing: border-box;
+  width: min(var(--p-locus-measure), 100%);
+  border-bottom: 1px solid var(--p-locus-rule-edit);
+  font-size: var(--p-type-field);
+  line-height: var(--p-type-field-lh);
+  letter-spacing: 0;
+}
+.pf .p-field .p-constraint { margin-top: var(--p-rhythm-inline); }
+
+/* What a form says about a refused attempt keeps its distance from the actions
+   under it; it used to end flush against «Сохранить». */
+.pf .p-row--open .p-feedback--field { margin-bottom: var(--p-rhythm-locus); }

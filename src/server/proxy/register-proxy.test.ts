@@ -104,11 +104,15 @@ describe("register proxy — route matrix", () => {
       // surface, so the registration route must declare its own.
       authSurface: "academy_register",
     });
-    // Adjacent Backend auth routes are not reachable: no operation names them.
+    /* Adjacent Backend auth routes are reachable only by name. `verify-email`
+       and `resend-verification` were unreachable while the product could send no
+       mail; ACCOUNT RECOVERY (2026-10-01) names them, once each. `session-status`
+       is still named by nothing. */
     const paths = PROXY_OPERATIONS.map((op) => PROXY_ALLOW_LIST[op].backendPath);
-    expect(paths).not.toContain("/api/auth/verify-email");
-    expect(paths).not.toContain("/api/auth/resend-verification");
+    expect(paths.filter((p) => p === "/api/auth/verify-email")).toHaveLength(1);
+    expect(paths.filter((p) => p === "/api/auth/resend-verification")).toHaveLength(1);
     expect(paths).not.toContain("/api/auth/session-status");
+    expect(new Set(paths).size).toBe(paths.length);
     expect(paths.filter((p) => p === "/api/auth/register")).toHaveLength(1);
     expect(paths.some((p) => p.includes("*"))).toBe(false);
   });

@@ -17,6 +17,14 @@
  * entry — the trusted client IP is now forwarded, and the Backend is told which
  * authentication surface this is — and it names the surface for `register`
  * explicitly rather than leaving it implied.
+ *
+ * ACCOUNT RECOVERY (2026-10-01) names the routes behind the password reset, the
+ * confirmation of an address and its change — including `verify-email` and
+ * `resend-verification`, which were deliberately unreachable while the product
+ * could send no mail. There is still no passthrough: eight more named
+ * operations, each one method and one constant path. Whether any of them does
+ * anything is the Backend's answer (`capabilities`): where no mail can be sent
+ * it refuses them, and the Academy does not offer them.
  */
 import type { BackendAuthSurface } from "@/server/proxy/auth-surface";
 
@@ -26,7 +34,15 @@ export type ProxyOperation =
   | "logout"
   | "csrf"
   | "register"
-  | "changePassword";
+  | "changePassword"
+  | "account"
+  | "passwordResetRequest"
+  | "passwordResetConfirm"
+  | "verifyEmail"
+  | "resendVerification"
+  | "emailChangeRequest"
+  | "emailChangeCancel"
+  | "emailChangeConfirm";
 
 export type ProxyRoute = {
   method: "GET" | "POST";
@@ -130,6 +146,87 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
   changePassword: {
     method: "POST",
     backendPath: "/api/auth/change-password",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: true,
+    authSurface: null,
+  },
+
+  /* ------------------------------------------------- ACCOUNT RECOVERY --
+     The learner's own address and what can be done with it. Authenticated,
+     read-only, no body. */
+  account: {
+    method: "GET",
+    backendPath: "/api/me/account",
+    isLogin: false,
+    hasBody: false,
+    forwardClientIp: false,
+    authSurface: null,
+  },
+  /* Ask for a reset link. Anonymous; the Backend limits it by client address,
+     so the trusted address is forwarded, and it verifies a challenge minted for
+     THIS surface — a login or registration token is refused here. */
+  passwordResetRequest: {
+    method: "POST",
+    backendPath: "/api/auth/password-reset/request",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: true,
+    authSurface: "academy_password_reset",
+  },
+  /* Set a new password with a link's token. `isLogin: false`: a dead link is a
+     400, and nothing here is a credential check the shell should interpret. */
+  passwordResetConfirm: {
+    method: "POST",
+    backendPath: "/api/auth/password-reset/confirm",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: true,
+    authSurface: null,
+  },
+  /* Confirm the address with a link's token. Anonymous: the link may be opened
+     on another device. */
+  verifyEmail: {
+    method: "POST",
+    backendPath: "/api/auth/verify-email",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: false,
+    authSurface: null,
+  },
+  /* Send the confirmation message again. Authenticated, CSRF, no body. */
+  resendVerification: {
+    method: "POST",
+    backendPath: "/api/auth/resend-verification",
+    isLogin: false,
+    hasBody: false,
+    forwardClientIp: false,
+    authSurface: null,
+  },
+  /* Ask to change the address: the new address and the current password. A
+     wrong password is a 400 from the route, never a 401. */
+  emailChangeRequest: {
+    method: "POST",
+    backendPath: "/api/me/email-change",
+    isLogin: false,
+    hasBody: true,
+    forwardClientIp: false,
+    authSurface: null,
+  },
+  /* Withdraw a pending change. Authenticated, CSRF, no body. */
+  emailChangeCancel: {
+    method: "POST",
+    backendPath: "/api/me/email-change/cancel",
+    isLogin: false,
+    hasBody: false,
+    forwardClientIp: false,
+    authSurface: null,
+  },
+  /* Confirm the new address with a link's token. Anonymous, like `verifyEmail`,
+     and limited by client address at the Backend. */
+  emailChangeConfirm: {
+    method: "POST",
+    backendPath: "/api/auth/email-change/confirm",
     isLogin: false,
     hasBody: true,
     forwardClientIp: true,

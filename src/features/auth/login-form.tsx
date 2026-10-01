@@ -53,9 +53,16 @@ export type LoginFormProps = {
    * refuse with a configuration error anyway.
    */
   turnstileSiteKey: string | null;
+  /**
+   * Whether this deployment can send a password-reset message (ACCOUNT
+   * RECOVERY). Decided by the Backend and read on the server; absent or false
+   * means the link is not rendered — a recovery that produces no email is not
+   * offered.
+   */
+  passwordRecovery?: boolean;
 };
 
-export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
+export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("next"));
@@ -175,6 +182,14 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
           aria-describedby={error ? errorId : undefined}
         />
       </div>
+
+      {passwordRecovery ? (
+        <p className="login-forgot">
+          <Link href="/forgot-password" className="login-alt__link">
+            Забыли пароль?
+          </Link>
+        </p>
+      ) : null}
 
       {hasCaptchaWidget(captcha) && captcha.mode === "provider" ? (
         <TurnstileWidget

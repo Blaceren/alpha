@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getAcademyConfig } from "@/config/academy-config";
 import { RegisterForm } from "@/features/auth/register-form";
 import { AuthStage } from "@/features/auth/auth-stage";
+import { readAccountCapabilities } from "@/server/auth/account-read";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
@@ -29,8 +30,11 @@ export const dynamic = "force-dynamic";
  * runtime injection means one build serves every deployment and rotating the
  * widget does not require a release. The SECRET never leaves the Backend.
  */
-export default function RegisterPage() {
+export default async function RegisterPage() {
   const { turnstileSiteKey } = getAcademyConfig();
+  /* ACCOUNT RECOVERY — where the Backend can send mail, a new account's address
+     gets a confirmation message, and the completed state says so. */
+  const { emailVerification } = await readAccountCapabilities();
 
   return (
     <AuthStage
@@ -46,7 +50,7 @@ export default function RegisterPage() {
       lead="Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор."
     >
       <Suspense fallback={null}>
-        <RegisterForm turnstileSiteKey={turnstileSiteKey} />
+        <RegisterForm turnstileSiteKey={turnstileSiteKey} verificationMail={emailVerification} />
       </Suspense>
     </AuthStage>
   );

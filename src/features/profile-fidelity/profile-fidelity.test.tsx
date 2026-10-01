@@ -355,14 +355,22 @@ describe("Profile — what the page may never become", () => {
     }
   });
 
-  it("offers no email control, and never calls the pending-email path", async () => {
+  /* ACCOUNT RECOVERY (2026-10-01). The page used to assert that its source never
+     mentioned a pending address. It mentions one now — but only on a deployment
+     whose Backend can send mail, which the page learns from the `account` prop.
+     Without that prop (PREPROD, or an unreadable Backend) the row is exactly
+     what this test always held: it names support, prints no address and offers
+     no control. The enabled row has its own tests in profile-email.test.tsx. */
+  it("offers no email control where no mail can be sent", async () => {
     render(<ProfileFidelity canonical="Мария" />);
     expect(screen.getByText(COPY.email_label)).toBeTruthy();
     expect(screen.getByText(COPY.email_via_support)).toBeTruthy();
     /* No editor, no field, no promise of a date. */
     expect(screen.queryByRole("button", { name: /email/i })).toBeNull();
     expect(screen.queryByLabelText(/email/i)).toBeNull();
-    expect(surface.toLowerCase()).not.toContain("pendingemail");
+    for (const role of ["email-affordance", "email-editor", "email-pending-row", "email-verify-row", "email-value"]) {
+      expect(document.querySelector(`[data-role="${role}"]`), role).toBeNull();
+    }
     expect(surface.toLowerCase()).not.toContain("скоро");
     /* Two links reach /support on this page: the row's own handoff and the
        page-level one the frozen surface already carried. Both are specified, so

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { UnreadPresence } from "@/components/shell/unread-presence";
 import { getServerViewer } from "@/server/auth/server-session";
+import { readServerAccount } from "@/server/auth/account-read";
 import { ProfileFidelity } from "@/features/profile-fidelity/profile-fidelity";
 
 export const metadata: Metadata = {
@@ -23,10 +24,14 @@ export const dynamic = "force-dynamic";
  * retry, not a page that renders an account with no name in it.
  */
 export default async function ProfilePage() {
-  const viewer = await getServerViewer();
+  /* ACCOUNT RECOVERY — the address and what can be done with it come from the
+     page's own narrow read, in parallel with the viewer. `null` (unreachable,
+     or a deployment that reports nothing) leaves the email row as it always
+     was: it names support and prints no address. */
+  const [viewer, account] = await Promise.all([getServerViewer(), readServerAccount()]);
   return (
     <AppShell userName={viewer?.name ?? "Ученик"} activeId="profile" frozenSurface notificationPresence={<UnreadPresence />}>
-      <ProfileFidelity canonical={viewer?.name ?? null} />
+      <ProfileFidelity canonical={viewer?.name ?? null} account={account} />
     </AppShell>
   );
 }

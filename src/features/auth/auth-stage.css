@@ -197,9 +197,16 @@
 @media (max-width: 640px) {
   .auth__frame { padding: 26px 20px 24px; --auth-frame-radius: 12px; }
   .auth__frame::before,
-  .auth__frame::after { width: 30px; height: 30px; border-width: 5px; }
-  .auth__frame::before { top: 12px; left: 12px; }
-  .auth__frame::after { right: 12px; bottom: 12px; }
+  .auth__frame::after { width: 30px; height: 30px; }
+  /* PER SIDE, NOT THE SHORTHAND. This used to be `border-width: 5px` on both
+     marks. The global reset gives every border a solid style at zero width, so
+     the shorthand switched on all four sides: on a phone each corner closed
+     into a square, and in the compact tier below its right and bottom sides ran
+     through the first letter of the heading. Measured on the released page at
+     390x844 (2026-10-01): four sides at 5px solid, heading at 29px, mark down
+     to 52px. A corner has two sides, and only those two get a width. */
+  .auth__frame::before { top: 12px; left: 12px; border-top-width: 5px; border-left-width: 5px; }
+  .auth__frame::after { right: 12px; bottom: 12px; border-right-width: 5px; border-bottom-width: 5px; }
   .auth__eyebrow { padding-left: 26px; margin-bottom: 12px; }
 }
 
@@ -653,4 +660,68 @@
   .auth .register-submit { border: 1px solid ButtonBorder; }
   .auth .login-field input:focus-visible,
   .auth .register-field input:focus-visible { outline: 2px solid Highlight; }
+}
+
+/*
+ * THE MARKS FOLLOW THE FRAME'S PADDING.
+ *
+ * A mark is a corner OF THE FRAME: its two bars live in the frame's padding,
+ * between the edge and the content, and it ends before the heading begins. At
+ * rest and on a tall phone that was already true. The two compression tiers
+ * above take the padding down to 14/18 and to 8/12 and left the marks where
+ * they were, so the marks ended up INSIDE the content. Measured on the released
+ * page (2026-10-01): the bottom-right bar ran through the last 1px of a closing
+ * button on a short viewport and through its last 4px on a phone, and the
+ * top-left bar ran down beside the first letter of the heading.
+ *
+ * Nobody saw it on the sign-in form, which ends in a line of text. The account
+ * recovery states end in a button — and so does «Аккаунт создан».
+ *
+ * So where the padding is compressed, the marks are too: smaller, and moved
+ * outward into the padding that is left. They are blocks of their own rather
+ * than lines inside the two tiers, because those tiers are pinned to spacing
+ * and nothing else, and that pin is worth more than one media query fewer.
+ *
+ * NO NEW BREAKPOINT. The conditions are the two the tiers already use — the
+ * short viewport at any width, then the phone-sized one — and the second block
+ * is placed after the first so that it wins where both hold, exactly as the
+ * compact tier wins over the short one. They are spelled differently from the
+ * tiers on purpose, so that nothing here can be mistaken for them.
+ *
+ *   tier                padding t/s/b   mark   bars   inset t/s/b   mark ends   heading from
+ *   short, not narrow   14 / 24 / 18    24     5      4 / 10 / 5    28          30
+ *   phone compact        8 / 22 / 12    18     4      3 /  9 / 4    21          23
+ *
+ * Widths are set PER SIDE here as everywhere: a corner has two sides.
+ */
+@media all and (max-height: 820px) {
+  .auth__frame::before,
+  .auth__frame::after { width: 24px; height: 24px; }
+  .auth__frame::before { top: 4px; left: 10px; border-top-width: 5px; border-left-width: 5px; }
+  .auth__frame::after { right: 10px; bottom: 5px; border-right-width: 5px; border-bottom-width: 5px; }
+}
+@media (max-height: 950px) and (max-width: 640px) {
+  .auth__frame::before,
+  .auth__frame::after { width: 18px; height: 18px; }
+  .auth__frame::before { top: 3px; left: 9px; border-top-width: 4px; border-left-width: 4px; }
+  .auth__frame::after { right: 9px; bottom: 4px; border-right-width: 4px; border-bottom-width: 4px; }
+}
+
+/* ------------------------------------------------- account recovery -- */
+
+/* «Забыли пароль?» sits under the password it is about, on the trailing edge,
+   in the same link treatment as the way to registration. It is rendered only
+   where a reset message can actually be sent. */
+.auth .login-forgot {
+  margin: -6px 0 0;
+  font-size: 13.5px;
+  text-align: right;
+}
+
+/* A plain sentence inside the frame: what pressing the button will do. */
+.auth .auth-note {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
 }

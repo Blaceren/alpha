@@ -36,6 +36,8 @@ export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
  */
 export const TURNSTILE_REGISTER_ACTION = "academy_register";
 export const TURNSTILE_LOGIN_ACTION = "academy_login";
+/** The request for a password-reset link (ACCOUNT RECOVERY). */
+export const TURNSTILE_PASSWORD_RESET_ACTION = "academy_password_reset";
 
 /**
  * A conservative site-key shape: a leading digit, `x`, then key material.

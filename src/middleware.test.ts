@@ -56,6 +56,23 @@ describe("middleware — anonymous routes", () => {
     expect(redirectTarget(response)).toContain("/login");
   });
 
+  /* ACCOUNT RECOVERY (2026-10-01). A person who forgot a password has no session
+     by definition, and a link from an email may be opened on a device that is
+     not signed in. */
+  it("lets an anonymous visitor reach the reset request and the three pages a link opens", () => {
+    for (const path of ["/forgot-password", "/reset-password", "/verify-email", "/confirm-email"]) {
+      expect(redirectTarget(middleware(request(path))), path).toBeNull();
+      expect(redirectTarget(middleware(request(path, { session: true }))), `${path} signed in`).toBeNull();
+      expect(middleware(request(path)).headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
+    }
+  });
+
+  it("does not exempt anything that merely resembles them", () => {
+    for (const path of ["/forgot-passwords", "/reset-password-admin", "/verify-emails", "/confirm-emailx", "/profile"]) {
+      expect(redirectTarget(middleware(request(path))), path).toContain("/login");
+    }
+  });
+
   it("renders /register for an authenticated visitor, matching /login's convention", () => {
     expect(redirectTarget(middleware(request("/register", { session: true })))).toBeNull();
     expect(redirectTarget(middleware(request("/login", { session: true })))).toBeNull();

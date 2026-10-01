@@ -23,6 +23,19 @@ vi.mock("@/config/academy-config", () => ({
   getAcademyConfig: () => ({ mode: "api", turnstileSiteKey: null, backendOrigin: "https://b.invalid", requestTimeoutMs: 1000 }),
 }));
 
+
+/* ACCOUNT RECOVERY made both pages async server components: they ask the
+   Backend what it can do before they offer anything that ends in an email. A
+   test resolves the page first, and the read is substituted — "cannot send
+   mail" by default, which is the state these guards were written for. */
+vi.mock("@/server/auth/account-read", () => ({
+  readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
+}));
+type PageComponent = () => Promise<React.ReactElement> | React.ReactElement;
+async function page(Page: PageComponent): Promise<React.ReactElement> {
+  return await Page();
+}
+
 const ROOT = process.cwd();
 const ACCEPTED_LOGO_SHA = "29e945f57aeafb3d";
 
@@ -39,16 +52,16 @@ describe("the auth stage composition", () => {
     ["login", LoginPage, "Продолжить свой путь."],
     ["register", RegisterPage, "Начать путь."],
   ] as const) {
-    it(`${name} has exactly one main and one h1`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} has exactly one main and one h1`, async () => {
+      const { container } = renderPage(await page(Page));
       expect(container.querySelectorAll("main")).toHaveLength(1);
       const h1s = container.querySelectorAll("h1");
       expect(h1s).toHaveLength(1);
       expect(h1s[0]?.textContent).toBe(heading);
     });
 
-    it(`${name} shows the mark as the asset of record, inside one link to /`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} shows the mark as the asset of record, inside one link to /`, async () => {
+      const { container } = renderPage(await page(Page));
       const marks = container.querySelectorAll("a.auth__mark");
       expect(marks).toHaveLength(1);
       const link = marks[0] as HTMLAnchorElement;
@@ -60,8 +73,8 @@ describe("the auth stage composition", () => {
       expect(img?.getAttribute("alt")).toBe("");
     });
 
-    it(`${name} no longer imitates the mark with text`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} no longer imitates the mark with text`, async () => {
+      const { container } = renderPage(await page(Page));
       // the old `<p class="login-brand">Alfa Trade Academy</p>`
       expect(container.querySelector(".login-brand")).toBeNull();
       const stray = [...container.querySelectorAll("p, span")].filter(
@@ -70,8 +83,8 @@ describe("the auth stage composition", () => {
       expect(stray, "no element may render the wordmark as text").toHaveLength(0);
     });
 
-    it(`${name} loads no remote asset`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} loads no remote asset`, async () => {
+      const { container } = renderPage(await page(Page));
       const remote = [...container.querySelectorAll("[src],[href]")]
         .map((e) => e.getAttribute("src") ?? e.getAttribute("href"))
         .filter((u) => u && /^https?:\/\//.test(u));
@@ -94,16 +107,16 @@ describe("the form contract is untouched", () => {
       labelled: !!i.labels?.length,
     }));
 
-  it("login keeps email and password, in order, with their autocomplete", () => {
-    const { container } = renderPage(<LoginPage />);
+  it("login keeps email and password, in order, with their autocomplete", async () => {
+    const { container } = renderPage(await page(LoginPage));
     expect(fields(container)).toEqual([
       { name: "email", type: "email", autocomplete: "username", labelled: true },
       { name: "password", type: "password", autocomplete: "current-password", labelled: true },
     ]);
   });
 
-  it("registration keeps its four fields, in order, with their autocomplete", () => {
-    const { container } = renderPage(<RegisterPage />);
+  it("registration keeps its four fields, in order, with their autocomplete", async () => {
+    const { container } = renderPage(await page(RegisterPage));
     expect(fields(container)).toEqual([
       { name: "email", type: "email", autocomplete: "email", labelled: true },
       { name: "name", type: "text", autocomplete: "nickname", labelled: true },
@@ -112,9 +125,9 @@ describe("the form contract is untouched", () => {
     ]);
   });
 
-  it("every field is bound to a real label, not a placeholder", () => {
+  it("every field is bound to a real label, not a placeholder", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       for (const input of container.querySelectorAll("input")) {
         expect(input.labels?.length, input.getAttribute("name") ?? "").toBeGreaterThan(0);
         expect(input.labels?.[0]?.textContent?.trim()).toBeTruthy();
@@ -123,9 +136,9 @@ describe("the form contract is untouched", () => {
     }
   });
 
-  it("adds no password-reveal control, because none existed", () => {
+  it("adds no password-reveal control, because none existed", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       const reveal = [...container.querySelectorAll("button")].filter((b) =>
         /показать|скрыть|reveal|show/i.test(b.textContent ?? "" + (b.getAttribute("aria-label") ?? "")),
       );
@@ -136,29 +149,51 @@ describe("the form contract is untouched", () => {
 });
 
 describe("the way between the two pages", () => {
-  it("login offers registration", () => {
-    const { container } = renderPage(<LoginPage />);
+  it("login offers registration", async () => {
+    const { container } = renderPage(await page(LoginPage));
     const alt = container.querySelector(".login-alt");
     expect(alt).not.toBeNull();
     const link = within(alt as HTMLElement).getByRole("link", { name: "Создать аккаунт" });
     expect(link.getAttribute("href")).toBe("/register");
   });
 
-  it("registration still offers login", () => {
-    const { container } = renderPage(<RegisterPage />);
+  it("registration still offers login", async () => {
+    const { container } = renderPage(await page(RegisterPage));
     const alt = container.querySelector(".register-alt");
     expect(alt).not.toBeNull();
     const link = within(alt as HTMLElement).getByRole("link", { name: "Войти" });
     expect(link.getAttribute("href")).toBe("/login");
   });
 
-  it("offers no password recovery, because no such route exists", () => {
+  /* ACCOUNT RECOVERY (2026-10-01). This guard used to say «offers no password
+     recovery, because no such route exists». The route exists now, and the rule
+     it protected is unchanged: a recovery that cannot deliver an email is not
+     offered. So the link follows the Backend's answer, in both directions. */
+  it("offers no password recovery where the deployment cannot send mail", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       expect(container.textContent).not.toMatch(/Забыли пароль|Восстановить пароль/i);
       expect(container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
       unmount();
     }
+  });
+
+  it("offers it on login, and only there, where the Backend says a reset message can be sent", async () => {
+    const { readAccountCapabilities } = await import("@/server/auth/account-read");
+    const able = { passwordRecovery: true, emailVerification: true, emailChange: true };
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce(able);
+    const login = renderPage(await page(LoginPage));
+    const link = within(login.container).getByRole("link", { name: "Забыли пароль?" });
+    expect(link.getAttribute("href")).toBe("/forgot-password");
+    // Beside the password it is about: after the password field, before the submit.
+    const order = [...login.container.querySelectorAll('input[name="password"], a[href="/forgot-password"], button[type="submit"]')].map((el) => el.tagName);
+    expect(order).toEqual(["INPUT", "A", "BUTTON"]);
+    login.unmount();
+
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce(able);
+    const register = renderPage(await page(RegisterPage));
+    expect(register.container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
+    register.unmount();
   });
 });
 

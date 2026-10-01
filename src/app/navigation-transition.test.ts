@@ -314,6 +314,38 @@ describe("the authenticated route group", () => {
   "src/server/curriculum/server-read.ts",
   "src/server/learner-ops/server-read.ts",
   "src/server/notifications/unread-presence.ts",
+  /* ACCOUNT RECOVERY (owner, 2026-10-01: «сброс пароля / восстановление пароля,
+     подтверждение и смена почты»). The request for a reset link and the three
+     pages a link from an email opens — outside the route group, on the auth
+     stage; their forms; the browser client, the link-token reader and the
+     shapes they share; the server reads of the Backend's capabilities and of
+     the learner's own address; eight named proxy operations and their routes;
+     the capability-gated «Забыли пароль?» on the login form; and the profile's
+     email row, which acts only where the Backend can send mail and is unchanged
+     everywhere else (PREPROD among them). */
+  "src/app/(app)/profile/page.tsx",
+  "src/app/api/backend/auth/email-change/confirm/route.ts",
+  "src/app/api/backend/auth/password-reset/confirm/route.ts",
+  "src/app/api/backend/auth/password-reset/request/route.ts",
+  "src/app/api/backend/auth/resend-verification/route.ts",
+  "src/app/api/backend/auth/verify-email/route.ts",
+  "src/app/api/backend/profile/account/route.ts",
+  "src/app/api/backend/profile/email-change/cancel/route.ts",
+  "src/app/api/backend/profile/email-change/route.ts",
+  "src/app/confirm-email/page.tsx",
+  "src/app/forgot-password/page.tsx",
+  "src/app/reset-password/page.tsx",
+  "src/app/verify-email/page.tsx",
+  "src/features/auth/forgot-password-form.tsx",
+  "src/features/auth/link-confirmation.tsx",
+  "src/features/auth/login-form.tsx",
+  "src/features/auth/reset-password-form.tsx",
+  "src/lib/account/account-client.ts",
+  "src/lib/account/account-types.ts",
+  "src/lib/account/link-token.ts",
+  "src/lib/auth/turnstile.ts",
+  "src/server/auth/account-read.ts",
+  "src/server/proxy/auth-surface.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
