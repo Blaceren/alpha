@@ -9,6 +9,7 @@
  * their own change handlers, and a server component may not hand an element an
  * event handler.
  */
+import type { ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { AssetOptions, DirectionToggle, ExpiryOptions, FieldError } from "../trade-card/trade-card-parts";
 import { directionLabel } from "../trade-card/trade-card-model";
@@ -190,10 +191,90 @@ export function JournalNote({ term, text, empty }: { term: string; text: string 
   );
 }
 
-/** «Payout 90% · Экспирация 3 мин · Из Trade Card» — what the line above leaves out. */
+/**
+ * «Payout 90% · Экспирация 3 мин · Из Trade Card» — what the line above leaves
+ * out. An entry from a card that was corrected here says so: the card itself
+ * still holds the trade as it was saved, and the two must not be read as one.
+ */
 export function entryFacts(entry: JournalEntry): string {
-  const source = entry.source === "trade_card" ? "Из Trade Card" : "Записано вручную";
+  const source =
+    entry.source !== "trade_card"
+      ? "Записано вручную"
+      : entry.editedAfterCard
+        ? "Из Trade Card · изменена в журнале"
+        : "Из Trade Card";
   return `Payout ${entry.payoutPercent}% · Экспирация ${entry.expiry.label} · ${source}`;
+}
+
+/* ----------------------------------------------------------------- delete */
+
+const NBSP = "\u00a0";
+
+/**
+ * «Удалить эту запись?» — asked in place, where the entry is, before anything
+ * is sent. It says what goes with the entry (its place in Personal Stats, which
+ * is counted from the journal), that it cannot be brought back, and — for an
+ * entry made from a card — what stays.
+ *
+ * The workspace puts the focus on «Отмена» when this opens, so a second press
+ * of the same key never deletes; Escape leaves it as «Отмена» does.
+ */
+export function JournalDeleteConfirm({
+  idPrefix,
+  fromCard,
+  busy,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  idPrefix: string;
+  fromCard: boolean;
+  busy: boolean;
+  error: ReactNode;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = `${idPrefix}-delete-title`;
+  const noteId = `${idPrefix}-delete-note`;
+  return (
+    <div
+      className="tc-confirm jr-delete"
+      role="group"
+      aria-labelledby={titleId}
+      aria-describedby={noteId}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !busy) {
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <p className="jr-delete__title" id={titleId}>
+        Удалить эту запись?
+      </p>
+      {/* The tools' names never break across lines: the spaces inside them do not wrap. */}
+      <p className="tc-caption" id={noteId}>
+        Она исчезнет из журнала и из Personal{NBSP}Stats. Вернуть её будет нельзя.
+        {fromCard ? ` Карточка в Trade${NBSP}Card останется.` : ""}
+      </p>
+      <div className="tc-actions__row jr-delete__actions">
+        <button type="button" className="tw-button" data-variant="danger" data-solid onClick={onConfirm} disabled={busy}>
+          {busy ? "Удаляю…" : "Удалить запись"}
+        </button>
+        <button
+          id={`${idPrefix}-delete-keep`}
+          type="button"
+          className="tw-button"
+          data-variant="outline"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          Отмена
+        </button>
+      </div>
+      {error}
+    </div>
+  );
 }
 
 /* ----------------------------------------------------------------- review */

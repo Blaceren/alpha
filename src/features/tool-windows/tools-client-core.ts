@@ -125,6 +125,24 @@ export async function toolSend<T>(
   return readEnvelope(response, guard);
 }
 
+/** A delete, with a fresh CSRF token and no body: the path names what goes. */
+export async function toolDelete<T>(path: string, guard: (value: unknown) => value is T): Promise<ToolResult<T>> {
+  const csrf = await fetchCsrfToken();
+  if (!csrf.ok) return csrf;
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "DELETE",
+      headers: { accept: "application/json", "x-csrf-token": csrf.token },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, error: makeError("NETWORK_ERROR"), detail: null };
+  }
+  return readEnvelope(response, guard);
+}
+
 /* ------------------------------------------------------------ small guards */
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

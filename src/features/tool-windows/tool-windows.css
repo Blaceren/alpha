@@ -784,6 +784,31 @@
   color: var(--tw-text-1);
 }
 
+/* An action that takes something away, in the rose of a loss and of an error —
+   never the Signal, which is the product's «go». Outlined where it is offered;
+   filled only on the step that actually does it. */
+.tw-button[data-variant="danger"] {
+  border-color: color-mix(in srgb, var(--tw-negative) 42%, transparent);
+  background: transparent;
+  color: var(--tw-negative);
+}
+
+.tw-button[data-variant="danger"]:hover:not(:disabled) {
+  border-color: var(--tw-negative);
+  background: color-mix(in srgb, var(--tw-negative) 9%, transparent);
+}
+
+.tw-button[data-variant="danger"][data-solid] {
+  border-color: transparent;
+  background: var(--tw-negative);
+  color: var(--tw-on-signal);
+}
+
+.tw-button[data-variant="danger"][data-solid]:hover:not(:disabled) {
+  border-color: transparent;
+  background: #e4b9bd;
+}
+
 .tw-button:disabled:not([data-variant="primary"]) {
   opacity: 0.55;
   cursor: not-allowed;
@@ -1287,6 +1312,54 @@
   margin-top: 14px;
 }
 
+/* An open entry's own actions. On a phone the review — the entry's next step —
+   is a full bar; the edit and the delete share the row under it, the delete as
+   wide as its word. Their labels never break in two: the pair is set a little
+   tighter so it holds one row from 360px, and where even that does not fit
+   (320px) the delete takes a row of its own, still at the far end. */
+.jr-entry-actions > .tw-button {
+  white-space: nowrap;
+}
+
+.jr-entry-actions > .tw-button:first-child {
+  flex-basis: 100%;
+}
+
+.jr-entry-actions > .tw-button:nth-child(2) {
+  flex: 1 1 auto;
+  padding-inline: 14px;
+}
+
+.jr-entry-actions > .jr-detail__delete {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-inline: 14px;
+}
+
+/* «Удалить эту запись?» — asked where the entry is. The rose edge says what
+   kind of question it is before the words do. */
+.jr-delete {
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+  border-color: color-mix(in srgb, var(--tw-negative) 46%, transparent);
+}
+
+.jr-delete__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.jr-delete .tc-caption {
+  font-size: 13.5px;
+}
+
+.jr-delete__actions {
+  margin-top: 6px;
+}
+
 .jr-detail__review {
   display: flex;
   flex-direction: column;
@@ -1524,10 +1597,39 @@
     max-width: 360px;
   }
 
-  /* A lone action is as wide as its words, not a stretched bar. */
+  /* An action is as wide as its words, not a stretched bar. The two that
+     change the entry sit together; the one that deletes it stands apart, at
+     the far end of the row. */
   .jr-detail__actions > .tw-button {
     flex: 0 0 auto;
     min-width: 200px;
+  }
+
+  /* Three on one line from 600px, and the line never breaks: the two that
+     change give way instead, down to their own words. */
+  .jr-entry-actions {
+    flex-wrap: nowrap;
+  }
+
+  .jr-entry-actions > .tw-button:first-child,
+  .jr-entry-actions > .tw-button:nth-child(2) {
+    flex: 0 1 200px;
+    min-width: auto;
+    padding-inline: 20px;
+  }
+
+  .jr-entry-actions > .jr-detail__delete {
+    min-width: auto;
+    padding-inline: 20px;
+  }
+
+  .jr-delete {
+    max-width: 560px;
+  }
+
+  .jr-delete__actions > .tw-button {
+    flex: 0 0 auto;
+    min-width: 168px;
   }
 
   .jr-more {
