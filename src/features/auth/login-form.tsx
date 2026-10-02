@@ -204,7 +204,7 @@ export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginF
           describedById={captchaStatusId}
         />
       ) : (
-        <div className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
+        <div id={captchaStatusId} className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
           Вход временно недоступен: проверка безопасности не настроена. Обратитесь к поддержке.
         </div>
       )}
@@ -228,10 +228,13 @@ export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginF
         {submitting ? "Вход…" : "Войти"}
       </button>
 
-      <p id={captchaStatusId} className="auth-status" role="status" aria-live="polite">
-        {captcha.mode === "provider" && !captchaToken && !submitting
-          ? "Пройдите проверку безопасности, чтобы продолжить."
-          : ""}
+      {/* Why the button is not available yet is said by the check's own line,
+          above it: the button is described by that line (`captchaStatusId`).
+          There used to be a second line here — «Пройдите проверку
+          безопасности…» — which asked the visitor to do something while the
+          check was running by itself. */}
+      <p className="auth-status" role="status" aria-live="polite">
+        {submitting ? "Выполняем вход, подождите." : ""}
       </p>
 
       {/* The way to registration. `/register` has carried the reciprocal link

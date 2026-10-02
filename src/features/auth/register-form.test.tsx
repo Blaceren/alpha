@@ -722,7 +722,9 @@ describe("RegisterForm — Turnstile gating", () => {
 
     const statuses = screen.getAllByRole("status");
     const text = statuses.map((node) => node.textContent).join(" ");
-    expect(text).toContain("Пройдите проверку безопасности");
+    // The check runs by itself; the line says so and asks the visitor for nothing.
+    expect(text).toContain("Проверяем браузер…");
+    expect(text).not.toContain("Пройдите проверку безопасности");
   });
 
   it("re-disables submission when a solved token later expires", async () => {

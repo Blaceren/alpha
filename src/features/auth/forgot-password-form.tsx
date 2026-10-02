@@ -126,7 +126,7 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey: str
           describedById={captchaStatusId}
         />
       ) : (
-        <div className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
+        <div id={captchaStatusId} className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
           Восстановление временно недоступно: проверка безопасности не настроена.
         </div>
       )}
@@ -148,8 +148,13 @@ export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey: str
         {submitting ? "Отправка…" : "Отправить ссылку"}
       </button>
 
-      <p id={captchaStatusId} className="auth-status" role="status" aria-live="polite">
-        {captcha.mode === "provider" && !captchaToken && !submitting ? "Пройдите проверку безопасности, чтобы продолжить." : ""}
+      {/* Why the button is not available yet is said by the check's own line,
+          above it: the button is described by that line (`captchaStatusId`).
+          There used to be a second line here — «Пройдите проверку
+          безопасности…» — which asked the visitor to do something while the
+          check was running by itself. */}
+      <p className="auth-status" role="status" aria-live="polite">
+        {submitting ? "Отправляем запрос, подождите." : ""}
       </p>
 
       <p className="login-alt">

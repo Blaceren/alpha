@@ -416,20 +416,135 @@
 /* ------------------------------------------------------------- captcha --- */
 
 /*
- * The widget is a third-party iframe and nothing here reaches inside it: no
- * rule touches its content, its branding or its behaviour. What is set is the
- * space it occupies, so it reads as part of the form rather than a block
- * dropped into one — and so it cannot push the page sideways.
+ * THE CHECK IS ONE LINE OF THE FORM (owner, 2026-10-02: «окно капчи слишком
+ * выделяется и не соответствует нам»).
+ *
+ * Cloudflare's box is a third-party iframe and nothing here reaches inside it:
+ * no rule touches its content, its branding or its behaviour. What changed is
+ * WHEN it is drawn — only when the visitor has to do something (the widget's
+ * own «interaction-only» appearance) — and what stands in the form the rest of
+ * the time: one quiet line in the page's own hand, where the box used to be,
+ * with a mark before it that turns while the check runs and becomes a tick
+ * when it has passed. No Signal: the page's one action is the button below.
+ *
+ * When the box does appear it stands under the line, inside a frame cut to the
+ * fields' own corner, and it cannot push the page sideways.
+ *
+ * No gap between the parts: the frame is always in the page (see below), and a
+ * gap would be drawn around it while it holds nothing. What separates the box
+ * from the line is the open frame's own margin.
  */
-.auth .auth-captcha { display: grid; gap: 8px; min-width: 0; }
+.auth .auth-captcha { display: grid; gap: 0; min-width: 0; }
+
+.auth .auth-captcha__status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 20px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* The mark: a ring whose lit quarter turns while the check is running… */
+.auth .auth-captcha__status::before {
+  box-sizing: border-box;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--text-muted) 34%, transparent);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  content: "";
+  animation: auth-captcha-turn 900ms linear infinite;
+}
+
+@keyframes auth-captcha-turn {
+  to { transform: rotate(360deg); }
+}
+
+/* …stands still, whole, while the visitor is asked for a press… */
+.auth .auth-captcha[data-phase="interactive"] .auth-captcha__status { color: var(--text-secondary); }
+.auth .auth-captcha[data-phase="interactive"] .auth-captcha__status::before {
+  border-color: var(--text-secondary);
+  animation: none;
+}
+
+/* …and is a tick once the check has passed. */
+.auth .auth-captcha[data-phase="passed"] .auth-captcha__status::before {
+  width: 6px;
+  height: 10px;
+  margin: -3px 3px 0;
+  border: solid var(--text-secondary);
+  border-width: 0 1.5px 1.5px 0;
+  border-radius: 0;
+  transform: rotate(45deg);
+  animation: none;
+}
+
+/* «Повторить проверку» — the way back from a failed check, now that Cloudflare's
+   box is not on the page to be pressed again. A link in the page's own hand, a
+   full touch target, tucked into the message it belongs to. */
+.auth .auth-captcha__failure { display: grid; justify-items: start; }
+.auth .auth-captcha__retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  /* Its ring, 3px out, clears the sentence above; the target's lower part is
+     tucked into the message's own padding. */
+  margin: 3px 0 -10px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--divider-strong);
+  cursor: pointer;
+}
+.auth .auth-captcha__retry:hover { text-decoration-color: var(--signal-active); }
+
+/*
+ * CLOUDFLARE'S OWN FRAME IS NEVER TAKEN OUT OF THE PAGE.
+ *
+ * While nothing has to be pressed, Turnstile keeps its iframe alive and out of
+ * the flow BY ITSELF — one pixel, fixed to the screen's corner, all but
+ * transparent (read off the widget on the stand: «width: 1px; height: 1px;
+ * position: fixed; opacity: 0.01»). That pixel is how the check runs unseen:
+ * the browser goes on rendering the iframe. `display: none` on this frame would
+ * undo it — the iframe would not be rendered at all — and nothing on a stand
+ * with test keys would show it, because a test key runs no real challenge.
+ *
+ * So the frame stays in the page, zero high. A fixed element is not clipped by
+ * it, so the pixel is untouched; what IS cut off is anything Turnstile lays out
+ * in the flow before a press is asked for.
+ *
+ * When Cloudflare asks for a press the frame opens — and stays open for that
+ * check, with Cloudflare's own «Успешно» in it after the press: the box is not
+ * snatched from under the visitor's pointer, and its live iframe is not hidden.
+ * It is cut to the fields' corner, and — holding a fixed-width iframe in a form
+ * that must fit a 320px screen — scrolls inside itself rather than push the
+ * page sideways.
+ */
 .auth .auth-captcha__frame {
+  height: 0;
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  overflow: hidden;
   border-radius: 10px;
+  line-height: 0;
 }
-.auth .auth-captcha__status,
+.auth .auth-captcha__frame[data-shown] {
+  height: auto;
+  margin-top: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
 .auth .auth-status {
   font-size: 12.5px;
   line-height: 1.5;
@@ -507,6 +622,10 @@
 }
 .auth .register-alt__link:hover,
 .auth .login-alt__link:hover { text-decoration-color: var(--signal-active); }
+/* The check's line takes the focus after a retry, so the keyboard is not sent
+   back to the top of the page; reached that way it shows the page's own ring. */
+.auth .auth-captcha__status:focus-visible,
+.auth .auth-captcha__retry:focus-visible,
 .auth .register-alt__link:focus-visible,
 .auth .login-alt__link:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
 
@@ -650,6 +769,8 @@
   .auth .register-field input,
   .auth .login-submit,
   .auth .register-submit { transition-duration: 0.001s; }
+  /* The check's mark stands still; the words beside it say what is happening. */
+  .auth .auth-captcha__status::before { animation: none; }
 }
 
 /* Windows high contrast: the system owns the palette; keep the shapes legible. */

@@ -270,11 +270,72 @@ describe("the stylesheet's own contract", () => {
        that the space around it contains its own overflow instead of handing it
        to the document. Removing this is how /login started scrolling sideways
        once the widget was added. */
-    const block = css.slice(css.indexOf(".auth .auth-captcha__frame"));
+    const block = css.slice(css.indexOf(".auth .auth-captcha__frame {"));
     const rule = block.slice(0, block.indexOf("}"));
-    expect(rule).toMatch(/overflow-x:\s*auto/);
     expect(rule).toMatch(/max-width:\s*100%/);
     expect(rule).toMatch(/min-width:\s*0/);
+    // Open, it scrolls inside itself; closed, it shows nothing to scroll.
+    const open = css.slice(css.indexOf(".auth .auth-captcha__frame[data-shown] {"));
+    expect(open.slice(0, open.indexOf("}"))).toMatch(/overflow-x:\s*auto/);
+  });
+
+  it("gives Cloudflare's box no room until it has something to ask", () => {
+    // Owner, 2026-10-02. The frame is closed by default — zero high — and
+    // opened by one attribute, which the widget sets when a press is asked for.
+    const block = css.slice(css.indexOf(".auth .auth-captcha__frame {"));
+    const closed = block.slice(0, block.indexOf("}"));
+    expect(closed).toMatch(/height:\s*0;/);
+    expect(closed).toMatch(/overflow:\s*hidden/);
+    const open = css.slice(css.indexOf(".auth .auth-captcha__frame[data-shown] {"));
+    const opened = open.slice(0, open.indexOf("}"));
+    expect(opened).toMatch(/height:\s*auto/);
+    expect(opened).toMatch(/margin-top:\s*8px/);
+    // The parts of the check are not spaced by a gap: one would be drawn
+    // around the closed frame, which is always in the page.
+    expect(css).toMatch(/\.auth \.auth-captcha \{ display: grid; gap: 0; min-width: 0; \}/);
+  });
+
+  it("never takes Cloudflare's frame out of the page", () => {
+    /*
+     * While nothing has to be pressed, Turnstile keeps its iframe rendered by
+     * itself — one fixed pixel — and that is how the check runs unseen. A
+     * `display: none` (or `visibility: hidden`, or `content-visibility`) on
+     * anything around it would stop the iframe being rendered. A stand with
+     * test keys cannot show the difference: a test key runs no real challenge.
+     * So the rule is pinned here, for every selector that names the frame or
+     * the element Turnstile is rendered into.
+     */
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => /auth-captcha__(frame|widget)/.test(selector ?? ""));
+    expect(rules.length).toBeGreaterThanOrEqual(2);
+    for (const [, selector, body] of rules) {
+      expect(body, selector).not.toMatch(/display:\s*none/);
+      expect(body, selector).not.toMatch(/visibility:\s*(hidden|collapse)/);
+      expect(body, selector).not.toMatch(/content-visibility/);
+    }
+    // Nor may the closed frame become the containing block of that fixed pixel
+    // and clip it: nothing that makes one is declared on it.
+    const block = bare.slice(bare.indexOf(".auth .auth-captcha__frame {"));
+    const closed = block.slice(0, block.indexOf("}"));
+    for (const property of ["transform", "filter", "perspective", "contain", "will-change", "backdrop-filter"]) {
+      expect(closed, property).not.toMatch(new RegExp(`(^|[\\s;])${property}\\s*:`));
+    }
+  });
+
+  it("marks the check with a ring that turns and a tick, never with the Signal", () => {
+    // The line and its mark, up to the rules of the retry link that follow them.
+    const start = css.indexOf(".auth .auth-captcha__status {");
+    const end = css.indexOf(".auth .auth-captcha__failure { display: grid");
+    expect(end).toBeGreaterThan(start);
+    const rules = css.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(rules).toContain(".auth .auth-captcha__status::before");
+    expect(rules).toContain("animation: auth-captcha-turn 900ms linear infinite");
+    expect(rules).toContain('.auth .auth-captcha[data-phase="passed"] .auth-captcha__status::before');
+    // The page's one Signal is its action. A check that passed is not an action.
+    expect(rules).not.toMatch(/signal/);
+    // Under a stated preference the ring stands still.
+    const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced.slice(0, reduced.indexOf("\n}"))).toContain(".auth .auth-captcha__status::before { animation: none; }");
   });
 
   it("keeps every control at a real target size", () => {

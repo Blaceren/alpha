@@ -29,6 +29,33 @@ import { TURNSTILE_SCRIPT_URL, type TurnstileApi } from "@/lib/auth/turnstile";
  * The widget INSTANCE. `turnstile.remove(id)` on unmount tears down the iframe
  * and its timers; without it, React Strict Mode's double-mount in development
  * leaves a duplicate challenge on the page.
+ *
+ * WHAT THE VISITOR SEES (owner, 2026-10-02: «окно капчи слишком выделяется и не
+ * соответствует нам»). Cloudflare's box is a third-party frame: its grey ground,
+ * its own type and its logo cannot be restyled, and it used to stand in the
+ * form on every visit — white on a light-theme system, because the theme was
+ * left to the visitor's OS on a page that is dark-only. Three things changed,
+ * all of them options Cloudflare documents:
+ *
+ *   appearance: "interaction-only"  the box is drawn ONLY when the visitor has
+ *                                   to do something; the check itself runs as
+ *                                   before, unseen
+ *   theme: "dark"                   the page has one theme, so the box has it too
+ *   the two interactive callbacks   so this component knows when the box is up
+ *
+ * What stands in the form instead is ONE LINE in the page's own hand, where the
+ * box used to be: «Проверяем браузер…», then «Браузер проверен». If Cloudflare
+ * does ask for a press, the line says so — in its own words, not the box's,
+ * which says «Подтвердите, что вы человек» itself — and the box appears under
+ * it, inside the form's own frame. Nothing about the token, the action, the verification
+ * or the callbacks that destroy a token has changed.
+ *
+ * THE BOX'S CONTAINER IS NEVER `display: none`. While it has nothing to ask,
+ * Turnstile keeps its iframe rendered by itself — a single fixed pixel — and
+ * that is how the check runs unseen. Our frame around it is zero high and stays
+ * in the page (`auth-stage.css`); taking it out of the page would stop the
+ * iframe being rendered, which a stand with test keys cannot show and a real
+ * challenge may not survive.
  */
 
 type LoadState = "loading" | "ready" | "failed";
@@ -116,14 +143,59 @@ export function TurnstileWidget({
    * Nothing about the token, the callbacks, the site key or the verification
    * changes — the widget simply says what happened.
    */
-  const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
+  const [failedAttempt, setFailedAttempt] = useState<string | null>(null);
+  /*
+   * THE VISITOR'S OWN RETRY. While Cloudflare's box stood in the form, a failed
+   * challenge could be pressed again in the box itself. The box is no longer
+   * drawn unless it has something to ask, so a failure would be a dead end:
+   * «Попробуйте ещё раз» with nothing to try. «Повторить проверку» bumps this
+   * count, which — like the form's `resetSignal` — remounts the widget and
+   * issues a brand-new challenge.
+   */
+  const [retry, setRetry] = useState(0);
+  /** One challenge: the form's reset count and the visitor's retry count together. */
+  const attempt = `${resetSignal}/${retry}`;
   /*
    * Held as "which attempt failed" rather than a bare boolean, so that a
    * deliberately renewed challenge is clean without an effect to clear it: a
-   * bumped `resetSignal` no longer matches, and the message is simply gone.
+   * new attempt no longer matches, and the message is simply gone.
    */
-  const challengeFailed = failedAttempt === resetSignal;
+  const challengeFailed = failedAttempt === attempt;
   const statusId = useId();
+  const statusRef = useRef<HTMLParagraphElement | null>(null);
+  /*
+   * AFTER A RETRY THE FOCUS GOES TO THE LINE — but only once the line is there
+   * to take it. At the moment of the press the challenge is still «failed», the
+   * line is empty, and an empty line takes no room (`:empty { display: none }`),
+   * so focusing it then does nothing and the keyboard falls back to the top of
+   * the page with the button that just left. The flag is read after the render
+   * that follows, when the line says «Проверяем браузер…».
+   */
+  const focusLineNext = useRef(false);
+  useEffect(() => {
+    if (!focusLineNext.current) return;
+    focusLineNext.current = false;
+    statusRef.current?.focus();
+  });
+  /*
+   * WHICH ATTEMPT WAS SOLVED, AND WHICH ONE IS ASKING FOR A PRESS — held, like
+   * the failure, as the attempt they belong to: a renewed challenge starts
+   * clean without an effect to reset them.
+   */
+  const [solvedAttempt, setSolvedAttempt] = useState<string | null>(null);
+  const [interactiveAttempt, setInteractiveAttempt] = useState<string | null>(null);
+  const solved = solvedAttempt === attempt;
+  const interactive = interactiveAttempt === attempt && !solved;
+  /*
+   * THE BOX, ONCE UP, STAYS UP FOR THAT CHECK. Cloudflare leaves its own
+   * «Успешно» in the box after a press and keeps the iframe laid out; closing
+   * our frame over it would pull the form up from under the visitor's pointer
+   * and hide an iframe that is still alive (it renews its own token later). A
+   * new check starts with the frame closed again. A check that has failed
+   * closes it too: the message under the line is then the only voice.
+   */
+  const [boxAttempt, setBoxAttempt] = useState<string | null>(null);
+  const boxUp = boxAttempt === attempt && !challengeFailed;
 
   /**
    * The callbacks are held in a ref so the render effect below does not depend
@@ -160,22 +232,44 @@ export function TurnstileWidget({
           // on the success path, is what makes recovery visible: the message
           // goes, and the submit control comes back with it.
           setFailedAttempt(null);
+          setSolvedAttempt(attempt);
+          setInteractiveAttempt(null);
           handlers.current.onToken(token);
         },
         "error-callback": () => {
-          setFailedAttempt(resetSignal);
+          setFailedAttempt(attempt);
+          setSolvedAttempt(null);
           handlers.current.onTokenLost("error");
         },
-        "expired-callback": () => handlers.current.onTokenLost("expired"),
+        "expired-callback": () => {
+          // The token lapsed; Turnstile runs the check again by itself, so the
+          // line goes back to «Проверяем…» rather than claiming a pass.
+          setSolvedAttempt(null);
+          handlers.current.onTokenLost("expired");
+        },
         "timeout-callback": () => {
           // A challenge that ran out of time did not succeed, and the visitor
           // has exactly the same symptom as an outright error: a submit control
           // that will not move. It gets the same explanation.
-          setFailedAttempt(resetSignal);
+          setFailedAttempt(attempt);
+          setSolvedAttempt(null);
           handlers.current.onTokenLost("timeout");
         },
-        theme: "auto",
+        "before-interactive-callback": () => {
+          // A check that asks for a press is alive: if it had failed and
+          // Turnstile tried again by itself, the failure is withdrawn — the
+          // visitor is shown the box, not a message over a hidden one.
+          setFailedAttempt(null);
+          setInteractiveAttempt(attempt);
+          setBoxAttempt(attempt);
+        },
+        "after-interactive-callback": () => setInteractiveAttempt(null),
+        // The page is dark-only: «auto» drew a white box for every visitor
+        // whose system is set to light.
+        theme: "dark",
         size: "flexible",
+        // Drawn only when the visitor has to do something.
+        appearance: "interaction-only",
       });
     } catch {
       // A render failure is a challenge the visitor cannot solve. Reported as
@@ -200,10 +294,11 @@ export function TurnstileWidget({
         // to clean up and nothing worth reporting.
       }
     };
-    // `resetSignal` is in the dependency list on purpose: a bump remounts the
-    // widget, which is the most reliable way to obtain a genuinely fresh
-    // challenge across every Turnstile version.
-  }, [loadState, siteKey, action, resetSignal, markFailed]);
+    // `attempt` — the form's `resetSignal` and the visitor's own retry — is in
+    // the dependency list on purpose: a new attempt remounts the widget, which
+    // is the most reliable way to obtain a genuinely fresh challenge across
+    // every Turnstile version.
+  }, [loadState, siteKey, action, attempt, markFailed]);
 
   if (loadState === "failed") {
     return (
@@ -217,17 +312,49 @@ export function TurnstileWidget({
     );
   }
 
+  /*
+   * ONE LINE, FOUR THINGS IT CAN SAY. While a challenge has failed it says
+   * nothing: the alert below is the message, and a second voice saying
+   * «проверяем» over it would make the failure read as still pending.
+   */
+  const phase = challengeFailed
+    ? "failed"
+    : loadState === "loading"
+      ? "loading"
+      : solved
+        ? "passed"
+        : interactive
+          ? "interactive"
+          : "checking";
+  const line =
+    phase === "loading"
+      ? "Загружается проверка безопасности…"
+      : phase === "checking"
+        ? "Проверяем браузер…"
+        : phase === "interactive"
+          ? "Нужно подтверждение: отметьте поле ниже."
+          : phase === "passed"
+            ? "Браузер проверен."
+            : "";
+
   return (
-    <div className="auth-captcha" data-testid="turnstile-widget">
-      <div
-        ref={containerRef}
-        className="auth-captcha__frame"
-        data-testid="turnstile-container"
-        aria-describedby={describedById ?? statusId}
-      />
-      <p id={statusId} className="auth-captcha__status" role="status" aria-live="polite">
-        {loadState === "loading" ? "Загружается проверка безопасности…" : ""}
+    <div className="auth-captcha" data-testid="turnstile-widget" data-phase={phase}>
+      <p
+        ref={statusRef}
+        id={describedById ?? statusId}
+        className="auth-captcha__status"
+        role="status"
+        aria-live="polite"
+        // Takes the focus after «Повторить проверку», whose button leaves the page.
+        tabIndex={-1}
+      >
+        {line}
       </p>
+      {/* Cloudflare's own frame. It takes no room unless the challenge asks
+          the visitor for a press — and it is always in the page (see above). */}
+      <div className="auth-captcha__frame" data-shown={boxUp || undefined}>
+        <div ref={containerRef} className="auth-captcha__widget" data-testid="turnstile-container" />
+      </div>
       {/*
         Rendered only while a challenge has actually failed, so nothing is
         announced on the first render and the transition announces exactly once.
@@ -235,9 +362,23 @@ export function TurnstileWidget({
         the reason is not otherwise on screen.
       */}
       {challengeFailed ? (
-        <p className="auth-captcha__failure" data-testid="turnstile-challenge-failed" role="alert">
-          Проверка безопасности не выполнена. Попробуйте ещё раз.
-        </p>
+        <div className="auth-captcha__failure" data-testid="turnstile-challenge-failed" role="alert">
+          {/* «Попробуйте ещё раз» used to end this sentence; the button under
+              it now says how. */}
+          <span>Проверка безопасности не выполнена.</span>
+          <button
+            type="button"
+            className="auth-captcha__retry"
+            onClick={() => {
+              // The button is about to leave the page with the message; the
+              // line that will say «Проверяем браузер…» takes the focus.
+              focusLineNext.current = true;
+              setRetry((count) => count + 1);
+            }}
+          >
+            Повторить проверку
+          </button>
+        </div>
       ) : null}
     </div>
   );

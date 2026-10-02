@@ -61,7 +61,15 @@ const UNTOUCHED = [
      Freezing it in two places would mean the looser of the two fails first, for
      the least informative reason. What it must NOT do is still asserted below,
      against the file as it stands. */
-  "src/features/auth/turnstile-widget.tsx",
+  /* `turnstile-widget.tsx` is no longer frozen here: the owner's review of
+     2026-10-02 («окно капчи слишком выделяется и не соответствует нам») was an
+     order to change what the visitor SEES of the check — the box is drawn only
+     when it has something to ask, in the page's one theme, and a line of the
+     form stands in its place. What the widget DOES is unchanged and is pinned in
+     detail by turnstile-widget.test.tsx: the script loaded once, the action
+     stamped, every token-destroying callback wired, a reset issuing a fresh
+     challenge, the instance removed on unmount, the token never persisted. The
+     assertion below still holds it to its error callback. */
   "src/features/auth/session-machine.ts",
   "src/features/auth/session-provider.tsx",
   "src/features/auth/auth.css",
