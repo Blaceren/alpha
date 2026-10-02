@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type UserLessonProgress } from "@prisma/client";
 import { z } from "zod";
 import {
+  isCurriculumV2AssessmentEnabled,
   isCurriculumV2ContentEnabled,
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
@@ -85,6 +86,19 @@ export type SafeResolvedContent = {
      * than an absolute address.
      */
     assets: Array<z.infer<typeof contentAssetPayloadSchema> | LessonMediaEntry>;
+    /**
+     * LESSON MARKERS (2026-10-02, the lesson hi-fi). Where in the lesson's video
+     * the answer to each question of the level's test is taught — the same
+     * second the test's разбор offers as «пересмотреть с …» — so the player's
+     * timeline can carry the four points before the first attempt.
+     *
+     * The question's NUMBER and that second, nothing else: no prompt, no option,
+     * no key. Empty when the level has no published test of its own, its
+     * questions name no seconds, or assessments are switched off. Markers are a
+     * hint on a timeline, so anything inconsistent about the test yields none
+     * rather than taking the lesson's content down with it.
+     */
+    questionMarkers: Array<{ questionNumber: number; rewatchFromSeconds: number }>;
   };
   progress: SafeLessonProgress | null;
 };
@@ -303,8 +317,76 @@ async function loadBoundContent(tx: TransactionClient, scope: ResolvedScope) {
           assets: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
         },
       },
+      // Only what the lesson markers need: never a prompt, an option or the key.
+      assessmentVersion: {
+        select: {
+          id: true,
+          levelDefinitionId: true,
+          curriculumVersionId: true,
+          status: true,
+          publishedAt: true,
+          questions: {
+            where: { status: "active" },
+            select: { questionNumber: true, rewatchFromSeconds: true },
+            orderBy: [{ questionNumber: "asc" }, { id: "asc" }],
+          },
+        },
+      },
     },
   });
+}
+
+/**
+ * The lesson markers of a bound test (see `SafeResolvedContent.content.questionMarkers`).
+ *
+ * The same checks the assessment runtime makes before it serves a question —
+ * this level, this version, published — and none of the failures it raises: a
+ * test that would not be served yields no markers, and the lesson reads as it
+ * did without them.
+ */
+export function lessonQuestionMarkers(
+  scope: { level: { id: number }; curriculumVersionId: number },
+  assessment:
+    | {
+        id: number;
+        levelDefinitionId: number;
+        curriculumVersionId: number;
+        status: string;
+        publishedAt: Date | null;
+        questions: Array<{ questionNumber: number; rewatchFromSeconds: number | null }>;
+      }
+    | null
+    | undefined,
+  assessmentsEnabled: boolean,
+): Array<{ questionNumber: number; rewatchFromSeconds: number }> {
+  if (!assessmentsEnabled || !assessment) return [];
+  if (
+    assessment.levelDefinitionId !== scope.level.id ||
+    assessment.curriculumVersionId !== scope.curriculumVersionId ||
+    assessment.status !== "published" ||
+    !assessment.publishedAt
+  ) {
+    return [];
+  }
+  const markers: Array<{ questionNumber: number; rewatchFromSeconds: number }> = [];
+  const seen = new Set<number>();
+  for (const question of assessment.questions) {
+    const seconds = question.rewatchFromSeconds;
+    if (
+      seconds === null ||
+      !Number.isSafeInteger(seconds) ||
+      seconds < 0 ||
+      seconds > MAX_PLAYBACK_WITHOUT_DURATION ||
+      !Number.isSafeInteger(question.questionNumber) ||
+      question.questionNumber < 1 ||
+      seen.has(question.questionNumber)
+    ) {
+      continue;
+    }
+    seen.add(question.questionNumber);
+    markers.push({ questionNumber: question.questionNumber, rewatchFromSeconds: seconds });
+  }
+  return markers;
 }
 
 function validateBoundContent(
@@ -471,6 +553,11 @@ async function resolveContentWithin(
       publishedAt: safeDate(content.publishedAt!),
       localization: parsedLocalization.data,
       assets: mergeLessonMedia(contentAssets, media),
+      questionMarkers: lessonQuestionMarkers(
+        scope,
+        checked.content.assessmentVersion,
+        isCurriculumV2AssessmentEnabled(),
+      ),
     },
     progress,
   };

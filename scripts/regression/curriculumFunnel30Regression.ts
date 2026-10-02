@@ -931,6 +931,32 @@ async function main() {
     }
   });
 
+  await check("F4 a lesson says where each answer of its test is taught, and nothing about the answers", async () => {
+    const tested = await contentRead.resolveUserLevelContent({
+      actorUserId: learner.id,
+      stableCode: codeOf(4),
+      locale: LOCALE,
+    });
+    assert.ok(tested.kind === "completed");
+    if (tested.kind !== "completed") return;
+    const expected = (sourceLevel(4).test ?? []).map((question, index) => ({
+      questionNumber: index + 1,
+      rewatchFromSeconds: question.rewatchFromSeconds,
+    }));
+    assert.equal(expected.length, 4);
+    assert.deepEqual(tested.content.questionMarkers, expected);
+    for (const marker of tested.content.questionMarkers) {
+      assert.deepEqual(Object.keys(marker).sort(), ["questionNumber", "rewatchFromSeconds"]);
+    }
+    // A lesson without a test has no markers.
+    const untested = await contentRead.resolveUserLevelContent({
+      actorUserId: learner.id,
+      stableCode: codeOf(1),
+      locale: LOCALE,
+    });
+    assert.ok(untested.kind === "completed" && untested.content.questionMarkers.length === 0);
+  });
+
   /* ==================================================================== *
    * G. MOVING A LEARNER TO THE PUBLISHED VERSION
    * ==================================================================== */
