@@ -21,6 +21,9 @@ function level(over: Partial<AcademyLevelSummary> = {}): AcademyLevelSummary {
     shortDescription: null,
     learningObjective: "Составить личный план риска",
     typeInfo: { type: "mentor-review", label: "Практика", isCheckpoint: false, isExternal: false, supported: true },
+    kind: null,
+    kindLabel: "Практика",
+    inProduction: false,
     state: "completed",
     lockReason: null,
     stateLabel: "Завершён",
@@ -44,6 +47,7 @@ const PROGRESS: AcademyProgressSummary = {
   nextAvailableLevelCode: "v2.l015.kontrolnaya-tochka-200",
   completedLevels: 14,
   totalLevels: 100,
+  openLevels: 100,
   xp: { available: true, currentXp: 1700, nextLevelRequiredXp: null, xpRemaining: 0 },
   updatedAt: null,
 };

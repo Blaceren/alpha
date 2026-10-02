@@ -72,6 +72,12 @@ function level(over: Partial<AcademyLevelSummary> & { order: number }): AcademyL
       supported: true,
       ...(over.typeInfo ?? {}),
     },
+    kind: over.kind ?? null,
+    kindLabel:
+      over.kindLabel ??
+      over.typeInfo?.label ??
+      (method === "checkpoint" ? "контрольная точка" : "урок + тест"),
+    inProduction: over.inProduction ?? false,
     state: over.state ?? "locked",
     lockReason: over.lockReason ?? (over.state && over.state !== "locked" ? null : "sequence"),
     stateLabel: over.stateLabel ?? "Закрыт",
@@ -100,6 +106,7 @@ function moduleOf(
     description: null,
     learningObjective: "цель модуля",
     status: "active",
+    chapter: null,
     levels,
     progress: { total: levels.length, completed: levels.filter((l) => l.state === "completed").length },
   };
@@ -127,6 +134,7 @@ function viewOf(modules: AcademyModuleSummary[], currentLevelCode: string | null
       nextAvailableLevelCode: null,
       completedLevels: all.filter((l) => l.state === "completed").length,
       totalLevels: all.length,
+      openLevels: all.filter((l) => !l.inProduction).length,
       xp: { available: false },
       updatedAt: null,
     },

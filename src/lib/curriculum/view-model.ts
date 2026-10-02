@@ -15,7 +15,8 @@ import type {
   BackendContentAsset,
 } from "@/lib/curriculum/backend-dto";
 import { mapLevelType, type AcademyLevelType } from "@/lib/curriculum/level-type";
-import { mapCompletionMethod } from "@/lib/curriculum/completion-method";
+import { isFormalReportMethod, mapCompletionMethod } from "@/lib/curriculum/completion-method";
+import { levelKindLabel, mapLevelKind } from "@/lib/curriculum/level-kind";
 import { mapLevelState } from "@/lib/curriculum/progress-state";
 import type {
   AcademyCheckpointState,
@@ -31,7 +32,7 @@ import type {
 } from "@/lib/curriculum/academy-view";
 import { completionSourceLabel } from "@/lib/curriculum/completion-source";
 import { normalizeLessonBody } from "@/lib/curriculum/lesson-body";
-import { readBackendToolAccess } from "@/lib/curriculum/backend-dto";
+import { readBackendContentAssets, readBackendToolAccess } from "@/lib/curriculum/backend-dto";
 
 /**
  * The learner's reading position, read defensively.
@@ -181,12 +182,23 @@ function progressVersionOf(level: BackendLevel): string | null {
 
 function mapLevel(level: BackendLevel): AcademyLevelSummary {
   const typeInfo = mapLevelType(level.type);
+  const completionMethod = mapCompletionMethod(level.completionMethod);
+  /* PROGRAM STRUCTURE. A level the published program defines and has not opened
+     yet. The Backend says so twice — the definition's own `status`, and the
+     `definition_inactive` blocker on the learner's state — and either is
+     enough: both mean the lesson is not there to be taken. */
+  const inProduction =
+    level.status === "disabled" || (level.blockers ?? []).includes("definition_inactive");
   const stateInfo = mapLevelState({
     presentationState: level.presentationState,
     blockers: level.blockers,
     durableStatus: level.durableStatus,
     isExternal: typeInfo.isExternal,
   });
+  const kind = mapLevelKind(level.kind);
+  /* A report the platform accepts by itself is closed by the learner's own
+     submission; the type-derived source would say a mentor decides it. */
+  const completionSource = isFormalReportMethod(completionMethod) ? "self" : COMPLETION_SOURCE[typeInfo.type];
   return {
     levelCode: level.stableCode,
     order: level.levelNumber,
@@ -200,11 +212,14 @@ function mapLevel(level: BackendLevel): AcademyLevelSummary {
       isExternal: typeInfo.isExternal,
       supported: typeInfo.supported,
     },
+    kind,
+    kindLabel: levelKindLabel(kind, typeInfo.label),
+    inProduction,
     state: stateInfo.state,
     lockReason: stateInfo.lockReason,
     stateLabel: stateInfo.label,
-    completionSource: COMPLETION_SOURCE[typeInfo.type],
-    completionSourceLabel: completionSourceLabel(COMPLETION_SOURCE[typeInfo.type]),
+    completionSource,
+    completionSourceLabel: completionSourceLabel(completionSource),
     requirements: {
       previousLevel: level.requirements.previousLevel,
       requiredXp: level.requirements.requiredXp,
@@ -219,7 +234,7 @@ function mapLevel(level: BackendLevel): AcademyLevelSummary {
     // G3. `completionMethod` has always travelled in the Backend payload and was
     // dropped here, which is why a `lesson:manual` level was indistinguishable
     // from a `lesson:assessment_pass` one and got the wrong surface.
-    completionMethod: mapCompletionMethod(level.completionMethod),
+    completionMethod,
   };
 }
 
@@ -234,6 +249,9 @@ function mapModule(moduleDefinition: BackendModule): AcademyModuleSummary {
     description: moduleDefinition.description,
     learningObjective: moduleDefinition.learningObjective,
     status: moduleDefinition.status,
+    chapter: moduleDefinition.chapter
+      ? { number: moduleDefinition.chapter.number, title: moduleDefinition.chapter.title }
+      : null,
     levels,
     progress: { total: levels.length, completed: levels.filter((l) => l.state === "completed").length },
   };
@@ -266,6 +284,7 @@ function buildProgress(
     nextAvailableLevelCode: nextAvailable?.level.levelCode ?? null,
     completedLevels: completed,
     totalLevels: total,
+    openLevels: allLevels.filter((x) => !x.level.inProduction).length,
     xp: mapXp(xp),
     updatedAt,
   };
@@ -323,7 +342,12 @@ function mapLessonMedia(
   locale: string,
 ): AcademyLessonMedia | null {
   const usable = (asset: BackendContentAsset) => asset.locale === null || asset.locale === locale;
-  const byOrder = [...content.content.assets].sort((a, b) => a.sortOrder - b.sortOrder);
+  /* READ AGAIN AT THE POINT OF USE. The content guard checks the envelope, not
+     each asset, so until this line every raw `url` the Backend sent reached the
+     <video> element as it was. `readBackendContentAssets` keeps the two address
+     shapes a lesson may have and drops the rest; it is idempotent on a list that
+     was already read. */
+  const byOrder = readBackendContentAssets(content.content.assets).sort((a, b) => a.sortOrder - b.sortOrder);
 
   const video = byOrder.find((asset) => asset.kind === "video" && usable(asset));
   if (!video) return null;

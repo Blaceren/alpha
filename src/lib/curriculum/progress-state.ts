@@ -77,7 +77,10 @@ const LOCK_LABEL: Record<AcademyLockReason, string> = {
   xp: "Недостаточно XP",
   checkpoint: "Требуется контрольная точка",
   external: "Требуется внешнее условие",
-  inactive: "Уровень недоступен",
+  // PROGRAM STRUCTURE (2026-10-02). A level the published program defines but
+  // has not opened yet: its lesson is still being produced. It is the only way
+  // a level of a published version is inactive, so the reason says that.
+  inactive: "Уровень готовится",
   visibility: "Уровень пока недоступен",
   unknown: "Уровень заблокирован",
 };
@@ -106,19 +109,30 @@ const BLOCKER_REASON: Record<BackendBlocker, AcademyLockReason> = {
 };
 
 function deriveLockReason(blockers: string[], isExternal: boolean): AcademyLockReason {
-  // An external-event gate is the dominant reason when present (Pocket/external).
-  if (isExternal) return "external";
+  // The Backend's own blocker explains the lock whenever this build knows it.
+  //
+  // An external-event level used to answer "external" before its blockers were
+  // read. That was harmless while the registration level stood FIRST and was
+  // therefore never locked. In the 30-level program it stands third, and a
+  // learner on level 1 was told the third level «требует внешнего условия» when
+  // the truth is the ordinary one: two lessons come before it.
   for (const blocker of BLOCKER_PRIORITY) {
     if (blockers.includes(blocker)) return BLOCKER_REASON[blocker];
   }
-  return "unknown";
+  // No blocker this build recognises: an external gate is waiting on its event.
+  return isExternal ? "external" : "unknown";
 }
+
+/** The state label of a level that is defined and not open yet. */
+export const IN_PRODUCTION_LABEL = "Готовится";
 
 function locked(reason: AcademyLockReason): AcademyStateInfo {
   return {
     state: "locked",
     lockReason: reason,
-    label: `${STATE_LABEL.locked}: ${LOCK_LABEL[reason]}`,
+    // «Заблокирован: …» says something is in the learner's way. Nothing is: the
+    // lesson does not exist yet. One word, and not the word for an obstacle.
+    label: reason === "inactive" ? IN_PRODUCTION_LABEL : `${STATE_LABEL.locked}: ${LOCK_LABEL[reason]}`,
     routeAccessible: false,
     contentViewable: false,
     terminal: false,

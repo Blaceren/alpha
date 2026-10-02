@@ -23,21 +23,39 @@
  * anything else whatever this page offers.
  */
 
-/** The six methods the canonical v4 curriculum actually declares. */
+/**
+ * The methods a published curriculum declares.
+ *
+ * Six came with the 100-level program. The 30-level program (2026-10-02) adds
+ * two that the Backend has an owner for and this build had no surface for:
+ *
+ *   lesson:lesson        a lesson with NO test — the learner watches it and
+ *                        says so. Same Backend command as `manual`, different
+ *                        thing being declared («урок пройден», not «практика
+ *                        выполнена»), so it gets its own member and wording.
+ *   report:formal_check  a report nobody reviews — the platform accepts it at
+ *                        submission when the required fields are filled. Kept
+ *                        apart from `report` because every sentence written for
+ *                        `report` names a mentor, and here there is none.
+ */
 export type BackendCompletionMethod =
   | "pocket_postback"
   | "assessment_pass"
   | "report_approval"
+  | "formal_check"
   | "balance_check"
   | "manual"
+  | "lesson"
   | "mentor_review";
 
 export type AcademyCompletionMethod =
   | "external-event"
   | "assessment"
   | "report"
+  | "formal-report"
   | "checkpoint"
   | "manual"
+  | "lesson"
   | "mentor-review"
   | "unsupported";
 
@@ -45,8 +63,10 @@ const MAP: Record<BackendCompletionMethod, AcademyCompletionMethod> = {
   pocket_postback: "external-event",
   assessment_pass: "assessment",
   report_approval: "report",
+  formal_check: "formal-report",
   balance_check: "checkpoint",
   manual: "manual",
+  lesson: "lesson",
   mentor_review: "mentor-review",
 };
 
@@ -88,8 +108,10 @@ export const COMPLETION_METHOD_LABEL: Record<AcademyCompletionMethod, string> = 
   "external-event": "Внешнее событие",
   assessment: "Проверка знаний",
   report: "Одобрение отчёта",
+  "formal-report": "Отчёт, проверка автоматическая",
   checkpoint: "Контрольная точка",
   manual: "Самостоятельно",
+  lesson: "Просмотр урока",
   "mentor-review": "Проверка ментором",
   unsupported: "Не определён",
 };
@@ -110,4 +132,30 @@ export function completionMethodLabel(method: string | null | undefined): string
 
 export function isManualCompletionMethod(method: AcademyCompletionMethod): boolean {
   return method === "manual";
+}
+
+/**
+ * Is the level closed by the learner's own declaration?
+ *
+ * Two methods, one Backend command (`POST …/complete`): a practical step the
+ * learner did (`manual`) and a lesson without a test the learner watched
+ * (`lesson`). The surface is the same control with different words.
+ */
+export function isSelfDeclaredCompletionMethod(method: AcademyCompletionMethod): boolean {
+  return method === "manual" || method === "lesson";
+}
+
+/**
+ * Is the level a report — reviewed by a person or accepted by the platform?
+ *
+ * Both share the form, the drafts and the revisions. What differs is who says
+ * yes, and every sentence that names that someone must ask
+ * `isFormalReportMethod` first.
+ */
+export function isReportCompletionMethod(method: AcademyCompletionMethod): boolean {
+  return method === "report" || method === "formal-report";
+}
+
+export function isFormalReportMethod(method: AcademyCompletionMethod): boolean {
+  return method === "formal-report";
 }

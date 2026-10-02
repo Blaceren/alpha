@@ -66,6 +66,18 @@ describe("completion method — the truth matrix", () => {
     );
   });
 
+  it("names the two methods of the 30-level program, and neither borrows a mentor", () => {
+    // `lesson:lesson` — a lesson with no test; `report:formal_check` — a report
+    // the platform accepts by itself. Both had fallen to «Не определён».
+    expect(mapCompletionMethod("lesson")).toBe("lesson");
+    expect(mapCompletionMethod("formal_check")).toBe("formal-report");
+    expect(completionMethodLabel(mapCompletionMethod("lesson"))).toBe("Просмотр урока");
+    const formal = completionMethodLabel(mapCompletionMethod("formal_check"));
+    expect(formal).toBe("Отчёт, проверка автоматическая");
+    expect(formal).not.toMatch(/ментор|наставник/i);
+    expect(formal).not.toBe(completionMethodLabel(mapCompletionMethod("report_approval")));
+  });
+
   it("fails closed on an unknown method, and never guesses from the type", () => {
     expect(mapCompletionMethod("some_future_method")).toBe("unsupported");
     expect(completionMethodLabel("some_future_method")).toBe(COMPLETION_METHOD_LABEL.unsupported);
@@ -82,8 +94,8 @@ describe("completion method — the truth matrix", () => {
 
   it("covers the method vocabulary exhaustively, with no machine value showing", () => {
     const methods: AcademyCompletionMethod[] = [
-      "external-event", "assessment", "report", "checkpoint",
-      "manual", "mentor-review", "unsupported",
+      "external-event", "assessment", "report", "formal-report", "checkpoint",
+      "manual", "lesson", "mentor-review", "unsupported",
     ];
     expect(Object.keys(COMPLETION_METHOD_LABEL).sort()).toEqual([...methods].sort());
     for (const m of methods) {

@@ -55,6 +55,10 @@ export type NextActionKind =
   | "start-registration"
   | "wait-registration"
   | "continue-next-level"
+  // Every level the program has opened is finished and the next one is still
+  // being produced. Not `blocked` (nothing is in the learner's way) and not
+  // `course-complete` (the program goes on).
+  | "open-levels-complete"
   | "blocked"
   | "course-complete"
   | "not-enrolled";
@@ -143,7 +147,7 @@ function lockExplanation(level: AcademyLevelSummary): string {
     case "external":
       return "Нужно подтверждение внешнего условия на более раннем уровне.";
     case "inactive":
-      return "Уровень временно недоступен в программе.";
+      return "Этот уровень ещё готовится. Он откроется, когда урок будет готов.";
     case "visibility":
       return "Уровень пока не открыт в вашей программе.";
     default:
@@ -187,6 +191,19 @@ function actionableLevel(
         explanation: inProgress
           ? "Вы уже начали этот уровень. Проверка знаний завершит его."
           : "Изучите урок и пройдите короткую проверку, чтобы завершить уровень.",
+        ctaLabel: inProgress ? "Продолжить" : "Открыть уровень",
+      };
+
+    case "lesson":
+      // A lesson with no test. The learner's own word closes it, and the
+      // sentence says so before they look for a check that is not there.
+      return {
+        ...base,
+        kind: inProgress ? "continue-lesson" : "start-lesson",
+        posture: "act",
+        title: inProgress ? "Продолжите урок" : "Пройдите урок",
+        explanation:
+          "В этом уроке нет теста. Изучите материал и отметьте урок пройденным — уровень завершится.",
         ctaLabel: inProgress ? "Продолжить" : "Открыть уровень",
       };
 
@@ -234,6 +251,31 @@ function actionableLevel(
         posture: "act",
         title: "Подготовьте и отправьте отчёт",
         explanation: "Отчёт проверяет наставник. После одобрения уровень будет завершён.",
+        ctaLabel: "Открыть отчёт",
+      };
+    }
+
+    case "formal-report": {
+      // A report nobody reviews. Every sentence of the `report` case names a
+      // mentor; none of them may be reused here.
+      if (detail.reportState === "draft") {
+        return {
+          ...base,
+          kind: "submit-report",
+          posture: "act",
+          title: "Допишите и отправьте отчёт",
+          explanation:
+            "Черновик отчёта сохранён. Заполните оставшиеся поля и отправьте — проверка автоматическая.",
+          ctaLabel: "Продолжить отчёт",
+        };
+      }
+      return {
+        ...base,
+        kind: "submit-report",
+        posture: "act",
+        title: "Заполните и отправьте отчёт",
+        explanation:
+          "Отчёт проверяется автоматически, без наставника: когда обязательные поля заполнены, уровень завершается сразу после отправки.",
         ctaLabel: "Открыть отчёт",
       };
     }
@@ -415,6 +457,32 @@ export function deriveNextAction(
   }
 
   const levelModule = moduleOf.get(target.levelCode) ?? null;
+
+  /* THE END OF WHAT IS OPEN. The learner's current level is one the program has
+     defined and not opened yet. Because closed levels are always the tail of a
+     published version, that is true exactly when every open level is finished —
+     which is checked rather than assumed, so a state this build does not expect
+     falls through to the ordinary locked answer below instead of congratulating
+     anyone.
+
+     `level` is deliberately null: the statement is about the program, and
+     naming the unopened lesson above it would read as an instruction to take
+     it. Path still focuses that level through the progress summary. */
+  if (target.inProduction) {
+    const open = levels.filter((l) => !l.inProduction);
+    if (open.length > 0 && open.every((l) => l.state === "completed")) {
+      return {
+        kind: "open-levels-complete",
+        posture: "done",
+        title: "Открытые уровни пройдены",
+        explanation: `Вы прошли все открытые уровни программы — ${open.length} из ${levels.length}. Следующие уровни готовятся и откроются позже. Пройденные уроки и инструменты остаются доступными.`,
+        ctaLabel: "Открыть путь",
+        href: "/path",
+        level: null,
+        module: levelModule,
+      };
+    }
+  }
 
   switch (target.state) {
     case "pending_review":
