@@ -134,7 +134,7 @@ describe("Trade Card — a new plan", () => {
     await screen.findByRole("button", { name: "Зафиксировать план" });
     await fillPlan(user);
     await user.click(screen.getByRole("button", { name: "Зафиксировать план" }));
-    expect(await screen.findByText("Payout — целое число от 1 до 100.")).toBeInTheDocument();
+    expect(await screen.findByText("Payout — целое число от 20 до 99.")).toBeInTheDocument();
     expect(screen.getByLabelText("Payout")).toHaveAttribute("aria-invalid", "true");
   });
 });

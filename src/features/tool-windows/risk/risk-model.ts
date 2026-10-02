@@ -15,6 +15,7 @@
  */
 import { formatMinor, parseAmountToMinor } from "../trade-card/trade-card-model";
 import { localDateTime } from "../model/local-date";
+import { PAYOUT_MESSAGE, parsePayoutPercent } from "../model/numeric-input";
 
 /* ------------------------------------------------------------------ types */
 
@@ -289,7 +290,7 @@ export function draftInputs(
   shares: readonly number[],
 ): { capitalMinor: number; payoutPercent: number; riskPercent: number; dailyLimitPercent: number } | null {
   const capitalMinor = parseCapital(draft.capital);
-  const payoutPercent = parseWholePercent(draft.payoutPercent, 1, 100);
+  const payoutPercent = parsePayoutPercent(draft.payoutPercent);
   const riskPercent = Number(draft.riskPercent);
   const dailyLimitPercent = parseWholePercent(
     draft.dailyLimitPercent,
@@ -303,7 +304,7 @@ export function draftInputs(
 
 const MESSAGES: Record<RiskField, string> = {
   capital: "Капитал — сумма от $1 до $1 000 000, до двух знаков после точки.",
-  payoutPercent: "Payout — целое число от 1 до 100.",
+  payoutPercent: PAYOUT_MESSAGE,
   riskPercent: "Выберите долю риска на сделку.",
   dailyLimitPercent: "Дневной лимит — целое число процентов от 1 до 100.",
   scenario: `Запишите сценарий — от ${RISK_LIMITS.minTextLength} до ${RISK_LIMITS.maxTextLength} символов.`,
@@ -322,7 +323,7 @@ export function validateRiskDraft(
   const errors: RiskErrors = {};
   const capitalMinor = parseCapital(draft.capital);
   if (capitalMinor === null) errors.capital = MESSAGES.capital;
-  const payoutPercent = parseWholePercent(draft.payoutPercent, 1, 100);
+  const payoutPercent = parsePayoutPercent(draft.payoutPercent);
   if (payoutPercent === null) errors.payoutPercent = MESSAGES.payoutPercent;
   const riskPercent = Number(draft.riskPercent);
   if (!shares.includes(riskPercent)) errors.riskPercent = MESSAGES.riskPercent;

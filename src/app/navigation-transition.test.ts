@@ -346,6 +346,18 @@ describe("the authenticated route group", () => {
   "src/lib/auth/turnstile.ts",
   "src/server/auth/account-read.ts",
   "src/server/proxy/auth-surface.ts",
+  /* The owner's review of 2026-10-02. The tools' own date, time and payout
+     fields — three components, the panel they share and the three models they
+     stand on — in place of the browser's date and time inputs and of a text
+     field that took any character. None of it is a page, a route or a loading
+     boundary. */
+  "src/features/tool-windows/components/date-field.tsx",
+  "src/features/tool-windows/components/payout-field.tsx",
+  "src/features/tool-windows/components/picker-panel.ts",
+  "src/features/tool-windows/components/time-field.tsx",
+  "src/features/tool-windows/model/calendar.ts",
+  "src/features/tool-windows/model/numeric-input.ts",
+  "src/features/tool-windows/model/time-input.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

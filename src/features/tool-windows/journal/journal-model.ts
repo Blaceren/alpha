@@ -22,6 +22,7 @@ import {
   type TradeResult,
 } from "../trade-card/trade-card-model";
 import { localDate } from "../model/local-date";
+import { PAYOUT_MESSAGE, parsePayoutPercent } from "../model/numeric-input";
 
 export { localDate };
 
@@ -288,7 +289,7 @@ const MESSAGES: Record<ManualField, string> = {
   asset: "Выберите актив из списка.",
   direction: "Выберите направление: выше или ниже.",
   amount: "Сумма — число больше нуля, до двух знаков после точки.",
-  payoutPercent: "Payout — целое число от 1 до 100.",
+  payoutPercent: PAYOUT_MESSAGE,
   expiry: "Выберите экспирацию.",
   result: "Отметьте результат: прибыль или убыток.",
   plan: `План — не длиннее ${JOURNAL_LIMITS.maxPlanLength} символов.`,
@@ -326,12 +327,8 @@ export function validateReview(
   };
 }
 
-function parsePayout(raw: string): number | null {
-  const trimmed = raw.trim().replace("%", "").trim();
-  if (!/^\d{1,3}$/.test(trimmed)) return null;
-  const value = Number(trimmed);
-  return value >= 1 && value <= 100 ? value : null;
-}
+/** A whole percent inside the tools' payout limits (`numeric-input.ts`), or null. */
+const parsePayout = parsePayoutPercent;
 
 /** A hand-recorded trade as the Backend accepts it. Every field checked at once. */
 export function validateManual(

@@ -11,6 +11,10 @@
  */
 import type { ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { DateField } from "../components/date-field";
+import { PayoutField } from "../components/payout-field";
+import { TimeField } from "../components/time-field";
+import { moneyOnly } from "../model/numeric-input";
 import { AssetOptions, DirectionToggle, ExpiryOptions, FieldError } from "../trade-card/trade-card-parts";
 import { directionLabel } from "../trade-card/trade-card-model";
 import {
@@ -431,20 +435,19 @@ export function ManualTradeFields({
   return (
     <div className="tc-fields">
       <div className="tc-field">
-        <label className="tc-label" htmlFor={id("tradeDate")}>
+        <span className="tc-label" id={`${id("tradeDate")}-label`}>
           Дата
-        </label>
-        <input
+        </span>
+        <DateField
           id={id("tradeDate")}
-          className="tc-input"
-          type="date"
+          labelId={`${id("tradeDate")}-label`}
+          value={draft.tradeDate}
           min={JOURNAL_LIMITS.minTradeDate}
           max={maxDate}
-          value={draft.tradeDate}
-          onChange={change("tradeDate")}
+          onChange={(value) => onChange("tradeDate", value)}
           disabled={disabled}
-          aria-invalid={invalid("tradeDate")}
-          aria-describedby={described("tradeDate")}
+          invalid={Boolean(errors.tradeDate)}
+          describedBy={described("tradeDate")}
         />
         <FieldError id={errorId("tradeDate")} message={errors.tradeDate} />
       </div>
@@ -453,15 +456,14 @@ export function ManualTradeFields({
         <label className="tc-label" htmlFor={id("entryTime")}>
           Время входа
         </label>
-        <input
+        <TimeField
           id={id("entryTime")}
-          className="tc-input"
-          type="time"
           value={draft.entryTime}
-          onChange={change("entryTime")}
+          onChange={(value) => onChange("entryTime", value)}
           disabled={disabled}
-          aria-invalid={invalid("entryTime")}
-          aria-describedby={described("entryTime")}
+          invalid={Boolean(errors.entryTime)}
+          describedBy={described("entryTime")}
+          align="end"
         />
         <FieldError id={errorId("entryTime")} message={errors.entryTime} />
       </div>
@@ -513,7 +515,7 @@ export function ManualTradeFields({
             inputMode="decimal"
             autoComplete="off"
             value={draft.amount}
-            onChange={change("amount")}
+            onChange={(event) => onChange("amount", moneyOnly(event.target.value))}
             disabled={disabled}
             aria-invalid={invalid("amount")}
             aria-describedby={described("amount")}
@@ -522,29 +524,14 @@ export function ManualTradeFields({
         <FieldError id={errorId("amount")} message={errors.amount} />
       </div>
 
-      <div className="tc-field">
-        <label className="tc-label" htmlFor={id("payoutPercent")}>
-          Payout
-        </label>
-        <span className="tc-affix" data-side="end">
-          <input
-            id={id("payoutPercent")}
-            className="tc-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={draft.payoutPercent}
-            onChange={change("payoutPercent")}
-            disabled={disabled}
-            aria-invalid={invalid("payoutPercent")}
-            aria-describedby={described("payoutPercent")}
-          />
-          <span className="tc-affix__mark" aria-hidden="true">
-            %
-          </span>
-        </span>
-        <FieldError id={errorId("payoutPercent")} message={errors.payoutPercent} />
-      </div>
+      <PayoutField
+        id={id("payoutPercent")}
+        errorId={errorId("payoutPercent")}
+        value={draft.payoutPercent}
+        onChange={(value) => onChange("payoutPercent", value)}
+        disabled={disabled}
+        error={errors.payoutPercent}
+      />
 
       <div className="tc-field">
         <label className="tc-label" htmlFor={id("expiry")}>

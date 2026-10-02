@@ -102,6 +102,8 @@ function failure(code: string | null, category: NormalizedError["category"] = "V
 }
 
 const row = (asset: RegExp) => screen.getByRole("button", { name: asset });
+/** «Дата»: a field that is pressed, with the day in words as its value. */
+const dateField = () => screen.getByRole("combobox", { name: "Дата" });
 
 beforeEach(() => {
   fetchJournalPage.mockReset();
@@ -370,8 +372,11 @@ describe("Trading Journal — the review", () => {
 
 describe("Trading Journal — a trade recorded by hand", () => {
   async function fillTrade(user: ReturnType<typeof userEvent.setup>) {
-    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-09-20" } });
-    fireEvent.change(screen.getByLabelText("Время входа"), { target: { value: "10:05" } });
+    // The day before the learner's today is one press; the time is four digits.
+    await user.click(dateField());
+    await user.click(screen.getByRole("button", { name: "Вчера" }));
+    await user.clear(screen.getByLabelText("Время входа"));
+    await user.type(screen.getByLabelText("Время входа"), "1005");
     await user.selectOptions(screen.getByLabelText("Актив"), "GBPUSD_OTC");
     await user.click(screen.getByRole("radio", { name: /Ниже/ }));
     await user.type(screen.getByLabelText("Сумма"), "5");
@@ -385,9 +390,11 @@ describe("Trading Journal — a trade recorded by hand", () => {
     render(<JournalWorkspace initialPage={page()} />);
     await user.click(screen.getByRole("button", { name: "Новая запись" }));
     expect(screen.getByRole("heading", { name: "Новая запись" })).toHaveFocus();
-    expect(screen.getByLabelText("Дата")).toHaveValue("2026-09-21");
-    expect(screen.getByLabelText("Дата")).toHaveAttribute("max", "2026-09-21");
+    // The learner's own today, in words, and their own clock — not the browser's date field.
+    expect(dateField()).toHaveTextContent("Сегодня");
+    expect(dateField()).toHaveTextContent("21 сентября");
     expect(screen.getByLabelText("Время входа")).toHaveValue("15:00");
+    expect(document.querySelector('input[type="date"], input[type="time"]')).toBeNull();
     expect(screen.queryByRole("button", { name: /EUR\/USD OTC/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Отмена" }));
     expect(screen.getByRole("button", { name: "Новая запись" })).toHaveFocus();
@@ -469,8 +476,8 @@ describe("Trading Journal — a trade recorded by hand", () => {
     await fillTrade(user);
     await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
     expect(await screen.findByText("Дата сделки — не раньше 2020 года и не позже сегодняшнего дня.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Дата")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Дата")).toHaveFocus();
+    expect(dateField()).toHaveAttribute("aria-invalid", "true");
+    expect(dateField()).toHaveFocus();
   });
 
   it("changes a hand-recorded entry as a whole", async () => {
@@ -512,7 +519,7 @@ describe("Trading Journal — an entry from a card, changed whole", () => {
         "Запись из Trade Card. Исправьте то, что записано неточно: изменения останутся в журнале, сама карточка не изменится.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Дата")).toHaveValue("2026-09-21");
+    expect(dateField()).toHaveTextContent("Сегодня");
     expect(screen.getByLabelText("Время входа")).toHaveValue("14:32");
     expect(screen.getByLabelText("Актив")).toHaveValue("EURUSD_OTC");
     expect(screen.getByRole("radio", { name: /Выше/ })).toHaveAttribute("aria-checked", "true");
