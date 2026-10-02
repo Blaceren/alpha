@@ -366,6 +366,9 @@
   margin: 0 0 16px;
   max-width: 62ch;
 }
+/* A settled registration says its sentence and offers nothing after it. */
+.ld .lvl-manual__explain:last-child,
+.ld .pocket-reg__explain:last-child { margin-bottom: 0; }
 .ld .lvl-manual__confirm {
   align-items: center;
   gap: 12px;
