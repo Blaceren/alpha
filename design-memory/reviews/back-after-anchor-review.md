@@ -137,3 +137,26 @@ The same tree built for production with the stand's environment and served with 
 - Nothing a visitor sees has changed.
 - Ready for PREPROD by the owner's word of 2026-10-02 («как закончишь — публикуй предпрод»).
   Academy only; no Backend change, no migration.
+
+## Released to PREPROD — 2026-10-02
+
+Owner: «продолжай, как закончишь — публикуй предпрод». Academy `871d298` (BUILD_ID
+`dEPQRhnCua6oa-Y1FuJKB`) at 10:37:47Z; the rollback point is `8cb7c5b` (BUILD_ID
+`06v4VxI6YMt3OQU7zrevE`). Academy only: the Backend stays `e70b6b1`, no migration, the database is
+not touched. Not pushed to GitHub.
+
+On the live host, in a real browser:
+
+- **the owner's own steps** — home → «Практика и обратная связь» → «Войти» → Back: the address is
+  `/#review` and the screen is the public home, the section where it was; Forward: the sign-in form;
+- **the 18 checks that need no session** — the five section links × two ways out, the wordmark, the
+  hero's call, the skip link, the phone menu, the chain of two sections, the same link twice, the
+  entry made behind the router's back, and that handing an entry over asks the server for nothing:
+  18 of 18;
+- nothing else moved: the lines are behind their nodes (175 of 175), the security check goes
+  through the same states as before the release, the console has the one warning it had, the
+  service and nginx logs since the cutover are clean, the host is still `noindex`.
+
+**Not verified on PREPROD:** the lesson's contents and the product's «Перейти к содержимому» under a
+learner (no session can be minted) — checks 18 and 19 on the stand; and any browser other than
+Chromium.
