@@ -40,7 +40,7 @@ import {
   type AssessmentState,
 } from "@/features/assessment/assessment-machine";
 import type { AssessmentReviewItem } from "@/lib/assessment/types";
-import { requestLessonRewatch } from "@/features/lesson-media/lesson-playback";
+import { publishLessonVerdicts, requestLessonRewatch } from "@/features/lesson-media/lesson-playback";
 import { formatTimecode } from "@/lib/time/timecode";
 import "@/features/assessment/assessment.css";
 
@@ -144,12 +144,14 @@ export function LevelAssessment({
     requestAnimationFrame(() => headingRef.current?.focus());
   }, []);
 
-  const onRewatch = useCallback((item: AssessmentReviewItem) => {
+  const onRewatch = useCallback((item: AssessmentReviewItem, from: HTMLElement | null) => {
     if (item.rewatchFromSeconds === null) return;
     // False when no player is mounted to take the request (the video failed to
     // render, or was removed since the page was served). Say so beside the
-    // control instead of leaving a button that did nothing.
-    setRewatchMissed(requestLessonRewatch(item.rewatchFromSeconds) ? null : item.questionKey);
+    // control instead of leaving a button that did nothing. The question goes
+    // with the request, so a docked player keeps it in view.
+    const taken = requestLessonRewatch(item.rewatchFromSeconds, { questionNumber: item.questionNumber, from });
+    setRewatchMissed(taken ? null : item.questionKey);
   }, []);
 
   /**
@@ -163,6 +165,29 @@ export function LevelAssessment({
   }, [state.phase, state.result]);
 
   const graded = state.phase === "failed";
+
+  /**
+   * THE LESSON LINE HEARS HOW THE ATTEMPT WENT (lesson hi-fi). The verdicts are
+   * the ones this component already prints — a question the review lists was
+   * answered wrongly, one it does not list rightly, every one right on a pass —
+   * and nothing when there is no graded attempt on the screen. Leaving the page
+   * takes them away with it.
+   */
+  useEffect(() => {
+    if (state.phase === "passed") {
+      publishLessonVerdicts(stableCode, new Map(state.questions.map((q) => [q.questionNumber, "right" as const])));
+      return;
+    }
+    if (state.phase === "failed" && review) {
+      publishLessonVerdicts(
+        stableCode,
+        new Map(state.questions.map((q) => [q.questionNumber, review.has(q.questionKey) ? ("wrong" as const) : ("right" as const)])),
+      );
+      return;
+    }
+    if (state.phase === "answering" || state.phase === "loading") publishLessonVerdicts(stableCode, null);
+  }, [review, stableCode, state.phase, state.questions]);
+  useEffect(() => () => publishLessonVerdicts(stableCode, null), [stableCode]);
 
   const nextAction = nextLevelCode ? (
     <Link className="asmt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>
@@ -281,7 +306,7 @@ export function LevelAssessment({
                               <button
                                 type="button"
                                 className="asmt__rewatch"
-                                onClick={() => onRewatch(item)}
+                                onClick={(event) => onRewatch(item, event.currentTarget.closest("li"))}
                               >
                                 Пересмотреть с {formatTimecode(item.rewatchFromSeconds)}
                               </button>

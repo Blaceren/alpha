@@ -184,7 +184,27 @@ describe("mapLevelContent media", () => {
       poster: "/media/lessons/v2.l004.x/bbbbbbbbbbbbbbbb.jpg",
       durationSeconds: 612,
       captions: [{ src: "/media/lessons/v2.l004.x/cccccccccccccccc.vtt", srcLang: "ru", label: "ru" }],
+      markers: [],
     });
+  });
+
+  it("carries the lesson line's points, read strictly, and none the video cannot reach", () => {
+    const payload = content([asset({ url: "/media/lessons/v2.l004.x/aaaaaaaaaaaaaaaa.mp4", durationSeconds: 612, sortOrder: 0 })]);
+    (payload.content as { questionMarkers?: unknown }).questionMarkers = [
+      { questionNumber: 2, rewatchFromSeconds: 190 },
+      { questionNumber: 1, rewatchFromSeconds: 115 },
+      { questionNumber: 1, rewatchFromSeconds: 400 }, // a number seen twice keeps its first second
+      { questionNumber: 3, rewatchFromSeconds: 900 }, // past the end of a 612-second video
+      { questionNumber: 4, rewatchFromSeconds: "470" }, // not a number
+      { questionNumber: 0, rewatchFromSeconds: 10 }, // not a question
+      "noise",
+    ];
+    expect(mapLevelContent(payload, null).media?.markers).toEqual([
+      { questionNumber: 1, seconds: 115 },
+      { questionNumber: 2, seconds: 190 },
+    ]);
+    (payload.content as { questionMarkers?: unknown }).questionMarkers = { questionNumber: 1 };
+    expect(mapLevelContent(payload, null).media?.markers).toEqual([]);
   });
 
   it("drops an unreadable address even when the payload was never pre-read", () => {

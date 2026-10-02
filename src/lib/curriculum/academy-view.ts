@@ -194,6 +194,12 @@ export type AcademyLessonMedia = {
   poster: string | null;
   durationSeconds: number | null;
   captions: ReadonlyArray<{ src: string; srcLang: string; label: string }>;
+  /**
+   * The lesson line's points: where the answer to each question of the level's
+   * test is taught. Empty for a lesson without a test, or a Backend that does
+   * not send them.
+   */
+  markers: ReadonlyArray<{ questionNumber: number; seconds: number }>;
 };
 
 /**

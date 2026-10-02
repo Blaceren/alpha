@@ -123,6 +123,35 @@ export const COMPLETION_METHOD_LABEL: Record<AcademyCompletionMethod, string> = 
  * in the closed vocabulary above resolves to the neutral copy rather than being
  * echoed or inferred.
  */
+/**
+ * LESSON HI-FI (DD-336) — the method as a FACT under a level's title.
+ *
+ * The table of parameters under a lesson is gone; what it said is one line of
+ * facts beside the title, worded for a learner reading what the level asks of
+ * them rather than naming a mechanism («Внешнее событие» was the table's word
+ * for registering in Pocket). One vocabulary, kept here beside the labels; null
+ * where a method is not known, so nothing is guessed.
+ */
+export const COMPLETION_METHOD_FACT: Record<AcademyCompletionMethod, string | null> = {
+  "external-event": "регистрация в Pocket",
+  assessment: "тест после урока",
+  report: "отчёт · проверяет наставник",
+  "formal-report": "отчёт · проверка автоматическая",
+  checkpoint: "контрольная точка",
+  manual: "задание · отмечаете сами",
+  lesson: "урок без теста",
+  "mentor-review": "работа наставнику",
+  unsupported: null,
+};
+
+/** The fact a level's method reads as under its title; null for an unknown one. */
+export function completionMethodFact(method: string | null | undefined): string | null {
+  if (typeof method === "string" && method in COMPLETION_METHOD_FACT) {
+    return COMPLETION_METHOD_FACT[method as AcademyCompletionMethod];
+  }
+  return null;
+}
+
 export function completionMethodLabel(method: string | null | undefined): string {
   if (typeof method === "string" && method in COMPLETION_METHOD_LABEL) {
     return COMPLETION_METHOD_LABEL[method as AcademyCompletionMethod];

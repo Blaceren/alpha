@@ -32,7 +32,7 @@ import type {
 } from "@/lib/curriculum/academy-view";
 import { completionSourceLabel } from "@/lib/curriculum/completion-source";
 import { normalizeLessonBody } from "@/lib/curriculum/lesson-body";
-import { readBackendContentAssets, readBackendToolAccess } from "@/lib/curriculum/backend-dto";
+import { readBackendContentAssets, readBackendQuestionMarkers, readBackendToolAccess } from "@/lib/curriculum/backend-dto";
 
 /**
  * The learner's reading position, read defensively.
@@ -363,12 +363,17 @@ function mapLessonMedia(
       label: asset.locale ?? locale,
     }));
 
+  const durationSeconds = video.durationSeconds ?? content.content.videoDurationSeconds;
   return {
     src: video.url,
     mimeType: video.mimeType,
     poster: poster?.url ?? null,
-    durationSeconds: video.durationSeconds ?? content.content.videoDurationSeconds,
+    durationSeconds,
     captions,
+    /* A point the video cannot reach is not drawn. */
+    markers: readBackendQuestionMarkers(content.content.questionMarkers).filter(
+      (marker) => durationSeconds === null || marker.seconds < durationSeconds,
+    ),
   };
 }
 

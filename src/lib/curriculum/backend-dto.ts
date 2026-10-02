@@ -186,6 +186,12 @@ export type BackendLevelContent = {
       body: unknown;
     };
     assets: BackendContentAsset[];
+    /**
+     * Where the answer to each question of the level's test is taught (lesson
+     * hi-fi, 2026-10-02). Absent from a Backend that predates it; read with
+     * `readBackendQuestionMarkers`, never trusted as it arrives.
+     */
+    questionMarkers?: unknown;
   };
   progress: unknown | null;
 };
@@ -442,6 +448,44 @@ export function readBackendContentAssets(value: unknown): BackendContentAsset[] 
     });
   }
   return assets;
+}
+
+/** One point of the lesson line: a question's number and the second its answer is taught. */
+export type BackendQuestionMarker = { questionNumber: number; seconds: number };
+
+const MAX_MARKER_SECONDS = 86_400;
+const MAX_MARKERS = 50;
+
+/**
+ * The lesson line's points, read strictly and FAIL-SOFT.
+ *
+ * A point is a hint on a timeline: a payload that cannot be read gives none,
+ * and the lesson plays exactly as it did before points existed. Each kept point
+ * is a whole question number from 1 and a whole second within a day; a number
+ * seen twice keeps its first second.
+ */
+export function readBackendQuestionMarkers(value: unknown): BackendQuestionMarker[] {
+  if (!Array.isArray(value)) return [];
+  const markers: BackendQuestionMarker[] = [];
+  const seen = new Set<number>();
+  for (const entry of value) {
+    if (markers.length >= MAX_MARKERS) break;
+    if (!isObject(entry)) continue;
+    const { questionNumber, rewatchFromSeconds } = entry;
+    if (
+      !Number.isSafeInteger(questionNumber) ||
+      (questionNumber as number) < 1 ||
+      !Number.isSafeInteger(rewatchFromSeconds) ||
+      (rewatchFromSeconds as number) < 0 ||
+      (rewatchFromSeconds as number) > MAX_MARKER_SECONDS ||
+      seen.has(questionNumber as number)
+    ) {
+      continue;
+    }
+    seen.add(questionNumber as number);
+    markers.push({ questionNumber: questionNumber as number, seconds: rewatchFromSeconds as number });
+  }
+  return markers.sort((a, b) => a.questionNumber - b.questionNumber);
 }
 
 export function isBackendLevelContent(value: unknown): value is BackendLevelContent {

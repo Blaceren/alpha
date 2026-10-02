@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AcademyVideoPlayer, type AcademyVideoPlayerHandle } from "./academy-video-player";
+import { AcademyVideoPlayer, printableMarkerLabels, type AcademyVideoPlayerHandle } from "./academy-video-player";
 
 function setMedia(
   video: HTMLVideoElement,
@@ -368,7 +368,7 @@ describe("AcademyVideoPlayer", () => {
     expect(screen.getByText("Урок просмотрен")).toBeInTheDocument();
   });
 
-  it("auto-hides controls after inactivity and returns on interaction", () => {
+  it("keeps the bar under the picture while it plays; only in full screen does it step aside", () => {
     vi.useFakeTimers();
     render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
     const region = getRegion();
@@ -377,10 +377,21 @@ describe("AcademyVideoPlayer", () => {
     fireEvent.play(video);
     fireEvent.pointerDown(region);
     act(() => vi.advanceTimersByTime(2500));
+    // On the page the bar is below the picture: nothing to hide.
+    expect(region).toHaveClass("avp--controls-visible");
+
+    // Full screen: the bar floats over the picture and steps aside while it plays.
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, value: region });
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    fireEvent.pointerDown(region);
+    act(() => vi.advanceTimersByTime(2500));
     expect(region).not.toHaveClass("avp--controls-visible");
 
     fireEvent.pointerMove(region);
     expect(region).toHaveClass("avp--controls-visible");
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, value: null });
   });
 
   /* ------------------------------------------------------------------ *
@@ -546,5 +557,305 @@ describe("AcademyVideoPlayer", () => {
       expect(container.querySelector(".avp__poster-copy, .avp__poster-route, .avp__poster-grid")).toBeNull();
       expect(container.textContent).not.toMatch(/Академия \/ Урок/);
     });
+  });
+});
+
+/* -------------------------------------------------------------------------- *
+ * Lesson hi-fi (DD-336): the lesson line, the offer to go on, the speed, the
+ * reading position and the docked player.
+ * -------------------------------------------------------------------------- */
+
+describe("AcademyVideoPlayer — the lesson hi-fi", () => {
+  const play = vi.fn(() => Promise.resolve());
+  const pause = vi.fn();
+  const load = vi.fn();
+
+  beforeEach(() => {
+    play.mockClear();
+    pause.mockClear();
+    load.mockClear();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(play);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(pause);
+    vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(load);
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom always has one */
+    }
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const MARKERS = [
+    { id: "q1", seconds: 115, label: "1", description: "Вопрос 1 · ответ объясняют с 1:55" },
+    { id: "q2", seconds: 190, label: "2", description: "Вопрос 2 · ответ объясняют с 3:10", state: "right" as const },
+    { id: "q3", seconds: 320, label: "3", description: "Вопрос 3 · ответ объясняют с 5:20", state: "wrong" as const },
+  ];
+
+  function loaded(duration = 500, currentTime = 0) {
+    const video = getVideo();
+    setMedia(video, { duration, currentTime });
+    fireEvent.loadedMetadata(video);
+    return video;
+  }
+
+  describe("the lesson line", () => {
+    it("puts each point where its answer is taught, and pressing one plays from there", () => {
+      const { container } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" markers={MARKERS} />);
+      // No length, no line: the points wait for the file.
+      expect(screen.queryByRole("button", { name: /Вопрос 1/ })).toBeNull();
+      const video = loaded();
+
+      const first = screen.getByRole("button", { name: "Вопрос 1 · ответ объясняют с 1:55" });
+      expect(first.closest("li")).toHaveStyle({ left: "23%" });
+      fireEvent.click(first);
+      expect(video.currentTime).toBe(115);
+      expect(play).toHaveBeenCalledOnce();
+      expect(first.closest("li")).toHaveAttribute("data-active", "true");
+
+      const states = [...container.querySelectorAll(".avp__marker")].map((item) => item.getAttribute("data-state"));
+      expect(states).toEqual(["neutral", "right", "wrong"]);
+      expect(screen.getByRole("list", { name: "Где в видео объясняют ответы теста" })).toBeInTheDocument();
+    });
+
+    it("never places a point outside the video", () => {
+      render(
+        <AcademyVideoPlayer
+          src="/lesson.mp4"
+          title="Урок"
+          markers={[...MARKERS, { id: "late", seconds: 9_000, label: "4", description: "Вопрос 4" }]}
+        />,
+      );
+      loaded();
+      expect(screen.queryByRole("button", { name: "Вопрос 4" })).toBeNull();
+      expect(screen.getAllByRole("button", { name: /^Вопрос/ })).toHaveLength(3);
+    });
+
+    it("prints a number only where it does not touch its neighbour", () => {
+      const markers = [
+        { id: "a", seconds: 100 },
+        { id: "b", seconds: 104 },
+        { id: "c", seconds: 300 },
+      ];
+      // 600 px for 500 s: 100 s and 104 s are under 5 px apart.
+      expect([...printableMarkerLabels(markers, 500, 600)]).toEqual(["a", "c"]);
+      // Wide enough, every number fits.
+      expect([...printableMarkerLabels(markers, 500, 4_000)]).toEqual(["a", "b", "c"]);
+      expect(printableMarkerLabels(markers, Number.NaN, 600).size).toBe(0);
+    });
+  });
+
+  describe("«Продолжить с …»", () => {
+    it("offers the second the learner stopped at, and goes on from it", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" resumeFrom={222} />);
+      const video = loaded();
+      fireEvent.click(screen.getByRole("button", { name: "Продолжить с 3:42" }));
+      expect(video.currentTime).toBe(222);
+      expect(play).toHaveBeenCalledOnce();
+    });
+
+    it("can start over instead", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" resumeFrom={222} />);
+      const video = loaded(500, 0);
+      video.currentTime = 40;
+      fireEvent.click(screen.getByRole("button", { name: "Смотреть с начала" }));
+      expect(video.currentTime).toBe(0);
+      expect(play).toHaveBeenCalledOnce();
+    });
+
+    it("offers nothing for a position at either end", () => {
+      const { unmount } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" resumeFrom={3} />);
+      loaded();
+      expect(screen.queryByRole("button", { name: /Продолжить с/ })).toBeNull();
+      expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+      unmount();
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" resumeFrom={498} />);
+      loaded();
+      expect(screen.queryByRole("button", { name: /Продолжить с/ })).toBeNull();
+    });
+
+    it("is gone once the lesson has started", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" resumeFrom={222} />);
+      const video = loaded();
+      fireEvent.play(video);
+      fireEvent.pause(video);
+      expect(screen.queryByRole("button", { name: /Продолжить с/ })).toBeNull();
+      expect(screen.getByRole("button", { name: "Продолжить видео" })).toBeInTheDocument();
+    });
+  });
+
+  describe("speed", () => {
+    it("is chosen from a short list, applied to the video and remembered", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      const video = loaded();
+      fireEvent.click(screen.getByRole("button", { name: "Скорость: 1×" }));
+      const menu = screen.getByRole("menu", { name: "Скорость воспроизведения" });
+      expect(menu).toBeInTheDocument();
+      expect(screen.getByRole("menuitemradio", { name: "1×" })).toHaveAttribute("aria-checked", "true");
+
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "1,5×" }));
+      expect(video.playbackRate).toBe(1.5);
+      expect(window.localStorage.getItem("ata.player.playbackRate")).toBe("1.5");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(screen.getByRole("button", { name: "Скорость: 1,5×" })).toBeInTheDocument();
+    });
+
+    it("starts at the speed the viewer chose last time, and ignores a value it does not offer", () => {
+      window.localStorage.setItem("ata.player.playbackRate", "1.25");
+      const { unmount } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      expect(screen.getByRole("button", { name: "Скорость: 1,25×" })).toBeInTheDocument();
+      unmount();
+      window.localStorage.setItem("ata.player.playbackRate", "7");
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      expect(screen.getByRole("button", { name: "Скорость: 1×" })).toBeInTheDocument();
+    });
+
+    it("closes on Escape", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      fireEvent.click(screen.getByRole("button", { name: "Скорость: 1×" }));
+      fireEvent.keyDown(screen.getByRole("menuitemradio", { name: "2×" }), { key: "Escape" });
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
+  describe("the reading position", () => {
+    it("is told where the learner paused and where they finished, never before the start", () => {
+      const onPositionSave = vi.fn();
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" onPositionSave={onPositionSave} />);
+      const video = loaded(500, 0);
+      fireEvent.pause(video);
+      expect(onPositionSave).not.toHaveBeenCalled();
+
+      fireEvent.play(video);
+      video.currentTime = 61.8;
+      fireEvent.pause(video);
+      expect(onPositionSave).toHaveBeenLastCalledWith(61);
+      // The same second twice is said once.
+      fireEvent.pause(video);
+      expect(onPositionSave).toHaveBeenCalledTimes(1);
+
+      fireEvent.ended(video);
+      expect(onPositionSave).toHaveBeenLastCalledWith(500);
+    });
+
+    it("is told every fifteen seconds while the lesson plays", () => {
+      vi.useFakeTimers();
+      const onPositionSave = vi.fn();
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" onPositionSave={onPositionSave} />);
+      const video = loaded(500, 0);
+      fireEvent.play(video);
+      video.currentTime = 20;
+      act(() => vi.advanceTimersByTime(15_000));
+      expect(onPositionSave).toHaveBeenLastCalledWith(20);
+      video.currentTime = 35;
+      act(() => vi.advanceTimersByTime(15_000));
+      expect(onPositionSave).toHaveBeenLastCalledWith(35);
+    });
+  });
+
+  describe("docked", () => {
+    type Observed = { callback: IntersectionObserverCallback; element: Element | null };
+    let observed: Observed;
+
+    beforeEach(() => {
+      observed = { callback: () => undefined, element: null };
+      class FakeObserver {
+        constructor(callback: IntersectionObserverCallback) {
+          observed.callback = callback;
+        }
+        observe(element: Element) {
+          observed.element = element;
+        }
+        disconnect() {}
+        unobserve() {}
+        takeRecords() {
+          return [];
+        }
+      }
+      vi.stubGlobal("IntersectionObserver", FakeObserver);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stage(visible: boolean) {
+      act(() => {
+        observed.callback(
+          [{ isIntersecting: visible, intersectionRatio: visible ? 1 : 0, target: observed.element! } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        );
+      });
+    }
+
+    it("docks while the lesson plays and its stage is off screen, and the place stays on the page", () => {
+      const { container } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" dockable />);
+      const video = loaded();
+      stage(false);
+      // Paused and off screen: nothing to keep in view.
+      expect(getRegion()).not.toHaveClass("avp--docked");
+
+      fireEvent.play(video);
+      expect(getRegion()).toHaveClass("avp--docked");
+      expect(container.querySelector(".avp-slot")).toHaveClass("avp-slot--away");
+
+      stage(true);
+      expect(getRegion()).not.toHaveClass("avp--docked");
+    });
+
+    it("closes: the lesson pauses and the player goes back to its place", () => {
+      render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" dockable />);
+      const video = loaded();
+      stage(false);
+      fireEvent.play(video);
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть мини-плеер" }));
+      expect(pause).toHaveBeenCalled();
+      fireEvent.pause(video);
+      expect(getRegion()).not.toHaveClass("avp--docked");
+    });
+
+    it("a rewatch plays where the learner is: docked, not scrolled to", () => {
+      const ref = createRef<AcademyVideoPlayerHandle>();
+      render(<AcademyVideoPlayer ref={ref} src="/lesson.mp4" title="Урок" dockable markers={MARKERS} />);
+      const video = loaded();
+      stage(false);
+      const scrollIntoView = vi.fn();
+      getRegion().scrollIntoView = scrollIntoView;
+
+      act(() => ref.current!.playFrom(115, { markerId: "q1" }));
+      expect(video.currentTime).toBe(115);
+      expect(play).toHaveBeenCalledOnce();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(getRegion()).toHaveClass("avp--docked");
+      expect(screen.getByRole("button", { name: "Вопрос 1 · ответ объясняют с 1:55" }).closest("li")).toHaveAttribute(
+        "data-active",
+        "true",
+      );
+    });
+
+    it("a player that cannot dock is brought into view instead", () => {
+      const ref = createRef<AcademyVideoPlayerHandle>();
+      render(<AcademyVideoPlayer ref={ref} src="/lesson.mp4" title="Урок" />);
+      const video = loaded();
+      const scrollIntoView = vi.fn();
+      getRegion().scrollIntoView = scrollIntoView;
+      act(() => ref.current!.playFrom(190));
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+      expect(video.currentTime).toBe(190);
+      expect(getRegion()).not.toHaveClass("avp--docked");
+    });
+  });
+
+  it("J and L step ten seconds like the arrows", () => {
+    render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+    const region = getRegion();
+    const video = loaded(100, 30);
+    fireEvent.keyDown(region, { key: "l" });
+    expect(video.currentTime).toBe(40);
+    fireEvent.keyDown(region, { key: "j" });
+    expect(video.currentTime).toBe(30);
   });
 });

@@ -22,6 +22,7 @@ function media(partial: Partial<AcademyLessonMedia> = {}): AcademyLessonMedia {
     poster: null,
     durationSeconds: 480,
     captions: [],
+    markers: [],
     ...partial,
   };
 }
@@ -101,6 +102,20 @@ describe("LessonMedia", () => {
     const executable = source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
     for (const handler of ["onEnded", "onPlay", "onPause", "onTimeUpdate", "onError"]) {
       expect(executable, `lesson media wires ${handler}`).not.toMatch(new RegExp(`${handler}\\s*=`));
+    }
+  });
+
+  it("keeps where the learner stopped through the reading-position command, and nothing else", () => {
+    /* Lesson hi-fi (DD-336): the player tells the page where the learner
+       stopped. The only thing that may hear it is the lesson-progress command —
+       the one that writes `UserLessonProgress` and refuses unless the level is
+       in progress. No completion, start or assessment client is reachable here. */
+    const source = fs.readFileSync(path.join(REPO_ROOT, "src/features/lesson-media/lesson-media.tsx"), "utf8");
+    const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+    expect(imports).toContain("@/lib/curriculum/lesson-progress-client");
+    expect(source).toMatch(/import \{ saveLessonReadingProgress \} from "@\/lib\/curriculum\/lesson-progress-client"/);
+    for (const forbidden of ["completion", "level-start", "assessment-client", "manual-completion", "report-client"]) {
+      expect(imports.filter((name) => name.includes(forbidden)), forbidden).toEqual([]);
     }
   });
 });

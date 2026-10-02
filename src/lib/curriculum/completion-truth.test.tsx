@@ -222,12 +222,19 @@ describe("one dictionary, three surfaces", () => {
   });
 
   it("binds all three consumers to the same helper", () => {
-    expect(src(DETAIL)).toContain("completionMethodLabel(summary.completionMethod)");
+    /* Lesson hi-fi (DD-336): the level page no longer prints the label in a
+       table; it reads the method as a fact under the title — from the SAME
+       module, through its second, learner-worded dictionary. */
+    expect(src(DETAIL)).toContain("completionMethodFact(summary.completionMethod)");
+    expect(src(DETAIL)).toMatch(/import \{[^}]*completionMethodFact[^}]*\} from "@\/lib\/curriculum\/completion-method"/);
     expect(src(API)).toContain("completionMethodLabel(summary.completionMethod)");
     expect(src(HOME)).toContain("completionMethodLabel(level.completionMethod)");
-    for (const f of [DETAIL, HOME, API]) {
+    for (const f of [HOME, API]) {
       expect(src(f)).toMatch(/import \{[^}]*completionMethodLabel[^}]*\} from "@\/lib\/curriculum\/completion-method"/);
     }
+    // The page restates neither vocabulary.
+    expect(src(DETAIL)).not.toContain("COMPLETION_METHOD_FACT");
+    expect(src(DETAIL)).not.toContain("тест после урока");
   });
 
   it("leaves no surface still rendering the type-derived label", () => {
@@ -240,46 +247,37 @@ describe("one dictionary, three surfaces", () => {
 });
 
 describe("XP is a secondary metric", () => {
+  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one quiet
+     fact in the line under the title — after the video's length and the
+     method, never leading, never lit. */
   const detail = src(DETAIL);
-  const meta = detail.slice(
-    detail.indexOf('<dl className="ax-lvlmeta">'),
-    detail.indexOf("</dl>", detail.indexOf('<dl className="ax-lvlmeta">')),
-  );
+  const factsAt = detail.indexOf("export function levelFacts");
+  const facts = detail.slice(factsAt, detail.indexOf("\n}\n", factsAt));
 
-  /** The XP note itself — not merely the first `.ax-lvlsec__note` in the file. */
-  const xpNote = (() => {
-    const at = detail.indexOf("Опыт за уровень");
-    expect(at, "the XP note is missing").toBeGreaterThan(-1);
-    const open = detail.lastIndexOf("<p ", at);
-    return detail.slice(open, detail.indexOf("</p>", at));
-  })();
-
-  it("is out of the row of equal leading parameters", () => {
-    expect(meta).not.toContain("Опыт за уровень");
-    expect(meta).not.toContain("xpReward");
-    // The condition that actually closes the level leads that row.
-    expect(meta).toContain("<dt>Способ завершения</dt>");
+  it("is out of any row of leading parameters: there is no such row", () => {
+    expect(factsAt, "levelFacts is missing").toBeGreaterThan(-1);
+    expect(detail).not.toContain('<dl className="ax-lvlmeta">');
+    // The method comes before it in the line.
+    expect(facts.indexOf("completionMethodFact(summary")).toBeLessThan(facts.indexOf("summary.xpReward > 0"));
   });
 
-  it("is still shown, in the section's own quiet note", () => {
-    expect(detail).toMatch(
-      /<p className="ax-lvlsec__note">\s*Опыт за уровень: \{summary\.xpReward > 0 \? `\+\$\{summary\.xpReward\} XP` : "—"\}/,
-    );
+  it("is still shown, as the server's value, only when there is any", () => {
+    expect(facts).toMatch(/if \(summary\.xpReward > 0\) facts\.push\(`\+\$\{summary\.xpReward\} XP`\);/);
   });
 
   it("keeps the server value and appears exactly once", () => {
-    // The file passes `xpReward` to LevelMentorReview as well, so a whole-file
-    // count would measure the wrong thing. What must appear once is the DISPLAYED
-    // value: one label, and one guard-plus-value inside the note that renders it.
-    expect((xpNote.match(/summary\.xpReward/g) ?? []).length).toBe(2);
-    expect(xpNote).toContain('className="ax-lvlsec__note"');
-    expect((detail.match(/Опыт за уровень/g) ?? []).length).toBe(1);
+    expect((detail.match(/ XP`/g) ?? []).length).toBe(1);
     // Never a literal: the number belongs to Backend.
     expect(detail).not.toMatch(/\+500 XP/);
     expect(detail).not.toMatch(/xpReward\s*=\s*\d/);
   });
 
   it("carries no Signal, frame, icon or animation", () => {
-    expect(xpNote).not.toMatch(/signal|frame|icon|anim/i);
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    const at = css.indexOf(".ld.ld--hifi .ld-fact {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).not.toMatch(/signal|border|anim|icon/i);
   });
 });
+
