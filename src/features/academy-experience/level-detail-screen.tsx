@@ -522,7 +522,15 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             isExternal: summary.typeInfo.isExternal,
             state: summary.state,
           })
-            ? task(<PocketRegistrationConfirmed nextLevelCode={navigation.nextLevelCode} />, "pocket-ok")
+            ? task(
+                <PocketRegistrationConfirmed
+                  /* The completion moment above already offers the way onward;
+                     the confirmation keeps its sentence and drops the second
+                     button to the same place. */
+                  nextLevelCode={summary.state === "completed" && enrolled && nextAction ? null : navigation.nextLevelCode}
+                />,
+                "pocket-ok",
+              )
             : null}
 
           {isCheckpoint && summary.checkpoint
