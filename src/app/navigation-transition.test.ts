@@ -418,8 +418,11 @@ describe("the authenticated route group", () => {
          least informative reason. */
       /* The root layout is no longer frozen here: the owner's Back-button bug
          of 2026-10-02 is fixed by one component mounted in it, which renders
-         nothing (see the list above). `<html lang>`, the body's classes, the
-         metadata and the viewport did not move. */
+         nothing (see the list above), and root-layout.test.ts governs the file
+         in detail — the document's language, the body's classes, the one thing
+         beside the page, the imports, the metadata and the viewport. Freezing
+         it in two places would mean the looser of the two fails first, for the
+         least informative reason. */
       "src/features/support", "src/components/shell",
       "src/config/feature-visibility.ts",
     ]) {
