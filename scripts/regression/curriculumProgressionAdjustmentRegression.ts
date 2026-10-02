@@ -307,6 +307,7 @@ async function main() {
       "lesson:lesson",
       "lesson:manual",
       "mentor_review:mentor_review",
+      "report:formal_check",
       "report:report_approval",
     ]);
     assert.equal(pairs.isAdminCorrectablePair("financial_checkpoint", "balance_check"), false);
