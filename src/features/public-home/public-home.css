@@ -765,14 +765,32 @@ html.ph-smooth-scroll {
   column-gap: var(--loop-gap);
 }
 
-/* The line, from the centre of the first node to the centre of the last. */
+/* The line, from the centre of the first node to the centre of the last.
+ *
+ * ONE ELEMENT, AND THE FIRST ONE (owner, 2026-10-02: «полоска всё равно
+ * перегораживает цифры»). The drawn, Signal part used to be the list's `::after`
+ * — its LAST child. Every step is revealed with a transform that stays on it at
+ * rest (`translateY(0)`), so every step is a stacking context of its own: the
+ * node's `z-index` counts only inside its step, and a line that comes after the
+ * steps in the tree is painted over all of them — through «01», «02» and the
+ * rest. It could not be seen on the node's fill, which is the line's own colour,
+ * only on the digits and on the ring; the first pass of this fix read the frame
+ * at a size where that did not show.
+ *
+ * Both parts are now this one first-child pseudo-element — the faint line, and
+ * over it the drawn part as a background that grows — so the line is painted
+ * before the steps whatever they are. Nothing about it is transformed: a
+ * transformed line is a layer of its own, and layers are where order is lost.
+ */
 .ph .learning-loop::before {
   position: absolute;
   top: calc(var(--loop-node) / 2 - 1px);
   right: calc((100% - 5 * var(--loop-gap)) / 12);
   left: calc((100% - 5 * var(--loop-gap)) / 12);
   height: 2px;
-  background: var(--line-dark);
+  background:
+    linear-gradient(var(--signal-400), var(--signal-400)) left center / 0% 100% no-repeat,
+    var(--line-dark);
   content: "";
 }
 
@@ -1153,8 +1171,7 @@ html.ph-smooth-scroll {
     row-gap: 56px;
   }
 
-  .ph .learning-loop::before,
-.ph .learning-loop::after {
+  .ph .learning-loop::before {
     display: none;
   }
 
@@ -3892,23 +3909,22 @@ html.ph-smooth-scroll {
 
 /* --- the cycle (#mechanism) -------------------------------------------- */
 
-/* The Signal line is drawn over the faint one, from the first node to the
-   last, and the six nodes light in order as it reaches them. ≈ 850ms. It lies
-   under the nodes, like the faint line it covers. */
-.ph .learning-loop::after {
-  position: absolute;
-  top: calc(var(--loop-node) / 2 - 1px);
-  right: calc((100% - 5 * var(--loop-gap)) / 12);
-  left: calc((100% - 5 * var(--loop-gap)) / 12);
-  height: 2px;
-  background: var(--signal-400);
-  transform: scaleX(0);
-  transform-origin: left center;
-  content: "";
+/* The Signal part of the line grows over the faint one, from the first node to
+   the last, and the six nodes light in order as it reaches them. ≈ 850ms. It
+   is the same first-child element as the faint line (see the cycle's rules), so
+   it lies under the nodes at every moment of the drawing. */
+@keyframes ph-line-grow {
+  from {
+    background-size: 0% 100%;
+  }
+
+  to {
+    background-size: 100% 100%;
+  }
 }
 
-.ph .learning-loop.is-visible::after {
-  animation: ph-draw-x 760ms var(--ease) 80ms both;
+.ph .learning-loop.is-visible::before {
+  animation: ph-line-grow 760ms var(--ease) 80ms both;
 }
 
 .ph .learning-loop.is-visible > li > span {
@@ -4273,12 +4289,15 @@ html.ph-smooth-scroll {
    top edge, lit as far as the state the window is showing. */
 .ph .review .evidence-track > li {
   position: relative;
+  /* The card's light lies between its ground and its words (see `::after`). */
+  isolation: isolate;
   padding: 24px 20px 20px;
   transition:
     opacity 240ms var(--ease),
     transform 240ms var(--ease),
     background-color 240ms var(--ease);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ph .review .evidence-track > li::before {
@@ -4289,7 +4308,9 @@ html.ph-smooth-scroll {
   height: 2px;
   background: transparent;
   content: "";
-  transition: background-color 240ms var(--ease);
+  transition:
+    background-color 240ms var(--ease),
+    box-shadow 240ms var(--ease);
 }
 
 .ph .review .evidence-track > li.is-reached::before {
@@ -4298,21 +4319,111 @@ html.ph-smooth-scroll {
 
 .ph .review .evidence-track > li.is-active::before {
   background: var(--signal-400);
+  box-shadow: 0 0 14px rgba(199, 247, 109, 0.55);
 }
 
 .ph .review .evidence-track > li.is-active {
   background: var(--ink-900);
 }
 
-/* The whole card answers the pointer as the title does; the object inside
-   the card is content, so the pointer over it is the reading pointer. */
-.ph .review .evidence-track > li:hover:not(:has(.evidence__object:hover)) .evidence__button {
-  color: var(--signal-300);
+/*
+ * THE CARDS SAY THEY CAN BE PRESSED (owner, 2026-10-02: «дать понять, что можно
+ * переключать блоки, небольшими подсвечиваниями»).
+ *
+ * One light, in four strengths: a wash of Signal that falls from the card's
+ * rail and is gone 140px down, inside a hairline of the same light. It is lit
+ * on the card on show; it comes up under
+ * the pointer and under the keyboard's focus; it is full for the moment of a
+ * press; and once — when the window's sequence has played to its end — it
+ * passes over the three cards that are not on show, one after another. No card
+ * moves and nothing is added to it: the same rail, lit further.
+ *
+ * The whole card is the target now, its object included, so the pointer is the
+ * pressing one everywhere on it.
+ */
+.ph .review .evidence-track > li::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(199, 247, 109, 0.17) 0,
+    rgba(199, 247, 109, 0.055) 56px,
+    rgba(199, 247, 109, 0) 140px
+  );
+  box-shadow: inset 0 0 0 1px rgba(199, 247, 109, 0.2);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease);
 }
 
-.ph .review .evidence__object {
-  cursor: auto;
+.ph .review .evidence-track > li.is-active::after {
+  opacity: 1;
 }
+
+.ph .review .evidence-track > li:focus-within::after {
+  opacity: 0.8;
+}
+
+/* Only where there is a pointer to hover with: on a touch screen a «hover»
+   sticks to the last card that was tapped. */
+@media (hover: hover) {
+  .ph .review .evidence-track > li:hover::after {
+    opacity: 0.8;
+  }
+
+  .ph .review .evidence-track > li:hover:not(.is-active)::before {
+    background: rgba(199, 247, 109, 0.78);
+  }
+
+  .ph .review .evidence-track > li:hover .evidence__button {
+    color: var(--signal-300);
+  }
+}
+
+.ph .review .evidence-track > li.is-active:hover::after,
+.ph .review .evidence-track > li:active::after {
+  opacity: 1;
+}
+
+/* The one hint: the three cards not on show, lit in order, once. */
+@keyframes ph-card-hint {
+  0% {
+    opacity: 0;
+  }
+
+  45% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* …and its rail with it: to full Signal and back to where it was. */
+@keyframes ph-rail-hint {
+  45% {
+    background: var(--signal-400);
+  }
+}
+
+.ph .review .evidence-track[data-hint] > li:not(.is-active)::after {
+  animation: ph-card-hint 420ms var(--ease) both;
+}
+
+.ph .review .evidence-track[data-hint] > li:not(.is-active)::before {
+  animation: ph-rail-hint 420ms var(--ease) both;
+}
+
+.ph .review .evidence-track[data-hint] > li:nth-child(2)::before { animation-delay: 120ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(3)::before { animation-delay: 240ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(4)::before { animation-delay: 360ms; }
+
+.ph .review .evidence-track[data-hint] > li:nth-child(2)::after { animation-delay: 120ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(3)::after { animation-delay: 240ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(4)::after { animation-delay: 360ms; }
 
 .ph .review .evidence-track h3 {
   margin-bottom: 12px;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
@@ -385,7 +385,7 @@ describe("Public Home — signature evidence", () => {
     expect(buttons[3]!.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("switches the window from anywhere on a card except the object inside it", async () => {
+  it("switches the window from anywhere on a card, its object included", async () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const review = container.querySelector("#review") as HTMLElement;
     const window = review.querySelector("#review-window") as HTMLElement;
@@ -398,16 +398,36 @@ describe("Public Home — signature evidence", () => {
     expect(window.getAttribute("data-stage")).toBe("feedback");
     await userEvent.click(cards[3]!);
     expect(window.getAttribute("data-stage")).toBe("accepted");
-    // The object inside a card is content, not a control.
+    // The object inside a card is the largest thing on it: a press there is a
+    // press on the card (until 2026-10-02 it did nothing — a dead middle in a
+    // card that lights up under the pointer).
     await userEvent.click(cards[0]!.querySelector(".evidence__object") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
-    await userEvent.click(cards[0]!.querySelector(".evidence__object .dframe__value") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
+    expect(window.getAttribute("data-stage")).toBe("v1");
+    await userEvent.click(cards[2]!.querySelector(".evidence__object .dframe__value") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("v2");
     await userEvent.click(cards[1]!.querySelector(".evidence__verdict") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
+    expect(window.getAttribute("data-stage")).toBe("feedback");
     // The button still carries the state for the keyboard and assistive tech.
     const pressed = Array.from(review.querySelectorAll(".evidence__button")).map((b) => b.getAttribute("aria-pressed"));
-    expect(pressed).toEqual(["false", "false", "false", "true"]);
+    expect(pressed).toEqual(["false", "true", "false", "false"]);
+  });
+
+  it("does not take a drag that selected the card's text for a press", async () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    const stage = () => (review.querySelector("#review-window") as HTMLElement).getAttribute("data-stage");
+    const cards = Array.from(review.querySelectorAll(".evidence-track > li")) as HTMLElement[];
+    const text = cards[2]!.querySelector(".evidence__object .dframe__value") as HTMLElement;
+    const selection = globalThis.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.click(text);
+    expect(stage()).toBe("v1");
+    selection.removeAllRanges();
+    fireEvent.click(text);
+    expect(stage()).toBe("v2");
   });
 
   it("stops the Decision Frame after the evidence", () => {
@@ -677,7 +697,7 @@ describe("Public Home — stylesheet holds its contract", () => {
     // The three sequences ride `is-visible`, run with `both`, and nothing loops.
     for (const trigger of [
       ".ph .reframe.is-visible .source-cloud span",
-      ".ph .learning-loop.is-visible::after",
+      ".ph .learning-loop.is-visible::before",
       '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
     ]) {
       expect(css, `${trigger} must be a sequence`).toContain(trigger);
@@ -773,18 +793,34 @@ describe("Public Home — the owner's review of 2026-10-01", () => {
       expect(Number(/font-size:\s*([\d.]+)px/.exec(node ?? "")?.[1])).toBeGreaterThanOrEqual(13);
       expect(node).toMatch(/z-index:\s*1/);
       expect(node).toMatch(/background:\s*var\(--ink-950\)/);
-      // Node centre to node centre, not edge to edge — the faint line and the drawn one alike.
-      for (const pseudo of ["before", "after"]) {
-        expect(rules, `::${pseudo}`).toMatch(
-          new RegExp(`\\.ph \\.learning-loop::${pseudo} \\{[^}]*left:\\s*calc\\(\\(100% - 5 \\* var\\(--loop-gap\\)\\) / 12\\)`),
-        );
-      }
+      // Node centre to node centre, not edge to edge.
+      expect(rules).toMatch(/\.ph \.learning-loop::before \{[^}]*left:\s*calc\(\(100% - 5 \* var\(--loop-gap\)\) \/ 12\)/);
+    });
+
+    it("draws the whole line — faint and Signal — in ONE first-child element, so no number is ever crossed", () => {
+      // Owner, 2026-10-02: «полоска всё равно перегораживает цифры». Every step
+      // carries `data-reveal`, whose resting state keeps a transform on it…
+      expect(rule(".ph.has-js [data-reveal].is-visible")).toMatch(/transform:\s*translateY\(0\)/);
+      // …so every step is a stacking context, its node's z-index counts only
+      // inside it, and anything that FOLLOWS the steps in the tree is painted
+      // over them. The line may therefore never be the list's last child:
+      expect(rules).not.toMatch(/\.learning-loop(\.is-visible)?::after/);
+      // both parts are the first child, the drawn one a background layer over the faint one,
+      const line = rule(".ph .learning-loop::before");
+      expect(line).toMatch(/linear-gradient\(var\(--signal-400\), var\(--signal-400\)\)[^,;]*0% 100%[^,;]*,\s*var\(--line-dark\)/);
+      // and it is drawn by growing that layer — never by a transform, which
+      // would make the line a layer of its own.
+      expect(line).not.toMatch(/transform/);
+      expect(rules).toMatch(/@keyframes ph-line-grow \{\s*from \{\s*background-size:\s*0% 100%;\s*\}\s*to \{\s*background-size:\s*100% 100%;/);
+      expect(rule(".ph .learning-loop.is-visible::before")).toMatch(/animation:\s*ph-line-grow 760ms var\(--ease\) 80ms both/);
+      // The route's line was fixed the same way on 2026-10-01.
+      expect(rules).not.toMatch(/\.route__steps::after/);
     });
 
     it("goes to three columns at its own step, and to one column without a line through the words", () => {
       const three = /@media \(max-width: 1340px\) \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
       expect(three).toMatch(/\.ph \.learning-loop \{[^}]*repeat\(3,/);
-      expect(three).toMatch(/\.ph \.learning-loop::before,\s*\.ph \.learning-loop::after \{[^}]*display:\s*none/);
+      expect(three).toMatch(/\.ph \.learning-loop::before \{[^}]*display:\s*none/);
       // On a phone the line used to run down the left edge at 11px, through
       // the first letters of every paragraph.
       expect(rules).not.toMatch(/\.learning-loop::after \{[^}]*left:\s*11px/);
@@ -811,3 +847,68 @@ describe("Public Home — no way to the news", () => {
     expect(hrefs.filter((href) => href === "/news" || href.startsWith("/news/") || href.startsWith("/news?"))).toEqual([]);
   });
 });
+
+describe("Public Home — the owner's review of 2026-10-02", () => {
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(rules)?.[1] ?? null;
+  };
+
+  describe("the strip's cards say they can be pressed", () => {
+    it("lights a card from its rail down, under its words and never over them", () => {
+      const card = rule(".ph .review .evidence-track > li");
+      expect(card).toMatch(/isolation:\s*isolate/);
+      expect(card).toMatch(/cursor:\s*pointer/);
+      const light = rule(".ph .review .evidence-track > li::after");
+      expect(light).toMatch(/z-index:\s*-1/);
+      expect(light).toMatch(/linear-gradient\(\s*180deg,\s*rgba\(199, 247, 109, 0\.17\) 0,[\s\S]*rgba\(199, 247, 109, 0\) 140px\s*\)/);
+      // A hairline of the same light, so the lit card has an edge, not only a glow.
+      expect(light).toMatch(/box-shadow:\s*inset 0 0 0 1px rgba\(199, 247, 109, 0\.2\)/);
+      expect(light).toMatch(/opacity:\s*0;/);
+      // The light never takes a press meant for the card.
+      expect(light).toMatch(/pointer-events:\s*none/);
+    });
+
+    it("keeps the card on show lit, and lights the others under the pointer, the focus and a press", () => {
+      expect(rule(".ph .review .evidence-track > li.is-active::after")).toMatch(/opacity:\s*1/);
+      expect(rule(".ph .review .evidence-track > li:focus-within::after")).toMatch(/opacity:\s*0\.8/);
+      // Hover only where there is a pointer to hover with: on a touch screen it
+      // would stick to the last card that was tapped.
+      const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(hover).toMatch(/\.ph \.review \.evidence-track > li:hover::after \{[^}]*opacity:\s*0\.8/);
+      expect(hover).toMatch(/\.ph \.review \.evidence-track > li:hover:not\(\.is-active\)::before \{[^}]*rgba\(199, 247, 109, 0\.78\)/);
+      expect(rules.replace(hover, "")).not.toMatch(/evidence-track > li:hover::after/);
+      expect(rules).toMatch(/\.ph \.review \.evidence-track > li:active::after \{[^}]*opacity:\s*1/);
+      // The rail of the card on show glows; the others' rails only brighten.
+      expect(rule(".ph .review .evidence-track > li.is-active::before")).toMatch(/box-shadow:\s*0 0 14px rgba\(199, 247, 109, 0\.55\)/);
+    });
+
+    it("has no dead middle: the object inside a card is pressed like the rest of it", () => {
+      // It used to carry the reading pointer and to swallow the press.
+      expect(rules).not.toMatch(/\.ph \.review \.evidence__object \{[^}]*cursor:\s*auto/);
+      expect(rules).not.toMatch(/:has\(\.evidence__object:hover\)/);
+    });
+
+    it("hints once, on the three cards not on show, inside the page's motion limits", () => {
+      expect(rule(".ph .review .evidence-track[data-hint] > li:not(.is-active)::after")).toMatch(
+        /animation:\s*ph-card-hint 420ms var\(--ease\) both/,
+      );
+      // The rail flashes with the light, in the same order.
+      expect(rule(".ph .review .evidence-track[data-hint] > li:not(.is-active)::before")).toMatch(
+        /animation:\s*ph-rail-hint 420ms var\(--ease\) both/,
+      );
+      for (const pseudo of ["after", "before"]) {
+        const delays = Array.from(
+          rules.matchAll(new RegExp(`evidence-track\\[data-hint\\] > li:nth-child\\(\\d\\)::${pseudo} \\{ animation-delay: (\\d+)ms; \\}`, "g")),
+        ).map((m) => Number(m[1]));
+        expect(delays, pseudo).toEqual([120, 240, 360]);
+      }
+      // It begins and ends dark: nothing stays lit that is not on show.
+      const frames = /@keyframes ph-card-hint \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(frames).toMatch(/0% \{\s*opacity:\s*0;/);
+      expect(frames).toMatch(/100% \{\s*opacity:\s*0;/);
+    });
+  });
+});
+

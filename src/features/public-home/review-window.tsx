@@ -39,15 +39,26 @@ import {
  * control. Without a script the window shows the first state and the strip
  * reads as it always did.
  *
- * THE CARD IS THE TARGET. The button in the title is the control — focusable,
- * `aria-pressed`, the keyboard's way in — but a pointer may land anywhere on
- * the card: the note, the empty surface. Only the object inside
- * the card (the field, the criterion, the accepted note) is content, not a
- * control: it is there to be read, and a click on it changes nothing. A drag
- * that selected text is not a click either.
+ * THE CARD IS THE TARGET — ALL OF IT. The button in the title is the control —
+ * focusable, `aria-pressed`, the keyboard's way in — and a pointer may land
+ * anywhere on the card: the title, the object, the note, the empty surface.
+ * (Until 2026-10-02 the object inside the card was left out as «content»; it is
+ * the largest thing on the card, so the card lit up under the pointer and then
+ * did nothing in its middle.) A drag that selected text is not a press.
+ *
+ * THE CARDS SAY THEY CAN BE PRESSED (owner, 2026-10-02: «дать понять, что
+ * можно переключать блоки, небольшими подсвечиваниями»). A card under the
+ * pointer or the focus lights from its rail down; the card on show stays lit;
+ * a press answers at once. And once, when the sequence has played to its end,
+ * the three cards that are not on show light one after another — the strip
+ * saying, without a word, that it goes back as well as forward.
  */
 
 const HOLD_MS = 1500;
+/** After the last state has settled in the window, the strip gives its one hint. */
+const HINT_AFTER_MS = 700;
+/** Three cards, 420ms each, 120ms apart — and then the mark comes off. */
+const HINT_MS = 900;
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
 /** The five entries of the real assignment, the third the one under review. */
@@ -61,6 +72,8 @@ const ENTRIES = [
 
 export function ReviewWindow() {
   const [stage, setStage] = useState<ReviewStageId>("v1");
+  /** True for the one moment after the sequence in which the strip hints that it can be pressed. */
+  const [hinting, setHinting] = useState(false);
   const windowRef = useRef<HTMLDivElement | null>(null);
   const playedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
@@ -86,6 +99,10 @@ export function ReviewWindow() {
         order.forEach((id, i) => {
           timersRef.current.push(window.setTimeout(() => setStage(id), HOLD_MS * (i + 1)));
         });
+        // The sequence has played to its end: the strip hints, once, and lets go.
+        const end = HOLD_MS * order.length + HINT_AFTER_MS;
+        timersRef.current.push(window.setTimeout(() => setHinting(true), end));
+        timersRef.current.push(window.setTimeout(() => setHinting(false), end + HINT_MS));
       },
       { threshold: 0.3 },
     );
@@ -100,6 +117,7 @@ export function ReviewWindow() {
     (id: ReviewStageId) => {
       playedRef.current = true;
       stop();
+      setHinting(false);
       setStage(id);
     },
     [stop],
@@ -108,8 +126,8 @@ export function ReviewWindow() {
   const chooseFromCard = useCallback(
     (event: MouseEvent<HTMLLIElement>, id: ReviewStageId) => {
       const target = event.target as HTMLElement;
-      // The button handles itself; the object inside the card is not a control.
-      if (target.closest(".evidence__button") || target.closest(".evidence__object")) return;
+      // The button handles itself; everything else on the card is the card.
+      if (target.closest(".evidence__button")) return;
       if (window.getSelection()?.toString()) return;
       choose(id);
     },
@@ -231,7 +249,13 @@ export function ReviewWindow() {
       </div>
 
       {/* ---------------------------------------------------------- the strip */}
-      <ol className="evidence-track" data-evidence aria-label="Цикл проверки практической работы" data-reveal>
+      <ol
+        className="evidence-track"
+        data-evidence
+        data-hint={hinting ? "" : undefined}
+        aria-label="Цикл проверки практической работы"
+        data-reveal
+      >
         {REVIEW_STAGES.map((item, index) => (
           <li
             key={item.id}
