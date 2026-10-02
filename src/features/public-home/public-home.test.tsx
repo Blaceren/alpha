@@ -855,6 +855,39 @@ describe("Public Home — the owner's review of 2026-10-02", () => {
     return new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(rules)?.[1] ?? null;
   };
 
+  describe("a line is behind what it connects — everywhere on the page", () => {
+    /*
+     * The same defect was found three times: in the route (2026-10-01), in the
+     * cycle (2026-10-02, by the owner) and in the product window's path
+     * (2026-10-02, by a hit-test sweep of the whole page). Each time the drawn
+     * part of a line was its holder's LAST child, and each node of the holder
+     * keeps a transform at rest — a stacking context — so the last child was
+     * painted over every node. The rule is therefore held for every holder of
+     * nodes on the page, not for the one last complained about.
+     */
+    it("draws no line as the last child of anything that holds nodes", () => {
+      for (const holder of ["route__steps", "learning-loop", "pw-path__nodes", "cyc__path"]) {
+        expect(rules, holder).toMatch(new RegExp(`\\.${holder}::before \\{`));
+        expect(rules, holder).not.toMatch(new RegExp(`\\.${holder}(\\.[\\w-]+)*::after`));
+      }
+    });
+
+    it("draws the walked part of the window's path as a layer of its first child", () => {
+      const line = rule(".ph .pw-path__nodes::before");
+      // Faint from the first node to the fifth; Signal over the first half of it — to the third, the current one.
+      expect(line).toMatch(
+        /linear-gradient\(var\(--pw-signal-700\), var\(--pw-signal-700\)\) left center \/ 50% 100% no-repeat,\s*var\(--pw-line-2\)/,
+      );
+      expect(line).toMatch(/animation:\s*pw-line-draw 600ms var\(--ease\) 200ms both/);
+      // Grown by its size — a transform would make the line a layer of its own.
+      expect(line).not.toMatch(/transform/);
+      expect(rules).toMatch(/@keyframes pw-line-draw \{\s*from \{\s*background-size:\s*0% 100%;\s*\}\s*\}/);
+      // Why the order matters: a node keeps the last frame of its entrance, and that frame has a transform.
+      expect(rule(".ph .pw-node")).toMatch(/animation:\s*pw-in 320ms var\(--ease\) both/);
+      expect(rules).toMatch(/@keyframes pw-in \{[\s\S]*?to \{[^}]*transform:\s*translateY\(0\)/);
+    });
+  });
+
   describe("the strip's cards say they can be pressed", () => {
     it("lights a card from its rail down, under its words and never over them", () => {
       const card = rule(".ph .review .evidence-track > li");

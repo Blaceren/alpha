@@ -2688,27 +2688,39 @@ html.ph-smooth-scroll {
   grid-template-columns: repeat(5, 1fr);
 }
 
+/*
+ * THE MODULE'S LINE AND THE PART ALREADY WALKED ARE ONE ELEMENT, PAINTED BEFORE
+ * THE NODES (owner, 2026-10-01 and again 2026-10-02: a line must be BEHIND what
+ * it connects — «тут и дальше по анимации»).
+ *
+ * The walked part used to be `::after`, the list's last child. Every node
+ * arrives with `pw-in` and keeps its last frame — `transform: translateY(0)`,
+ * which is not «none» — so each node is a stacking context of its own, its
+ * `z-index` counts only inside it, and the last child was painted over all of
+ * them: a cut through the ticks of L1 and L2, a dark band into the current
+ * node. Found by sweeping the page with a hit test, not by eye — the line and
+ * a passed node are the same colour.
+ *
+ * So the walked part is a background layer of the first child, grown by its
+ * size: from the first node's centre to the third's is half of the line.
+ */
 .ph .pw-path__nodes::before {
   position: absolute;
   top: 11px;
   right: 10%;
   left: 10%;
   height: 2px;
-  background: var(--pw-line-2);
+  background:
+    linear-gradient(var(--pw-signal-700), var(--pw-signal-700)) left center / 50% 100% no-repeat,
+    var(--pw-line-2);
+  animation: pw-line-draw 600ms var(--ease) 200ms both;
   content: "";
 }
 
-.ph .pw-path__nodes::after {
-  position: absolute;
-  top: 11px;
-  left: 10%;
-  width: 40%;
-  height: 2px;
-  background: var(--pw-signal-700);
-  transform-origin: left;
-  animation: pw-fill 600ms var(--ease) both;
-  animation-delay: 200ms;
-  content: "";
+@keyframes pw-line-draw {
+  from {
+    background-size: 0% 100%;
+  }
 }
 
 .ph .pw-node {
