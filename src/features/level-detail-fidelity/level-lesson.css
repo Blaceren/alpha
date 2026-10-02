@@ -31,6 +31,20 @@
 .ld .ax-lvlsec[data-section="lesson"] .lesson-media { margin: 0; }
 .ld .ax-lvlsec[data-section="unlocks"] { max-width: var(--ld-task-measure); }
 
+/* ------------------------------------------------------------ state line -- */
+
+/* The line under the header is a dot and a sentence on one row. With a long
+   sentence the row used to wrap at the paragraph — the whole sentence dropped
+   below a dot left alone on its own line (measured at 390 on a level in
+   production). The sentence now takes the rest of the row and wraps inside it;
+   the dot stays beside its first line. */
+.ld .ax-statestrip { flex-wrap: nowrap; }
+.ld .ax-statestrip__text { flex: 1 1 0; min-width: 0; }
+/* On the first line's middle, not the paragraph's: 14px text at 1.55 is a
+   21.7px line, and the dot is 4px. */
+.ld .ax-statestrip__dot,
+.ld .ax-statestrip[data-posture] .ax-statestrip__dot { align-self: flex-start; margin-top: 9px; }
+
 /* ----------------------------------------------- a level not open yet ----- */
 
 /* The page of a level in production is its title, one line and the way back.

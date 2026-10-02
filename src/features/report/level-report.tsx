@@ -377,8 +377,18 @@ export function LevelReport({ stableCode, locale, nextLevelCode, acceptance, nex
             </p>
           ) : null}
 
-          {model.groups.map((group) => {
+          {model.groups.map((group, index) => {
             const active = isGroupActive(group, state.values);
+            /* ONE «ДОБАВИТЬ» AT A TIME. Of the optional records that are off,
+               only the first of its kind is offered; the next appears once that
+               one is added. Two identical buttons for «отказ 2» and «отказ 3»
+               asked the learner to choose between two things that are the same.
+               A record that is ON is always shown, whatever came before it, so a
+               draft saved in any order still opens whole. */
+            const earlierOff = model.groups
+              .slice(0, index)
+              .some((other) => other.kind === group.kind && other.switchField !== null && !isGroupActive(other, state.values));
+            if (!active && earlierOff) return null;
             if (!active) {
               /* An optional record the learner has not asked for: one control,
                  no empty inputs. It is not a fieldset — there are no fields. */

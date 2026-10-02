@@ -343,7 +343,30 @@ describe("a report the platform accepts by itself", () => {
 /* ---------------------------------------------------------------- the form */
 
 describe("LevelReport — records on the page", () => {
-  it("shows five trades and one refusal as records, and the two optional ones as a single control each", async () => {
+  it("offers one «Добавить» at a time: the next optional record appears once the previous is added", async () => {
+    fetchMock.mockResolvedValue(ok(context("available", null)));
+    const user = userEvent.setup();
+    const { container } = render(<LevelReport {...props} />);
+    await screen.findByText("Отчёт: первые пять demo-сделок");
+    expect(screen.getAllByRole("button", { name: "Добавить запись отказа" })).toHaveLength(1);
+    expect(container.querySelector('[data-group="refusal-3"]')).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Добавить запись отказа" }));
+    expect(container.querySelector('[data-group="refusal-2"]')?.getAttribute("data-active")).toBe("true");
+    expect(container.querySelector('[data-group="refusal-3"]')?.getAttribute("data-active")).toBe("false");
+    expect(screen.getAllByRole("button", { name: "Добавить запись отказа" })).toHaveLength(1);
+  });
+
+  it("a draft saved with only the third refusal still opens with that refusal", async () => {
+    const values = complete({ "refusal3-added": true, "refusal3-asset": "USD/JPY" });
+    fetchMock.mockResolvedValue(ok(context("draft", submission({ fieldValues: values }))));
+    const { container } = render(<LevelReport {...props} />);
+    await screen.findByText("Отчёт: первые пять demo-сделок");
+    expect(container.querySelector('[data-group="refusal-3"]')?.getAttribute("data-active")).toBe("true");
+    expect(container.querySelector('[data-group="refusal-2"]')?.getAttribute("data-active")).toBe("false");
+  });
+
+  it("shows five trades and one refusal as records, and the next optional one as a single control", async () => {
     fetchMock.mockResolvedValue(ok(context("available", null)));
     const { container } = render(<LevelReport {...props} />);
     await screen.findByText("Отчёт: первые пять demo-сделок");
@@ -353,11 +376,11 @@ describe("LevelReport — records on the page", () => {
     ]);
     expect(groups).toEqual([
       ["trade-1", "true"], ["trade-2", "true"], ["trade-3", "true"], ["trade-4", "true"], ["trade-5", "true"],
-      ["refusal-1", "true"], ["refusal-2", "false"], ["refusal-3", "false"],
+      ["refusal-1", "true"], ["refusal-2", "false"],
     ]);
     // 55 fields are on the page; the ten of the optional records are not.
     expect(container.querySelectorAll("[data-field]")).toHaveLength(55);
-    expect(screen.getAllByRole("button", { name: "Добавить запись отказа" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Добавить запись отказа" })).toHaveLength(1);
     // The switch is never rendered as a «Да / Нет» question.
     expect(container.querySelector('[data-field="refusal2-added"]')).toBeNull();
     expect(screen.queryByText("Добавить ещё одну запись отказа")).toBeNull();

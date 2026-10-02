@@ -733,8 +733,22 @@
 }
 
 @media (max-width: 620px) {
+  /* ON A PHONE THE FRAME IS ABOUT 200PX TALL. Three round buttons across its
+     middle and the control bar across its lower half met in the same place:
+     measured at 390px, the bar's top edge ran through the centre buttons and
+     the picture behind them was gone. The bar already carries −10 / play / +10,
+     so the centre keeps the one large play target and gives the other two up,
+     and it sits in the middle of what the bar leaves free rather than in the
+     middle of the whole frame. 92px is the bar: its 8px inset, 44px row, 20px
+     timeline, padding and gap. In fullscreen the same sum puts the button a
+     little above the middle, which is where a thumb expects it. */
   .avp__center {
-    gap: clamp(16px, 9vw, 40px);
+    top: calc((100% - 92px) / 2);
+    gap: 0;
+  }
+
+  .avp__center-btn--skip {
+    display: none;
   }
 
   .avp__controls {
