@@ -243,3 +243,19 @@ product objects, not six identical cards).
 - The anti-generic review passes on both surfaces.
 - Ready for the owner's review before release to PREPROD. Order: Backend first (it reads both the
   old and the new name of the whole-entry change), then Academy. No migration.
+
+## Released to PREPROD — 2026-10-02
+
+Owner: «на пред прод то, что сделали, выкатывай». Backend `c5694d7` (BUILD_ID
+`Uu3_jYtj6n5mbnYZEqirJ`) at 05:28Z, then Academy `4e06ef3` (BUILD_ID `TEMRp9HPHXj-M6gLbESJO`) at
+05:30Z, after a database backup. Between the two cutovers the released Academy ran against the new
+Backend without a fault.
+
+On the live host: the three home blocks re-photographed at the same six widths — no badges, the
+line under the nodes, the cycle centred, no console errors, no overflow, still `noindex`. The delete
+route answers 401 without a session, 400 to a body, a query or a hostile id, 405 to any other
+method. The served build carries the new journal screen and no longer carries the rule that kept a
+card's entry from being changed. Service and nginx logs are clean.
+
+**Not verified on PREPROD:** the journal itself under a learner — sign-in is CAPTCHA-gated and an
+agent cannot mint a session. The same commits passed the 13 end-to-end checks on the stand.
