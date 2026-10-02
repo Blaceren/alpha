@@ -362,6 +362,14 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/model/numeric-input.ts",
   "src/features/tool-windows/model/time-input.ts",
   "src/test/turnstile-double.ts",
+  /* The owner's bug of 2026-10-02: after an in-page link (`/#review`) and a
+     way out («Войти»), Back changed the address and left the screen where it
+     was. The browser's entry for an in-page link carries no state and the
+     router ignores it. One component that draws nothing hands such entries to
+     the router; it stands in the root layout because every page can be the one
+     the link is on, or the one Back is pressed from. */
+  "src/app/layout.tsx",
+  "src/components/navigation/history-entry-sync.tsx",
 ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -408,8 +416,12 @@ describe("the authenticated route group", () => {
          `next` contract and the submit endpoints are pinned there. Freezing it
          in two places would mean the looser of the two fails first, for the
          least informative reason. */
+      /* The root layout is no longer frozen here: the owner's Back-button bug
+         of 2026-10-02 is fixed by one component mounted in it, which renders
+         nothing (see the list above). `<html lang>`, the body's classes, the
+         metadata and the viewport did not move. */
       "src/features/support", "src/components/shell",
-      "src/config/feature-visibility.ts", "src/app/layout.tsx",
+      "src/config/feature-visibility.ts",
     ]) {
       expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);
     }

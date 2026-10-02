@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import { HistoryEntrySync } from "@/components/navigation/history-entry-sync";
 /*
  * Brand faces are bound locally in src/styles/fonts.css over woff2 files
  * vendored under public/fonts/ata/ from the accepted design authority. They
@@ -65,7 +67,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="font-ui text-ink antialiased">{children}</body>
+      <body className="font-ui text-ink antialiased">
+        {/*
+          ONE THING BESIDE THE PAGE, AND IT DRAWS NOTHING. An in-page link
+          (`#review`, a lesson's section, «Перейти к содержимому») is followed by
+          the browser, and the history entry it leaves has nothing the router can
+          come back to: Back then changed the address and left the screen where
+          it was (owner, 2026-10-02). It stands here, in the root layout, because
+          every page can be the one such a link is on — and the one Back is
+          pressed from. It reads the query string, hence the boundary: a
+          prerendered page is not made dynamic by it.
+        */}
+        <Suspense fallback={null}>
+          <HistoryEntrySync />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
