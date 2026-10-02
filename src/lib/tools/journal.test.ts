@@ -77,6 +77,12 @@ describe("parseJournalManualEntry", () => {
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, asset: "NOPE" }, NOW))).toBe("invalid_asset");
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, expiry: "M2" }, NOW))).toBe("invalid_expiry");
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, amount: "0" }, NOW))).toBe("invalid_amount");
+    // A payout is 20…99 (owner, 2026-10-02), for a hand-recorded trade as for a card.
+    for (const payoutPercent of [0, 19, 100, 101, 85.5, "85"]) {
+      expect(refusal(() => parseJournalManualEntry({ ...ENTRY, payoutPercent }, NOW)), String(payoutPercent)).toBe("invalid_payoutPercent");
+    }
+    expect(parseJournalManualEntry({ ...ENTRY, payoutPercent: 20 }, NOW).payoutPercent).toBe(20);
+    expect(parseJournalManualEntry({ ...ENTRY, payoutPercent: 99 }, NOW).payoutPercent).toBe(99);
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, result: "draw" }, NOW))).toBe("invalid_result");
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, entryTime: "9:30" }, NOW))).toBe("invalid_entryTime");
     expect(refusal(() => parseJournalManualEntry({ ...ENTRY, userId: 7 }, NOW))).toBe("invalid_entry");

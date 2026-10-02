@@ -14,6 +14,18 @@
  * never be reused for a different asset.
  */
 
+/**
+ * A PAYOUT IS A WHOLE PERCENT FROM 20 TO 99 (owner, 2026-10-02: «можно писать
+ * только цифры и от 20 до 99»). One range for every tool that takes a payout —
+ * a Trade Card, a journal entry, a Risk Plan, the learner's own minimum in an
+ * Entry Check — so a number accepted by one is never refused by the next.
+ *
+ * The database's own checks are wider (1…100, from the tables' migrations) and
+ * stay as they are: they are the storage's guard, this is the product's rule,
+ * and nothing saved before the rule is made unreadable by it.
+ */
+export const PAYOUT_PERCENT = { min: 20, max: 99 } as const;
+
 export type TradingAssetGroup = "currency_otc" | "currency" | "crypto_otc" | "commodity_otc";
 
 export type TradingAsset = {

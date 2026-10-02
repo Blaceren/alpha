@@ -43,7 +43,7 @@ import { z } from "zod";
 import type { ToolJournalEntry, ToolJournalViolation, ToolTradeCard } from "@prisma/client";
 import { ToolError } from "./errors";
 import { isAcceptableTradeDate } from "./dates";
-import { expiryByCode, tradingAssetByCode } from "./reference";
+import { PAYOUT_PERCENT, expiryByCode, tradingAssetByCode } from "./reference";
 import {
   TRADE_CARD_DIRECTIONS,
   TRADE_CARD_LIMITS,
@@ -162,7 +162,7 @@ const manualSchema = z.strictObject({
   asset: z.string().max(40),
   direction: z.enum(TRADE_CARD_DIRECTIONS),
   amount: z.string().max(20),
-  payoutPercent: z.number().int().min(1).max(100),
+  payoutPercent: z.number().int().min(PAYOUT_PERCENT.min).max(PAYOUT_PERCENT.max),
   expiry: z.string().max(10),
   result: z.enum(TRADE_CARD_RESULTS),
   plan: optionalText(JOURNAL_LIMITS.maxPlanLength),

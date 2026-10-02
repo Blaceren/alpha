@@ -24,7 +24,7 @@
 import { z } from "zod";
 import type { ToolEntryCheck } from "@prisma/client";
 import { ToolError } from "./errors";
-import { tradingAssetByCode } from "./reference";
+import { PAYOUT_PERCENT, tradingAssetByCode } from "./reference";
 
 export const ENTRY_CHECKLIST_TOOL_CODE = "tool.entry_checklist" as const;
 
@@ -98,7 +98,7 @@ const answersShape = Object.fromEntries(CHECKLIST_ITEMS.map((item) => [item.code
 
 const checkSchema = z.strictObject({
   asset: z.string().max(40),
-  minPayoutPercent: z.number().int().min(1).max(100).nullable(),
+  minPayoutPercent: z.number().int().min(PAYOUT_PERCENT.min).max(PAYOUT_PERCENT.max).nullable(),
   answers: z.strictObject(answersShape),
 });
 
