@@ -169,7 +169,13 @@ export type ProgressionAdjustmentBlocker = {
   stableCode: string;
   title: string;
   type: string;
-  reason: "protected_authority_gate" | "not_administratively_correctable";
+  /**
+   * `level_not_open` (2026-10-02): the level is defined and not open yet — the
+   * closed tail of a program whose later lessons are still being produced. No
+   * owner can complete it, an administrative one included, because there is
+   * nothing in it to have completed.
+   */
+  reason: "protected_authority_gate" | "not_administratively_correctable" | "level_not_open";
 };
 
 export type ProgressionAdjustmentPlan = {
@@ -226,11 +232,19 @@ type Tx = Prisma.TransactionClient;
 /**
  * TOOLS-V2 — the tools completing `levels` would open, by title. Derived from
  * the same rule `tool-access.ts` applies: a tool is open when the level that
- * releases it is completed, so a level that is already completed opens nothing.
+ * releases it IN THE LEARNER'S VERSION is completed, so a level that is already
+ * completed opens nothing. `unlockLevelByTool` is that version's own rows
+ * (`LevelToolUnlock`), as level numbers.
  */
-function toolsOpenedBy(levels: readonly ProgressionAdjustmentPlanLevel[]): string[] {
+function toolsOpenedBy(
+  levels: readonly ProgressionAdjustmentPlanLevel[],
+  unlockLevelByTool: ReadonlyMap<string, number>,
+): string[] {
   return CURRICULUM_TOOLS.filter((tool) =>
-    levels.some((level) => level.levelNumber === tool.unlockLevel && level.currentStatus !== "completed"),
+    levels.some(
+      (level) =>
+        level.levelNumber === unlockLevelByTool.get(tool.code) && level.currentStatus !== "completed",
+    ),
   ).map((tool) => tool.title);
 }
 
@@ -265,7 +279,12 @@ async function planAdjustment(
     orderBy: { id: "desc" },
     include: {
       curriculumVersion: {
-        select: { id: true, code: true, versionNumber: true, levels: true },
+        select: {
+          id: true,
+          code: true,
+          versionNumber: true,
+          levels: { include: { toolUnlocks: { select: { toolCode: true } } } },
+        },
       },
       levelProgress: { select: { levelDefinitionId: true, status: true } },
     },
@@ -349,16 +368,20 @@ async function planAdjustment(
   const levels: ProgressionAdjustmentPlanLevel[] = [];
   let blocker: ProgressionAdjustmentBlocker | null = null;
   for (const definition of interval) {
+    const notOpen = definition.status !== "active";
     const describe = (): ProgressionAdjustmentBlocker => ({
       levelNumber: definition.levelNumber,
       stableCode: definition.stableCode,
       title: definition.title,
       type: definition.type,
-      reason: isProtectedAuthorityPair(definition.type, definition.completionMethod)
-        ? "protected_authority_gate"
-        : "not_administratively_correctable",
+      reason: notOpen
+        ? "level_not_open"
+        : isProtectedAuthorityPair(definition.type, definition.completionMethod)
+          ? "protected_authority_gate"
+          : "not_administratively_correctable",
     });
     if (
+      notOpen ||
       isProtectedAuthorityPair(definition.type, definition.completionMethod) ||
       !isAdminCorrectablePair(definition.type, definition.completionMethod)
     ) {
@@ -393,7 +416,14 @@ async function planAdjustment(
   if (levels.length > 1) {
     warnings.push(`Будет административно завершено уровней: ${levels.length}.`);
   }
-  const toolsUnlocked = toolsOpenedBy(levels);
+  const toolsUnlocked = toolsOpenedBy(
+    levels,
+    new Map(
+      definitions.flatMap((definition) =>
+        definition.toolUnlocks.map((unlock) => [unlock.toolCode, definition.levelNumber] as const),
+      ),
+    ),
+  );
   warnings.push(
     toolsUnlocked.length > 0
       ? `Откроются инструменты: ${toolsUnlocked.join(", ")}. Инструмент открывается завершением своего уровня, в том числе административным.`
