@@ -59,6 +59,7 @@ program on the stand, at 1440:
 | 17 | registration level, completed | two buttons to the next level (the completion moment's and the confirmation's) | minor | fixed |
 | 18 | report, 390 | the form is 8 900px tall — five records of ten fields is the assignment | minor | open — for the owner's review |
 | 19 | lesson 9 | the lesson printed the document's notes to its producers («в образце обязательно…») | major | fixed in the package |
+| 20 | registration level, completed | with its button gone (#17) the confirmation kept the button's margin as empty space under its sentence | minor | fixed |
 
 ## Fixes applied
 
@@ -112,7 +113,8 @@ the stand, labelled «Тестовая запись стенда — не уче
 
 ## The chain, end to end (on the stand)
 
-35 checks, all passing, in the dev server and again in a production build of the same tree: the
+35 checks, all passing, in the dev server and again in a production build of the same tree (the
+final tree, `68b37a9`, each run on a freshly seeded database): the
 start control's words; the clock on arrival; the test after the start; the разбор, its second and
 the locked attempt; the rewatch playing from 1:55 with the player in view; a clean retry; four right
 answers completing the level (+100 XP) and naming the next; a lesson without a test (+50 XP); the
@@ -174,5 +176,6 @@ contrast problems none · unadapted landing-only none.
 ## Sign-off
 
 Critical and major findings fixed; one minor (the report's length on a phone) left for the owner.
+`final/level3-registration-settled-1440.png` is the production build of `68b37a9` (one way onward).
 Not checked under a learner on PREPROD: sign-in there is CAPTCHA-gated and an agent cannot mint a
 session — the owner checks it after the release.
