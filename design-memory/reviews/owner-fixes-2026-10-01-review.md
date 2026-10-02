@@ -259,3 +259,13 @@ card's entry from being changed. Service and nginx logs are clean.
 
 **Not verified on PREPROD:** the journal itself under a learner — sign-in is CAPTCHA-gated and an
 agent cannot mint a session. The same commits passed the 13 end-to-end checks on the stand.
+
+## Correction — 2026-10-02
+
+This review said the cycle's nodes stand on its line (finding 6, the cycle's fixes, and «nodes stand
+on it in the route and in the cycle» in the score). That was true of the route and NOT of the cycle
+wherever six steps stand in one row (1340px and wider): the cycle's drawn line was still the list's
+last child and was painted over «01…06» — a 2px Signal cut through 13px digits, missed in frames
+judged at full size. The owner reported it the next day. It is fixed in the second wave (DD-333),
+and the question is now asked of the browser's paint order rather than read off a screenshot:
+`design-memory/reviews/owner-fixes-2026-10-02-review.md`.
