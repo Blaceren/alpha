@@ -215,6 +215,51 @@ async function main() {
     }
   });
 
+  await check("A5b nothing written for the people building a level reaches the learner taking it", () => {
+    /* The owner's document mixes two voices: what the learner is told, and what
+       the production team is told about the level («не начат», «задание не
+       готово», «в образце обязательно…», «сюда ложится видео…»). The package is
+       the learner's copy. Every string a learner can be shown is collected and
+       checked against the phrases of the other voice. */
+    const result = packageValidate.validateCurriculumPackage(rawPackage);
+    assert.ok(result.ok);
+    if (!result.ok) return;
+    const shown: string[] = [];
+    const collect = (value: unknown): void => {
+      if (typeof value === "string") shown.push(value);
+      else if (Array.isArray(value)) value.forEach(collect);
+      else if (value && typeof value === "object") {
+        for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+          // Provenance is the package's own record of where a text came from.
+          if (key === "provenance" || key === "pendingApprovals") continue;
+          collect(inner);
+        }
+      }
+    };
+    collect(result.package.modules);
+    const text = shown.join("\n");
+    for (const phrase of [
+      "В образце обязательно",
+      "ученик делает сам",
+      "формулировка средней руки",
+      "пока не подготовлен",
+      "не хватает экрана регистрации",
+      "можно писать уже сейчас",
+      "Сюда ложится видео",
+      "ждёт готовый продукт",
+      "Не начат",
+      "задание не готово",
+    ]) {
+      assert.ok(!text.includes(phrase), `learner copy carries a production note: «${phrase}»`);
+    }
+    // The level-9 lesson has no «Проверка» section of its own: the report says
+    // what the check looks at, once.
+    const nine = result.package.modules.flatMap((item) => item.levels).find((item) => item.levelNumber === 9)!;
+    const body = nine.content!.localizations[0].body as { sections: Array<{ code: string }> };
+    assert.deepEqual(body.sections.map((section) => section.code), ["o-chem", "zadanie", "zapisi"]);
+    assert.ok(nine.report!.localizations[0].successCriteriaSummary.includes("Ручной проверки нет"));
+  });
+
   await check("A6 every package shipped before this one still hashes to its declared fingerprint", async () => {
     const fingerprint = await import("../../src/lib/curriculum/package/fingerprint");
     const shipped = fs

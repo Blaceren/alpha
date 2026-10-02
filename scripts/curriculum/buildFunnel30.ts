@@ -229,21 +229,17 @@ function demoTradesSections(level: SourceLevel): Section[] {
         },
       ],
     },
-    {
-      code: "proverka",
-      title: "Проверка",
-      blocks: [
-        { type: "rich_text", text: String(assignment.check) },
-        { type: "heading", level: 3, text: "Сверка с образцом" },
-        { type: "rich_text", text: String(assignment.sampleComparison) },
-        {
-          type: "callout",
-          variant: "info",
-          title: "",
-          body: sentence(`Не проверяется: ${String(assignment.notChecked)}`),
-        },
-      ],
-    },
+    /* NO «ПРОВЕРКА» SECTION IN THE LESSON. The document's «ПРОВЕРКА» and
+       «СВЕРКА С ОБРАЗЦОМ» paragraphs are written for the people building the
+       level, not for the learner taking it: «содержательную сверку ученик
+       делает сам по заполненному образцу», «в образце обязательно и удачные, и
+       неудачные сделки, и хотя бы одна формулировка средней руки». The second
+       is a requirement on a sample that does not exist yet.
+
+       What a learner needs from them is said once, by the report itself: its
+       criteria line states what the check looks at and what it does not
+       (`demoTradesReport`). The comparison with a sample returns here together
+       with the sample. */
   ];
 }
 
