@@ -58,9 +58,47 @@ export type LessonMediaReading = {
   } | null;
 };
 
-function markerDescription(questionNumber: number, seconds: number, verdict: "right" | "wrong" | undefined) {
-  const said = verdict === "right" ? " · верно" : verdict === "wrong" ? " · неверно" : "";
-  return `Вопрос ${questionNumber}${said} · ответ объясняют с ${formatTimecode(seconds)}`;
+/**
+ * The lesson line's points: one per second of the video, not one per question.
+ *
+ * Two questions whose answers are taught at the same second share a point —
+ * three dots on one spot would hide each other and their numbers. The shared
+ * point says «2–4» and names every question in its description; it reads
+ * «неверно» when any of them was answered wrongly, «верно» only when all were.
+ */
+export function lessonLineMarkers(
+  markers: ReadonlyArray<{ questionNumber: number; seconds: number }>,
+  verdicts: LessonVerdicts | null,
+): { points: AcademyVideoMarker[]; pointOf: ReadonlyMap<number, string> } {
+  const bySecond = new Map<number, number[]>();
+  for (const marker of markers) {
+    const numbers = bySecond.get(marker.seconds);
+    if (numbers) numbers.push(marker.questionNumber);
+    else bySecond.set(marker.seconds, [marker.questionNumber]);
+  }
+  const points: AcademyVideoMarker[] = [];
+  const pointOf = new Map<number, string>();
+  for (const [seconds, numbers] of bySecond) {
+    numbers.sort((a, b) => a - b);
+    const id = `q${numbers[0]}`;
+    const said = numbers.map((n) => verdicts?.get(n));
+    const state = said.some((v) => v === "wrong")
+      ? "wrong"
+      : said.length > 0 && said.every((v) => v === "right")
+        ? "right"
+        : "neutral";
+    const verdictWord = state === "right" ? " · верно" : state === "wrong" ? " · неверно" : "";
+    const consecutive = numbers.every((n, i) => i === 0 || n === numbers[i - 1]! + 1);
+    const label =
+      numbers.length === 1 ? String(numbers[0]) : consecutive ? `${numbers[0]}–${numbers[numbers.length - 1]}` : numbers.join(",");
+    const description =
+      numbers.length === 1
+        ? `Вопрос ${numbers[0]}${verdictWord} · ответ объясняют с ${formatTimecode(seconds)}`
+        : `Вопросы ${numbers.join(", ")}${verdictWord} · ответы объясняют с ${formatTimecode(seconds)}`;
+    points.push({ id, seconds, label, description, state });
+    for (const n of numbers) pointOf.set(n, id);
+  }
+  return { points, pointOf };
 }
 
 let saveSequence = 0;
@@ -84,12 +122,17 @@ export function LessonMedia({
   const player = useRef<AcademyVideoPlayerHandle | null>(null);
   const hasMedia = media !== null;
   const [verdicts, setVerdicts] = useState<LessonVerdicts | null>(null);
+  const line = useMemo(() => lessonLineMarkers(media?.markers ?? [], verdicts), [media, verdicts]);
+  const pointOfRef = useRef(line.pointOf);
+  useEffect(() => {
+    pointOfRef.current = line.pointOf;
+  }, [line]);
 
   useEffect(() => {
     if (!hasMedia) return;
     return subscribeLessonRewatch(({ seconds, questionNumber, from }) => {
       player.current?.playFrom(seconds, {
-        markerId: questionNumber === undefined ? undefined : `q${questionNumber}`,
+        markerId: questionNumber === undefined ? undefined : pointOfRef.current.get(questionNumber),
         keepInView: from ?? null,
       });
     });
@@ -154,20 +197,6 @@ export function LessonMedia({
     [levelCode],
   );
 
-  const playerMarkers = useMemo<AcademyVideoMarker[]>(
-    () =>
-      (media?.markers ?? []).map((marker) => {
-        const verdict = verdicts?.get(marker.questionNumber);
-        return {
-          id: `q${marker.questionNumber}`,
-          seconds: marker.seconds,
-          label: String(marker.questionNumber),
-          description: markerDescription(marker.questionNumber, marker.seconds, verdict),
-          state: verdict ?? "neutral",
-        };
-      }),
-    [media, verdicts],
-  );
 
   // A lesson without a video renders nothing at all here. The page says what is
   // happening in words; a disabled player frame would only imply a video exists
@@ -182,7 +211,7 @@ export function LessonMedia({
         poster={media.poster ?? undefined}
         title={title}
         endedAction={endedAction}
-        markers={playerMarkers}
+        markers={line.points}
         resumeFrom={reading && reading.positionSeconds > 0 ? reading.positionSeconds : null}
         dockable
         onPositionSave={reading?.save && levelCode ? (seconds) => void savePosition(seconds) : undefined}

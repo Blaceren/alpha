@@ -111,7 +111,7 @@ describe("LessonMedia", () => {
        the one that writes `UserLessonProgress` and refuses unless the level is
        in progress. No completion, start or assessment client is reachable here. */
     const source = fs.readFileSync(path.join(REPO_ROOT, "src/features/lesson-media/lesson-media.tsx"), "utf8");
-    const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+    const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1] ?? "");
     expect(imports).toContain("@/lib/curriculum/lesson-progress-client");
     expect(source).toMatch(/import \{ saveLessonReadingProgress \} from "@\/lib\/curriculum\/lesson-progress-client"/);
     for (const forbidden of ["completion", "level-start", "assessment-client", "manual-completion", "report-client"]) {

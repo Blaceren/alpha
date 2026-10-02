@@ -174,3 +174,63 @@ describe("the verdicts of the last attempt", () => {
     expect(late).toEqual([new Map([[1, "right"]])]);
   });
 });
+
+describe("the lesson line's points", () => {
+  it("are one per second: questions taught at the same second share a point", async () => {
+    const { lessonLineMarkers } = await import("@/features/lesson-media/lesson-media");
+    const { points, pointOf } = lessonLineMarkers(
+      [
+        { questionNumber: 1, seconds: 40 },
+        { questionNumber: 2, seconds: 130 },
+        { questionNumber: 3, seconds: 130 },
+        { questionNumber: 4, seconds: 130 },
+      ],
+      null,
+    );
+    expect(points.map((p) => [p.id, p.seconds, p.label])).toEqual([
+      ["q1", 40, "1"],
+      ["q2", 130, "2–4"],
+    ]);
+    expect(points[1]!.description).toBe("Вопросы 2, 3, 4 · ответы объясняют с 2:10");
+    expect(pointOf.get(3)).toBe("q2");
+  });
+
+  it("a shared point says «неверно» when any of its questions was wrong, «верно» only when all were right", async () => {
+    const { lessonLineMarkers } = await import("@/features/lesson-media/lesson-media");
+    const markers = [
+      { questionNumber: 2, seconds: 130 },
+      { questionNumber: 3, seconds: 130 },
+    ];
+    expect(lessonLineMarkers(markers, new Map([[2, "right"], [3, "wrong"]])).points[0]!.state).toBe("wrong");
+    expect(lessonLineMarkers(markers, new Map([[2, "right"], [3, "right"]])).points[0]!.state).toBe("right");
+    expect(lessonLineMarkers(markers, new Map([[2, "right"]])).points[0]!.state).toBe("neutral");
+    // Numbers that do not follow each other are listed, not ranged.
+    expect(lessonLineMarkers([{ questionNumber: 1, seconds: 9 }, { questionNumber: 3, seconds: 9 }], null).points[0]!.label).toBe("1,3");
+  });
+
+  it("a rewatch from a question on a shared point lights that point", () => {
+    const shared: AcademyLessonMedia = {
+      ...MEDIA,
+      markers: [
+        { questionNumber: 1, seconds: 40 },
+        { questionNumber: 2, seconds: 130 },
+        { questionNumber: 3, seconds: 130 },
+      ],
+    };
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+    vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
+    const { container } = render(<LessonMedia media={shared} title="Урок" levelCode="v2.l008.voyti-ili-otkazatsya" />);
+    const video = container.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "duration", { configurable: true, value: 500 });
+    Object.defineProperty(video, "currentTime", { configurable: true, writable: true, value: 0 });
+    fireEvent.loadedMetadata(video);
+    act(() => {
+      requestLessonRewatch(130, { questionNumber: 3 });
+    });
+    expect(container.querySelector('.avp__marker[data-active="true"] .avp__marker-point')).toHaveAttribute(
+      "aria-label",
+      "Вопросы 2, 3 · ответы объясняют с 2:10",
+    );
+    vi.restoreAllMocks();
+  });
+});
