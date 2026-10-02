@@ -415,6 +415,13 @@ describe("the authenticated route group", () => {
   "src/server/media/lesson-media-access.ts",
   "src/server/media/lesson-media-file.ts",
   "src/server/proxy/referral-link-proxy.ts",
+  /* THE LESSON HI-FI (owner, 2026-10-02: «доведи экран урока и плеер до хай
+     фая … выбери лучшее и реализовывай»; DD-336). The level page's composition
+     on one axis — the stage, the reading column, the lesson line down to the
+     task — lives in its own stylesheet next to the page's others. The player,
+     its wire to the test and the page's markup were already on this list. Not
+     a loading boundary. */
+  "src/features/level-detail-fidelity/level-hifi.css",
 ];
 
   it("has brought no loading boundary back since the release", () => {
