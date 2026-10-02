@@ -19,6 +19,9 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   levelUpdated: "LEVEL_DEFINITION_UPDATED",
   levelDeleted: "LEVEL_DEFINITION_DELETED",
   userEnrolled: "CURRICULUM_USER_ENROLLED",
+  // PROGRAM STRUCTURE (2026-10-02). An operator moved a learner from the version
+  // they were pinned to onto the published one (`enrollment-move.ts`).
+  enrollmentMoved: "CURRICULUM_ENROLLMENT_MOVED",
   levelStarted: "CURRICULUM_LEVEL_STARTED",
   levelCompleted: "CURRICULUM_LEVEL_COMPLETED",
   // L4VC-1. Recorded ONLY when a financial checkpoint is passed; a refusal or

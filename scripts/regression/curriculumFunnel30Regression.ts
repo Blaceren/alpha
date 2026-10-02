@@ -886,6 +886,175 @@ async function main() {
     }
   });
 
+  /* ==================================================================== *
+   * G. MOVING A LEARNER TO THE PUBLISHED VERSION
+   * ==================================================================== */
+
+  const move = await import("../../src/lib/curriculum/enrollment-move");
+  const fingerprint = await import("../../src/lib/curriculum/package/fingerprint");
+
+  type MutablePackage = {
+    contentFingerprint: string;
+    modules: Array<{ levels: Array<{ levelNumber: number; levelCode: string; status?: string; prerequisiteLevelCodes: string[] }> }>;
+    toolUnlocks?: Array<{ toolCode: string; levelCode: string }>;
+    pendingApprovals: Array<{ levelCode: string }>;
+  };
+
+  /** A successor of the program, built from the same source, with one change. */
+  async function publishSuccessor(versionNumber: number, change: (pkg: MutablePackage) => void) {
+    const pkg = JSON.parse(builder.serializeFunnel30Package(versionNumber)) as MutablePackage;
+    change(pkg);
+    pkg.contentFingerprint = fingerprint.calculateFingerprint(pkg as never);
+    const imported = await packageImport.importCurriculumPackage(pkg, { db: prisma });
+    assert.equal(imported.ok, true, JSON.stringify(imported.ok ? [] : imported.issues));
+    const draft = await prisma.curriculumVersion.findFirstOrThrow({ where: { code: "ata-v2", versionNumber } });
+    const current = await prisma.curriculumVersion.findFirstOrThrow({ where: { code: "ata-v2", status: "published" } });
+    await service.publishCurriculumVersion({
+      curriculumVersionId: draft.id,
+      actorId: admin.id,
+      expectedPublishedVersionId: current.id,
+    });
+    return draft.id;
+  }
+
+  // A second learner, part of the way through version 5, for the refusals.
+  const waiting = await createUser("waiting");
+  await enrollmentDomain.enrollUserInPublishedCurriculum({ userId: waiting.id, actorId: admin.id });
+
+  await check("G1 a learner on the published version is not moved, and a plan writes nothing", async () => {
+    const plan = await move.moveEnrollmentToPublishedVersion({
+      userId: learner.id,
+      reason: "regression: already current",
+    });
+    assert.equal(plan.outcome, "already_current");
+    assert.equal(await prisma.userCurriculumEnrollment.count({ where: { userId: learner.id } }), 1);
+    const nobody = await createUser("nobody");
+    assert.equal(
+      (await move.moveEnrollmentToPublishedVersion({ userId: nobody.id, reason: "regression: no enrollment" })).outcome,
+      "no_active_enrollment",
+    );
+  });
+
+  let versionSix = 0;
+  await check("G2 the chapter opens: a successor with level 15 open is published, and version 5 is archived", async () => {
+    versionSix = await publishSuccessor(6, (pkg) => {
+      for (const moduleDefinition of pkg.modules) {
+        for (const level of moduleDefinition.levels) {
+          if (level.levelNumber === 15) delete level.status;
+        }
+      }
+    });
+    const versions = await prisma.curriculumVersion.findMany({ where: { code: "ata-v2", versionNumber: { in: [5, 6] } }, orderBy: { versionNumber: "asc" } });
+    assert.deepEqual(versions.map((item) => item.status), ["archived", "published"]);
+    // The learner is still pinned to version 5, and still standing on a closed level 15.
+    const resolved = await states();
+    assert.equal(resolved.curriculumVersion.versionNumber, 5);
+    assert.equal(resolved.levels.find((item) => item.levelDefinition.levelNumber === 15)!.state, "locked");
+  });
+
+  await check("G3 a dry run says what would happen and changes nothing", async () => {
+    const plan = await move.moveEnrollmentToPublishedVersion({
+      userId: learner.id,
+      reason: "regression: plan only",
+      dryRun: true,
+    });
+    assert.equal(plan.outcome, "moved");
+    assert.deepEqual(plan.from && [plan.from.versionNumber, plan.from.currentLevel, plan.from.completedLevels], [5, 15, 14]);
+    assert.deepEqual(plan.to, { versionNumber: 6, currentLevel: 15, carriedLevels: 14 });
+    assert.equal(plan.xpCarried, 1_700);
+    assert.equal(plan.newEnrollmentId, null);
+    assert.equal(await prisma.userCurriculumEnrollment.count({ where: { userId: learner.id } }), 1);
+    assert.equal((await states()).curriculumVersion.versionNumber, 5);
+  });
+
+  await check("G4 the move carries fourteen levels, the XP and the tools, and level 15 is now open to start", async () => {
+    const plan = await move.moveEnrollmentToPublishedVersion({
+      userId: learner.id,
+      actorId: admin.id,
+      reason: "regression: chapter two is out",
+    });
+    assert.equal(plan.outcome, "moved");
+    assert.ok(plan.newEnrollmentId);
+    const rows = await prisma.userCurriculumEnrollment.findMany({ where: { userId: learner.id }, orderBy: { id: "asc" } });
+    assert.deepEqual(rows.map((row) => row.status), ["superseded", "active"]);
+    assert.equal(rows[1].curriculumVersionId, versionSix);
+    assert.equal(rows[1].migrationSource, `enrollment:${rows[0].id}`);
+
+    const resolved = await states();
+    assert.equal(resolved.curriculumVersion.versionNumber, 6);
+    assert.equal(resolved.enrollment.currentLevel, 15);
+    assert.equal(resolved.levels.filter((item) => item.state === "completed").length, 14);
+    assert.equal(resolved.levels.find((item) => item.levelDefinition.levelNumber === 15)!.state, "available");
+    assert.equal(await xpTotal(), 1_700, "XP is never taken away");
+    assert.equal((await tools()).unlockedCount, 4, "the tools the learner had are still open");
+    assert.equal(await toolGuard.isToolUnlockedForUser(learner.id, "tool.trading_journal", prisma), true);
+
+    // The old enrollment's history is whole.
+    assert.equal(await prisma.userLevelProgress.count({ where: { enrollmentId: rows[0].id, status: "completed" } }), 14);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "CURRICULUM_ENROLLMENT_MOVED" } });
+    assert.equal(audit.userId, admin.id);
+    assert.equal((audit.metadata as { carriedLevels: number }).carriedLevels, 14);
+
+    // And the program goes on: level 15 starts and completes like any lesson.
+    await start(15);
+    const receipt = await manual.completeManualLevel({
+      actorUserId: learner.id,
+      stableCode: codeOf(15),
+      requestId: requestId("manual-15"),
+    });
+    assert.equal(receipt.nextLevelNumber, 16);
+    assert.equal((await stateOf(16)).state, "locked");
+    // A second move is a no-op.
+    assert.equal(
+      (await move.moveEnrollmentToPublishedVersion({ userId: learner.id, reason: "regression: again" })).outcome,
+      "already_current",
+    );
+  });
+
+  await check("G5 a learner waiting on a reviewer is not moved", async () => {
+    const enrollment = await prisma.userCurriculumEnrollment.findFirstOrThrow({ where: { userId: waiting.id, status: "active" } });
+    const first = await prisma.levelDefinition.findFirstOrThrow({ where: { curriculumVersionId: enrollment.curriculumVersionId, levelNumber: 1 } });
+    await prisma.userLevelProgress.create({
+      data: {
+        enrollmentId: enrollment.id,
+        curriculumVersionId: enrollment.curriculumVersionId,
+        levelDefinitionId: first.id,
+        status: "pending_review",
+      },
+    });
+    const plan = await move.moveEnrollmentToPublishedVersion({ userId: waiting.id, reason: "regression: pending review" });
+    assert.equal(plan.outcome, "blocked_pending_review");
+    assert.equal(await prisma.userCurriculumEnrollment.count({ where: { userId: waiting.id, status: "active" } }), 1);
+    assert.equal(await prisma.userCurriculumEnrollment.count({ where: { userId: waiting.id } }), 1);
+    await prisma.userLevelProgress.updateMany({ where: { enrollmentId: enrollment.id }, data: { status: "in_progress" } });
+  });
+
+  await check("G6 a version whose first level is a different level carries nothing: level 1 again, with the XP", async () => {
+    // Same program, but level 1 is a different lesson (another stable code).
+    await publishSuccessor(7, (pkg) => {
+      const levels = pkg.modules.flatMap((moduleDefinition) => moduleDefinition.levels);
+      const first = levels.find((level) => level.levelNumber === 1)!;
+      const renamed = `${first.levelCode}-novyy`;
+      for (const level of levels) {
+        level.prerequisiteLevelCodes = level.prerequisiteLevelCodes.map((code) => (code === first.levelCode ? renamed : code));
+      }
+      for (const pending of pkg.pendingApprovals) {
+        if (pending.levelCode === first.levelCode) pending.levelCode = renamed;
+      }
+      first.levelCode = renamed;
+    });
+    const before = await xpTotal();
+    const plan = await move.moveEnrollmentToPublishedVersion({ userId: learner.id, reason: "regression: a different program" });
+    assert.equal(plan.outcome, "moved");
+    assert.deepEqual(plan.to, { versionNumber: 7, currentLevel: 1, carriedLevels: 0 });
+    const resolved = await states();
+    assert.equal(resolved.enrollment.currentLevel, 1);
+    assert.equal(resolved.levels.filter((item) => item.state === "completed").length, 0);
+    assert.equal(await xpTotal(), before);
+    // Tools follow the levels: nothing completed on this version, nothing open.
+    assert.equal((await tools()).unlockedCount, 0);
+  });
+
   await prisma.$disconnect();
   console.log(`\n30-level program regression: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
