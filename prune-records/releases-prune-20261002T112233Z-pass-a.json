@@ -435,7 +435,7 @@
   }
  ],
  "total_mib": 20261,
- "deleted": false,
+ "deleted": true,
  "df_free_before_bytes": 6405341184,
  "gate_outputs": {
   "academy-04de960e00c85ebfbfae2b1da13b71982dd5deb5": "=== prune gate: academy 04de960e00c8\n  1 exactly one path      : /srv/ata/releases/academy/04de960e00c85ebfbfae2b1da13b71982dd5deb5\n  2 manifest              : /srv/ata/releases/academy/04de960e00c85ebfbfae2b1da13b71982dd5deb5/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 04de960e00c85ebfbfae2b1da13b71982dd5deb5 / 0b0fef8a7d4778c9e17c1bc86dd417939ae72e84 / DW2u5RWuCAz7iqINpPQbX\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725\n      backend   -> /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb\n      crm       -> /srv/ata/releases/crm/3404dc2cab0d8aeda967a649871c5dd5dbc5f708\n      partner   -> /srv/ata/releases/partner/27b64a41c41def2162e9d6ea9eb3c9bc27629a67\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1278050, cwd==symlink, port 3050 owned by pid 1278081 in-cgroup\n    release: /srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1239848, cwd==symlink, port 3100 owned by pid 1239881 in-cgroup\n    release: /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=614225, cwd==symlink, port 3010 owned by pid 614257 in-cgroup\n    release: /srv/ata/releases/crm/3404dc2cab0d8aeda967a649871c5dd5dbc5f708\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1499, cwd==symlink, port 3110 owned by pid 1499 in-cgroup\n    release: /srv/ata/releases/partner/27b64a41c41def2162e9d6ea9eb3c9bc27629a67\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/academy-prune-20260922T132747Z.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/04de960e00c85ebfbfae2b1da13b71982dd5deb5  (1559 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
@@ -475,5 +475,10 @@
  "data_volume_free_after_bytes": 15318310912,
  "move_log": "/home/ubuntu/audits/ata-disk-prune-2026-10-02/moved-to-archive.log",
  "move_log_first_line": "2026-10-02T11:35:29Z start free_root_bytes=6404984832 free_data_bytes=48323325952",
- "move_log_last_line": "2026-10-02T11:40:34Z end free_root_bytes=39413854208 free_data_bytes=15318310912"
+ "move_log_last_line": "2026-10-02T11:40:34Z end free_root_bytes=39413854208 free_data_bytes=15318310912",
+ "deleted_by": "the owner, who ran 4-udalit-arhiv-navsegda.sh and reported it in chat on 2026-10-02 («команда выполнена»)",
+ "deleted_observed_at_utc": "2026-10-02T11:49:36.172396Z",
+ "archive_entries_still_present": [],
+ "data_volume_free_after_delete_bytes": 48323325952,
+ "root_free_after_delete_bytes": 39413252096
 }
