@@ -35,8 +35,16 @@ was not carried to the cycle.
 
 What changed in the method, not only in the code: «is anything painted over this?» is now asked of
 the browser (`document.elementFromPoint` at each node — a pseudo-element answers as its host)
-instead of being read off a screenshot. Live PREPROD: 12 of 119 nodes covered (the cycle's six, at
-1440 and at 1360). This build: 0 of 119.
+instead of being read off a screenshot, and it is asked of EVERY node of every drawn line on the
+page, not of the ones last complained about.
+
+That sweep found the defect a third time, where nobody had looked: in the product window's «Путь»
+state the walked part of the module's line was also a last child, and ran through the ticks of L1
+and L2 and into the current node — at every width, since the hi-fi release. The owner's first
+words on this were «тут и дальше по анимации»; it was further along the animation.
+
+Live PREPROD: 33 of 175 nodes covered (the cycle's six at 1440 and at 1360; three of the window
+path's five at all seven widths). This build: 0 of 175.
 
 ## Visual thesis
 
@@ -81,6 +89,7 @@ the cards the window is not on, and then under the pointer, the focus and the fi
   form, 300px wide in a 386px form; under the button «Пройдите проверку безопасности, чтобы
   продолжить».
 - `home-cycle-1440x900.png`, `home-cycle-nodes-zoom-w{1440,1360}.png` — the line through «01», «02».
+- `home-window-path-zoom-w{1440,390}@2x.png` — the line through the ticks of L1 and L2.
 - `home-strip-rest-w{1440,1024,768,390}.png`, `home-strip-hover-card-2-w{1440,1024,768}.png` — the
   strip; under the pointer nothing changes.
 - Tools: `../owner-fixes-2026-10-01/final/journal-3-card-entry-form-<viewport>.png` — the browser's
@@ -109,10 +118,11 @@ the cards the window is not on, and then under the pointer, the focus and the fi
 | 17 | Auth · every state (final pass) | **Our frame around Cloudflare's iframe was `display: none` while closed.** Turnstile keeps its iframe RENDERED while it has nothing to ask — one fixed pixel, `opacity: 0.01` — and that is how the check runs unseen. Hiding the frame took the iframe out of rendering altogether. Nothing on the stand showed it: a test key runs no real challenge | critical (never shipped) | fixed — the frame stays in the page, zero high; the browser reports the iframe rendered and unclipped in every state |
 | 18 | Auth · after a press (final pass) | The box was closed the moment the press succeeded: the form jumped up 73px under the visitor's pointer, and a live iframe was hidden | major | fixed — once up, the box stays for that check, Cloudflare's own «Успешно» in it |
 | 19 | Home cycle · ≥1340 | The line was painted over «01…06» (owner — and the first wave's miss, above) | major | fixed — one first-child pseudo-element, the drawn part a background layer |
-| 20 | Home strip · all | Nothing said the four cards can be pressed: only the title was a control, and nothing answered the pointer (owner) | major | fixed — DD-333 |
-| 21 | Home strip (first pass) | The first highlights were too faint to be seen at arm's length | major | fixed — a deeper wash, a hairline, the rail lit |
-| 22 | Home strip · all | The product object inside a card did not switch the window; only the rest of the card did | minor | fixed — the whole card is one target |
-| 23 | Stand scripts (final pass) | The hit test reported route nodes «covered» on narrow screens — by the pinned product window they pass under by design; the theme check read an iframe it could not see and passed on nothing | — (test) | fixed — each node is tested clear of the window; the theme is read from Cloudflare's frame address |
+| 20 | Home, the product window's «Путь» state · all | The same defect a third time, found by the sweep: the walked part of the module's line painted over the ticks of L1 and L2 and into the current node | major | fixed — one first-child pseudo-element here too; the rule is now held by a test for every holder of nodes on the page |
+| 21 | Home strip · all | Nothing said the four cards can be pressed: only the title was a control, and nothing answered the pointer (owner) | major | fixed — DD-333 |
+| 22 | Home strip (first pass) | The first highlights were too faint to be seen at arm's length | major | fixed — a deeper wash, a hairline, the rail lit |
+| 23 | Home strip · all | The product object inside a card did not switch the window; only the rest of the card did | minor | fixed — the whole card is one target |
+| 24 | Stand scripts (final pass) | The hit test reported route nodes «covered» on narrow screens — by the pinned product window they pass under by design; the theme check read an iframe it could not see and passed on nothing | — (test) | fixed — each node is tested clear of the window; the theme is read from Cloudflare's frame address |
 
 ## Fixes applied
 
@@ -149,9 +159,11 @@ says «Нужно подтверждение: отметьте поле ниже
 cut to their corner. A failed check is the boxed sentence and «Повторить проверку». The token, the
 action, the verification and every callback that destroys a token are unchanged.
 
-**The cycle's line** (`public-home.css`). The faint line and its drawn part are one `::before`,
-painted before the steps; the drawn part is a background layer grown by `background-size` (no
-transform, so nothing new is stacked).
+**The cycle's line, and the window's path** (`public-home.css`). The faint line and its drawn part
+are one `::before`, painted before the nodes; the drawn part is a background layer grown by
+`background-size` (no transform, so nothing new is stacked). The stylesheet's test now refuses an
+`::after` on any holder of nodes — the route, the cycle, the window's path, the cycle object's
+small path.
 
 **The strip** (`review-window.tsx`, `public-home.css`). The whole card is the target. A card lights
 with a wash from its top edge, a hairline and its rail: at rest only the card on show; once, when
@@ -175,7 +187,8 @@ motion: no wave, the states are instant.
 - `auth-login-press-asked-<viewport>.png`, `auth-register-press-asked-*.png` — Cloudflare asks
 - `auth-login-failed-<viewport>.png`, `auth-register-no-key-*.png`
 - `auth-closeup-{1-loading,2-checking,3-passed,4-interactive,4b-after-the-press,5-failed,5b-failed-retry-focused}-*@2x.png`
-- `home-cycle-1440x900.png`, `home-cycle-nodes-zoom-w{1440,1360}.png`
+- `home-cycle-1440x900.png`, `home-cycle-nodes-zoom-w{1440,1360}.png`,
+  `home-window-path-zoom-w{1440,390}@2x.png`
 - `home-strip-rest-w*.png`, `home-strip-hover-card-2-w*.png`, `home-strip-hint-*.png`,
   `home-strip-focus-1440.png`, `home-strip-after-press-on-object-1440.png`,
   `home-strip-after-tap-390@2x.png`
@@ -202,8 +215,9 @@ motion: no wave, the states are instant.
 
 ## Measured, not judged
 
-- **Paint order:** `elementFromPoint` at three points of each of 17 nodes × 7 widths. Live: 12 of
-  119 covered. This build: 0 of 119.
+- **Paint order:** `elementFromPoint` at each of 25 nodes — the cycle's 6, the route's 11, the
+  window path's 5, the cycle object's 3 — at 7 widths from 1440 to 360. Live: 33 of 175 covered.
+  This build: 0 of 175.
 - **Cloudflare's iframe while our frame is closed:** an `IntersectionObserver` on the iframe —
   intersecting, ratio 1, in every state, at 1280 and at 390. Its own inline style while it has
   nothing to ask: `width: 1px; height: 1px; position: fixed; opacity: 0.01`.
@@ -236,13 +250,25 @@ motion: no wave, the states are instant.
 ## Console result
 
 No page errors, no console errors, no failed local requests and no 4xx/5xx on any tool page or on
-the home, at 1440, 1024, 768 and 390. One dev-only line is stated rather than filtered: the dev
-server's «preloaded but not used» warning for a stylesheet chunk, which a production build does not
-emit. On the live sign-in page the only console lines are Cloudflare's own, from inside its frame.
+the home, at 1440, 1024, 768 and 390 — in the dev server and in a production build of the same tree.
+One WARNING is stated rather than filtered: the browser's «preloaded using link preload but not
+used» for the stylesheet of the learner's experience shell (and, on tool pages, of the learner
+home), which the framework preloads on pages that do not use it. It is not this wave's — the live
+PREPROD build emits the same line for the same file on `/`, `/login` and `/register` — and it is
+recorded as a separate task. On the live sign-in page the remaining console lines are Cloudflare's
+own, from inside its frame.
+
+## The same chain against a production build
+
+Everything above was first seen on the dev server. Before asking for a release the same tree was
+built for production (`next build`, the stand's environment) and served with `next start`: the 31
+field checks, the 22 checks of the security check in its three key modes, the strip's checks and the
+whole-page sweep all pass there as well. (The release artifact itself is built separately by the
+release tooling, with the release environment; it is not what was served here.)
 
 ## Automated
 
-- Academy: `tsc` clean, ESLint clean, Vitest 184 files / 2837 tests. New: the three models
+- Academy: `tsc` clean, ESLint clean, Vitest 184 files / 2839 tests. New: the three models
   (`numeric-input`, `time-input`, `calendar`), the three field components, the review window; the
   check's widget (39), the sign-in and registration forms, the auth stylesheet's rules — among them
   that nothing around Cloudflare's frame may be `display: none`.
@@ -350,8 +376,8 @@ Automatic-fail check: all PASS.
 
 ## Sign-off
 
-- The critical and major findings are closed; two of them (17, 18) were found in the last pass,
-  by measuring rather than looking.
+- The critical and major findings are closed; three of them (17, 18, 20) were found in the last
+  pass, by measuring rather than looking.
 - The screenshots are real renders of the real routes.
 - The console is clean.
 - The anti-generic review passes on all three surfaces.
