@@ -450,11 +450,27 @@ describe("Path — each workflow state reads as itself", () => {
     );
   });
 
-  it("explains why the next level has not opened, using that level's own reason", () => {
+  it("explains why the next level has not opened: its own reason on its node, and by number under the focus", () => {
     const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    // On the next level's OWN node the level's sentence needs no subject.
     const reason = container.querySelector(".level-node--next .level-node__reason")?.textContent;
     expect(reason).toBe("Сначала нужно завершить предыдущие уровни.");
-    expect(container.querySelector(".focus__next")?.textContent).toBe(reason);
+    // Under the level in focus the same sentence read as being about THAT
+    // level — «сначала завершите предыдущие» beside the one you are on. There
+    // it names the level it is about.
+    expect(container.querySelector(".focus__next")?.textContent).toBe(
+      "Уровень 6 откроется, когда этот уровень будет завершён.",
+    );
+  });
+
+  it("a following level locked for another reason keeps its own sentence, with its number", () => {
+    const view = standardView();
+    const following = view.modules[1]!.levels[2]!;
+    following.lockReason = "xp";
+    const { container } = render(<PathFidelityView view={view} userName="Тест" />);
+    expect(container.querySelector(".focus__next")?.textContent).toBe(
+      "Уровень 6: Для этого уровня нужно больше опыта с предыдущих шагов.",
+    );
   });
 
   it("offers the action deriveNextAction chose, as a real navigation", () => {
@@ -696,5 +712,127 @@ describe("the primary CTA resolves both branches of nextAction", () => {
     const stops = actions.querySelectorAll("a, button, input, [tabindex]");
     for (const s of stops) expect(s.tagName).toBe("A");
     expect(actions.querySelectorAll(".button--primary")).toHaveLength(1);
+  });
+});
+
+/* ====================================================================== *
+ * PROGRAM STRUCTURE (2026-10-02) — chapters, kinds, and the end of what is
+ * open, on the frozen composition.
+ * ====================================================================== */
+
+/** Two chapters: modules 1–2 open, module 3 defined and not open yet. */
+function funnelView(currentCode: string, done: number): Enrolled {
+  const lv = (order: number, extra: Partial<AcademyLevelSummary> = {}) =>
+    level({
+      order,
+      state: order <= done ? "completed" : "locked",
+      stateLabel: order <= done ? "Пройден" : "Закрыт",
+      routeAccessible: order <= done,
+      ...extra,
+    });
+  const closed = (order: number, extra: Partial<AcademyLevelSummary> = {}) =>
+    lv(order, {
+      state: "locked",
+      lockReason: "inactive",
+      stateLabel: "Готовится",
+      routeAccessible: false,
+      inProduction: true,
+      shortDescription: `Описание уровня ${order}.`,
+      ...extra,
+    });
+  const m1 = { ...moduleOf(1, [lv(1), lv(2, { kind: "task", kindLabel: "Задание", completionMethod: "external-event" })], "Основы"), chapter: { number: 1, title: "Первая глава" } };
+  const m2 = {
+    ...moduleOf(
+      2,
+      [
+        lv(3, done >= 3 ? {} : { state: "in_progress", stateLabel: "В процессе", routeAccessible: true, kind: "report", kindLabel: "Отчёт", completionMethod: "formal-report" }),
+        lv(4, { kind: "assembly", kindLabel: "Точка сборки" }),
+      ],
+      "Практика",
+    ),
+    chapter: { number: 1, title: "Первая глава" },
+  };
+  const m3 = { ...moduleOf(3, [closed(5), closed(6), closed(7)], "Свеча в контексте"), chapter: { number: 2, title: "Вторая глава" } };
+  return viewOf([m1, m2, m3], currentCode);
+}
+
+describe("Path — the 30-level program", () => {
+  it("puts the tall tick where a chapter ends, from the program's own chapters", () => {
+    const { container } = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
+    const ticks = [...container.querySelectorAll(".mod-seg")].map((seg) => seg.classList.contains("mod-seg--chapter"));
+    // Chapter 1 is modules 1–2; chapter 2 is the last module and ends nothing.
+    expect(ticks).toEqual([false, true, false]);
+  });
+
+  it("a program without chapters keeps the frozen every-fifth rhythm", () => {
+    const modules = Array.from({ length: 6 }, (_, i) =>
+      moduleOf(i + 1, [level({ order: i + 1, state: i === 0 ? "in_progress" : "locked", routeAccessible: i === 0 })]),
+    );
+    const { container } = render(<PathFidelityView view={viewOf(modules, "v2.l001")} userName="Тест" />);
+    const ticks = [...container.querySelectorAll(".mod-seg")].map((seg) => seg.classList.contains("mod-seg--chapter"));
+    expect(ticks).toEqual([false, false, false, false, true, false]);
+  });
+
+  it("names the chapter above the module, and says nothing about one the program does not have", () => {
+    const withChapters = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
+    expect(withChapters.container.querySelector(".workspace__kicker")?.textContent).toBe(
+      "Глава 1 · Первая глава · Модуль 02 / 3",
+    );
+    withChapters.unmount();
+    const without = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    expect(without.container.querySelector(".workspace__kicker")?.textContent).toBe("Модуль 02 / 3");
+  });
+
+  it("calls a level what its author calls it", () => {
+    const { container } = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
+    const types = [...container.querySelectorAll(".level-node__type")].map((node) => node.textContent);
+    expect(types).toEqual(["Отчёт", "Точка сборки"]);
+    expect(container.querySelector(".focus__meta")?.textContent).toContain("Отчёт");
+  });
+
+  it("says how many levels are open while part of the program is in production", () => {
+    const { container } = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
+    expect(container.querySelector(".path-header__done")?.textContent).toBe("Пройдено 2 из 7 уровней · открыто 4");
+    const whole = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    expect(whole.container.querySelector(".path-header__done")?.textContent).toBe("Пройдено 4 из 10 уровней");
+  });
+
+  it("the last open level says the next one is still being prepared", () => {
+    const view = funnelView("v2.l004", 3);
+    const last = view.modules[1]!.levels[1]!;
+    Object.assign(last, { state: "in_progress", stateLabel: "В процессе", routeAccessible: true });
+    const { container } = render(<PathFidelityView view={view} userName="Тест" />);
+    expect(container.querySelector(".focus__next")?.textContent).toBe("Уровень 5 ещё готовится и откроется позже.");
+  });
+
+  describe("when every open level is finished", () => {
+    const rendered = () => render(<PathFidelityView view={funnelView("v2.l005", 4)} userName="Тест" />);
+
+    it("focuses the first level in production as what comes next — not as «сейчас»", () => {
+      const { container } = rendered();
+      const now = container.querySelector(".path-header__now")?.textContent ?? "";
+      expect(now.startsWith("Дальше: Уровень 5")).toBe(true);
+      expect(now).toContain("готовится");
+      expect(now).not.toContain("Сейчас");
+    });
+
+    it("draws that level as waiting, and its node says «готовится», never «текущий»", () => {
+      const { container } = rendered();
+      const node = container.querySelector('[aria-current="step"]')!;
+      expect(node.classList.contains("level-node--wf-waiting")).toBe(true);
+      expect(node.querySelector(".level-node__state")?.textContent).toBe("готовится");
+      expect(container.querySelector(".focus__state")?.classList.contains("focus__state--waiting")).toBe(true);
+      expect(container.querySelector(".focus__state")?.textContent).toBe("Готовится");
+    });
+
+    it("tells the learner nothing is required, with the reason, and offers no control", () => {
+      const { container } = rendered();
+      const body = container.querySelector(".focus__body")?.textContent ?? "";
+      expect(body).toContain("Описание уровня 5.");
+      expect(body).toContain("Сейчас от вас ничего не требуется — уровень откроется, когда урок будет готов.");
+      // «Открыть путь» is the shared decision's control; on Path it would lead here.
+      expect(container.querySelector(".focus__actions a")).toBeNull();
+      expect(container.querySelector(".focus__next")).toBeNull();
+    });
   });
 });

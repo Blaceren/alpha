@@ -54,6 +54,27 @@ export type AssessmentCompletion = {
   completedAt: string;
 };
 
+/**
+ * The разбор of one WRONG answer (2026-10-02).
+ *
+ * «При неверном ответе показывать разбор, а не только слово „неверно“» and
+ * «указывать конкретный отрезок видео для пересмотра». The Backend sends one of
+ * these per wrongly answered question of a graded attempt, and only when the
+ * assessment's author asked for explanations to be shown.
+ *
+ * It names the question and never the answer: there is no option code, no
+ * "correct" flag and no key here. The explanation is the author's own prose and
+ * may well say the answer in words — that is what a разбор is.
+ */
+export type AssessmentReviewItem = {
+  questionKey: string;
+  questionNumber: number;
+  /** The author's explanation, or null when this question has none. */
+  explanation: string | null;
+  /** «Пересмотреть с 1:55» — seconds from the start of the lesson video. */
+  rewatchFromSeconds: number | null;
+};
+
 export type AssessmentResult = {
   created: boolean;
   status: "passed" | "failed";
@@ -65,6 +86,12 @@ export type AssessmentResult = {
   correctCount: number;
   scoreBasisPoints: number;
   completion: AssessmentCompletion | null;
+  /**
+   * Null when this assessment shows no разбор (or the Backend predates it): the
+   * result is then the aggregate alone, as it always was. An array — possibly
+   * empty, on a pass — names exactly the questions answered wrongly.
+   */
+  review: AssessmentReviewItem[] | null;
 };
 
 /* --------------------------------- guards --------------------------------- */
@@ -125,6 +152,49 @@ export function assessmentStartData(value: unknown): AssessmentStart {
   return unwrapData(value) as AssessmentStart;
 }
 
+/** Longest разбор the page will print; anything longer is not one. */
+const MAX_EXPLANATION_LENGTH = 4_000;
+/** A lesson video is not longer than a day. */
+const MAX_REWATCH_SECONDS = 86_400;
+
+/**
+ * Read the review defensively.
+ *
+ * Absent, null or not a list → null: «this result has no разбор», which the
+ * page renders exactly as it did before the field existed. A malformed ITEM is
+ * dropped on its own, and what survives is still true: every item left names a
+ * question the Backend said was answered wrongly.
+ */
+export function readAssessmentReview(value: unknown): AssessmentReviewItem[] | null {
+  if (!Array.isArray(value)) return null;
+  const items: AssessmentReviewItem[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (!isObject(raw)) continue;
+    const { questionKey, questionNumber, explanation, rewatchFromSeconds } = raw;
+    if (typeof questionKey !== "string" || questionKey === "" || seen.has(questionKey)) continue;
+    if (typeof questionNumber !== "number" || !Number.isInteger(questionNumber) || questionNumber < 1) continue;
+    seen.add(questionKey);
+    items.push({
+      questionKey,
+      questionNumber,
+      explanation:
+        typeof explanation === "string" && explanation.trim() !== "" && explanation.length <= MAX_EXPLANATION_LENGTH
+          ? explanation
+          : null,
+      rewatchFromSeconds:
+        typeof rewatchFromSeconds === "number" &&
+        Number.isInteger(rewatchFromSeconds) &&
+        rewatchFromSeconds >= 0 &&
+        rewatchFromSeconds <= MAX_REWATCH_SECONDS
+          ? rewatchFromSeconds
+          : null,
+    });
+  }
+  return items;
+}
+
 export function assessmentResultData(value: unknown): AssessmentResult {
-  return unwrapData(value) as AssessmentResult;
+  const data = unwrapData(value) as AssessmentResult & { review?: unknown };
+  return { ...data, review: readAssessmentReview(data.review) };
 }

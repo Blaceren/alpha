@@ -107,6 +107,15 @@ export function LevelCompletion({
           screen withholds — the exact inconsistency this phase exists to remove. */}
       {forward ? (
         <div className="ax-done__next">
+          {/* WHICH level the next sentence is about. The sentences below were
+              written for Home, where the level is named above them; here they
+              stand under THIS level's title, and «вы уже начали этот уровень»
+              read as a statement about the level just finished. */}
+          {nextAction.level ? (
+            <p className="ax-done__nextLevel">
+              Дальше · уровень {nextAction.level.order} · {nextAction.level.title}
+            </p>
+          ) : null}
           <p className="ax-done__nextTitle">{nextAction.title}</p>
           <p className="ax-done__nextWhy">{nextAction.explanation}</p>
           {nextAction.ctaLabel && nextAction.href ? (

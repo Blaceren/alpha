@@ -113,6 +113,47 @@ describe("Home — the posture is the canonical decision, translated once", () =
     expect("control" in field).toBe(false);
   });
 
+  /* 2026-10-02 — the 30-level program is published with its tail in production. */
+  it("when every open level is finished, nothing is required and nothing is offered — and it is not «программа пройдена»", () => {
+    const field = fieldForAction(
+      action({
+        kind: "open-levels-complete",
+        posture: "done",
+        title: "Открытые уровни пройдены",
+        explanation: "Вы прошли все открытые уровни программы — 14 из 30. Следующие уровни готовятся и откроются позже.",
+        ctaLabel: "Открыть путь",
+        href: "/path",
+        level: null,
+      }),
+    );
+    expect(field.posture).toBe("NONE");
+    expect(field.stateKey).toBe("OPEN_LEVELS_COMPLETE");
+    expect(field.consequence).toBe("Открытые уровни пройдены");
+    expect(field.consequence).not.toBe("Программа пройдена");
+    expect("control" in field).toBe(false);
+    expect("authority" in field).toBe(false);
+    // The unopened lesson is not named as the work in front of the learner.
+    expect("workIdentity" in field).toBe(false);
+  });
+
+  it("a lesson without a test and a report nobody reviews are both ACTION, with their own words", () => {
+    const lesson = fieldForAction(
+      action({ kind: "start-lesson", title: "Пройдите урок", explanation: "В этом уроке нет теста." }),
+    );
+    expect(lesson.posture).toBe("ACTION");
+    expect(lesson.consequence).toBe("Пройдите урок");
+    const report = fieldForAction(
+      action({
+        kind: "submit-report",
+        title: "Заполните и отправьте отчёт",
+        explanation: "Отчёт проверяется автоматически, без наставника.",
+        ctaLabel: "Открыть отчёт",
+      }),
+    );
+    expect(report.posture).toBe("ACTION");
+    if (report.posture === "ACTION") expect(report.control.label).toBe("Открыть отчёт");
+  });
+
   it("offers a retry only where the source classified the failure as recoverable", () => {
     const recoverable = fieldForError(err({ retryable: true }));
     expect(recoverable).toMatchObject({ posture: "UNKNOWN", retry: true });

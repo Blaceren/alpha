@@ -1,28 +1,47 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import type { ToolWindowDefinition } from "@/features/tool-windows/model/catalog";
+import type { ReleasingLevel } from "@/features/tool-windows/model/access";
 
 /**
  * A tool the learner has not reached yet: where they are, the level that opens
  * it, and what opens it — and the one next step, which is the path. No example
  * and no preview (owner decision 2026-09-21).
+ *
+ * WHAT OPENS IT IS THE PROGRAM'S FACT (2026-10-02). The sentence used to be
+ * read off the catalogue: the Trade Card after «урок», the other five after
+ * «контрольная точка». That was the 100-level program. In the 30-level program
+ * the same tools are released by a lesson, a report and a practice, and there
+ * are no checkpoint levels at all — so the sentence is written from the level
+ * the learner's own program names, and the catalogue is only the fallback for a
+ * view that could not say.
  */
 export function ToolLocked({
   tool,
   unlockLevel,
   currentLevel,
-  releasingLevelTitle,
+  releasing,
 }: {
   tool: ToolWindowDefinition;
   unlockLevel: number;
   /** Null when there is no enrolled progression to say anything about. */
   currentLevel: number | null;
-  releasingLevelTitle: string | null;
+  /** The releasing level as the learner's program has it, or null when unknown. */
+  releasing: ReleasingLevel | null;
 }) {
+  const kind =
+    releasing && releasing.kind !== "unknown"
+      ? releasing.kind
+      : tool.releasedBy === "checkpoint"
+        ? "checkpoint"
+        : "lesson";
+  const named = releasing?.title ? ` «${releasing.title}»` : "";
   const reason =
-    tool.releasedBy === "lesson"
-      ? `Инструмент появится после урока L${unlockLevel}${releasingLevelTitle ? ` «${releasingLevelTitle}»` : ""}.`
-      : `Инструмент появится после контрольной точки L${unlockLevel}, когда будут пройдены уроки, на которые он опирается.`;
+    kind === "checkpoint"
+      ? `Инструмент появится после контрольной точки L${unlockLevel}, когда будут пройдены уроки, на которые он опирается.`
+      : kind === "lesson"
+        ? `Инструмент появится после урока L${unlockLevel}${named}.`
+        : `Инструмент появится после уровня L${unlockLevel}${named}.`;
 
   return (
     <div className="tw-quiet">
@@ -30,8 +49,11 @@ export function ToolLocked({
         <Lock aria-hidden="true" size={12} strokeWidth={2} />
         {currentLevel !== null ? `Закрыто · сейчас L${currentLevel}` : "Закрыто"}
       </p>
-      <h2 className="tw-quiet__title">Откроется на уровне {unlockLevel}</h2>
-      <p className="tw-quiet__line">{reason}</p>
+      <h2 className="tw-quiet__title">Откроется после уровня {unlockLevel}</h2>
+      <p className="tw-quiet__line">
+        {reason}
+        {releasing?.inProduction ? " Этот уровень ещё готовится." : ""}
+      </p>
       <Link className="tw-button" data-variant="outline" href="/path">
         Продолжить путь
       </Link>

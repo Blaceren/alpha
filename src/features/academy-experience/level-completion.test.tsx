@@ -255,3 +255,54 @@ describe("LevelCompletion — the control follows the derived posture", () => {
     }
   });
 });
+
+/**
+ * 2026-10-02 — the sentences under a finished level are about the NEXT level,
+ * and say so.
+ */
+describe("LevelCompletion — which level the next step is about", () => {
+  it("names the next level above its sentence", () => {
+    const next = level({ levelCode: "v2.l005.cikl-sdelki", order: 5, title: "Жизненный цикл сделки", state: "in_progress" });
+    render(
+      <LevelCompletion
+        level={level({ order: 4, title: "Как читать график" })}
+        progress={PROGRESS}
+        nextAction={nextAction({
+          kind: "retry-assessment",
+          title: "Продолжите проверку знаний",
+          explanation: "Вы уже начали этот уровень. Проверка знаний завершит его.",
+          ctaLabel: "Продолжить",
+          href: "/lessons/v2.l005.cikl-sdelki",
+          level: next,
+        })}
+        moduleTitle={null}
+      />,
+    );
+    // «вы уже начали этот уровень» stands under level 4's title; the line above
+    // it says it is level 5 that was begun.
+    expect(screen.getByText("Дальше · уровень 5 · Жизненный цикл сделки")).toBeInTheDocument();
+  });
+
+  it("names no level when the next step is about the program", () => {
+    const { container } = render(
+      <LevelCompletion
+        level={level()}
+        progress={{ ...PROGRESS, totalLevels: 30, openLevels: 14 }}
+        nextAction={nextAction({
+          kind: "open-levels-complete",
+          posture: "done",
+          title: "Открытые уровни пройдены",
+          explanation: "Вы прошли все открытые уровни программы — 14 из 30.",
+          ctaLabel: "Открыть путь",
+          href: "/path",
+          level: null,
+        })}
+        moduleTitle={null}
+      />,
+    );
+    expect(container.querySelector(".ax-done__nextLevel")).toBeNull();
+    expect(screen.getByText("Открытые уровни пройдены")).toBeInTheDocument();
+    // Nothing to act on, so the control is the quiet one.
+    expect(screen.getByRole("link", { name: "Открыть путь" })).toHaveClass("ax-done__cta--quiet");
+  });
+});

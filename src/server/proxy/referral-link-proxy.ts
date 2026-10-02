@@ -1,9 +1,18 @@
 /**
- * Bounded same-origin proxy for the Pocket REFERRAL LINK owner (SERVER-ONLY).
+ * Bounded same-origin proxy for the Pocket REGISTRATION owners (SERVER-ONLY).
  *
- * Exposes exactly ONE operation, pinned to one constant Backend path:
+ * Exposes exactly TWO operations, each pinned to one constant Backend path:
  *
- *   referral-link -> POST /api/exchange/referral-link
+ *   referral-link      -> POST /api/exchange/referral-link
+ *   registration-check -> POST /api/exchange/registration/check
+ *
+ * THE SECOND ONE (2026-10-02). In the 30-level program the registration level
+ * stands third, so a learner may register with Pocket while still on a lesson
+ * in front of it: the postback binds the identity and completes nothing, since
+ * the level is not theirs yet. `registration-check` is how that is settled once
+ * they stand on the level — the Backend looks at its own authenticated identity
+ * row and completes the level if, and only if, the registration is already a
+ * fact. Nothing in the request can assert that it is: there is no body.
  *
  * WHY POST AND NOT GET
  * The Backend owner is a state-mutating, CSRF-protected POST: it mints the
@@ -34,11 +43,17 @@ import { getAcademyConfig, AcademyConfigError } from "@/config/academy-config";
 import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/errors";
 
 export type ReferralLinkProxyInput = {
-  operation: "referral-link";
+  operation: "referral-link" | "registration-check";
 };
 
-/** The one Backend path this proxy may ever reach. */
+/** The Backend paths this proxy may ever reach — constants, one per operation. */
 export const REFERRAL_LINK_BACKEND_PATH = "/api/exchange/referral-link";
+export const REGISTRATION_CHECK_BACKEND_PATH = "/api/exchange/registration/check";
+
+const BACKEND_PATHS: Readonly<Record<ReferralLinkProxyInput["operation"], string>> = {
+  "referral-link": REFERRAL_LINK_BACKEND_PATH,
+  "registration-check": REGISTRATION_CHECK_BACKEND_PATH,
+};
 
 /** A referral link is a short JSON envelope; anything larger is malformed. */
 export const MAX_REFERRAL_LINK_RESPONSE_BYTES = 8 * 1024;
@@ -88,8 +103,9 @@ export async function proxyReferralLink(
     return errorResponse(makeError("VALIDATION_ERROR", { status: 405 }), 405);
   }
   // Defensive: the route binds this, but a future caller must not be able to
-  // widen the operation into a second destination.
-  if (input.operation !== "referral-link") {
+  // widen the operation into another destination. `Object.hasOwn`, so a name
+  // inherited from Object.prototype can never resolve to a path.
+  if (!Object.hasOwn(BACKEND_PATHS, input.operation)) {
     return errorResponse(makeError("VALIDATION_ERROR", { status: 400 }), 400);
   }
 
@@ -109,7 +125,7 @@ export async function proxyReferralLink(
     return errorResponse(makeError("VALIDATION_ERROR", { status: 400 }), 400);
   }
 
-  const target = `${config.backendOrigin}${REFERRAL_LINK_BACKEND_PATH}`;
+  const target = `${config.backendOrigin}${BACKEND_PATHS[input.operation]}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
 

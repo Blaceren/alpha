@@ -20,8 +20,10 @@ import type {
   PointerEvent as ReactPointerEvent,
   SyntheticEvent,
 } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { formatTimecode } from "@/lib/time/timecode";
 import "./academy-video-player.css";
 
 export interface AcademyVideoCaption {
@@ -31,11 +33,30 @@ export interface AcademyVideoCaption {
   default?: boolean;
 }
 
+/**
+ * What a page may ask of a mounted player.
+ *
+ * One capability, and it exists for one sentence of the product: a test's
+ * разбор says «пересмотрите отрезок с 1:55», and the page should take the
+ * learner there instead of leaving them to find it on the timeline.
+ */
+export interface AcademyVideoPlayerHandle {
+  /**
+   * Move to `seconds` and, when asked, start playing from there.
+   *
+   * Safe before the file's metadata has arrived: the request is kept and
+   * applied the moment the length is known. A second beyond the end lands just
+   * before it rather than on the «просмотрен» screen.
+   */
+  seekTo: (seconds: number, options?: { play?: boolean }) => void;
+  /** Bring the player into view and give it keyboard focus. */
+  reveal: () => void;
+}
+
 export interface AcademyVideoPlayerProps {
   src: string;
   poster?: string;
   title: string;
-  description?: string;
   captions?: AcademyVideoCaption[];
   autoPlay?: boolean;
   className?: string;
@@ -44,11 +65,11 @@ export interface AcademyVideoPlayerProps {
   /** How the frame is filled. "contain" (default) never distorts; "cover" crops to fill. */
   fit?: "contain" | "cover";
   /**
-   * Showcase-only: render the synthetic branded pre-play graphic when no real
-   * `poster` is supplied. Production lessons leave this false so a missing
-   * poster shows a neutral frame, never a fake "Урок 18" placeholder.
+   * What to offer once the video has played to its end, beside «Смотреть
+   * снова». A lesson with a test says «Перейти к тесту»; without it the ended
+   * screen only offers the replay, as before.
    */
-  demoPoster?: boolean;
+  endedAction?: { label: string; href: string };
   initialVolume?: number;
   onPlay?: () => void;
   onPause?: () => void;
@@ -70,13 +91,8 @@ function isFiniteDuration(value: number) {
   return Number.isFinite(value) && value > 0;
 }
 
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const whole = Math.floor(seconds);
-  const minutes = Math.floor(whole / 60);
-  const remainder = whole % 60;
-  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
-}
+/** The clock is printed by the same function the test's «пересмотреть с …» uses. */
+const formatTime = formatTimecode;
 
 function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -122,24 +138,27 @@ function SkipTenIcon({ direction }: { direction: "back" | "forward" }) {
   );
 }
 
-export function AcademyVideoPlayer({
-  src,
-  poster,
-  title,
-  description,
-  captions = [],
-  autoPlay = false,
-  className,
-  aspectRatio = "source",
-  fit = "contain",
-  demoPoster = false,
-  initialVolume = 0.8,
-  onPlay,
-  onPause,
-  onEnded,
-  onTimeUpdate,
-  onError,
-}: AcademyVideoPlayerProps) {
+export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVideoPlayerProps>(
+  function AcademyVideoPlayer(
+    {
+      src,
+      poster,
+      title,
+      captions = [],
+      autoPlay = false,
+      className,
+      aspectRatio = "source",
+      fit = "contain",
+      endedAction,
+      initialVolume = 0.8,
+      onPlay,
+      onPause,
+      onEnded,
+      onTimeUpdate,
+      onError,
+    }: AcademyVideoPlayerProps,
+    ref,
+  ) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -153,6 +172,8 @@ export function AcademyVideoPlayer({
   const scrubbingRef = useRef(false);
   const errorRef = useRef<MediaError | null>(null);
   const onErrorRef = useRef(onError);
+  /** A seek asked for before the file's length was known. */
+  const pendingSeekRef = useRef<{ seconds: number; play: boolean } | null>(null);
 
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
@@ -400,6 +421,53 @@ export function AcademyVideoPlayer({
     }
   }, []);
 
+  // --- seek on request (the page's «пересмотреть с …») --------------------
+  const applySeek = useCallback((video: HTMLVideoElement, seconds: number, play: boolean) => {
+    // Just short of the end: a request for the very last second must show that
+    // second, not the «Урок просмотрен» screen.
+    const limit = Math.max(0, video.duration - 0.25);
+    const safeTime = clamp(Number.isFinite(seconds) ? seconds : 0, 0, limit);
+    video.currentTime = safeTime;
+    setCurrentTime(safeTime);
+    setEnded(false);
+    if (play) {
+      // A browser may refuse to start playback it did not see a gesture for.
+      // The player is then simply paused on the requested second.
+      void video.play().catch(() => undefined);
+    }
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seekTo(seconds, options) {
+        const video = videoRef.current;
+        if (!video) return;
+        const play = options?.play ?? false;
+        setControlsVisible(true);
+        if (isFiniteDuration(video.duration)) {
+          pendingSeekRef.current = null;
+          applySeek(video, seconds, play);
+          return;
+        }
+        pendingSeekRef.current = { seconds, play };
+        // Nothing has asked the browser for this file yet (or it failed):
+        // ask again, and the metadata handler finishes the job.
+        if (video.readyState === 0) video.load();
+      },
+      reveal() {
+        const root = rootRef.current;
+        if (!root) return;
+        const reduced =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        root.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "center" });
+        root.focus({ preventScroll: true });
+      },
+    }),
+    [applySeek],
+  );
+
   // --- timeline seek (pointer + touch) ------------------------------------
   const seekFromClientX = useCallback(
     (clientX: number) => {
@@ -577,8 +645,7 @@ export function AcademyVideoPlayer({
     onTimeUpdate?.(video.currentTime, video.duration || duration);
   };
 
-  const syncMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
-    const video = event.currentTarget;
+  const syncFromElement = (video: HTMLVideoElement) => {
     setDuration(isFiniteDuration(video.duration) ? video.duration : 0);
     if (!scrubbingRef.current) setCurrentTime(video.currentTime);
     if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -586,7 +653,50 @@ export function AcademyVideoPlayer({
     }
     clearError();
     updateCaptionTracks(captionsOn);
+    // A seek that was asked for before the length was known lands now.
+    const pending = pendingSeekRef.current;
+    if (pending && isFiniteDuration(video.duration)) {
+      pendingSeekRef.current = null;
+      applySeek(video, pending.seconds, pending.play);
+    }
   };
+
+  const syncMetadata = (event: SyntheticEvent<HTMLVideoElement>) => syncFromElement(event.currentTarget);
+
+  /**
+   * WHAT THE ELEMENT ALREADY KNOWS WHEN REACT ARRIVES.
+   *
+   * The <video> is in the server's HTML, so the browser starts fetching it
+   * before this component hydrates — and `loadedmetadata`, `durationchange`,
+   * even `error`, can all have fired by the time the handlers above are
+   * attached. They do not fire again. Measured on a lesson page: the element
+   * reported 500 seconds and a decodable frame while the clock read 0:00 / 0:00
+   * and the timeline stayed disabled for good.
+   *
+   * So on mount the element is read once, as if its events had just arrived.
+   * Nothing is assumed about which of them were missed: every fact is taken
+   * from the element itself.
+   */
+  const syncFromElementRef = useRef(syncFromElement);
+  useEffect(() => {
+    syncFromElementRef.current = syncFromElement;
+  });
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.error) {
+      reportError(video.error);
+      return;
+    }
+    if (video.readyState >= 1 /* HAVE_METADATA */) syncFromElementRef.current(video);
+    if (video.readyState >= 2 /* HAVE_CURRENT_DATA */) setHasFrame(true);
+    if (!video.paused && !video.ended) {
+      // Autoplay began before hydration: the controls must say "playing".
+      startedRef.current = true;
+      setStarted(true);
+      setPlaying(true);
+    }
+  }, [reportError]);
 
   // Once the first frame is decodable the video layer can fade in over the
   // poster instead of snapping from a black box.
@@ -742,24 +852,8 @@ export function AcademyVideoPlayer({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="avp__poster-image" src={poster} alt="" />
           </div>
-        ) : demoPoster ? (
-          // Showcase-only branded graphic — never a production fallback.
-          <div className="avp__poster" aria-hidden="true">
-            <div className="avp__poster-grid" />
-            <div className="avp__poster-route">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="avp__poster-copy">
-              <span>Академия / Урок 18</span>
-              <strong>{title}</strong>
-              {description && <p>{description}</p>}
-            </div>
-          </div>
         ) : (
-          // Production default with no poster: a neutral frame, no fake lesson.
+          // No poster: a plain frame. Nothing is drawn in a lesson's name.
           <div className="avp__poster avp__poster--plain" aria-hidden="true" />
         ))}
 
@@ -853,10 +947,21 @@ export function AcademyVideoPlayer({
         >
           <span className="avp__eyebrow">Урок просмотрен</span>
           <strong>{title}</strong>
-          <button type="button" onClick={() => void togglePlay()}>
-            <RotateCcw aria-hidden="true" />
-            Смотреть снова
-          </button>
+          <div className="avp__ended-actions">
+            {endedAction ? (
+              <Link className="avp__ended-next" href={endedAction.href}>
+                {endedAction.label}
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              className={endedAction ? "avp__ended-replay avp__ended-replay--quiet" : "avp__ended-replay"}
+              onClick={() => void togglePlay()}
+            >
+              <RotateCcw aria-hidden="true" />
+              Смотреть снова
+            </button>
+          </div>
         </div>
       )}
 
@@ -1008,4 +1113,5 @@ export function AcademyVideoPlayer({
       </span>
     </div>
   );
-}
+  },
+);

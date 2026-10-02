@@ -68,7 +68,7 @@ function ToolRow({ view }: { view: ToolWindowView }) {
       ) : (
         <span className="twh-row__state">
           <Lock aria-hidden="true" size={13} strokeWidth={2} />
-          Откроется на уровне {unlockLevel}
+          Откроется после уровня {unlockLevel}
         </span>
       )}
     </div>

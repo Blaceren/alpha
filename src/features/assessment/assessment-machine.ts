@@ -89,11 +89,17 @@ export function reducer(state: AssessmentState, action: AssessmentAction): Asses
       return { ...state, phase: phaseForError(action.error), error: action.error };
     case "select":
       // Only mutate for a known question while answering; never auto-preselect.
-      if (state.phase !== "answering" && state.phase !== "failed") return state;
+      //
+      // NOT WHILE `failed` (2026-10-02). A failed attempt is GRADED: the Backend
+      // has closed it, and its answers are now the subject of the разбор the
+      // learner is reading. This used to accept a new selection there and slide
+      // back to `answering` with the dead attempt's id, so the next submit went
+      // to an attempt that could no longer be answered. A new answer needs a new
+      // attempt, and «Попробовать ещё раз» is the one way to get it.
+      if (state.phase !== "answering") return state;
       if (!state.questions.some((q) => q.questionKey === action.questionKey)) return state;
       return {
         ...state,
-        phase: "answering",
         selections: { ...state.selections, [action.questionKey]: action.code },
       };
     case "submit_pending":

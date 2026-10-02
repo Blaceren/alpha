@@ -7,14 +7,14 @@
  * fails on the server is surfaced from the server error envelope, never hidden.
  */
 import { isFieldEffectivelyRequired } from "@/features/report/required-when";
-import type { ReportDefinitionModel } from "@/features/report/report-definition";
+import { isGroupActive, type ReportDefinitionModel } from "@/features/report/report-definition";
 import type { ReportFieldDefinition } from "@/lib/report/types";
 
 export type ReportFieldError = { stableKey: string; message: string };
 
 const MAX_TEXT = 16_000;
 
-function isBlank(value: unknown): boolean {
+export function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === "string") return value.trim().length === 0;
   if (Array.isArray(value)) return value.length === 0;
@@ -87,14 +87,26 @@ export function validateReport(
 ): ReportFieldError[] {
   const errors: ReportFieldError[] = [];
   for (const field of model.orderedFields) {
+    const group = model.groupOf.get(field.stableKey) ?? null;
+    // A record's own on/off is not a question with a right answer.
+    if (group?.switchField?.stableKey === field.stableKey) continue;
+    // A record that is switched off is not part of the report: its fields are
+    // not shown, so nothing in them can be wrong.
+    if (group && !isGroupActive(group, values)) continue;
+
     const raw = values[field.stableKey];
     const required = isFieldEffectivelyRequired(field, values);
     if (isBlank(raw)) {
       if (required) {
-        const reason = field.requiredWhen && !field.required
-          ? "Обязательно, так как отклонились от плана."
-          : "Обязательное поле.";
-        errors.push({ stableKey: field.stableKey, message: reason });
+        // «так как отклонились от плана» is what a conditional field means in
+        // the report it was written for. A field that is required because its
+        // RECORD was added is simply a required field of that record.
+        const conditional =
+          field.requiredWhen && !field.required && group?.switchField?.stableKey !== field.requiredWhen.fieldCode;
+        errors.push({
+          stableKey: field.stableKey,
+          message: conditional ? "Обязательно, так как отклонились от плана." : "Обязательное поле.",
+        });
       }
       continue; // a blank optional field is valid
     }

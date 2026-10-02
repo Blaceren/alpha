@@ -30,8 +30,8 @@ function fourQuestionStart(): AssessmentStart {
   };
 }
 const okStart = () => ({ ok: true as const, data: fourQuestionStart(), requestId: null });
-const failRes = (): { ok: true; data: AssessmentResult; requestId: null } => ({ ok: true, data: { created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 3, totalQuestions: 4, correctCount: 3, scoreBasisPoints: 7500, completion: null }, requestId: null });
-const passRes = (): { ok: true; data: AssessmentResult; requestId: null } => ({ ok: true, data: { created: true, status: "passed", passed: true, attemptNumber: 2, submittedAt: "t", durationSeconds: 3, totalQuestions: 4, correctCount: 4, scoreBasisPoints: 10000, completion: { levelNumber: 2, stableCode: "v2.l002.x", xpAwarded: 0, nextLevelNumber: 3, terminal: false, completedAt: "t" } }, requestId: null });
+const failRes = (): { ok: true; data: AssessmentResult; requestId: null } => ({ ok: true, data: { created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 3, totalQuestions: 4, correctCount: 3, scoreBasisPoints: 7500, completion: null, review: null }, requestId: null });
+const passRes = (): { ok: true; data: AssessmentResult; requestId: null } => ({ ok: true, data: { created: true, status: "passed", passed: true, attemptNumber: 2, submittedAt: "t", durationSeconds: 3, totalQuestions: 4, correctCount: 4, scoreBasisPoints: 10000, completion: { levelNumber: 2, stableCode: "v2.l002.x", xpAwarded: 0, nextLevelNumber: 3, terminal: false, completedAt: "t" }, review: [] }, requestId: null });
 
 const props = { stableCode: "v2.l002.x", locale: "ru", alreadyCompleted: false, nextLevelCode: null as string | null };
 
@@ -176,6 +176,118 @@ describe("LevelAssessment", () => {
     startMock.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR", status: null, code: null, messageKey: "k", requestId: null, retryable: true } });
     render(<LevelAssessment {...props} />);
     expect(await screen.findByRole("alert")).toHaveTextContent(/Не удалось загрузить проверку/);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * THE РАЗБОР (2026-10-02)
+   * ------------------------------------------------------------------ */
+
+  const reviewedFail = (): { ok: true; data: AssessmentResult; requestId: null } => ({
+    ok: true,
+    data: {
+      created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 3,
+      totalQuestions: 4, correctCount: 2, scoreBasisPoints: 5000, completion: null,
+      review: [
+        { questionKey: "q1", questionNumber: 1, explanation: "При наведении курсора площадка показывает четыре значения.", rewatchFromSeconds: 115 },
+        { questionKey: "q4", questionNumber: 4, explanation: "Это две разные настройки.", rewatchFromSeconds: null },
+      ],
+    },
+    requestId: null,
+  });
+
+  async function failWithReview(extra: Partial<React.ComponentProps<typeof LevelAssessment>> = {}) {
+    startMock.mockResolvedValue(okStart());
+    submitMock.mockResolvedValue(reviewedFail());
+    render(<LevelAssessment {...props} {...extra} />);
+    await screen.findByRole("button", { name: /Проверить ответы/ });
+    await answerAll();
+    await userEvent.click(screen.getByRole("button", { name: /Проверить ответы/ }));
+    await screen.findByText(/Пока не пройдено/);
+  }
+
+  it("a failed attempt explains every wrong answer, and only the wrong ones", async () => {
+    await failWithReview({ hasLessonVideo: true });
+    const items = screen.getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("data-verdict"))).toEqual(["wrong", "right", "right", "wrong"]);
+    expect(within(items[0]!).getByText("Разбор")).toBeInTheDocument();
+    expect(within(items[0]!).getByText(/четыре значения/)).toBeInTheDocument();
+    expect(within(items[3]!).getByText("Это две разные настройки.")).toBeInTheDocument();
+    expect(within(items[1]!).queryByText("Разбор")).toBeNull();
+    // The word is there, and it is never the only thing said.
+    expect(within(items[0]!).getByText("Неверно")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("Верно")).toBeInTheDocument();
+  });
+
+  it("the разбор never marks an option as the right one", async () => {
+    await failWithReview({ hasLessonVideo: true });
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.closest("[data-correct]")).toBeNull();
+      expect(radio).not.toHaveAttribute("data-correct");
+    }
+    // Only the learner's own selections are checked: one per question.
+    expect(screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked)).toHaveLength(4);
+  });
+
+  it("a graded attempt is locked: its answers cannot be changed, only retried", async () => {
+    await failWithReview({ hasLessonVideo: true });
+    for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("B1"));
+    expect((screen.getByLabelText("A1") as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("button", { name: /Проверить ответы/ })).toBeNull();
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Попробовать ещё раз/ })).toBeEnabled();
+  });
+
+  it("«Пересмотреть с 1:55» asks the page's player for exactly that second", async () => {
+    const { subscribeLessonRewatch } = await import("@/features/lesson-media/lesson-playback");
+    const asked: number[] = [];
+    const unsubscribe = subscribeLessonRewatch(({ seconds }) => asked.push(seconds));
+    try {
+      await failWithReview({ hasLessonVideo: true });
+      // One control: the second wrong answer names no second.
+      const controls = screen.getAllByRole("button", { name: /Пересмотреть с/ });
+      expect(controls).toHaveLength(1);
+      expect(controls[0]).toHaveTextContent("Пересмотреть с 1:55");
+      await userEvent.click(controls[0]!);
+      expect(asked).toEqual([115]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("with no player on the page the second is a sentence, not a dead button", async () => {
+    await failWithReview({ hasLessonVideo: false });
+    expect(screen.queryByRole("button", { name: /Пересмотреть с/ })).toBeNull();
+    expect(screen.getByText(/Пересмотрите отрезок урока с 1:55/)).toBeInTheDocument();
+  });
+
+  it("a control that finds no player says where the fragment starts", async () => {
+    // The page promised a video and none is listening (it failed to mount).
+    await failWithReview({ hasLessonVideo: true });
+    await userEvent.click(screen.getByRole("button", { name: /Пересмотреть с 1:55/ }));
+    expect(await screen.findByText(/Нужный отрезок начинается\s+с 1:55/)).toBeInTheDocument();
+  });
+
+  it("an assessment without a разбор marks no question either way", async () => {
+    startMock.mockResolvedValue(okStart());
+    submitMock.mockResolvedValue(failRes()); // review: null
+    render(<LevelAssessment {...props} hasLessonVideo />);
+    await screen.findByRole("button", { name: /Проверить ответы/ });
+    await answerAll();
+    await userEvent.click(screen.getByRole("button", { name: /Проверить ответы/ }));
+    await screen.findByText(/Пока не пройдено/);
+    expect(screen.queryByText("Разбор")).toBeNull();
+    expect(screen.queryByText("Неверно")).toBeNull();
+    for (const li of screen.getAllByRole("listitem")) expect(li).not.toHaveAttribute("data-verdict");
+  });
+
+  it("says before the first answer that attempts are unlimited", async () => {
+    startMock.mockResolvedValue(okStart());
+    render(<LevelAssessment {...props} />);
+    await screen.findByRole("button", { name: /Проверить ответы/ });
+    expect(document.querySelector('[role="status"]')).toHaveTextContent(
+      "4 вопроса. Нужно ответить верно на все; попытки не ограничены.",
+    );
   });
 
   it("announces status through a polite live region", async () => {

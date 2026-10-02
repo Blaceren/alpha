@@ -370,6 +370,51 @@ describe("the authenticated route group", () => {
      the link is on, or the one Back is pressed from. */
   "src/app/layout.tsx",
   "src/components/navigation/history-entry-sync.tsx",
+  /* THE 30-LEVEL PROGRAM (owner, 2026-10-02: «внедряем первые 30 настоящих
+     уровней … плеер так же добавляй уже … стилизируй его если надо под наш
+     дизайн»). The read model's new facts — chapters, the author's kind of a
+     level, levels defined and not open yet, two completion methods, the test's
+     разбор — and the surfaces that say them: the level page becomes a lesson
+     page (video, the lesson's own text, one task at a time, the tool a level
+     opens), the test explains a wrong answer and sends the learner to the
+     second of the video, the report is a list of records the platform accepts
+     by itself, the registration level settles a registration that came first,
+     Path draws chapters and the end of what is open, and the player is in the
+     product's language and can be asked for a second. Two routes: the lesson
+     media the Academy serves to a learner the Backend would give the lesson to,
+     and the registration check. None of it is a loading boundary. */
+  "src/app/api/backend/exchange/registration/check/route.ts",
+  "src/app/media/[...path]/route.ts",
+  "src/components/media/academy-video-player.tsx",
+  "src/features/academy-experience/level-completion.tsx",
+  "src/features/assessment/assessment-machine.ts",
+  "src/features/assessment/level-assessment.tsx",
+  "src/features/lesson-media/lesson-playback.ts",
+  "src/features/level-detail-fidelity/level-detail-fidelity.css",
+  "src/features/level-detail-fidelity/level-lesson-shape.ts",
+  "src/features/level-detail-fidelity/level-lesson-text.tsx",
+  "src/features/level-detail-fidelity/level-lesson.css",
+  "src/features/level-detail-fidelity/level-unlocks.tsx",
+  "src/features/level-start/level-start.tsx",
+  "src/features/manual-completion/level-manual-completion.tsx",
+  "src/features/path-fidelity/path-fidelity-view.tsx",
+  "src/features/path-fidelity/path-state.ts",
+  "src/features/pocket-registration/pocket-registration-confirmed.tsx",
+  "src/features/pocket-registration/pocket-registration.tsx",
+  "src/features/report/components/validation-summary.tsx",
+  "src/features/report/level-report.tsx",
+  "src/features/report/report-definition.ts",
+  "src/features/report/report-machine.ts",
+  "src/features/report/report-validation.ts",
+  "src/lib/assessment/types.ts",
+  "src/lib/curriculum/level-kind.ts",
+  "src/lib/curriculum/next-action.ts",
+  "src/lib/curriculum/progress-state.ts",
+  "src/lib/pocket-registration/referral-link-client.ts",
+  "src/lib/time/timecode.ts",
+  "src/server/media/lesson-media-access.ts",
+  "src/server/media/lesson-media-file.ts",
+  "src/server/proxy/referral-link-proxy.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -395,7 +440,17 @@ describe("the authenticated route group", () => {
        or the failure said only that two 54-item arrays differed. */
     expect(changed.sort()).toEqual([...AUTHORISED_VIEWER_IDENTITY].sort());
     for (const prefix of [
-      "src/features/home", "src/features/level-detail-fidelity",
+      "src/features/home",
+      /* Level detail is no longer frozen here: the 30-level program (owner,
+         2026-10-02) made the level page a lesson page — the lesson's own text,
+         the tool a level opens, the test's разбор, the report as records — and
+         took the player's look out of this tree and into the player.
+         level-lesson.test.tsx governs the tree in detail: what text may be
+         printed on the page and what keeps the reading surface, that the tool
+         block is the Backend's verdict and never a link to a closed tool, and
+         that every rule of the new sheet stays inside `.ld`, on the page's own
+         tokens and breakpoints. Freezing it in two places would mean the looser
+         of the two fails first, for the least informative reason. */
       /* Tools is no longer frozen here: TOOLS-AUTHORITY-DIVERGENCE-1
          was authorised to move the access decision, and tools-equivalence.test.ts
          governs that tree in detail — rendered contract, the decision lines, and

@@ -1,16 +1,36 @@
 "use client";
 
 /**
- * L2 server-graded assessment (Client Component).
+ * The server-graded lesson test (Client Component).
  *
  * Renders the answer-free questions returned by the Backend, submits stable
  * question/option identifiers, and derives EVERY pass/completion decision from
  * the Backend response. It never computes a score, never writes completion, and
  * never stores pass/unlock/answers as local authority. On a server-confirmed
  * pass it refetches the server-authoritative curriculum via `router.refresh()`.
+ *
+ * THE РАЗБОР (2026-10-02). The owner's rules for a test are five, and four of
+ * them land here:
+ *
+ *   «При неверном ответе показывать разбор, а не только слово „неверно“.»
+ *   «Разбор адресован задаче, а не человеку.»
+ *   «Указывать конкретный отрезок видео для пересмотра.»
+ *   «Количество попыток не ограничивать.»
+ *
+ * So a failed attempt stays on the screen exactly as it was answered, each
+ * wrongly answered question carries the author's explanation and — when the
+ * lesson has a video on this page — a control that plays it from the named
+ * second. The explanation is the author's text and is printed as written. The
+ * labels around it speak about the question («Разбор»), never about the learner.
+ * The fifth rule («неудачные попытки никак не отражать в прогрессе») is the
+ * Backend's, and it keeps it.
+ *
+ * WHAT A FAILED ATTEMPT IS NOT. It is not editable. The Backend has graded and
+ * closed it, so its answers are locked and the only way forward is a new
+ * attempt.
  */
 import Link from "next/link";
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { newRequestId, startAssessment, submitAssessment } from "@/lib/assessment/assessment-client";
 import {
@@ -19,6 +39,9 @@ import {
   reducer,
   type AssessmentState,
 } from "@/features/assessment/assessment-machine";
+import type { AssessmentReviewItem } from "@/lib/assessment/types";
+import { requestLessonRewatch } from "@/features/lesson-media/lesson-playback";
+import { formatTimecode } from "@/lib/time/timecode";
 import "@/features/assessment/assessment.css";
 
 export type LevelAssessmentProps = {
@@ -28,6 +51,12 @@ export type LevelAssessmentProps = {
   alreadyCompleted: boolean;
   /** From server navigation: next level code once it is route-accessible, else null. */
   nextLevelCode: string | null;
+  /**
+   * The lesson's video is on this page, so «пересмотреть с …» can be a control
+   * rather than a sentence. Server-decided: it is true exactly when the page
+   * rendered a player.
+   */
+  hasLessonVideo?: boolean;
 };
 
 function scoreLine(state: AssessmentState): string {
@@ -36,12 +65,29 @@ function scoreLine(state: AssessmentState): string {
   return `Верно ${r.correctCount} из ${r.totalQuestions}`;
 }
 
-export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLevelCode }: LevelAssessmentProps) {
+/** Russian plural for «вопрос». Grammar, not a product decision. */
+function questionWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "вопрос";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "вопроса";
+  return "вопросов";
+}
+
+export function LevelAssessment({
+  stableCode,
+  locale,
+  alreadyCompleted,
+  nextLevelCode,
+  hasLessonVideo = false,
+}: LevelAssessmentProps) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, alreadyCompleted, initialState);
   const inFlight = useRef(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const statusRef = useRef<HTMLParagraphElement | null>(null);
+  /** The question whose «пересмотреть» found no player to answer it. */
+  const [rewatchMissed, setRewatchMissed] = useState<string | null>(null);
 
   // Start (or resume) the attempt whenever we enter the loading phase
   // (initial mount and immediate retry). Aborts on unmount.
@@ -83,7 +129,7 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
       inFlight.current = false;
       if (res.ok) {
         dispatch({ type: "submit_ok", result: res.data });
-        if (res.data.passed) router.refresh(); // re-read server-authoritative state (L3 unlock)
+        if (res.data.passed) router.refresh(); // re-read server-authoritative state (next level unlock)
       } else {
         dispatch({ type: "submit_err", error: res.error });
       }
@@ -92,10 +138,31 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
   );
 
   const onRetry = useCallback(() => {
+    setRewatchMissed(null);
     dispatch({ type: "retry" });
     // Return focus to the assessment heading for the fresh attempt.
     requestAnimationFrame(() => headingRef.current?.focus());
   }, []);
+
+  const onRewatch = useCallback((item: AssessmentReviewItem) => {
+    if (item.rewatchFromSeconds === null) return;
+    // False when no player is mounted to take the request (the video failed to
+    // render, or was removed since the page was served). Say so beside the
+    // control instead of leaving a button that did nothing.
+    setRewatchMissed(requestLessonRewatch(item.rewatchFromSeconds) ? null : item.questionKey);
+  }, []);
+
+  /**
+   * The разбор, by question. Present only on a graded FAILED attempt whose
+   * assessment shows explanations; null means the result is the aggregate alone
+   * and no question is marked either way.
+   */
+  const review = useMemo(() => {
+    if (state.phase !== "failed" || !state.result || state.result.review === null) return null;
+    return new Map(state.result.review.map((item) => [item.questionKey, item]));
+  }, [state.phase, state.result]);
+
+  const graded = state.phase === "failed";
 
   const nextAction = nextLevelCode ? (
     <Link className="asmt__next" href={`/lessons/${encodeURIComponent(nextLevelCode)}`}>
@@ -112,6 +179,8 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
       {/* Live region: submit / result announcements (not color-only). */}
       <p className="asmt__status" role="status" aria-live="polite" tabIndex={-1} ref={statusRef}>
         {state.phase === "loading" && "Загрузка вопросов…"}
+        {state.phase === "answering" &&
+          `${state.questions.length} ${questionWord(state.questions.length)}. Нужно ответить верно на все; попытки не ограничены.`}
         {state.phase === "submitting" && "Проверяем ответы…"}
         {state.phase === "failed" && `Не пройдено. ${scoreLine(state)}. Можно попробовать ещё раз.`}
         {state.phase === "passed" && `Пройдено. ${scoreLine(state)}. Уровень завершён.`}
@@ -144,18 +213,38 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
             {state.phase === "failed" && (
               <div className="asmt__result asmt__result--fail" role="alert">
                 <p className="asmt__result-title">✗ Пока не пройдено</p>
-                <p className="asmt__result-score">{scoreLine(state)} — нужно ответить верно на все вопросы.</p>
+                <p className="asmt__result-score">
+                  {scoreLine(state)} — нужно ответить верно на все вопросы.
+                  {review
+                    ? " Ниже — разбор вопросов с неверным ответом. Попытки не ограничены."
+                    : " Попытки не ограничены."}
+                </p>
               </div>
             )}
 
             <ol className="asmt__questions">
               {state.questions.map((q) => {
                 const name = `q-${q.questionKey}`;
+                const item = review?.get(q.questionKey) ?? null;
+                /* A verdict exists only where the Backend gave one: with a
+                   review, a question it lists was answered wrongly and one it
+                   does not list was answered rightly. Without a review nothing
+                   is marked. */
+                const verdict = review ? (item ? "wrong" : "right") : null;
+                const reviewId = `${name}-review`;
                 return (
-                  <li key={q.questionKey} className="asmt__question">
-                    <fieldset className="asmt__fieldset">
+                  <li key={q.questionKey} className="asmt__question" data-verdict={verdict ?? undefined}>
+                    <fieldset
+                      className="asmt__fieldset"
+                      aria-describedby={item ? reviewId : undefined}
+                    >
                       <legend className="asmt__legend">
                         <span className="asmt__qnum">Вопрос {q.questionNumber}</span> {q.prompt}
+                        {verdict ? (
+                          <span className="asmt__verdict" data-verdict={verdict}>
+                            {verdict === "right" ? "Верно" : "Неверно"}
+                          </span>
+                        ) : null}
                       </legend>
                       {q.options.map((opt) => {
                         const id = `${name}-${opt.code}`;
@@ -167,7 +256,7 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
                               name={name}
                               value={opt.code}
                               checked={state.selections[q.questionKey] === opt.code}
-                              disabled={state.phase === "submitting"}
+                              disabled={state.phase === "submitting" || graded}
                               onChange={() => dispatch({ type: "select", questionKey: q.questionKey, code: opt.code })}
                             />
                             <label htmlFor={id}>{opt.label}</label>
@@ -175,6 +264,42 @@ export function LevelAssessment({ stableCode, locale, alreadyCompleted, nextLeve
                         );
                       })}
                     </fieldset>
+
+                    {item ? (
+                      <div className="asmt__review" id={reviewId} data-question={q.questionKey}>
+                        <p className="asmt__review-label">Разбор</p>
+                        {item.explanation ? (
+                          <p className="asmt__review-text">{item.explanation}</p>
+                        ) : (
+                          <p className="asmt__review-text">
+                            На этот вопрос дан неверный ответ.
+                          </p>
+                        )}
+                        {item.rewatchFromSeconds !== null ? (
+                          hasLessonVideo ? (
+                            <>
+                              <button
+                                type="button"
+                                className="asmt__rewatch"
+                                onClick={() => onRewatch(item)}
+                              >
+                                Пересмотреть с {formatTimecode(item.rewatchFromSeconds)}
+                              </button>
+                              {rewatchMissed === q.questionKey ? (
+                                <p className="asmt__rewatch-note" role="status">
+                                  Видео урока сейчас недоступно на странице. Нужный отрезок начинается
+                                  с {formatTimecode(item.rewatchFromSeconds)}.
+                                </p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <p className="asmt__rewatch-note">
+                              Пересмотрите отрезок урока с {formatTimecode(item.rewatchFromSeconds)}.
+                            </p>
+                          )
+                        ) : null}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

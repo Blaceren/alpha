@@ -17,7 +17,7 @@ vi.mock("@/lib/pocket-registration/referral-link-client", async () => {
   const actual = await vi.importActual<
     typeof import("@/lib/pocket-registration/referral-link-client")
   >("@/lib/pocket-registration/referral-link-client");
-  return { ...actual, requestReferralLink: vi.fn() };
+  return { ...actual, requestReferralLink: vi.fn(), checkPocketRegistration: vi.fn() };
 });
 
 import * as client from "@/lib/pocket-registration/referral-link-client";
@@ -25,7 +25,10 @@ import { PocketRegistration } from "@/features/pocket-registration/pocket-regist
 import { makeError } from "@/lib/api/errors";
 
 const requestMock = vi.mocked(client.requestReferralLink);
+const checkMock = vi.mocked(client.checkPocketRegistration);
 
+/** What the Backend says about a learner who has not registered with Pocket. */
+const pending = () => ({ ok: true as const, confirmed: false, levelCompleted: false, requestId: null });
 const EXTERNAL_URL =
   "https://affiliate.example.invalid/register?utm_campaign=820107&cid=962747&click_id=tq-a&clickid=tq-a&landing=Landing_1";
 
@@ -36,6 +39,8 @@ let openSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   refresh.mockReset();
   requestMock.mockReset();
+  checkMock.mockReset();
+  checkMock.mockResolvedValue(pending());
   openSpy = vi.fn();
   vi.stubGlobal("open", openSpy);
 });
@@ -186,43 +191,114 @@ describe("PocketRegistration — failure never unlocks anything", () => {
 });
 
 describe("PocketRegistration — the manual re-check", () => {
-  it("re-reads authoritative server state and stays pending", async () => {
+  it("asks the Backend's own record, re-reads the level and stays pending", async () => {
     const user = userEvent.setup();
     render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1)); // the arrival check
+    refresh.mockReset();
 
     await user.click(recheckButton());
 
-    // The answer comes from the server render, not from local state.
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(2));
+    // The request carries nothing: no learner, no level, no claim.
+    expect(checkMock).toHaveBeenLastCalledWith();
+    // The answer the learner sees comes from the server render, not local state.
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    // Nothing was written and no link was requested.
+    // No link was requested and nothing was opened.
     expect(requestMock).not.toHaveBeenCalled();
     expect(openSpy).not.toHaveBeenCalled();
   });
 
   it("deduplicates rapid re-check clicks", async () => {
+    let release: (value: ReturnType<typeof pending>) => void = () => {};
     const user = userEvent.setup();
     render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    checkMock.mockReturnValue(new Promise((resolve) => { release = resolve; }));
 
     const button = recheckButton();
     await user.click(button);
     await user.click(button);
     await user.click(button);
 
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(checkMock).toHaveBeenCalledTimes(2); // arrival + ONE re-check
     await waitFor(() => expect(recheckButton()).toBeDisabled());
+    expect(recheckButton()).toHaveAttribute("aria-busy", "true");
+    await act(async () => { release(pending()); });
+    await waitFor(() => expect(recheckButton()).toBeEnabled());
   });
 
   it("reports a neutral pending message rather than a failure", async () => {
-    vi.useFakeTimers();
-    try {
-      render(<PocketRegistration />);
-      const button = recheckButton();
-      await act(async () => { button.click(); });
-      await act(async () => { vi.advanceTimersByTime(1300); });
-      expect(screen.getByRole("status").textContent ?? "").toMatch(/пока не подтверждена/);
-    } finally {
-      vi.useRealTimers();
-    }
+    const user = userEvent.setup();
+    render(<PocketRegistration />);
+    await user.click(recheckButton());
+    await waitFor(() => expect(screen.getByRole("status").textContent ?? "").toMatch(/пока не подтверждена/));
+  });
+
+  it("says so when Pocket has confirmed, and leaves completion to the re-read", async () => {
+    const user = userEvent.setup();
+    render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    checkMock.mockResolvedValue({ ok: true, confirmed: true, levelCompleted: true, requestId: null });
+    refresh.mockReset();
+
+    await user.click(recheckButton());
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    const text = screen.getByRole("status").textContent ?? "";
+    expect(text).toMatch(/Регистрация подтверждена/);
+    // The component itself never declares the level finished.
+    expect(text).not.toMatch(/уровень завершён|уровень пройден/i);
+  });
+
+  it("a failed check says the check failed — not that the learner is unregistered", async () => {
+    const user = userEvent.setup();
+    render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    checkMock.mockResolvedValue({ ok: false, error: makeError("BACKEND_UNAVAILABLE") });
+
+    await user.click(recheckButton());
+
+    await waitFor(() => expect(screen.getByRole("status").textContent ?? "").toMatch(/Сервер сейчас недоступен/));
+    expect(screen.getByRole("status").textContent ?? "").not.toMatch(/пока не подтверждена/);
+  });
+});
+
+/**
+ * 2026-10-02 — the registration level stands THIRD in the 30-level program, so
+ * the registration may already be a fact when the learner arrives on it.
+ */
+describe("PocketRegistration — the arrival check", () => {
+  it("asks once on arrival, and re-reads the level only when it was completed", async () => {
+    checkMock.mockResolvedValue({ ok: true, confirmed: true, levelCompleted: true, requestId: null });
+    render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("says and does nothing for a learner who has not registered", async () => {
+    render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent ?? "").toBe("");
+  });
+
+  it("a failed arrival check is silent: the learner asked nothing", async () => {
+    checkMock.mockResolvedValue({ ok: false, error: makeError("NETWORK_ERROR") });
+    render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent ?? "").toBe("");
+  });
+
+  it("does not ask again on re-render", async () => {
+    const { rerender } = render(<PocketRegistration />);
+    await waitFor(() => expect(checkMock).toHaveBeenCalledTimes(1));
+    rerender(<PocketRegistration />);
+    await act(async () => { await Promise.resolve(); });
+    expect(checkMock).toHaveBeenCalledTimes(1);
   });
 });
 

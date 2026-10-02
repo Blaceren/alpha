@@ -10,7 +10,10 @@ import type {
 import { CurriculumInfoState } from "@/features/curriculum-api/curriculum-states";
 import { PathRail } from "@/features/path-fidelity/path-rail";
 import {
+  chapterKicker,
+  endsChapter,
   focusKind,
+  followingLevelLine,
   waitingLine,
   nodeState,
   nodeStateText,
@@ -135,7 +138,11 @@ export function PathFidelityView({
     currentOrder === null
       ? null
       : modules.flatMap((m) => m.levels).find((l) => l.order === currentOrder + 1) ?? null;
-  const nextReason = followingLevel ? explainLevelState(followingLevel) : null;
+  const nextReason = focusLevel ? followingLevelLine(focusLevel, followingLevel, explainLevelState) : null;
+  /* The level in focus is defined and not open yet: every open level is behind
+     the learner, and the page says what comes next rather than what is "now". */
+  const focusInProduction = focusLevel?.inProduction === true;
+  const chapterLine = chapterKicker(focusModule);
 
   /* The primary action is whatever `deriveNextAction` decided; it returns label
      and href together or not at all, so one test covers both.
@@ -149,8 +156,11 @@ export function PathFidelityView({
 
      The secondary is the frozen "открыть описание" navigation, shown only when
      it would lead somewhere else than the primary already does. */
+  /* …and never a control that leads to this very page. When every open level is
+     finished the shared decision offers «Открыть путь», which is the right
+     thing for Home and for a level page to say and nothing at all here. */
   const primaryAction =
-    nextAction.ctaLabel !== null && nextAction.href !== null
+    nextAction.ctaLabel !== null && nextAction.href !== null && nextAction.href !== "/path"
       ? { label: nextAction.ctaLabel, href: nextAction.href }
       : null;
   const showSecondary =
@@ -166,13 +176,20 @@ export function PathFidelityView({
             <h1 id="path-title">Путь</h1>
             <p className="path-header__done">
               Пройдено {view.progress.completedLevels} из {view.progress.totalLevels} уровней
+              {/* Said only while part of the program is still being produced:
+                  how many of those levels can be taken at all. */}
+              {view.progress.openLevels < view.progress.totalLevels
+                ? ` · открыто ${view.progress.openLevels}`
+                : ""}
             </p>
           </div>
           {focusLevel ? (
             <p className="path-header__now">
-              Сейчас: <b>Уровень {focusLevel.order}</b> · {focusLevel.title}
+              {focusInProduction ? "Дальше" : "Сейчас"}: <b>Уровень {focusLevel.order}</b> ·{" "}
+              {focusLevel.title}
               <span className="path-header__module">
                 модуль {focusModule.order} из {modules.length}
+                {focusInProduction ? " · готовится" : ""}
               </span>
             </p>
           ) : null}
@@ -180,7 +197,7 @@ export function PathFidelityView({
 
         <nav className="mod-nav" aria-label="Модули программы">
           <ol className="mod-nav__ribbon">
-            {modules.map((m) => {
+            {modules.map((m, index) => {
               const seg = moduleSegState(m, focusModule.order);
               return (
                 <li
@@ -188,7 +205,7 @@ export function PathFidelityView({
                   className={[
                     "mod-seg",
                     `mod-seg--${seg}`,
-                    m.order % 5 === 0 ? "mod-seg--chapter" : "",
+                    endsChapter(modules, index) ? "mod-seg--chapter" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -214,6 +231,7 @@ export function PathFidelityView({
         <section className="workspace" aria-label="Текущий модуль">
           <header className="workspace__head">
             <span className="workspace__kicker">
+              {chapterLine ? <>{chapterLine} · </> : null}
               {moduleKicker(focusModule.order, modules.length)}
             </span>
             <span className="workspace__name">{focusModule.title}</span>
@@ -263,7 +281,7 @@ export function PathFidelityView({
                       <span className="level-node__name">{level.title}</span>
                       {beyond ? null : (
                         <span className="level-node__type">
-                          {level.typeInfo.label}
+                          {level.kindLabel}
                           {level.completionMethod === "mentor-review" &&
                           (st === "current" || st === "next")
                             ? " · mentor review"
@@ -274,7 +292,7 @@ export function PathFidelityView({
                         <span className="visually-hidden">{NODE_STATE_WORD.locked}</span>
                       ) : (
                         <span className="level-node__state">
-                          {nodeStateText(st, kind, level.stateLabel)}
+                          {nodeStateText(st, kind, level.stateLabel, level.inProduction)}
                         </span>
                       )}
                       {st === "next" ? (
@@ -304,7 +322,7 @@ export function PathFidelityView({
               </h2>
               <p className="focus__meta">
                 Модуль {String(focusModule.order).padStart(2, "0")} «{focusModule.title}» ·{" "}
-                {focusLevel.typeInfo.label}
+                {focusLevel.kindLabel}
                 {focusLevel.completionMethod === "mentor-review" ? " · mentor review" : ""}
               </p>
               <p className={`focus__state focus__state--${kind}`}>

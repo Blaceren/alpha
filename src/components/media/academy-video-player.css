@@ -1,7 +1,28 @@
+/*
+ * THE LESSON PLAYER, IN THE PRODUCT'S OWN LANGUAGE (2026-10-02).
+ *
+ * The player was drawn before the Academy settled on Ink and Signal, and kept
+ * that earlier look as its own: a 20px frame floating on a deep shadow, a lit
+ * ring behind the play button, a glass control bar. The level page then
+ * repainted four of its properties from outside. The owner asked for the player
+ * to be brought under the product's design, so the look now lives HERE, once,
+ * and no page restyles it:
+ *
+ *   - a flat Ink frame with the product's 8px corner and a hairline edge, no
+ *     drop shadow — the same material as every other surface of a level;
+ *   - Signal only where something is current or focused: the played part of
+ *     the timeline, its thumb, a pressed toggle, the focus ring, and the one
+ *     forward control of the ended screen;
+ *   - transport buttons are neutral Ink with a hairline, never a filled accent;
+ *   - time in the narrow Mono the rest of the product uses for coordinates.
+ *
+ * The shade under the controls and their slight blur stay: they are what keeps
+ * white controls legible over an arbitrary video frame, not decoration.
+ */
 .avp {
   /*
    * Academy design tokens → local player aliases. Values come from
-   * src/styles/tokens.css; the HEX after each var() is only a fallback so the
+   * src/styles/tokens.css; the value after each var() is only a fallback so the
    * player still renders if it is ever mounted outside the token scope.
    */
   --avp-accent: var(--route-current, var(--ata-signal-500)); /* the Signal accent, via the route token */
@@ -14,20 +35,23 @@
   --avp-text-2: var(--text-secondary, #626a60);
   --avp-text-muted: var(--text-muted, #9aa396);
   --avp-eyebrow: var(--route-upcoming, var(--ata-text-secondary));
-  --avp-border: var(--divider, rgba(150, 175, 210, 0.14));
-  --avp-border-strong: var(--divider-strong, rgba(150, 175, 210, 0.24));
+  --avp-border: var(--divider, rgba(237, 240, 234, 0.14));
+  --avp-border-strong: var(--divider-strong, rgba(237, 240, 234, 0.24));
   --avp-focus: var(--focus-ring, var(--ata-signal-500));
-  --avp-glow: var(--glow-current, rgba(57, 211, 166, 0.22));
   --avp-danger: #ff8f96; /* no Academy danger token exists; error semantics only */
   --avp-danger-soft: rgba(255, 120, 128, 0.12);
-  /* Neutral (dark) surface for the primary play buttons — the Signal accent is
-   * used only pointwise (timeline, thumbs, active toggles), not as a big fill. */
-  --avp-btn-dark: rgba(10, 15, 25, 0.86);
-  --avp-btn-dark-hover: rgba(18, 26, 40, 0.94);
-  --avp-btn-border: rgba(117, 142, 170, 0.28);
-  --avp-btn-ink: #f4f7fa;
+  /* Neutral Ink for the play buttons — the Signal accent is used only pointwise
+   * (timeline, thumbs, active toggles), never as a large fill. */
+  --avp-btn-dark: rgba(11, 13, 10, 0.86);
+  --avp-btn-dark-hover: rgba(26, 31, 24, 0.94);
+  --avp-btn-border: rgba(237, 240, 234, 0.28);
+  --avp-btn-ink: var(--text-primary, #edf0ea);
+  /* The corner every surface of a level has. */
+  --avp-radius: 8px;
+  --avp-radius-inner: 6px;
 
-  --avp-control-size: 42px;
+  /* A transport button is a touch target on every width. */
+  --avp-control-size: 44px;
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -39,10 +63,7 @@
   color: var(--avp-text);
   background: var(--avp-field);
   border: 1px solid var(--avp-border-strong);
-  border-radius: 20px;
-  box-shadow:
-    0 26px 70px rgba(0, 3, 12, 0.5),
-    0 0 0 1px color-mix(in srgb, var(--avp-border) 60%, transparent) inset;
+  border-radius: var(--avp-radius);
   outline: none;
   touch-action: manipulation;
 }
@@ -97,33 +118,15 @@
 .avp__poster {
   z-index: 1;
   overflow: hidden;
-  background:
-    radial-gradient(
-      circle at 79% 28%,
-      color-mix(in srgb, var(--avp-accent-deep) 22%, transparent),
-      transparent 35%
-    ),
-    linear-gradient(
-      125deg,
-      var(--avp-field) 0%,
-      var(--avp-surface) 48%,
-      var(--avp-field) 100%
-    );
+  /* Before the first frame: the level's own context surface, flat. The earlier
+   * frame drew a lit ring here; a lesson that has not started has nothing to
+   * announce. */
+  background: var(--avp-surface);
 }
 
-/* A real uploaded/lesson preview replaces the synthetic branded poster. */
+/* A real lesson preview fills the frame the way the video will. */
 .avp__poster--image {
   background: var(--avp-field);
-}
-
-.avp__poster--image::before {
-  content: none;
-}
-
-/* Neutral production frame when a lesson has no poster: keep the subtle base
- * gradient, drop the decorative ring and all synthetic lesson chrome. */
-.avp__poster--plain::before {
-  content: none;
 }
 
 .avp__poster-image {
@@ -135,113 +138,13 @@
   object-position: center;
 }
 
-.avp__poster::before {
-  content: "";
-  position: absolute;
-  width: 44%;
-  aspect-ratio: 1;
-  right: 6%;
-  top: 8%;
-  border: 1px solid color-mix(in srgb, var(--avp-eyebrow) 30%, transparent);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 42px color-mix(in srgb, var(--avp-eyebrow) 4%, transparent),
-    0 0 0 84px color-mix(in srgb, var(--avp-eyebrow) 3%, transparent);
-}
-
-.avp__poster-grid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.32;
-  background-image:
-    linear-gradient(
-      color-mix(in srgb, var(--avp-eyebrow) 16%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--avp-eyebrow) 16%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 8.333% 14.285%;
-  mask-image: linear-gradient(90deg, transparent 8%, black 56%, transparent 96%);
-}
-
-.avp__poster-route {
-  position: absolute;
-  left: 42%;
-  right: 9%;
-  top: 54%;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--avp-accent) 25%, transparent),
-    var(--avp-accent-deep) 54%,
-    var(--avp-eyebrow)
-  );
-  transform: rotate(-9deg);
-  transform-origin: left center;
-  box-shadow: 0 0 24px var(--avp-glow);
-}
-
-.avp__poster-route span {
-  position: absolute;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  border: 2px solid color-mix(in srgb, var(--avp-accent) 60%, #ffffff);
-  border-radius: 50%;
-  background: var(--avp-surface);
-  transform: translate(-50%, -50%);
-}
-
-.avp__poster-route span:nth-child(1) { left: 4%; }
-.avp__poster-route span:nth-child(2) { left: 34%; }
-.avp__poster-route span:nth-child(3) { left: 67%; }
-.avp__poster-route span:nth-child(4) { left: 96%; }
-
-.avp__poster-copy {
-  position: absolute;
-  left: clamp(24px, 5vw, 64px);
-  top: clamp(24px, 6vw, 64px);
-  max-width: min(44%, 480px);
-  display: grid;
-  gap: 12px;
-}
-
-.avp__poster-copy span {
-  color: var(--avp-eyebrow);
-  font-family: var(--font-mono);
-  font-size: clamp(0.66rem, 1vw, 0.76rem);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.avp__poster-copy strong {
-  color: var(--avp-text);
-  font-family: var(--font-display);
-  font-size: clamp(1.45rem, 3.5vw, 3rem);
-  font-weight: 620;
-  line-height: 1.08;
-  text-wrap: balance;
-}
-
-.avp__poster-copy p {
-  max-width: 420px;
-  margin: 2px 0 0;
-  color: var(--avp-text-muted);
-  font-size: clamp(0.72rem, 1.25vw, 0.92rem);
-  line-height: 1.55;
-  text-wrap: balance;
-}
-
 .avp__shade {
   z-index: 2;
   pointer-events: none;
+  /* Functional, not decoration: it keeps the controls legible over any frame. */
   background:
-    linear-gradient(180deg, rgba(2, 7, 15, 0.25), transparent 30%),
-    linear-gradient(0deg, rgba(2, 7, 15, 0.93) 0%, rgba(2, 7, 15, 0.5) 19%, transparent 54%);
+    linear-gradient(180deg, rgba(11, 13, 10, 0.25), transparent 30%),
+    linear-gradient(0deg, rgba(11, 13, 10, 0.93) 0%, rgba(11, 13, 10, 0.5) 19%, transparent 54%);
   opacity: 0.86;
   transition: opacity var(--motion-base) var(--ease-standard);
 }
@@ -301,7 +204,6 @@
   color: var(--avp-btn-ink);
   background: var(--avp-btn-dark);
   border-color: var(--avp-btn-border);
-  box-shadow: 0 16px 40px rgba(0, 3, 12, 0.44);
   backdrop-filter: blur(6px);
 }
 
@@ -388,7 +290,7 @@
 }
 
 .avp__timeline:focus-visible {
-  border-radius: 8px;
+  border-radius: var(--avp-radius-inner);
 }
 
 .avp__controls {
@@ -400,10 +302,9 @@
   display: grid;
   gap: 4px;
   padding: 9px 12px 10px;
-  background: color-mix(in srgb, var(--avp-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--avp-field) 86%, transparent);
   border: 1px solid var(--avp-border-strong);
-  border-radius: 13px;
-  box-shadow: 0 12px 32px rgba(0, 3, 10, 0.32);
+  border-radius: var(--avp-radius);
   backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(10px);
@@ -439,7 +340,7 @@
 
 .avp__timeline-track {
   position: relative;
-  height: 5px;
+  height: 4px;
   border-radius: 999px;
   background: var(--avp-border-strong);
 }
@@ -460,10 +361,10 @@
   left: var(--avp-progress, 0%);
   width: 14px;
   height: 14px;
-  border: 3px solid var(--avp-text);
+  /* A Signal point with an Ink edge — the product's "current position" mark. */
+  border: 2px solid var(--avp-field);
   border-radius: 50%;
   background: var(--avp-accent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--avp-field) 78%, transparent);
   transform: translate(-50%, -50%);
   transition: transform var(--motion-fast) var(--ease-standard);
 }
@@ -506,19 +407,17 @@
   width: 14px;
   height: 14px;
   appearance: none;
-  border: 3px solid var(--avp-text);
+  border: 2px solid var(--avp-field);
   border-radius: 50%;
-  background: var(--avp-accent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--avp-field) 78%, transparent);
+  background: var(--avp-text);
 }
 
 .avp input[type="range"]::-moz-range-thumb {
   width: 10px;
   height: 10px;
-  border: 3px solid var(--avp-text);
+  border: 2px solid var(--avp-field);
   border-radius: 50%;
-  background: var(--avp-accent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--avp-field) 78%, transparent);
+  background: var(--avp-text);
 }
 
 .avp__icon-button {
@@ -532,7 +431,7 @@
   color: var(--avp-text-2);
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--avp-radius-inner);
   cursor: pointer;
   transition:
     color var(--motion-fast) var(--ease-standard),
@@ -587,6 +486,7 @@
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
@@ -598,16 +498,58 @@
   gap: 2px;
 }
 
+/*
+ * VOLUME — a 44px target with a 3px track.
+ *
+ * MEASURED, NOT ASSUMED. The player draws the volume slider by styling the
+ * `input[type=range]` ELEMENT as the track: `height: 3px`, a rounded background,
+ * and a 12px thumb that overflows it. Raw hit-testing with elementFromPoint puts
+ * the input's real interaction zone at 78x13 — the thumb's overflow, not the
+ * 31px the label around it occupies. The label's 14px vertical padding is not
+ * part of it: above and below the input, elementFromPoint returns the LABEL, and
+ * a click forwarded from a label to a range input focuses it without setting a
+ * value at that position. So the drag zone was 13px tall.
+ *
+ * THE FIX IS THE SHAPE OF THE ELEMENT, NOT ITS PAINT. The input becomes 44px
+ * tall and transparent — that box IS the interaction target, natively, for
+ * pointer and drag alike — and the 3px track it used to be moves to the track
+ * pseudo-elements, one for Blink and one for Gecko, with the same height, the
+ * same radius and the same colour. Nothing about the drawn control changes: the
+ * track stays 3px, the thumb stays 12px, and it is not turned into a pill.
+ *
+ * The label loses its vertical padding because the height now comes from the
+ * input; it keeps `Громкость` and the input keeps its `aria-valuetext`, so the
+ * accessible name and the announced value are untouched.
+ */
 .avp__volume-slider {
+  display: flex;
+  align-items: center;
   width: 78px;
-  padding: 14px 6px;
+  min-height: 44px;
+  padding: 0 6px;
 }
-
 .avp__volume-slider input[type="range"] {
+  height: 44px;
+  background: transparent;
+  border-radius: 0;
+}
+/* Blink/WebKit: the track is a pseudo-element, and the thumb is positioned
+   against it, so it needs centring by hand — (3 - 12) / 2. */
+.avp__volume-slider input[type="range"]::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 999px;
   background: var(--avp-border-strong);
 }
+.avp__volume-slider input[type="range"]::-webkit-slider-thumb {
+  margin-top: -4.5px;
+}
+/* Gecko: it centres the thumb on the track itself. */
+.avp__volume-slider input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--avp-border-strong);
+}
+
 
 .avp__volume-slider input[type="range"]::-webkit-slider-thumb {
   width: 12px;
@@ -649,10 +591,9 @@
   width: min(88%, 420px);
   padding: clamp(20px, 4vw, 34px);
   text-align: center;
-  background: color-mix(in srgb, var(--avp-surface) 96%, transparent);
+  background: color-mix(in srgb, var(--avp-field) 94%, transparent);
   border: 1px solid var(--avp-border-strong);
-  border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 3, 12, 0.46);
+  border-radius: var(--avp-radius);
 }
 
 .avp__state--error {
@@ -670,7 +611,7 @@
   place-items: center;
   color: var(--avp-danger);
   background: var(--avp-danger-soft);
-  border-radius: 12px;
+  border-radius: var(--avp-radius-inner);
 }
 
 .avp__state-icon svg {
@@ -697,19 +638,23 @@
   line-height: 1.45;
 }
 
-.avp__state button {
-  min-height: 40px;
-  padding: 8px 14px;
+.avp__state button,
+.avp__ended-next {
+  min-height: 44px;
+  padding: 8px 16px;
   color: var(--avp-on-accent);
-  font: 600 0.82rem/1 var(--font-ui);
+  font: 600 0.86rem/1.2 var(--font-ui);
   background: var(--avp-accent);
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--avp-radius-inner);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--ease-standard);
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
 }
 
-.avp__state button:hover {
+.avp__state button:hover,
+.avp__ended-next:hover {
   background: var(--avp-accent-hover);
 }
 
@@ -718,14 +663,46 @@
   gap: 10px;
 }
 
-.avp__state--ended button {
-  display: inline-flex;
+.avp__ended-actions {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
   margin-top: 6px;
 }
 
-.avp__state--ended button svg {
+.avp__ended-next {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.avp__ended-next:focus-visible {
+  outline: 2px solid var(--avp-focus);
+  outline-offset: 3px;
+}
+
+.avp__ended-replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* With a forward step beside it, the replay is the quiet control: the ended
+ * screen has ONE accent, and it points onward. */
+.avp__state button.avp__ended-replay--quiet {
+  color: var(--avp-text);
+  background: transparent;
+  border-color: var(--avp-border-strong);
+}
+
+.avp__state button.avp__ended-replay--quiet:hover {
+  background: color-mix(in srgb, var(--avp-text) 8%, transparent);
+  border-color: color-mix(in srgb, var(--avp-text) 40%, transparent);
+}
+
+.avp__ended-replay svg {
   width: 16px;
   height: 16px;
 }
@@ -756,26 +733,6 @@
 }
 
 @media (max-width: 620px) {
-  .avp {
-    --avp-control-size: 44px;
-    border-radius: 15px;
-  }
-
-  .avp__poster-copy {
-    left: 20px;
-    top: 20px;
-    max-width: 65%;
-    gap: 7px;
-  }
-
-  .avp__poster-copy strong {
-    display: none;
-  }
-
-  .avp__poster-copy p {
-    display: none;
-  }
-
   .avp__center {
     gap: clamp(16px, 9vw, 40px);
   }
@@ -785,7 +742,6 @@
     right: 8px;
     bottom: 8px;
     padding: 7px 8px 8px;
-    border-radius: 11px;
   }
 
   .avp__volume-slider {

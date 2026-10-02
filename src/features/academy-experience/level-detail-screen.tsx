@@ -20,6 +20,21 @@
  * calls for its rows, so a locked row and the page it opens cannot explain
  * themselves differently — the property Wave 1 established between Home and Path,
  * extended to the third surface.
+ *
+ * THE LESSON IS ON THIS PAGE (2026-10-02). The 30-level program is video
+ * lessons with a test, and its levels are read top to bottom as one thing:
+ * the video, what the lesson is about, then the test — whose разбор can send
+ * the learner back up to a second of that same video. So a lesson's short text
+ * is printed here rather than behind a link, the task surfaces appear only when
+ * they can be used, and a level says which tool its completion opens. The
+ * 100-level program's long reading lessons keep their own surface exactly as
+ * they had it (`level-lesson-shape.ts` draws the line).
+ *
+ * ONE TASK AT A TIME. A level that has not been started shows the start control
+ * and nothing else to press; the test, the report form and the completion
+ * control appear once the Backend says the level is in progress. They used to be
+ * rendered beside «Начать», and failed — an assessment cannot open an attempt
+ * on a level that has not begun.
  */
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
@@ -37,8 +52,14 @@ import { LevelManualCompletion } from "@/features/manual-completion/level-manual
 import { LevelMentorReview } from "@/features/mentor-review/level-mentor-review";
 import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
-import { completionMethodLabel, isManualCompletionMethod } from "@/lib/curriculum/completion-method";
-import { LevelStart } from "@/features/level-start/level-start";
+import {
+  completionMethodLabel,
+  isFormalReportMethod,
+  isReportCompletionMethod,
+  isSelfDeclaredCompletionMethod,
+  type AcademyCompletionMethod,
+} from "@/lib/curriculum/completion-method";
+import { LevelStart, type LevelStartCopy } from "@/features/level-start/level-start";
 import { PocketRegistration } from "@/features/pocket-registration/pocket-registration";
 import { PocketRegistrationConfirmed } from "@/features/pocket-registration/pocket-registration-confirmed";
 import {
@@ -47,9 +68,13 @@ import {
 } from "@/features/pocket-registration/model/pocket-registration-visibility";
 import { LessonMedia } from "@/features/lesson-media/lesson-media";
 import { MilestoneMark } from "@/features/academy-experience/primitives";
+import { isInlineLessonBody } from "@/features/level-detail-fidelity/level-lesson-shape";
+import { LevelLessonText } from "@/features/level-detail-fidelity/level-lesson-text";
+import { LevelUnlocks } from "@/features/level-detail-fidelity/level-unlocks";
 import "@/features/curriculum-api/curriculum-api.css";
 import "@/features/academy-experience/experience.css";
 import "@/features/level-detail-fidelity/level-detail-fidelity.css";
+import "@/features/level-detail-fidelity/level-lesson.css";
 
 const ASSESSMENT_LOCALE = "ru";
 const REPORT_LOCALE = "ru";
@@ -83,6 +108,87 @@ function readSectionCount(content: AcademyLevelContent): number {
   if (!content.body || !content.reading) return 0;
   const read = new Set(content.reading.completedSections);
   return content.body.sections.filter((section) => read.has(section.code)).length;
+}
+
+/**
+ * What «Начать» begins, by what the level is.
+ *
+ * The control is one and the same; the sentence around it is true of the level
+ * in front of the learner. A method this build does not know gets the neutral
+ * line rather than a promise of a test.
+ */
+export function startCopyFor(method: AcademyCompletionMethod, hasVideo: boolean): LevelStartCopy {
+  const watch = hasVideo ? " Видео можно смотреть уже сейчас." : "";
+  switch (method) {
+    case "assessment":
+      return {
+        title: "Начните урок",
+        explain: `После начала откроется тест по уроку: нужно ответить верно на все вопросы, попытки не ограничены.${watch}`,
+        action: "Начать урок",
+      };
+    case "lesson":
+      return {
+        title: "Начните урок",
+        explain: `В этом уроке нет теста: после начала урок можно будет отметить пройденным.${watch}`,
+        action: "Начать урок",
+      };
+    case "manual":
+      return {
+        title: "Начните уровень",
+        explain: `Это практический уровень: задание выполняется самостоятельно. После начала его можно будет отметить выполненным.${watch}`,
+        action: "Начать уровень",
+      };
+    case "report":
+      return {
+        title: "Начните уровень",
+        explain: `После начала откроется форма отчёта. Отчёт проверяет наставник.${watch}`,
+        action: "Начать уровень",
+      };
+    case "formal-report":
+      return {
+        title: "Начните уровень",
+        explain: `После начала откроется форма отчёта. Черновик сохраняется, проверка автоматическая.${watch}`,
+        action: "Начать уровень",
+      };
+    case "mentor-review":
+      return {
+        title: "Начните уровень",
+        explain: `После начала работу можно будет отправить наставнику.${watch}`,
+        action: "Начать уровень",
+      };
+    default:
+      return {
+        title: "Начать уровень",
+        explain: "Уровень откроется. Прогресс сохраняется на сервере.",
+        action: "Начать",
+      };
+  }
+}
+
+/**
+ * Where the lesson goes after its video has been watched to the end — the
+ * player offers it beside «Смотреть снова». Null when there is nothing to do
+ * next on this page (the level is finished, or its task is not here).
+ */
+export function afterVideoAction(
+  method: AcademyCompletionMethod,
+  state: AcademyLevelSummary["state"],
+): { label: string; href: string } | undefined {
+  if (state !== "available" && state !== "in_progress") return undefined;
+  if (state === "available") return { label: "Начать урок", href: "#task" };
+  switch (method) {
+    case "assessment":
+      return { label: "Перейти к тесту", href: "#task" };
+    case "lesson":
+      return { label: "Отметить урок пройденным", href: "#task" };
+    case "manual":
+      return { label: "К заданию", href: "#task" };
+    case "report":
+    case "formal-report":
+      return { label: "К отчёту", href: "#task" };
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -147,8 +253,9 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
    */
   const enrolled = result.view.state === "enrolled" || result.view.state === "completed" ? result.view : null;
   const nextAction = enrolled ? deriveNextAction(result.view) : null;
-  const moduleTitle =
-    enrolled?.modules.find((module) => module.moduleCode === result.detail.moduleCode)?.title ?? null;
+  const levelModule =
+    enrolled?.modules.find((module) => module.moduleCode === result.detail.moduleCode) ?? null;
+  const moduleTitle = levelModule?.title ?? null;
 
   /**
    * The reviewer's own words, when there are any (§1).
@@ -164,6 +271,31 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
     summary.completionMethod === "mentor-review" || summary.completionMethod === "report"
       ? await readLevelMentorFeedback(summary.levelCode)
       : null;
+
+  const method = summary.completionMethod;
+  /* The task surfaces need a level the Backend has STARTED (or finished). */
+  const begun =
+    summary.state === "in_progress" || summary.state === "pending_review" || summary.state === "completed";
+  /* A FINISHED LEVEL SAYS SO ONCE. The completion moment states that the level
+     is done, what it was worth and what is next. A test or a completion control
+     under it could only repeat «уровень завершён» and offer the same link a
+     second time — so on a completed level those two surfaces are not rendered.
+     A report stays: what the learner wrote in it is still theirs to read. */
+  const working = summary.state === "in_progress" || summary.state === "pending_review";
+  const hasVideo = content.media !== null;
+  /* A short lesson text is printed here; a long one keeps the reading surface. */
+  const inlineBody = content.available && isInlineLessonBody(content.body) ? content.body : null;
+  /* An external-event level is completed by an event, not by being started. */
+  const showStart =
+    summary.state === "available" && !summary.typeInfo.isCheckpoint && !summary.typeInfo.isExternal;
+  /* What the program's author says the level gives. Printed with its label only
+     when it is a RESULT — for a level whose objective is just its description
+     (a lesson not produced yet) the description is printed once, as itself. */
+  const objectiveIsResult =
+    summary.kind !== null &&
+    summary.learningObjective.trim() !== "" &&
+    summary.learningObjective !== summary.shortDescription;
+  const lessonTitle = summary.kind === null || summary.kind === "lesson" ? "Урок" : "Материал";
 
   // A financial checkpoint is a module boundary, not a lesson. It has no
   // material by definition, so the "Материал" section is suppressed rather than
@@ -201,14 +333,51 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
     );
   };
 
+  /* A LEVEL THE PROGRAM HAS NOT OPENED YET. It has a title and one line, and
+     nothing else exists: no lesson, no task, no parameters worth printing. The
+     page says exactly that and leaves the two ways out. */
+  if (summary.inProduction) {
+    return (
+      <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
+        <div className="ax ld">
+          <article data-level={summary.levelCode} data-state={summary.state} data-posture="waiting" data-production="true">
+            <header className="ax-lvlhead">
+              <LevelCoordinate summary={summary} module={levelModule} />
+              <h1 className="ax-lvlhead__title">{summary.title}</h1>
+              <p className="ax-lvlhead__row">
+                <span className="ax-mark" data-state={summary.state}>
+                  {summary.stateLabel}
+                </span>
+              </p>
+              {summary.shortDescription ? (
+                <p className="ax-lvlhead__obj">{summary.shortDescription}</p>
+              ) : null}
+            </header>
+            <div className="ax-statestrip" data-posture="waiting">
+              <span className="ax-statestrip__dot" aria-hidden="true" />
+              <p className="ax-statestrip__text">{explainLevelState(summary)}</p>
+            </div>
+            <nav className="ax-lvlnav" aria-label="Навигация по уровням">
+              {navigation.previousLevelCode ? (
+                <Link href={`/lessons/${encodeURIComponent(navigation.previousLevelCode)}`}>← Предыдущий уровень</Link>
+              ) : (
+                <span />
+              )}
+              <Link href="/path">Вернуться к пути</Link>
+              <span />
+            </nav>
+          </article>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="ax ld">
         <article data-level={summary.levelCode} data-state={summary.state} data-posture={posture}>
           <header className="ax-lvlhead">
-            <p className="ax-coord">
-              Уровень <b>{summary.order}</b> · {summary.typeInfo.label}
-            </p>
+            <LevelCoordinate summary={summary} module={levelModule} />
             <h1 className="ax-lvlhead__title">{summary.title}</h1>
             <p className="ax-lvlhead__row">
               <span className="ax-mark" data-state={summary.state}>
@@ -216,8 +385,17 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
               </span>
               <MilestoneMark level={summary} />
             </p>
-            {summary.learningObjective ? (
+            {objectiveIsResult ? (
+              <p className="ax-lvlhead__obj">
+                <span className="ax-lvlhead__objlabel">Результат урока</span>
+                {summary.learningObjective}
+              </p>
+            ) : summary.kind === null && summary.learningObjective ? (
+              /* A program without kinds keeps its objective exactly as it was. */
               <p className="ax-lvlhead__obj">{summary.learningObjective}</p>
+            ) : !inlineBody && summary.shortDescription ? (
+              /* No lesson text will be printed below, so the description is. */
+              <p className="ax-lvlhead__obj">{summary.shortDescription}</p>
             ) : null}
           </header>
 
@@ -228,66 +406,79 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             <p className="ax-statestrip__text">{explainLevelState(summary)}</p>
           </div>
 
-          {isCheckpoint ? null : (
-            <section className="ax-lvlsec" aria-label="Материал уровня">
-              <h2>Материал</h2>
+          {/* A checkpoint is a module boundary and an external-event level is a
+              task with no lesson: neither has material, and neither gets a
+              section saying that a type "is not displayed yet". */}
+          {isCheckpoint || (summary.typeInfo.isExternal && !content.available) ? null : (
+            <section className="ax-lvlsec" aria-label="Материал уровня" data-section="lesson">
+              <h2>{lessonTitle}</h2>
               {content.available && content.metadata ? (
                 <div className="cur-content">
                   {/* View-only: playback records nothing and completes nothing. */}
-                  <LessonMedia media={content.media} title={content.metadata.title} />
-                  <p className="cur-content__title">{content.metadata.title}</p>
-                  {content.metadata.subtitle ? (
-                    <p className="cur-content__subtitle">{content.metadata.subtitle}</p>
-                  ) : null}
-                  <p className="cur-content__summary">{content.metadata.summary}</p>
-                  {/* THE HANDOFF TO THE READING SURFACE.
-                      This page owns state and the canonical task; the written
-                      lesson lives on its own surface, so the two are not two
-                      copies of one another (§9). What is offered here is the
-                      lesson's real SHAPE — how many sections, and how far the
-                      learner has read — both facts the Backend owns. Nothing is
-                      estimated: there is no invented reading time, because the
-                      canonical curriculum does not own one. */}
-                  {content.body ? (
-                    <div className="cur-content__material">
-                      <p className="cur-content__shape">
-                        {content.body.sections.length} {sectionWord(content.body.sections.length)}
-                        {content.reading && content.reading.completedSections.length > 0 ? (
-                          <> · прочитано {readSectionCount(content)}</>
-                        ) : null}
-                        {content.metadata.hasTranscript ? <> · есть расшифровка</> : null}
-                      </p>
-                      <Link
-                        className="cur-content__open"
-                        href={`/lessons/${encodeURIComponent(summary.levelCode)}/material`}
-                      >
-                        {content.reading && content.reading.completedSections.length > 0
-                          ? "Продолжить материал"
-                          : "Открыть материал урока"}
-                      </Link>
-                    </div>
-                  ) : (
-                    <p className="ax-lvlsec__note">
-                      Учебный текст для этого уровня пока не опубликован.
-                    </p>
-                  )}
-                  {content.metadata.videoDurationSeconds !== null ? (
-                    <p className="ax-lvlsec__note">
-                      Видео: {Math.round(content.metadata.videoDurationSeconds / 60)} мин
-                    </p>
-                  ) : null}
+                  <LessonMedia
+                    media={content.media}
+                    title={content.metadata.title}
+                    endedAction={afterVideoAction(method, summary.state)}
+                  />
                   {content.media === null ? (
                     <p className="cur-content__media-pending" data-media="pending">
-                      Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас.
+                      {inlineBody
+                        ? "Видео этого урока готовится. Описание урока — ниже."
+                        : "Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас."}
                     </p>
                   ) : null}
+
+                  {inlineBody ? (
+                    <LevelLessonText body={inlineBody} />
+                  ) : (
+                    <>
+                      {content.metadata.title !== summary.title ? (
+                        <p className="cur-content__title">{content.metadata.title}</p>
+                      ) : null}
+                      {content.metadata.subtitle ? (
+                        <p className="cur-content__subtitle">{content.metadata.subtitle}</p>
+                      ) : null}
+                      {content.metadata.summary ? (
+                        <p className="cur-content__summary">{content.metadata.summary}</p>
+                      ) : null}
+                      {/* THE HANDOFF TO THE READING SURFACE.
+                          This page owns state and the canonical task; a long
+                          written lesson lives on its own surface, so the two
+                          are not two copies of one another (§9). What is
+                          offered here is the lesson's real SHAPE — how many
+                          sections, and how far the learner has read — both
+                          facts the Backend owns. Nothing is estimated: there is
+                          no invented reading time, because the canonical
+                          curriculum does not own one. */}
+                      {content.body ? (
+                        <div className="cur-content__material">
+                          <p className="cur-content__shape">
+                            {content.body.sections.length} {sectionWord(content.body.sections.length)}
+                            {content.reading && content.reading.completedSections.length > 0 ? (
+                              <> · прочитано {readSectionCount(content)}</>
+                            ) : null}
+                            {content.metadata.hasTranscript ? <> · есть расшифровка</> : null}
+                          </p>
+                          <Link
+                            className="cur-content__open"
+                            href={`/lessons/${encodeURIComponent(summary.levelCode)}/material`}
+                          >
+                            {content.reading && content.reading.completedSections.length > 0
+                              ? "Продолжить материал"
+                              : "Открыть материал урока"}
+                          </Link>
+                        </div>
+                      ) : (
+                        <p className="ax-lvlsec__note">
+                          Учебный текст для этого уровня пока не опубликован.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               ) : (
                 <p className="ax-lvlsec__note">{CONTENT_NOTE[content.unavailableReason ?? "unavailable"]}</p>
               )}
-              <p className="ax-lvlsec__note" style={{ marginTop: 14 }}>
-                Материал — только просмотр. Прогресс сохраняется на сервере.
-              </p>
             </section>
           )}
 
@@ -316,10 +507,10 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             </section>
           ) : null}
 
-          {/* Every block below is the SAME condition and the SAME component as
-              before; only the surface they sit on changed. */}
-          {summary.state === "available" && !isCheckpoint
-            ? task(<LevelStart stableCode={summary.levelCode} />, "start")
+          {/* ONE TASK AT A TIME. Not started: the start control, worded for what
+              this level is. Started or finished: the level's own surface. */}
+          {showStart
+            ? task(<LevelStart stableCode={summary.levelCode} copy={startCopyFor(method, hasVideo)} />, "start")
             : null}
 
           {showPocketRegistration ? task(<PocketRegistration />, "pocket") : null}
@@ -342,47 +533,47 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
               )
             : null}
 
-          {summary.typeInfo.type === "lesson" &&
-          summary.completionMethod === "assessment" &&
-          summary.routeAccessible
+          {summary.typeInfo.type === "lesson" && method === "assessment" && working
             ? task(
                 <LevelAssessment
                   stableCode={summary.levelCode}
                   locale={ASSESSMENT_LOCALE}
                   alreadyCompleted={summary.state === "completed"}
                   nextLevelCode={navigation.nextLevelCode}
+                  hasLessonVideo={hasVideo}
                 />,
                 "assessment",
               )
             : null}
 
-          {summary.typeInfo.type === "lesson" &&
-          isManualCompletionMethod(summary.completionMethod) &&
-          summary.routeAccessible
+          {summary.typeInfo.type === "lesson" && isSelfDeclaredCompletionMethod(method) && working
             ? task(
                 <LevelManualCompletion
                   stableCode={summary.levelCode}
                   xpReward={summary.xpReward}
                   alreadyCompleted={summary.state === "completed"}
+                  variant={method === "lesson" ? "lesson" : "practice"}
                 />,
                 "manual",
               )
             : null}
 
-          {summary.typeInfo.type === "report" && summary.routeAccessible
+          {summary.typeInfo.type === "report" && isReportCompletionMethod(method) && begun
             ? task(
                 <LevelReport
                   stableCode={summary.levelCode}
                   locale={REPORT_LOCALE}
                   nextLevelCode={navigation.nextLevelCode}
+                  acceptance={isFormalReportMethod(method) ? "formal" : "review"}
+                  /* On a level the page already shows as completed, the way
+                     onward is the completion moment's, said once. */
+                  nextStep={summary.state === "completed" ? "elsewhere" : "here"}
                 />,
                 "report",
               )
             : null}
 
-          {summary.typeInfo.type === "mentor-review" &&
-          summary.completionMethod === "mentor-review" &&
-          summary.routeAccessible
+          {summary.typeInfo.type === "mentor-review" && method === "mentor-review" && begun
             ? task(
                 <LevelMentorReview
                   stableCode={summary.levelCode}
@@ -392,6 +583,8 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                 "mentor",
               )
             : null}
+
+          <LevelUnlocks levelOrder={summary.order} toolAccess={enrolled?.toolAccess ?? null} />
 
           <section className="ax-lvlsec" aria-label="Параметры уровня">
             <h2>Параметры уровня</h2>
@@ -437,5 +630,28 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
         </article>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Where the level sits: chapter, module, number, and what its author calls it.
+ *
+ * The chapter and the module are printed only when the program has them and
+ * this build could read them; a level of a program without chapters reads
+ * exactly as it did.
+ */
+function LevelCoordinate({
+  summary,
+  module,
+}: {
+  summary: AcademyLevelSummary;
+  module: { order: number; chapter: { number: number; title: string } | null } | null;
+}) {
+  return (
+    <p className="ax-coord">
+      {module?.chapter ? <>Глава {module.chapter.number} · </> : null}
+      {module?.chapter ? <>Модуль {module.order} · </> : null}
+      Уровень <b>{summary.order}</b> · {summary.kindLabel}
+    </p>
   );
 }
