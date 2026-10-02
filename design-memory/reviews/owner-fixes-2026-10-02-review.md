@@ -383,3 +383,43 @@ Automatic-fail check: all PASS.
 - The anti-generic review passes on all three surfaces.
 - Ready for the owner's review before release to PREPROD. Backend first, then Academy; no
   migration.
+
+## Released to PREPROD — 2026-10-02
+
+Owner: «выкати для проверки, пуш позже, будут ещё правки». Backend `e70b6b1` (BUILD_ID
+`fMF09AhwKZKasQbKxmN7C`) at 09:00:52Z, then Academy `8cb7c5b` (BUILD_ID `06v4VxI6YMt3OQU7zrevE`)
+at 09:02:34Z, after a database backup. Between the two cutovers the released Academy ran against
+the new Backend without a fault. No migration. Not pushed to GitHub.
+
+On the live host, in a real browser:
+
+- **The whole-page sweep:** 175 of 175 nodes tested, nothing painted over a node (33 covered before
+  the release).
+- **The check with the REAL site key — observed, nothing pressed.** `/login` and `/register`, at
+  1440 and at 390: «Загружается проверка безопасности…» → «Проверяем браузер…» after 0.3s → after
+  about 2s Cloudflare asks this automated browser for a press: the line says «Нужно подтверждение:
+  отметьте поле ниже.», and the box opens under it — dark, as wide as the fields (386×65, 312×65
+  on a phone), with no test band. The button is held and described by the line; the old line under
+  the button is gone; Cloudflare's frame address carries `dark` and `flexible`; its iframe is
+  rendered and unclipped. So the two callbacks that open the box do fire with the real key.
+  `/forgot-password` draws no check on PREPROD: mail is off there, and the page offers nothing.
+- **The strip:** the wave plays once after the window's sequence; a press on a card's object
+  switches the window; under the pointer a card lights.
+- **Console:** no page errors. The one warning is the stylesheet preload noted above, for the same
+  file as before the release; the rest is Cloudflare's own, from inside its frame.
+- Still `noindex, nofollow` (header and meta). Readiness: database, schema, storage and environment
+  `ok`. Service and nginx logs since the cutovers: no errors, no warnings.
+- The published builds carry the change: the Backend's compiled tool routes hold `min:20,max:99`
+  (the previous release holds none); the Academy's stylesheets hold the pickers' panel and the
+  path's `pw-line-draw`, and no `::after` on any holder of nodes.
+
+Frames from the live host: `design-memory/screenshots/owner-fixes-2026-10-02/released/`.
+
+**Not verified on PREPROD:**
+
+- a pass of the check WITHOUT a press — what a person's browser normally gets. An automated browser
+  is always asked for a press, and pressing a real challenge is not something an agent does. The
+  owner's own look at `/login` closes this;
+- the tools under a learner (Payout, the date and the time) — sign-in is CAPTCHA-gated and an agent
+  cannot mint a session. The same commits passed 31 end-to-end checks on the stand, in a dev server
+  and in a production build.
