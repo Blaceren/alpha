@@ -28,6 +28,12 @@ const PHASE_4_LESSON_PROGRESS_MIGRATION = "20260715010000_lesson_progress_autosa
 const PHASE_5_REPORT_MIGRATION = "20260716000000_report_workflow_foundation";
 const PHASE_5_ATTACHMENT_MIGRATION = "20260716010000_report_attachment_purge_receipt";
 const PHASE_5_REVIEW_PIN_MIGRATION = "20260717000000_report_review_history_pin";
+// Columns that 20261002120000_program_structure later added to the two
+// definition tables. Between Phase 1 and the end of the chain the database does
+// not have them yet while the client knows the current schema, so every read
+// and write of these rows in that window leaves them out.
+const MODULE_COLUMNS_ADDED_LATER = { chapterNumber: true, chapterTitle: true } as const;
+const LEVEL_COLUMNS_ADDED_LATER = { presentationKind: true } as const;
 const migrationsRoot = path.join(process.cwd(), "prisma", "migrations");
 const PORT = 3930 + (process.pid % 20);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -360,6 +366,7 @@ async function main() {
         firstLevel: 1,
         lastLevel: 1,
       },
+      omit: MODULE_COLUMNS_ADDED_LATER,
     });
     const phase1Level = await prisma.levelDefinition.create({
       data: {
@@ -371,6 +378,7 @@ async function main() {
         title: "Upgrade level",
         completionMethod: "lesson",
       },
+      omit: LEVEL_COLUMNS_ADDED_LATER,
     });
 
     const snapshot = {
@@ -395,8 +403,12 @@ async function main() {
         where: { id: promocodeRedemption.id },
       }),
       curriculumVersionRow: await prisma.curriculumVersion.findUniqueOrThrow({ where: { id: phase1Version.id } }),
-      moduleDefinitionRow: await prisma.moduleDefinition.findUniqueOrThrow({ where: { id: phase1Module.id } }),
-      levelDefinitionRow: await prisma.levelDefinition.findUniqueOrThrow({ where: { id: phase1Level.id } }),
+      moduleDefinitionRow: await prisma.moduleDefinition.findUniqueOrThrow({
+        where: { id: phase1Module.id }, omit: MODULE_COLUMNS_ADDED_LATER,
+      }),
+      levelDefinitionRow: await prisma.levelDefinition.findUniqueOrThrow({
+        where: { id: phase1Level.id }, omit: LEVEL_COLUMNS_ADDED_LATER,
+      }),
     };
 
     // ---- Apply only the additive Phase 2B.1 migration ----
@@ -440,11 +452,15 @@ async function main() {
         snapshot.curriculumVersionRow,
       );
       assert.deepEqual(
-        await prisma.moduleDefinition.findUniqueOrThrow({ where: { id: phase1Module.id } }),
+        await prisma.moduleDefinition.findUniqueOrThrow({
+          where: { id: phase1Module.id }, omit: MODULE_COLUMNS_ADDED_LATER,
+        }),
         snapshot.moduleDefinitionRow,
       );
       assert.deepEqual(
-        await prisma.levelDefinition.findUniqueOrThrow({ where: { id: phase1Level.id } }),
+        await prisma.levelDefinition.findUniqueOrThrow({
+          where: { id: phase1Level.id }, omit: LEVEL_COLUMNS_ADDED_LATER,
+        }),
         snapshot.levelDefinitionRow,
       );
       // relations still resolve
@@ -549,7 +565,7 @@ async function main() {
         where: { id: phase1Version.id },
       }),
       levelDefinition: await prisma.levelDefinition.findUniqueOrThrow({
-        where: { id: phase1Level.id },
+        where: { id: phase1Level.id }, omit: LEVEL_COLUMNS_ADDED_LATER,
       }),
     };
 
@@ -595,7 +611,7 @@ async function main() {
       );
       assert.deepEqual(
         await prisma.levelDefinition.findUniqueOrThrow({
-          where: { id: phase1Level.id },
+          where: { id: phase1Level.id }, omit: LEVEL_COLUMNS_ADDED_LATER,
         }),
         phase2Snapshot.levelDefinition,
       );
