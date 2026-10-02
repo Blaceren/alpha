@@ -295,7 +295,10 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
     summary.kind !== null &&
     summary.learningObjective.trim() !== "" &&
     summary.learningObjective !== summary.shortDescription;
-  const lessonTitle = summary.kind === null || summary.kind === "lesson" ? "Урок" : "Материал";
+  /* «Урок» where the author calls the level a lesson; everywhere else — a
+     report, a practice, a program that names no kinds — the section keeps the
+     heading it always had. */
+  const lessonTitle = summary.kind === "lesson" ? "Урок" : "Материал";
 
   // A financial checkpoint is a module boundary, not a lesson. It has no
   // material by definition, so the "Материал" section is suppressed rather than
