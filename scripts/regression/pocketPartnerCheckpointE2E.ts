@@ -491,7 +491,7 @@ async function main() {
       });
       const view =
         states.kind === "resolved"
-          ? readApi.mapEnrolledCurriculumRead(states as never)
+          ? readApi.mapEnrolledCurriculumRead(states as never, [])
           : states;
       const serialised = scrub(safeJson(view));
       for (const forbidden of FORBIDDEN_TOKENS) {

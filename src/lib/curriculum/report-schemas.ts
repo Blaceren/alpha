@@ -16,6 +16,16 @@ function optionalSafeText(max: number, label: string) {
     .refine((value) => value.length === 0 || !UNSAFE_TEXT.test(value), `${label} contains unsafe markup or URI content`);
 }
 
+/**
+ * How many structured fields one report may define.
+ *
+ * Was 50, which is exactly five trade records of ten fields and left no room for
+ * the record of a refused entry the 30-level program asks for beside them. The
+ * package schema and the authoring validator both read this constant, so the
+ * two cannot drift apart again.
+ */
+export const MAX_REPORT_FIELDS = 80;
+
 export const reportEntityIdSchema = z.number().int().positive().max(MAX_INT);
 export const reportActorIdSchema = reportEntityIdSchema;
 export const reportStableKeySchema = z.string().trim().min(1).max(64).regex(STABLE_KEY);

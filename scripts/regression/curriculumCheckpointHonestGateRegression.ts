@@ -430,7 +430,7 @@ async function main() {
 
   await check("D1 the enrolled read model exposes the bounded checkpoint block", async () => {
     const states = await statesFor(atCheckpoint.userId);
-    const dto = readApi.mapEnrolledCurriculumRead(states) as AnyRecord;
+    const dto = readApi.mapEnrolledCurriculumRead(states, []) as AnyRecord;
     const levels = (dto.modules as AnyRecord[])[0].levels as AnyRecord[];
     const l4 = levels[3];
     assert.equal(l4.presentationState, "checkpoint_unverified");
@@ -451,7 +451,7 @@ async function main() {
 
   await check("D2 no balance-shaped value appears anywhere in the read model", async () => {
     const states = await statesFor(atCheckpoint.userId);
-    const dto = readApi.mapEnrolledCurriculumRead(states);
+    const dto = readApi.mapEnrolledCurriculumRead(states, []);
     const text = scrub(JSON.stringify(dto));
     for (const token of FORBIDDEN_TOKENS) {
       assert.ok(!text.includes(token), `read model leaked "${token}"`);

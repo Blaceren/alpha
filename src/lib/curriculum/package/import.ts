@@ -37,6 +37,7 @@ import {
   isAtaVideoProfileLevel,
 } from "@/lib/curriculum/authoring-level-profile";
 import type { CurriculumPackage, PackageQuestion } from "@/lib/curriculum/package/schema";
+import { CURRICULUM_TOOLS } from "@/lib/curriculum/product-vocabulary";
 import { canonicalizeQuestion, localizationIsComplete } from "@/lib/curriculum/assessment-validation";
 import {
   isCanonicalAssessmentQuestionKey,
@@ -78,6 +79,7 @@ export type ImportSummary = {
     reportRejectionReasons: number;
     reportBindings: number;
     checkpointRequirements: number;
+    toolUnlocks: number;
   };
   warnings: PackageIssue[];
   notes: string[];
@@ -128,6 +130,7 @@ function emptyCounts(): ImportSummary["counts"] {
     reportRejectionReasons: 0,
     reportBindings: 0,
     checkpointRequirements: 0,
+    toolUnlocks: 0,
   };
 }
 
@@ -301,6 +304,14 @@ async function writePackage(
           moduleDefinition.checkpointLevelCode !== null
             ? levelNumberByCode.get(moduleDefinition.checkpointLevelCode) ?? null
             : null,
+        chapterNumber: moduleDefinition.chapter?.number ?? null,
+        chapterTitle: moduleDefinition.chapter?.title ?? null,
+        // PROGRAM STRUCTURE. A module is not open while none of its levels is.
+        // Derived, never declared: a package cannot say a module is closed and
+        // leave one of its levels open, because there is nowhere to say it.
+        status: moduleDefinition.levels.every((level) => level.status === "disabled")
+          ? "disabled"
+          : "active",
       },
     });
     counts.modules += 1;
@@ -334,7 +345,8 @@ async function writePackage(
           // reason and is deliberately absent from this object.
           requiredCheckpointLevel: null,
           featureUnlockCode: level.gate?.integrationCode ?? null,
-          status: "active",
+          status: level.status ?? "active",
+          presentationKind: level.kind ?? null,
         },
       });
       counts.levels += 1;
@@ -452,6 +464,7 @@ async function writePackage(
               skillTag: question.skillTag,
               options: canonicalOptionsJson(question),
               correctAnswer: correctAnswerJson(question),
+              rewatchFromSeconds: question.rewatchFromSeconds ?? null,
               status: "active",
             },
           });
@@ -583,9 +596,19 @@ async function writePackage(
                 label: localization.label,
                 helpText: localization.helpText,
                 placeholder: localization.placeholder,
+                // The package carries choice labels POSITIONALLY, beside the
+                // field's ordered `choiceCodes`; the report runtime reads them as
+                // `{ [choiceCode]: label }` (`reportFieldLocalizationPayloadSchema`).
+                // Storing the array as it came made every report that declared
+                // choice labels read as a corrupt definition — which no shipped
+                // package had ever done, because every one of them ships an empty
+                // list. The mapping is total and deterministic: the validator
+                // refuses a label list whose length differs from the code list.
                 choiceLabels:
                   localization.choiceLabels.length > 0
-                    ? (localization.choiceLabels as unknown as Prisma.InputJsonValue)
+                    ? (Object.fromEntries(
+                        field.choiceCodes.map((code, index) => [code, localization.choiceLabels[index]]),
+                      ) as Prisma.InputJsonValue)
                     : undefined,
               },
             });
@@ -735,6 +758,39 @@ async function writePackage(
         counts.checkpointRequirements += 1;
       }
     }
+  }
+
+  /* ----------------------------- tool unlocks ----------------------------- */
+  /*
+   * Which level opens which tool, in this version.
+   *
+   * A package that DECLARES its unlocks is copied, entry for entry. A package
+   * that does not carry the field was written while the answer was one global
+   * number per tool (`CURRICULUM_TOOLS[].unlockLevel`), and that rule is
+   * written down for it here — the same rows migration
+   * `20261002120000_program_structure` wrote for the versions that already
+   * existed. So an artifact accepted before the field existed imports to
+   * exactly the tool access it has always had, without its bytes or its
+   * fingerprint changing, and the runtime reads ONE table whichever way the
+   * rows arrived.
+   */
+  const unlocks: Array<{ toolCode: string; levelCode: string }> = pkg.toolUnlocks
+    ? pkg.toolUnlocks.map((unlock) => ({ toolCode: unlock.toolCode, levelCode: unlock.levelCode }))
+    : CURRICULUM_TOOLS.flatMap((tool) => {
+        const levelCode = [...levelNumberByCode.entries()].find(
+          ([, levelNumber]) => levelNumber === tool.unlockLevel,
+        )?.[0];
+        return levelCode ? [{ toolCode: tool.code, levelCode }] : [];
+      });
+  for (const unlock of unlocks) {
+    await tx.levelToolUnlock.create({
+      data: {
+        levelDefinitionId: levelIdByCode.get(unlock.levelCode)!,
+        curriculumVersionId: version.id,
+        toolCode: unlock.toolCode,
+      },
+    });
+    counts.toolUnlocks += 1;
   }
 
   return counts;

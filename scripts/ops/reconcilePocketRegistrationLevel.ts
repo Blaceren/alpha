@@ -7,10 +7,7 @@
  * never prints a Pocket user id or a clickid.
  */
 import { prisma } from "@/lib/prisma";
-import {
-  reconcilePocketRegistrationLevelCompletion,
-  POCKET_REGISTRATION_STABLE_CODE,
-} from "@/lib/curriculum/pocket-registration-completion";
+import { reconcilePocketRegistrationLevelCompletion } from "@/lib/curriculum/pocket-registration-completion";
 
 const BATCH = 200;
 
@@ -28,19 +25,28 @@ async function candidates(learnerId?: number) {
 
 async function classify(userId: number): Promise<string> {
   const enrolment = await prisma.userCurriculumEnrollment.findFirst({
-    where: { userId, status: "active" }, select: { id: true, curriculumVersionId: true },
+    where: { userId, status: "active" }, select: { id: true, curriculumVersionId: true, currentLevel: true },
   });
   if (!enrolment) return "missing_enrollment";
-  const level = await prisma.levelDefinition.findFirst({
-    where: { curriculumVersionId: enrolment.curriculumVersionId, stableCode: POCKET_REGISTRATION_STABLE_CODE },
-    select: { id: true, type: true, completionMethod: true },
+  // The registration level is found the way the service finds it: by its
+  // completion pair in the learner's own version, exactly one.
+  const levels = await prisma.levelDefinition.findMany({
+    where: {
+      curriculumVersionId: enrolment.curriculumVersionId,
+      type: "external_event",
+      completionMethod: "pocket_postback",
+    },
+    take: 2,
+    select: { id: true, levelNumber: true },
   });
-  if (!level) return "configuration_conflict";
-  if (level.type !== "external_event" || level.completionMethod !== "pocket_postback") return "configuration_conflict";
+  if (levels.length !== 1) return "configuration_conflict";
+  const level = levels[0];
   const p = await prisma.userLevelProgress.findFirst({
     where: { enrollmentId: enrolment.id, levelDefinitionId: level.id }, select: { status: true },
   });
-  return p?.status === "completed" ? "already_completed" : "eligible";
+  if (p?.status === "completed") return "already_completed";
+  // A learner who has not reached the level yet has nothing to reconcile.
+  return enrolment.currentLevel === level.levelNumber ? "eligible" : "not_reached";
 }
 
 async function main() {
@@ -53,7 +59,7 @@ async function main() {
   }
 
   const ids = await candidates(learnerId);
-  const counts: Counts = { eligible: 0, already_completed: 0, missing_enrollment: 0, configuration_conflict: 0 };
+  const counts: Counts = { eligible: 0, already_completed: 0, not_reached: 0, missing_enrollment: 0, configuration_conflict: 0 };
   const eligible: number[] = [];
   for (const id of ids) {
     const c = await classify(id);

@@ -19,6 +19,13 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * PROGRAM STRUCTURE: 60 -> 61. One additive migration,
+ * `20261002120000_program_structure`: four nullable columns (a module's chapter
+ * number and title, a level's learner-facing kind, a question's rewatch
+ * second) and two tables (LevelToolUnlock, LessonMediaAsset). Its one data
+ * statement writes, for every version that already existed, the tool-unlock
+ * rule those versions were read by; it rewrites no existing row.
+ *
  * ACCOUNT RECOVERY: 59 -> 60. One additive migration,
  * `20261001120000_account_action_token`, which creates AccountActionToken and
  * its three indexes. It alters no existing table, so a Backend built before it
@@ -159,7 +166,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 60;
+export const EXPECTED_MIGRATION_COUNT = 61;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

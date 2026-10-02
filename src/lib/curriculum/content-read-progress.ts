@@ -14,6 +14,12 @@ import {
   contentLocalizationPayloadSchema,
   normalizedLocaleSchema,
 } from "./content-schemas";
+import {
+  effectiveVideoDurationSeconds,
+  loadLessonMedia,
+  mergeLessonMedia,
+  type LessonMediaEntry,
+} from "./lesson-media";
 import { resolveUserCurriculumLevelStates } from "./level-state";
 import { resolveUserCurriculumContext } from "./resolver";
 
@@ -72,7 +78,13 @@ export type SafeResolvedContent = {
       transcript: string | null;
       body: z.infer<typeof contentLocalizationPayloadSchema>["body"];
     };
-    assets: Array<z.infer<typeof contentAssetPayloadSchema>>;
+    /**
+     * The content version's own assets and, since 2026-10-02, the lesson's
+     * current media from the registry (`lesson-media.ts`). A registry entry has
+     * the same shape; its `url` is a path on the Academy's own origin rather
+     * than an absolute address.
+     */
+    assets: Array<z.infer<typeof contentAssetPayloadSchema> | LessonMediaEntry>;
   };
   progress: SafeLessonProgress | null;
 };
@@ -171,6 +183,7 @@ type ResolvedScope = {
   enrollmentId: number;
   enrollmentStatus: "active" | "completed";
   curriculumVersionId: number;
+  curriculumCode: string;
   level: {
     id: number;
     levelNumber: number;
@@ -265,6 +278,7 @@ async function resolveScopeWithin(
     enrollmentId: context.enrollment.id,
     enrollmentStatus: context.enrollment.status as "active" | "completed",
     curriculumVersionId: context.curriculumVersion.id,
+    curriculumCode: context.curriculumVersion.code,
     level: {
       id: level.id,
       levelNumber: level.levelNumber,
@@ -430,6 +444,18 @@ async function resolveContentWithin(
     progress = mapLessonProgress(progressRow, sectionCodes);
     if (!progress) return { kind: "corrupt", reason: "lesson_progress_corrupt" };
   }
+  const contentAssets = parsedAssets
+    .map((item) => item.success ? item.data : neverValue())
+    .filter((asset) => asset.locale === null || asset.locale === locale.data);
+  // LESSON MEDIA. The lesson's current video, poster and captions, read from
+  // the registry on the same snapshot. A lesson with no registry rows gets
+  // exactly the assets it always got.
+  const media = await loadLessonMedia(tx, {
+    curriculumCode: scope.curriculumCode,
+    levelStableCode: scope.level.stableCode,
+    locale: locale.data,
+    sortOrderFrom: contentAssets.reduce((highest, asset) => Math.max(highest, asset.sortOrder), -1) + 1,
+  });
   const safe: SafeResolvedContent = {
     level: {
       levelNumber: scope.level.levelNumber,
@@ -441,12 +467,10 @@ async function resolveContentWithin(
     },
     content: {
       versionNumber: content.versionNumber,
-      videoDurationSeconds: content.videoDurationSeconds,
+      videoDurationSeconds: effectiveVideoDurationSeconds(content.videoDurationSeconds, media),
       publishedAt: safeDate(content.publishedAt!),
       localization: parsedLocalization.data,
-      assets: parsedAssets
-        .map((item) => item.success ? item.data : neverValue())
-        .filter((asset) => asset.locale === null || asset.locale === locale.data),
+      assets: mergeLessonMedia(contentAssets, media),
     },
     progress,
   };

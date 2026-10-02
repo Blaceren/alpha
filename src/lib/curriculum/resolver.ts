@@ -9,6 +9,7 @@ import type {
 } from "@prisma/client";
 import { isCurriculumV2ReadEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { describeClosedTail } from "./closed-tail";
 import { DEFAULT_CURRICULUM_CODE } from "./constants";
 
 export type CurriculumResolverDb = Pick<
@@ -166,15 +167,15 @@ function validateCurriculumGraph(
   }
 
   if (snapshot.status === "published") {
-    const disabledModule = snapshot.modules.find(
-      (moduleDefinition) => moduleDefinition.status === "disabled",
-    );
-    const disabledLevel = snapshot.levels.find((level) => level.status === "disabled");
-    if (disabledModule || disabledLevel) {
+    // PROGRAM STRUCTURE. A published version may END in levels that are defined
+    // but not open yet (`closed-tail.ts`); any other disabled definition is
+    // still a graph publication could not have produced, and still corrupt.
+    const tail = describeClosedTail(snapshot.levels, snapshot.modules);
+    if (!tail.ok) {
       return corrupt("invalid_curriculum_graph", {
         versionId: snapshot.id,
         issue: "published_graph_contains_disabled_definition",
-        definitionId: disabledModule?.id ?? disabledLevel?.id ?? null,
+        definitionId: tail.offendingModuleIds[0] ?? tail.offendingLevelIds[0] ?? null,
       });
     }
   }

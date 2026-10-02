@@ -127,6 +127,30 @@ export type StartAssessmentAttemptResult = {
   };
 };
 
+/**
+ * PROGRAM STRUCTURE (2026-10-02) — what a learner is told about a question they
+ * answered wrongly.
+ *
+ * The owner's rule for tests: «При неверном ответе показывать разбор, а не
+ * только слово „неверно“. Разбор адресован задаче, а не человеку. Указывать
+ * конкретный отрезок видео для пересмотра.» So a graded attempt now names the
+ * questions that were answered wrongly, each with the bank's own explanation
+ * and the second of the lesson video where the answer is taught.
+ *
+ * WHAT IT STILL NEVER CARRIES: the correct option code, a per-option verdict, or
+ * anything about a question that was answered correctly. The explanation is the
+ * author's text and may well state the answer in words — that is what a разбор
+ * is — but the grading key itself stays where it always was.
+ */
+export type AssessmentReviewItem = {
+  questionKey: string;
+  questionNumber: number;
+  /** The bank's explanation for this question, or null when it has none. */
+  explanation: string | null;
+  /** «Пересмотреть: с 1:55», in seconds from the start of the lesson video. */
+  rewatchFromSeconds: number | null;
+};
+
 export type SubmitAssessmentAttemptResult = {
   kind: "graded";
   created: boolean;
@@ -140,6 +164,14 @@ export type SubmitAssessmentAttemptResult = {
     correctCount: number;
     scoreBasisPoints: number;
   };
+  /**
+   * The wrongly answered questions, in question order — or `null` when this
+   * bank does not show explanations (`AssessmentVersion.showExplanation`), in
+   * which case the learner is told the aggregate and nothing else, exactly as
+   * before. An empty array means the bank shows explanations and nothing was
+   * wrong.
+   */
+  review: AssessmentReviewItem[] | null;
   completion: null | {
     levelNumber: number;
     stableCode: string;
@@ -427,6 +459,9 @@ type RuntimeQuestion = {
   skillTag: string | null;
   correctAnswer: { code: string } | { codes: string[] } | { value: string };
   optionCodes: string[];
+  /** The разбор in the grading locale. Never part of `safe`: a question is not sent with its explanation. */
+  explanation: string | null;
+  rewatchFromSeconds: number | null;
   safe: SafeQuestion;
 };
 
@@ -468,6 +503,11 @@ function runtimeQuestions(assessment: AssessmentGraph, locale: string): RuntimeQ
       skillTag: question.skillTag,
       correctAnswer: canonical.correctAnswer,
       optionCodes: (canonical.options ?? []).map(({ code }) => code),
+      explanation:
+        typeof localization.explanation === "string" && localization.explanation.trim().length > 0
+          ? localization.explanation.trim()
+          : null,
+      rewatchFromSeconds: question.rewatchFromSeconds,
       safe: {
         questionKey: question.stableKey,
         questionNumber: question.questionNumber,
@@ -795,15 +835,36 @@ function grade(
   passPercent: number,
 ) {
   let correctCount = 0;
+  const wrong: RuntimeQuestion[] = [];
   for (const question of questions) {
     if (stableJson(normalized[question.stableKey]) === stableJson(question.correctAnswer)) {
       correctCount += 1;
+    } else {
+      wrong.push(question);
     }
   }
   const totalQuestions = questions.length;
   const scoreBasisPoints = Math.floor((correctCount * 10_000) / totalQuestions);
   const passed = correctCount * 100 >= passPercent * totalQuestions;
-  return { correctCount, totalQuestions, scoreBasisPoints, passed };
+  return { correctCount, totalQuestions, scoreBasisPoints, passed, wrong };
+}
+
+/**
+ * The review a graded attempt carries, derived from nothing but the immutable
+ * bank and the learner's own stored answers — so an exact retry of the same
+ * submission rebuilds the identical review without a row being written for it.
+ */
+function reviewOf(
+  assessment: AssessmentGraph,
+  graded: ReturnType<typeof grade>,
+): AssessmentReviewItem[] | null {
+  if (!assessment.showExplanation) return null;
+  return graded.wrong.map((question) => ({
+    questionKey: question.stableKey,
+    questionNumber: question.questionNumber,
+    explanation: question.explanation,
+    rewatchFromSeconds: question.rewatchFromSeconds,
+  }));
 }
 
 function safeCompletion(
@@ -823,6 +884,7 @@ function submitResult(
   created: boolean,
   attempt: AssessmentAttempt,
   completion: SubmitAssessmentAttemptResult["completion"],
+  review: SubmitAssessmentAttemptResult["review"],
 ): SubmitAssessmentAttemptResult {
   const terminal = terminalValues(attempt);
   return {
@@ -838,6 +900,7 @@ function submitResult(
       correctCount: terminal.correctCount,
       scoreBasisPoints: terminal.scoreBasisPoints,
     },
+    review,
     completion,
   };
 }
@@ -893,7 +956,7 @@ async function terminalRetry(
       },
     });
     if (xp) fail("ASSESSMENT_STATE_CORRUPT", "failed assessment attempt owns XP");
-    return submitResult(false, attempt, null);
+    return submitResult(false, attempt, null, reviewOf(assessment, graded));
   }
   // Reward-conditional XP flag, mirroring runSubmit: a zero-reward level's passing
   // retry re-asserts completion without requiring the XP flag.
@@ -906,7 +969,7 @@ async function terminalRetry(
     actorId: actorUserId,
     evaluationTime: terminalValues(attempt).submittedAt,
   });
-  return submitResult(false, attempt, safeCompletion(completion));
+  return submitResult(false, attempt, safeCompletion(completion), reviewOf(assessment, graded));
 }
 
 async function runSubmit(
@@ -1036,7 +1099,7 @@ async function runSubmit(
   }
   const saved = await tx.assessmentAttempt.findUnique({ where: { id: attempt.id } });
   if (!saved) fail("ASSESSMENT_STATE_CORRUPT", "graded assessment attempt disappeared");
-  return submitResult(true, saved, completion);
+  return submitResult(true, saved, completion, reviewOf(assessment, graded));
 }
 
 function isKnownConflict(error: unknown) {

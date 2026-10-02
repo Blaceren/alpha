@@ -19,6 +19,7 @@ import {
   type LevelDefinition,
   type LevelDefinitionType,
 } from "@prisma/client";
+import { seedLegacyToolUnlocks } from "./support/toolUnlocks";
 
 const dbPath = `/tmp/ata-progression-adjustment-${process.pid}.db`;
 const dbUrl = `file:${dbPath}`;
@@ -179,6 +180,7 @@ async function main() {
         }),
       );
     }
+    await seedLegacyToolUnlocks(prisma, version.id, levels);
     const learner = await createUser("learner");
     const enrollment = await prisma.userCurriculumEnrollment.create({
       data: {

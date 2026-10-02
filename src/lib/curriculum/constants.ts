@@ -114,6 +114,10 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportReassigned: "REPORT_REASSIGNED",
   reportRejected: "REPORT_REJECTED",
   reportApproved: "REPORT_APPROVED",
+  // PROGRAM STRUCTURE (2026-10-02). A report accepted by the platform's formal
+  // check at submission — no reviewer, so deliberately NOT `REPORT_APPROVED`,
+  // which says a person approved it.
+  reportFormallyAccepted: "REPORT_FORMALLY_ACCEPTED",
   reportAttachmentAvailable: "CURRICULUM_REPORT_ATTACHMENT_AVAILABLE",
   reportAttachmentDeleted: "CURRICULUM_REPORT_ATTACHMENT_DELETED",
   reportAttachmentRejected: "CURRICULUM_REPORT_ATTACHMENT_REJECTED",

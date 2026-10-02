@@ -18,11 +18,13 @@ import {
   mapUnavailableCurriculumSummary,
 } from "@/lib/curriculum/read-api";
 import { resolveUserCurriculumContext } from "@/lib/curriculum/resolver";
+import { loadCurriculumToolUnlocks } from "@/lib/curriculum/tool-access";
 import { resolveEnrollmentXp } from "@/lib/curriculum/xp";
 import {
   isCurriculumV2ReadEnabled,
   isCurriculumV2XpEnabled,
 } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
 
 function noStore(response: NextResponse) {
   response.headers.set("Cache-Control", NO_STORE_HEADERS["Cache-Control"]);
@@ -116,11 +118,14 @@ export async function GET(request: Request) {
       if (xp.kind === "not_found" || xp.kind === "corrupt") {
         return curriculumReadErrorResponse("XP_STATE_CORRUPT", "XP_STATE_CORRUPT");
       }
+      // PROGRAM STRUCTURE. A completed enrollment has no level-state resolution
+      // to carry the pinned version's tool unlocks, so they are read here.
+      const toolUnlocks = await loadCurriculumToolUnlocks(prisma, context.curriculumVersion.id);
       return NextResponse.json(
         {
           data: summary
-            ? mapCompletedCurriculumSummary(context, xp)
-            : mapCompletedCurriculumRead(context, xp),
+            ? mapCompletedCurriculumSummary(context, xp, toolUnlocks)
+            : mapCompletedCurriculumRead(context, xp, toolUnlocks),
         },
         { headers: NO_STORE_HEADERS },
       );
@@ -153,11 +158,12 @@ export async function GET(request: Request) {
       );
     }
 
+    const toolUnlocks = await loadCurriculumToolUnlocks(prisma, levelStates.curriculumVersion.id);
     return NextResponse.json(
       {
         data: summary
-          ? mapEnrolledCurriculumSummary(levelStates)
-          : mapEnrolledCurriculumRead(levelStates),
+          ? mapEnrolledCurriculumSummary(levelStates, toolUnlocks)
+          : mapEnrolledCurriculumRead(levelStates, toolUnlocks),
       },
       { headers: NO_STORE_HEADERS },
     );

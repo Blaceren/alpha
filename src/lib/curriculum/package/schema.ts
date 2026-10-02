@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { requiredWhenSchema } from "@/lib/curriculum/report-required-when";
+import { MAX_REPORT_FIELDS } from "@/lib/curriculum/report-schemas";
 import { contentBodySchema } from "@/lib/curriculum/content-body";
 import { optionalSafeText, safeText } from "@/lib/curriculum/content-safe-text";
 
@@ -86,6 +87,13 @@ const levelTypeSchema = z.enum([
   "financial_checkpoint",
   "final_exam",
 ]);
+
+/**
+ * The learner-facing names a level may carry. A CLOSED list: the Academy
+ * switches on it, and the database column carries the same CHECK.
+ */
+export const LEVEL_KIND_VALUES = ["lesson", "task", "report", "practice", "assembly"] as const;
+export type PackageLevelKind = (typeof LEVEL_KIND_VALUES)[number];
 
 const questionTypeSchema = z.enum([
   "single_choice",
@@ -197,6 +205,14 @@ const questionSchema = z.strictObject({
     .max(20),
   /** Which lesson takeaway teaches this answer — required for review. */
   lessonTakeawayRef: z.string().trim().max(300).nullable(),
+  /**
+   * PROGRAM STRUCTURE — «Пересмотреть: с 1:55». The second of the lesson video
+   * at which this answer is taught; the learner is sent there from the
+   * explanation of a wrong answer. Optional, and absent from every package
+   * written before it existed, so those keep parsing and keep their
+   * fingerprints. `null` and absent mean the same thing: no such point.
+   */
+  rewatchFromSeconds: z.number().int().min(0).max(86_400).nullable().optional(),
   provenance: provenanceRecordSchema,
 });
 
@@ -349,7 +365,7 @@ const reportSchema = z.strictObject({
     )
     .min(1)
     .max(20),
-  fields: z.array(reportFieldSchema).min(1).max(50),
+  fields: z.array(reportFieldSchema).min(1).max(MAX_REPORT_FIELDS),
   attachmentsAllowed: z.boolean(),
   maxAttachments: z.number().int().min(0).max(20),
   draftAllowed: z.boolean(),
@@ -449,6 +465,33 @@ const levelSchema = z.strictObject({
   prerequisiteLevelCodes: z.array(z.string().trim().min(1).max(128)).max(20),
   checkpointLevelCode: z.string().trim().min(1).max(128).nullable(),
   estimatedDurationSeconds: z.number().int().positive().max(86_400).nullable(),
+  /**
+   * PROGRAM STRUCTURE — what the learner is told this level IS: «Урок»,
+   * «Задание», «Отчёт», «Практика», «Точка сборки». DISPLAY ONLY. Who may
+   * complete the level is decided by `type` + `completionMethod` exactly as
+   * before, so two levels with one completion pair may be named differently and
+   * a name can never open or close anything.
+   *
+   * Optional for the reason every later addition to this schema is optional:
+   * the packages already shipped do not carry it and must keep their
+   * fingerprints.
+   */
+  kind: z.enum(LEVEL_KIND_VALUES).optional(),
+  /**
+   * PROGRAM STRUCTURE — a level that is DEFINED but not open yet.
+   *
+   * A program is written faster than it is produced: the first chapter of the
+   * 30-level program has its lessons, the second has titles and one line each.
+   * Those levels belong on the learner's path — they are what comes next — and
+   * must not be completable, because there is nothing to complete. `disabled`
+   * says exactly that: the runtime already locks a level whose definition is
+   * not active (`definition_inactive`) and refuses to complete one.
+   *
+   * Only a TRAILING run may be disabled (checked by the package validator and
+   * again at publication): a closed level in the middle of a route would strand
+   * everything after it.
+   */
+  status: z.enum(["active", "disabled"]).optional(),
   content: contentSchema.nullable(),
   assessment: assessmentSchema.nullable(),
   report: reportSchema.nullable(),
@@ -463,6 +506,17 @@ const moduleSchema = z.strictObject({
   description: optionalText(2_000),
   learningObjective: text(1_000),
   checkpointLevelCode: z.string().trim().min(1).max(128).nullable(),
+  /**
+   * PROGRAM STRUCTURE — the chapter this module belongs to. A chapter is a run
+   * of consecutive modules and carries a number and a title, nothing else.
+   * Optional: a package either gives every module a chapter or gives none.
+   */
+  chapter: z
+    .strictObject({
+      number: z.number().int().positive().max(100),
+      title: text(300, "chapter title"),
+    })
+    .optional(),
   levels: z.array(levelSchema).min(1).max(200),
 });
 
@@ -533,6 +587,30 @@ export const curriculumPackageSchema = z.strictObject({
     .max(200),
   /** sha256 over the canonical semantic projection; verified before import. */
   contentFingerprint: z.string().trim().regex(/^[0-9a-f]{64}$/),
+  /**
+   * PROGRAM STRUCTURE — which level's completion opens which tool, in THIS
+   * version.
+   *
+   * Until now the answer was one global number per tool in
+   * `product-vocabulary.ts`, which is only true while every published version
+   * has the same shape. A package may now state it: one entry per tool, naming
+   * the level by its stable code.
+   *
+   * ABSENT IS NOT EMPTY. A package that does not carry the field at all is a
+   * package written under the old global rule, and the importer materialises
+   * that rule for it — so every artifact shipped before this field existed
+   * imports to exactly the tool access it always had. A package that carries
+   * the field, even as an empty list, is taken at its word.
+   */
+  toolUnlocks: z
+    .array(
+      z.strictObject({
+        toolCode: z.string().trim().regex(/^tool\.[a-z0-9]+(?:_[a-z0-9]+)*$/).max(64),
+        levelCode: z.string().trim().min(1).max(128),
+      }),
+    )
+    .max(50)
+    .optional(),
   modules: z.array(moduleSchema).min(1).max(100),
 });
 

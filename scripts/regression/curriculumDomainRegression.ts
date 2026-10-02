@@ -86,6 +86,8 @@ function makeModule(over: Partial<ModuleDefinition> = {}): ModuleDefinition {
     checkpointLevel: 3,
     learningObjective: "learn the basics",
     status: "active",
+    chapterNumber: null,
+    chapterTitle: null,
     ...over,
   };
 }
@@ -110,6 +112,7 @@ function makeLevel(over: Partial<LevelDefinition> = {}): LevelDefinition {
     featureUnlockCode: null,
     visibilityRule: null,
     status: "active",
+    presentationKind: null,
     ...over,
   };
 }

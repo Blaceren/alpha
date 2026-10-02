@@ -1182,7 +1182,41 @@ async function main() {
           : { type: "lesson", completionMethod: "manual", xpReward: 150 },
       );
     }
-    return createGraph(specs);
+    const graph = await createGraph(specs);
+    // PROGRAM STRUCTURE (2026-10-02). Which level opens a tool is the version's
+    // own row now. This graph is built by hand, so it states the rule the
+    // importer and migration 61 write for a legacy-shaped version: the level
+    // with the tool's legacy number, where the graph has one.
+    for (const tool of vocabulary.CURRICULUM_TOOLS) {
+      const level = graph.levels[tool.unlockLevel - 1];
+      if (!level) continue;
+      await prisma.levelToolUnlock.create({
+        data: {
+          levelDefinitionId: level.id,
+          curriculumVersionId: graph.version.id,
+          toolCode: tool.code,
+        },
+      });
+    }
+    return graph;
+  }
+
+  /** The pinned version's unlock rows — what the read route loads beside the level states. */
+  async function unlockRowsOf(states: unknown) {
+    const resolved = states as { curriculumVersion: { id: number } };
+    return toolAccess.loadCurriculumToolUnlocks(prisma, resolved.curriculumVersion.id);
+  }
+
+  /** The resolved levels and the pinned version's unlock rows, as the read route hands them over. */
+  async function toolInputs(states: unknown) {
+    const resolved = states as {
+      curriculumVersion: { id: number };
+      levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0];
+    };
+    return [
+      resolved.levels,
+      await toolAccess.loadCurriculumToolUnlocks(prisma, resolved.curriculumVersion.id),
+    ] as const;
   }
 
   await check("4.1 exactly the canonical tools are emitted, in unlock order, no duplicates", () => {
@@ -1217,9 +1251,7 @@ async function main() {
 
     const states = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
     assert.equal(states.kind, "resolved");
-    const access = toolAccess.resolveCurriculumToolAccess(
-      (states as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
-    );
+    const access = toolAccess.resolveCurriculumToolAccess(...(await toolInputs(states)));
     const open = access.tools.filter((entry) => entry.unlocked).map((entry) => entry.code);
     assert.deepEqual(open, ["tool.trade_card", "tool.trading_journal"]);
     assert.equal(access.unlockedCount, 2);
@@ -1255,7 +1287,7 @@ async function main() {
         asOf: AT,
       });
       assert.equal(states.kind, "resolved", status);
-      const access = toolAccess.resolveCurriculumToolAccess((states as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels);
+      const access = toolAccess.resolveCurriculumToolAccess(...(await toolInputs(states)));
       // L1–L9 are durably complete, so the L5 Trade Card is open; the L10 row is
       // only ${status} and must not open the L10 tool.
       const open = access.tools.filter((entry) => entry.unlocked).map((entry) => entry.code);
@@ -1306,7 +1338,11 @@ async function main() {
     const progressRows = await prisma.userLevelProgress.findMany({
       where: { enrollmentId: enrollment.id },
     });
-    const access = toolAccess.resolveCompletedCurriculumToolAccess(levels, progressRows);
+    const access = toolAccess.resolveCompletedCurriculumToolAccess(
+      levels,
+      progressRows,
+      await toolAccess.loadCurriculumToolUnlocks(prisma, graph.version.id),
+    );
     const journal = access.tools.find((entry) => entry.code === "tool.trading_journal")!;
     assert.equal(journal.unlocked, false, "an incomplete L10 keeps the L10 tool locked");
     assert.equal(journal.reason, "unlock_level_incomplete");
@@ -1342,9 +1378,7 @@ async function main() {
     }
     assert.equal(await xpTotal(richEnrollment.id), 1_350, "this learner has plenty of XP");
     const richStates = await levelState.resolveUserCurriculumLevelStates({ userId: rich.id, asOf: AT });
-    const richAccess = toolAccess.resolveCurriculumToolAccess(
-      (richStates as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
-    );
+    const richAccess = toolAccess.resolveCurriculumToolAccess(...(await toolInputs(richStates)));
     // Only the L5 tool, whose source lesson IS complete. 1 350 XP opens nothing more.
     assert.deepEqual(
       richAccess.tools.filter((entry) => entry.unlocked).map((entry) => entry.code),
@@ -1362,9 +1396,7 @@ async function main() {
     await startLevel(poorEnrollment.id, graph, 11);
     assert.equal(await xpTotal(poorEnrollment.id), 0, "this learner has earned nothing");
     const poorStates = await levelState.resolveUserCurriculumLevelStates({ userId: poor.id, asOf: AT });
-    const poorAccess = toolAccess.resolveCurriculumToolAccess(
-      (poorStates as unknown as { levels: Parameters<typeof toolAccess.resolveCurriculumToolAccess>[0] }).levels,
-    );
+    const poorAccess = toolAccess.resolveCurriculumToolAccess(...(await toolInputs(poorStates)));
     assert.equal(poorAccess.unlockedCount, 2);
     assert.equal(
       poorAccess.tools.find((entry) => entry.code === "tool.trading_journal")!.unlocked,
@@ -1401,16 +1433,16 @@ async function main() {
     setFlags({ read: true, enrollment: true, xp: true });
     const enabled = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
     assert.equal(enabled.kind, "resolved");
-    const enabledRead = readApi.mapEnrolledCurriculumRead(enabled as never);
+    const enabledRead = readApi.mapEnrolledCurriculumRead(enabled as never, await unlockRowsOf(enabled));
     assert.equal(enabledRead.xp.kind, "available");
     assert.equal((enabledRead.xp as { currentXp: number }).currentXp, 0);
-    const enabledSummary = readApi.mapEnrolledCurriculumSummary(enabled as never);
+    const enabledSummary = readApi.mapEnrolledCurriculumSummary(enabled as never, await unlockRowsOf(enabled));
     assert.equal(enabledSummary.xp.kind, "available");
     assert.equal((enabledSummary.xp as { currentXp: number }).currentXp, 0);
 
     setFlags({ read: true, enrollment: true });
     const disabled = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
-    const disabledRead = readApi.mapEnrolledCurriculumRead(disabled as never);
+    const disabledRead = readApi.mapEnrolledCurriculumRead(disabled as never, await unlockRowsOf(disabled));
     assert.equal(disabledRead.xp.kind, "disabled");
     assert.ok(
       !("currentXp" in disabledRead.xp),
@@ -1427,7 +1459,7 @@ async function main() {
     await startLevel(enrollment.id, graph, 11);
     const states = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
 
-    const full = readApi.mapEnrolledCurriculumRead(states as never);
+    const full = readApi.mapEnrolledCurriculumRead(states as never, await unlockRowsOf(states));
     assert.equal(full.toolAccess.total, vocabulary.CURRICULUM_TOOLS.length);
     assert.equal(full.toolAccess.tools.length, vocabulary.CURRICULUM_TOOLS.length);
     assert.equal(full.toolAccess.unlockedCount, 2);
@@ -1442,7 +1474,7 @@ async function main() {
       );
     }
 
-    const summary = readApi.mapEnrolledCurriculumSummary(states as never);
+    const summary = readApi.mapEnrolledCurriculumSummary(states as never, await unlockRowsOf(states));
     assert.equal(summary.shape, "summary");
     assert.equal(summary.toolAccess.total, vocabulary.CURRICULUM_TOOLS.length);
     assert.equal(summary.toolAccess.unlockedCount, 2);
@@ -1470,9 +1502,9 @@ async function main() {
     const enrollment = await enroll(learner.id, graph, 2);
     await startLevel(enrollment.id, graph, 2);
     const states = await levelState.resolveUserCurriculumLevelStates({ userId: learner.id, asOf: AT });
-    const summary = readApi.mapEnrolledCurriculumSummary(states as never);
+    const summary = readApi.mapEnrolledCurriculumSummary(states as never, await unlockRowsOf(states));
     assert.equal(summary.currentLevel!.xpReward, 250);
-    const full = readApi.mapEnrolledCurriculumRead(states as never);
+    const full = readApi.mapEnrolledCurriculumRead(states as never, await unlockRowsOf(states));
     const rewards = full.modules[0].levels.map((level) => level.xpReward);
     assert.deepEqual(rewards, [100, 250, 0]);
   });

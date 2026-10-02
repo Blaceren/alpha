@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type ReportCommandType } from "@prisma/client";
 import { z } from "zod";
+import {
+  completeCurriculumLevelInTransaction,
+  isCurriculumLevelCompletionError,
+} from "@/lib/curriculum/completion";
+import {
+  isFormallyAcceptedReportPair,
+  isReportCompletionPair,
+} from "@/lib/curriculum/completion-pairs";
 import { CURRICULUM_AUDIT_ACTIONS, STABLE_CODE_PATTERN } from "@/lib/curriculum/constants";
 import { ReportDomainError, isReportDomainError } from "@/lib/curriculum/report-errors";
 import {
@@ -22,7 +30,10 @@ import {
   isCurriculumV2ReportEnabled,
 } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { emitReportSubmittedEvent } from "@/lib/growth/product-events";
+import {
+  emitReportApprovedEvent,
+  emitReportSubmittedEvent,
+} from "@/lib/growth/product-events";
 import { resolveUserCurriculumLevelStates } from "@/lib/curriculum/level-state";
 import { resolveUserCurriculumContext } from "@/lib/curriculum/resolver";
 import {
@@ -100,6 +111,17 @@ export type SafeReportPresentation = {
     title: string;
     shortDescription: string;
     learningObjective: string;
+    /**
+     * PROGRAM STRUCTURE (2026-10-02) — who accepts this report.
+     *
+     * `review`  a mentor or an admin reads it and approves or returns it.
+     * `formal`  nobody does: the platform accepts it at submission when every
+     *           required field is filled, and the level completes on the spot.
+     *
+     * Derived from the level's own completion method, so the learner's screen
+     * can say which of the two is about to happen BEFORE the learner submits.
+     */
+    acceptance: "review" | "formal";
   };
   assignment: {
     versionNumber: number;
@@ -252,6 +274,8 @@ type Scope = {
     status: "in_progress" | "pending_review" | "completed";
   } | null;
   access: "available" | "locked" | "in_progress" | "pending_review" | "completed";
+  /** The level is `report:formal_check`: accepted at submission, never reviewed. */
+  formal: boolean;
 };
 
 type DefinitionGraph = {
@@ -427,7 +451,7 @@ async function resolveScopeWithin(
   if (!level) return { kind: "unavailable", reason: "level_not_accessible" };
   const moduleDefinition = context.modules.find((item) => item.id === level.moduleId);
   if (!moduleDefinition || level.status !== "active" || moduleDefinition.status !== "active") return { kind: "unavailable", reason: "level_not_accessible" };
-  if (level.type !== "report" || level.completionMethod !== "report_approval") return { kind: "unavailable", reason: "wrong_level_type" };
+  if (!isReportCompletionPair(level.type, level.completionMethod)) return { kind: "unavailable", reason: "wrong_level_type" };
   const durable = context.progress.find((item) => item.levelDefinitionId === level.id) ?? null;
   let access: Scope["access"];
   if (context.kind === "completed") {
@@ -462,6 +486,7 @@ async function resolveScopeWithin(
     },
     progress: durable ? { id: durable.id, status: durable.status as "in_progress" | "pending_review" | "completed" } : null,
     access,
+    formal: isFormallyAcceptedReportPair(level.type, level.completionMethod),
   };
 }
 
@@ -739,7 +764,11 @@ function mapPresentation(scope: Scope, graph: DefinitionGraph, locale: string): 
   });
   if (criteria.some((item) => item === null) || scale.some((item) => item === null)) return null;
   return {
-    level: { levelNumber: scope.level.levelNumber, stableCode: scope.level.stableCode, type: "report", title: scope.level.title, shortDescription: scope.level.shortDescription, learningObjective: scope.level.learningObjective },
+    level: {
+      levelNumber: scope.level.levelNumber, stableCode: scope.level.stableCode, type: "report", title: scope.level.title,
+      shortDescription: scope.level.shortDescription, learningObjective: scope.level.learningObjective,
+      acceptance: scope.formal ? "formal" : "review",
+    },
     assignment: {
       versionNumber: graph.assignment.versionNumber, locale,
       title: assignmentLocalization.title, instructions: assignmentLocalization.instructions,
@@ -802,6 +831,11 @@ function inspectSubmission(
   const submitted = submission.submittedRevisionId ? byId.get(submission.submittedRevisionId) ?? null : null;
   const approved = submission.approvedRevisionId ? byId.get(submission.approvedRevisionId) ?? null : null;
   if (!active) return "revision_pointer_corrupt";
+  // PROGRAM STRUCTURE. A formally accepted report is never waiting for anybody
+  // and is never sent back: the only durable states it has are a draft and an
+  // acceptance that names no review. Anything else on such a level is a row no
+  // code path here could have written.
+  if (scope.formal && (submission.status === "pending_review" || submission.status === "rejected")) return "submission_corrupt";
   if (submission.status === "draft") {
     if (active.kind !== "draft_autosave" || submitted || approved || submission.firstSubmittedAt || submission.submittedAt || submission.latestReviewId) return "submission_corrupt";
   } else if (submission.status === "pending_review") {
@@ -811,6 +845,12 @@ function inspectSubmission(
     if (active.id !== submitted.id && (active.kind !== "draft_autosave" || active.revisionNumber <= submitted.revisionNumber)) return "submission_corrupt";
   } else if (submission.status === "approved") {
     if (!submitted || !approved || active.id !== submitted.id || approved.id !== submitted.id || !submission.latestReview || submission.latestReview.decision !== "approved" || submission.latestReview.revisionId !== submitted.id || submission.approvedReviewId !== submission.latestReview.id || !submission.reviewedAt || !submission.approvedAt) return "submission_corrupt";
+    // Accepted by the formal check: the acceptance row names NO reviewer and
+    // carries no claim. A reviewer on it would mean somebody was asked to review
+    // a report the product says nobody reviews. (Nothing is asserted in the
+    // other direction: a reviewed level's row may have lost its reviewer to an
+    // account deletion, and rows written before claims existed carry none.)
+    if (scope.formal && (submission.latestReview.reviewerId !== null || submission.latestReview.claimedAt !== null)) return "submission_corrupt";
   } else return "submission_corrupt";
   const expectedProgress = submission.status === "pending_review" ? "pending_review" : submission.status === "approved" ? "completed" : "in_progress";
   if (scope.progress?.status !== expectedProgress) return "submission_corrupt";
@@ -1573,20 +1613,135 @@ async function transitionOwnReport(
     // same one. Reconciling to `pending_review` afterwards is what returns a
     // resubmitted report's case out of `waiting_learner` and restarts its
     // resolution clock — with no second case and no second timeline.
-    const learnerActor = await resolveOperationalActor(tx, actorUserId);
-    await ensureReportReviewWorkItem(tx, {
-      submissionId: submission.id,
-      userId: submission.userId,
-      levelNumber: scope.level.levelNumber,
-      levelTitle: scope.level.title,
-      actor: learnerActor,
-    });
-    await reconcileReportReviewOperationalState(tx, {
-      submissionId: submission.id,
-      canonicalState: "pending_review",
-      actor: learnerActor,
-      reason: commandType === "submit" ? "report:submitted" : "report:resubmitted",
-    });
+    if (scope.formal) {
+      // FORMAL ACCEPTANCE — «Ручной проверки нет. Система проверяет формально».
+      //
+      // The submission above passed the full field validation, and on this kind
+      // of level that IS the acceptance. Everything below happens in this same
+      // transaction, so the submission and the progress row that were just moved
+      // to `pending_review` leave that state again before anybody can read it:
+      // no reader ever sees a formally checked report "awaiting review", and no
+      // operations work item is created for a task nobody can do.
+      //
+      // HOW AN ACCEPTANCE WITHOUT A REVIEWER IS RECORDED. The table's own CHECK
+      // (`ReportSubmission_state_check`) requires an approved submission to
+      // point at a review row, and rebuilding that table to relax it would be a
+      // far larger risk than the row written here, which says exactly what
+      // happened: decision `approved`, NO reviewer (`reviewerId` NULL — nobody
+      // read it), no claim, and one score per rubric criterion, the criteria
+      // being the four things the formal check looks at. `reviewerRoleSnapshot`
+      // has to hold a role and holds `user`: the only person involved is the
+      // learner, who does the comparison with the sample themselves.
+      //
+      // The completion owner then verifies that row as its proof — and refuses
+      // it for any level that is not `formal_check`, exactly as it refuses a
+      // reviewer-less row for a level a mentor is supposed to read.
+      const scaleOption = [...graph.rubric.scaleOptions].sort((left, right) => left.ordinal - right.ordinal || left.id - right.id)[0];
+      if (!scaleOption || graph.rubric.criteria.length === 0) {
+        fail("REPORT_STATE_CORRUPT", "formal acceptance requires a rubric that states what is checked");
+      }
+      const review = await tx.reportReview.create({ data: {
+        submissionId: submission.id,
+        revisionId: revision.id,
+        curriculumVersionId: submission.curriculumVersionId,
+        levelDefinitionId: submission.levelDefinitionId,
+        reportAssignmentVersionId: submission.reportAssignmentVersionId,
+        reportRubricVersionId: submission.reportRubricVersionId,
+        reviewerId: null,
+        reviewerRoleSnapshot: "user",
+        decision: "approved",
+        humanComment: null,
+        correctiveAction: null,
+        rejectionReasonId: null,
+        requestId: command.requestId,
+        payloadFingerprint: hash({
+          version: 1,
+          acceptance: "formal",
+          submissionId: submission.id,
+          revisionNumber: revision.revisionNumber,
+          contentFingerprint: revision.contentFingerprint,
+        }),
+        claimedAt: null,
+        claimExpiresAt: null,
+        reviewStartedAt: null,
+        reviewedAt: evaluationTime,
+      } });
+      await tx.reportReviewScore.createMany({ data: graph.rubric.criteria.map((criterion) => ({
+        reportReviewId: review.id,
+        reportRubricVersionId: submission.reportRubricVersionId,
+        rubricCriterionId: criterion.id,
+        rubricScaleOptionId: scaleOption.id,
+        comment: null,
+      })) });
+      try {
+        await completeCurriculumLevelInTransaction(tx, {
+          enrollmentId: scope.enrollmentId,
+          levelDefinitionId: scope.level.id,
+          sourceType: "report_approval",
+          sourceId: `report-review:${review.id}`,
+          actorId: actorUserId,
+          evaluationTime,
+        });
+      } catch (error) {
+        if (!isCurriculumLevelCompletionError(error)) throw error;
+        if (error.code === "COMPLETION_DISABLED") fail("REPORT_DISABLED", "report acceptance is disabled");
+        if (error.code === "COMPLETION_CONFLICT" || error.code === "COMPLETION_IDEMPOTENCY_CONFLICT") {
+          fail("REPORT_REVISION_CONFLICT", "report completion changed concurrently");
+        }
+        if (error.code === "COMPLETION_INTERNAL_ERROR") fail("REPORT_INTERNAL_ERROR", "report completion failed");
+        fail("REPORT_STATE_CORRUPT", "report completion evidence is missing or corrupt");
+      }
+      const accepted = await tx.reportSubmission.updateMany({
+        where: {
+          id: submission.id,
+          status: "pending_review",
+          workflowVersion: command.expectedRevision + 1,
+          activeRevisionId: revision.id,
+          submittedRevisionId: revision.id,
+          approvedRevisionId: null,
+          approvedReviewId: null,
+          claimedById: null,
+        },
+        data: {
+          status: "approved",
+          approvedRevisionId: revision.id,
+          latestReviewId: review.id,
+          approvedReviewId: review.id,
+          reviewedAt: evaluationTime,
+          approvedAt: evaluationTime,
+          rejectedAt: null,
+        },
+      });
+      if (accepted.count !== 1) fail("REPORT_REVISION_CONFLICT", "report acceptance changed concurrently");
+      scope.progress!.status = "completed";
+      scope.access = "completed";
+      // The same `report_approved` event a reviewed report produces, keyed on
+      // the submission: the funnel step is «the report was accepted», and it is
+      // true of both kinds of report level.
+      await emitReportApprovedEvent(tx, {
+        submissionId: submission.id,
+        reviewId: review.id,
+        userId: submission.userId,
+        enrollmentId: submission.enrollmentId,
+        levelDefinitionId: submission.levelDefinitionId,
+        occurredAt: evaluationTime,
+      });
+    } else {
+      const learnerActor = await resolveOperationalActor(tx, actorUserId);
+      await ensureReportReviewWorkItem(tx, {
+        submissionId: submission.id,
+        userId: submission.userId,
+        levelNumber: scope.level.levelNumber,
+        levelTitle: scope.level.title,
+        actor: learnerActor,
+      });
+      await reconcileReportReviewOperationalState(tx, {
+        submissionId: submission.id,
+        canonicalState: "pending_review",
+        actor: learnerActor,
+        reason: commandType === "submit" ? "report:submitted" : "report:resubmitted",
+      });
+    }
     const resultingWorkflowVersion = command.expectedRevision + 1;
     const resultKindValue = commandType === "submit" ? "submitted" : "resubmitted";
     const safeResult = safeReceiptResult(resultKindValue, revision.revisionNumber, resultingWorkflowVersion);
@@ -1618,6 +1773,26 @@ async function transitionOwnReport(
         commandType,
       },
     } });
+    if (scope.formal) {
+      // Its own action, so nobody reading the log mistakes a formal acceptance
+      // for a person's approval. IDs and facts only, like every audit here.
+      await tx.auditLog.create({ data: {
+        userId: actorUserId,
+        action: CURRICULUM_AUDIT_ACTIONS.reportFormallyAccepted,
+        entityType: "ReportSubmission",
+        entityId: String(submission.id),
+        metadata: {
+          actorUserId,
+          enrollmentId: scope.enrollmentId,
+          curriculumVersionId: scope.curriculumVersionId,
+          levelDefinitionId: scope.level.id,
+          submissionId: submission.id,
+          revisionNumber: revision.revisionNumber,
+          workflowVersion: resultingWorkflowVersion,
+          acceptance: "formal",
+        },
+      } });
+    }
     const current = await currentCommandSnapshot(tx, scope, graph, fields);
     return {
       kind: resultKindValue, created: false, retry: false, acceptedRevision: revision.revisionNumber,

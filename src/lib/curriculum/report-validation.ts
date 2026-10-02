@@ -1,7 +1,9 @@
 import type { z } from "zod";
+import { isReportCompletionPair } from "@/lib/curriculum/completion-pairs";
 import { ReportDomainError } from "@/lib/curriculum/report-errors";
 import type { ReportValidationIssue } from "@/lib/curriculum/report-errors";
 import {
+  MAX_REPORT_FIELDS,
   reportAssignmentLocalizationPayloadSchema,
   reportCriterionLocalizationPayloadSchema,
   reportCriterionPayloadSchema,
@@ -278,8 +280,8 @@ export function validateReportAssignmentPublication(snapshot: ReportAssignmentPu
   if (snapshot.levelDefinition.curriculumVersion.status !== "draft") {
     issues.push(issue("REPORT_PARENT_NOT_DRAFT", "curriculumVersion.status", "report definitions can be published only inside a draft curriculum"));
   }
-  if (snapshot.levelDefinition.type !== "report" || snapshot.levelDefinition.completionMethod !== "report_approval") {
-    issues.push(issue("REPORT_LEVEL_TYPE_INVALID", "levelDefinition.type", "report assignment requires a report/report_approval level"));
+  if (!isReportCompletionPair(snapshot.levelDefinition.type, snapshot.levelDefinition.completionMethod)) {
+    issues.push(issue("REPORT_LEVEL_TYPE_INVALID", "levelDefinition.type", "report assignment requires a report level completed by report_approval or formal_check"));
   }
   if (snapshot.levelDefinition.status !== "active") {
     issues.push(issue("REPORT_LEVEL_INACTIVE", "levelDefinition.status", "report level must be active"));
@@ -288,7 +290,7 @@ export function validateReportAssignmentPublication(snapshot: ReportAssignmentPu
     issues.push(issue("REPORT_ASSIGNMENT_LOCALIZATION_REQUIRED", "localizations", "assignment localization is required"));
   }
   if (snapshot.fields.length === 0) issues.push(issue("REPORT_FIELD_REQUIRED", "fields", "at least one structured field is required"));
-  if (snapshot.fields.length > 50) issues.push(issue("REPORT_FIELD_LIMIT", "fields", "at most 50 fields are allowed"));
+  if (snapshot.fields.length > MAX_REPORT_FIELDS) issues.push(issue("REPORT_FIELD_LIMIT", "fields", `at most ${MAX_REPORT_FIELDS} fields are allowed`));
   if (snapshot.rubric.reportAssignmentVersionId !== snapshot.id || snapshot.rubric.status !== "published") {
     issues.push(issue("REPORT_RUBRIC_MISMATCH", "rubric", "exact published rubric must belong to the assignment"));
   }

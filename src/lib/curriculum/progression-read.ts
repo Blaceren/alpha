@@ -94,7 +94,12 @@ export async function resolveLearnerProgressionSnapshot(
           code: true,
           status: true,
           versionNumber: true,
-          levels: true,
+          // PROGRAM STRUCTURE. The version's own tool unlocks ride on the levels
+          // that open them, so the tool count below is resolved from the same
+          // rows as the levels and costs no second query.
+          levels: {
+            include: { toolUnlocks: { select: { toolCode: true, levelDefinitionId: true } } },
+          },
         },
       },
       levelProgress: {
@@ -134,7 +139,11 @@ export async function resolveLearnerProgressionSnapshot(
 
   const xp = await resolveEnrollmentXp({ enrollmentId: enrollment.id });
   const toolAccess = summarizeToolAccess(
-    resolveCompletedCurriculumToolAccess(definitions, enrollment.levelProgress),
+    resolveCompletedCurriculumToolAccess(
+      definitions,
+      enrollment.levelProgress,
+      definitions.flatMap((level) => level.toolUnlocks),
+    ),
   );
 
   const describe = (level: (typeof definitions)[number]): LearnerProgressionLevel => ({

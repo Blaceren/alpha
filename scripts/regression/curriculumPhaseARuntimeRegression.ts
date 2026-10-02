@@ -1461,6 +1461,7 @@ async function main() {
     assert.equal(states.kind, "resolved");
     const summary = readApi.mapEnrolledCurriculumSummary(
       states as Extract<typeof states, { kind: "resolved" }>,
+      [],
     );
 
     assert.equal(summary.shape, "summary");
@@ -1503,6 +1504,7 @@ async function main() {
     });
     const full = readApi.mapEnrolledCurriculumRead(
       states as Extract<typeof states, { kind: "resolved" }>,
+      [],
     );
     assert.equal(full.kind, "enrolled");
     assert.equal("shape" in full, false, "the default response gains no new key");
@@ -1528,6 +1530,7 @@ async function main() {
     });
     const summary = readApi.mapEnrolledCurriculumSummary(
       states as Extract<typeof states, { kind: "resolved" }>,
+      [],
     );
     assert.equal(summary.nextLevel, null);
     assert.equal(summary.progress.percentComplete, 50);
