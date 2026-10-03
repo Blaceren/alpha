@@ -4,7 +4,7 @@ import { ResetPasswordForm } from "@/features/auth/reset-password-form";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
-  title: "Новый пароль — Alfa Trade Academy",
+  title: "Новый пароль — Alpha Trade Academy",
   description: "Задайте новый пароль для входа в Академию.",
   robots: { index: false, follow: false },
 };

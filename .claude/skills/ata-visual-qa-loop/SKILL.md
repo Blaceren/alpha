@@ -1,7 +1,7 @@
 ---
 name: ata-visual-qa-loop
 description: >
-  The mandatory screenshot QA process for any Alfa Trade Academy UI. Use this
+  The mandatory screenshot QA process for any Alpha Trade Academy UI. Use this
   whenever ATA UI has been built or changed and needs to be verified, or when the
   user asks to screenshot, test, QA, or "check it works" on an ATA screen. It runs
   a real browser (Playwright, per the webapp-testing skill), captures exact
@@ -14,7 +14,7 @@ description: >
 
 # ATA Visual QA Loop
 
-Verify Alfa Trade Academy UI only with **real browser screenshots**. This wraps the `webapp-testing`
+Verify Alpha Trade Academy UI only with **real browser screenshots**. This wraps the `webapp-testing`
 skill (native Playwright, `scripts/with_server.py`, `wait_for_load_state('networkidle')`, headless
 chromium, console capture) with ATA-specific comparison and scoring.
 

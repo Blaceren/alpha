@@ -70,7 +70,7 @@ export function PublicHomeHeader({ authenticated }: { authenticated: boolean }) 
   return (
     <header className="site-header" data-header ref={headerRef}>
       <div className="site-header__inner shell">
-        <a className="wordmark" href="#top" aria-label="Alfa Trade Academy — на главную">
+        <a className="wordmark" href="#top" aria-label="Alpha Trade Academy — на главную">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/ata-logo.svg" alt="" width={362} height={200} />
         </a>

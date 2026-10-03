@@ -66,7 +66,7 @@ describe("Shell — the mark is the asset of record, once", () => {
       const markLinks = Array.from(container.querySelectorAll("a")).filter((a) => a.querySelector(".brand"));
       expect(markLinks.length, id).toBe(2);
       for (const a of markLinks) {
-        expect(a.getAttribute("aria-label"), id).toBe("Alfa Trade Academy — на главную");
+        expect(a.getAttribute("aria-label"), id).toBe("Alpha Trade Academy — на главную");
         expect(a.getAttribute("href"), id).toBe("/home");
         expect(a.textContent!.trim(), id).toBe("");
       }
@@ -84,7 +84,7 @@ describe("Shell — the mark is the asset of record, once", () => {
     expect(code).not.toContain("<svg");
     expect(code).not.toContain("polyline");
     /* The literal wordmark beside it. */
-    expect(code).not.toMatch(/["'>]\s*Alfa Trade Academy\s*[<"']/);
+    expect(code).not.toMatch(/["'>]\s*Alpha Trade Academy\s*[<"']/);
   });
 });
 

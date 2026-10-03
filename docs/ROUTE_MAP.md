@@ -1,6 +1,6 @@
 # ROUTE_MAP
 
-Карта маршрутов Alfa Trade Academy Web V2 в канонической записи **Next.js App Router** (динамические сегменты — `[param]`). Финализируется в D1. Коды сущностей — из `CURRICULUM_AND_UNLOCKS.md` (стабильные, не локализуются).
+Карта маршрутов Alpha Trade Academy Web V2 в канонической записи **Next.js App Router** (динамические сегменты — `[param]`). Финализируется в D1. Коды сущностей — из `CURRICULUM_AND_UNLOCKS.md` (стабильные, не локализуются).
 
 Легенда доступа: **Auth** — только для авторизованного пользователя; **Public** — доступно без входа (SEO); **Gated** — зависит от progression/unlock.
 

@@ -9,7 +9,7 @@ import { ProfileExit } from "@/features/profile-fidelity/profile-exit";
 import { ProfileSupportCard } from "@/features/profile-fidelity/profile-support-card";
 
 export const metadata: Metadata = {
-  title: "Профиль — Alfa Trade Academy",
+  title: "Профиль — Alpha Trade Academy",
   description: "Ваш профиль в Академии: данные аккаунта, безопасность и поддержка.",
 };
 

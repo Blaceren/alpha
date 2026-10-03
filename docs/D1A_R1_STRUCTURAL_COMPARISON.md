@@ -30,4 +30,4 @@ glow/hero-size/whitespace, не общий sidebar). Требование «ес
 Product content идентичен: Артём · уровень 18 · «Поддержка и сопротивление» · Модуль 4 · Ранг
 Наблюдатель III · 2 480 XP · Серия 6 · 2/5 · «Продолжить урок» · Контрольная точка L20 от $200 ·
 награда Chart Markup Tool · открыты Trading Journal + Risk Calculator · сообщение Alex. Без баланса
-пользователя, без Pocket-CTA, без raw enum/codes; терминология RU; только «Alfa Trade Academy».
+пользователя, без Pocket-CTA, без raw enum/codes; терминология RU; только «Alpha Trade Academy».

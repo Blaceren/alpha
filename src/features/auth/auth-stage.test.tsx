@@ -38,7 +38,11 @@ async function page(Page: PageComponent): Promise<React.ReactElement> {
 }
 
 const ROOT = process.cwd();
-const ACCEPTED_LOGO_SHA = "29e945f57aeafb3d";
+/* The accepted asset, with one line changed on the owner's word of 2026-10-03
+   (DD-341): its <title> spells the product «Alpha». The drawing is the accepted
+   one — the test below proves it against the hash it was accepted with. */
+const ACCEPTED_LOGO_SHA = "7b80daee8ad28bfc";
+const ACCEPTED_DRAWING_SHA = "29e945f57aeafb3d";
 
 function renderPage(node: React.ReactElement) {
   return render(node);
@@ -67,7 +71,7 @@ describe("the auth stage composition", () => {
       expect(marks).toHaveLength(1);
       const link = marks[0] as HTMLAnchorElement;
       expect(link.getAttribute("href")).toBe("/");
-      expect(link.getAttribute("aria-label")).toBe("Alfa Trade Academy — на главную");
+      expect(link.getAttribute("aria-label")).toBe("Alpha Trade Academy — на главную");
       const img = link.querySelector("img");
       expect(img?.getAttribute("src")).toBe("/brand/ata-logo.svg");
       // decorative: the link carries the name, the image must not repeat it
@@ -76,10 +80,10 @@ describe("the auth stage composition", () => {
 
     it(`${name} no longer imitates the mark with text`, async () => {
       const { container } = renderPage(await page(Page));
-      // the old `<p class="login-brand">Alfa Trade Academy</p>`
+      // the old `<p class="login-brand">Alpha Trade Academy</p>`
       expect(container.querySelector(".login-brand")).toBeNull();
       const stray = [...container.querySelectorAll("p, span")].filter(
-        (e) => e.textContent?.trim() === "Alfa Trade Academy",
+        (e) => e.textContent?.trim() === "Alpha Trade Academy",
       );
       expect(stray, "no element may render the wordmark as text").toHaveLength(0);
     });
@@ -96,6 +100,13 @@ describe("the auth stage composition", () => {
   it("the logo is the accepted asset, byte for byte", () => {
     const bytes = readFileSync(join(ROOT, "public", "brand", "ata-logo.svg"));
     expect(createHash("sha256").update(bytes).digest("hex").slice(0, 16)).toBe(ACCEPTED_LOGO_SHA);
+  });
+
+  it("only the logo's accessible name changed with the product's spelling", () => {
+    const text = readFileSync(join(ROOT, "public", "brand", "ata-logo.svg"), "utf8");
+    expect(text).toContain("<title id=\"title\">Логотип Alpha Trade Academy</title>");
+    const asAccepted = text.replace("Логотип Alpha Trade Academy", "Логотип Alfa Trade Academy");
+    expect(createHash("sha256").update(asAccepted).digest("hex").slice(0, 16)).toBe(ACCEPTED_DRAWING_SHA);
   });
 });
 

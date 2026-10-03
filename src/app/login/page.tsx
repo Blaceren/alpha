@@ -7,8 +7,8 @@ import { readAccountCapabilities } from "@/server/auth/account-read";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
-  title: "Вход — Alfa Trade Academy",
-  description: "Войдите в Alfa Trade Academy, чтобы продолжить обучение.",
+  title: "Вход — Alpha Trade Academy",
+  description: "Войдите в Alpha Trade Academy, чтобы продолжить обучение.",
 };
 
 // The guard/redirect logic depends on the request; never statically prerender.

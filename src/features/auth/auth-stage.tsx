@@ -6,7 +6,7 @@ import "@/features/auth/auth-stage.css";
  * THE ONE STAGE BOTH AUTH PAGES STAND ON.
  *
  * WHAT IT REPLACES. `/login` and `/register` each rendered a 400px card
- * centred in an empty field, and each opened with the words «Alfa Trade
+ * centred in an empty field, and each opened with the words «Alpha Trade
  * Academy» set as a paragraph — a text imitation of a mark the product already
  * owns as a file. On a 1440px display the result was a small box adrift in a
  * large void, and the page it belonged to was unrecognisable as the same
@@ -68,7 +68,7 @@ export function AuthStage({
             narrow one it stacks above it. It carries the mark and nothing that
             competes with the form for attention. */}
         <div className="auth__axis">
-          <Link className="auth__mark" href="/" aria-label="Alfa Trade Academy — на главную">
+          <Link className="auth__mark" href="/" aria-label="Alpha Trade Academy — на главную">
             {/* eslint-disable-next-line @next/next/no-img-element -- the asset of
                 record, served from public/, sized by CSS; the optimiser would
                 add a remote-looking URL to a page that must have none. */}

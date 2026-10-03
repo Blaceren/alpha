@@ -512,7 +512,7 @@ describe("Path — nothing synthetic crossed over", () => {
       .container.innerHTML;
     for (const fixture of [
       "Регистрация Pocket",
-      "Как устроен Alfa Trade Academy",
+      "Как устроен Alpha Trade Academy",
       "Первые пять demo-сделок",
       "Контрольная точка $50",
       "Жизненный цикл сделки",

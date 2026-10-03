@@ -4,7 +4,7 @@ import { LinkConfirmation } from "@/features/auth/link-confirmation";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
-  title: "Новый адрес почты — Alfa Trade Academy",
+  title: "Новый адрес почты — Alpha Trade Academy",
   description: "Подтвердите новый адрес почты вашего аккаунта.",
   robots: { index: false, follow: false },
 };

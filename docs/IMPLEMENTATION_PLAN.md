@@ -1,6 +1,6 @@
 # IMPLEMENTATION_PLAN
 
-Пофазный план реализации Alfa Trade Academy Web V2. Реализация — маленькими этапами (Linear-принцип). Каждая фаза: scope · non-scope · dependencies · acceptance · screenshots · tests · risks · stop condition.
+Пофазный план реализации Alpha Trade Academy Web V2. Реализация — маленькими этапами (Linear-принцип). Каждая фаза: scope · non-scope · dependencies · acceptance · screenshots · tests · risks · stop condition.
 
 > D0 — текущая фаза (только документация). Последующие фазы **не начинать** без явного запроса. UI-фазы обязаны проходить `SCREENSHOT_QA_PROTOCOL.md`.
 

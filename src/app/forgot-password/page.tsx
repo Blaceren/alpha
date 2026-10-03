@@ -7,7 +7,7 @@ import { readAccountCapabilities } from "@/server/auth/account-read";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
-  title: "Сброс пароля — Alfa Trade Academy",
+  title: "Сброс пароля — Alpha Trade Academy",
   description: "Получите ссылку для нового пароля на почту аккаунта.",
   robots: { index: false, follow: false },
 };

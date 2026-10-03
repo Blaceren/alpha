@@ -1,9 +1,9 @@
 ---
 name: ata-brand-language
 description: >
-  The visual brand language for Alfa Trade Academy (ATA), derived from the four
+  The visual brand language for Alpha Trade Academy (ATA), derived from the four
   PROVISIONAL prelanding references. Use this whenever designing, proposing,
-  reviewing, or discussing ANY Alfa Trade Academy UI — pages, components, color,
+  reviewing, or discussing ANY Alpha Trade Academy UI — pages, components, color,
   typography, layout, motion, the path/progression, ranks, tools, or Alex Curie —
   even if the user does not say "brand". Load it before art-direction, before any
   React/UI work, and before critiquing an ATA screen. It defines brand essence,
@@ -14,8 +14,10 @@ description: >
 
 # ATA Brand Language (provisional)
 
-The official product name is **Alfa Trade Academy**. The wordmark **“Alpha Trade”** on
-the reference frames is legacy/provisional and is **never** carried into product UI.
+The official product name is **Alpha Trade Academy** — the owner's decision of 2026-10-03
+(«во всем проекте название должно быть alpha а не alfa»). «Alfa» is the retired spelling and
+never appears in product UI. The wordmark on the reference frames is provisional art; the product
+name is always written in full.
 
 **Sources (provisional):** `design-memory/references/ata-brand/prelanding-desktop-0{1..4}.png`
 and `design-memory/references/ata-brand/REFERENCE_MANIFEST.md`. These are a *direction*, not a

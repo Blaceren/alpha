@@ -1,6 +1,6 @@
 # DESIGN_SYSTEM
 
-Provisional design system для Alfa Trade Academy Web V2. Dark-only. Все visual-значения — **provisional** и будут заменены токенами прелендинга. Именование семантическое: код ссылается на роль токена, не на конкретный HEX.
+Provisional design system для Alpha Trade Academy Web V2. Dark-only. Все visual-значения — **provisional** и будут заменены токенами прелендинга. Именование семантическое: код ссылается на роль токена, не на конкретный HEX.
 
 > **D1A статус (реализовано).** Токены живут в `src/styles/tokens.css` (`:root`, dark-only), маппятся в Tailwind (`tailwind.config.ts`) на `var(--token)` и типизированы в `src/design-system/tokens/tokens.ts`. Реализованы все 25 семантических токенов из брифа D1A (background-base/deep, surface-primary/secondary/elevated/interactive, border-subtle/default, text-primary/secondary/muted, accent-primary/secondary, success, warning, danger, info, locked, completed, active, suspended, focus-ring, overlay, path-line, path-glow). Provisional HEX-значения ниже соответствуют реализованным. Замена палитры прелендинга = правка только `tokens.css`.
 

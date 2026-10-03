@@ -21,7 +21,7 @@ import "@/features/public-home/public-home.css";
  */
 const TITLE = "ATA — последовательный путь в трейдинге";
 const DESCRIPTION =
-  "Alfa Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.";
+  "Alpha Trade Academy — последовательный путь обучения трейдингу: знания, практика, обратная связь и видимый прогресс.";
 
 /**
  * THE SOCIAL PREVIEW. A static 1200×630 render of the hero's own words in the
@@ -47,7 +47,7 @@ export function generateMetadata(): Metadata {
     url: `${indexing.origin}${OG_IMAGE.path}`,
     width: OG_IMAGE.width,
     height: OG_IMAGE.height,
-    alt: "Alfa Trade Academy — Возможности не приходят с готовыми ответами.",
+    alt: "Alpha Trade Academy — Возможности не приходят с готовыми ответами.",
   };
   return {
     title: TITLE,
@@ -59,7 +59,7 @@ export function generateMetadata(): Metadata {
       url: `${indexing.origin}/`,
       title: TITLE,
       description: DESCRIPTION,
-      siteName: "Alfa Trade Academy",
+      siteName: "Alpha Trade Academy",
       locale: "ru_RU",
       images: [image],
     },
@@ -88,7 +88,7 @@ function structuredData(indexing: SearchIndexing & { enabled: true }) {
   const organization = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Alfa Trade Academy",
+    name: "Alpha Trade Academy",
     url: `${indexing.origin}/`,
     logo: `${indexing.origin}/brand/ata-logo.svg`,
   };

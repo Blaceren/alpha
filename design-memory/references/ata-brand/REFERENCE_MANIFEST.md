@@ -1,5 +1,7 @@
 # REFERENCE_MANIFEST — provisional ATA brand references
 
+> **Обновление 03.10.2026.** Продукт называется **Alpha Trade Academy** (решение владельца). Надпись «Alpha Trade» на кадрах больше не расходится с названием, но остаётся provisional-брендингом кадров: в UI название пишется полностью.
+
 Официальное название продукта: **Alfa Trade Academy**.
 Надпись **«Alpha Trade» / «ALPHA TRADE»** на кадрах — provisional/legacy branding прелендинга,
 **в новый UI не переносится**.

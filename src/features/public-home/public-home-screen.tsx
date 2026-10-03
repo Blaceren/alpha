@@ -81,7 +81,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
         <section className="hero surface surface--ink" id="top">
           <div className="hero__inner shell">
             <div className="hero__copy" data-reveal>
-              <p className="eyebrow">ALFA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
+              <p className="eyebrow">ALPHA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
               <h1 className="display display--hero">
                 Возможности не приходят с готовыми ответами.
               </h1>
@@ -388,7 +388,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
 
       <footer className="site-footer">
         <div className="shell site-footer__grid">
-          <p>© <span data-year>{new Date().getFullYear()}</span> Alfa Trade Academy</p>
+          <p>© <span data-year>{new Date().getFullYear()}</span> Alpha Trade Academy</p>
           <p>Обучение и прохождение ATA не гарантируют финансовый результат.</p>
           {/* The three legal labels have no destination pages yet. They are NOT
               links and NOT a navigation landmark — an affordance that goes

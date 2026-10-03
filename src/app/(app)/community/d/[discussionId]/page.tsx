@@ -24,7 +24,7 @@ import { NOT_FOUND_METADATA } from "@/config/not-found-metadata";
 export async function generateMetadata(): Promise<Metadata> {
   if (!COMMUNITY_ENABLED) return NOT_FOUND_METADATA;
   return {
-    title: "Обсуждение — Alfa Trade Academy",
+    title: "Обсуждение — Alpha Trade Academy",
     description: "Вопрос и ответы участников программы.",
   };
 }

@@ -1,6 +1,6 @@
 # D1A_R2_2_PRODUCTION_READINESS
 
-Финальная design-only коррекция Route Field перед React. Продукт — **Alfa Trade Academy**.
+Финальная design-only коррекция Route Field перед React. Продукт — **Alpha Trade Academy**.
 References provisional. React ещё **не** разрешён.
 
 ## Зафиксировано

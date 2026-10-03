@@ -25,7 +25,7 @@
    WHAT CHANGED IN THE POLISH PASS, AND WHY:
 
    * THE MARK IS THE REAL ONE. The brand slot used to hold a hand-drawn chart
-     glyph and the words "Alfa Trade Academy" — two lockups, neither of them the
+     glyph and the words "Alpha Trade Academy" — two lockups, neither of them the
      asset of record. It is now `/brand/ata-logo.svg` at its natural ratio.
 
    * THE ACTIVE INDICATOR IS A LINE, NOT A GLOW. It used to be a gradient that

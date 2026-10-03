@@ -1,6 +1,6 @@
 # PAGE_INVENTORY
 
-Инвентарь страниц Alfa Trade Academy Web V2. Для каждой страницы: route · user goal · primary action · secondary actions · hierarchy · components · states · desktop · tablet · mobile · mock data · future backend data · analytics events · edge cases · acceptance criteria.
+Инвентарь страниц Alpha Trade Academy Web V2. Для каждой страницы: route · user goal · primary action · secondary actions · hierarchy · components · states · desktop · tablet · mobile · mock data · future backend data · analytics events · edge cases · acceptance criteria.
 
 Коды/маршруты — `ROUTE_MAP.md` (канонический App Router синтаксис `[param]`). Состояния — `STATE_MATRIX.md`. Компоненты — `COMPONENT_INVENTORY.md`. Тексты и терминология — `CONTENT_AND_TONE.md`.
 

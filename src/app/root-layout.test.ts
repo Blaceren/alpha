@@ -52,7 +52,7 @@ describe("the root layout", () => {
   });
 
   it("declares the same metadata and viewport as before", () => {
-    expect(code).toMatch(/title: "Alfa Trade Academy"/);
+    expect(code).toMatch(/title: "Alpha Trade Academy"/);
     expect(code).toMatch(/icons: \{ icon: \[\{ url: "\/brand\/favicon\.svg", type: "image\/svg\+xml" \}\] \}/);
     expect(code).toMatch(/themeColor: "#0b0d0a"/);
     expect(code).toMatch(/width: "device-width"/);

@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!read || read.status !== "ok") return { robots: { index: false, follow: false } };
   const { item } = read.data;
   return {
-    title: `${item.title} — ${item.countryLabel}, ${releaseDayWords(item.releaseAt)} — Alfa Trade Academy`,
+    title: `${item.title} — ${item.countryLabel}, ${releaseDayWords(item.releaseAt)} — Alpha Trade Academy`,
     description: item.summary,
     robots: { index: false, follow: false },
   };

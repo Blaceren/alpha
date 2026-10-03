@@ -47,9 +47,9 @@ import "@/styles/globals.css";
  * untouched.
  */
 export const metadata: Metadata = {
-  title: "Alfa Trade Academy",
+  title: "Alpha Trade Academy",
   description:
-    "Alfa Trade Academy — последовательная образовательная платформа по трейдингу.",
+    "Alpha Trade Academy — последовательная образовательная платформа по трейдингу.",
   icons: { icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }] },
 };
 

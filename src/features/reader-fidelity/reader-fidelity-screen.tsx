@@ -14,7 +14,7 @@ import "@/features/reader-fidelity/reader-fidelity.css";
 import "@/features/reader-fidelity/reader-hifi.css";
 
 export const metadata: Metadata = {
-  title: "Материал урока — Alfa Trade Academy",
+  title: "Материал урока — Alpha Trade Academy",
 };
 
 /** An authored CTA at the end of the material already carries the action. */

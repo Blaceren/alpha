@@ -1,7 +1,7 @@
 ---
 name: ata-anti-generic-ui-review
 description: >
-  Scoring rubric that decides whether an Alfa Trade Academy UI is distinctive
+  Scoring rubric that decides whether an Alpha Trade Academy UI is distinctive
   enough to ship or is just another generic dashboard. Use this to review, score,
   or "grade" any ATA screen, art direction, or screenshot — always after
   implementation and after ata-visual-qa-loop, and any time the user asks "is this
@@ -15,7 +15,7 @@ description: >
 
 # ATA Anti-Generic UI Review
 
-Score an Alfa Trade Academy screen against the brand. Prerequisites: `ata-brand-language` loaded;
+Score an Alpha Trade Academy screen against the brand. Prerequisites: `ata-brand-language` loaded;
 real screenshots produced via `ata-visual-qa-loop` (never review from code or synthetic images);
 `design-memory/references/ata-brand/REFERENCE_MANIFEST.md` and the D1A anti-examples
 (`design-memory/references/anti-examples/d1a-generic/`) available for comparison.

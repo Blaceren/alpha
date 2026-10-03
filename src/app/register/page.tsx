@@ -7,8 +7,8 @@ import { readAccountCapabilities } from "@/server/auth/account-read";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
-  title: "Регистрация — Alfa Trade Academy",
-  description: "Создайте аккаунт Alfa Trade Academy, чтобы начать обучение.",
+  title: "Регистрация — Alpha Trade Academy",
+  description: "Создайте аккаунт Alpha Trade Academy, чтобы начать обучение.",
   // A registration page has nothing to gain from indexing and the URL may carry
   // an invite code.
   robots: { index: false, follow: false },

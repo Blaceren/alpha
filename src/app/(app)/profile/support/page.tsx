@@ -10,7 +10,7 @@ import "@/features/profile-fidelity/profile-fidelity.css";
 import "@/features/profile-fidelity/profile-hifi.css";
 
 export const metadata: Metadata = {
-  title: "Поддержка — Alfa Trade Academy",
+  title: "Поддержка — Alpha Trade Academy",
   description:
     "Обращения в поддержку Академии: задать вопрос, посмотреть ответы команды и продолжить переписку.",
 };

@@ -24,7 +24,7 @@ import "@/features/report-level/report-level.css";
 import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
-  title: "Урок — Alfa Trade Academy",
+  title: "Урок — Alpha Trade Academy",
   description: "Видеоурок и проверка понимания одного уровня пути.",
 };
 

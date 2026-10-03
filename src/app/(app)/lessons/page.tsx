@@ -9,7 +9,7 @@ import "@/features/lessons-library/lessons-library.css";
 import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
-  title: "Уроки — Alfa Trade Academy",
+  title: "Уроки — Alpha Trade Academy",
   description:
     "Библиотека уроков: обзор модулей и уровней, продолжение текущего урока и возврат к пройденному материалу.",
 };

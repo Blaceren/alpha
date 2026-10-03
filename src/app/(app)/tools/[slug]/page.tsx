@@ -52,7 +52,7 @@ type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const tool = toolWindowBySlug((await params).slug);
-  return { title: tool ? `${tool.title} — Alfa Trade Academy` : "Инструмент — Alfa Trade Academy" };
+  return { title: tool ? `${tool.title} — Alpha Trade Academy` : "Инструмент — Alpha Trade Academy" };
 }
 
 /**

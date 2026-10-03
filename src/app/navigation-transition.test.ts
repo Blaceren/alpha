@@ -495,6 +495,19 @@ describe("the authenticated route group", () => {
   "src/features/tool-windows/tools-hifi.css",
   "src/features/workspace-fidelity/workspace-hifi.css",
   "src/styles/states-hifi.css",
+  /* THE NAME (DD-341, owner 2026-10-03: «во всем проекте название должно быть
+     alpha а не alfa»): page titles, the brand mark's accessible name and the
+     comments that spelled the product «Alfa». Text only — no route, boundary
+     or behaviour moved. */
+  "src/app/(app)/community/[spaceCode]/page.tsx",
+  "src/app/(app)/community/d/[discussionId]/page.tsx",
+  "src/app/(app)/community/page.tsx",
+  "src/app/(app)/notifications/page.tsx",
+  "src/app/(app)/path/[levelCode]/workspace/page.tsx",
+  "src/components/shell/app-shell.tsx",
+  "src/components/shell/brand-mark.tsx",
+  "src/config/not-found-metadata.ts",
+  "src/lib/curriculum/provider.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

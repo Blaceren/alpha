@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { WorkspaceFidelityScreen } from "@/features/workspace-fidelity/workspace-fidelity-screen";
 
 export const metadata: Metadata = {
-  title: "Рабочая область — Alfa Trade Academy",
+  title: "Рабочая область — Alpha Trade Academy",
   description: "Выполнение задания уровня: отправка работы, разбор и исправления.",
 };
 
