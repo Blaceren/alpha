@@ -5290,7 +5290,29 @@ html.ph-smooth-scroll {
   .ph .pw--review .pw__level,
   .ph .rw__title .pw-mono,
   .ph .rw__entry-head .pw-mono,
-  .ph .rw__entry-head .rw__chip {
+  .ph .rw__entries .rw__chip {
+    font-size: 11px;
+  }
+
+  /* The product windows' own small print — times, statuses, counters, the
+     levels on the bars — was 8.5–10.5px: a miniature to look at, not to read.
+     On a phone or a tablet it is 11px, the page's floor. */
+  .ph .pw .pw-mono,
+  .ph .cyc .pw-mono,
+  .ph .pw__level,
+  .ph .pw-journal__counters span,
+  .ph .pw-check__item em,
+  .ph .pw-stats__tiles span,
+  .ph .pw-news__now,
+  .ph .pw-news__h,
+  .ph .pw-news__cur,
+  .ph .rw__chip,
+  .ph .cyc__path li,
+  .ph .pw-node strong,
+  .ph .pw-node em,
+  .ph .rstep__label,
+  .ph .rstart__node,
+  .ph .environment-note > span {
     font-size: 11px;
   }
 
@@ -5645,13 +5667,9 @@ html.ph-smooth-scroll {
     display: none;
   }
 
-  .ph .pw-node strong,
-  .ph .pw-node em {
-    font-size: 11px;
-  }
-
   .ph .pw-path__card-head {
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 2px 8px;
   }
 
   .ph .pw-path__card-head span {

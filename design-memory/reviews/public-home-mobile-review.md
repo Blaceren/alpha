@@ -222,8 +222,8 @@ Findings, before → after:
 | 3 | phones | the review sequence changed height off screen → page jumped 170–250px | major | fixed — in sight only, never shrinks |
 | 4 | 320–414 | «самостоятельности.» ran 5–9px past its box (the earlier 12.3vw − 6px fix did not hold) | major | fixed — page phone scale |
 | 5 | 320 | path facts: «Последовательность» past its column at body size | major | fixed — name over value |
-| 6 | 320 | path window: «пройден»«пройден» ran into one word | minor | fixed — the ticks say it |
-| 7 | ≤920 | 9–10px small print in the decide and review windows, eyebrows | minor | fixed — 11px |
+| 6 | 320 | path window: «пройден»«пройден» ran into one word; «уровни 1–5» cut at 11px | minor | fixed — the ticks say it; the head wraps |
+| 7 | ≤920 | 8.5–10.5px small print in every product window (times, statuses, counters, levels, the path's nodes), eyebrows | minor | fixed — 11px, the page's floor |
 | 8 | ≤920 | «многое → одно» stacked without words | minor | fixed — two captions |
 | 9 | phones | screen-high gaps in «Что такое ATA», FAQ, the first step | minor | fixed — 36–48px |
 | 10 | phones | the hero's line and the frame's demo badge stay 10px | minor | kept — the hero frame is the owner's (video slot) |
