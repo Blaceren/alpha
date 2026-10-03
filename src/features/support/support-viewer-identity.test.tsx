@@ -8,6 +8,12 @@
  *
  * NO NEW ENDPOINT AND NO NEW SESSION BEHAVIOUR: the viewer comes from
  * `getServerViewer`, which Tools, Profile and Notifications already call.
+ *
+ * 2026-10-03 — the desk moved into the profile, at `/profile/support` (owner:
+ * «что бы написать в поддержку можно было только из профиля»). The route that
+ * renders it is that page now, and it reads the viewer through the profile's
+ * own server read (`readProfile`), which calls the same `getServerViewer`.
+ * `/support` only redirects there; its own test is at the end.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
@@ -23,12 +29,22 @@ vi.mock("@/lib/support/support-client", () => ({
 vi.mock("@/lib/curriculum/provider", () => ({ getCurriculumView: vi.fn(async () => ({ ok: false, error: {} })) }));
 vi.mock("@/config/academy-config", () => ({ getAcademyConfig: () => ({ mode: "api" }) }));
 vi.mock("@/components/shell/unread-presence", () => ({ UnreadPresence: () => null }));
+vi.mock("@/server/auth/account-read", () => ({ readServerAccount: vi.fn(async () => null) }));
+const redirect = vi.fn((to: string) => {
+  throw new Error(`redirect:${to}`);
+});
+vi.mock("next/navigation", () => ({
+  redirect: (to: string) => redirect(to),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}));
 
-import SupportPage from "@/app/(app)/support/page";
+import SupportPage from "@/app/(app)/profile/support/page";
+import SupportRedirect from "@/app/(app)/support/page";
 import ToolsPage from "@/app/(app)/tools/page";
 
 const ROOT = process.cwd();
-const ROUTE = readFileSync(join(ROOT, "src/app/(app)/support/page.tsx"), "utf8");
+const ROUTE = readFileSync(join(ROOT, "src/app/(app)/profile/support/page.tsx"), "utf8");
+const READ = readFileSync(join(ROOT, "src/server/profile/profile-read.ts"), "utf8");
 
 /** The name the shell exposes, taken from the profile control's accessible name. */
 function shellName(container: HTMLElement): string {
@@ -42,15 +58,18 @@ beforeEach(() => getServerViewer.mockReset());
 describe("the Support route", () => {
   it("carries no hardcoded name at all", () => {
     expect(ROUTE).not.toContain("Артём");
-    expect(ROUTE).toContain("getServerViewer");
+    expect(ROUTE).toContain("readProfile");
+    expect(READ).toContain("getServerViewer");
     expect(ROUTE).toContain('viewer?.name ?? "Ученик"');
   });
 
   it("asks for the viewer through the existing server session, and nothing else", () => {
     // No new endpoint, no client fetch, no session handling of its own.
-    expect(ROUTE).not.toMatch(/fetch\(/);
-    expect(ROUTE).not.toMatch(/\/api\//);
-    expect(ROUTE).toContain('from "@/server/auth/server-session"');
+    for (const source of [ROUTE, READ]) {
+      expect(source).not.toMatch(/fetch\(/);
+      expect(source).not.toMatch(/\/api\//);
+    }
+    expect(READ).toContain('from "@/server/auth/server-session"');
   });
 
   it("puts the viewer's name in the shell", async () => {
@@ -80,16 +99,18 @@ describe("the Support route", () => {
     expect(container.textContent).not.toContain("atalerntest");
   });
 
-  it("keeps Support as the one current destination", async () => {
+  it("says the learner is in the profile, at its «Поддержка» part", async () => {
     getServerViewer.mockResolvedValue({ name: "atalerntest" });
     const { container } = render(await SupportPage());
-    const current = [...container.querySelectorAll("[aria-current]")].filter(
-      (el) => el.getAttribute("aria-current") !== "false",
-    );
+    const current = [...container.querySelectorAll('[aria-current="page"]')];
     expect(current.length).toBeGreaterThan(0);
     for (const el of current) {
-      expect((el.textContent ?? "") + (el.getAttribute("aria-label") ?? "")).toMatch(/Поддержка|Ещё/);
+      // The shell's profile controls, and the profile's own part.
+      expect((el.textContent ?? "") + (el.getAttribute("aria-label") ?? "")).toMatch(/Профиль|Поддержка/);
     }
+    const part = container.querySelector('.pp-tabs a[aria-current="page"]')!;
+    expect(part.textContent).toBe("Поддержка");
+    expect(part.getAttribute("href")).toBe("/profile/support");
   });
 
   it("does not bring Community back into the shell", async () => {
@@ -132,5 +153,14 @@ describe("one session, two surfaces", () => {
     tools.unmount();
     expect(a).toBe(b);
     expect(a).toContain("Ученик");
+  });
+});
+
+/** The old address still arrives at the desk. */
+describe("/support", () => {
+  it("redirects into the profile's support part", () => {
+    redirect.mockClear();
+    expect(() => SupportRedirect()).toThrow("redirect:/profile/support");
+    expect(redirect).toHaveBeenCalledWith("/profile/support");
   });
 });

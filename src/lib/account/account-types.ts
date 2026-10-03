@@ -23,6 +23,12 @@ export type AccountEmailState = {
   readonly email: string;
   readonly emailVerified: boolean;
   readonly pendingEmail: string | null;
+  /**
+   * When the account was made (ISO), for the profile's «В Академии с …»
+   * (2026-10-03). Optional: a Backend from before it sends nothing, and the
+   * profile then says nothing about it.
+   */
+  readonly memberSince?: string | null;
 };
 
 export type AccountView = {
@@ -45,11 +51,12 @@ export function isAccountCapabilities(value: unknown): value is AccountCapabilit
 
 export function isAccountView(value: unknown): value is AccountView {
   if (!isRecord(value) || !isRecord(value.account) || !isAccountCapabilities(value.capabilities)) return false;
-  const { email, emailVerified, pendingEmail } = value.account;
+  const { email, emailVerified, pendingEmail, memberSince } = value.account;
   return (
     typeof email === "string" &&
     email.length > 0 &&
     typeof emailVerified === "boolean" &&
-    (pendingEmail === null || typeof pendingEmail === "string")
+    (pendingEmail === null || typeof pendingEmail === "string") &&
+    (memberSince === undefined || memberSince === null || typeof memberSince === "string")
   );
 }

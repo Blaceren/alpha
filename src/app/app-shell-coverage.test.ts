@@ -60,19 +60,35 @@ function rendersShell(text: string): boolean {
   return text.includes('from "@/components/shell/app-shell"') && /<AppShell\b/.test(text);
 }
 
+/**
+ * A page whose whole body is a redirect draws nothing, so it has no shell to
+ * forget. `/support` is one since 2026-10-03: the desk moved into the profile
+ * (`/profile/support`) and the old address only sends a learner there. It must
+ * redirect and render nothing else — no JSX at all — to count as one.
+ */
+function onlyRedirects(text: string): boolean {
+  return /import \{ redirect \} from "next\/navigation"/.test(text) && /\bredirect\(/.test(text) && !/<[A-Za-z]/.test(text);
+}
+
 const PAGES = pages(APP_DIR).map((file) => {
   const text = readFileSync(file, "utf8");
   const delegates = importedSources(text).map((f) => readFileSync(f, "utf8"));
+  const redirects = onlyRedirects(text);
   return {
     file: path.relative(process.cwd(), file),
     text,
-    shellSomewhere: rendersShell(text) || delegates.some(rendersShell),
+    shellSomewhere: redirects || rendersShell(text) || delegates.some(rendersShell),
     activeIdSomewhere:
-      /activeId="[a-z-]+"/.test(text) || delegates.some((d) => /activeId="[a-z-]+"/.test(d)),
+      redirects || /activeId="[a-z-]+"/.test(text) || delegates.some((d) => /activeId="[a-z-]+"/.test(d)),
   };
 });
 
 describe("app shell coverage", () => {
+  it("treats exactly one page as a redirect, and it is /support", () => {
+    const redirects = PAGES.filter((page) => onlyRedirects(page.text)).map((page) => page.file);
+    expect(redirects).toEqual(["src/app/(app)/support/page.tsx"]);
+  });
+
   it("finds the authenticated pages", () => {
     // A sanity check on the walker itself: if this ever drops to zero the whole
     // suite below would pass vacuously.

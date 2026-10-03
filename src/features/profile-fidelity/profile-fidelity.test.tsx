@@ -321,10 +321,12 @@ describe("Profile — the frozen composition", () => {
     expect(container.querySelectorAll("h1")).toHaveLength(1);
   });
 
+  /* Support is a part of the profile since 2026-10-03 (owner: «поддержку тоже
+     сюда переноси»): every handoff on the page leads to /profile/support. */
   it("keeps the support handoff pointing somewhere real, in the row it belongs to", () => {
     const { container } = render(<ProfileFidelity canonical="Мария" />);
     const link = container.querySelector('[data-role="email-support-link"]') as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/support");
+    expect(link.getAttribute("href")).toBe("/profile/support");
     expect(container.querySelector('[data-role="consequence"]')!.textContent).toBe(COPY.consequence);
   });
 
@@ -334,7 +336,7 @@ describe("Profile — the frozen composition", () => {
     const { container } = render(<ProfileFidelity canonical={null} />);
     expect(container.querySelector('[data-role="page-failure"]')).toBeTruthy();
     const link = container.querySelector('[data-role="support-link"]') as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/support");
+    expect(link.getAttribute("href")).toBe("/profile/support");
   });
 });
 
@@ -372,27 +374,47 @@ describe("Profile — what the page may never become", () => {
       expect(document.querySelector(`[data-role="${role}"]`), role).toBeNull();
     }
     expect(surface.toLowerCase()).not.toContain("скоро");
-    /* Two links reach /support on this page: the row's own handoff and the
-       page-level one the frozen surface already carried. Both are specified, so
-       the query names which is which rather than matching on text. */
     const rowLink = document.querySelector('[data-role="email-support-link"]') as HTMLAnchorElement;
-    expect(rowLink.getAttribute("href")).toBe("/support");
+    expect(rowLink.getAttribute("href")).toBe("/profile/support");
   });
 
-  it("offers exactly one support path, and it belongs to the email row", () => {
+  /* THIS REPLACES «offers exactly one support path» BY THE OWNER'S DECISION
+     (2026-10-03): support is a part of the profile now — the page's frame
+     carries the part «Поддержка», and the route gives it a support card. What
+     the component itself still holds is unchanged: one handoff, in the email
+     row, for the one thing support still does for this page — and none beside
+     the password, which is self-service. */
+  it("hands off to support from the email row alone, and never from security", () => {
     const { container } = render(<ProfileFidelity canonical="Мария" />);
-    const links = [...container.querySelectorAll('a[href="/support"]')];
+    const links = [...container.querySelectorAll('a[href="/profile/support"]')];
     expect(links).toHaveLength(1);
     expect(links[0]!.getAttribute("data-role")).toBe("email-support-link");
+    expect(container.querySelector('a[href="/support"]')).toBeNull();
 
-    /* Not beside the password section: that is self-service now, and a handoff
-       there would send people to support for something the page does itself. */
-    const security = container.querySelectorAll("section")[1]!;
-    expect(security.querySelectorAll('a[href="/support"]')).toHaveLength(0);
+    const security = container.querySelector('section[aria-labelledby="p-section-security"]')!;
+    expect(security.querySelectorAll('a[href*="support"]')).toHaveLength(0);
 
     /* And the sentence that used to make the page-wide promise is gone. */
     expect(container.textContent).not.toContain("Остальные данные учётной записи");
     expect(container.textContent).not.toContain("скоро");
+  });
+
+  it("draws the frame and the closing it is given, and the aside beside the rows", () => {
+    const { container } = render(
+      <ProfileFidelity
+        canonical="Мария"
+        frame={<nav data-testid="frame" />}
+        closing={<section data-testid="closing" />}
+        aside={<aside data-testid="aside" />}
+      />,
+    );
+    const order = [...container.querySelectorAll('h1, [data-testid], section[aria-labelledby="p-section-account"]')].map(
+      (el) => el.getAttribute("data-testid") ?? el.tagName.toLowerCase() + (el.getAttribute("aria-labelledby") ? ":account" : ""),
+    );
+    /* The support card sits beside the rows on a wide screen and after them on
+       a narrow one; signing out is last either way. */
+    expect(order).toEqual(["h1", "frame", "section:account", "aside", "closing"]);
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
   });
 
   it("shows nothing that belongs to another product", () => {

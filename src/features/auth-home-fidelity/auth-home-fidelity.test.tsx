@@ -259,9 +259,12 @@ describe("Home — the frozen field", () => {
 
   it("names the work only where naming it makes the consequence intelligible", () => {
     const withWork = render(<AuthHomeField field={fieldForAction(action({}))} />);
+    /* With its number since 2026-10-03: on the filled Home the priority hangs
+       from a point on the program line, and «Уровень 7» is what ties the two. */
     expect(withWork.container.querySelector(".home-subject")!.textContent).toBe(
-      "Поддержка и сопротивление",
+      "Уровень 7Поддержка и сопротивление",
     );
+    expect(withWork.container.querySelector(".home-subject__order")!.textContent).toBe("Уровень 7");
     withWork.unmount();
     const withoutWork = render(<AuthHomeField field={FIELD_NO_CURRICULUM} />);
     expect(withoutWork.container.querySelector(".home-subject")).toBeNull();
@@ -361,7 +364,15 @@ describe("Home — PAGE_FAILURE is not UNKNOWN", () => {
 
 /* --------------------------------------------------- what Home may not say */
 
-describe("Home — what the surface never contains", () => {
+/* 2026-10-03 — HOME IS FILLED (owner: «наполни внутреннюю главную, после сделай
+   ее хай фай»; DD-337). The page around the field now greets the learner, draws
+   the program line, the module, the tools and «Что нового» — in their own files
+   (home-overview*.tsx, home-program-line.tsx, home-news.tsx), held by
+   home-overview.test.tsx. What follows still holds for the FIELD, the block that
+   carries the one current priority: it says nothing about the learner but that
+   priority. Amounts stay out of the whole page — home-overview.test.tsx holds
+   that for the new files. */
+describe("Home — what the priority field never contains", () => {
   const sources = [
     codeOnly(SRC("auth-home-field.tsx")),
     codeOnly(SRC("auth-home-state.ts")),

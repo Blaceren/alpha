@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMobileMenu } from "@/components/shell/mobile-menu-state";
+import { mobileBarCarries } from "@/components/navigation/mobile-slots";
 
 function initials(name: string): string {
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
@@ -21,6 +22,11 @@ function initials(name: string): string {
  * and while that sheet is open it is the exposed navigation. Only one control
  * may claim the page. See `mobile-menu-state.tsx` for why this one steps back.
  *
+ * …AND TO THE BAR'S OWN «ПРОФИЛЬ» (2026-10-03). Where the bottom bar carries
+ * the profile as a slot of its own — with support moved into the profile, the
+ * one destination «Ещё» had left — that labelled slot is on screen the whole
+ * time, and it is the better answer for the same reason the sheet's row is.
+ *
  * THE ACCESSIBLE NAME IS UNCHANGED: «Профиль — {name}».
  */
 export function UserAvatar({
@@ -34,7 +40,7 @@ export function UserAvatar({
   placement?: "desktop" | "mobile";
 }) {
   const { open } = useMobileMenu();
-  const claims = current && !(placement === "mobile" && open);
+  const claims = current && !(placement === "mobile" && (open || mobileBarCarries("profile")));
 
   return (
     <Link

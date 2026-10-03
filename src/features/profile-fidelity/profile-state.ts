@@ -229,6 +229,9 @@ export const COPY = {
      behind it yet. */
   email_label: "Email",
   email_via_support: "Изменение email пока выполняется через поддержку.",
+  /* Beside the printed address (2026-10-03), where the long sentence would
+     follow an address mid-line. */
+  email_via_support_short: "меняется через поддержку",
 
   password_label: "Пароль",
   password_edit: "Изменить пароль",

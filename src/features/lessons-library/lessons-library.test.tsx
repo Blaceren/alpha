@@ -338,11 +338,12 @@ describe("navigation", () => {
     // LEARNER-OPERATIONS-V1: «Ещё» was a DISABLED button whose own id was not in
     // the built list, so it could never open the menu it existed for — and that
     // is what hid Поддержка after it shipped. Unbuilt sections are now absent
-    // rather than advertised, and Поддержка is a real link.
+    // rather than advertised. Поддержка has since moved into the profile
+    // (2026-10-03, owner: «не по ссылке из хеда»), so the bar no longer carries it.
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByRole("link", { name: "Главная" })).toHaveAttribute("href", "/home");
     expect(screen.getByRole("link", { name: "Путь" })).toHaveAttribute("href", "/path");
     expect(screen.getByRole("link", { name: "Инструменты" })).toHaveAttribute("href", "/tools");
-    expect(screen.getByRole("link", { name: "Поддержка" })).toHaveAttribute("href", "/support");
+    expect(screen.queryByRole("link", { name: "Поддержка" })).toBeNull();
   });
 });

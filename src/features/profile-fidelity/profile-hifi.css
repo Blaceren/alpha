@@ -1,0 +1,542 @@
+/*
+ * PROFILE, HI-FI — the passport and the profile's two parts (DD-337; owner,
+ * 2026-10-03: «наполни как нормальный профиль на платформе, поддержку тоже
+ * сюда переноси … как наполнишь так же сделай хай фай»).
+ *
+ * The page sits in the product's own column — the 1008px measure Path, Lessons
+ * and Tools centre — instead of against the left edge, and opens with:
+ *
+ *   the PASSPORT, the page's one framed object: the initials inside THE RING
+ *     (the program line closed around them, a stroke per level, done light,
+ *     the current one in Signal), the name, the address, «В Академии с …», and
+ *     four counts with a way to the path;
+ *   the two PARTS, «Аккаунт» and «Поддержка», as links with the shell's own
+ *     active mark (a Signal underline);
+ *   then the account rows, security and the session — the frozen rows, set at
+ *     a steadier measure with a label column, so the values line up.
+ *
+ * Every rule is `.pf.pf--hifi …`, one class more specific than the frozen
+ * layer it re-composes, so it wins by specificity and never by order. Canonical
+ * breakpoints only (599/600, 899/900).
+ */
+
+.pf.pf--hifi .p-profile {
+  --pp-measure: 1008px;
+  --pp-rows: 720px;
+  --pp-label: 128px;
+  --pp-mark-done: #c2c8bd;
+  --pp-ahead: rgba(255, 255, 255, 0.22);
+  --pp-preparing: rgba(255, 255, 255, 0.2);
+
+  width: min(100%, var(--pp-measure));
+  max-width: none;
+  margin-inline: auto;
+  padding: 40px 28px 96px;
+}
+
+/* The support part carries only the frame; the desk follows in its own box. */
+.pf.pf--hifi .p-profile--frame {
+  padding-bottom: 0;
+}
+
+.pf.pf--hifi .p-coord--page {
+  margin: 0 0 16px;
+}
+
+/* -------------------------------------------------------------- passport -- */
+
+.pf.pf--hifi .pp {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+  padding: 28px 32px;
+  background:
+    radial-gradient(420px 200px at 0% 0%, rgba(199, 247, 109, 0.05), transparent 70%),
+    var(--ink-800);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+
+.pf.pf--hifi .pp-id {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  min-width: 0;
+}
+
+.pf.pf--hifi .pp-ring {
+  position: relative;
+  flex: 0 0 124px;
+  width: 124px;
+  height: 124px;
+}
+
+.pf.pf--hifi .pp-ring__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.pf.pf--hifi .pp-ring__track,
+.pf.pf--hifi .pp-ring__lit {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.pf.pf--hifi .pp-ring__track {
+  stroke: var(--pp-ahead);
+}
+
+.pf.pf--hifi .pp-ring__track--preparing {
+  stroke: var(--pp-preparing);
+  stroke-dasharray: 2 4;
+  stroke-linecap: butt;
+}
+
+.pf.pf--hifi .pp-ring__lit {
+  stroke: var(--pp-mark-done);
+}
+
+.pf.pf--hifi .pp-ring__halo {
+  fill: rgba(199, 247, 109, 0.2);
+}
+
+.pf.pf--hifi .pp-ring__point {
+  fill: var(--sig-500);
+  filter: drop-shadow(0 0 5px rgba(199, 247, 109, 0.6));
+}
+
+.pf.pf--hifi .pp-ring__empty {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+
+.pf.pf--hifi .pp-ring__initials {
+  position: absolute;
+  inset: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--txt-1);
+  font: 650 26px / 1 var(--ui);
+  letter-spacing: 0.02em;
+  background: var(--ink-700);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+}
+
+.pf.pf--hifi .pp-who {
+  min-width: 0;
+}
+
+.pf.pf--hifi .pp-name {
+  color: var(--txt-1);
+  font: 650 28px / 1.15 var(--ui);
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.pf.pf--hifi .pp-mail {
+  margin-top: 8px;
+  color: var(--txt-2);
+  font: 500 14.5px / 1.45 var(--ui);
+  overflow-wrap: anywhere;
+}
+
+/* The state never starts a line on its own separator. */
+.pf.pf--hifi .pp-mail__state {
+  white-space: nowrap;
+}
+
+.pf.pf--hifi .pp-mail__state,
+.pf.pf--hifi .pp-since {
+  color: var(--p-ink-quiet);
+}
+
+.pf.pf--hifi .pp-since {
+  margin-top: 4px;
+  font: 500 13px / 1.45 var(--mono);
+}
+
+.pf.pf--hifi .pp-record {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-1);
+}
+
+.pf.pf--hifi .pp-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto));
+  gap: 12px 32px;
+  margin: 0;
+}
+
+/* From 900px the record stands beside the person, in two columns. */
+@media (min-width: 900px) {
+  .pf.pf--hifi .pp {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 28px 56px;
+  }
+
+  .pf.pf--hifi .pp-record {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .pf.pf--hifi .pp-facts {
+    grid-template-columns: repeat(2, minmax(0, auto));
+    gap: 14px 40px;
+  }
+}
+
+.pf.pf--hifi .pp-fact {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pf.pf--hifi .pp-fact dt {
+  color: var(--p-ink-quiet);
+  font: 500 11px / 1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pf.pf--hifi .pp-fact dd {
+  margin: 0;
+  color: var(--txt-1);
+  font: 600 16px / 1.25 var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pf.pf--hifi .pp-path,
+.pf.pf--hifi .pp-tab {
+  text-decoration: none;
+}
+
+.pf.pf--hifi .pp-path {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--txt-1);
+  font: 600 13.5px / 1.3 var(--ui);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--p-rule-underline);
+}
+
+.pf.pf--hifi .pp-path:hover {
+  text-decoration-color: var(--txt-2);
+}
+
+/* ----------------------------------------------------------------- parts -- */
+
+.pf.pf--hifi .pp-tabs {
+  display: flex;
+  gap: 32px;
+  margin: 26px 0 0;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.pf.pf--hifi .pp-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--txt-2);
+  font: 600 15px / 1 var(--ui);
+}
+
+.pf.pf--hifi .pp-tab:hover {
+  color: var(--txt-1);
+}
+
+.pf.pf--hifi .pp-tab[aria-current="page"] {
+  color: var(--txt-1);
+}
+
+.pf.pf--hifi .pp-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--sig-500);
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------- the account part -- */
+
+.pf.pf--hifi .p-lead {
+  margin: 26px 0 34px;
+}
+
+.pf.pf--hifi .p-section {
+  max-width: var(--pp-rows);
+  margin-bottom: 40px;
+}
+
+.pf.pf--hifi .p-section__title {
+  margin-bottom: 4px;
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.pf.pf--hifi .p-row {
+  min-height: 60px;
+  column-gap: 20px;
+}
+
+.pf.pf--hifi .p-row__label {
+  flex: 0 0 var(--pp-label);
+  min-width: 0;
+  font-size: 13px;
+}
+
+.pf.pf--hifi .p-row__value {
+  font-size: 15px;
+}
+
+.pf.pf--hifi .p-row__value--muted {
+  font-size: 13.5px;
+}
+
+.pf.pf--hifi .p-consequence {
+  max-width: var(--pp-rows);
+  margin: 8px 0 6px calc(var(--pp-label) + 20px);
+  color: var(--p-ink-quiet);
+  font-size: 12.5px;
+}
+
+.pf.pf--hifi .p-row--open {
+  padding: 18px 0 20px;
+}
+
+/* The rows and, beside them on a wide screen, the support card. */
+.pf.pf--hifi .p-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.pf.pf--hifi .p-main {
+  min-width: 0;
+}
+
+.pf.pf--hifi .p-aside {
+  min-width: 0;
+  max-width: var(--pp-rows);
+  margin: 0 0 40px;
+  padding: 8px 0 0;
+}
+
+.pf.pf--hifi .p-aside .p-section__title {
+  margin-bottom: 10px;
+}
+
+.pf.pf--hifi .p-aside__lead {
+  margin: 0 0 12px;
+  color: var(--txt-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.pf.pf--hifi .p-aside__quiet {
+  margin: 0 0 6px;
+  color: var(--p-ink-quiet);
+  font-size: 13px;
+}
+
+.pf.pf--hifi .p-aside__cases {
+  margin: 0 0 6px;
+}
+
+.pf.pf--hifi .p-aside__case {
+  padding: 10px 0;
+  border-top: 1px solid var(--line-1);
+}
+
+.pf.pf--hifi .p-aside__subject {
+  display: block;
+  color: var(--txt-1);
+  font: 600 14px / 1.4 var(--ui);
+  overflow-wrap: anywhere;
+}
+
+.pf.pf--hifi .p-aside__meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--p-ink-quiet);
+  font: 500 12px / 1.4 var(--mono);
+}
+
+.pf.pf--hifi .p-aside__action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--txt-1);
+  font: 600 13.5px / 1.3 var(--ui);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--p-rule-underline);
+}
+
+.pf.pf--hifi .p-aside__action:hover {
+  text-decoration-color: var(--txt-2);
+}
+
+@media (min-width: 1200px) {
+  /* The rows keep one measure inside the grid and after it (signing out), so
+     every row ends at the same x; the card takes what is left. */
+  .pf.pf--hifi .p-profile {
+    --pp-rows: 616px;
+  }
+
+  .pf.pf--hifi .p-body {
+    grid-template-columns: minmax(0, var(--pp-rows)) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 56px;
+  }
+
+  .pf.pf--hifi .p-aside {
+    margin: 0;
+    padding: 2px 0 0 28px;
+    border-left: 1px solid var(--line-2);
+  }
+}
+
+/* --------------------------------------------------- the support part -- */
+
+/* The desk is the frozen support surface, unchanged, laid into the profile's
+   column. Its h1 stays for a screen reader; on screen the active part names it. */
+.pp-support {
+  width: min(100%, 1008px);
+  margin-inline: auto;
+  padding: 30px 28px 96px;
+}
+
+.pp-support .support-hub {
+  max-width: none;
+  margin: 0;
+}
+
+.pp-support .support-hub__header h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pp-support .support-hub__header {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* --------------------------------------------------------------- narrower -- */
+
+@media (max-width: 899px) {
+  /* The shell's bar is fixed to the bottom below 900px: end above it. */
+  .pf.pf--hifi .p-profile {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+
+  .pf.pf--hifi .p-profile--frame {
+    padding-bottom: 0;
+  }
+
+  /* The desk brings its own inset and its own clearance of the bar; inside
+     the profile's column only the clearance is kept. */
+  .pp-support {
+    padding-bottom: 0;
+  }
+
+  .pp-support .support-hub {
+    padding-top: 0;
+    padding-inline: 0;
+  }
+
+}
+
+@media (max-width: 599px) {
+  .pf.pf--hifi .p-profile {
+    padding-top: 24px;
+    padding-inline: 16px;
+  }
+
+  .pf.pf--hifi .pp {
+    padding: 20px 18px;
+  }
+
+  .pf.pf--hifi .pp-id {
+    gap: 16px;
+  }
+
+  .pf.pf--hifi .pp-ring {
+    flex-basis: 84px;
+    width: 84px;
+    height: 84px;
+  }
+
+  .pf.pf--hifi .pp-ring__initials {
+    inset: 13px;
+    font-size: 20px;
+  }
+
+  .pf.pf--hifi .pp-name {
+    font-size: 22px;
+  }
+
+  .pf.pf--hifi .pp-mail {
+    font-size: 13.5px;
+  }
+
+  .pf.pf--hifi .pp-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 20px;
+  }
+
+  .pf.pf--hifi .pp-fact dd {
+    font-size: 15px;
+    white-space: normal;
+  }
+
+  .pf.pf--hifi .pp-tabs {
+    gap: 0;
+  }
+
+  .pf.pf--hifi .pp-tab {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .pf.pf--hifi .p-row__label {
+    flex-basis: 100%;
+  }
+
+  .pf.pf--hifi .p-consequence {
+    margin-left: 0;
+  }
+
+  .pp-support {
+    padding-top: 22px;
+    padding-inline: 16px;
+  }
+}

@@ -10,8 +10,7 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { AppShell } from "@/components/shell/app-shell";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 import { DesktopRouteNavigation } from "@/components/navigation/desktop-route-navigation";
@@ -29,10 +28,11 @@ const shell = (activeId: string) =>
     </AppShell>,
   );
 
-/** The ten activeIds the authenticated routes actually pass. */
+/** The activeIds the authenticated routes actually pass. */
 /* Community is built and still answers, but is withheld from the learner
-   product, so it is not one of the routes the shell advertises. */
-const ACTIVE_IDS = ["home", "path", "lessons", "tools", "notifications", "profile", "support"];
+   product, so it is not one of the routes the shell advertises. Support is a
+   part of the profile since 2026-10-03 and passes `profile`. */
+const ACTIVE_IDS = ["home", "path", "lessons", "tools", "notifications", "profile"];
 
 /* ------------------------------------------------------------------ the mark */
 
@@ -103,22 +103,24 @@ describe("Shell — every route survives the polish", () => {
     const { container } = render(<DesktopRouteNavigation activeId="home" />);
     const labels = Array.from(container.querySelectorAll("a")).map((a) => a.textContent!.trim());
     expect(labels).toEqual(built.map((item) => item.label));
-    /* Two groups, one nav, one hairline between them. */
     expect(container.querySelectorAll("nav")).toHaveLength(1);
-    expect(container.querySelectorAll(".rnav__group")).toHaveLength(2);
-    expect(container.querySelectorAll(".rnav__rule")).toHaveLength(1);
-    expect(container.querySelector(".rnav__rule")!.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("puts exactly Поддержка in the secondary group while Community is withheld", () => {
+  /* 2026-10-03 — support moved into the profile (owner: «что бы написать в
+     поддержку можно было только из профиля, не по ссылке из хеда»). It was the
+     secondary group's one entry while Community is withheld; with it gone the
+     bar is one group of four, and draws no hairline in front of nothing. */
+  it("draws no secondary group while Community is withheld: support is a part of the profile", () => {
     const { container } = render(<DesktopRouteNavigation activeId="home" />);
-    const secondary = container.querySelector(".rnav__group--secondary")!;
-    expect(Array.from(secondary.querySelectorAll("a")).map((a) => a.getAttribute("href")))
-      .toEqual(["/support"]);
+    expect(container.querySelectorAll(".rnav__group")).toHaveLength(1);
+    expect(container.querySelector(".rnav__group--secondary")).toBeNull();
+    expect(container.querySelector(".rnav__rule")).toBeNull();
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(["/home", "/path", "/lessons", "/tools"]);
   });
 
   it("marks one current route, and nests the Reader and the Workspace under Уроки", () => {
-    for (const id of ["home", "path", "lessons", "tools", "support"]) {
+    for (const id of ["home", "path", "lessons", "tools"]) {
       const { container, unmount } = render(<DesktopRouteNavigation activeId={id} />);
       const current = container.querySelectorAll('[aria-current="page"]');
       expect(current, id).toHaveLength(1);
@@ -132,7 +134,7 @@ describe("Shell — every route survives the polish", () => {
 
   it("reserves the active weight so the row cannot move when the route changes", () => {
     const a = render(<DesktopRouteNavigation activeId="home" />);
-    const b = render(<DesktopRouteNavigation activeId="support" />);
+    const b = render(<DesktopRouteNavigation activeId="tools" />);
     const labels = (r: typeof a) => Array.from(r.container.querySelectorAll(".rnav__label"))
       .map((el) => el.getAttribute("data-label"));
     expect(labels(a)).toEqual(labels(b));
@@ -143,83 +145,22 @@ describe("Shell — every route survives the polish", () => {
   });
 });
 
-/* ------------------------------------------------------- the mobile disclosure */
+/* ------------------------------------------------------------- the mobile bar */
 
-describe("Shell — the mobile disclosure", () => {
-  const open = async () => {
-    const view = render(<MobileBottomNavigation activeId="home" />);
-    const more = screen.getByRole("button", { name: /Ещё/ });
-    return { view, more };
-  };
-
-  it("keeps its destinations out of the document while it is closed", () => {
+/* The disclosure «Ещё» is the bar's answer only when two or more destinations
+   would be behind it. Today one would — «Профиль» — so it takes the fifth slot
+   (`mobile-slots.ts`, 2026-10-03). The disclosure's own contract — Enter and
+   Space, focus in and back, Escape and a press outside, the grouping — is held
+   in more-menu-disclosure.test.tsx with Community shown. */
+describe("Shell — the mobile bar", () => {
+  it("opens no menu of one: «Профиль» is the fifth slot", () => {
     const { container } = render(<MobileBottomNavigation activeId="home" />);
+    expect(screen.queryByRole("button", { name: /Ещё/ })).toBeNull();
     expect(container.querySelector(".bottomnav__sheet")).toBeNull();
+    const hrefs = Array.from(container.querySelectorAll(".bottomnav a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(["/home", "/path", "/lessons", "/tools", "/profile"]);
     expect(screen.queryByRole("link", { name: /Сообщество/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Поддержка/ })).toBeNull();
-  });
-
-  it("opens with Enter and with Space, and reports its own state", async () => {
-    for (const key of ["{Enter}", " "]) {
-      const { view, more } = await open();
-      expect(more.getAttribute("aria-expanded")).toBe("false");
-      more.focus();
-      await userEvent.keyboard(key);
-      await waitFor(() => expect(more.getAttribute("aria-expanded")).toBe("true"));
-      view.unmount();
-    }
-  });
-
-  it("moves focus into the menu when it opens", async () => {
-    const { view, more } = await open();
-    await userEvent.click(more);
-    await waitFor(() => {
-      const sheet = view.container.querySelector(".bottomnav__sheet")!;
-      expect(sheet.contains(document.activeElement)).toBe(true);
-    });
-    view.unmount();
-  });
-
-  it("closes on Escape and gives focus back to the control that opened it", async () => {
-    const { view, more } = await open();
-    await userEvent.click(more);
-    await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).not.toBeNull());
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).toBeNull());
-    expect(document.activeElement).toBe(more);
-    view.unmount();
-  });
-
-  it("closes on a press outside it, and gives focus back", async () => {
-    /* Deliberately NOT a focusable control: clicking a button outside would
-       legitimately leave focus on that button, which is the browser doing its
-       job, not the menu failing at its own. The case this protects is a press
-       on ordinary page content. */
-    const outside = document.createElement("div");
-    outside.textContent = "снаружи";
-    document.body.appendChild(outside);
-    const { view, more } = await open();
-    await userEvent.click(more);
-    await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).not.toBeNull());
-    await userEvent.click(outside);
-    await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).toBeNull());
-    /* The restore waits for the press to finish, so the assertion does too. */
-    await waitFor(() => expect(document.activeElement).toBe(more));
-    outside.remove();
-    view.unmount();
-  });
-
-  it("separates primary from secondary in the menu, without reordering it", async () => {
-    const { view, more } = await open();
-    await userEvent.click(more);
-    await waitFor(() => expect(view.container.querySelector(".bottomnav__sheet")).not.toBeNull());
-    const items = Array.from(view.container.querySelectorAll(".bottomnav__sheet li"));
-    const groups = items.map((li) => li.getAttribute("data-group"));
-    expect(groups).toContain("secondary");
-    /* Grouping is an attribute, not a reordering: the canonical order stands. */
-    const hrefs = items.map((li) => li.querySelector("a")!.getAttribute("href"));
-    expect(hrefs).toEqual([...hrefs].filter(Boolean));
-    view.unmount();
   });
 });
 
@@ -324,10 +265,14 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
       const { container, unmount } = shell(id);
       const avatars = Array.from(container.querySelectorAll('a[href="/profile"].avatar'));
       expect(avatars.length, id).toBe(2);
+      /* The desktop avatar is the one control in its bar pointing at /profile.
+         The mobile one yields to the bottom bar's own «Профиль», which is on
+         screen beside it the whole time (see the next test). */
+      expect(container.querySelector(".appbar a.avatar")!.getAttribute("aria-current"), `${id} desktop`).toBe(
+        id === "profile" ? "page" : null,
+      );
+      expect(container.querySelector(".mtop a.avatar")!.getAttribute("aria-current"), `${id} mobile`).toBeNull();
       for (const avatar of avatars) {
-        expect(avatar.getAttribute("aria-current"), `${id} avatar`).toBe(
-          id === "profile" ? "page" : null,
-        );
         expect(avatar.getAttribute("aria-label"), id).toBe("Профиль — Мария Ковалёва");
       }
       unmount();
@@ -363,30 +308,14 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
     elsewhere.unmount();
   });
 
-  it("never declares two current pages: the avatar yields to the open menu", async () => {
+  it("never declares two current pages: the mobile avatar yields to the bar's «Профиль»", () => {
+    /* The bottom bar carries «Профиль» as a slot of its own, on screen beside
+       the mobile avatar the whole time: the labelled slot is the better answer,
+       for the reason the open sheet's row was (mobile-menu-state.tsx). */
     const { container } = shell("profile");
-    /* Closed: the avatar is the one control on screen pointing at /profile. */
-    const mobileAvatar = container.querySelector(".mtop a.avatar")!;
-    expect(mobileAvatar.getAttribute("aria-current")).toBe("page");
-    expect(container.querySelector(".bottomnav__sheet")).toBeNull();
-
-    await userEvent.click(screen.getByRole("button", { name: /Ещё/ }));
-    await waitFor(() => expect(container.querySelector(".bottomnav__sheet")).not.toBeNull());
-
-    /* Open: the sheet is the exposed navigation and carries the claim; the
-       avatar steps back rather than making a second one. */
-    const sheetProfile = container.querySelector('.bottomnav__sheet a[href="/profile"]')!;
-    expect(sheetProfile.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelector('.bottomnav a[href="/profile"]')!.getAttribute("aria-current")).toBe("page");
     expect(container.querySelector(".mtop a.avatar")!.getAttribute("aria-current")).toBeNull();
-  });
-
-  it("does not blank the desktop marker when a menu was left open", async () => {
-    /* A menu opened at 390px and then widened: the bottom bar is hidden, so the
-       sheet cannot be beside the desktop avatar and the desktop avatar must not
-       yield to it. Placement decides, not the state alone. */
-    const { container } = shell("profile");
-    await userEvent.click(screen.getByRole("button", { name: /Ещё/ }));
-    await waitFor(() => expect(container.querySelector(".bottomnav__sheet")).not.toBeNull());
+    /* The desktop avatar never yields: the bottom bar is hidden in its layout. */
     expect(container.querySelector(".appbar a.avatar")!.getAttribute("aria-current")).toBe("page");
   });
 
@@ -414,155 +343,40 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
  * WHERE AM I, ANSWERED EXACTLY ONCE.
  *
  * The shell can render the same destination in more than one place: /profile is
- * the avatar and a row in «Ещё»; /community and /support are a desktop nav item
- * and a row in «Ещё». Only one of those may declare itself current, or the
- * answer to "where am I" arrives twice.
+ * the avatar in each bar and the bottom bar's fifth slot. Only one control per
+ * bar may declare itself current, or the answer to "where am I" arrives twice.
  *
- * The last cell to close was /community and /support with the menu SHUT. There
- * is no visible link to them then — the only one is inside the closed sheet —
- * so nothing could carry `aria-current="page"`. The «Ещё» button now carries
- * `aria-current="true"` instead: "the current item in this set", which is what
- * the button honestly is. It is not "page", because the button is not a page.
- *
- * These tests hold the whole contract, not just the new attribute: the button
- * claims it ONLY while closed, ONLY for the secondary group, and hands it back
- * to the real link the moment the menu opens.
+ * The contract «Ещё» adds when it is drawn — `aria-current="true"` on the closed
+ * button for a secondary destination, handed to the real row when it opens —
+ * is held in more-menu-disclosure.test.tsx.
  */
 describe("Shell — exactly one current, in every state", () => {
-  const nav = (activeId: string) => render(<MobileBottomNavigation activeId={activeId} />);
-  const more = () => screen.getByRole("button", { name: /Ещё/ });
-  /** Every element declaring a current — of any value, in this subtree. */
-  const declared = (root: HTMLElement) => [...root.querySelectorAll("[aria-current]")];
-
-  it("marks «Ещё» as the current group on /support while it is shut", () => {
-    for (const id of ["support"]) {
-      const { unmount } = nav(id);
-      expect(more()).toHaveAttribute("aria-current", "true");
-      // the group, not the page — the button is not a destination
-      expect(more()).not.toHaveAttribute("aria-current", "page");
+  it("never declares more than one current in the bottom bar, on any route", () => {
+    for (const id of ACTIVE_IDS) {
+      const { container, unmount } = render(<MobileBottomNavigation activeId={id} />);
+      expect(container.querySelectorAll("[aria-current]").length, id).toBeLessThanOrEqual(1);
       unmount();
     }
   });
 
-  it("leaves «Ещё» undeclared on every other route", async () => {
-    for (const id of ["home", "path", "lessons", "tools", "notifications", "profile"]) {
-      const { unmount } = nav(id);
-      expect(more()).not.toHaveAttribute("aria-current");
-      unmount();
-    }
-  });
-
-  it("hands the marker to the real link when the menu opens, and takes it back on close", async () => {
-    const user = userEvent.setup();
-    for (const [id, label] of [["support", "Поддержка"]] as const) {
-      const { container, unmount } = nav(id);
-      expect(more()).toHaveAttribute("aria-current", "true");
-
-      await user.click(more());
-      const sheet = await screen.findByRole("dialog", { name: "Ещё" });
-      // the button lets go...
-      expect(more()).not.toHaveAttribute("aria-current");
-      // ...and the destination itself claims it, as a page this time
-      const link = within(sheet).getByRole("link", { name: label });
-      expect(link).toHaveAttribute("aria-current", "page");
-      // still exactly one answer in the whole bar
-      expect(declared(container)).toHaveLength(1);
-
-      await user.keyboard("{Escape}");
-      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(more()).toHaveAttribute("aria-current", "true");
-      unmount();
-    }
-  });
-
-  it("never declares more than one current, on any route, open or shut", async () => {
-    const user = userEvent.setup();
-    const ids = ["home", "path", "lessons", "tools", "notifications", "profile", "support"];
-    for (const id of ids) {
-      const { container, unmount } = nav(id);
-      expect(declared(container).length).toBeLessThanOrEqual(1);
-      await user.click(more());
-      await screen.findByRole("dialog", { name: "Ещё" });
-      expect(declared(container).length).toBeLessThanOrEqual(1);
-      unmount();
-    }
-  });
-
-  it("moves the marker cleanly when the route crosses from primary to secondary", async () => {
-    // Same bar, different route: the primary slot must let go and the button must claim.
-    const { container, rerender } = render(<MobileBottomNavigation activeId="lessons" />);
-    expect(more()).not.toHaveAttribute("aria-current");
-    expect(declared(container).map((e) => e.getAttribute("aria-current"))).toEqual(["page"]);
-
-    rerender(<MobileBottomNavigation activeId="support" />);
-    expect(more()).toHaveAttribute("aria-current", "true");
-    expect(declared(container)).toHaveLength(1);
-
-    rerender(<MobileBottomNavigation activeId="path" />);
-    expect(more()).not.toHaveAttribute("aria-current");
-    expect(declared(container).map((e) => e.getAttribute("aria-current"))).toEqual(["page"]);
-  });
-
-  it("keeps «Ещё» looking active, and keeps its word", async () => {
-    // The LOOK is broader than the declaration: /profile lives behind the button
-    // too, so the button still marks itself there even though the avatar owns
-    // the declaration. The label is not a state indicator and must not move.
-    const { unmount } = nav("profile");
-    expect(more()).toHaveClass("is-active");
-    expect(more()).not.toHaveAttribute("aria-current");
-    expect(more().textContent).toContain("Ещё");
-    unmount();
-
-    nav("support");
-    expect(more()).toHaveClass("is-active");
-    expect(more().textContent).toContain("Ещё");
-  });
-
-  it("gives the marker back after an outside press closes the menu, with focus", async () => {
-    const user = userEvent.setup();
-    render(
-      <div>
-        <button type="button">снаружи</button>
-        <MobileBottomNavigation activeId="support" />
-      </div>,
-    );
-    await user.click(more());
-    await screen.findByRole("dialog", { name: "Ещё" });
-    expect(more()).not.toHaveAttribute("aria-current");
-
-    await user.click(screen.getByRole("button", { name: "снаружи" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(more()).toHaveAttribute("aria-current", "true");
-    await waitFor(() => expect(more()).toHaveFocus());
-  });
-
-  it("answers once per breakpoint in the whole shell, not just in the bar", async () => {
+  it("answers once per bar in the whole shell, and every bar names the same page", () => {
     // The shell renders BOTH bars; a breakpoint hides one. Whatever the CSS
-    // hides, the document must never hold two `page` declarations at once.
-    const user = userEvent.setup();
-    for (const activeId of ["home", "notifications", "profile", "support"]) {
+    // hides, no bar may hold two `page` declarations, and the bars must agree.
+    for (const activeId of ACTIVE_IDS) {
       const { container, unmount } = render(
         <AppShell userName="Мария Ковалёва" activeId={activeId} frozenSurface>
           <div>тело</div>
         </AppShell>,
       );
-      const pages = () => [...container.querySelectorAll('[aria-current="page"]')];
-      /* Both bars are in the document; a media query hides one. So more than one
-         `page` declaration is expected here — what must hold is that they are
-         COPIES: one per bar, all naming the same destination. Two in one bar, or
-         two different destinations, would be two answers at one breakpoint. */
+      const pages = [...container.querySelectorAll('[aria-current="page"]')];
       const perBar = new Map<Element | null, number>();
-      for (const el of pages()) {
-        const bar = el.closest(".rnav, .bottomnav, .appbar, .mtop");
+      for (const el of pages) {
+        const bar = el.closest(".appbar, .mtop, .bottomnav");
         perBar.set(bar, (perBar.get(bar) ?? 0) + 1);
       }
-      for (const [, n] of perBar) expect(n).toBe(1);
-      expect(new Set(pages().map((e) => e.getAttribute("href"))).size).toBeLessThanOrEqual(1);
-
-      await user.click(more());
-      await screen.findByRole("dialog", { name: "Ещё" });
-      // once the menu is open the button has let go, on every route
-      expect(container.querySelectorAll('[aria-current="true"]')).toHaveLength(0);
+      for (const [, n] of perBar) expect(n, activeId).toBe(1);
+      expect(new Set(pages.map((e) => e.getAttribute("href"))).size, activeId).toBeLessThanOrEqual(1);
+      expect(container.querySelectorAll('[aria-current="true"]'), activeId).toHaveLength(0);
       unmount();
     }
   });

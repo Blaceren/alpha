@@ -42,15 +42,28 @@ describe("the email row, where mail can be sent", () => {
     expect(role("email-value")!.textContent).toContain("maria@example.invalid");
     expect(role("email-state")!.textContent).toContain(COPY.email_state_unverified);
     expect(role("email-support-link")).toBeNull();
-    expect(document.querySelector('a[href="/support"]')).toBeNull();
+    expect(document.querySelector('a[href*="support"]')).toBeNull();
     expect(role("email-affordance")!.textContent).toBe(COPY.email_edit);
   });
 
-  it("is the old row when the Backend cannot change an address, even with an address in hand", () => {
+  /* 2026-10-03 — A NORMAL PROFILE SHOWS A PERSON THEIR ADDRESS (owner: «наполни
+     как нормальный профиль на платформе»). Where the Backend cannot change it,
+     the row still offers no control and names support for a change; it now
+     prints the learner's own address beside that, which it had in hand and
+     hid. Without an address (an unreadable account) it is the old row. */
+  it("prints the address and names support where the Backend cannot change it", () => {
     render(<ProfileFidelity canonical="Мария" account={view({}, { passwordRecovery: false, emailVerification: false, emailChange: false })} />);
+    expect(role("email-value")!.textContent).toContain("maria@example.invalid");
+    expect(role("email-note")!.textContent).toContain(COPY.email_via_support_short);
+    expect(role("email-support-link")!.getAttribute("href")).toBe("/profile/support");
+    // No control, no confirmation request, no state the learner cannot act on.
+    for (const r of ["email-affordance", "email-editor", "email-verify-row", "email-state"]) expect(role(r), r).toBeNull();
+  });
+
+  it("is the old row without an address", () => {
+    render(<ProfileFidelity canonical="Мария" account={null} />);
     expect(role("email-note")!.textContent).toBe(COPY.email_via_support);
     expect(role("email-value")).toBeNull();
-    expect(document.body.textContent).not.toContain("maria@example.invalid");
   });
 
   it("asks an unconfirmed address to confirm itself, and says what was actually sent", async () => {

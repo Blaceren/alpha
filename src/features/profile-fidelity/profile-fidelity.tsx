@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { changeProfilePassword, saveProfileName } from "@/lib/profile/profile-client";
 import {
@@ -31,6 +31,7 @@ import {
   type ProfileState,
 } from "@/features/profile-fidelity/profile-state";
 import "@/features/profile-fidelity/profile-fidelity.css";
+import "@/features/profile-fidelity/profile-hifi.css";
 
 /**
  * PROFILE — account data and sign-in security, on the real account.
@@ -82,6 +83,15 @@ import "@/features/profile-fidelity/profile-fidelity.css";
  * PASSWORDS EXIST ONLY IN THE FIELDS AND THE REQUEST. They are never placed in
  * state that outlives the submit, never logged, never carried in an error, and
  * cleared on success.
+ *
+ * A NORMAL PROFILE, HI-FI (owner, 2026-10-03: «наполни как нормальный профиль
+ * на платформе, поддержку тоже сюда переноси»; DD-337). The page receives its
+ * frame from the route — the passport (who, since when, how far) and the two
+ * parts, «Аккаунт» and «Поддержка» — and a closing section (signing out). Support
+ * is a part of the profile now, so every handoff on this page leads to
+ * `/profile/support`. Where mail cannot be sent the email row still names
+ * support for a change, and now prints the learner's own address beside it:
+ * a profile that hides a person's address from them is not a normal one.
  */
 
 type Editor = "none" | "name" | "password" | "email";
@@ -107,13 +117,25 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+/** Where support lives (2026-10-03): a part of the profile. */
+export const SUPPORT_HREF = "/profile/support";
+
 export function ProfileFidelity({
   canonical,
   account = null,
+  frame = null,
+  closing = null,
+  aside = null,
 }: {
   canonical: string | null;
   /** The learner's address and what can be done with it, or null where that is unknown or unavailable. */
   account?: AccountView | null;
+  /** The passport and the profile's parts, drawn under the page coordinate. */
+  frame?: ReactNode;
+  /** A last section after security — signing out. */
+  closing?: ReactNode;
+  /** Beside the rows on a wide screen, after them on a narrow one — the support card. */
+  aside?: ReactNode;
 }) {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>(() => initial(canonical));
@@ -176,10 +198,16 @@ export function ProfileFidelity({
       if (current.mode !== "SUBMITTING") return current;
       return result.ok ? saveConfirmed(current, result.name) : saveFailed(current);
     });
-    if (result.ok) setEditor("none");
+    if (result.ok) {
+      setEditor("none");
+      /* The passport and the shell's avatar print the server's name; a refresh
+         brings them to the one just confirmed. This page's own state survives
+         it — the row already shows the confirmed value. */
+      router.refresh();
+    }
     caretToEnd.current = !result.ok;
     pendingFocus.current = result.ok ? FOCUS_AFTER.CONFIRMED_SAVE : FOCUS_AFTER.MUTATION_FAIL;
-  }, []);
+  }, [router]);
 
   const onSave = useCallback(() => {
     const outcome = saveTransition(state);
@@ -298,11 +326,12 @@ export function ProfileFidelity({
 
   if (state.mode === "PAGEFAIL") {
     return (
-      <div className="pf" ref={rootRef}>
+      <div className="pf pf--hifi" ref={rootRef}>
         <div className="p-profile" data-mode="PAGEFAIL">
           <h1 className="p-coord p-coord--page" data-role="page-title">
             {COPY.page_title}
           </h1>
+          {frame}
           <StatusRegion text={null} />
           <div className="p-pagefail" data-role="page-failure" role="alert">
             <p className="p-pagefail__lead">{COPY.page_failed_lead}</p>
@@ -325,18 +354,21 @@ export function ProfileFidelity({
   }
 
   return (
-    <div className="pf" ref={rootRef}>
+    <div className="pf pf--hifi" ref={rootRef}>
       <div className="p-profile" data-mode={state.mode} data-editor={editor}>
         {/* PERMANENT. The page coordinate does not move when a form opens. */}
         <h1 className="p-coord p-coord--page" data-role="page-title">
           {COPY.page_title}
         </h1>
+        {frame}
         <p className="p-lead" data-role="page-lead">
           {COPY.page_lead}
         </p>
 
         <StatusRegion text={state.announce} />
 
+        <div className="p-body">
+        <div className="p-main">
         {/* ------------------------------------------------ account data -- */}
         <section className="p-section" aria-labelledby="p-section-account">
           <h2 className="p-section__title" id="p-section-account">
@@ -433,6 +465,12 @@ export function ProfileFidelity({
               </button>
             </div>
           )}
+
+          {/* What the name is for — under the name, not at the foot of the page
+              after security (2026-10-03). */}
+          <p className="p-consequence" data-role="consequence">
+            {COPY.consequence}
+          </p>
 
           {emailActions && emailState ? (
             <>
@@ -582,14 +620,24 @@ export function ProfileFidelity({
               ) : null}
             </>
           ) : (
-            /* EMAIL — named, not printed: the state of a deployment that cannot
-               send mail. See the file header. */
+            /* EMAIL where no mail can be sent: the change goes through support.
+               With the address in hand the row prints it (2026-10-03); without
+               one it names support and prints nothing, as it always did. */
             <div className="p-row" data-role="email-row">
               <span className="p-row__label">{COPY.email_label}</span>
-              <span className="p-row__value p-row__value--muted" data-role="email-note">
-                {COPY.email_via_support}
-              </span>
-              <Link className="p-edit p-edit--link" href="/support" data-role="email-support-link">
+              {account?.account.email ? (
+                <span className="p-row__value" data-role="email-value">
+                  {account.account.email}{" "}
+                  <span className="p-row__state" data-role="email-note">
+                    · {COPY.email_via_support_short}
+                  </span>
+                </span>
+              ) : (
+                <span className="p-row__value p-row__value--muted" data-role="email-note">
+                  {COPY.email_via_support}
+                </span>
+              )}
+              <Link className="p-edit p-edit--link" href={SUPPORT_HREF} data-role="email-support-link">
                 {COPY.support_link}
               </Link>
             </div>
@@ -722,9 +770,11 @@ export function ProfileFidelity({
           )}
         </section>
 
-        <p className="p-consequence" data-role="consequence">
-          {COPY.consequence}
-        </p>
+        </div>
+        {aside}
+        </div>
+
+        {closing}
       </div>
     </div>
   );
@@ -749,7 +799,7 @@ function SupportHandoff() {
   return (
     <p className="p-support" data-role="support">
       {COPY.support_lead}{" "}
-      <Link href="/support" data-role="support-link">
+      <Link href={SUPPORT_HREF} data-role="support-link">
         {COPY.support_link}
       </Link>
     </p>

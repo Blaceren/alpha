@@ -422,6 +422,48 @@ describe("the authenticated route group", () => {
      its wire to the test and the page's markup were already on this list. Not
      a loading boundary. */
   "src/features/level-detail-fidelity/level-hifi.css",
+  /* HOME AND PROFILE, FILLED AND HI-FI (owner, 2026-10-03: «наполни внутреннюю
+     главную, после сделай ее хай фай, так же сделай с профилем, наполни как
+     нормальный профиль на платформе, поддержку тоже сюда переноси, что бы
+     написать в поддержку можно было только из профиля, не по ссылке из хеда»;
+     DD-337). Home: the greeting, the program line, the module, the tools and
+     «Что нового» around the same priority field, which gains the level's
+     number; the bell's notifications read is shared with «Что нового». The
+     program as points, read by Home and Profile alike. Profile: the passport
+     with its ring, the two parts «Аккаунт» and «Поддержка», the support card,
+     signing out, the address beside the support handoff, and the profile's
+     server read. Support: the desk at /profile/support, /support a redirect to
+     it, its status words shared with the card. The shell: support leaves both
+     bars, a «Ещё» with one destination becomes that destination's slot, and the
+     mobile avatar yields «current» to it. A test-only program fixture. No
+     loading boundary moved; the Home's own is untouched. */
+  "src/app/(app)/profile/support/page.tsx",
+  "src/components/navigation/desktop-route-navigation.tsx",
+  "src/components/navigation/mobile-bottom-navigation.tsx",
+  "src/components/navigation/mobile-slots.ts",
+  "src/components/shell/user-avatar.tsx",
+  "src/config/navigation.ts",
+  "src/features/auth-home-fidelity/auth-home-field.tsx",
+  "src/features/auth-home-fidelity/auth-home-loading.tsx",
+  "src/features/auth-home-fidelity/auth-home-screen.tsx",
+  "src/features/auth-home-fidelity/auth-home-state.ts",
+  "src/features/auth-home-fidelity/home-hifi.css",
+  "src/features/auth-home-fidelity/home-news.tsx",
+  "src/features/auth-home-fidelity/home-overview-model.ts",
+  "src/features/auth-home-fidelity/home-overview.tsx",
+  "src/features/auth-home-fidelity/home-program-line.tsx",
+  "src/features/profile-fidelity/local-day.tsx",
+  "src/features/profile-fidelity/profile-exit.tsx",
+  "src/features/profile-fidelity/profile-hifi.css",
+  "src/features/profile-fidelity/profile-passport.tsx",
+  "src/features/profile-fidelity/profile-record.ts",
+  "src/features/profile-fidelity/profile-support-card.tsx",
+  "src/features/profile-fidelity/profile-tabs.tsx",
+  "src/features/support/components/support-hub.tsx",
+  "src/lib/curriculum/program-points.ts",
+  "src/lib/support/support-status.ts",
+  "src/server/profile/profile-read.ts",
+  "src/test/program-fixture.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -485,7 +527,15 @@ describe("the authenticated route group", () => {
          beside the page, the imports, the metadata and the viewport. Freezing
          it in two places would mean the looser of the two fails first, for the
          least informative reason. */
-      "src/features/support", "src/components/shell",
+      /* Support and the shell are no longer frozen here: the owner moved
+         support into the profile on 2026-10-03, which took it out of both bars
+         and touched the avatar's «current». support-hub.test.tsx and
+         support-design.test.ts govern the desk in detail (its h1, its regions,
+         every status word, its stylesheet), and shell-polish, community-hidden,
+         mobile-bottom-navigation, more-menu-disclosure and support-reachable
+         govern the shell — every route, every «current», the bar's slots and
+         «Ещё» the day it returns. Freezing them in two places would mean the
+         looser of the two fails first, for the least informative reason. */
       "src/config/feature-visibility.ts",
     ]) {
       expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);

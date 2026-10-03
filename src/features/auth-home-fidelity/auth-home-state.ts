@@ -133,6 +133,8 @@ export type HomeField =
       posture: "ACTION";
       stateKey: string;
       workIdentity: string | null;
+      /** The level's number, printed before its title («Уровень 4 · …»). */
+      workOrder: number | null;
       consequence: string;
       basis: string | null;
       control: { label: string; href: string; levelCode: string | null };
@@ -141,6 +143,7 @@ export type HomeField =
       posture: "WAIT";
       stateKey: string;
       workIdentity: string | null;
+      workOrder: number | null;
       consequence: string;
       basis: string | null;
       authority: string;
@@ -199,6 +202,7 @@ export const FIELD_NO_CURRICULUM: HomeField = {
 export function fieldForAction(action: AcademyNextAction): HomeField {
   const stateKey = action.kind.toUpperCase().replace(/-/g, "_");
   const workIdentity = action.level?.title ?? null;
+  const workOrder = action.level ? action.level.order : null;
 
   if (action.kind === "course-complete") {
     return {
@@ -216,6 +220,7 @@ export function fieldForAction(action: AcademyNextAction): HomeField {
       posture: "ACTION",
       stateKey,
       workIdentity,
+      workOrder,
       consequence: action.title,
       basis: action.explanation || null,
       control: {
@@ -233,6 +238,7 @@ export function fieldForAction(action: AcademyNextAction): HomeField {
       posture: "WAIT",
       stateKey,
       workIdentity,
+      workOrder,
       consequence: action.title,
       basis: action.explanation || null,
       authority,

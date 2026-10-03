@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * Поддержка (/support) — the learner's own support surface.
+ * Поддержка (/profile/support) — the learner's own support surface.
+ *
+ * A part of the profile since 2026-10-03 (owner: «что бы написать в поддержку
+ * можно было только из профиля, не по ссылке из хеда»); `/support` redirects
+ * there. The desk itself did not change.
  *
  * WHAT A LEARNER SEES, AND WHAT THEY DELIBERATELY DO NOT.
  *
@@ -30,31 +34,9 @@ import {
   type SupportCaseSummary,
 } from "@/lib/support/support-client";
 import type { NormalizedError } from "@/lib/api/errors";
-
-/**
- * The learner-facing meaning of each operational status.
- *
- * An unmapped code renders as itself rather than as an invented phrase — this
- * repository has shipped a raw enum to a learner once already, and the fix was
- * to add the label, not to add a fallback that hides the gap.
- */
-const STATUS_TEXT: Record<string, string> = {
-  new: "Получено",
-  open: "Получено",
-  in_progress: "В работе",
-  waiting_learner: "Ждём вашего ответа",
-  waiting_internal: "Уточняем внутри команды",
-  waiting_external: "Ждём ответа провайдера",
-  escalated: "Передано специалисту",
-  resolved: "Решено",
-  closed: "Закрыто",
-};
-
-const CLOSED_STATUSES = new Set(["resolved", "closed"]);
-
-function statusText(status: string): string {
-  return STATUS_TEXT[status] ?? status;
-}
+/* The status words live in one place since the profile reads them too
+   (2026-10-03); the map moved unchanged. */
+import { CLOSED_STATUSES, statusText } from "@/lib/support/support-status";
 
 function when(iso: string): string {
   const value = new Date(iso);

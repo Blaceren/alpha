@@ -203,8 +203,11 @@ describe("the stylesheet stays inside Support", () => {
  * zero and below it supplied `20px 16px`. That inset is restated in this
  * stylesheet so the content keeps the x position it was accepted with.
  */
+/* Since 2026-10-03 the desk is a part of the profile and renders at
+   `/profile/support` (owner: «что бы написать в поддержку можно было только из
+   профиля»); `/support` only redirects. The canvas rule follows the desk. */
 describe("the Support canvas", () => {
-  const ROUTE_SRC = readFileSync(join(ROOT, "src/app/(app)/support/page.tsx"), "utf8");
+  const ROUTE_SRC = readFileSync(join(ROOT, "src/app/(app)/profile/support/page.tsx"), "utf8");
   /* Comments explain the flag by name, so the prop has to be read from the CODE
      — asserting on the file text passed while the prop was removed. */
   const ROUTE = ROUTE_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -212,7 +215,7 @@ describe("the Support canvas", () => {
 
   it("asks the shell for the flat Ink ground", () => {
     expect(ROUTE).toMatch(/<AppShell[^>]*\sfrozenSurface[\s/>]/);
-    // And it is the existing mechanism, not a new one: no wrapper, no new prop.
+    // And it is the existing mechanism, not a new one: no inline paint, no new prop.
     expect(ROUTE).not.toMatch(/background/i);
     expect(ROUTE).not.toMatch(/box-shadow/i);
   });
