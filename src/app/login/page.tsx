@@ -24,7 +24,7 @@ export default function LoginPage() {
   return (
     <div className="main login">
       <h1>Affiliate Partners</h1>
-      <p className="sub">Alfa Trade Academy</p>
+      <p className="sub">Alpha Trade Academy</p>
       <form
         className="card"
         onSubmit={async (event) => {
