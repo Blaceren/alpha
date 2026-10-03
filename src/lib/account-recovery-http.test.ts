@@ -554,12 +554,19 @@ describe("changing the address", () => {
     session.user = { id: user.id, role: "user", status: "active" };
     await ask(user.id, { newEmail: "account-next@example.invalid", currentPassword: "Password-1" });
     const body = await (await GET(request("GET", "http://backend.invalid/api/me/account", undefined))).json();
+    const made = (await db.user.findUniqueOrThrow({ where: { id: user.id } })).createdAt.toISOString();
     expect(body).toEqual({
-      account: { email: "account@example.invalid", emailVerified: false, pendingEmail: "account-next@example.invalid" },
+      account: {
+        email: "account@example.invalid",
+        emailVerified: false,
+        pendingEmail: "account-next@example.invalid",
+        memberSince: made,
+      },
       capabilities: { passwordRecovery: true, emailVerification: true, emailChange: true },
     });
-    // Three fields about the address and nothing else about the account.
-    expect(Object.keys(body.account).sort()).toEqual(["email", "emailVerified", "pendingEmail"]);
+    // Three fields about the address and the day the account was made (the
+    // profile's «в Академии с …», 2026-10-03) — nothing else about the account.
+    expect(Object.keys(body.account).sort()).toEqual(["email", "emailVerified", "memberSince", "pendingEmail"]);
   });
 
   it("is no longer something PATCH /api/me does", async () => {
