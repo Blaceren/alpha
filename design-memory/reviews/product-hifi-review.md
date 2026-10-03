@@ -102,8 +102,10 @@ CAPTCHA-gated.
 - **Released Academy before part 2:** `c85513b` (part 1). Same system, same tokens (`--hf-*`), one new
   layer per surface: `tools-hifi.css`, `reader-hifi.css`, `workspace-hifi.css`, `states-hifi.css`, plus
   additions to `level-hifi.css` and `auth-stage.css`. The Backend does not change.
-- **Captures before:** `before/tools-*.png`, `before/tool-*.png`, `before/lesson-l04-*.png`,
-  `before/login-*.png`, `before/register-*.png`. **After:** `part2/` (1440, 1024, 768, 390).
+- **Captures before:** `before/tools-*.png`, `before/tool-*.png`, `before/login-*.png`,
+  `before/register-*.png`. `before/lesson-l04-*.png` is not the lesson page: the address used for the
+  before set did not resolve, so it shows the old «Уровень не найден» state — kept as that state's
+  before. The lesson page itself has no before capture. **After:** `part2/` (1440, 1024, 768, 390).
 
 ## Findings (part 2)
 
