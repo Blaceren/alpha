@@ -6,7 +6,16 @@ not implemented is not in this document.
 
 Owner, 2026-10-02: «следующий этап внедряем первые 30 настоящих уровней, вот
 описание того какой должна быть структура уровней». The description is the
-document «ALFA TRADE ACADEMY · СОДЕРЖАНИЕ ВОРОНКИ ОБУЧЕНИЯ · УРОВНИ 1–30».
+document «ALPHA TRADE ACADEMY · СОДЕРЖАНИЕ ВОРОНКИ ОБУЧЕНИЯ · УРОВНИ 1–30».
+
+Owner, 2026-10-03: «во всем проекте название должно быть alpha а не alfa». The
+document as received spelled the name «Alfa»; the source records that edit
+(`source.edits`) next to the document's sha256, and the program was rebuilt as
+**version 6** — the same 30 levels with the same stable codes, the name spelled
+«Alpha». Version 5 (published 2026-10-02) stays in the repository exactly as it
+was published. Stable codes are identities, not texts: the level-2 slug
+`ustroystvo-alfa-trade-academy` did not change, which is what lets a learner move
+from 5 to 6 with every completed level.
 
 ---
 
@@ -19,13 +28,16 @@ document «ALFA TRADE ACADEMY · СОДЕРЖАНИЕ ВОРОНКИ ОБУЧЕ�
 curriculum/canonical/ata-funnel-30.source.json        the program as data: 2 chapters, 6 modules, 30 levels
         │   scripts/curriculum/buildFunnel30.ts        (npm run curriculum:funnel30:build)
         ▼
-curriculum/packages/ata-v2-funnel-30.v5.draft.json    package `ata-v2.funnel-30`, curriculum `ata-v2` version 5
+curriculum/packages/ata-v2-funnel-30.v6.draft.json    package `ata-v2.funnel-30`, curriculum `ata-v2` version 6
 ```
+
+(`ata-v2-funnel-30.v5.draft.json` is the version-5 record, the «Alfa» spelling;
+the builder no longer reproduces it.)
 
 The build is deterministic — no clock, no randomness — and
 `npm run curriculum:funnel30:check` proves the checked-in package is byte-identical
 to a build of its source. `scripts/regression/curriculumFunnel30Regression.ts`
-(40 checks) walks one learner through it in a disposable database.
+(41 checks) walks one learner through it in a disposable database.
 
 **Nothing in a lesson is rewritten.** Titles, descriptions, results, questions,
 options, correct answers, the «разбор» of every question and its «пересмотреть с
@@ -79,9 +91,9 @@ All commands run in the Backend release with the Backend's environment. Each one
 
 ```
 tsx scripts/ops/activateProgramVersion.ts \
-  --package curriculum/packages/ata-v2-funnel-30.v5.draft.json \
+  --package curriculum/packages/ata-v2-funnel-30.v6.draft.json \
   --expect-fingerprint <the package's contentFingerprint> \
-  --expect-published-version 4 \
+  --expect-published-version 5 \
   --actor-user-id <an active admin> \
   --backup <a backup of THIS database, taken in the last 30 minutes> --apply
 ```
@@ -90,7 +102,7 @@ It imports the package as a draft and publishes it; the replaced version is
 archived. No learner is enrolled, moved or touched — the command counts the
 learner tables before and after each step and stops if any of them moved.
 
-From that moment **new registrations get version 5**. Learners already enrolled
+From that moment **new registrations get the new version** (5 on 2026-10-02, 6 on 2026-10-03). Learners already enrolled
 stay on the version they are on.
 
 ### 4.2 Put a lesson's video on the platform
@@ -113,15 +125,16 @@ no external tool is used.
 
 ```
 tsx scripts/ops/moveLearnersToPublishedProgram.ts \
-  (--user-id 73 [--user-id 74 …] | --all-on-version 4) --reason "…" [--apply]
+  (--user-id 73 [--user-id 74 …] | --all-on-version 5) --reason "…" [--apply]
 ```
 
 A move supersedes the active enrollment and creates one on the published
 version. Completed levels carry over only as a contiguous prefix of levels with
 the same stable code, type and completion method — from the 100-level program to
 this one that prefix is empty (level 1 is a different lesson), so a moved learner
-starts at level 1 with their XP carried as one adjustment. A learner waiting on a
-reviewer is not moved.
+starts at level 1 with their XP carried as one adjustment. From version 5 to 6
+every stable code is the same, so the whole completed prefix carries. A learner
+waiting on a reviewer is not moved.
 
 ### 4.4 Open the next levels, or change a published text
 

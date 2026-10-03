@@ -16,7 +16,7 @@
  */
 import type { MailKind, MailMessage } from "@/lib/mail/transport";
 
-const PRODUCT = "Alfa Trade Academy";
+const PRODUCT = "Alpha Trade Academy";
 
 /** Text placed inside HTML. Links are built by this application, names are not. */
 export function escapeHtml(value: string): string {

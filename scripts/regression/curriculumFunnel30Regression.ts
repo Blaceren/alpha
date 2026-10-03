@@ -8,6 +8,7 @@
  *
  *   A. THE ARTIFACT — reproducible from its source, valid, and what it claims.
  *      Every package shipped before it still hashes to its declared value.
+ *      (The current build is v6 — the name spelled «Alpha»; v5 stays as published.)
  *   B. IMPORT AND PUBLICATION — chapters, kinds, a closed tail, tool unlocks and
  *      rewatch seconds reach the database; a version that ends in levels not
  *      open yet can be published, and one with a hole in the middle cannot.
@@ -43,7 +44,8 @@ for (const flag of [
   process.env[flag] = "true";
 }
 
-const PACKAGE_PATH = "curriculum/packages/ata-v2-funnel-30.v5.draft.json";
+// The version the builder writes now (v6 since 2026-10-03, the «Alpha» spelling) and its artifact;
+// the successors below are VERSION + 1 and VERSION + 2. v5 stays as published and is checked by A6.
 const SOURCE_PATH = "curriculum/canonical/ata-funnel-30.source.json";
 const LOCALE = "ru";
 
@@ -118,6 +120,8 @@ async function main() {
   const sourceLevel = (number: number) => source.levels.find((level) => level.number === number)!;
   const codeOf = (number: number) =>
     `v2.l${String(number).padStart(3, "0")}.${sourceLevel(number).slug}`;
+  const VERSION = builder.FUNNEL30_CURRICULUM_VERSION_NUMBER;
+  const PACKAGE_PATH = builder.funnel30PackagePath(VERSION);
   const rawPackage = JSON.parse(fs.readFileSync(PACKAGE_PATH, "utf8")) as unknown;
 
   let sequence = 0;
@@ -141,9 +145,9 @@ async function main() {
   });
 
   await check("A2 the checked-in package is byte-identical to a build of its source", () => {
-    assert.equal(fs.readFileSync(PACKAGE_PATH, "utf8"), builder.serializeFunnel30Package(5));
+    assert.equal(fs.readFileSync(PACKAGE_PATH, "utf8"), builder.serializeFunnel30Package(VERSION));
     // …and a second build is the same bytes: no clock, no randomness.
-    assert.equal(builder.serializeFunnel30Package(5), builder.serializeFunnel30Package(5));
+    assert.equal(builder.serializeFunnel30Package(VERSION), builder.serializeFunnel30Package(VERSION));
   });
 
   await check("A3 the package validates as a draft and says what is outstanding", () => {
@@ -152,7 +156,7 @@ async function main() {
     if (!result.ok) return;
     assert.equal(result.package.status, "draft");
     assert.equal(result.package.packageCode, "ata-v2.funnel-30");
-    assert.equal(result.package.curriculumVersionNumber, 5);
+    assert.equal(result.package.curriculumVersionNumber, VERSION);
     assert.ok(result.package.pendingApprovals.length > 0, "a draft with nothing pending is not this draft");
     assert.equal(result.fingerprint, result.package.contentFingerprint);
   });
@@ -316,7 +320,7 @@ async function main() {
     assert.equal(counts.reportAssignments, 1);
     assert.equal(counts.reportBindings, 1);
     assert.equal(counts.toolUnlocks, 6);
-    const version = await prisma.curriculumVersion.findFirstOrThrow({ where: { code: "ata-v2", versionNumber: 5 } });
+    const version = await prisma.curriculumVersion.findFirstOrThrow({ where: { code: "ata-v2", versionNumber: VERSION } });
     versionId = version.id;
     // Re-importing the identical package is a no-op.
     const again = await packageImport.importCurriculumPackage(rawPackage, { db: prisma });
@@ -395,7 +399,7 @@ async function main() {
   await check("B5 the version publishes, and is the one a new learner gets", async () => {
     const result = await service.publishCurriculumVersion({ curriculumVersionId: versionId, actorId: admin.id });
     assert.equal(result.published.status, "published");
-    assert.equal(result.published.versionNumber, 5);
+    assert.equal(result.published.versionNumber, VERSION);
   });
 
   /* ==================================================================== *
@@ -453,7 +457,7 @@ async function main() {
     return { started, input, graded: await assessment.submitOwnAssessmentAttempt(learner.id, input) };
   }
 
-  await check("C1 a new learner is enrolled in version 5 at level 1, with every tool shut", async () => {
+  await check(`C1 a new learner is enrolled in version ${VERSION} at level 1, with every tool shut`, async () => {
     const result = await enrollmentDomain.enrollUserInPublishedCurriculum({ userId: learner.id, actorId: admin.id });
     assert.equal(result.created, true);
     assert.equal(result.enrollment.curriculumVersionId, versionId);
@@ -988,7 +992,7 @@ async function main() {
     return draft.id;
   }
 
-  // A second learner, part of the way through version 5, for the refusals.
+  // A second learner, part of the way through the current version, for the refusals.
   const waiting = await createUser("waiting");
   await enrollmentDomain.enrollUserInPublishedCurriculum({ userId: waiting.id, actorId: admin.id });
 
@@ -1006,20 +1010,20 @@ async function main() {
     );
   });
 
-  let versionSix = 0;
-  await check("G2 the chapter opens: a successor with level 15 open is published, and version 5 is archived", async () => {
-    versionSix = await publishSuccessor(6, (pkg) => {
+  let successorId = 0;
+  await check(`G2 the chapter opens: a successor with level 15 open is published, and version ${VERSION} is archived`, async () => {
+    successorId = await publishSuccessor(VERSION + 1, (pkg) => {
       for (const moduleDefinition of pkg.modules) {
         for (const level of moduleDefinition.levels) {
           if (level.levelNumber === 15) delete level.status;
         }
       }
     });
-    const versions = await prisma.curriculumVersion.findMany({ where: { code: "ata-v2", versionNumber: { in: [5, 6] } }, orderBy: { versionNumber: "asc" } });
+    const versions = await prisma.curriculumVersion.findMany({ where: { code: "ata-v2", versionNumber: { in: [VERSION, VERSION + 1] } }, orderBy: { versionNumber: "asc" } });
     assert.deepEqual(versions.map((item) => item.status), ["archived", "published"]);
-    // The learner is still pinned to version 5, and still standing on a closed level 15.
+    // The learner is still pinned to the current version, and still standing on a closed level 15.
     const resolved = await states();
-    assert.equal(resolved.curriculumVersion.versionNumber, 5);
+    assert.equal(resolved.curriculumVersion.versionNumber, VERSION);
     assert.equal(resolved.levels.find((item) => item.levelDefinition.levelNumber === 15)!.state, "locked");
   });
 
@@ -1030,12 +1034,12 @@ async function main() {
       dryRun: true,
     });
     assert.equal(plan.outcome, "moved");
-    assert.deepEqual(plan.from && [plan.from.versionNumber, plan.from.currentLevel, plan.from.completedLevels], [5, 15, 14]);
-    assert.deepEqual(plan.to, { versionNumber: 6, currentLevel: 15, carriedLevels: 14 });
+    assert.deepEqual(plan.from && [plan.from.versionNumber, plan.from.currentLevel, plan.from.completedLevels], [VERSION, 15, 14]);
+    assert.deepEqual(plan.to, { versionNumber: VERSION + 1, currentLevel: 15, carriedLevels: 14 });
     assert.equal(plan.xpCarried, 1_700);
     assert.equal(plan.newEnrollmentId, null);
     assert.equal(await prisma.userCurriculumEnrollment.count({ where: { userId: learner.id } }), 1);
-    assert.equal((await states()).curriculumVersion.versionNumber, 5);
+    assert.equal((await states()).curriculumVersion.versionNumber, VERSION);
   });
 
   await check("G4 the move carries fourteen levels, the XP and the tools, and level 15 is now open to start", async () => {
@@ -1048,11 +1052,11 @@ async function main() {
     assert.ok(plan.newEnrollmentId);
     const rows = await prisma.userCurriculumEnrollment.findMany({ where: { userId: learner.id }, orderBy: { id: "asc" } });
     assert.deepEqual(rows.map((row) => row.status), ["superseded", "active"]);
-    assert.equal(rows[1].curriculumVersionId, versionSix);
+    assert.equal(rows[1].curriculumVersionId, successorId);
     assert.equal(rows[1].migrationSource, `enrollment:${rows[0].id}`);
 
     const resolved = await states();
-    assert.equal(resolved.curriculumVersion.versionNumber, 6);
+    assert.equal(resolved.curriculumVersion.versionNumber, VERSION + 1);
     assert.equal(resolved.enrollment.currentLevel, 15);
     assert.equal(resolved.levels.filter((item) => item.state === "completed").length, 14);
     assert.equal(resolved.levels.find((item) => item.levelDefinition.levelNumber === 15)!.state, "available");
@@ -1102,7 +1106,7 @@ async function main() {
 
   await check("G6 a version whose first level is a different level carries nothing: level 1 again, with the XP", async () => {
     // Same program, but level 1 is a different lesson (another stable code).
-    await publishSuccessor(7, (pkg) => {
+    await publishSuccessor(VERSION + 2, (pkg) => {
       const levels = pkg.modules.flatMap((moduleDefinition) => moduleDefinition.levels);
       const first = levels.find((level) => level.levelNumber === 1)!;
       const renamed = `${first.levelCode}-novyy`;
@@ -1117,7 +1121,7 @@ async function main() {
     const before = await xpTotal();
     const plan = await move.moveEnrollmentToPublishedVersion({ userId: learner.id, reason: "regression: a different program" });
     assert.equal(plan.outcome, "moved");
-    assert.deepEqual(plan.to, { versionNumber: 7, currentLevel: 1, carriedLevels: 0 });
+    assert.deepEqual(plan.to, { versionNumber: VERSION + 2, currentLevel: 1, carriedLevels: 0 });
     const resolved = await states();
     assert.equal(resolved.enrollment.currentLevel, 1);
     assert.equal(resolved.levels.filter((item) => item.state === "completed").length, 0);

@@ -51,7 +51,7 @@ const ORIGIN = "https://academy.example.invalid";
 const MAIL_ENV = {
   ATA_ENVIRONMENT: "dev",
   MAIL_TRANSPORT: "outbox",
-  MAIL_FROM: "Alfa Trade Academy <no-reply@example.invalid>",
+  MAIL_FROM: "Alpha Trade Academy <no-reply@example.invalid>",
   MAIL_OUTBOX_DIR: "/nonexistent/never-written-by-this-test",
   PUBLIC_APP_URL: ORIGIN,
 } as const;
@@ -188,7 +188,7 @@ describe("mail configuration — disabled unless all of it is right", () => {
   it("reads the sender's address out of either form", async () => {
     const { parseMailFrom } = await import("@/lib/mail/config");
     expect(parseMailFrom("no-reply@example.invalid")?.address).toBe("no-reply@example.invalid");
-    expect(parseMailFrom("Alfa Trade Academy <no-reply@example.invalid>")?.address).toBe("no-reply@example.invalid");
+    expect(parseMailFrom("Alpha Trade Academy <no-reply@example.invalid>")?.address).toBe("no-reply@example.invalid");
     expect(parseMailFrom("<no-reply@example.invalid>")).toBeNull();
     expect(parseMailFrom("")).toBeNull();
   });
@@ -240,7 +240,7 @@ describe("the messages", () => {
     for (const message of all) {
       const everything = `${message.subject}\n${message.text}\n${message.html}`;
       expect(everything).not.toMatch(/pocket|депозит|баланс|уровен|\$\d|парол[ья] [^\s]+:/i);
-      expect(message.subject).toContain("Alfa Trade Academy");
+      expect(message.subject).toContain("Alpha Trade Academy");
     }
     // A notice to the OLD address shows the new one masked, never in full.
     expect(all[4]!.text).toContain("ne***@example.invalid");

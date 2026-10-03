@@ -121,7 +121,7 @@ What is written against those facts:
 2. Its name in `MAIL_TRANSPORTS` and its settings in `resolveMailConfig`:
    `MAIL_SES_REGION` (required with `ses`), and a reply-to address if chosen.
    Nothing in `src/lib/account/` or the routes changes.
-3. On PROD: `MAIL_TRANSPORT=ses`, `MAIL_FROM=Alfa Trade Academy
+3. On PROD: `MAIL_TRANSPORT=ses`, `MAIL_FROM=Alpha Trade Academy
    <no-reply@alfatrade.media>`, `MAIL_SES_REGION=eu-central-1`;
    `PUBLIC_APP_URL=https://alfatrade.media` is already there. Until that
    release these variables must NOT be set: a transport this build does not

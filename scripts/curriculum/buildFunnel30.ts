@@ -2,7 +2,7 @@
  * PROGRAM STRUCTURE (2026-10-02) — the builder of the 30-level program package.
  *
  * ============================== WHAT IT DOES ==============================
- * Assembles `curriculum/packages/ata-v2-funnel-30.v5.draft.json` from ONE input:
+ * Assembles `curriculum/packages/ata-v2-funnel-30.v6.draft.json` from ONE input:
  *
  *   curriculum/canonical/ata-funnel-30.source.json
  *
@@ -15,6 +15,14 @@
  * It reads no other repository, opens no database, makes no network call and
  * uses no clock or randomness. Same input → byte-identical output → identical
  * fingerprint. `--check` proves the checked-in artifact still matches its input.
+ *
+ * VERSIONS. v5 (published 2026-10-02) is kept exactly as it was published; it
+ * spelled the product «Alfa», as the document did. v6 (2026-10-03) is the same
+ * program with the name spelled «Alpha» on the owner's word («во всем проекте
+ * название должно быть alpha а не alfa»). No stable code changed — the slug
+ * `kak-ustroen-alfa-trade-academy` is an identity, not a text — so a learner
+ * moved from v5 to v6 keeps every completed level. Since the source moved on,
+ * `--curriculum-version-number 5` no longer reproduces the v5 file.
  *
  *   tsx scripts/curriculum/buildFunnel30.ts [--curriculum-version-number N] [--check]
  *
@@ -63,12 +71,12 @@ const PACKAGE_REVISION = 1;
 const LOCALE = "ru";
 
 /**
- * The version this program was first built as. An explicit build input for the
- * reason `buildCanonical100.ts` gives at length: the artifact is the release
- * identity, and a version taken from a database would make two builds of one
- * source disagree.
+ * The version the current source is built as (v5 was the first; see VERSIONS
+ * above). An explicit build input for the reason `buildCanonical100.ts` gives at
+ * length: the artifact is the release identity, and a version taken from a
+ * database would make two builds of one source disagree.
  */
-const DEFAULT_CURRICULUM_VERSION_NUMBER = 5;
+export const FUNNEL30_CURRICULUM_VERSION_NUMBER = 6;
 
 /* ------------------------------------------------------------------ *
  * The source
@@ -102,7 +110,7 @@ type SourceLevel = {
 };
 
 type Source = {
-  source: { document: string; from: string; receivedOn: string; sha256: string };
+  source: { document: string; from: string; receivedOn: string; sha256: string; edits?: string[] };
   curriculum: { code: string; title: string; description: string };
   chapters: Array<{ number: number; title: string }>;
   modules: Array<{ number: number; title: string; chapter: number; levels: number[] }>;
@@ -138,6 +146,13 @@ function resourceCode(level: SourceLevel, suffix: string): string {
  * Provenance
  * ------------------------------------------------------------------ */
 
+/** The document, who handed it over and when — and what was changed in it since, on whose word. */
+function sourceLine(source: Source): string {
+  const edits = source.source.edits ?? [];
+  const base = `${source.source.document} (${source.source.from}, ${source.source.receivedOn})`;
+  return edits.length === 0 ? base : `${base}; ${edits.join("; ")}`;
+}
+
 /** Everything here was handed over by the product owner as the program to build. */
 function ownerProvenance(source: Source, sourceRef: string): ProvenanceRecord {
   return {
@@ -148,7 +163,7 @@ function ownerProvenance(source: Source, sourceRef: string): ProvenanceRecord {
     confidence: "high",
     conflicts: [],
     approvalRequired: false,
-    note: `${source.source.document} (${source.source.from}, ${source.source.receivedOn}).`,
+    note: `${sourceLine(source)}.`,
   };
 }
 
@@ -688,7 +703,7 @@ function buildPackage(curriculumVersionNumber: number): CurriculumPackage {
     curriculumTitle: source.curriculum.title,
     curriculumDescription: source.curriculum.description,
     locale: LOCALE,
-    createdFrom: `scripts/curriculum/buildFunnel30.ts — ${SOURCE_PATH}: ${source.source.document} (${source.source.from}, ${source.source.receivedOn})`,
+    createdFrom: `scripts/curriculum/buildFunnel30.ts — ${SOURCE_PATH}: ${sourceLine(source)}`,
     approval: { approvedBy: null, approvedAt: null, note: null },
     pendingApprovals: source.levels.flatMap(pendingFor),
     contentFingerprint: "0".repeat(64),
@@ -726,7 +741,7 @@ function buildPackage(curriculumVersionNumber: number): CurriculumPackage {
 
 function parseVersion(argv: string[]): number {
   const index = argv.indexOf("--curriculum-version-number");
-  if (index < 0) return DEFAULT_CURRICULUM_VERSION_NUMBER;
+  if (index < 0) return FUNNEL30_CURRICULUM_VERSION_NUMBER;
   const raw = argv[index + 1];
   // Digits only, for the reason the canonical-100 builder gives: a coerced value
   // here becomes a curriculum identity in a published database.

@@ -59,7 +59,7 @@ export type MailConfigReason =
 
 export type MailConfig = {
   readonly transport: MailTransportName;
-  /** The header value, e.g. `Alfa Trade Academy <no-reply@alfatrade.media>`. */
+  /** The header value, e.g. `Alpha Trade Academy <no-reply@alfatrade.media>`. */
   readonly from: string;
   /** The address inside `from`. */
   readonly fromAddress: string;

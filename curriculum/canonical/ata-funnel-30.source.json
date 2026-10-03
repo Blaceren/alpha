@@ -1,20 +1,23 @@
 {
   "_about": [
-    "The canonical source of the 30-level program (ata-v2 version 5).",
+    "The canonical source of the 30-level program (ata-v2 version 6; version 5 was built from it before the name changed).",
     "Every learner-visible sentence here is the product owner's own, from the document named in `source`.",
     "What this file adds to the document is identity and contract: stable-code slugs, the learner-facing kind,",
     "the completion pair, the XP reward, which levels are open, which level opens which tool, and the field",
     "list of the level-9 report form. scripts/curriculum/buildFunnel30.ts turns it into the package."
   ],
   "source": {
-    "document": "ALFA TRADE ACADEMY · СОДЕРЖАНИЕ ВОРОНКИ ОБУЧЕНИЯ · УРОВНИ 1–30",
+    "document": "ALPHA TRADE ACADEMY · СОДЕРЖАНИЕ ВОРОНКИ ОБУЧЕНИЯ · УРОВНИ 1–30",
     "from": "product owner",
     "receivedOn": "2026-10-02",
-    "sha256": "f6334fe0a76277eec14715eb728079a1e5a5f48a549917bd769a4e32ba6c3518"
+    "sha256": "f6334fe0a76277eec14715eb728079a1e5a5f48a549917bd769a4e32ba6c3518",
+    "edits": [
+      "2026-10-03, product owner: the product name is spelled «Alpha», not «Alfa» (the document as received, whose sha256 is above, spells it «Alfa»)"
+    ]
   },
   "curriculum": {
     "code": "ata-v2",
-    "title": "Alfa Trade Academy — программа, уровни 1–30",
+    "title": "Alpha Trade Academy — программа, уровни 1–30",
     "description": "Первые две главы программы: «Основы и первые реальные сделки» и «Чтение графика»."
   },
   "chapters": [
@@ -151,8 +154,8 @@
       "completionMethod": "lesson",
       "xpReward": 50,
       "xpRewardStatus": "approved",
-      "title": "Как устроен Alfa Trade Academy",
-      "lessonTitle": "Как устроен Alfa Trade Academy",
+      "title": "Как устроен Alpha Trade Academy",
+      "lessonTitle": "Как устроен Alpha Trade Academy",
       "description": "Устройство Академии: уровни, прогресс, инструменты, тесты начиная с четвёртого урока.",
       "result": null
     },
