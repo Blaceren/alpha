@@ -145,3 +145,46 @@ describe("Review window — the strip's hint", () => {
     expect(view.container.querySelector("#review-window")!.getAttribute("data-stage")).toBe("v1");
   });
 });
+
+describe("Review window — the stepper a narrow screen shows above it (2026-10-03)", () => {
+  const steps = (view: ReturnType<typeof mount>) =>
+    Array.from(view.container.querySelectorAll(".rstepper__button")) as HTMLButtonElement[];
+
+  it("numbers the four states in order, names each in one word, and controls the window", () => {
+    const view = mount();
+    const buttons = steps(view);
+    expect(buttons.map((b) => b.querySelector(".rstepper__num")!.textContent)).toEqual(["01", "02", "03", "04"]);
+    expect(buttons.map((b) => b.querySelector(".rstepper__label")!.textContent)).toEqual([
+      "Отправлена",
+      "Разбор",
+      "Исправлено",
+      "Принята",
+    ]);
+    for (const button of buttons) expect(button).toHaveAttribute("aria-controls", "review-window");
+    // It sits right above the window it switches.
+    const stepper = view.container.querySelector(".review__stepper")!;
+    expect(stepper.nextElementSibling?.id).toBe("review-window");
+  });
+
+  it("switches the window at a press, says which state is on show, and stops the sequence", () => {
+    const view = mount();
+    view.reach();
+    fireEvent.click(steps(view)[1]!);
+    expect(view.stage()).toBe("feedback");
+    expect(steps(view)[1]).toHaveAttribute("aria-pressed", "true");
+    expect(view.container.querySelector(".rstepper__note")!.textContent).toContain("Получен разбор.");
+    // The rail is lit as far as the state on show.
+    expect((view.container.querySelector(".rstepper") as HTMLElement).style.getPropertyValue("--rs-at")).toBe("1");
+    view.wait(10_000);
+    expect(view.stage()).toBe("feedback");
+  });
+
+  it("follows the sequence while it plays", () => {
+    const view = mount();
+    view.reach();
+    view.wait(1500 * 3);
+    expect(view.stage()).toBe("accepted");
+    expect(steps(view)[3]).toHaveAttribute("aria-pressed", "true");
+    expect(view.container.querySelectorAll(".rstepper__step.is-reached").length).toBe(4);
+  });
+});

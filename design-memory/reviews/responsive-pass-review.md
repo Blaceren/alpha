@@ -118,3 +118,16 @@ sideways phone; Path, Trade Card and the report lesson on phones) — 38 of 38 s
 site before: 1 of 28); the route at ≤920 shows 8 of 8 step windows and no pinned window, at ≥921 the
 pinned window as before; the Public Home sweep at 25 sizes clean of overflow, cuts, overlaps and small
 targets.
+
+## Round 2, addendum — #review on a narrow screen
+
+The owner, from a phone: «не понятно что переключается и зачем переключатели занимают весь экран и то что
+переключается не видно и не связано с переключателями логикой». Up to 1040px the four stage cards (982px
+stacked at 390, 2×2 at 768) sat under a 723–796px window, so a press changed something out of sight.
+
+Fixed: up to 1040px the states are a stepper right above the window (01–04 on the rail, lit to the state on
+show, one word each, the state's note under it); on a phone the window keeps the status first and only the
+record under review — stepper and window together 765px at 390×844, one screen under the header; from
+1041px the strip of cards stays as it was (one row under the window). Measured: the stepper shows at
+320–1040 and the strip at 1041+; pressing 01–04 at 390×844 keeps the status within the screen every time;
+the Public Home sweep at 25 sizes clean; tests pin the stepper's order, words, control and sequence.

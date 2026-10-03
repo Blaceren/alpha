@@ -34,6 +34,8 @@ export type ReviewStageId = "v1" | "feedback" | "v2" | "accepted";
 export type ReviewStage = {
   readonly id: ReviewStageId;
   readonly title: string;
+  /** One word for the stepper a narrow screen shows above the window. */
+  readonly short: string;
   readonly note: string;
 };
 
@@ -41,21 +43,25 @@ export const REVIEW_STAGES: ReadonlyArray<ReviewStage> = [
   {
     id: "v1",
     title: "Работа отправлена",
+    short: "Отправлена",
     note: "Учащийся фиксирует решение и его основание в отчёте уровня.",
   },
   {
     id: "feedback",
     title: "Получен разбор",
+    short: "Разбор",
     note: "Проверяющий возвращает работу по конкретному критерию рубрики.",
   },
   {
     id: "v2",
     title: "Замечание исправлено",
+    short: "Исправлено",
     note: "Меняется то же самое место — основание решения, а не оформление.",
   },
   {
     id: "accepted",
     title: "Работа принята",
+    short: "Принята",
     note: "Принятие подтверждает выполненную работу — не результат сделок.",
   },
 ];

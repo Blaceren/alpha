@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import {
   DECISION_FIELD,
   DECISION_STRONG,
@@ -142,6 +142,44 @@ export function ReviewWindow() {
 
   return (
     <div className="review">
+      {/* ON A NARROW SCREEN THE STATES ARE A STEPPER ABOVE THE WINDOW
+          (2026-10-03, the owner from a phone: «не понятно что переключается и
+          зачем переключатели занимают весь экран»). The four cards stacked to
+          a screen and more, and the window they switched was out of sight above
+          them. Here the four states are numbered, joined by the rail and lit
+          as far as the state on show, right above what they switch, with that
+          state's note under them. CSS shows the stepper or the strip of cards,
+          never both. */}
+      <div className="review__stepper">
+        <ol className="rstepper" aria-label="Этапы проверки работы" style={{ "--rs-at": at } as CSSProperties}>
+          {REVIEW_STAGES.map((item, index) => (
+            <li
+              key={item.id}
+              className={`rstepper__step${item.id === stage ? " is-active" : ""}${index <= at ? " is-reached" : ""}`}
+            >
+              <button
+                type="button"
+                className="rstepper__button"
+                aria-pressed={item.id === stage}
+                aria-controls="review-window"
+                aria-label={`${String(index + 1).padStart(2, "0")} · ${item.title}`}
+                onClick={() => choose(item.id)}
+              >
+                <span className="rstepper__num pw-mono" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="rstepper__label" aria-hidden="true">
+                  {item.short}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <p className="rstepper__note">
+          <strong>{REVIEW_STAGES[at]!.title}.</strong> {REVIEW_STAGES[at]!.note}
+        </p>
+      </div>
+
       <div className="pw pw--review" id="review-window" ref={windowRef} data-stage={stage} aria-label={`Окно продукта: отчёт уровня 3, ${REVIEW_STAGES[at]!.title.toLowerCase()}`}>
         <div className="pw__bar">
           {/* eslint-disable-next-line @next/next/no-img-element */}
