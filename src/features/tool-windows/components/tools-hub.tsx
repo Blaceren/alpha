@@ -14,7 +14,8 @@ import type { ToolWindowView } from "@/features/tool-windows/model/access";
 export function ToolsHub({ tools }: { tools: readonly ToolWindowView[] }) {
   const openCount = tools.filter((view) => view.state === "open").length;
   return (
-    <div className="twh">
+    // `tw-hifi`: the product hi-fi layer (DD-338) over the tools stylesheet.
+    <div className="twh tw-hifi">
       <div className="tw-head">
         <h1 className="tw-title">Инструменты</h1>
         <span className="tw-count">{`Открыто ${openCount} из ${tools.length}`}</span>

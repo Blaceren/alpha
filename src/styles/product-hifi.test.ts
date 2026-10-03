@@ -45,12 +45,36 @@ function rules(css: string): Array<[string, string]> {
   return out;
 }
 
+/** A selector list split on its top-level commas only — `:is(a, b)` stays whole. */
+function selectors(prelude: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let buf = "";
+  for (const ch of prelude) {
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  parts.push(buf);
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
 const LAYERS: Array<{ file: string; scopes: string[] }> = [
   { file: "src/features/auth-home-fidelity/home-hifi.css", scopes: [".hm"] },
   { file: "src/features/path-fidelity/path-hifi.css", scopes: [".pth.pth--hifi"] },
   { file: "src/features/lessons-fidelity/lessons-hifi.css", scopes: [".lsn.lsn--hifi"] },
   { file: "src/features/notifications-fidelity/notifications-hifi.css", scopes: [".nt.nt--hifi"] },
   { file: "src/features/profile-fidelity/profile-hifi.css", scopes: [".pf.pf--hifi", ".pp-support"] },
+  { file: "src/features/tool-windows/tools-hifi.css", scopes: [":is(.twh, .twp).tw-hifi"] },
+  { file: "src/features/level-detail-fidelity/level-hifi.css", scopes: [".ax.ld.ld--hifi", ".ld.ld--hifi"] },
+  { file: "src/features/reader-fidelity/reader-hifi.css", scopes: [".rdr.rdr--hifi"] },
+  { file: "src/features/workspace-fidelity/workspace-hifi.css", scopes: [".wsp.wsp--hifi"] },
+  { file: "src/styles/states-hifi.css", scopes: ["html .ax", ".ax", ".ax-page"] },
 ];
 
 describe("the shared values", () => {
@@ -121,7 +145,7 @@ describe.each(LAYERS)("$file", ({ file, scopes }) => {
   it("lets no selector escape its page", () => {
     const escapees: string[] = [];
     for (const [prelude] of all) {
-      for (const part of prelude.split(",").map((p) => p.trim()).filter(Boolean)) {
+      for (const part of selectors(prelude)) {
         if (!scopes.some((scope) => part.startsWith(scope))) escapees.push(part);
       }
     }
@@ -130,14 +154,14 @@ describe.each(LAYERS)("$file", ({ file, scopes }) => {
 
   it("uses the canonical edges only", () => {
     const widths = [...bare(css).matchAll(/\((min|max)-width:\s*(\d+)px\)/g)].map((m) => `${m[1]}-${m[2]}`);
-    for (const w of widths) expect(["max-599", "max-899", "min-900", "max-1199", "min-1200"], w).toContain(w);
+    for (const w of widths) expect(["max-599", "min-600", "max-899", "min-900", "max-1199", "min-1200"], w).toContain(w);
   });
 
   it("sets the display face on titles and statements only — never on text, controls or numbers", () => {
     const display = all.filter(([, body]) => body.includes("var(--hf-display)"));
     expect(display.length, "the layer speaks in the display face somewhere").toBeGreaterThan(0);
     for (const [prelude] of display) {
-      expect(prelude, prelude).toMatch(/h1|h2|title|name|greeting|consequence/);
+      expect(prelude, prelude).toMatch(/h1|h2|title|heading|name|greeting|consequence/);
       expect(prelude, prelude).not.toMatch(/button|input|textarea|select|\.p-row__value|dd\b|count|code|time|fact/);
     }
   });
@@ -149,9 +173,18 @@ describe("each screen mounts its layer", () => {
     ["src/features/lessons-fidelity/lessons-fidelity-screen.tsx", 'className="lsn lsn--hifi"', "@/features/lessons-fidelity/lessons-hifi.css"],
     ["src/features/notifications-fidelity/notifications-fidelity.tsx", 'className="nt nt--hifi"', "@/features/notifications-fidelity/notifications-hifi.css"],
     ["src/features/profile-fidelity/profile-fidelity.tsx", 'className="pf pf--hifi"', "@/features/profile-fidelity/profile-hifi.css"],
+    ["src/features/reader-fidelity/reader-fidelity-screen.tsx", "", "@/features/reader-fidelity/reader-hifi.css"],
+    ["src/features/reader-fidelity/reader-body.tsx", 'className="rdr rdr--hifi"', ""],
+    ["src/features/workspace-fidelity/workspace-fidelity-screen.tsx", 'className="wsp wsp--hifi"', "@/features/workspace-fidelity/workspace-hifi.css"],
+    ["src/features/tool-windows/components/tool-page.tsx", 'className="twp tw-hifi"', ""],
+    ["src/features/tool-windows/components/tools-hub.tsx", 'className="twh tw-hifi"', ""],
+    ["src/app/(app)/tools/page.tsx", "", "@/features/tool-windows/tools-hifi.css"],
+    ["src/app/(app)/tools/[slug]/page.tsx", "", "@/features/tool-windows/tools-hifi.css"],
+    ["src/app/(app)/layout.tsx", "", "@/styles/states-hifi.css"],
+    ["src/app/not-found.tsx", 'className="ax-page"', "@/styles/states-hifi.css"],
   ])("%s", (file, root, stylesheet) => {
     const src = read(file);
-    expect(src).toContain(root);
-    expect(src).toContain(`import "${stylesheet}";`);
+    if (root) expect(src).toContain(root);
+    if (stylesheet) expect(src).toContain(`import "${stylesheet}";`);
   });
 });

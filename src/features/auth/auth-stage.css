@@ -12,8 +12,9 @@
  */
 
 .auth {
-  /* Ink, the same ground the Academy and Public Home stand on. */
-  background: var(--background-base);
+  /* Ink, the same ground the Academy and Public Home stand on — since the
+     product hi-fi (DD-338) with the corner light every signed-in page has. */
+  background: var(--hf-light), var(--background-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
   min-height: 100dvh;
@@ -39,7 +40,8 @@
   /* Derived from the ground's own ink rather than copied as a literal, so the
      grid cannot drift away from the text it sits behind. */
   --auth-frame-grid: color-mix(in srgb, var(--text-primary) 3%, transparent);
-  --auth-frame-radius: 14px;
+  /* The product's surface radius (DD-338), as on every signed-in page. */
+  --auth-frame-radius: var(--hf-radius-surface);
 }
 
 .auth__stage {
@@ -579,10 +581,11 @@
 .auth .register-submit {
   box-sizing: border-box;
   width: 100%;
-  min-height: 48px;
+  min-height: 52px;
   padding: 13px 20px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  /* Public Home's pill (DD-338). */
+  border-radius: var(--hf-radius-pill);
   background: var(--signal-active);
   color: var(--background-base);
   font-family: var(--font-ui);

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import "@/features/home/home.css";
+// The product hi-fi for error and empty states (DD-338), once for the group.
+import "@/styles/states-hifi.css";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer } from "@/server/auth/server-session";
 import { SessionProvider } from "@/features/auth/session-provider";

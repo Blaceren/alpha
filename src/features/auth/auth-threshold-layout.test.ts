@@ -233,7 +233,8 @@ describe("the floors the compact step is not allowed to lower", () => {
   const floors: [string, string][] = [
     [".auth__mark {", "min-height: 44px"],                                   // the brand link
     [".auth .login-field input,\n.auth .register-field input {", "min-height: 48px"],
-    [".auth .login-submit,\n.auth .register-submit {", "min-height: 48px"],
+    // 52px since the product hi-fi made it Public Home's pill (DD-338).
+    [".auth .login-submit,\n.auth .register-submit {", "min-height: 52px"],
     [".auth .register-alt__link,\n.auth .login-alt__link {", "min-height: 44px"],
   ];
   it.each(floors)("%s keeps %s", (selector, floor) => {
@@ -265,7 +266,8 @@ describe("the frame's material has one place of authority", () => {
       ["--auth-frame-line", "var(--divider)"],
       ["--auth-frame-ground", "var(--surface-subtle)"],
       ["--auth-frame-bracket", "var(--signal-active)"],
-      ["--auth-frame-radius", "14px"],
+      /* The product hi-fi (DD-338) gave every surface one radius. */
+      ["--auth-frame-radius", "var(--hf-radius-surface)"],
     ] as const) {
       expect(auth, `${name} must be declared on .auth`).toContain(`${name}: ${source}`);
     }

@@ -23,7 +23,8 @@ export function ToolPage({
   children: ReactNode;
 }) {
   return (
-    <div className="twp">
+    // `tw-hifi`: the product hi-fi layer (DD-338) over the tools stylesheet.
+    <div className="twp tw-hifi">
       <Link className="twp-back" href="/tools">
         <ArrowLeft aria-hidden="true" size={15} strokeWidth={2} />
         Все инструменты

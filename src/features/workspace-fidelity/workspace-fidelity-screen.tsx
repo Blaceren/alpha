@@ -11,6 +11,7 @@ import { MentorFeedbackPanel } from "@/features/mentor-review/mentor-feedback";
 import { readLevelMentorFeedback } from "@/server/learner-ops/server-read";
 import { WS_COPY, decisionOf, ownerOf, whereLineOf } from "@/features/workspace-fidelity/workspace-state";
 import "@/features/workspace-fidelity/workspace-fidelity.css";
+import "@/features/workspace-fidelity/workspace-hifi.css";
 import "@/features/workspace-fidelity/workspace-form-fidelity.css";
 
 const REPORT_LOCALE = "ru";
@@ -124,7 +125,8 @@ export async function WorkspaceFidelityScreen({ levelCode }: { levelCode: string
 
   return (
     <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
-      <div className="wsp">
+      {/* `wsp--hifi`: the product hi-fi layer (DD-338) over the frozen workspace. */}
+      <div className="wsp wsp--hifi">
         <div className="ws" data-decision={decision}>
           <header className="ws-id">
             <p className="ws-id__coord">
@@ -233,7 +235,7 @@ function PageMessage({
   levelHref?: string;
 }) {
   return (
-    <div className="wsp">
+    <div className="wsp wsp--hifi">
       <div className="ws" data-decision="none">
         <div className="ws-page-msg">
           <p className="ws-page-msg__title">{title}</p>

@@ -481,6 +481,20 @@ describe("the authenticated route group", () => {
   "src/features/path-fidelity/path-hifi.css",
   "src/styles/globals.css",
   "src/styles/tokens.css",
+  /* THE PRODUCT HI-FI, PART 2 (DD-338): a hi-fi layer over the tools' hub and
+     windows, the reader and the workspace, each mounted by its own page or
+     screen; the error and empty states and the top-level 404 in the product's
+     language, the states' layer loaded once for the signed-in group by its
+     layout. Not a loading boundary. */
+  "src/app/(app)/layout.tsx",
+  "src/app/not-found.tsx",
+  "src/features/reader-fidelity/reader-body.tsx",
+  "src/features/reader-fidelity/reader-fidelity-screen.tsx",
+  "src/features/reader-fidelity/reader-hifi.css",
+  "src/features/reader-fidelity/reader-unavailable.tsx",
+  "src/features/tool-windows/tools-hifi.css",
+  "src/features/workspace-fidelity/workspace-hifi.css",
+  "src/styles/states-hifi.css",
 ];
 
   it("has brought no loading boundary back since the release", () => {

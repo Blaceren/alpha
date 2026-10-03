@@ -8,6 +8,7 @@ import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer, shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import "@/features/tool-windows/tool-windows.css";
+import "@/features/tool-windows/tools-hifi.css";
 
 export const metadata: Metadata = {
   title: "Инструменты — Alfa Trade Academy",

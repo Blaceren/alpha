@@ -20,7 +20,7 @@
 .ax.ld.ld--hifi {
   /* The stage may be as wide as the page; the first screen decides how wide
      it is allowed to be, so the title, the picture and its bar fit together. */
-  --ld-stage-fit: calc((100svh - 410px) * 16 / 9);
+  --ld-stage-fit: calc((100svh - 430px) * 16 / 9);
 }
 
 /* -------------------------------------------------------------- the title -- */
@@ -31,11 +31,12 @@
   text-align: center;
 }
 
+/* PRODUCT HI-FI (DD-338): the lesson's name is the page's statement, in the
+   display face Public Home speaks in. */
 .ld.ld--hifi .ax-lvlhead__title {
   margin: 10px auto 14px;
-  font-size: clamp(28px, 3.1vw, 42px);
-  line-height: 1.12;
-  letter-spacing: -0.015em;
+  font: 400 clamp(32px, 3.4vw, 50px) / 1.04 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
   text-wrap: balance;
 }
 
@@ -279,7 +280,8 @@
   padding: 10px 14px;
   min-height: 48px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  /* the product's control radius, as the report's choices */
+  border-radius: var(--hf-radius-control);
   transition:
     border-color var(--motion-fast) var(--ease-standard),
     background var(--motion-fast) var(--ease-standard);
@@ -355,9 +357,6 @@
 
 .ld.ld--hifi .asmt__btn--primary {
   margin-top: 22px;
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 8px;
 }
 
 /* The other tasks drop their own card the same way: one sheet per page. */
@@ -367,6 +366,152 @@
   background: var(--background-field);
   border: var(--ld-rule);
   border-radius: 8px;
+}
+
+/* ----------------------------------------------------- the product hi-fi -- */
+
+/* The test names itself in the display face; the page's section labels stay
+   Public Home's mono eyebrows — they are labels, not statements. */
+.ld.ld--hifi .asmt__heading {
+  font: 400 clamp(26px, 2.2vw, 32px) / 1.1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+.ld.ld--hifi .ax-lvlsec > h2 {
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+/* The stage takes the product's window radius; the docked player keeps its own. */
+.ld.ld--hifi .ld-stage .avp:not(.avp--docked) {
+  --avp-radius: var(--hf-radius-window);
+  --avp-radius-inner: 10px;
+}
+
+/* Every lit action on the level page is Public Home's pill: start, open the
+   material, the test's send, go on, the completion's way forward. */
+.ld.ld--hifi .lvl-start__action,
+.ld.ld--hifi .cur-content__open,
+.ld.ld--hifi .asmt__btn,
+.ld.ld--hifi .asmt__next,
+.ld.ld--hifi .ax-done__cta {
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+  font-weight: 700;
+  transition:
+    background-color 180ms var(--hf-ease),
+    transform 180ms var(--hf-ease);
+}
+
+.ld.ld--hifi .lvl-start__action:hover,
+.ld.ld--hifi .cur-content__open:hover,
+.ld.ld--hifi .asmt__next:hover,
+.ld.ld--hifi .ax-done__cta:hover {
+  transform: translateY(-2px);
+}
+
+/* The other tasks' cards take the product's surface: rounded, lit from a corner. */
+.ld.ld--hifi .lvl-manual,
+.ld.ld--hifi .pocket-reg {
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-window);
+}
+
+/* The report (level 9) is the same kind of task and takes the same window. It
+   names itself in the display face, as the test does; its fields and choices
+   take the product's control radius; its actions — «Сдать отчёт», «Сохранить
+   черновик», a refusal record, the way on after acceptance — are pills. */
+.ld.ld--hifi .rpt {
+  padding: 28px 30px 30px;
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-window);
+}
+
+.ld.ld--hifi .rpt__heading {
+  margin: 0 0 12px;
+  font: 400 var(--hf-title-md) / 1.12 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+.ld.ld--hifi :is(.rf__input, .rf__textarea, .rf__option) {
+  border-radius: var(--hf-radius-control);
+}
+
+.ld.ld--hifi .rpt__btn,
+.ld.ld--hifi .rpt__next {
+  min-height: 48px;
+  padding: 12px 22px;
+  border-radius: var(--hf-radius-pill);
+}
+
+/* The practice (levels 13–14) and the registration (level 3) are the same kind
+   of task: their names in the display face, their actions as pills. */
+.ld.ld--hifi .lvl-manual__title,
+.ld.ld--hifi .pocket-reg__title {
+  margin: 0 0 10px;
+  font: 400 var(--hf-title-md) / 1.12 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+.ld.ld--hifi .lvl-manual__action,
+.ld.ld--hifi .pocket-reg__action,
+.ld.ld--hifi .pocket-reg__recheck {
+  min-height: 48px;
+  padding: 12px 22px;
+  border-radius: var(--hf-radius-pill);
+}
+
+/* The tool a level releases opens from a quiet pill. */
+.ld.ld--hifi .ld-unlock__open {
+  min-height: 44px;
+  padding: 10px 20px;
+  border-color: rgba(243, 244, 239, 0.18);
+  border-radius: var(--hf-radius-pill);
+  background: rgba(243, 244, 239, 0.035);
+}
+
+.ld.ld--hifi .ld-unlock__open:hover {
+  border-color: rgba(243, 244, 239, 0.32);
+  background: rgba(243, 244, 239, 0.09);
+}
+
+/* The completion moment keeps its intent — the surface settles, one quiet
+   Signal mark says «behind you», the only lit thing left is the way forward —
+   in the product's geometry: a settled window (no corner light: the task is
+   done), the mark moved from a 2px edge, which a rounded window would bend, to
+   the kicker's dot, the level's name in the display face. */
+.ld.ld--hifi .ax-done {
+  padding: 26px 28px 28px;
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-window);
+  background: var(--hf-surface);
+}
+
+.ld.ld--hifi .ax-done__kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+.ld.ld--hifi .ax-done__kicker::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal-active);
+}
+
+.ld.ld--hifi .ax-done__title {
+  font: 400 var(--hf-title-md) / 1.12 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
 }
 
 /* --------------------------------------------------------------- narrower -- */
@@ -412,6 +557,10 @@
 
   .ld.ld--hifi .asmt__option {
     padding: 10px 12px;
+  }
+
+  .ld.ld--hifi .rpt {
+    padding: 22px 18px 24px;
   }
 }
 

@@ -11,6 +11,7 @@ import { ReaderBody } from "@/features/reader-fidelity/reader-body";
 import { ReaderUnavailable } from "@/features/reader-fidelity/reader-unavailable";
 import { AVAILABILITY, availabilityOf, boundaryOf } from "@/features/reader-fidelity/reader-state";
 import "@/features/reader-fidelity/reader-fidelity.css";
+import "@/features/reader-fidelity/reader-hifi.css";
 
 export const metadata: Metadata = {
   title: "Материал урока — Alfa Trade Academy",

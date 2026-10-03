@@ -1,0 +1,168 @@
+/*
+ * TOOLS, HI-FI — the product hi-fi, part 2 (DD-338, owner 2026-10-03: «хай фай
+ * всего»).
+ *
+ * The hub and the six tool windows keep everything they do — the catalogue and
+ * its verdict, every field, every check, every record — and speak Public
+ * Home's language on the product's ink:
+ *
+ *   the tool's name and «Инструменты» in the display face;
+ *   the level and the count as mono eyebrows;
+ *   the working territory as a rounded surface lit from its corner;
+ *   the way back and every action as pills; fields and inner panels at the
+ *     product's control radius (12px) instead of 8.
+ *
+ * The tools stylesheet is mobile-first and its selectors are not prefixed, so
+ * every rule here is `:is(.twh, .twp).tw-hifi …` — two classes over theirs —
+ * and wins by specificity, never by order. Canonical edges only (600, 900).
+ */
+
+:is(.twh, .twp).tw-hifi {
+  --tw-radius: var(--hf-radius-control);
+  padding-top: 24px;
+}
+
+/* --------------------------------------------------------------- the head -- */
+
+:is(.twh, .twp).tw-hifi .tw-head {
+  align-items: flex-end;
+  gap: 8px 32px;
+}
+
+:is(.twh, .twp).tw-hifi .tw-title {
+  font: 400 40px / 1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+:is(.twh, .twp).tw-hifi .tw-count {
+  padding-bottom: 6px;
+  color: var(--tw-text-2);
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+:is(.twh, .twp).tw-hifi .tw-orient {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* The way back: Public Home's quiet pill. */
+:is(.twh, .twp).tw-hifi .twp-back {
+  /* 44px at every width: a pill is pressed with a thumb as often as a cursor. */
+  min-height: 44px;
+  margin-bottom: 24px;
+  padding: 8px 18px 8px 14px;
+  border-color: rgba(243, 244, 239, 0.18);
+  border-radius: var(--hf-radius-pill);
+  background: rgba(243, 244, 239, 0.035);
+}
+
+:is(.twh, .twp).tw-hifi .twp-back:hover {
+  border-color: rgba(243, 244, 239, 0.32);
+  background: rgba(243, 244, 239, 0.09);
+}
+
+/* ------------------------------------------------------- the territory -- */
+
+:is(.twh, .twp).tw-hifi .tw-territory {
+  margin-top: 26px;
+  padding: 24px 18px 24px;
+  background: var(--hf-light), var(--tw-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+:is(.twh, .twp).tw-hifi .tw-territory::before {
+  left: 18px;
+  width: 34px;
+}
+
+/* ----------------------------------------------------------- the actions -- */
+
+:is(.twh, .twp).tw-hifi .tw-button {
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+  font-weight: 700;
+  transition:
+    background-color 180ms var(--hf-ease),
+    border-color 180ms var(--hf-ease),
+    color 180ms var(--hf-ease),
+    transform 180ms var(--hf-ease);
+}
+
+:is(.twh, .twp).tw-hifi .tw-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* A segmented choice is a pill of pills, and each choice is a 44px target at
+   every width — a tablet is touched, not clicked. */
+:is(.twh, .twp).tw-hifi .tc-segmented {
+  min-height: 48px;
+  padding: 2px;
+  border-radius: var(--hf-radius-pill);
+}
+
+:is(.twh, .twp).tw-hifi .tc-segmented__option {
+  min-height: 44px;
+  border-radius: var(--hf-radius-pill);
+}
+
+/* Fields stand as tall as the pills beside them (48px), so a field's own
+   button — the time picker's — keeps a 44px target inside it. */
+:is(.twh, .twp).tw-hifi :is(.tc-input, .tc-select, .tp-input) {
+  min-height: 48px;
+}
+
+/* The hub's rows: a soft rounded hover on the territory. */
+:is(.twh, .twp).tw-hifi .twh-row__title {
+  font-size: 16px;
+}
+
+/* --------------------------------------------------------------- wider -- */
+
+@media (min-width: 600px) {
+  :is(.twh, .twp).tw-hifi .tw-territory {
+    padding: 30px 30px 30px;
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-territory::before {
+    left: 30px;
+  }
+}
+
+@media (min-width: 900px) {
+  :is(.twh, .twp).tw-hifi {
+    padding-top: 48px;
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-title {
+    font-size: var(--hf-title-xl);
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-orient {
+    margin-top: 18px;
+    font-size: 17px;
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-territory {
+    margin-top: 34px;
+    padding: 36px 40px 36px;
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-territory::before {
+    left: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.twh, .twp).tw-hifi .tw-button {
+    transition: none;
+  }
+
+  :is(.twh, .twp).tw-hifi .tw-button:hover:not(:disabled) {
+    transform: none;
+  }
+}

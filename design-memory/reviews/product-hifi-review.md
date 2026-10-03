@@ -94,3 +94,79 @@ decorative market elements PASS.
 Critical and major findings of part 1 fixed. Part 2 — Tools, the lesson page, sign-in and registration,
 error pages — follows in the next release. Not checked under a learner on PREPROD: sign-in there is
 CAPTCHA-gated.
+
+---
+
+# PART 2 — Tools, the lesson page and its tasks, the material, the workspace, auth, states
+
+- **Released Academy before part 2:** `c85513b` (part 1). Same system, same tokens (`--hf-*`), one new
+  layer per surface: `tools-hifi.css`, `reader-hifi.css`, `workspace-hifi.css`, `states-hifi.css`, plus
+  additions to `level-hifi.css` and `auth-stage.css`. The Backend does not change.
+- **Captures before:** `before/tools-*.png`, `before/tool-*.png`, `before/lesson-l04-*.png`,
+  `before/login-*.png`, `before/register-*.png`. **After:** `part2/` (1440, 1024, 768, 390).
+
+## Findings (part 2)
+
+| # | where | problem | severity | status |
+|---|---|---|---|---|
+| 1 | Tools — the hub and six windows | still the old product: 32px Manrope titles, a square territory, 8px controls | critical (the owner's ask) | fixed — display titles, the lit 24px territory, pills, 12px fields, the way back as Public Home's quiet pill |
+| 2 | the lesson page | the title, the test, the report, the practice and the registration in the old geometry: Manrope headings, 8px cards and buttons | major | fixed — the title and every task's name in the display face, each task a lit 16px window, every action a pill, fields and choices at 12px |
+| 3 | the workspace, level 9 (pre-existing, found in this pass) | the report kept its panel colour after the adaptation layer took its inset: the heading and the criteria ran into the panel's edges | major | fixed — the report is the page's lit surface (24px), inset 36/40 |
+| 4 | the workspace (pre-existing) | «Сделка 1заполнено 0 из 10»: the floated legend lost the head's row | major | fixed — the row restored, the count as a mono eyebrow at the far end |
+| 5 | the material, 13 levels, live on PREPROD (pre-existing) | «Чему учит материал» printed the same sentence twice: v5 fills the objective and its extension with one text | major | fixed — the extension is shown only when it adds something (test added) |
+| 6 | error and «not found» states | the retired navy and teal of the first prototype | major | fixed — one lit surface, the statement in the display face, Signal and quiet pills |
+| 7 | measured, not judged | targets under 44px: «Все инструменты» 40, segmented choices 36, the time toggle 41, reader links 28/35/42, workspace exits 21, «Перейти к следующему уровню» 22, «Ваш отчёт» 24 | major | fixed — 44–48px |
+| 8 | the lesson page, 1440 (found in QA) | with the display title the stage's control bar ended at 902 of 900 | major | fixed — the stage fit reserves 430px; the bar ends at 882 |
+| 9 | «Уровень завершён» | its quiet 2px Signal edge would bend on a rounded window (the accent-rail cliché) | minor | fixed — the same quiet mark as the kicker's dot; the window settles (no corner light) |
+| 10 | sign-in, registration | the frame and the submit in their own radii; the ground without the corner light | minor | fixed — the surface radius, a 52px pill submit, the shell's lit ground |
+| 11 | the lesson page | the released tool's «Открыть» a square outline | minor | fixed — a quiet pill |
+
+## Measured, not judged (part 2)
+
+- **Signed-in pages:** the tools hub and all six windows (four open, two locked), the lesson page with
+  a test (level 5), the report (level 9, open and accepted), the practice (level 13), the registration
+  (level 3), the material, the workspace (the report open, accepted, and a level that needs none), a
+  level that does not exist — 16 pages at 1440, 1024, 768, 390, 360 and 320: **96 of 96** with no
+  sideways scroll, no link, button or disclosure under 44px (the frozen workspace links reach 44px by
+  their own `::after` hit area, counted as such), no overlaps, no page or console errors.
+- **Without a session:** `/login`, `/register`, `/forgot-password` and an unknown address at the same six
+  widths — no overflow, no small targets.
+- **Contrast** (lowest per role): the hub's row descriptions 6.8:1, the state message 8.1:1, the lesson
+  facts 8.5:1, eyebrows 11.4:1, titles 16.1:1 and up.
+- **The lesson stage** still fits the first screen under the floating bar and the display title: control
+  bar bottom 882 of 900 (1440), 706 of 768 (1024), 729 of 1024 (768), 566 of 844 (390).
+- **E2E on a fresh stand database:** the lesson walk (a test, the report with its refusal records, the
+  tool it releases) 35 of 35; Home, Profile and support 25 of 25; the tools (a choice, the time picker,
+  a journal entry, the risk sum, checklist ticks; no console errors) 12 of 12 at 1440 and 390.
+
+## Anti-generic score — part 2 (tools, the lesson page, the workspace)
+
+Frames: `part2/tools-d.png`, `part2/tool-trade-card-d.png`, `part2/lesson-l09-d.png`,
+`part2/ws-l09-form-d.png`, `part2/tools-m.png`, `part2/lesson-m.png`.
+
+| Criterion | Score |
+|---|---|
+| Connection to ATA DNA: Public Home's statements, lit surfaces and pills now on every working page; Signal kept for the one way forward and the current state | 18/20 |
+| Structural originality: one lit object per page — the territory, the stage, the task — under the floating bar; inner windows only where a record needs one | 13/15 |
+| Product meaning: nothing decorative added; two defects of meaning fixed (the doubled objective, the run-together record head) | 14/15 |
+| Typography: the display face names pages, tools and tasks; body, fields, numbers stay Manrope and mono | 10/10 |
+| Signature object: the lesson stage and the lit task window; the program line stays on Home and Path | 8/10 |
+| Progression clarity: every task ends in one Signal pill; «Уровень завершён» keeps «behind you» and the one way on | 9/10 |
+| Mobile transformation: full-width pills, records re-inset for the phone, the stage edge to edge | 8/10 |
+| Usability / readability: 44px targets everywhere, no overflow from 320, contrast ≥ 6.8 on the measured roles | 9/10 |
+| **Total** | **89/100** |
+
+Automatic-fail check: ≥ 80 PASS · signature object PASS · not renameable (levels, a report of demo trades
+with refusals, Pocket registration, tools released by level) PASS · no sidebar + card grid PASS · mobile
+not a stacked desktop PASS · no low-contrast body PASS · no six identical cards PASS · not one shape
+everywhere (24px surface, 16px window, 12px control, pill) PASS · identity not on icons PASS · two
+references (01/03 the lit trace through the program; 04 the line as structure) PASS · no decorative
+market elements PASS.
+
+**Verdict: PASS (89).**
+
+## Sign-off (part 2)
+
+Critical and major findings fixed; the whole signed-in platform, sign-in and the error pages now speak
+one language. The workspace route has no link in the interface (it opens only by its address); it was
+brought along with everything and its future is a separate question for the owner.

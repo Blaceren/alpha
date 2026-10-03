@@ -46,6 +46,7 @@ import type { ChecklistState } from "@/features/tool-windows/checklist/checklist
 import type { JournalStats } from "@/features/tool-windows/stats/stats-model";
 import type { NewsCalendarState } from "@/features/tool-windows/news/news-model";
 import "@/features/tool-windows/tool-windows.css";
+import "@/features/tool-windows/tools-hifi.css";
 
 type Params = { params: Promise<{ slug: string }> };
 
