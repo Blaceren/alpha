@@ -300,7 +300,7 @@ function NewsState() {
       </div>
       <div className="pw-news__status pw-moment-2">
         <strong>Вход закрыт по вашему плану до 14:45</strong>
-        <span>Через 12 мин: USD · Базовый индекс потребительских цен, м/м.</span>
+        <span>Через 12 мин: USD · Базовый индекс потребительских цен, <span className="pw-nowrap">м/м</span>.</span>
         <small>Первое движение после публикации — только наблюдение.</small>
       </div>
       <p className="pw-news__day">Сегодня, 21 сентября · понедельник <span className="pw-mono">по плану: USD, EUR · высокая важность · 15 мин до и 15 после</span></p>
@@ -323,7 +323,7 @@ function NewsState() {
       <ol className="pw-news__events">
         <li>
           <span className="pw-mono">14:30</span><b className="pw-news__cur">USD</b>
-          <span className="pw-news__title">Базовый индекс потребительских цен, м/м <em className="pw-mono">скоро</em></span>
+          <span className="pw-news__title">Базовый индекс потребительских цен, <span className="pw-nowrap">м/м</span> <em className="pw-mono">скоро</em></span>
           <small>США · ●●● · прогноз 0,3 % · вход закрыт 14:15–14:45</small>
         </li>
         <li>

@@ -65,6 +65,15 @@ function text(container: HTMLElement): string {
   return (container.textContent ?? "").replace(/\s+/g, " ");
 }
 
+/** The words of every text node, each its own word: «20:00» in one cell and
+    «USD» in the next read as two words, not as «20:00USD». */
+function words(container: HTMLElement): string {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.textContent ?? "");
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
 describe("Public Home — architecture", () => {
   it("renders eleven responsibilities: a header and ten sections, in order", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
@@ -81,8 +90,20 @@ describe("Public Home — architecture", () => {
       expect(segment.closest("#product"), `#${id} must sit inside the route`).toBe(route);
       expect(segment.classList.contains("route__segment")).toBe(true);
     }
-    // One window for the whole route, pinned beside the three segments.
+    // One window for the whole route, pinned beside the three segments on a
+    // wide screen...
     expect(route.querySelectorAll("#route-window").length).toBe(1);
+    // ...and on a narrow one each step carries its own window, right under its
+    // words, showing that step's state (2026-10-03: the pinned window covered
+    // the route on a phone). CSS shows one or the other.
+    const steps = Array.from(route.querySelectorAll<HTMLElement>("[data-route-step]"));
+    expect(steps.length).toBeGreaterThan(0);
+    for (const step of steps) {
+      const own = step.querySelector(".rstep__window .pw");
+      expect(own, `${step.id} has no window of its own`).not.toBeNull();
+      expect(own?.getAttribute("data-state")).toBe(step.getAttribute("data-route-step"));
+      expect(own?.hasAttribute("id"), "a step's window must not repeat the pinned window's id").toBe(false);
+    }
   });
 
   it("opens on the opportunity, not on a negated category", () => {
@@ -216,7 +237,12 @@ describe("Public Home — the claim never outruns the product", () => {
     expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${tool.unlockLevel}`));
     const nodes = Array.from(tools.querySelectorAll(".rstep__node")).map((el) => el.textContent);
     expect(nodes).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
-    const copy = text(tools);
+    // The route's own words promise nothing ahead. (A window shows the
+    // product's states — the News Calendar marks a release due today «скоро» —
+    // so the windows are read apart from the copy.)
+    const copyOnly = tools.cloneNode(true) as HTMLElement;
+    copyOnly.querySelectorAll(".pw").forEach((window) => window.remove());
+    const copy = text(copyOnly);
     for (const roadmap of ["скоро", "в разработке", "появится", "планируется", "roadmap"]) {
       expect(copy.toLowerCase()).not.toContain(roadmap);
     }
@@ -259,9 +285,15 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("marks every synthetic panel as a demonstration", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    // Hero frame, decide frame, and the two product windows — one badge in
-    // each bar covers every state the window shows.
-    expect(container.querySelectorAll(".demo-badge").length).toBe(4);
+    // Hero frame, decide frame, the two product windows — one badge in each
+    // bar covers every state the window shows — and each route step's own
+    // window for a narrow screen (2026-10-03).
+    const stepWindows = container.querySelectorAll(".rstep__window .pw").length;
+    expect(stepWindows).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".demo-badge").length).toBe(4 + stepWindows);
+    for (const bar of Array.from(container.querySelectorAll(".rstep__window .pw__bar"))) {
+      expect(within(bar as HTMLElement).getAllByText(/Демонстрационный пример/).length).toBe(1);
+    }
     for (const selector of ["#top .dframe", "#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
@@ -270,10 +302,13 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("carries no learner data — the demonstration is authored, not captured", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const body = text(container);
+    const body = words(container);
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
     expect(body).not.toMatch(/\+7\s?\(?\d{3}/);
-    expect(body).not.toMatch(/\b\d+\s?(₽|\$|USD|EUR)\b/);
+    // A sum of money, not a clock: the windows show «14:32 EUR/USD OTC» and
+    // «20:00 USD» (a trade's time and its pair, a release's time and its
+    // currency), and those are not amounts.
+    expect(body).not.toMatch(/(?<!:)\b\d+\s?(₽|\$|USD|EUR)\b/);
   });
 });
 

@@ -47,6 +47,33 @@ function stepId(id: RouteStateId): string {
   return `route-step-${id}`;
 }
 
+/** The product's window showing one step's state: the pinned window on a wide
+    screen, and each step's own window on a narrow one. */
+function WindowFrame({ id, windowId }: { id: RouteStateId; windowId?: string }) {
+  const item = ROUTE_STEPS[stepIndex(id)] ?? ROUTE_STEPS[0]!;
+  const bar = item.id === "home" ? "Главная" : item.id === "path" ? "Путь" : "Инструменты";
+  return (
+    <div className="pw" id={windowId} data-state={item.id} aria-label={`Окно продукта: ${item.label}`}>
+      <div className="pw__bar">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="pw__mark" src="/brand/ata-logo.svg" alt="" width={362} height={200} />
+        <ul className="pw__nav" aria-hidden="true">
+          {["Главная", "Путь", "Уроки", "Инструменты"].map((label) => (
+            <li key={label} className={label === bar ? "is-active" : undefined}>
+              {label}
+            </li>
+          ))}
+        </ul>
+        <span className="pw__level pw-mono">Уровень {item.level}</span>
+        <span className="demo-badge pw__badge">Демонстрационный пример</span>
+      </div>
+      <div className="pw__stage" key={item.id}>
+        <RouteWindowState id={item.id} />
+      </div>
+    </div>
+  );
+}
+
 export function ProductRoute() {
   const [active, setActive] = useState<RouteStateId>(ROUTE_STEPS[0]!.id);
   const activeIndex = stepIndex(active);
@@ -56,8 +83,9 @@ export function ProductRoute() {
     const root = listRef.current;
     if (!root || !("IntersectionObserver" in window)) return;
     const steps = Array.from(root.querySelectorAll<HTMLElement>("[data-route-step]"));
-    // The band sits under the pinned window on narrow screens and around the
-    // upper third on wide ones; a step is active while it crosses the band.
+    // The band sits around the upper third on a wide screen, beside the pinned
+    // window; on a narrow one (each step with its own window) a little above
+    // the middle. A step is active while it crosses the band.
     const narrow = window.matchMedia("(max-width: 920px)").matches;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -67,7 +95,7 @@ export function ProductRoute() {
           if (id) setActive(id);
         }
       },
-      { rootMargin: narrow ? "-58% 0px -30% 0px" : "-38% 0px -52% 0px", threshold: 0 },
+      { rootMargin: narrow ? "-35% 0px -55% 0px" : "-38% 0px -52% 0px", threshold: 0 },
     );
     steps.forEach((step) => observer.observe(step));
     return () => observer.disconnect();
@@ -132,13 +160,18 @@ export function ProductRoute() {
           </button>
         </h3>
         <p className="rstep__copy">{item.copy}</p>
+        {/* On a narrow screen each step shows its own state right under its
+            words (2026-10-03, the owner: the pinned window covered the route
+            on a phone). The shared window below serves wide screens only;
+            CSS shows one or the other, never both. */}
+        <div className="rstep__window">
+          <WindowFrame id={item.id} />
+        </div>
       </li>
     );
   };
 
   const current = ROUTE_STEPS[activeIndex] ?? ROUTE_STEPS[0]!;
-  const bar =
-    current.id === "home" ? "Главная" : current.id === "path" ? "Путь" : "Инструменты";
 
   return (
     <section className="route surface surface--ink" id="product">
@@ -227,29 +260,7 @@ export function ProductRoute() {
 
         {/* --------------------------------------------------- the window */}
         <div className="route__window">
-          <div
-            className="pw"
-            id="route-window"
-            data-state={active}
-            aria-label={`Окно продукта: ${current.label}`}
-          >
-            <div className="pw__bar">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="pw__mark" src="/brand/ata-logo.svg" alt="" width={362} height={200} />
-              <ul className="pw__nav" aria-hidden="true">
-                {["Главная", "Путь", "Уроки", "Инструменты"].map((item) => (
-                  <li key={item} className={item === bar ? "is-active" : undefined}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <span className="pw__level pw-mono">Уровень {current.level}</span>
-              <span className="demo-badge pw__badge">Демонстрационный пример</span>
-            </div>
-            <div className="pw__stage" key={active}>
-              <RouteWindowState id={active} />
-            </div>
-          </div>
+          <WindowFrame id={current.id} windowId="route-window" />
         </div>
       </div>
     </section>

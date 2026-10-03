@@ -96,3 +96,25 @@ On the production build of this change, on a fresh stand database:
 
 Every critical and major finding is fixed and re-measured. Not checked under a learner on PREPROD (sign-in
 there is CAPTCHA-gated); every signed-in page was measured on the stand with the build that ships.
+
+---
+
+# ROUND 2 — the owner's phone screenshots (DD-340)
+
+The owner sent two screenshots of Public Home from a phone: in the route the pinned product window
+covered the steps' words as they scrolled under it, and above and around the floating header the page
+showed through. «Похожие ситуации так же поищи и исправь».
+
+| # | where | problem | status |
+|---|---|---|---|
+| 1 | Public Home route, ≤920px | the pinned window covered the words of every step passing under it | fixed — each step carries its own window under its words; the pinned window serves 921px and up only |
+| 2 | Public Home header, ≤1040px | the page showed above the floating pill and at its corners | fixed — once scrolled, the gutter around the pill is the page's own ground |
+| 3 | the product's bottom bar, ≤899px (the similar case) | the page showed below the floating bar and at its corners | fixed — the bar sits on a band of the page's ground |
+| 4 | the News Calendar window at 320 | a release's title column narrower than «потребительских» | fixed — the row reads in two lines in a narrow window |
+| 5 | the News Calendar window | «м/м» broke after its slash | fixed — kept on one line |
+
+Measured: the gaps around the bars pixel-sampled at 38 scroll positions (Public Home at 320–1024 and the
+sideways phone; Path, Trade Card and the report lesson on phones) — 38 of 38 show only the band (the live
+site before: 1 of 28); the route at ≤920 shows 8 of 8 step windows and no pinned window, at ≥921 the
+pinned window as before; the Public Home sweep at 25 sizes clean of overflow, cuts, overlaps and small
+targets.

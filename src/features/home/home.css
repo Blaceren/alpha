@@ -225,6 +225,12 @@ a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
   background: color-mix(in srgb, var(--background-base) 86%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); }
+/* The bar floats on a band of the page's ground: what scrolls under it never
+   shows below the bar or at its corners (2026-10-03). The band sits just under
+   the bar and goes with it from 900px. */
+.home::after { content: ""; position: fixed; z-index: 39; inset-inline: 0; bottom: 0;
+  height: calc(var(--mobile-bottom-nav-height) + 16px + env(safe-area-inset-bottom));
+  background: var(--background-base); pointer-events: none; }
 .bottomnav ul { display: flex; justify-content: space-around; margin: 0; padding: 0 4px; list-style: none; }
 .bottomnav a, .bottomnav button { min-width: 56px; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 4px; font-size: 10.5px; color: var(--text-muted); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer;
@@ -412,6 +418,7 @@ html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-ar
   .appbar { display: flex; }
   .mtop { display: none; }
   .bottomnav { display: none; }
+  .home::after { display: none; }
   /* The floating bar stays in view (DD-338): whatever is scrolled to — an
      in-page link, a focused field — lands below it, never under it. */
   html { scroll-padding-bottom: 0; scroll-padding-top: 86px; }

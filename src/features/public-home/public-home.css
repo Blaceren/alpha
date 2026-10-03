@@ -4997,13 +4997,46 @@ html.ph-smooth-scroll {
   }
 }
 
-/* On a short phone the route's sticky window (52% of the screen) cannot hold
-   the News Calendar's list under its timeline: the first release was sliced
-   by the window's edge at 360×740 and 375×667. There the timeline, with the
-   releases on it, says it alone. */
-@media (max-width: 680px) and (max-height: 800px) {
-  .ph .pw-news__events {
+/* The route on a narrow screen (2026-10-03, the owner's screenshots from a
+   phone: «всё перекрывается»). The pinned window covered the steps' words as
+   they scrolled under it. Each step now shows its own window right under its
+   words, at its content's height, and the route reads top to bottom; the
+   pinned window is for wide screens only. */
+.ph .rstep__window {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .ph .route__window {
     display: none;
+  }
+
+  .ph .rstep__window {
+    display: block;
+    margin-top: 18px;
+  }
+
+  .ph .rstep__window .pw {
+    height: auto;
+    max-height: none;
+  }
+}
+
+/* The header on a phone and a tablet: once the page scrolls, the gutter around
+   the floating pill fills with the page's own ground, so nothing that scrolls
+   under the header shows above it or at its corners. At the top of the page
+   the pill floats over the hero as before. */
+@media (max-width: 1040px) {
+  .ph .site-header.is-compact {
+    top: 0;
+    padding: 14px 0 8px;
+    background: var(--mist-200);
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .site-header.is-compact {
+    padding: 8px 0 6px;
   }
 }
 
@@ -5021,4 +5054,27 @@ html.ph-smooth-scroll {
 
 .ph .site-footer__grid {
   font-size: 12px;
+}
+
+/* In a narrow window a release reads in two lines: its time and currency, then
+   its title and facts under them — at 320 the title's column was narrower
+   than «потребительских». */
+@container (max-width: 300px) {
+  .ph .pw-news__events li {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .ph .pw-news__events li > .pw-news__cur {
+    justify-self: start;
+  }
+
+  .ph .pw-news__title,
+  .ph .pw-news__events small {
+    grid-column: 1 / -1;
+  }
+}
+
+/* «м/м» is one unit: a line never breaks after its slash («м/ м» at 390). */
+.ph .pw-nowrap {
+  white-space: nowrap;
 }
