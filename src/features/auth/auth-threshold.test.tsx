@@ -132,9 +132,10 @@ describe("the threshold composition", () => {
     expect(src("src/styles/fonts.css")).toContain('font-family:"ATA Source Serif 4"');
     expect(css).not.toContain("@font-face");
     expect(css).not.toContain("@import");
-    // And the face stays out of the authenticated product, which is what
-    // FONT_ROLES.publicDisplay actually forbids.
-    expect(src("src/design-system/typography/typography.ts")).toContain("Public Home ONLY");
+    // The face was Public Home's alone; since 2026-10-03 (DD-338, owner: «хай
+    // фай всего») the product's statements and titles speak in it too — and
+    // still never its body text, controls or numbers.
+    expect(src("src/design-system/typography/typography.ts")).toContain("Never body text, controls or numbers");
   });
 
   // 13

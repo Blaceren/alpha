@@ -11,6 +11,7 @@ import {
   type PresenceState,
 } from "@/features/notifications-fidelity/notifications-state";
 import "@/features/notifications-fidelity/notifications-fidelity.css";
+import "@/features/notifications-fidelity/notifications-hifi.css";
 
 /**
  * NOTIFICATIONS — the frozen NotationLedger surface, on the real register.
@@ -133,7 +134,8 @@ export function NotificationsFidelity() {
   const presence: PresenceState = presenceFor(requestState, records?.length ?? 0);
 
   return (
-    <div className="nt" data-nt-root>
+    // `nt--hifi`: the product hi-fi layer (DD-338) over the frozen surface.
+    <div className="nt nt--hifi" data-nt-root>
       <div className="n-page">
         <div className="n-page__inner">
           <h1 className="n-page__title" id={PAGE_TITLE_ID}>

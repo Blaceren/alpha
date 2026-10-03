@@ -93,8 +93,8 @@ describe("the ring", () => {
   });
 
   it("keeps every stretch on the circle and inside the picture", () => {
-    for (const module of ringModel(programPosition(levelFourProgram())).modules) {
-      for (const d of [module.track, module.lit].filter((x): x is string => x !== null)) {
+    for (const stretch of ringModel(programPosition(levelFourProgram())).modules) {
+      for (const d of [stretch.track, stretch.lit].filter((x): x is string => x !== null)) {
         for (const [x, y] of ends(d)) {
           expect(onCircle(x, y)).toBeCloseTo(54, 1);
           expect(x).toBeGreaterThanOrEqual(0);

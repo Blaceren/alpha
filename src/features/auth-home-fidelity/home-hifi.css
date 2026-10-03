@@ -13,8 +13,12 @@
  *     I» and «what now» as one object;
  *   then the module the learner is in, beside their tools and «Что нового».
  *
- * SIGNAL STAYS SCARCE, as on Path: the current point, its leader, the frame's
- * corners and the one handoff. Completion is light grey, never Signal.
+ * PRODUCT HI-FI (DD-338, owner: «хай фай всего»): the page speaks Public
+ * Home's language on the product's ink — the greeting and the priority in the
+ * display face, the priority on a rounded surface lit from its corner, a pill
+ * handoff, and the walked route glowing in the route's own green, as Public
+ * Home's spine does. Full Signal stays on the current point, its leader, the
+ * frame's corners and the one handoff.
  *
  * The priority is the frozen field (auth-home-fidelity.css), restyled here
  * from outside: every rule that touches it is `.hm .ahm …`, one class more
@@ -35,10 +39,10 @@
   --hm-pt: 14px;
   --hm-pt-half: 7px;
   --hm-dot: 8px;
-  /* the line's tones — Path's own axis tones, so the two routes read alike */
-  --hm-axis-done: rgba(237, 240, 234, 0.42);
+  /* the line's tones — the route's own: walked green, ahead faint (DD-338) */
+  --hm-axis-done: var(--route-completed);
   --hm-axis-future: rgba(237, 240, 234, 0.15);
-  --hm-mark-done: #98a295;
+  --hm-mark-done: var(--route-completed);
   --hm-ring: rgba(237, 240, 234, 0.42);
   --hm-ring-faint: rgba(237, 240, 234, 0.26);
   --hm-signal-glow: rgba(199, 247, 109, 0.32);
@@ -83,27 +87,47 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 22px 48px;
-  margin: 0 0 34px;
+  gap: 24px 48px;
+  margin: 0 0 44px;
 }
 
+/* Where the learner is reads first, as an eyebrow over the greeting; the
+   greeting is the page's statement, in the display face. */
 .hm .hm-head__who {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 16px;
   min-width: 0;
   flex: 1 1 420px;
 }
 
 .hm .hm-greeting {
   margin: 0;
-  font: 650 clamp(28px, 2.6vw, 36px) / 1.12 var(--font-ui);
-  letter-spacing: -0.02em;
+  font: 400 var(--hf-title-xl) / 1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
   text-wrap: balance;
 }
 
 .hm .hm-where {
-  margin: 10px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
   color: var(--text-secondary);
-  font: 500 14px / 1.5 var(--font-ui);
+  font: 500 10.5px / 1.6 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
   text-wrap: pretty;
+}
+
+.hm .hm-where::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal-active);
+  transform: translateY(-1px);
 }
 
 .hm .hm-facts {
@@ -122,15 +146,15 @@
 
 .hm .hm-fact dt {
   color: var(--text-muted);
-  font: 500 11px / 1.3 var(--font-mono);
-  letter-spacing: 0.08em;
+  font: 500 10.5px / 1.3 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
   text-transform: uppercase;
 }
 
 .hm .hm-fact dd {
   margin: 0;
   color: var(--text-primary);
-  font: 600 20px / 1.1 var(--font-mono);
+  font: 500 24px / 1.1 var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -147,8 +171,8 @@
 
 .hm .hm-route__label {
   color: var(--text-muted);
-  font: 500 11px / 1.3 var(--font-mono);
-  letter-spacing: 0.1em;
+  font: 500 10.5px / 1.3 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
   text-transform: uppercase;
 }
 
@@ -265,6 +289,7 @@
     var(--hm-axis-done) var(--hm-lit, 0%),
     var(--hm-axis-future) var(--hm-lit, 0%)
   );
+  filter: drop-shadow(0 0 5px rgba(168, 216, 79, 0.35));
 }
 
 .hm .hm-mod[data-preparing] .hm-mod__track::before {
@@ -315,8 +340,8 @@
   height: 14px;
   background: var(--signal-active);
   box-shadow:
-    0 0 0 5px var(--glow-current),
-    0 0 24px var(--hm-signal-glow);
+    var(--hf-halo),
+    0 0 26px var(--hm-signal-glow);
 }
 
 /* The leader: from the current point down to the priority's top edge. */
@@ -356,12 +381,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   margin: var(--hm-leader-gap) 0 0;
-  padding: 30px 36px 34px;
+  padding: 36px 40px 40px;
   background:
-    radial-gradient(560px 220px at var(--hm-x, 12%) 0%, rgba(199, 247, 109, 0.06), transparent 70%),
-    var(--background-field);
-  border: 1px solid var(--divider);
-  border-radius: 10px;
+    radial-gradient(560px 240px at var(--hm-x, 12%) 0%, rgba(199, 247, 109, 0.075), transparent 70%),
+    var(--hf-light),
+    var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
 }
 
 .hm .hm-now[data-aside] {
@@ -463,8 +490,8 @@
 
 .hm .hm-now__corner {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 34px;
+  height: 34px;
   border: 0 solid var(--signal-active);
   pointer-events: none;
 }
@@ -473,14 +500,14 @@
   top: -1px;
   left: -1px;
   border-width: 2px 0 0 2px;
-  border-top-left-radius: 10px;
+  border-top-left-radius: var(--hf-radius-surface);
 }
 
 .hm .hm-now__corner--br {
   right: -1px;
   bottom: -1px;
   border-width: 0 2px 2px 0;
-  border-bottom-right-radius: 10px;
+  border-bottom-right-radius: var(--hf-radius-surface);
 }
 
 .hm .ahm .home-field {
@@ -504,6 +531,13 @@
   align-items: center;
   gap: 6px 16px;
   margin: 0 0 18px;
+}
+
+.hm .ahm .home-identity,
+.hm .ahm .home-posture {
+  font: 500 10.5px / 1.5 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
 }
 
 .hm .ahm .home-identity {
@@ -566,12 +600,13 @@
   color: var(--text-muted);
 }
 
+/* The priority is the page's h1 and its statement, in the display face. */
 .hm .ahm .home-consequence {
-  max-width: 24ch;
+  max-width: 22ch;
   padding: 0;
   border: 0;
-  font: 650 clamp(28px, 2.8vw, 40px) / 1.1 var(--font-ui);
-  letter-spacing: -0.02em;
+  font: 400 var(--hf-title-lg) / 1.04 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
   text-wrap: balance;
 }
 
@@ -583,13 +618,32 @@
 }
 
 .hm .ahm .home-resolution {
-  margin: 26px 0 0;
+  margin: 30px 0 0;
 }
 
+/* Public Home's pill: Signal, an arrow that says «go», and a lift on hover. */
 .hm .ahm .home-handoff {
-  min-height: 48px;
-  padding: 0 28px;
-  font: 650 15px / 1 var(--font-ui);
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 24px 0 28px;
+  border-radius: var(--hf-radius-pill);
+  font: 700 15px / 1 var(--font-ui);
+  transition:
+    background-color 180ms var(--hf-ease),
+    transform 180ms var(--hf-ease);
+}
+
+.hm .ahm .home-handoff::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--hf-arrow) center / contain no-repeat;
+  mask: var(--hf-arrow) center / contain no-repeat;
+}
+
+.hm .ahm .home-handoff:hover {
+  transform: translateY(-2px);
 }
 
 .hm .ahm .home-authority__key {
@@ -639,17 +693,17 @@
 
 .hm .hm-block__kicker {
   flex: 1 0 100%;
-  margin: 0;
+  margin: 0 0 4px;
   color: var(--text-muted);
-  font: 500 11px / 1.3 var(--font-mono);
-  letter-spacing: 0.08em;
+  font: 500 10.5px / 1.3 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
   text-transform: uppercase;
 }
 
 .hm .hm-block__title {
   margin: 0;
-  font: 650 19px / 1.3 var(--font-ui);
-  letter-spacing: -0.01em;
+  font: 400 var(--hf-title-md) / 1.1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
   text-wrap: balance;
 }
 
@@ -668,22 +722,37 @@
   line-height: 1.55;
 }
 
-/* The module: its levels on a spine, the one in front of the learner lit. */
+/* The module: its levels on a spine, glowing as far as the learner has walked.
+   Each row draws the stretch from its own mark to the next one, so the walked
+   part is lit row by row whatever the rows' heights. */
 .hm .hm-levels {
+  --hm-mark-x: 20px;
+  --hm-mark-y: 23px;
   position: relative;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.hm .hm-levels::before {
+.hm .hm-level {
+  position: relative;
+}
+
+.hm .hm-level:not(:last-child)::before {
   content: "";
   position: absolute;
-  top: 26px;
-  bottom: 26px;
-  left: 20px;
+  top: var(--hm-mark-y);
+  left: var(--hm-mark-x);
   width: 1px;
+  height: 100%;
   background: var(--divider);
+}
+
+.hm .hm-level--done:not(:last-child)::before {
+  width: 2px;
+  margin-left: -0.5px;
+  background: var(--hm-axis-done);
+  box-shadow: 0 0 8px rgba(168, 216, 79, 0.35);
 }
 
 .hm .hm-level__row {
@@ -714,10 +783,11 @@
   grid-area: mark;
   position: relative;
   z-index: 1;
-  align-self: center;
+  align-self: start;
   justify-self: center;
   width: 9px;
   height: 9px;
+  margin-top: 6px;
   border-radius: 50%;
 }
 
@@ -728,8 +798,9 @@
 .hm .hm-level--current .hm-level__mark {
   width: 11px;
   height: 11px;
+  margin-top: 5px;
   background: var(--signal-active);
-  box-shadow: 0 0 0 4px var(--glow-current);
+  box-shadow: 0 0 0 5px var(--glow-current), 0 0 16px var(--hm-signal-glow);
 }
 
 .hm .hm-level--ahead .hm-level__mark {
@@ -976,7 +1047,7 @@
   }
 
   .hm .hm-greeting {
-    font-size: 26px;
+    font-size: 38px;
   }
 
   .hm .hm-where {
@@ -1017,7 +1088,7 @@
   }
 
   .hm .ahm .home-consequence {
-    font-size: 26px;
+    font-size: 32px;
   }
 
   .hm .ahm .home-basis {
@@ -1039,8 +1110,8 @@
     column-gap: 10px;
   }
 
-  .hm .hm-levels::before {
-    left: 16px;
+  .hm .hm-levels {
+    --hm-mark-x: 16px;
   }
 
   .hm .hm-module__next {

@@ -24,6 +24,7 @@ import {
   moduleKicker,
 } from "@/features/path-fidelity/path-state";
 import "@/features/path-fidelity/path-fidelity.css";
+import "@/features/path-fidelity/path-hifi.css";
 
 /**
  * PATH — the frozen PuthATA composition, rendered from real progression.
@@ -168,7 +169,8 @@ export function PathFidelityView({
 
   return (
     <AppShell userName={userName} activeId="path" frozenSurface notificationPresence={<UnreadPresence />}>
-      <div className="pth" data-pth-root>
+      {/* `pth--hifi`: the product hi-fi layer (DD-338) over the frozen surface. */}
+      <div className="pth pth--hifi" data-pth-root>
         <PathRail />
 
         <section className="path-header" aria-labelledby="path-title">

@@ -464,6 +464,23 @@ describe("the authenticated route group", () => {
   "src/lib/support/support-status.ts",
   "src/server/profile/profile-read.ts",
   "src/test/program-fixture.ts",
+  /* THE PRODUCT HI-FI, PART 1 (owner, 2026-10-03: «хай фай всего» — the whole
+     platform at Public Home's level, the direction delegated, released in
+     parts; DD-338). The shared values in the token file (the display face for
+     statements and titles, rounded surfaces lit from a corner, pill controls,
+     the halo, the arrow), the display face's role widened in the typography
+     roles, the shell's bar floating as Public Home's does and its logout a
+     pill, and a hi-fi layer over Path, Lessons and Notifications, each mounted
+     by its screen. Not a loading boundary. */
+  "src/design-system/typography/typography.ts",
+  "src/features/home/home.css",
+  "src/features/lessons-fidelity/lessons-fidelity-screen.tsx",
+  "src/features/lessons-fidelity/lessons-hifi.css",
+  "src/features/notifications-fidelity/notifications-fidelity.tsx",
+  "src/features/notifications-fidelity/notifications-hifi.css",
+  "src/features/path-fidelity/path-hifi.css",
+  "src/styles/globals.css",
+  "src/styles/tokens.css",
 ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -488,6 +505,11 @@ describe("the authenticated route group", () => {
        one meant every addition had to be inserted at exactly the right line
        or the failure said only that two 54-item arrays differed. */
     expect(changed.sort()).toEqual([...AUTHORISED_VIEWER_IDENTITY].sort());
+    /* The shell's stylesheet lives in the fixture Home's folder. The product
+       hi-fi (DD-338) moved the shell — its bar floats — so that one file is
+       authorised above, and shell-polish.test.tsx governs its shell section;
+       the fixture Home itself stays frozen. */
+    const SHELL_STYLESHEET = "src/features/home/home.css";
     for (const prefix of [
       "src/features/home",
       /* Level detail is no longer frozen here: the 30-level program (owner,
@@ -538,7 +560,7 @@ describe("the authenticated route group", () => {
          looser of the two fails first, for the least informative reason. */
       "src/config/feature-visibility.ts",
     ]) {
-      expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);
+      expect(changed.filter((f) => f.startsWith(prefix) && f !== SHELL_STYLESHEET), prefix).toEqual([]);
     }
   });
 });

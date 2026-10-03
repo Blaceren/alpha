@@ -1,0 +1,290 @@
+/*
+ * PATH, HI-FI — the product hi-fi (DD-338, owner 2026-10-03: «хай фай всего»).
+ *
+ * The frozen PuthATA composition stays — the title and the counts, the
+ * module ribbon, the module's field with its level strip, the current focus
+ * hanging from its node by the stem — and speaks Public Home's language on
+ * the product's ink:
+ *
+ *   «Путь» and the module's name in the display face;
+ *   the counts and kickers as Public Home's mono eyebrows;
+ *   the module's field as a rounded surface lit from its corner;
+ *   the walked route — ribbon and strip — glowing in the route's own green;
+ *   the focus as a raised window inside it, its Decision Frame corners
+ *     following the window's radius, its action a pill with an arrow.
+ *
+ * Every rule is `.pth.pth--hifi …`, one class more specific than the frozen
+ * layer, so it wins by specificity and never by order. Canonical breakpoints
+ * only (599/600, 899/900).
+ */
+
+/* The frozen root paints its own ground; the shell's ground (with Public
+   Home's corner light) shows through instead, so no seam marks the column. */
+.pth.pth--hifi {
+  padding-top: 48px;
+  background: none;
+}
+
+/* ------------------------------------------------------------- the title -- */
+
+.pth.pth--hifi .path-header__row {
+  align-items: flex-end;
+  gap: 10px 32px;
+}
+
+.pth.pth--hifi h1 {
+  font: 400 var(--hf-title-xl) / 1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+.pth.pth--hifi .path-header__done {
+  padding-bottom: 10px;
+  color: var(--text-secondary);
+  font: 500 10.5px / 1.5 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+.pth.pth--hifi .path-header__now {
+  margin-top: 18px;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.pth.pth--hifi .path-header__module {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+/* ----------------------------------------------------------- the ribbon -- */
+
+.pth.pth--hifi .mod-nav {
+  margin-top: 34px;
+}
+
+.pth.pth--hifi .mod-seg--done::before {
+  background: var(--route-completed);
+  box-shadow: 0 0 10px rgba(168, 216, 79, 0.35);
+}
+
+.pth.pth--hifi .mod-seg--current::before {
+  box-shadow: 0 0 16px rgba(199, 247, 109, 0.45);
+}
+
+.pth.pth--hifi .mod-nav__scale span:first-child {
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------ the module field -- */
+
+.pth.pth--hifi .workspace {
+  margin-top: 30px;
+  padding: 34px 38px 32px;
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+.pth.pth--hifi .workspace__head {
+  gap: 10px 18px;
+}
+
+.pth.pth--hifi .workspace__kicker,
+.pth.pth--hifi .workspace__range {
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+.pth.pth--hifi .workspace__name {
+  font: 400 var(--hf-title-md) / 1.1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+/* The walked part of the strip glows; what is ahead stays a dashed promise. */
+.pth.pth--hifi .level-node--done::before,
+.pth.pth--hifi .level-node--current::before {
+  background: var(--route-completed);
+  box-shadow: 0 0 10px rgba(168, 216, 79, 0.3);
+}
+
+.pth.pth--hifi .level-node--current::before {
+  background: linear-gradient(to right, var(--route-completed) 0 22px, var(--axis-future) 22px);
+  box-shadow: none;
+}
+
+.pth.pth--hifi .level-node--done .level-node__mark {
+  border-color: var(--route-completed);
+  background: var(--route-completed);
+}
+
+.pth.pth--hifi .level-node--current .level-node__mark {
+  box-shadow: 0 0 0 2px var(--signal), var(--hf-halo), 0 0 24px rgba(199, 247, 109, 0.4);
+}
+
+.pth.pth--hifi .level-node--current .level-node__name {
+  font-size: 15px;
+}
+
+/* --------------------------------------------------------------- the focus -- */
+
+.pth.pth--hifi .focus {
+  padding: 30px 32px 30px;
+  background: var(--hf-surface-raised);
+  border-color: var(--hf-line-strong);
+  border-radius: var(--hf-radius-window);
+}
+
+.pth.pth--hifi .focus__leader::after {
+  background: var(--hf-surface-raised);
+}
+
+.pth.pth--hifi .frame-corner {
+  width: 30px;
+  height: 30px;
+}
+
+.pth.pth--hifi .frame-corner--tl {
+  border-top-left-radius: var(--hf-radius-window);
+}
+
+.pth.pth--hifi .frame-corner--br {
+  border-bottom-right-radius: var(--hf-radius-window);
+}
+
+.pth.pth--hifi .focus h2 {
+  font: 400 var(--hf-title-md) / 1.12 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+.pth.pth--hifi .focus__meta {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.pth.pth--hifi .focus__body p {
+  font-size: 15px;
+}
+
+.pth.pth--hifi .focus__actions {
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Public Home's pills: the one action in Signal with its arrow, the other a
+   quiet outline; both lift a little on hover. */
+.pth.pth--hifi .button {
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+  font-size: 14px;
+  transition:
+    background-color 180ms var(--hf-ease),
+    border-color 180ms var(--hf-ease),
+    transform 180ms var(--hf-ease);
+}
+
+.pth.pth--hifi .button:hover {
+  transform: translateY(-2px);
+}
+
+.pth.pth--hifi .button--primary {
+  gap: 12px;
+  padding: 0 22px 0 26px;
+}
+
+.pth.pth--hifi .button--primary::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--hf-arrow) center / contain no-repeat;
+  mask: var(--hf-arrow) center / contain no-repeat;
+}
+
+.pth.pth--hifi .button--secondary {
+  border-color: rgba(243, 244, 239, 0.18);
+  background: rgba(243, 244, 239, 0.035);
+}
+
+/* --------------------------------------------------------------- narrower -- */
+
+/* Below 900px the shell's bar is fixed to the bottom: the page ends above it. */
+@media (max-width: 899px) {
+  .pth.pth--hifi {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+}
+
+@media (max-width: 599px) {
+  .pth.pth--hifi {
+    padding-top: 24px;
+  }
+
+  /* The panning strip fades its own content at an edge with more to see,
+     instead of laying a flat patch of the old ground over the lit surface. */
+  .pth.pth--hifi .rail::before,
+  .pth.pth--hifi .rail::after {
+    display: none;
+  }
+
+  .pth.pth--hifi .rail--more-right .rail__scroller {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 44px);
+    mask-image: linear-gradient(to left, transparent 0, #000 44px);
+  }
+
+  .pth.pth--hifi .rail--more-left .rail__scroller {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 44px);
+    mask-image: linear-gradient(to right, transparent 0, #000 44px);
+  }
+
+  .pth.pth--hifi .rail--more-left.rail--more-right .rail__scroller {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 calc(100% - 44px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 calc(100% - 44px), transparent 100%);
+  }
+
+  .pth.pth--hifi h1 {
+    font-size: 44px;
+  }
+
+  .pth.pth--hifi .path-header__done {
+    padding-bottom: 6px;
+  }
+
+  .pth.pth--hifi .path-header__now {
+    margin-top: 12px;
+    font-size: 15px;
+  }
+
+  .pth.pth--hifi .workspace {
+    padding: 22px 18px 20px;
+  }
+
+  .pth.pth--hifi .workspace__name {
+    font-size: 26px;
+  }
+
+  .pth.pth--hifi .focus {
+    padding: 22px 18px 22px;
+  }
+
+  .pth.pth--hifi .focus h2 {
+    font-size: 26px;
+  }
+
+  .pth.pth--hifi .button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pth.pth--hifi .button {
+    transition: none;
+  }
+
+  .pth.pth--hifi .button:hover {
+    transform: none;
+  }
+}

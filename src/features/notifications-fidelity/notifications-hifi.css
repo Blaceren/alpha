@@ -1,0 +1,109 @@
+/*
+ * NOTIFICATIONS, HI-FI — the product hi-fi (DD-338, owner 2026-10-03: «хай фай
+ * всего»).
+ *
+ * The frozen register keeps its grammar — the page-level presence line, the
+ * notation strip (time, then marks) beside each change, the one handoff per
+ * record, no vertical axis — and takes the product's column and Public Home's
+ * language on the product's ink: «Уведомления» in the display face, the
+ * presence line as a mono eyebrow, the register on a rounded surface lit from
+ * its corner, changes separated by hairlines.
+ *
+ * Every rule is `.nt.nt--hifi …`, one class more specific than the frozen
+ * layer. The frozen phone edge (599/600) is the only breakpoint besides the
+ * shell's.
+ */
+
+/* The shell's ground (with its corner light) shows through the frozen root. */
+.nt.nt--hifi {
+  background: none;
+}
+
+/* The product's column, centred like Path, Lessons and Tools. */
+.nt.nt--hifi .n-page {
+  width: min(100%, 1008px);
+  margin-inline: auto;
+  padding: 48px 28px 96px;
+}
+
+.nt.nt--hifi .n-page__inner {
+  max-width: none;
+}
+
+.nt.nt--hifi .n-page__title {
+  font: 400 var(--hf-title-xl) / 1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+.nt.nt--hifi .n-presence {
+  margin-top: 18px;
+}
+
+.nt.nt--hifi .n-presence__text {
+  font: 500 10.5px / 1.6 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+/* The register is the page's one surface. */
+.nt.nt--hifi .n-register,
+.nt.nt--hifi .n-state {
+  margin-top: 36px;
+  padding: 30px 40px 32px;
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+.nt.nt--hifi .n-register {
+  gap: 0;
+}
+
+.nt.nt--hifi .n-register > li + li {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--hf-line);
+}
+
+.nt.nt--hifi .n-record__statement {
+  font-size: 16.5px;
+}
+
+.nt.nt--hifi .n-record__meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+.nt.nt--hifi .n-action,
+.nt.nt--hifi .n-control {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--hf-radius-pill);
+}
+
+/* Below 900px the shell's bar is fixed to the bottom: the page ends above it. */
+@media (max-width: 899px) {
+  .nt.nt--hifi .n-page {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+}
+
+@media (max-width: 599px) {
+  .nt.nt--hifi .n-page {
+    padding-top: 24px;
+    padding-inline: 16px;
+  }
+
+  .nt.nt--hifi .n-page__title {
+    font-size: 44px;
+  }
+
+  .nt.nt--hifi .n-register,
+  .nt.nt--hifi .n-state {
+    margin-top: 24px;
+    padding: 22px 18px 24px;
+  }
+}

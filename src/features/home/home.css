@@ -41,9 +41,17 @@
      reason.
    ========================================================= */
 
-/* ---------- app bar (desktop/tablet) ---------- */
+/* ---------- app bar (desktop/tablet) ----------
+   PRODUCT HI-FI (DD-338, 2026-10-03): the bar floats, as Public Home's does — a
+   rounded band of ink over the page, 10px in from the edges, kept in view while
+   the page scrolls. Height is still 60px, so no body moves for it. */
 .appbar { display: none; align-items: center; gap: clamp(16px, 2.4vw, 28px);
-  height: 60px; padding: 0 clamp(20px, 3vw, 34px); border-bottom: 1px solid var(--divider); }
+  position: sticky; top: 10px; z-index: 45;
+  height: 60px; margin: 10px 10px 0; padding: 0 clamp(14px, 1.8vw, 22px);
+  border: 1px solid var(--hf-line); border-radius: 20px;
+  background: color-mix(in srgb, var(--background-base) 84%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: var(--hf-shadow); }
 
 /* ---------- the mark ----------
    A sizing box for the real SVG, and nothing else: no frame, no badge, no
@@ -135,9 +143,14 @@ a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-of
    the utilities must not clip it. */
 .appbar .actions, .mtop .actions { overflow: visible; }
 
-/* ---------- mobile top ---------- */
+/* ---------- mobile top ----------
+   The same ink band, edge to edge on a phone. It scrolls away with the page:
+   the bottom bar is the phone's navigation, and a docked lesson player takes
+   the top of the screen when it needs it. */
 .mtop { display: flex; align-items: center; gap: 12px;
-  height: 54px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
+  height: 54px; padding: 0 16px; border-bottom: 1px solid var(--hf-line);
+  background: color-mix(in srgb, var(--background-base) 86%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); }
 /* Where the learner is, in the section's own canonical label. No new word is
    introduced — it is the same string the navigation uses. */
 .mtop__context { font-family: var(--font-mono, inherit); font-size: 11px; letter-spacing: .12em;
@@ -196,12 +209,16 @@ a.avatar::after { content: ""; position: absolute; left: 50%; top: 50%;
   width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; }
 a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 
-/* ---------- bottom nav (mobile) ---------- */
-.bottomnav { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; display: block;
+/* ---------- bottom nav (mobile) ----------
+   PRODUCT HI-FI (DD-338): the bar floats like the desktop one — a rounded ink
+   band 8px in from the edges, above the safe area. Pages already end the bar's
+   height plus 24px above the bottom, which clears the 8px it floats by. */
+.bottomnav { position: fixed; inset-inline: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 40; display: block;
   min-height: var(--mobile-bottom-nav-height);
-  border-top: 1px solid var(--divider);
-  background: color-mix(in srgb, var(--background-base) 88%, transparent); backdrop-filter: blur(6px);
-  padding-bottom: env(safe-area-inset-bottom); }
+  border: 1px solid var(--hf-line); border-radius: 20px;
+  background: color-mix(in srgb, var(--background-base) 86%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); }
 .bottomnav ul { display: flex; justify-content: space-around; margin: 0; padding: 0 4px; list-style: none; }
 .bottomnav a, .bottomnav button { min-width: 56px; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 4px; font-size: 10.5px; color: var(--text-muted); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer;
@@ -221,8 +238,8 @@ a.avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
   height: 2px; background: var(--signal-active); }
 /* The overflow sheet. It sits ABOVE the bar and is bounded by the viewport, so
    it can never become the thing that overflows. */
-.bottomnav__sheet { position: absolute; left: 0; right: 0; bottom: 100%;
-  background: var(--surface-context); border-top: 1px solid var(--divider-strong);
+.bottomnav__sheet { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
+  background: var(--surface-context); border: 1px solid var(--divider-strong); border-radius: 18px;
   box-shadow: 0 -18px 40px -24px rgba(0,0,0,.9); max-height: 60vh; overflow-y: auto;
   overscroll-behavior: contain; }
 .bottomnav__sheet ul { display: block; padding: 6px 0; }
@@ -389,7 +406,9 @@ html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-ar
   .appbar { display: flex; }
   .mtop { display: none; }
   .bottomnav { display: none; }
-  html { scroll-padding-bottom: 0; }
+  /* The floating bar stays in view (DD-338): whatever is scrolled to — an
+     in-page link, a focused field — lands below it, never under it. */
+  html { scroll-padding-bottom: 0; scroll-padding-top: 86px; }
   .node-wide { display: block; }
   .node-narrow { display: none; }
 }
@@ -498,5 +517,8 @@ html { scroll-padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-ar
    content. Flattening it to the same ground removes the seam and introduces no
    new colour. Applied ONLY under .home--frozen, so Community and Support keep
    the field they were accepted with. */
-.home--frozen { background: var(--background-base); }
+/* PRODUCT HI-FI (DD-338): the ground also takes Public Home's ink light — one
+   soft olive glow from the top right of the page, under every signed-in
+   surface. It is painted here, on the shell, once. */
+.home--frozen { background: var(--hf-light), var(--background-base); }
 .home-main--frozen { padding: 0; }

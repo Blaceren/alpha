@@ -221,8 +221,9 @@ describe("the Support canvas", () => {
   });
 
   it("uses the ground the other accepted surfaces use", () => {
-    // `.home--frozen` is what the flag turns on, and it paints --background-base.
-    expect(HOME).toMatch(/\.home--frozen\s*\{\s*background:\s*var\(--background-base\)/);
+    // `.home--frozen` is what the flag turns on: the Ink ground, with Public
+    // Home's corner light over it since the product hi-fi (DD-338).
+    expect(HOME).toMatch(/\.home--frozen\s*\{\s*background:\s*var\(--hf-light\),\s*var\(--background-base\)/);
     const tokens = readFileSync(join(ROOT, "src/styles/tokens.css"), "utf8");
     expect(tokens).toMatch(/--background-base:\s*var\(--ata-ink-900\)/);
     expect(tokens).toMatch(/--ata-ink-900:\s*#0b0d0a/i);

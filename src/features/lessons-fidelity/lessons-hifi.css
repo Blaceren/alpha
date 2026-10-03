@@ -1,0 +1,137 @@
+/*
+ * LESSONS, HI-FI — the product hi-fi (DD-338, owner 2026-10-03: «хай фай
+ * всего»).
+ *
+ * The frozen LessonsATA reference corpus keeps its structure — the title and
+ * the count, the one chromatic territory, a classification margin per module,
+ * the full-row material links — and speaks Public Home's language on the
+ * product's ink: «Уроки» and each module's name in the display face, the count
+ * and the kickers as mono eyebrows, the territory as a rounded surface lit from
+ * its corner, the rows as soft rounded hovers.
+ *
+ * Every rule is `.lsn.lsn--hifi …`, one class more specific than the frozen
+ * layer. Canonical breakpoints only.
+ */
+
+/* The shell's ground (with its corner light) shows through the frozen root. */
+.lsn.lsn--hifi {
+  padding-top: 48px;
+  background: none;
+}
+
+.lsn.lsn--hifi .lessons-head__row {
+  align-items: flex-end;
+  gap: 10px 32px;
+}
+
+.lsn.lsn--hifi h1 {
+  font: 400 var(--hf-title-xl) / 1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+.lsn.lsn--hifi .lessons-head__count {
+  padding-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+.lsn.lsn--hifi .lessons-head__orient {
+  margin-top: 18px;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+/* ------------------------------------------------------- the territory -- */
+
+.lsn.lsn--hifi .corpus {
+  margin-top: 36px;
+  padding: 38px 40px 34px;
+  background: var(--hf-light), var(--surface-corpus);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+.lsn.lsn--hifi .corpus::before {
+  left: 40px;
+  width: 34px;
+}
+
+.lsn.lsn--hifi .group {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.lsn.lsn--hifi .group + .group {
+  margin-top: 34px;
+  padding-top: 30px;
+  border-top: 1px solid var(--line-1);
+}
+
+.lsn.lsn--hifi .group__kicker {
+  font-size: 10.5px;
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+.lsn.lsn--hifi .group__name {
+  margin-top: 10px;
+  color: var(--text-primary);
+  font: 400 24px / 1.15 var(--hf-display);
+  letter-spacing: -0.02em;
+}
+
+.lsn.lsn--hifi .material__open {
+  padding: 14px 44px 14px 14px;
+  margin-left: -14px;
+  border-radius: var(--hf-radius-control);
+}
+
+.lsn.lsn--hifi .material__title {
+  font-size: 15.5px;
+}
+
+.lsn.lsn--hifi #search-input {
+  height: 44px;
+  border-radius: var(--hf-radius-pill);
+  padding: 0 18px;
+}
+
+/* --------------------------------------------------------------- narrower -- */
+
+@media (max-width: 899px) {
+  .lsn.lsn--hifi {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+}
+
+@media (max-width: 599px) {
+  .lsn.lsn--hifi {
+    padding-top: 24px;
+  }
+
+  .lsn.lsn--hifi h1 {
+    font-size: 44px;
+  }
+
+  .lsn.lsn--hifi .lessons-head__orient {
+    margin-top: 12px;
+    font-size: 15px;
+  }
+
+  .lsn.lsn--hifi .corpus {
+    margin-top: 24px;
+    padding: 26px 18px 22px;
+  }
+
+  .lsn.lsn--hifi .corpus::before {
+    left: 18px;
+  }
+
+  .lsn.lsn--hifi .group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lsn.lsn--hifi .group__name {
+    font-size: 22px;
+  }
+}

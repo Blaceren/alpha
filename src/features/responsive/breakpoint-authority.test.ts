@@ -414,11 +414,19 @@ describe("the canon is the document's, not this file's", () => {
     expect(e!.rules).toBeGreaterThan(0);
   });
 
-  it("the shell boundary is the most shared transition in the product", () => {
-    const shell = WIDTH_INVENTORY.get("min-width|900")!;
+  /* The shell's edge was the single most shared transition when the canon was
+     written. The product hi-fi (DD-338, 2026-10-03) gives every page its own
+     phone composition, so the phone's edge is now shared as widely; what still
+     holds is that these two canonical edges carry the product, and no other
+     width is consumed by more files than either of them. */
+  it("the shell boundary and the phone boundary are the most shared transitions in the product", () => {
+    const edges = ["min-width|900", "max-width|599"] as const;
+    for (const edge of edges) expect(WIDTH_INVENTORY.get(edge), edge).toBeTruthy();
     for (const [key, e] of WIDTH_INVENTORY) {
-      if (key === "min-width|900") continue;
-      expect(shell.files.size, `${key} is consumed by more files than the shell boundary`).toBeGreaterThanOrEqual(e.files.size);
+      if ((edges as readonly string[]).includes(key)) continue;
+      for (const edge of edges) {
+        expect(WIDTH_INVENTORY.get(edge)!.files.size, `${key} is consumed by more files than ${edge}`).toBeGreaterThanOrEqual(e.files.size);
+      }
     }
   });
 });

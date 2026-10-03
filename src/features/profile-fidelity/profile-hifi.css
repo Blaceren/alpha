@@ -20,6 +20,12 @@
  * breakpoints only (599/600, 899/900).
  */
 
+/* The frozen root paints its own ground; the shell's ground (with Public
+   Home's corner light, DD-338) shows through instead. */
+.pf.pf--hifi {
+  background: none;
+}
+
 .pf.pf--hifi .p-profile {
   --pp-measure: 1008px;
   --pp-rows: 720px;
@@ -51,12 +57,14 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 22px;
-  padding: 28px 32px;
+  padding: 32px 36px;
   background:
     radial-gradient(420px 200px at 0% 0%, rgba(199, 247, 109, 0.05), transparent 70%),
-    var(--ink-800);
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+    var(--hf-light),
+    var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
 }
 
 .pf.pf--hifi .pp-id {
@@ -133,10 +141,11 @@
   min-width: 0;
 }
 
+/* The person's name is the page's statement, in the display face (DD-338). */
 .pf.pf--hifi .pp-name {
   color: var(--txt-1);
-  font: 650 28px / 1.15 var(--ui);
-  letter-spacing: -0.015em;
+  font: 400 clamp(32px, 3vw, 44px) / 1.04 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
   overflow-wrap: anywhere;
 }
 
@@ -418,6 +427,15 @@
   }
 }
 
+/* Public Home's pill for the one save action, and for the desk's send. */
+.pf.pf--hifi .p-save {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--hf-radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 /* --------------------------------------------------- the support part -- */
 
 /* The desk is the frozen support surface, unchanged, laid into the profile's
@@ -431,6 +449,18 @@
 .pp-support .support-hub {
   max-width: none;
   margin: 0;
+}
+
+.pp-support .support-hub form > button[type="submit"] {
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+  font-weight: 700;
+}
+
+.pp-support .support-hub input,
+.pp-support .support-hub textarea {
+  border-radius: 14px;
 }
 
 .pp-support .support-hub__header h1 {
@@ -501,7 +531,7 @@
   }
 
   .pf.pf--hifi .pp-name {
-    font-size: 22px;
+    font-size: 30px;
   }
 
   .pf.pf--hifi .pp-mail {
