@@ -1,4 +1,4 @@
-# DATA_PROVIDER_CONTRACT.md — Alfa Trade Academy CRM
+# DATA_PROVIDER_CONTRACT.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · Контракт `CrmDataProvider`. Единая граница между UI/domain-слоем и данными.
 > `MockCrmDataProvider` (сейчас) и `ApiCrmDataProvider` (позже) реализуют **один и тот же** интерфейс — UI не переписывается.

@@ -1,4 +1,4 @@
-# MUTATION_OVERLAY.md — Alfa Trade Academy CRM
+# MUTATION_OVERLAY.md — Alpha Trade Academy CRM
 
 > Phase 1B4-A · Mutation core + `addNote` на уровне domain/provider/storage.
 > Решения: D-53…D-57. Связано: DATA_PROVIDER_CONTRACT §15, DECISIONS D-09, ROLE_PERMISSION_MATRIX §1/§4.2.

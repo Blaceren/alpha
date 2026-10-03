@@ -1,4 +1,4 @@
-# TODAY_WORKSPACE.md — Alfa Trade Academy CRM (Phase 1B3)
+# TODAY_WORKSPACE.md — Alpha Trade Academy CRM (Phase 1B3)
 
 Read-only операционный центр смены на маршруте `/today`.
 Реализация: `src/domain/today/**` (деривация), `src/features/today/**` (рендер).

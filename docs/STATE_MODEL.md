@@ -1,4 +1,4 @@
-# STATE_MODEL.md — Alfa Trade Academy CRM
+# STATE_MODEL.md — Alpha Trade Academy CRM
 
 > Phase 0.5 · Каноническая модель состояний пользователя. **Заменяет прежний единый lifecycle mega-enum.**
 > Это источник истины для enum-имён во всех остальных документах и будущих TypeScript-типах.

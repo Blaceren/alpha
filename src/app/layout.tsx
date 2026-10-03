@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Alfa Trade Academy CRM",
+  title: "Alpha Trade Academy CRM",
   description:
-    "Внутреннее рабочее пространство сотрудников Alfa Trade Academy (demo / mock data).",
+    "Внутреннее рабочее пространство сотрудников Alpha Trade Academy (demo / mock data).",
   robots: { index: false, follow: false },
 };
 

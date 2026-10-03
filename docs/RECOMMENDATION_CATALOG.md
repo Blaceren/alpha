@@ -1,4 +1,4 @@
-# RECOMMENDATION_CATALOG.md — Alfa Trade Academy CRM (Phase 1B1)
+# RECOMMENDATION_CATALOG.md — Alpha Trade Academy CRM (Phase 1B1)
 
 Объяснимый каталог рекомендованных действий. Реализация: `src/domain/recommendations/catalog.ts` + `derive.ts`.
 

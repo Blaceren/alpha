@@ -1,4 +1,4 @@
-# PII_ACCESS_POLICY.md — Alfa Trade Academy CRM
+# PII_ACCESS_POLICY.md — Alpha Trade Academy CRM
 
 > Phase 0.5 · Политика доступа к персональным данным (PII). Единый источник правды по маскированию и раскрытию.
 > Статус: Утверждено (Decision Lock, DECISIONS D-11).

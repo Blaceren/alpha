@@ -1,4 +1,4 @@
-# TODAY_QUEUE_RULES.md — Alfa Trade Academy CRM (Phase 1B1, переосмыслено в 1B3)
+# TODAY_QUEUE_RULES.md — Alpha Trade Academy CRM (Phase 1B1, переосмыслено в 1B3)
 
 Правила вывода очередей Today. Реализация: `src/domain/today/builder.ts` (чистые функции, без React).
 

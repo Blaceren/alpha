@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 
 /**
  * Semantic design tokens map to CSS variables defined in src/styles/tokens.css.
- * Values are PROVISIONAL (no confirmed Alfa Trade Academy brand book yet) — see docs/DECISIONS.md.
+ * Values are PROVISIONAL (no confirmed Alpha Trade Academy brand book yet) — see docs/DECISIONS.md.
  * Colors use `hsl(var(--token) / <alpha-value>)` so opacity utilities keep working.
  */
 const config: Config = {

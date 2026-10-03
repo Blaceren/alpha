@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Alfa Trade Academy CRM (Phase 1A)
+# ARCHITECTURE.md — Alpha Trade Academy CRM (Phase 1A)
 
 Как устроено приложение и почему. Реализует границы, утверждённые в Phase 0/0.5.
 
@@ -72,7 +72,7 @@ domain/  ◄─ используется всеми слоями; сам НИ о
 
 ## Почему нет базы данных
 
-Самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alfa Trade Academy.
+Самостоятельное приложение на mock-данных (DECISIONS D-09/D-12). Нет базы, Prisma, SQLite, настоящей аутентификации и API-интеграции. Данные — immutable synthetic fixtures за провайдером; подключение к реальному API — на следующих этапах, без изменения UI-контрактов. Это исключает любой риск для production Alpha Trade Academy.
 
 Начиная с Phase 1B4-A мутации существуют (заметки; owner — 1B4-C; закрепление заметок — 1B4-D), но **persistence по-прежнему локальный**: versioned localStorage overlay (`ata-crm.mutation-overlay.v1`, схема расширена аддитивно в пределах v1 — owner- и pin-история выводятся из append-only `auditRecords`, отдельных структур нет), фикстуры неизменяемы, ничего не уходит за пределы вкладки. Backend не появился. См. `docs/MUTATION_OVERLAY.md`.
 

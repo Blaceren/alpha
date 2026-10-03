@@ -1,4 +1,4 @@
-# MOCK_DATA_IMPLEMENTATION.md — Alfa Trade Academy CRM (Phase 1B1)
+# MOCK_DATA_IMPLEMENTATION.md — Alpha Trade Academy CRM (Phase 1B1)
 
 Как устроен детерминированный синтетический mock-домен. Всё synthetic, без production-данных.
 
