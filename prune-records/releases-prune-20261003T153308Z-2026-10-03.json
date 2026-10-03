@@ -1,0 +1,343 @@
+{
+ "schema": "ata.prune.record/1",
+ "recorded_at_utc": "2026-10-03T15:33:08.504558Z",
+ "authorised_by": "owner, in chat, 2026-10-02: «можешь очищать то что нужно и после дам следующую задачу» — given for the 2026-10-02 pass. Applied again on 2026-10-03, when the system disk was 98 % full (2.2 GB free) after the pre-authorised academy b62e368 release; the move was announced in chat before it ran; it is reversible, and deleting the archive is the owner's action. Next time: ask first unless the disk blocks a release the owner already authorised.",
+ "gate": "tools/prune-release.sh, one run per release, verdict PRUNABLE on the exact path (outputs in `entries[].gate_output`)",
+ "extra_check": "no symlink in any kept release (academy b62e368, 1c47cc0, f8682d7, 3d85b10, 91549bc, 99b2b72; backend 0cc1151, e06e3f3, 3ae5b87, 378db2b, 7e40d55, b827178, d12ab14c, rollback-d12ab14c; crm 23a10d9, c317eb7, 3404dc2, 3f84ee4; partner all four) points under /srv/ata/releases; no process has its cwd, an fd or a mapping in any release on the list (only the four live releases are in use); the move script was dry-run and its guards refused live, kept, partner, non-release and mismatched paths",
+ "protected": {
+  "live": {
+   "academy": "b62e3680d43ea201b0f905561b8dea6c443ea6a7",
+   "backend": "0cc11516459321e5e05e02094a7713031d20daa7",
+   "crm": "23a10d9b592438c152d965288f09bc21afee9117",
+   "partner": "c1f0849e98aa68df8694e975a3890e932bca3f19"
+  },
+  "kept": {
+   "academy rollback anchor (b62e368 → 1c47cc0)": "/srv/ata/releases/academy/1c47cc0939bf6a62f015d24c33bf6ed95d471d7e",
+   "academy, the release before the wave (f8682d7)": "/srv/ata/releases/academy/f8682d73247fc5dec613da23d79f9eab3ce69454",
+   "academy QA-held": "/srv/ata/releases/academy/3d85b10b8ba5537f141342246d20247ba1706b26",
+   "academy QA-held (2)": "/srv/ata/releases/academy/91549bc40dd37c343de31a41223736eb1b41a452",
+   "academy 2026-08-16, never authorised": "/srv/ata/releases/academy/99b2b72fe599c6502552a60fd0945e2ac1fa3b25",
+   "backend rollback anchor (0cc1151 → e06e3f3)": "/srv/ata/releases/backend/e06e3f31cd54bfa116794b0f442032347f8a4b40",
+   "backend, the release before it (3ae5b87)": "/srv/ata/releases/backend/3ae5b87cde5572d960847f091697074ec9780f9e",
+   "backend, the accepted baseline of 2026-08-17": "/srv/ata/releases/backend/7e40d55e26800211ec1c61c7c5f728e4f01ab9f8",
+   "backend 2026-08-30 / 08-31, in the cutover receipt": [
+    "/srv/ata/releases/backend/b827178d8d7a654ad7da1a3f3db04e29e7e35973",
+    "/srv/ata/releases/backend/378db2b0b6672f67bec0db37a7dca52382396463"
+   ],
+   "backend, pre-tooling release and its verified rollback copy": [
+    "/srv/ata/releases/backend/d12ab14c0d52c26b3e8e40ba763d6d9a056bd62f",
+    "/srv/ata/releases/backend/rollback-d12ab14c-verified-20260812"
+   ],
+   "crm rollback anchor (23a10d9 → c317eb7)": "/srv/ata/releases/crm/c317eb7728be214ae377c2fdb7b16bb77b6241de",
+   "crm, the release before it (3404dc2)": "/srv/ata/releases/crm/3404dc2cab0d8aeda967a649871c5dd5dbc5f708",
+   "crm, the accepted baseline of 2026-08-17": "/srv/ata/releases/crm/3f84ee465bb15ebce2840bd799d8c46e2886b1a4",
+   "partner, every release": "/srv/ata/releases/partner/* (not touched)"
+  }
+ },
+ "deleted": false,
+ "action": "move to /srv/ata-data/release-archive/2026-10-03/<component>/<commit> with /home/ubuntu/audits/ata-disk-prune-2026-10-03/1-perenesti-v-arhiv.sh",
+ "entries": [
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8",
+   "source_commit": "1df2ff179dcc2b814a678a2631ccd81ce1436db8",
+   "build_id": "hThPsAyCiMXxj6pl6sgfD",
+   "size_mib": 2537,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8",
+   "gate_output": "=== prune gate: academy 1df2ff179dcc2b814a678a2631ccd81ce1436db8\n  1 exactly one path      : /srv/ata/releases/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8\n  2 manifest              : /srv/ata/releases/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 1df2ff179dcc2b814a678a2631ccd81ce1436db8 / 81d431cb1d2393a82df08c33fce2df3b79188c97 / hThPsAyCiMXxj6pl6sgfD\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8  (2537 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:33:33Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/1df2ff179dcc2b814a678a2631ccd81ce1436db8",
+    "entries": 42174,
+    "mib_after": 2537,
+    "tree_shape_sha256": "59b5291906f3ad1059e3cdc22e63dc5d254e06a92e65a61d90f355446f48cb82"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001",
+   "source_commit": "4d9b7a42f7b72c6db07d038642c5059b0586e001",
+   "build_id": "CTN3NIa9lwJa6vpI4fK6U",
+   "size_mib": 2934,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001",
+   "gate_output": "=== prune gate: academy 4d9b7a42f7b72c6db07d038642c5059b0586e001\n  1 exactly one path      : /srv/ata/releases/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001\n  2 manifest              : /srv/ata/releases/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 4d9b7a42f7b72c6db07d038642c5059b0586e001 / 596d05bbdb82ea4a93cbf132a20405e761262bed / CTN3NIa9lwJa6vpI4fK6U\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001  (2934 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:33:56Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001",
+    "entries": 44905,
+    "mib_after": 2933,
+    "tree_shape_sha256": "78e102d47996c0375ba63cea52d972ae6743c0c258806ad5b5756dc0e6cf3fa1"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18",
+   "source_commit": "4e06ef31d89b258782ed92e9230155c0f05b3f18",
+   "build_id": "TEMRp9HPHXj-M6gLbESJO",
+   "size_mib": 1961,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18",
+   "gate_output": "=== prune gate: academy 4e06ef31d89b258782ed92e9230155c0f05b3f18\n  1 exactly one path      : /srv/ata/releases/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18\n  2 manifest              : /srv/ata/releases/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 4e06ef31d89b258782ed92e9230155c0f05b3f18 / 59bdcba0ccf240dc3cd1207864781b067a7ba06e / TEMRp9HPHXj-M6gLbESJO\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18  (1961 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:34:15Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/4e06ef31d89b258782ed92e9230155c0f05b3f18",
+    "entries": 39264,
+    "mib_after": 1960,
+    "tree_shape_sha256": "9e8ff3caa4291aa8f6449c91ec3f10d6a3b393f7863987038c48fa1012e6515a"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/864e66b961413dc01bcf396cb95381aa259ef097",
+   "source_commit": "864e66b961413dc01bcf396cb95381aa259ef097",
+   "build_id": "2koTjzDEtIPmsya_WHh94",
+   "size_mib": 2537,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/864e66b961413dc01bcf396cb95381aa259ef097",
+   "gate_output": "=== prune gate: academy 864e66b961413dc01bcf396cb95381aa259ef097\n  1 exactly one path      : /srv/ata/releases/academy/864e66b961413dc01bcf396cb95381aa259ef097\n  2 manifest              : /srv/ata/releases/academy/864e66b961413dc01bcf396cb95381aa259ef097/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 864e66b961413dc01bcf396cb95381aa259ef097 / 8705a4d5ecea984a1857089f7487755420197b14 / 2koTjzDEtIPmsya_WHh94\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/864e66b961413dc01bcf396cb95381aa259ef097  (2537 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:34:35Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/864e66b961413dc01bcf396cb95381aa259ef097",
+    "entries": 42174,
+    "mib_after": 2537,
+    "tree_shape_sha256": "3384f7e88b97cbd3c57642a0ea34bf2de0812bb604dbbab0891cb223ff263f27"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725",
+   "source_commit": "871d298274f3242e2ebac3352f991c0c62f39725",
+   "build_id": "dEPQRhnCua6oa-Y1FuJKB",
+   "size_mib": 2595,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/871d298274f3242e2ebac3352f991c0c62f39725",
+   "gate_output": "=== prune gate: academy 871d298274f3242e2ebac3352f991c0c62f39725\n  1 exactly one path      : /srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725\n  2 manifest              : /srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 871d298274f3242e2ebac3352f991c0c62f39725 / 128e6d2abf8a416a30810b518d0d42889c3c9bd8 / dEPQRhnCua6oa-Y1FuJKB\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/871d298274f3242e2ebac3352f991c0c62f39725  (2595 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:34:59Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/871d298274f3242e2ebac3352f991c0c62f39725",
+    "entries": 41906,
+    "mib_after": 2595,
+    "tree_shape_sha256": "fda460e817b1005c817a0e5f0a6371a66ce81381dc3338624f20109f4a8fe2b0"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3",
+   "source_commit": "8c9abfd40e02d52c665e0786cb3c062af4ed76d3",
+   "build_id": "o8B5o0lQSDE3A4fAsOn_t",
+   "size_mib": 2704,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3",
+   "gate_output": "=== prune gate: academy 8c9abfd40e02d52c665e0786cb3c062af4ed76d3\n  1 exactly one path      : /srv/ata/releases/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3\n  2 manifest              : /srv/ata/releases/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 8c9abfd40e02d52c665e0786cb3c062af4ed76d3 / 9d69938d9a2285b344444ecaf63790cf8629c537 / o8B5o0lQSDE3A4fAsOn_t\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/c85513b1336f4742271f13665b10eff78e204804/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3  (2704 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:35:24Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/8c9abfd40e02d52c665e0786cb3c062af4ed76d3",
+    "entries": 42726,
+    "mib_after": 2704,
+    "tree_shape_sha256": "d20d908f5974e3085974348249abd358a07ff300100ee2deb934a81f5915d260"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e",
+   "source_commit": "8cb7c5b578274b1497526ffd167a6622b2090b6e",
+   "build_id": "06v4VxI6YMt3OQU7zrevE",
+   "size_mib": 2239,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e",
+   "gate_output": "=== prune gate: academy 8cb7c5b578274b1497526ffd167a6622b2090b6e\n  1 exactly one path      : /srv/ata/releases/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e\n  2 manifest              : /srv/ata/releases/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 8cb7c5b578274b1497526ffd167a6622b2090b6e / 1cc89de7d77621e2ccc349d1b4252952e971fed4 / 06v4VxI6YMt3OQU7zrevE\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e  (2239 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:35:44Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/8cb7c5b578274b1497526ffd167a6622b2090b6e",
+    "entries": 41149,
+    "mib_after": 2239,
+    "tree_shape_sha256": "04e40734facbab92026748f0b7a5b6660335327d4c23b8e201d53eb8f99258aa"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22",
+   "source_commit": "a1c9ff698ee3c75a3b0dbd122783b1140b596b22",
+   "build_id": "kQbijFwt4vGWVXwHRSTs4",
+   "size_mib": 2957,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22",
+   "gate_output": "=== prune gate: academy a1c9ff698ee3c75a3b0dbd122783b1140b596b22\n  1 exactly one path      : /srv/ata/releases/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22\n  2 manifest              : /srv/ata/releases/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : a1c9ff698ee3c75a3b0dbd122783b1140b596b22 / 0f553ce3d3cbce954a013e372ea38d00a766bf96 / kQbijFwt4vGWVXwHRSTs4\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/f8682d73247fc5dec613da23d79f9eab3ce69454/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22  (2957 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:36:13Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/a1c9ff698ee3c75a3b0dbd122783b1140b596b22",
+    "entries": 45225,
+    "mib_after": 2957,
+    "tree_shape_sha256": "775cdeea47f7f960adf9bee20a28a89089db995b56cf50c4240544bd63a2f359"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/c85513b1336f4742271f13665b10eff78e204804",
+   "source_commit": "c85513b1336f4742271f13665b10eff78e204804",
+   "build_id": "W5pyITx5b_9MGwizy3ZND",
+   "size_mib": 2772,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/c85513b1336f4742271f13665b10eff78e204804",
+   "gate_output": "=== prune gate: academy c85513b1336f4742271f13665b10eff78e204804\n  1 exactly one path      : /srv/ata/releases/academy/c85513b1336f4742271f13665b10eff78e204804\n  2 manifest              : /srv/ata/releases/academy/c85513b1336f4742271f13665b10eff78e204804/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : c85513b1336f4742271f13665b10eff78e204804 / 1f8a8f78b9abdbbe4c81cbfa415d2c35d97c17af / W5pyITx5b_9MGwizy3ZND\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/ec6072f3632e423fad3f2fad2945286404962e73/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/c85513b1336f4742271f13665b10eff78e204804  (2772 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:36:41Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/c85513b1336f4742271f13665b10eff78e204804",
+    "entries": 43132,
+    "mib_after": 2772,
+    "tree_shape_sha256": "e4c0f408d63c1144c85f1abddb1188ee13f2463ee7eea145065e8493ee412263"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49",
+   "source_commit": "d2bba56ddb16feb93e2ba542aabb5648521d8a49",
+   "build_id": "3fVZZ6FX3TH1YfXB9y9KG",
+   "size_mib": 2490,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49",
+   "gate_output": "=== prune gate: academy d2bba56ddb16feb93e2ba542aabb5648521d8a49\n  1 exactly one path      : /srv/ata/releases/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49\n  2 manifest              : /srv/ata/releases/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : d2bba56ddb16feb93e2ba542aabb5648521d8a49 / d880b5e48eb2332674dbf6f1b5ab83cea076c6bb / 3fVZZ6FX3TH1YfXB9y9KG\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/864e66b961413dc01bcf396cb95381aa259ef097/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49  (2490 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:01Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/d2bba56ddb16feb93e2ba542aabb5648521d8a49",
+    "entries": 41972,
+    "mib_after": 2489,
+    "tree_shape_sha256": "31e3c80ad2dda1bab4a388bdafd424afed77e2156442de9e5d3ac3c38ca6f83d"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/dc12cd94d4034d85871056fd52df35bba0829b81",
+   "source_commit": "dc12cd94d4034d85871056fd52df35bba0829b81",
+   "build_id": "MJ-z-zJNzLl8YePKn0OM9",
+   "size_mib": 2923,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/dc12cd94d4034d85871056fd52df35bba0829b81",
+   "gate_output": "=== prune gate: academy dc12cd94d4034d85871056fd52df35bba0829b81\n  1 exactly one path      : /srv/ata/releases/academy/dc12cd94d4034d85871056fd52df35bba0829b81\n  2 manifest              : /srv/ata/releases/academy/dc12cd94d4034d85871056fd52df35bba0829b81/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : dc12cd94d4034d85871056fd52df35bba0829b81 / 7b8748541fb6ae7ddb2a7d46eef23ce110b7f832 / MJ-z-zJNzLl8YePKn0OM9\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/academy/4d9b7a42f7b72c6db07d038642c5059b0586e001/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/dc12cd94d4034d85871056fd52df35bba0829b81  (2923 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:23Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/dc12cd94d4034d85871056fd52df35bba0829b81",
+    "entries": 44803,
+    "mib_after": 2923,
+    "tree_shape_sha256": "bdef9ca6c9425ef679317d44d47c91ac62fe49a775cb699b7431a3809aae0fb0"
+   }
+  },
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/ec6072f3632e423fad3f2fad2945286404962e73",
+   "source_commit": "ec6072f3632e423fad3f2fad2945286404962e73",
+   "build_id": "rMVCWXX-cDzN0mapN5Ws8",
+   "size_mib": 2774,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/academy/ec6072f3632e423fad3f2fad2945286404962e73",
+   "gate_output": "=== prune gate: academy ec6072f3632e423fad3f2fad2945286404962e73\n  1 exactly one path      : /srv/ata/releases/academy/ec6072f3632e423fad3f2fad2945286404962e73\n  2 manifest              : /srv/ata/releases/academy/ec6072f3632e423fad3f2fad2945286404962e73/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : ec6072f3632e423fad3f2fad2945286404962e73 / 1828b0657420e1df6c76f0d28f2782313ad48f4a / rMVCWXX-cDzN0mapN5Ws8\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/ec6072f3632e423fad3f2fad2945286404962e73  (2774 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:50Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/academy/ec6072f3632e423fad3f2fad2945286404962e73",
+    "entries": 43591,
+    "mib_after": 2774,
+    "tree_shape_sha256": "b8a0b45d8788671986c250434f7ab72e4a1bd12254d6f1b58705cccd13e5ecc0"
+   }
+  },
+  {
+   "component": "backend",
+   "path": "/srv/ata/releases/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f",
+   "source_commit": "6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f",
+   "build_id": "1Svjv59vLMNbR6qIjPdeW",
+   "size_mib": 215,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f",
+   "gate_output": "=== prune gate: backend 6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f\n  1 exactly one path      : /srv/ata/releases/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f\n  2 manifest              : /srv/ata/releases/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : 6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f / 1b8ba64565c8d446f728b1dfdfeb774ece7a748a / 1Svjv59vLMNbR6qIjPdeW\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/backend/3ae5b87cde5572d960847f091697074ec9780f9e/ATA_RELEASE_MANIFEST.json\n      no live references\n  PRUNABLE: /srv/ata/releases/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f  (215 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:51Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/backend/6ca1d6535bb902fa5d339db3a7c3d54e8f977b0f",
+    "entries": 5523,
+    "mib_after": 215,
+    "tree_shape_sha256": "6bfa6763b51bbac27ca4f6e0a3bc82c15c6456b25bdf13c3cc2bdcc9f28f2923"
+   }
+  },
+  {
+   "component": "backend",
+   "path": "/srv/ata/releases/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b",
+   "source_commit": "c5694d7e9337dbcec97de1854707f35b0c223c3b",
+   "build_id": "Uu3_jYtj6n5mbnYZEqirJ",
+   "size_mib": 214,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b",
+   "gate_output": "=== prune gate: backend c5694d7e9337dbcec97de1854707f35b0c223c3b\n  1 exactly one path      : /srv/ata/releases/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b\n  2 manifest              : /srv/ata/releases/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : c5694d7e9337dbcec97de1854707f35b0c223c3b / 630dad7156fb3fa136ee9eb03797b95055e3049c / Uu3_jYtj6n5mbnYZEqirJ\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb/ATA_RELEASE_MANIFEST.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b  (214 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:54Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/backend/c5694d7e9337dbcec97de1854707f35b0c223c3b",
+    "entries": 5506,
+    "mib_after": 214,
+    "tree_shape_sha256": "da5284e21238d740404118a3a455cb4823ebf9f1a07b7f4c1d3dda3b739cc1bf"
+   }
+  },
+  {
+   "component": "backend",
+   "path": "/srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb",
+   "source_commit": "e70b6b16d71dd450183c36aca3fc646943b4afeb",
+   "build_id": "fMF09AhwKZKasQbKxmN7C",
+   "size_mib": 214,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb",
+   "gate_output": "=== prune gate: backend e70b6b16d71dd450183c36aca3fc646943b4afeb\n  1 exactly one path      : /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb\n  2 manifest              : /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : e70b6b16d71dd450183c36aca3fc646943b4afeb / 1bfdeb40f526e715bd46c673f5fb8fe4c069ed89 / fMF09AhwKZKasQbKxmN7C\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb  (214 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:56Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/backend/e70b6b16d71dd450183c36aca3fc646943b4afeb",
+    "entries": 5506,
+    "mib_after": 214,
+    "tree_shape_sha256": "771d75f47238d9fee4c0198192c8994ea9655ce05ab9fe86ff26d73a894cd9d2"
+   }
+  },
+  {
+   "component": "backend",
+   "path": "/srv/ata/releases/backend/eb30a653353d7b73a96a6cecee8316764cfed61f",
+   "source_commit": "eb30a653353d7b73a96a6cecee8316764cfed61f",
+   "build_id": "4UqLdHtsFs7XDZtLTBfDT",
+   "size_mib": 214,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/backend/eb30a653353d7b73a96a6cecee8316764cfed61f",
+   "gate_output": "=== prune gate: backend eb30a653353d7b73a96a6cecee8316764cfed61f\n  1 exactly one path      : /srv/ata/releases/backend/eb30a653353d7b73a96a6cecee8316764cfed61f\n  2 manifest              : /srv/ata/releases/backend/eb30a653353d7b73a96a6cecee8316764cfed61f/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : eb30a653353d7b73a96a6cecee8316764cfed61f / c01cadf282a82425e7ab9ca05b95708b2f007423 / 4UqLdHtsFs7XDZtLTBfDT\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/backend/eb30a653353d7b73a96a6cecee8316764cfed61f  (214 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:37:59Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/backend/eb30a653353d7b73a96a6cecee8316764cfed61f",
+    "entries": 5506,
+    "mib_after": 214,
+    "tree_shape_sha256": "11cae35feab6dd366f092214bc6276703d11ec7eeabd670024591adcf198da6f"
+   }
+  },
+  {
+   "component": "crm",
+   "path": "/srv/ata/releases/crm/f825e59275c5c94f63cadac706e4985a7aed863f",
+   "source_commit": "f825e59275c5c94f63cadac706e4985a7aed863f",
+   "build_id": "3FqlA8VCNkAcN93RWg4Wg",
+   "size_mib": 756,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-03/crm/f825e59275c5c94f63cadac706e4985a7aed863f",
+   "gate_output": "=== prune gate: crm f825e59275c5c94f63cadac706e4985a7aed863f\n  1 exactly one path      : /srv/ata/releases/crm/f825e59275c5c94f63cadac706e4985a7aed863f\n  2 manifest              : /srv/ata/releases/crm/f825e59275c5c94f63cadac706e4985a7aed863f/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : f825e59275c5c94f63cadac706e4985a7aed863f / 472da2fc2523458fd2359dae7ebc9fc06d3c2856 / 3FqlA8VCNkAcN93RWg4Wg\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n      backend   -> /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n      crm       -> /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=1957566, cwd==symlink, port 3050 owned by pid 1957599 in-cgroup\n    release: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=1905123, cwd==symlink, port 3100 owned by pid 1905153 in-cgroup\n    release: /srv/ata/releases/backend/0cc11516459321e5e05e02094a7713031d20daa7\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=1895768, cwd==symlink, port 3010 owned by pid 1895800 in-cgroup\n    release: /srv/ata/releases/crm/23a10d9b592438c152d965288f09bc21afee9117\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [provenance parent, not a live reference] /srv/ata/releases/crm/3404dc2cab0d8aeda967a649871c5dd5dbc5f708/ATA_RELEASE_MANIFEST.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-b-override.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/academy-prune-20260922T132747Z.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/academy-prune-20260922T125112Z.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/academy-prune-20260922T130158Z.json\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261002T112233Z-pass-a.json\n      no live references\n  PRUNABLE: /srv/ata/releases/crm/f825e59275c5c94f63cadac706e4985a7aed863f  (756 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\n",
+   "result": {
+    "archived_at_utc": "2026-10-03T15:38:11Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-03/crm/f825e59275c5c94f63cadac706e4985a7aed863f",
+    "entries": 34162,
+    "mib_after": 756,
+    "tree_shape_sha256": "233672461861ef5dd0d7a295c0ae4fb43ce0dc304bdd19d62bdbfdbf8af645e6"
+   }
+  }
+ ],
+ "completed": {
+  "moved": 17,
+  "deleted": false,
+  "started": "2026-10-03T15:33:13Z start free_root_bytes=2322006016 free_data_bytes=48097206272",
+  "ended": "2026-10-03T15:38:11Z end free_root_bytes=36953030656 free_data_bytes=13469122560",
+  "verification": "per release: entry count and tree-shape digest (type, mode, size, link target of every path) equal before and after the move",
+  "services_after": "academy, backend, crm, partner units active; 127.0.0.1:3050 /, :3100 /api/health, :3010 /login, :3110 /login answered 200",
+  "journal": "/srv/ata/releases/{academy,backend,crm}/ATA_PRUNE_RECORD.jsonl — one \"event\": \"archive\" line per release",
+  "owner_scripts": [
+   "/home/ubuntu/audits/ata-disk-prune-2026-10-03/2-udalit-arhiv-navsegda.sh",
+   "/home/ubuntu/audits/ata-disk-prune-2026-10-03/3-udalit-kesh-razrabotki.sh"
+  ]
+ }
+}
