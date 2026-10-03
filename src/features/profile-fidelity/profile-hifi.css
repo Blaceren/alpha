@@ -570,3 +570,11 @@
     padding-inline: 16px;
   }
 }
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* The aside's lead (where support answers) reads at 14.5px on a phone. */
+  .pf.pf--hifi .p-aside__lead {
+    font-size: 14.5px;
+  }
+}

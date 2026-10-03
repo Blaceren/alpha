@@ -904,12 +904,18 @@
   height: 18px;
 }
 
+/* Docked on a wide screen the player sits in the corner INSIDE the gutter
+   beside the lesson page's 860px column, never over its text: the gutter
+   (half the screen less 430px) less 16px of air on each side, up to 380px.
+   Below 1404px that gutter holds less than a 240px picture, and the player
+   docks as a strip instead (below). A percentage, not vw: a fixed box measures
+   the viewport without its scrollbar, as the centred column does. */
 .avp--docked {
   position: fixed;
   z-index: 60;
-  right: 24px;
-  bottom: 24px;
-  width: min(380px, calc(100vw - 48px));
+  right: 16px;
+  bottom: 16px;
+  width: min(380px, calc(50% - 462px));
   border: 1px solid var(--avp-border-strong);
   border-radius: 10px;
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
@@ -930,22 +936,37 @@
 
 /* --------------------------------------------------------------- narrower */
 
-/* Where the page's column comes close to the corner, the docked player keeps
-   to a smaller footprint so less of the text runs under it. */
-@media (max-width: 1199px) {
+/* Where the gutter is too narrow for the corner, the docked player is a strip
+   across the column, under the floating bar: a small picture and the bar
+   beside it. The text scrolls under the strip and is read below it; nothing
+   stays covered at the side of every line, as the corner did here. */
+@media (max-width: 1403px) {
   .avp--docked {
-    right: 16px;
-    bottom: 16px;
-    width: 320px;
+    top: 80px;
+    right: auto;
+    bottom: auto;
+    left: max(16px, calc(50% - 430px));
+    width: min(860px, calc(100% - 32px));
+    flex-direction: row;
+  }
+
+  .avp--docked .avp__screen {
+    flex: 0 0 auto;
+    width: 192px;
+  }
+
+  .avp--docked .avp__bar {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-content: center;
   }
 }
 
-/* Below the shell's desktop edge the docked player runs along the top. */
+/* Below the shell's desktop edge there is no floating bar to clear: the
+   strip runs along the very top, edge to edge. */
 @media (max-width: 899px) {
   .avp--docked {
     top: 0;
-    right: 0;
-    bottom: auto;
     left: 0;
     width: 100%;
     border-width: 0 0 1px;
@@ -953,7 +974,22 @@
   }
 
   .avp--docked .avp__screen {
-    max-height: 40vh;
+    width: 176px;
+  }
+}
+
+/* A phone held upright has the height for the whole picture: the band shows
+   it full width, the bar under it. (A phone on its side keeps the strip: a
+   full-width picture there would cover most of the screen.) */
+@media (max-width: 599px) and (min-height: 561px) {
+  .avp--docked {
+    flex-direction: column;
+  }
+
+  .avp--docked .avp__screen {
+    width: 100%;
+    /* 30vh, not 40: on a 599×900 phone the band took 48% of the screen. */
+    max-height: 30vh;
     margin-inline: auto;
   }
 }

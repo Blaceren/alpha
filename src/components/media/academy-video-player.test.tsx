@@ -1,6 +1,8 @@
 import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { AcademyVideoPlayer, printableMarkerLabels, type AcademyVideoPlayerHandle } from "./academy-video-player";
 
 function setMedia(
@@ -857,5 +859,31 @@ describe("AcademyVideoPlayer — the lesson hi-fi", () => {
     expect(video.currentTime).toBe(40);
     fireEvent.keyDown(region, { key: "j" });
     expect(video.currentTime).toBe(30);
+  });
+});
+
+/* Where the docked player goes (2026-10-03, the responsive pass). Measured in a
+   browser at 19 sizes; the rules that hold it are pinned here. */
+describe("the docked player's place", () => {
+  const css = readFileSync(join(process.cwd(), "src/components/media/academy-video-player.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const block = (prelude: string) => {
+    const i = css.indexOf(prelude);
+    return i === -1 ? "" : css.slice(i, css.indexOf("\n}", i));
+  };
+
+  it("on a wide screen sits in the corner inside the gutter beside the 860px column, never over it", () => {
+    expect(css).toMatch(/\.avp--docked\s*\{[^}]*width:\s*min\(380px,\s*calc\(50%\s*-\s*462px\)\)/);
+  });
+
+  it("below 1404px is a strip across the column under the floating bar", () => {
+    const strip = block("@media (max-width: 1403px)");
+    expect(strip).toContain("top: 80px");
+    expect(strip).toContain("width: min(860px, calc(100% - 32px))");
+    expect(strip).toContain("flex-direction: row");
+  });
+
+  it("keeps the full-width band only for a phone held upright", () => {
+    expect(css).toContain("@media (max-width: 599px) and (min-height: 561px)");
+    expect(block("@media (max-width: 599px) and (min-height: 561px)")).toContain("max-height: 30vh");
   });
 });

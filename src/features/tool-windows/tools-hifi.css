@@ -116,6 +116,40 @@
   min-height: 48px;
 }
 
+/* The pickers' own buttons («Сейчас», «Сегодня», «Вчера», «Готово») are
+   targets too: 44px, not 34–40. A picker never runs past the screen: on a
+   phone held sideways it is taller than the screen (428px), so it stops above
+   the edge and scrolls inside. */
+:is(.twh, .twp).tw-hifi :is(.tp-chip, .tp-done) {
+  min-height: 44px;
+}
+
+/* Below 900px the shell's bottom bar is fixed over the page: a picker stops
+   above it (from 900px, above the screen's own edge — see below). */
+:is(.twh, .twp).tw-hifi .tp-panel {
+  max-height: calc(100vh - var(--mobile-bottom-nav-height, 60px) - 32px);
+  max-height: calc(100dvh - var(--mobile-bottom-nav-height, 60px) - env(safe-area-inset-bottom, 0px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* With no room under the field and room above it, the panel opens upward
+   (picker-panel.ts decides; the page could not scroll far enough to show it
+   below a field near its end). */
+:is(.twh, .twp).tw-hifi .tp-panel[data-side="up"] {
+  margin-top: calc(-1 * var(--tp-lift, 0px));
+}
+
+/* Its cells and the month's arrows are 44px at every width — 38px and 36px
+   from 600px before, and a tablet is touched. */
+:is(.twh, .twp).tw-hifi .tp-cell {
+  min-height: 44px;
+}
+
+:is(.twh, .twp).tw-hifi .tp-turn {
+  height: 44px;
+}
+
 /* The hub's rows: a soft rounded hover on the territory. */
 :is(.twh, .twp).tw-hifi .twh-row__title {
   font-size: 16px;
@@ -136,6 +170,11 @@
 @media (min-width: 900px) {
   :is(.twh, .twp).tw-hifi {
     padding-top: 48px;
+  }
+
+  :is(.twh, .twp).tw-hifi .tp-panel {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
   }
 
   :is(.twh, .twp).tw-hifi .tw-title {
@@ -164,5 +203,21 @@
 
   :is(.twh, .twp).tw-hifi .tw-button:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* What a tool says back — the checklist's verdict, an empty or a locked
+     window — reads at body size on a phone (13.5px before). */
+  :is(.twh, .twp).tw-hifi :is(.ck-verdict__body, .tw-quiet__line) {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  /* «Сделку вы открываете сами в Pocket — ATA сделки не открывает.» and the
+     page's footnote: small print, but not 12.5px on a phone. */
+  :is(.twh, .twp).tw-hifi :is(.tc-caption, .tw-footnote) {
+    font-size: 13.5px;
   }
 }

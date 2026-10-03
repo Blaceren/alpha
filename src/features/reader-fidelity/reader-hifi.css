@@ -68,3 +68,13 @@
     font-size: 26px;
   }
 }
+
+/* The reading strip's «Структура» is a 44px target at every width (it was 30
+   on a phone held sideways and on a tablet). */
+.rdr.rdr--hifi .strip__btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 44px;
+  white-space: nowrap;
+}

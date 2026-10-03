@@ -245,6 +245,9 @@ type Allowed = {
  * with an empty reason and an entry naming the wrong side are all failures.
  */
 const ALLOWLIST: Allowed[] = [
+  { value: 359, side: "max-width", files: ["src/features/home/home.css", "src/features/tool-windows/tool-windows.css"], role: "phone-trim",
+    surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "The narrowest phones (320): the phone top bar's section label no longer fits beside the bell, the avatar and «Выйти» and was cut to «ИНСТР…»; a tool's three-way choice gives each word 55px and «Прибыль» ran out of it. Both measured at 320, both fine at 360." },
   { value: 380, side: "max-width", files: ["src/features/lesson/lesson.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Within 20px of 360 and 400 doing similar padding work on different components; consolidation needs a visual pass on routes that require a session." },
@@ -320,6 +323,9 @@ const ALLOWLIST: Allowed[] = [
   { value: 1340, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
     surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "The cycle goes six columns to three. Set by the product objects under each step, not by the shell: below a 1244px shell a column is under 190px and the longest action breaks into three lines (measured at 1280 on 2026-10-01, 177px columns). 1px from the workspace's 1339 by coincidence: different surface, different grid, opposite job." },
+  { value: 1403, side: "max-width", files: ["src/components/media/academy-video-player.css"], role: "wide-reading",
+    surfaces: ["shared"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "Where the docked lesson player leaves the corner for the strip: from 1404px the gutter beside the lesson page's 860px column holds a 240px picture with 16px of air on each side; below it the corner would cover the ends of the column's lines (the open item of DD-336, measured 900–1683px)." },
   { value: 1500, side: "min-width", files: ["src/features/reader-fidelity/reader-fidelity.css"], role: "wide-reading",
     surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Reader takes the extra column only when there is genuinely room for it." },

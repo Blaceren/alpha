@@ -22,6 +22,13 @@ export type PickerPanel = {
   hide: (returnFocusTo?: HTMLElement | null) => void;
 };
 
+/** The floating bar of the desktop shell (10px in, 60px tall, 10px of air). */
+const TOP_CHROME = 80;
+/** What a panel keeps clear of the screen's edge. */
+const PANEL_AIR = 16;
+/** The gap between a field and its panel (tool-windows.css: `.tp-panel { margin-top }`). */
+const PANEL_GAP = 6;
+
 export function usePickerPanel(): PickerPanel {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -58,10 +65,30 @@ export function usePickerPanel(): PickerPanel {
     };
   }, [open]);
 
-  // A panel that opened below the fold is brought into view, and only as far
-  // as it takes: the field it belongs to stays where the learner left it.
+  // The panel opens upward when the screen has no room for it under the field
+  // and has room above (a field near the end of a page cannot be scrolled up
+  // far enough to show a panel below it). Otherwise a panel that opened below
+  // the fold is brought into view, and only as far as it takes: the field it
+  // belongs to stays where the learner left it.
   useEffect(() => {
-    if (open) panelRef.current?.scrollIntoView?.({ block: "nearest" });
+    if (!open) return;
+    const panel = panelRef.current;
+    const root = rootRef.current;
+    if (!panel) return;
+    if (root) {
+      const field = root.getBoundingClientRect();
+      const height = panel.getBoundingClientRect().height;
+      const nav = document.querySelector<HTMLElement>(".bottomnav");
+      const navTop = nav && nav.offsetParent !== null ? nav.getBoundingClientRect().top : window.innerHeight;
+      const below = Math.min(window.innerHeight, navTop) - field.bottom;
+      const above = field.top - TOP_CHROME;
+      const up = below < height + PANEL_AIR && above > height + PANEL_AIR;
+      panel.dataset.side = up ? "up" : "down";
+      // The panel's place is under the field; upward it is lifted by its own
+      // height, the field's and the gap (CSS reads it as a negative margin).
+      panel.style.setProperty("--tp-lift", up ? `${Math.ceil(height + field.height + PANEL_GAP)}px` : "0px");
+    }
+    panel.scrollIntoView?.({ block: "nearest" });
   }, [open]);
 
   return { open, rootRef, panelRef, panelId, show, hide };

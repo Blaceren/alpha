@@ -107,3 +107,13 @@
     padding: 22px 18px 24px;
   }
 }
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* The support team's reply is the message itself, not a caption: it reads
+     at body size on a phone (it was 13.5px). */
+  .nt.nt--hifi .n-record__support {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+}

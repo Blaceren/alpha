@@ -1127,3 +1127,11 @@
     transition: none;
   }
 }
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* «Дальше: модуль 2 …» is the next step's name: 14.5px on a phone. */
+  .hm .hm-module__next {
+    font-size: 14.5px;
+  }
+}

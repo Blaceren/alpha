@@ -157,6 +157,12 @@ a:has(> .brand):focus-visible { outline: 2px solid var(--focus-ring); outline-of
   text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
 .mtop .actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+/* Below 360px the label no longer fits beside the bell, the avatar and «Выйти»
+   and showed as «ИНСТР…»; the page's own title and the bottom bar already say
+   where the learner is. */
+@media (max-width: 359px) {
+  .mtop__context { display: none; }
+}
 
 /* ---------- shared chrome bits ---------- */
 .iconbtn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;

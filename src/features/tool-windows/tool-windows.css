@@ -611,6 +611,17 @@
   transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
 }
 
+/* Below 360px three choices share 55px each and a word as long as «Прибыль»
+   ran out of its choice (the responsive pass, 2026-10-03): the type steps
+   down a little there. */
+@media (max-width: 359px) {
+  .tc-segmented__option {
+    padding-inline: 2px;
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
+  }
+}
+
 .tc-segmented__option:hover:not(:disabled):not([data-selected]) {
   background: var(--tw-surface-hover);
   color: var(--tw-text-1);

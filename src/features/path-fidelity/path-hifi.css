@@ -216,12 +216,6 @@
   .pth.pth--hifi {
     padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
   }
-}
-
-@media (max-width: 599px) {
-  .pth.pth--hifi {
-    padding-top: 24px;
-  }
 
   /* The panning strip fades its own content at an edge with more to see,
      instead of laying a flat patch of the old ground over the lit surface. */
@@ -243,6 +237,31 @@
   .pth.pth--hifi .rail--more-left.rail--more-right .rail__scroller {
     -webkit-mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 calc(100% - 44px), transparent 100%);
     mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 calc(100% - 44px), transparent 100%);
+  }
+}
+
+/* Between the phone and the desktop shell a module's five levels share less
+   than 160px each, and their names broke mid-word («таймфре|йм»,
+   «бинарны|е», measured at 600). The strip pans there as it does on a
+   phone, each level at a width its name can wrap in. */
+@media (min-width: 600px) and (max-width: 899px) {
+  .pth.pth--hifi .rail__scroller {
+    scroll-snap-type: x proximity;
+  }
+
+  .pth.pth--hifi .level-strip {
+    min-width: max-content;
+  }
+
+  .pth.pth--hifi .level-node {
+    flex: 0 0 168px;
+    scroll-snap-align: center;
+  }
+}
+
+@media (max-width: 599px) {
+  .pth.pth--hifi {
+    padding-top: 24px;
   }
 
   .pth.pth--hifi h1 {
@@ -286,5 +305,14 @@
 
   .pth.pth--hifi .button:hover {
     transform: none;
+  }
+}
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* The line under the focus that names the next module: 13.5px on a phone
+     (it was 12). */
+  .pth.pth--hifi .workspace__edge--exit {
+    font-size: 13.5px;
   }
 }

@@ -42,9 +42,10 @@
 }
 
 /* Authenticated-shell logout control (api mode only; hidden for fixture viewer). */
-/* PRODUCT HI-FI (DD-338): Public Home's «Войти» pill, on the shell. */
+/* PRODUCT HI-FI (DD-338): Public Home's «Войти» pill, on the shell — at the
+   product's 44px target (it was 40: the responsive pass, 2026-10-03). */
 .logout-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 16px;
   font-size: 12px;
   font-weight: 600;

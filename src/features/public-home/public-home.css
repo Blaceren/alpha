@@ -4894,3 +4894,117 @@ html.ph-smooth-scroll {
     margin-top: 16px;
   }
 }
+
+/* =========================================================================
+ * RESPONSIVE PASS (2026-10-03, owner: «проверь все на адаптивность, где есть
+ * ошибки исправляй… и про внешнюю главную не забудь»). Measured at 25 sizes
+ * from 320 to 2560 wide and on phones held sideways; each rule names what it
+ * fixed.
+ * ====================================================================== */
+
+/* One long word must not widen a grid track past its container: at 390 the
+   boundaries column was 388px inside a 348px shell, so the heading, the lead
+   and the «ATA — это не» card ran off the right edge. */
+@media (max-width: 920px) {
+  .ph .fit__columns,
+  .ph .boundaries__grid,
+  .ph .faq__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The decision window is not the route's sticky window: it holds one card
+     and shows all of it. The phone height every product window takes cut
+     its foot («Зафиксировано 17:20», the note) from 390 down. */
+  .ph .pw--decide {
+    height: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 680px) {
+  /* The longest word on the page, «самостоятельности», fits the phone's line
+     at the section scale: the size follows the shell (100% less 42px) so the
+     word never needs breaking. */
+  .ph .boundaries .display--section {
+    font-size: clamp(32px, calc(12.3vw - 6px), 58px);
+  }
+
+  /* «Последовательная» in the route's title ran 26px past its column at 320:
+     below 360 the title steps down with the screen (34px from 352). */
+  .ph .route__title {
+    font-size: clamp(28px, calc(12.5vw - 10px), 34px);
+  }
+
+  /* «Последовательность обязательна» was cut by its section at 360 and ran
+     past its column at 320: on a phone the value takes the 40px the restored
+     user-agent indent kept beside it (the frozen page's parity holds from
+     681px up). */
+  .ph .path-facts div {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .ph .path-facts dd {
+    margin-inline-start: 0;
+  }
+}
+
+/* The product windows' bars answer to the window's own width, not the
+   screen's: the same window is 276px wide on a phone and 1278px in the review
+   section. Where the bar cannot hold every section name the active one stays
+   (as the decision window always did); where it still cannot hold the demo
+   badge, the badge waits for a wider window — at 320 «Уровень 30» ran past the
+   window's edge, at 1199–1340 the badge did. */
+.ph .pw {
+  container-type: inline-size;
+}
+
+@container (max-width: 600px) {
+  .ph .pw__nav li:not(.is-active) {
+    display: none;
+  }
+}
+
+@container (max-width: 420px) {
+  .ph .pw__badge {
+    display: none;
+  }
+}
+
+/* The menu hangs from the fixed header, so it can never be scrolled to: on a
+   phone held sideways (375–430px tall) its last links and «Начать путь» fell
+   below the screen. It now ends above the screen's edge and scrolls inside. */
+@media (max-width: 1040px) {
+  .ph .primary-nav {
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* On a short phone the route's sticky window (52% of the screen) cannot hold
+   the News Calendar's list under its timeline: the first release was sliced
+   by the window's edge at 360×740 and 375×667. There the timeline, with the
+   releases on it, says it alone. */
+@media (max-width: 680px) and (max-height: 800px) {
+  .ph .pw-news__events {
+    display: none;
+  }
+}
+
+/* Targets and type a phone can use: the route's step titles reach 44px at
+   every size (42 at the phone's line height); «Войти» reads at the size of
+   «Меню» beside it; the footer's legal lines at 12px, not 10. */
+.ph .rstep__button {
+  padding: 9px 0;
+  margin: -9px 0;
+}
+
+.ph .mobile-login {
+  font-size: 12px;
+}
+
+.ph .site-footer__grid {
+  font-size: 12px;
+}

@@ -555,7 +555,9 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
       const overlapsX = target.left < dock.right && target.right > dock.left;
       const overlapsY = target.top < dock.bottom && target.bottom > dock.top;
       if (!overlapsX || !overlapsY) return;
-      const dockAtTop = dock.top <= 1;
+      // The strip docks at the top (under the floating bar on a desktop), the
+      // corner at the bottom: which way to move the question depends on which.
+      const dockAtTop = dock.top < window.innerHeight / 2;
       const delta = dockAtTop ? target.top - dock.bottom - 16 : target.bottom - dock.top + 16;
       window.scrollBy({ top: delta, behavior: prefersReducedMotion() ? "auto" : "smooth" });
     });

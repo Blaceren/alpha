@@ -151,6 +151,15 @@
 
 /* --------------------------------------------------------------- phones -- */
 
+/* Below 900px the shell's bar is fixed to the bottom: the page ends above it.
+   The frozen 56px left «Вернуться к уровню» and «Вернуться к пути» under the
+   bar on a phone (measured at 320, 360 and 375). */
+@media (max-width: 899px) {
+  .wsp.wsp--hifi .ws {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+}
+
 @media (max-width: 599px) {
   .wsp.wsp--hifi .ws-id__title,
   .wsp.wsp--hifi .ws-page-msg__title {

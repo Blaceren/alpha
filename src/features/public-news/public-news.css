@@ -562,3 +562,55 @@
     text-align: center;
   }
 }
+
+/* RESPONSIVE PASS (2026-10-03): a release row is one target. Its title was a
+   23px link in a row a thumb reads as a whole; the link now covers the row. */
+.pn .pn-row {
+  position: relative;
+}
+
+.pn .pn-row__title::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+/* RESPONSIVE PASS (2026-10-03): an article title steps down on the narrowest
+   phones so a long word («потребительских») fits its line at 320; titles come
+   from the editors, so a word that still cannot fit breaks instead of leaving
+   the screen. */
+@media (max-width: 680px) {
+  .pn .pn-article__title {
+    font-size: clamp(30px, calc(11vw - 2px), 38px);
+  }
+}
+
+.pn .pn-article__title,
+.pn .pn-row__title {
+  overflow-wrap: break-word;
+}
+
+/* On a phone the three figures read as rows, the label and the value on one
+   line: in three columns «ожидается» broke into «ожида / ется» at 320. */
+@media (max-width: 599px) {
+  .pn .pn-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pn .pn-figure {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .pn .pn-figure + .pn-figure {
+    border-top: 1px solid var(--line-300);
+    border-left: 0;
+  }
+
+  .pn .pn-figure dd {
+    margin: 0;
+    overflow-wrap: normal;
+  }
+}

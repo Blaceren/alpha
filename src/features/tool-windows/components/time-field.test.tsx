@@ -193,3 +193,30 @@ describe("the time field — pointed at", () => {
     expect(field()).toHaveAttribute("aria-describedby", "why");
   });
 });
+
+describe("the time field — where its panel opens", () => {
+  const rect = (top: number, height: number) =>
+    ({ top, bottom: top + height, height, left: 0, right: 320, width: 320, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("opens under the field where there is room", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(toggle());
+    expect(panel()).toHaveAttribute("data-side", "down");
+  });
+
+  it("opens upward, lifted by its own height, when the screen has no room below and room above (2026-10-03)", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      // The panel is 480px tall; the field sits at 600–648, so 196px remain below it and 520 above.
+      return this.getAttribute("role") === "dialog" ? rect(654, 480) : rect(600, 48);
+    });
+    render(<Harness />);
+    await user.click(toggle());
+    expect(panel()).toHaveAttribute("data-side", "up");
+    expect(panel().style.getPropertyValue("--tp-lift")).toBe("534px");
+  });
+});

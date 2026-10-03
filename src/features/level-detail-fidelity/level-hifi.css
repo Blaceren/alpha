@@ -569,3 +569,12 @@
     transition: none;
   }
 }
+
+/* Responsive pass (2026-10-03): type a phone can read. */
+@media (max-width: 599px) {
+  /* The report's criteria and how it is checked are its rules: on a phone
+     they read at 14.5px, not 13.5. */
+  .ld.ld--hifi :is(.rpt__criteria, .rpt__formal) {
+    font-size: 14.5px;
+  }
+}
