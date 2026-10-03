@@ -165,6 +165,9 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
             </div>
 
             <div className="reframe" data-reveal>
+              {/* Phones only (CSS): stacked, the device needs its two words —
+                  what recedes and what is written. DD-342. */}
+              <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
               <div className="source-cloud" aria-label="Чужие ответы">
                 <span>Разборы</span>
                 <span>Стратегии</span>
@@ -174,6 +177,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
                 <span>Чужие выводы</span>
               </div>
               <div className="reframe__axis" aria-hidden="true" />
+              <p className="reframe__caption reframe__caption--own" aria-hidden="true">Ваше решение</p>
 
               {/* The same object, now determinate — in the Trade Card, where
                   the product holds it. decision-window.tsx */}

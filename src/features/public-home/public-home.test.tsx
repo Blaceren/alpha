@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -901,7 +901,7 @@ describe("Public Home — the owner's review of 2026-10-02", () => {
      * nodes on the page, not for the one last complained about.
      */
     it("draws no line as the last child of anything that holds nodes", () => {
-      for (const holder of ["route__steps", "learning-loop", "pw-path__nodes", "cyc__path"]) {
+      for (const holder of ["route__steps", "learning-loop", "pw-path__nodes", "cyc__path", "trail"]) {
         expect(rules, holder).toMatch(new RegExp(`\\.${holder}::before \\{`));
         expect(rules, holder).not.toMatch(new RegExp(`\\.${holder}(\\.[\\w-]+)*::after`));
       }
@@ -977,6 +977,120 @@ describe("Public Home — the owner's review of 2026-10-02", () => {
       expect(frames).toMatch(/0% \{\s*opacity:\s*0;/);
       expect(frames).toMatch(/100% \{\s*opacity:\s*0;/);
     });
+  });
+});
+
+describe("Public Home — the phone composition (DD-342)", () => {
+  /*
+   * Owner, 2026-10-03: «мобильная версия внешней главной мне не нравится…
+   * такая не понятная получается». Measured: 21.5 screens at 390px, the six
+   * tool windows alone almost five. Up to 920px the tools are one deck under
+   * the rail of the levels they open on; up to 680px the cycle is a spine
+   * without its objects and the headings are two or three lines.
+   */
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  /** Every block of a media query with exactly this prelude, joined. */
+  const media = (prelude: string) =>
+    Array.from(rules.matchAll(new RegExp(`@media \\(${prelude}\\) \\{([\\s\\S]*?)\\n\\}`, "g")))
+      .map((m) => m[1] ?? "")
+      .join("\n");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mountDeck() {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("920"), media: query }));
+    const scrollTo = vi.fn();
+    // jsdom lays nothing out; the deck is asked to scroll, and that is what is checked.
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { value: scrollTo, configurable: true, writable: true });
+    const view = render(<PublicHomeScreen authenticated={false} />);
+    const rail = view.container.querySelector(".tdeck__rail") as HTMLElement;
+    const buttons = Array.from(rail.querySelectorAll(".trail__button")) as HTMLButtonElement[];
+    const deck = view.container.querySelector("[data-tdeck]") as HTMLElement;
+    return { ...view, rail, buttons, deck, scrollTo };
+  }
+
+  it("names the six tools on the rail in the order they open, from the catalogue", () => {
+    const { buttons, rail } = mountDeck();
+    const built = TOOL_WINDOWS.filter((tool) => tool.built).sort((a, b) => a.unlockLevel - b.unlockLevel);
+    expect(buttons.map((b) => b.textContent)).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(
+      built.map((tool) => `${tool.title}, открывается на уровне ${tool.unlockLevel}`),
+    );
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false", "false", "false"]);
+    expect(rail.querySelector(".trail__note")?.textContent?.replace(/\s+/g, " ")).toContain(
+      `${built[0]!.title} — открывается на уровне ${built[0]!.unlockLevel}`,
+    );
+  });
+
+  it("controls the deck's cards: every rail button points at a card of the deck", () => {
+    const { buttons, deck } = mountDeck();
+    const cards = Array.from(deck.children).map((card) => card.id);
+    expect(buttons.map((b) => b.getAttribute("aria-controls"))).toEqual(cards);
+    expect(deck.querySelector(":scope > .is-shown")?.id).toBe(cards[0]);
+  });
+
+  it("a press on the rail brings that card, lights the rail up to it and names it", () => {
+    const { buttons, rail, deck, scrollTo } = mountDeck();
+    fireEvent.click(buttons[2]!);
+    expect(scrollTo).toHaveBeenCalled();
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true", "false", "false", "false"]);
+    const steps = Array.from(rail.querySelectorAll(".trail__step"));
+    expect(steps.map((li) => li.classList.contains("is-reached"))).toEqual([true, true, true, false, false, false]);
+    expect((rail.querySelector(".trail") as HTMLElement).style.getPropertyValue("--tr-at")).toBe("2");
+    expect(rail.querySelector(".trail__note")?.textContent).toContain("3 / 6");
+    expect(deck.querySelector(":scope > .is-shown")?.id).toBe(buttons[2]!.getAttribute("aria-controls"));
+  });
+
+  it("a tool's title in the deck brings its card sideways and leaves the page where it is", () => {
+    const { deck, buttons, scrollTo } = mountDeck();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true, writable: true });
+    fireEvent.click(deck.querySelectorAll(".rstep__button")[4]!);
+    expect(scrollTo).toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(buttons[4]!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("is the deck only up to 920px: wide screens keep the route and the pinned window", () => {
+    expect(rules).toMatch(/\n\.ph \.tdeck__rail \{\s*display:\s*none;\s*\}/);
+    const narrow = media("max-width: 920px");
+    expect(narrow).toMatch(/\.ph \.tdeck__rail \{[^}]*display:\s*block/);
+    expect(narrow).toMatch(/\.ph \.route__list--tools \{[^}]*display:\s*flex[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/);
+    expect(narrow).toMatch(/\.ph \.route__list--tools > \.rstep \{[^}]*scroll-snap-align:\s*start/);
+    // The route's line ends above the deck: the tools lie over it.
+    expect(narrow).toMatch(/\.ph \.route__segment--tools \{[^}]*z-index:\s*1[^}]*background:\s*var\(--ink-950\)/);
+    // Its nodes are 44px targets.
+    expect(narrow).toMatch(/\.ph \.trail__button \{[^}]*min-height:\s*44px/);
+  });
+
+  it("says the two words of «многое → одно» when it stands in a column, to the eye only", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const captions = Array.from(container.querySelectorAll(".reframe__caption"));
+    expect(captions.map((c) => c.textContent)).toEqual(["Чужие ответы", "Ваше решение"]);
+    for (const caption of captions) expect(caption).toHaveAttribute("aria-hidden", "true");
+    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*none;\s*\}/);
+    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe__caption \{[^}]*display:\s*block/);
+  });
+
+  it("makes the cycle a spine on a phone: the objects go, the line runs behind the nodes", () => {
+    const phone = media("max-width: 680px");
+    expect(phone).toMatch(/\.ph \.learning-loop \.cyc \{\s*display:\s*none;\s*\}/);
+    expect(phone).toMatch(/\.ph \.learning-loop > li > span \{[^}]*left:\s*0/);
+    // Wide screens keep the six objects: outside the phone blocks nothing hides them.
+    const outside = Array.from(rules.matchAll(/@media \(max-width: 680px\) \{[\s\S]*?\n\}/g)).reduce(
+      (rest, block) => rest.replace(block[0], ""),
+      rules,
+    );
+    expect(outside).not.toMatch(/\.learning-loop \.cyc \{\s*display:\s*none/);
+  });
+
+  it("keeps a phone heading to a few lines: section headings at most 36px", () => {
+    const phone = media("max-width: 680px");
+    const heading = /\.ph \.display--section,\s*\.ph \.route__title \{([^}]*)\}/.exec(phone)?.[1] ?? "";
+    expect(heading).toMatch(/font-size:\s*clamp\(24px, 7\.8vw, 36px\)/);
+    expect(phone).toMatch(/\.ph \.final-step__title \{[^}]*font-size:\s*clamp\(25px, 7\.4vw, 32px\)/);
   });
 });
 

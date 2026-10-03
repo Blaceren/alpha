@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   PATH_STEP,
   PRODUCT_STEP,
@@ -39,9 +39,19 @@ import { RouteWindowState } from "@/features/public-home/product-window-states";
  * before, so the menu and every published deep link still land where they did.
  * `#first-journey` still precedes the journey — now the three passed nodes the
  * route starts with.
+ *
+ * THE SIX TOOLS ON A NARROW SCREEN (2026-10-03, DD-342, the owner: the phone
+ * page «такая не понятная получается»). Stacked, the six tool windows were
+ * 4 000px of interface — almost five screens. Up to 920px they are one deck:
+ * a card per tool, swiped sideways, the next one showing at the edge, under a
+ * rail of the levels they open on — L5 … L30. The rail is not decoration: it
+ * is when each tool opens, it shows which card is on screen, and a press on
+ * it brings that card; rail and card share one screen. The vertical route
+ * stops above the deck, and the scroll observer leaves the deck's cards alone.
  */
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const DECK = "(max-width: 920px)";
 
 function stepId(id: RouteStateId): string {
   return `route-step-${id}`;
@@ -78,15 +88,22 @@ export function ProductRoute() {
   const [active, setActive] = useState<RouteStateId>(ROUTE_STEPS[0]!.id);
   const activeIndex = stepIndex(active);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // The tool card on show in the deck (narrow screens only).
+  const [tool, setTool] = useState(0);
+  const deckRef = useRef<HTMLOListElement | null>(null);
 
   useEffect(() => {
     const root = listRef.current;
     if (!root || !("IntersectionObserver" in window)) return;
-    const steps = Array.from(root.querySelectorAll<HTMLElement>("[data-route-step]"));
     // The band sits around the upper third on a wide screen, beside the pinned
     // window; on a narrow one (each step with its own window) a little above
-    // the middle. A step is active while it crosses the band.
-    const narrow = window.matchMedia("(max-width: 920px)").matches;
+    // the middle. A step is active while it crosses the band. On a narrow
+    // screen the six tools stand side by side in the deck — all of them cross
+    // the band at once — so the deck keeps its own card and is not observed.
+    const narrow = window.matchMedia(DECK).matches;
+    const steps = Array.from(root.querySelectorAll<HTMLElement>("[data-route-step]")).filter(
+      (element) => !(narrow && element.closest("[data-tdeck]")),
+    );
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -122,13 +139,65 @@ export function ProductRoute() {
     return () => window.removeEventListener("resize", draw);
   }, [active]);
 
-  const show = useCallback((id: RouteStateId) => {
-    setActive(id);
-    const element = document.getElementById(stepId(id));
-    if (!element) return;
-    const reduced = window.matchMedia(REDUCED_MOTION).matches;
-    element.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+  // The deck: the card on show is the one whose start is nearest the deck's
+  // own start (its padding), read once per frame while it scrolls.
+  useEffect(() => {
+    const deck = deckRef.current;
+    if (!deck) return;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const start = deck.getBoundingClientRect().left + (parseFloat(getComputedStyle(deck).paddingLeft) || 0);
+      let best = 0;
+      let distance = Number.POSITIVE_INFINITY;
+      Array.from(deck.children).forEach((card, index) => {
+        const gap = Math.abs(card.getBoundingClientRect().left - start);
+        if (gap < distance) {
+          distance = gap;
+          best = index;
+        }
+      });
+      setTool(best);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(read);
+    };
+    deck.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      deck.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, []);
+
+  const showTool = useCallback((index: number) => {
+    const deck = deckRef.current;
+    const card = deck?.children[index] as HTMLElement | undefined;
+    if (!deck || !card) return;
+    setTool(index);
+    const start = deck.getBoundingClientRect().left + (parseFloat(getComputedStyle(deck).paddingLeft) || 0);
+    const reduced = window.matchMedia(REDUCED_MOTION).matches;
+    deck.scrollTo({
+      left: deck.scrollLeft + card.getBoundingClientRect().left - start,
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }, []);
+
+  const show = useCallback(
+    (id: RouteStateId) => {
+      // In the deck a tool's title brings its card sideways; the page stays.
+      const toolIndex = TOOL_STEPS.findIndex((item) => item.id === id);
+      if (toolIndex >= 0 && window.matchMedia(DECK).matches) {
+        showTool(toolIndex);
+        return;
+      }
+      setActive(id);
+      const element = document.getElementById(stepId(id));
+      if (!element) return;
+      const reduced = window.matchMedia(REDUCED_MOTION).matches;
+      element.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    },
+    [showTool],
+  );
 
   // Steps carry no `data-reveal`: React rewrites their class list on every
   // state change, which would drop the `is-visible` the reveal observer adds
@@ -137,11 +206,13 @@ export function ProductRoute() {
   const step = (item: RouteStep) => {
     const index = stepIndex(item.id);
     const reached = index <= activeIndex;
+    // In the deck (narrow screens) the card on show; wide screens ignore it.
+    const shown = TOOL_STEPS[tool]?.id === item.id;
     return (
       <li
         key={item.id}
         id={stepId(item.id)}
-        className={`rstep${item.id === active ? " is-active" : ""}${reached ? " is-reached" : ""}`}
+        className={`rstep${item.id === active ? " is-active" : ""}${reached ? " is-reached" : ""}${shown ? " is-shown" : ""}`}
         data-route-step={item.id}
       >
         <i className="rstep__node" aria-hidden="true">
@@ -172,6 +243,7 @@ export function ProductRoute() {
   };
 
   const current = ROUTE_STEPS[activeIndex] ?? ROUTE_STEPS[0]!;
+  const shownTool = TOOL_STEPS[tool] ?? TOOL_STEPS[0]!;
 
   return (
     <section className="route surface surface--ink" id="product">
@@ -243,7 +315,7 @@ export function ProductRoute() {
           </section>
 
           {/* -------------------------------------------- segment: tools */}
-          <section className="route__segment" id="tools">
+          <section className="route__segment route__segment--tools" id="tools">
             <div className="route__intro" data-reveal>
               <p className="eyebrow">Инструменты · открываются по пути</p>
               <h2 className="display route__title">Инструмент появляется в контексте задачи.</h2>
@@ -252,7 +324,49 @@ export function ProductRoute() {
                 подвёл к задаче, для которой он нужен.
               </p>
             </div>
-            <ol className="route__list route__list--tools" aria-label="Шесть инструментов ATA и уровни их открытия">
+            {/* The deck's rail — narrow screens only (CSS): the levels the six
+                tools open on, lit up to the card on show. */}
+            <div className="tdeck__rail">
+              <ol
+                className="trail"
+                aria-label="Инструменты по уровням открытия"
+                style={{ "--tr-at": tool } as CSSProperties}
+              >
+                {TOOL_STEPS.map((item, index) => (
+                  <li
+                    key={item.id}
+                    className={`trail__step${index === tool ? " is-active" : ""}${index <= tool ? " is-reached" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="trail__button"
+                      aria-pressed={index === tool}
+                      aria-controls={stepId(item.id)}
+                      aria-label={`${item.name}, открывается на уровне ${item.level}`}
+                      onClick={() => showTool(index)}
+                    >
+                      <span className="trail__num pw-mono" aria-hidden="true">
+                        {item.node}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <p className="trail__note">
+                <span>
+                  <strong>{shownTool.name}</strong> — открывается на уровне {shownTool.level}
+                </span>
+                <span className="trail__count pw-mono">
+                  {tool + 1} / {TOOL_STEPS.length}
+                </span>
+              </p>
+            </div>
+            <ol
+              ref={deckRef}
+              className="route__list route__list--tools"
+              aria-label="Шесть инструментов ATA и уровни их открытия"
+              data-tdeck
+            >
               {TOOL_STEPS.map(step)}
             </ol>
           </section>

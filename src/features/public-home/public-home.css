@@ -5244,3 +5244,469 @@ html.ph-smooth-scroll {
     transition: none;
   }
 }
+
+/* =========================================================================
+ * THE PHONE COMPOSITION (2026-10-03, DD-342 — the owner: «мобильная версия
+ * внешней главной мне не нравится… такая не понятная получается»).
+ *
+ * Measured before, at 390px: 21.5 screens, 18 product windows on the way
+ * down, 103 text elements under 11px, four numbered sequences in a row, every
+ * heading 48px over three to seven lines. Direction «Одна лента» (review:
+ * design-memory/reviews/public-home-mobile-review.md): one reading line, one
+ * object per idea and none twice, the cycle as a spine that fits one screen,
+ * the six tools as one deck under the rail of the levels they open on. Wide
+ * screens are untouched.
+ * ====================================================================== */
+
+/* --- «многое → одно» says its two words when it stands in a column ------- */
+.ph .reframe__caption {
+  display: none;
+}
+
+/* --- the tools deck: a card per tool, under the rail of their levels ---- */
+.ph .tdeck__rail {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  /* Small print reads at 11px on phones and tablets, upright or sideways (it
+     was 10px, tracked wide). The hero keeps its line as it was: the brand and
+     what ATA is, on one line. */
+  .ph .eyebrow,
+  .ph .micro-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-wrap: balance;
+  }
+
+  .ph .hero .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.17em;
+  }
+
+  .ph .pw--decide .pw__level,
+  .ph .dc__field .dframe__field,
+  .ph .dc__fixed,
+  .ph .pw--review .pw__level,
+  .ph .rw__title .pw-mono,
+  .ph .rw__entry-head .pw-mono,
+  .ph .rw__entry-head .rw__chip {
+    font-size: 11px;
+  }
+
+  .ph .reframe__caption {
+    display: block;
+    margin: 0;
+    color: rgba(11, 13, 10, 0.62);
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .ph .reframe__caption--own {
+    color: var(--ink-950);
+  }
+
+  .ph .route {
+    --tdeck-bleed: 32px;
+  }
+
+  /* The route's line ends above the deck: the tools are a ground of their
+     own, laid over the line from the route's left edge. The steps' bottom
+     padding moves inside the segment, so no stub of line shows under it. */
+  .ph .route__steps {
+    padding-bottom: 0;
+  }
+
+  .ph .route__segment--tools {
+    position: relative;
+    z-index: 1;
+    margin-left: -44px;
+    padding-bottom: 40px;
+    background: var(--ink-950);
+  }
+
+  .ph .tdeck__rail {
+    display: block;
+    margin: 6px 0 18px;
+    container-type: inline-size;
+  }
+
+  .ph .trail {
+    position: relative;
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  /* One line and the first child (DD-333): faint from the first level to the
+     last, Signal up to the card on show — a layer of its own background. */
+  .ph .trail::before {
+    position: absolute;
+    top: 21px;
+    right: calc(100% / 12);
+    left: calc(100% / 12);
+    height: 2px;
+    background:
+      linear-gradient(var(--signal-400), var(--signal-400)) left center / calc(var(--tr-at, 0) * 20%) 100% no-repeat,
+      var(--line-dark);
+    content: "";
+    transition: background-size 240ms var(--ease);
+  }
+
+  .ph .trail__button {
+    display: grid;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    place-items: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ph .trail__num {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(243, 244, 239, 0.22);
+    border-radius: 50%;
+    background: var(--ink-950);
+    color: var(--text-on-dark-muted);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    place-items: center;
+    transition:
+      background-color 240ms var(--ease),
+      border-color 240ms var(--ease),
+      color 240ms var(--ease);
+  }
+
+  .ph .trail__step.is-reached .trail__num {
+    border-color: var(--signal-400);
+    color: var(--text-on-dark);
+  }
+
+  .ph .trail__step.is-active .trail__num {
+    border-color: var(--signal-400);
+    background: var(--signal-400);
+    color: var(--ink-950);
+    box-shadow: 0 0 0 6px rgba(199, 247, 109, 0.14);
+  }
+
+  .ph .trail__button:focus-visible {
+    outline: none;
+  }
+
+  .ph .trail__button:focus-visible .trail__num {
+    outline: 2px solid var(--signal-400);
+    outline-offset: 3px;
+  }
+
+  .ph .trail__note {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 0;
+    color: var(--text-on-dark-muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .ph .trail__note strong {
+    color: var(--text-on-dark);
+    font-weight: 600;
+  }
+
+  .ph .trail__count {
+    flex: none;
+    font-size: 12px;
+  }
+
+  /* The deck: swiped sideways, one card at a time, the next one at the edge.
+     It runs to the section's edges so a card can slide out of view. */
+  .ph .route__list--tools {
+    display: flex;
+    gap: 12px;
+    margin: 0 calc(var(--tdeck-bleed) * -1);
+    padding: 0 var(--tdeck-bleed) 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--tdeck-bleed);
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .ph .route__list--tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ph .route__list--tools > .rstep {
+    flex: 0 0 min(calc(100% - 28px), 520px);
+    padding: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    transition: opacity 240ms var(--ease);
+  }
+
+  .ph .route__list--tools > .rstep:not(.is-shown) {
+    opacity: 0.5;
+  }
+
+  /* The rail names the tool and its level; the card keeps its words and its window. */
+  .ph .route__list--tools .rstep__node,
+  .ph .route__list--tools .rstep__label {
+    display: none;
+  }
+
+  .ph .route__list--tools .rstep__title {
+    margin-top: 0;
+  }
+}
+
+/* The narrowest phones: six levels keep to their sixth. */
+@container (max-width: 300px) {
+  .ph .trail__num {
+    width: 40px;
+    height: 40px;
+    font-size: 11px;
+  }
+
+  .ph .trail::before {
+    top: 19px;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph {
+    --section-pad: 60px;
+  }
+
+  .ph .route {
+    --tdeck-bleed: 16px;
+  }
+
+  /* --- type: a heading is two or three lines, not a screen -------------
+     7.8vw is what the longest word on the page («самостоятельности.») can
+     take and still keep inside the column from 320px up. */
+  .ph .display--section,
+  .ph .route__title {
+    font-size: clamp(24px, 7.8vw, 36px);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+  }
+
+  .ph .final-step__title {
+    font-size: clamp(25px, 7.4vw, 32px);
+  }
+
+  /* The responsive pass gave this heading its own size (12.3vw − 6px) to fit
+     «самостоятельности.»; measured, it still ran 5–9px past its box from 320
+     to 414. It takes the page's phone scale with the rest. */
+  .ph .boundaries .display--section {
+    font-size: clamp(24px, 7.8vw, 36px);
+  }
+
+  .ph .eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .ph .section-intro .lead,
+  .ph .route__intro .lead {
+    margin-top: 16px;
+  }
+
+  /* --- the hero's facts: four short lines, not four tiles ---------------- */
+  .ph .hero__facts {
+    margin-top: 40px;
+  }
+
+  .ph .hero__facts div {
+    min-height: 0;
+    padding: 14px 12px;
+  }
+
+  .ph .hero__facts strong {
+    font-size: 26px;
+  }
+
+  .ph .hero__facts span {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  /* --- #decide: the chips are words again -------------------------------- */
+  .ph .reframe {
+    gap: 14px;
+  }
+
+  .ph .source-cloud span {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  .ph .source-cloud span:nth-child(2),
+  .ph .source-cloud span:nth-child(5) {
+    margin-left: 0;
+  }
+
+  .ph .reframe__axis {
+    height: 32px;
+  }
+
+
+  /* --- the cycle: a spine of six, on one screen -------------------------
+     Each step is its node, its name and one sentence. Its object goes: every
+     one of them is on the page in full further down — the reason in the
+     Trade Card (#decide), the check and the return in the review window, the
+     next action in the home window, the levels in the path window. */
+  .ph .learning-loop {
+    --loop-node: 40px;
+    margin-top: 36px;
+  }
+
+  .ph .learning-loop > li {
+    min-height: calc(var(--loop-node) + 24px);
+    align-items: flex-start;
+    padding: 0 0 24px 58px;
+    text-align: left;
+  }
+
+  .ph .learning-loop > li > span {
+    top: 0;
+    left: 0;
+    margin-left: 0;
+    font-size: 12px;
+  }
+
+  .ph .learning-loop > li > h3 {
+    margin: 8px 0 4px;
+    font-size: 19px;
+  }
+
+  .ph .learning-loop > li > p {
+    max-width: none;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+
+  /* From this node's centre to the next one's, behind both: the steps are
+     revealed with a transform, so each is painted over the line before it. */
+  .ph .learning-loop > li:nth-child(n)::before {
+    top: calc(var(--loop-node) / 2);
+    right: auto;
+    bottom: calc(var(--loop-node) / -2);
+    left: calc(var(--loop-node) / 2 - 1px);
+    width: 2px;
+    height: auto;
+    margin-left: 0;
+  }
+
+  .ph .learning-loop .cyc {
+    display: none;
+  }
+
+  /* --- the path's facts: the name over its value, read at body size ------
+     Side by side, «Последовательность» had 180px at 320 and ran past it. */
+  .ph .path-facts {
+    margin-top: 28px;
+  }
+
+  .ph .path-facts div {
+    padding: 11px 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .ph .path-facts dt {
+    color: var(--text-on-dark-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .ph .path-facts dd {
+    color: var(--text-on-dark);
+    font-size: 14.5px;
+    line-height: 1.45;
+  }
+
+  /* --- the path window's levels: the ticks already say «пройден» ----------
+     (the two words ran into one at 320), and the module line keeps to one row. */
+  .ph .pw-node--done em {
+    display: none;
+  }
+
+  .ph .pw-node strong,
+  .ph .pw-node em {
+    font-size: 11px;
+  }
+
+  .ph .pw-path__card-head {
+    gap: 8px;
+  }
+
+  .ph .pw-path__card-head span {
+    white-space: nowrap;
+  }
+
+  /* --- fit: two short lists ----------------------------------------------- */
+  .ph .fit__columns {
+    margin-top: 36px;
+  }
+
+  .ph .fit__columns article {
+    min-height: 0;
+    padding: 26px 0 28px;
+  }
+
+  .ph .fit__columns h3 {
+    margin: 12px 0 16px;
+    font-size: 24px;
+    line-height: 1.08;
+  }
+
+  .ph .plain-list li {
+    padding: 10px 0 10px 24px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .ph .plain-list li::before {
+    top: 16px;
+  }
+
+  /* --- what ATA is, and the first step: no screen-high gaps --------------- */
+  .ph .boundaries__grid {
+    gap: 36px;
+  }
+
+  .ph .not-list ul {
+    margin-top: 20px;
+  }
+
+  .ph .faq__grid {
+    gap: 36px;
+  }
+
+  .ph .final-step {
+    margin-top: 48px;
+    padding-top: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .trail::before,
+  .ph .trail__num,
+  .ph .route__list--tools > .rstep {
+    transition: none;
+  }
+}

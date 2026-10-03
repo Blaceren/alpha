@@ -75,7 +75,13 @@ export function ReviewWindow() {
   /** True for the one moment after the sequence in which the strip hints that it can be pressed. */
   const [hinting, setHinting] = useState(false);
   const windowRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  /** The tallest the block has been at this width (see «It never shrinks» below). */
+  const tallestRef = useRef({ width: 0, height: 0 });
+  /** The sequence has ended, or the visitor took over: nothing plays any more. */
   const playedRef = useRef(false);
+  /** How many states of the sequence have been shown. */
+  const shownRef = useRef(0);
   const timersRef = useRef<number[]>([]);
 
   const stop = useCallback(() => {
@@ -86,25 +92,48 @@ export function ReviewWindow() {
   // Play once, when the window is reached, unless motion is reduced. The
   // window itself is observed, not the block with the strip: on a phone the
   // block is taller than the screen and would never show enough of itself.
+  //
+  // ONLY IN SIGHT (2026-10-03, DD-342). The four states are not one height. A
+  // visitor who scrolled on before the sequence ended had it go on above them,
+  // and the page under their thumb jumped by the difference — measured 170px
+  // on a phone, where Safari does not hold the scroll position for them. The
+  // sequence now plays only while most of the window (60%) is on screen —
+  // while the visitor is looking at it — and goes on from the same state when
+  // it is back.
   useEffect(() => {
     const root = windowRef.current;
     if (!root || !("IntersectionObserver" in window)) return;
     if (window.matchMedia(REDUCED).matches) return;
+    const order: ReviewStageId[] = ["feedback", "v2", "accepted"];
+    const play = () => {
+      stop();
+      const rest = order.slice(shownRef.current);
+      rest.forEach((id, i) => {
+        timersRef.current.push(
+          window.setTimeout(() => {
+            shownRef.current += 1;
+            setStage(id);
+          }, HOLD_MS * (i + 1)),
+        );
+      });
+      // The sequence has played to its end: the strip hints, once, and lets go.
+      const end = HOLD_MS * rest.length + HINT_AFTER_MS;
+      timersRef.current.push(
+        window.setTimeout(() => {
+          playedRef.current = true;
+          setHinting(true);
+        }, end),
+      );
+      timersRef.current.push(window.setTimeout(() => setHinting(false), end + HINT_MS));
+    };
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting) || playedRef.current) return;
-        playedRef.current = true;
-        observer.disconnect();
-        const order: ReviewStageId[] = ["feedback", "v2", "accepted"];
-        order.forEach((id, i) => {
-          timersRef.current.push(window.setTimeout(() => setStage(id), HOLD_MS * (i + 1)));
-        });
-        // The sequence has played to its end: the strip hints, once, and lets go.
-        const end = HOLD_MS * order.length + HINT_AFTER_MS;
-        timersRef.current.push(window.setTimeout(() => setHinting(true), end));
-        timersRef.current.push(window.setTimeout(() => setHinting(false), end + HINT_MS));
+        if (playedRef.current) return;
+        const entry = entries[entries.length - 1];
+        if (entry && entry.intersectionRatio >= 0.6) play();
+        else stop();
       },
-      { threshold: 0.3 },
+      { threshold: [0, 0.6] },
     );
     observer.observe(root);
     return () => {
@@ -134,6 +163,38 @@ export function ReviewWindow() {
     [choose],
   );
 
+  // IT NEVER SHRINKS (DD-342). On a phone the states differ by up to 250px
+  // (the reviewer's comment is the tallest); going back to a shorter one
+  // pulled the page up under the visitor. The block keeps the tallest height
+  // it has had at this width; a new width starts over.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const width = root.clientWidth;
+    if (width !== tallestRef.current.width) {
+      root.style.minHeight = "";
+      tallestRef.current = { width, height: 0 };
+    }
+    const height = root.getBoundingClientRect().height;
+    if (height > tallestRef.current.height) {
+      tallestRef.current.height = height;
+      // The exact height, fraction and all: a rounded-up one adds a pixel to the page.
+      root.style.minHeight = `${height}px`;
+    }
+  }, [stage]);
+
+  // A turned phone is a new width: the kept height no longer applies.
+  useEffect(() => {
+    const onResize = () => {
+      const root = rootRef.current;
+      if (!root || root.clientWidth === tallestRef.current.width) return;
+      root.style.minHeight = "";
+      tallestRef.current = { width: root.clientWidth, height: root.getBoundingClientRect().height };
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const at = reviewStageIndex(stage);
   const returned = stage === "feedback";
   const corrected = at >= 2;
@@ -141,7 +202,7 @@ export function ReviewWindow() {
   const reason = corrected ? DECISION_STRONG : DECISION_WEAK;
 
   return (
-    <div className="review">
+    <div className="review" ref={rootRef}>
       {/* ON A NARROW SCREEN THE STATES ARE A STEPPER ABOVE THE WINDOW
           (2026-10-03, the owner from a phone: «не понятно что переключается и
           зачем переключатели занимают весь экран»). The four cards stacked to

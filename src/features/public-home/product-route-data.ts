@@ -36,6 +36,8 @@ export type RouteStep = {
   readonly id: RouteStateId;
   /** The node's mark on the route: a level code or the segment's own word. */
   readonly node: string;
+  /** What the step is called on its own: the screen or the tool's name. */
+  readonly name: string;
   /** Mono label above the title: what the visitor is looking at. */
   readonly label: string;
   /** The benefit, in the visitor's words. */
@@ -99,6 +101,7 @@ export const TOOL_STEPS: ReadonlyArray<RouteStep> = TOOL_WINDOWS.filter((tool) =
   .map((tool) => ({
     id: TOOL_STATE[tool.slug],
     node: `L${tool.unlockLevel}`,
+    name: tool.title,
     label: `${tool.title} · открывается на L${tool.unlockLevel}`,
     title: TOOL_STEP_COPY[tool.slug].title,
     copy: TOOL_STEP_COPY[tool.slug].copy,
@@ -108,6 +111,7 @@ export const TOOL_STEPS: ReadonlyArray<RouteStep> = TOOL_WINDOWS.filter((tool) =
 export const PRODUCT_STEP: RouteStep = {
   id: "home",
   node: "L3",
+  name: "Главная",
   label: "Главная · уровень 3",
   title: "Один следующий шаг.",
   copy:
@@ -118,6 +122,7 @@ export const PRODUCT_STEP: RouteStep = {
 export const PATH_STEP: RouteStep = {
   id: "path",
   node: "01",
+  name: "Путь",
   label: "Путь · модуль 01 из 20",
   title: "Виден только текущий сегмент.",
   copy:

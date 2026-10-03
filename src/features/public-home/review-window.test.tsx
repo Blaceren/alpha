@@ -10,13 +10,21 @@ import { ReviewWindow } from "@/features/public-home/review-window";
  * reached when the test says so, and the clock is the test's.
  */
 
-type Entry = { isIntersecting: boolean };
-let observers: Array<{ report: (visible: boolean) => void; disconnected: boolean }> = [];
+type Entry = { isIntersecting: boolean; intersectionRatio: number };
+/** `true` is the window wholly on screen, `false` wholly off it, a number the share of it on screen. */
+type Report = (visible: boolean | number) => void;
+let observers: Array<{ report: Report; disconnected: boolean }> = [];
 
 class ObserverDouble {
-  private record: { report: (visible: boolean) => void; disconnected: boolean };
+  private record: { report: Report; disconnected: boolean };
   constructor(callback: (entries: Entry[]) => void) {
-    this.record = { report: (visible) => callback([{ isIntersecting: visible }]), disconnected: false };
+    this.record = {
+      report: (visible) => {
+        const ratio = typeof visible === "number" ? visible : visible ? 1 : 0;
+        callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }]);
+      },
+      disconnected: false,
+    };
     observers.push(this.record);
   }
   observe() {}
@@ -33,8 +41,9 @@ function mount(reducedMotion = false) {
   const strip = () => view.container.querySelector(".evidence-track") as HTMLElement;
   const cards = () => Array.from(view.container.querySelectorAll(".evidence-track > li")) as HTMLElement[];
   const reach = () => act(() => observers.at(-1)!.report(true));
+  const leave = () => act(() => observers.at(-1)!.report(false));
   const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
-  return { ...view, stage, strip, cards, reach, wait };
+  return { ...view, stage, strip, cards, reach, leave, wait };
 }
 
 beforeEach(() => {
@@ -69,11 +78,51 @@ describe("Review window — the sequence", () => {
   it("plays once: the window reached again does not start it over", () => {
     const view = mount();
     view.reach();
-    expect(observers.at(-1)!.disconnected).toBe(true);
     view.wait(6000);
     expect(view.stage()).toBe("accepted");
+    view.leave();
     view.reach();
     view.wait(6000);
+    expect(view.stage()).toBe("accepted");
+  });
+
+  it("plays only while most of the window is on screen: a third of it is not enough (DD-342)", () => {
+    const view = mount();
+    act(() => observers.at(-1)!.report(true));
+    view.wait(1500);
+    expect(view.stage()).toBe("feedback");
+    // Partly scrolled away: the visitor is reading what follows, the window waits.
+    act(() => observers.at(-1)!.report(0.35));
+    view.wait(5000);
+    expect(view.stage()).toBe("feedback");
+  });
+
+  it("does not start for a window only a third on screen (DD-342)", () => {
+    const view = mount();
+    act(() => observers.at(-1)!.report(0.35));
+    view.wait(5000);
+    expect(view.stage()).toBe("v1");
+    act(() => observers.at(-1)!.report(0.7));
+    view.wait(1500);
+    expect(view.stage()).toBe("feedback");
+  });
+
+  it("plays only in sight: out of view it waits, and goes on from the same state (DD-342)", () => {
+    // The states are not one height; a sequence that went on above a visitor
+    // who had scrolled on moved the page under their thumb.
+    const view = mount();
+    view.reach();
+    view.wait(1500);
+    expect(view.stage()).toBe("feedback");
+    view.leave();
+    view.wait(10000);
+    expect(view.stage()).toBe("feedback");
+    view.reach();
+    view.wait(1499);
+    expect(view.stage()).toBe("feedback");
+    view.wait(1);
+    expect(view.stage()).toBe("v2");
+    view.wait(1500);
     expect(view.stage()).toBe("accepted");
   });
 
