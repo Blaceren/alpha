@@ -11,7 +11,7 @@
  * and a test that pretended otherwise would be describing a different product.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/lib/support/support-client", () => ({
@@ -37,7 +37,7 @@ const STATUSES = [
   ["in_progress", "В работе"],
   ["waiting_learner", "Ждём вашего ответа"],
   ["waiting_internal", "Уточняем внутри команды"],
-  ["waiting_external", "Ждём ответа провайдера"],
+  ["waiting_external", "Уточняем у внешней службы"],
   ["escalated", "Передано специалисту"],
   ["resolved", "Решено"],
   ["closed", "Закрыто"],
@@ -63,6 +63,8 @@ function full(over: Partial<client.SupportCaseDetail> = {}): client.SupportCaseD
 const never = <T,>() => new Promise<T>(() => {});
 
 beforeEach(() => {
+  // The open case lives in the address (2026-10-04): every test starts on the desk.
+  window.history.replaceState(null, "", "/profile/support");
   list.mockReset(); detail.mockReset(); open.mockReset(); reply.mockReset();
   list.mockResolvedValue({ ok: true, data: [] });
 });
@@ -521,5 +523,54 @@ describe("SUPPORT-ERROR-CATEGORY-1", () => {
     expect(screen.getByLabelText("Опишите подробнее")).toHaveValue("Описание сессии");
     await new Promise((r) => setTimeout(r, 60));
     expect(open).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ------------------------------------------- a case has an address --- */
+
+describe("a case has an address (2026-10-04)", () => {
+  it("opening a case writes ?case=, and Back returns to the list", async () => {
+    const user = userEvent.setup();
+    list.mockResolvedValue({ ok: true, data: [summary()] });
+    detail.mockResolvedValue({ ok: true, data: full() });
+    render(<SupportHub />);
+    await user.click(await screen.findByRole("button", { name: /Не открывается урок/ }));
+    await waitFor(() => expect(window.location.search).toBe("?case=c1"));
+    expect(await screen.findByText("Описание проблемы.")).toBeInTheDocument();
+    // The browser's Back.
+    await act(async () => {
+      window.history.replaceState(null, "", "/profile/support");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByRole("region", { name: "Мои обращения" })).toBeInTheDocument();
+  });
+
+  it("opens the case the address names", async () => {
+    window.history.replaceState(null, "", "/profile/support?case=c1");
+    detail.mockResolvedValue({ ok: true, data: full() });
+    render(<SupportHub />);
+    expect(await screen.findByText("Описание проблемы.")).toBeInTheDocument();
+    expect(detail).toHaveBeenCalledWith("c1");
+  });
+
+  it("ignores an address that is not a case id", async () => {
+    window.history.replaceState(null, "", "/profile/support?case=../../admin");
+    render(<SupportHub />);
+    expect(await screen.findByRole("region", { name: "Новое обращение" })).toBeInTheDocument();
+    expect(detail).not.toHaveBeenCalled();
+  });
+
+  it("puts the answer the team is waiting for above the new-request form", async () => {
+    list.mockResolvedValue({
+      ok: true,
+      data: [summary({ id: "c2", subject: "Ждут меня", status: "waiting_learner" }), summary()],
+    });
+    render(<SupportHub />);
+    const awaiting = await screen.findByRole("region", { name: "Ждём вашего ответа" });
+    const form = screen.getByRole("region", { name: "Новое обращение" });
+    expect(awaiting.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(awaiting).getByText("Ждут меня")).toBeInTheDocument();
+    // …and not twice: the list below holds the rest.
+    expect(within(screen.getByRole("region", { name: "Мои обращения" })).queryByText("Ждут меня")).toBeNull();
   });
 });

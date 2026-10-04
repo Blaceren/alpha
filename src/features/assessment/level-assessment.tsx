@@ -199,7 +199,7 @@ export function LevelAssessment({
   return (
     <section className="asmt" aria-labelledby="asmt-heading" data-phase={state.phase}>
       <h2 id="asmt-heading" className="asmt__heading" tabIndex={-1} ref={headingRef}>
-        Проверка понимания
+        Проверка знаний
       </h2>
 
       {/* Live region: submit / result announcements (not color-only). */}

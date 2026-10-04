@@ -50,7 +50,9 @@ function ReferralNotice({ referral }: { referral: ReferralCodeResult }) {
   if (referral.status === "valid") {
     return (
       <p className="register-referral" data-testid="referral-valid">
-        Вы регистрируетесь по приглашению. Бонус начислит платформа после создания аккаунта.
+        {/* The bonus is granted only when the programme pays one (2026-10-04,
+            launch audit), so the notice no longer promises it. */}
+        Вы регистрируетесь по приглашению.
       </p>
     );
   }
@@ -246,7 +248,8 @@ export function RegisterForm({ turnstileSiteKey, verificationMail = false }: Reg
                 router.refresh();
               }}
             >
-              Продолжить
+              {/* Where it goes, not just that it goes on (2026-10-04, launch audit). */}
+              Перейти к обучению
             </button>
           </>
         ) : (
@@ -281,6 +284,17 @@ export function RegisterForm({ turnstileSiteKey, verificationMail = false }: Reg
           <span>{registrationMessage(failure.failure)}</span>
           {failure.requestId ? (
             <span className="register-error__ref"> (код обращения: {failure.requestId})</span>
+          ) : null}
+          {/* A broken invite was a dead end: every submit re-read the code from
+              the address and failed again (2026-10-04, launch audit). The way
+              out keeps what was typed — it only drops the code. */}
+          {failure.failure === "REFERRAL_INVALID" ? (
+            <>
+              {" "}
+              <Link className="register-error__link" href="/register">
+                Зарегистрироваться без приглашения
+              </Link>
+            </>
           ) : null}
         </div>
       ) : null}

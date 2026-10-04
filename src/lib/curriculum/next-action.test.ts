@@ -295,7 +295,7 @@ describe("deriveNextAction — the 30-level program", () => {
     const fresh = deriveNextAction(view([level({ order: 1, state: "available", completionMethod: "lesson" })]));
     expect(fresh.kind).toBe("start-lesson");
     expect(fresh.posture).toBe("act");
-    expect(fresh.explanation).toMatch(/нет теста/);
+    expect(fresh.explanation).toMatch(/нет проверки знаний/);
     expect(fresh.ctaLabel).not.toBeNull();
 
     const begun = deriveNextAction(view([level({ order: 1, state: "in_progress", completionMethod: "lesson" })]));

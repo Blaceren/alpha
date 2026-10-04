@@ -41,18 +41,20 @@ export function ToolLocked({
         ? "lesson"
         : "level";
   const named = releasing?.title ? ` «${releasing.title}»` : "";
+  /* «Уровень N» in a sentence, as every heading says it (2026-10-04, launch
+     audit): the sentences read «L5», «сейчас L7» beside «Уровень 5». */
   const reason =
     kind === "checkpoint"
-      ? `Инструмент появится после контрольной точки L${unlockLevel}, когда будут пройдены уроки, на которые он опирается.`
+      ? `Инструмент появится после контрольной точки на уровне ${unlockLevel}, когда будут пройдены уроки, на которые он опирается.`
       : kind === "lesson"
-        ? `Инструмент появится после урока L${unlockLevel}${named}.`
-        : `Инструмент появится после уровня L${unlockLevel}${named}.`;
+        ? `Инструмент появится после урока ${unlockLevel}${named}.`
+        : `Инструмент появится после уровня ${unlockLevel}${named}.`;
 
   return (
     <div className="tw-quiet">
       <p className="tw-quiet__mark">
         <Lock aria-hidden="true" size={12} strokeWidth={2} />
-        {currentLevel !== null ? `Закрыто · сейчас L${currentLevel}` : "Закрыто"}
+        {currentLevel !== null ? `Закрыто · вы на уровне ${currentLevel}` : "Закрыто"}
       </p>
       <h2 className="tw-quiet__title">Откроется после уровня {unlockLevel}</h2>
       <p className="tw-quiet__line">

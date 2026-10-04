@@ -191,11 +191,11 @@ describe("LevelStart — copy by what the level is", () => {
     render(
       <LevelStart
         stableCode="v2.l001.x"
-        copy={{ title: "Начните урок", explain: "В этом уроке нет теста.", action: "Начать урок" }}
+        copy={{ title: "Начните урок", explain: "В этом уроке нет проверки знаний.", action: "Начать урок" }}
       />,
     );
     expect(screen.getByRole("heading", { name: "Начните урок" })).toBeInTheDocument();
-    expect(screen.getByText("В этом уроке нет теста.")).toBeInTheDocument();
+    expect(screen.getByText("В этом уроке нет проверки знаний.")).toBeInTheDocument();
     expect(screen.queryByText(/станут доступны материал и проверка/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Начать урок" }));
     await waitFor(() => expect(startMock).toHaveBeenCalledWith("v2.l001.x"));

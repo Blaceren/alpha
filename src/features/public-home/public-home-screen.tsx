@@ -341,8 +341,10 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
             <div className="environment-note" data-reveal>
               <span>Практическая среда</span>
               <p>
-                Для части практического пути используется внешняя торговая среда. Она
-                поддерживает обучение, но не является центральным ценностным предложением ATA.
+                {/* Said to a visitor, not to the team (2026-10-04, launch audit): the
+                    line ended «…не является центральным ценностным предложением ATA». */}
+                Для части практического пути используется внешняя торговая среда. Она нужна
+                для практики, а учит вас Академия.
               </p>
             </div>
           </div>
@@ -356,7 +358,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               <h2 className="display display--section">
                 До начала пути не должно оставаться скрытых условий.
               </h2>
-              <p>В первую версию включены только ответы, подтверждённые действующим продуктом.</p>
+              <p>Каждый ответ проверен на том, как Академия работает сейчас.</p>
             </div>
 
             <div className="faq-list" data-reveal>
@@ -385,7 +387,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </Link>
               {authenticated ? null : (
                 <Link className="client-entry" href="/login">
-                  Уже клиент? <strong>Войти</strong>
+                  Уже учитесь? <strong>Войти</strong>
                 </Link>
               )}
             </div>

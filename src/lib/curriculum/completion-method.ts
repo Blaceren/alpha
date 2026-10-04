@@ -134,12 +134,14 @@ export const COMPLETION_METHOD_LABEL: Record<AcademyCompletionMethod, string> = 
  */
 export const COMPLETION_METHOD_FACT: Record<AcademyCompletionMethod, string | null> = {
   "external-event": "регистрация в Pocket",
-  assessment: "тест после урока",
+  // «Проверка знаний» everywhere (2026-10-04, launch audit): the same thing was
+  // «тест», «проверка понимания» and «проверка знаний» on three screens.
+  assessment: "проверка знаний после урока",
   report: "отчёт · проверяет наставник",
   "formal-report": "отчёт · проверка автоматическая",
   checkpoint: "контрольная точка",
   manual: "задание · отмечаете сами",
-  lesson: "урок без теста",
+  lesson: "урок без проверки знаний",
   "mentor-review": "работа наставнику",
   unsupported: null,
 };

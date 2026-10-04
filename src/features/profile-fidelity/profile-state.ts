@@ -190,7 +190,7 @@ export const COPY = {
      a learner to a section they cannot open. If Community is ever switched on,
      restoring the wider context is its own decision — not a conditional string
      carried here in advance. */
-  consequence: "Это имя отображается в вашем профиле ATA.",
+  consequence: "Это имя отображается в вашем профиле.",
   /* Kept for the page-failure state, which has no email row to carry a handoff
      and still needs one. It is no longer shown on the working page: the password
      is self-service now, so «остальные данные» would have pointed at support for

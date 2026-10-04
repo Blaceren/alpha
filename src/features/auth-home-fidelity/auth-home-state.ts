@@ -56,7 +56,7 @@ export const POSTURE_LABEL: Record<HomePosture, string> = {
 const AUTHORITY: Partial<Record<NextActionKind, string>> = {
   "wait-mentor-review": "наставник",
   "wait-report-review": "проверяющий",
-  "wait-registration": "внешний партнёр",
+  "wait-registration": "Pocket",
   "wait-checkpoint": "система проверки",
   /* The programme itself is holding the next step — a system rule, never a
      person. `blocked` lands here too: a locked level is the sequence holding
@@ -70,8 +70,7 @@ export const NO_LEARNER_ACTION = "Сейчас от вас ничего не т�
 
 /** The two pending lines, and the threshold between them. */
 export const PENDING_INITIAL = "Определяем, что сейчас важно";
-export const PENDING_LONG_WAIT =
-  "Всё ещё определяем, что сейчас важно. Мы дождёмся точного ответа и не покажем предположение.";
+export const PENDING_LONG_WAIT = "Всё ещё загружаем данные о вашей программе.";
 
 /**
  * THE LONG-WAIT THRESHOLD — page interaction design, deliberately NOT a token.
@@ -92,12 +91,15 @@ export const LONG_WAIT_MS = 4000;
 
 /** The UNKNOWN copy. All three entries share the consequence, deliberately. */
 export const UNKNOWN_CONSEQUENCE = "Сейчас не удаётся определить, что для вас главное";
+/* Said to the learner, with a way forward (2026-10-04, launch audit): the
+   sentence they replaced — «Мы не показываем предположение вместо точного
+   ответа» — was the design's principle, not something a learner can act on. */
 export const UNKNOWN_NOT_ENROLLED =
-  "Учебная программа не связана с вашим аккаунтом. Мы не показываем предположение вместо точного ответа.";
+  "Учебная программа ещё не подключена к вашему аккаунту. Напишите в поддержку — подключим.";
 export const UNKNOWN_READ_FAILURE =
-  "Часть данных о вашей программе временно недоступна. Мы не показываем предположение вместо точного ответа.";
+  "Часть данных о вашей программе временно недоступна. Обновите страницу через минуту.";
 export const UNKNOWN_UNRECOVERABLE =
-  "Данные о вашей программе сейчас недоступны. Мы не показываем предположение вместо точного ответа.";
+  "Данные о вашей программе сейчас недоступны. Попробуйте позже или напишите в поддержку.";
 export const RETRY_LABEL = "Проверить данные ещё раз";
 
 /** NONE, for the two states that genuinely ask nothing of anyone. */

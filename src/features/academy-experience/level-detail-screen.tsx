@@ -124,13 +124,13 @@ export function startCopyFor(method: AcademyCompletionMethod, hasVideo: boolean)
     case "assessment":
       return {
         title: "Начните урок",
-        explain: `После начала откроется тест по уроку: нужно ответить верно на все вопросы, попытки не ограничены.${watch}`,
+        explain: `После начала откроется проверка знаний по уроку: нужно ответить верно на все вопросы, попытки не ограничены.${watch}`,
         action: "Начать урок",
       };
     case "lesson":
       return {
         title: "Начните урок",
-        explain: `В этом уроке нет теста: после начала урок можно будет отметить пройденным.${watch}`,
+        explain: `В этом уроке нет проверки знаний: после начала урок можно будет отметить пройденным.${watch}`,
         action: "Начать урок",
       };
     case "manual":
@@ -179,7 +179,7 @@ export function afterVideoAction(
   if (state === "available") return { label: "Начать урок", href: "#task" };
   switch (method) {
     case "assessment":
-      return { label: "Перейти к тесту", href: "#task" };
+      return { label: "Перейти к проверке знаний", href: "#task" };
     case "lesson":
       return { label: "Отметить урок пройденным", href: "#task" };
     case "manual":
@@ -417,7 +417,11 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
             <h1 className="ax-lvlhead__title">{summary.title}</h1>
             <p className="ax-lvlhead__row ld-facts">
               <span className="ax-mark" data-state={summary.state}>
-                {summary.stateLabel}
+                {/* When the line below explains the state, the mark says the
+                    state alone: «Заблокирован: сначала завершите предыдущие
+                    уровни» sat right above «Сначала нужно завершить предыдущие
+                    уровни» (2026-10-04, launch audit). */}
+                {explainState && summary.state === "locked" ? summary.stateLabel.split(":")[0] : summary.stateLabel}
               </span>
               {facts.map((fact) => (
                 <span key={fact} className="ld-fact">
@@ -483,7 +487,11 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                       <p className="cur-content__media-pending" data-media="pending">
                         {inlineBody
                           ? "Видео этого урока готовится. Описание урока — ниже."
-                          : "Видеоурок готовится. Текстовый материал доступен, проверку можно пройти уже сейчас."}
+                          : method === "assessment"
+                            ? "Видеоурок готовится. Текстовый материал доступен, проверку знаний можно пройти уже сейчас."
+                            /* Only a level with a check has one to pass
+                               (2026-10-04, launch audit). */
+                            : "Видеоурок готовится. Текстовый материал доступен уже сейчас."}
                       </p>
                     ) : null}
 

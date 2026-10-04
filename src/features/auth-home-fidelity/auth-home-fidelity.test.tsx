@@ -78,7 +78,7 @@ describe("Home — the posture is the canonical decision, translated once", () =
     const expected: Record<string, string> = {
       "wait-mentor-review": "наставник",
       "wait-report-review": "проверяющий",
-      "wait-registration": "внешний партнёр",
+      "wait-registration": "Pocket",
       "wait-checkpoint": "система проверки",
       "continue-next-level": "последовательность программы",
     };
@@ -138,7 +138,7 @@ describe("Home — the posture is the canonical decision, translated once", () =
 
   it("a lesson without a test and a report nobody reviews are both ACTION, with their own words", () => {
     const lesson = fieldForAction(
-      action({ kind: "start-lesson", title: "Пройдите урок", explanation: "В этом уроке нет теста." }),
+      action({ kind: "start-lesson", title: "Пройдите урок", explanation: "В этом уроке нет проверки знаний." }),
     );
     expect(lesson.posture).toBe("ACTION");
     expect(lesson.consequence).toBe("Пройдите урок");

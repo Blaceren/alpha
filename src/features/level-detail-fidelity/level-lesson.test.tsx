@@ -228,11 +228,12 @@ describe("the words around the start control are true of the level", async () =>
   ];
 
   it("promises a test only where there is one", () => {
-    expect(startCopyFor("assessment", true).explain).toMatch(/откроется тест/);
+    // «Проверка знаний» everywhere since 2026-10-04 (launch audit).
+    expect(startCopyFor("assessment", true).explain).toMatch(/откроется проверка знаний/);
     for (const method of METHODS.filter((m) => m !== "assessment")) {
-      expect(startCopyFor(method, true).explain, method).not.toMatch(/тест по уроку|проверк[аи] знаний/);
+      expect(startCopyFor(method, true).explain, method).not.toMatch(/откроется (тест|проверка знаний)|тест по уроку/);
     }
-    expect(startCopyFor("lesson", true).explain).toMatch(/нет теста/);
+    expect(startCopyFor("lesson", true).explain).toMatch(/нет проверки знаний/);
   });
 
   it("names a mentor only on the report a mentor reads", () => {
@@ -259,7 +260,7 @@ describe("the words around the start control are true of the level", async () =>
   });
 
   it("after the video, the player points at what the level asks next — and at nothing on a finished one", () => {
-    expect(afterVideoAction("assessment", "in_progress")).toEqual({ label: "Перейти к тесту", href: "#task" });
+    expect(afterVideoAction("assessment", "in_progress")).toEqual({ label: "Перейти к проверке знаний", href: "#task" });
     expect(afterVideoAction("lesson", "in_progress")).toEqual({ label: "Отметить урок пройденным", href: "#task" });
     expect(afterVideoAction("formal-report", "in_progress")).toEqual({ label: "К отчёту", href: "#task" });
     expect(afterVideoAction("assessment", "available")).toEqual({ label: "Начать урок", href: "#task" });

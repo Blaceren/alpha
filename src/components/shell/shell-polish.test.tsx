@@ -253,8 +253,10 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
         expect(bell.getAttribute("aria-current"), `${id} bell`).toBe(
           id === "notifications" ? "page" : null,
         );
-        /* The accessible name is unchanged. */
-        expect(bell.getAttribute("aria-label"), id).toBe("Уведомления");
+        /* The name is the link's own text since 2026-10-04, so the unread
+           mark's words can join it; without a mark it is just «Уведомления». */
+        expect(bell.getAttribute("aria-label"), id).toBeNull();
+        expect(bell.textContent?.trim(), id).toBe("Уведомления");
       }
       unmount();
     }

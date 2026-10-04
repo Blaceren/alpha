@@ -548,6 +548,16 @@ describe("the authenticated route group", () => {
   "src/features/level-start/level-start.css",
   "src/features/manual-completion/level-manual-completion.css",
   "src/lib/curriculum/level-tab-title.ts",
+  /* LAUNCH READINESS, WAVE 3 (2026-10-04): a line across the top while the next
+     page is on its way — the current page and its shell stay exactly as they
+     are, which is the point of this file; the bell's name is text so its
+     unread mark is heard; and a support case has an address the profile and
+     the notifications can link to. */
+  "src/components/shell/navigation-progress.css",
+  "src/components/shell/navigation-progress.tsx",
+  "src/components/shell/notification-button.tsx",
+  "src/components/shell/unread-presence.tsx",
+  "src/lib/support/support-links.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

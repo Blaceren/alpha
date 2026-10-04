@@ -1,0 +1,26 @@
+/* The line across the top while the next page is on its way (2026-10-04). */
+.nav-progress {
+  position: fixed;
+  z-index: 70;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  pointer-events: none;
+  background: var(--signal-active);
+  box-shadow: 0 0 10px rgba(199, 247, 109, 0.45);
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+}
+.nav-progress[data-active="true"] {
+  opacity: 1;
+  animation: nav-progress-run 9s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+@keyframes nav-progress-run {
+  0% { transform: scaleX(0.04); }
+  30% { transform: scaleX(0.55); }
+  100% { transform: scaleX(0.92); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress[data-active="true"] { animation: none; transform: scaleX(0.6); }
+}

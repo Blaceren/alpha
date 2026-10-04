@@ -37,6 +37,7 @@ import type { NormalizedError } from "@/lib/api/errors";
 /* The status words live in one place since the profile reads them too
    (2026-10-03); the map moved unchanged. */
 import { CLOSED_STATUSES, statusText } from "@/lib/support/support-status";
+import { SUPPORT_CASE_PARAM } from "@/lib/support/support-links";
 
 function when(iso: string): string {
   const value = new Date(iso);
@@ -88,6 +89,41 @@ function errorText(error: NormalizedError): string {
   }
 }
 
+/*
+ * A CASE HAS AN ADDRESS (2026-10-04, launch audit). The open case lived only
+ * in component state: «Назад» left the support desk, a reload lost the case,
+ * and nothing — the profile card, a notification — could link to one. It is
+ * `?case=<id>` now, read from the address and written with the History API
+ * (which the App Router keeps in step), so Back returns to the list.
+ */
+const CASE_PARAM = SUPPORT_CASE_PARAM;
+/* Letters, digits, «_» and «-» only — the proxy checks the id again before
+   anything reaches the Backend. */
+const CASE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const LOCATION_EVENT = "ata:support-location";
+
+function caseFromLocation(): string | null {
+  const raw = new URLSearchParams(window.location.search).get(CASE_PARAM);
+  return raw && CASE_ID.test(raw) ? raw : null;
+}
+
+function subscribeToLocation(onChange: () => void): () => void {
+  window.addEventListener("popstate", onChange);
+  window.addEventListener(LOCATION_EVENT, onChange);
+  return () => {
+    window.removeEventListener("popstate", onChange);
+    window.removeEventListener(LOCATION_EVENT, onChange);
+  };
+}
+
+function showCase(id: string | null) {
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set(CASE_PARAM, id);
+  else url.searchParams.delete(CASE_PARAM);
+  window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new Event(LOCATION_EVENT));
+}
+
 export function SupportHub() {
   /**
    * One state atom per fetch, written ONLY from inside the async callback.
@@ -101,7 +137,7 @@ export function SupportHub() {
   const [listState, setListState] = React.useState<
     { items: SupportCaseSummary[] } | { error: string } | null
   >(null);
-  const [openId, setOpenId] = React.useState<string | null>(null);
+  const openId = React.useSyncExternalStore(subscribeToLocation, caseFromLocation, () => null);
   const [detailState, setDetailState] = React.useState<
     { caseId: string; data: SupportCaseDetail } | { caseId: string; error: string } | null
   >(null);
@@ -144,6 +180,8 @@ export function SupportHub() {
   const current = detailState !== null && detailState.caseId === openId ? detailState : null;
   const detail = current !== null && "data" in current ? current.data : null;
   const detailError = current !== null && "error" in current ? current.error : null;
+  const awaiting = (cases ?? []).filter((row) => row.status === "waiting_learner");
+  const others = (cases ?? []).filter((row) => row.status !== "waiting_learner");
 
   return (
     <div className="support-hub" data-testid="support-hub">
@@ -157,10 +195,31 @@ export function SupportHub() {
 
       {openId === null ? (
         <>
+          {/* THE ANSWER THE TEAM IS WAITING FOR COMES FIRST (2026-10-04, launch
+              audit): it sat in the list under the new-request form, looking
+              like any other status. */}
+          {awaiting.length > 0 ? (
+            <section className="support-hub__list support-hub__list--awaiting" aria-label="Ждём вашего ответа">
+              <h2>Ждём вашего ответа</h2>
+              <ul>
+                {awaiting.map((row) => (
+                  <li key={row.id}>
+                    <button type="button" onClick={() => showCase(row.id)}>
+                      <span className="support-hub__subject">{row.subject}</span>
+                      <span className="support-hub__meta">
+                        {row.reference} · {statusText(row.status)} · {when(row.lastActivityAt)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <NewRequestForm
             onCreated={(id) => {
               reload();
-              setOpenId(id);
+              showCase(id);
             }}
           />
 
@@ -181,11 +240,13 @@ export function SupportHub() {
               <p className="support-hub__muted">
                 Обращений пока нет. Опишите вопрос в форме выше — мы ответим.
               </p>
+            ) : others.length === 0 ? (
+              <p className="support-hub__muted">Остальных обращений нет.</p>
             ) : (
               <ul>
-                {cases.map((row) => (
+                {others.map((row) => (
                   <li key={row.id}>
-                    <button type="button" onClick={() => setOpenId(row.id)}>
+                    <button type="button" onClick={() => showCase(row.id)}>
                       <span className="support-hub__subject">{row.subject}</span>
                       <span className="support-hub__meta">
                         {row.reference} · {statusText(row.status)} · {when(row.lastActivityAt)}
@@ -201,7 +262,7 @@ export function SupportHub() {
         <CaseThread
           detail={detail}
           error={detailError}
-          onBack={() => setOpenId(null)}
+          onBack={() => showCase(null)}
           onReplied={reload}
         />
       )}

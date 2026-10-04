@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import "@/features/home/home.css";
@@ -9,6 +9,7 @@ import { readServerSession } from "@/server/auth/server-session";
 import { SessionUnavailable } from "@/features/auth/session-unavailable";
 import { SessionProvider } from "@/features/auth/session-provider";
 import { SessionExpiryWatch } from "@/features/auth/session-expired-notice";
+import { NavigationProgress } from "@/components/shell/navigation-progress";
 import { sanitizeReturnTo, DEFAULT_RETURN_TO } from "@/lib/auth/return-to";
 import { PATHNAME_HEADER } from "@/lib/auth/constants";
 import { FIXTURE_VIEWER } from "@/lib/api/viewer";
@@ -65,6 +66,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       {children}
       {/* A 401 from any Backend call puts «Сеанс завершён — Войти снова» on screen. */}
       <SessionExpiryWatch />
+      {/* A line across the top from an internal link's click until the next page arrives. */}
+      <Suspense fallback={null}>
+        <NavigationProgress />
+      </Suspense>
     </SessionProvider>
   );
 }

@@ -15,7 +15,7 @@ const STATUS_TEXT: Record<string, string> = {
   in_progress: "В работе",
   waiting_learner: "Ждём вашего ответа",
   waiting_internal: "Уточняем внутри команды",
-  waiting_external: "Ждём ответа провайдера",
+  waiting_external: "Уточняем у внешней службы",
   escalated: "Передано специалисту",
   resolved: "Решено",
   closed: "Закрыто",

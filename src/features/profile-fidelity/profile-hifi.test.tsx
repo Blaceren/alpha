@@ -180,6 +180,8 @@ describe("the support card", () => {
     expect(cases[1]!.textContent).toContain("В работе");
     expect(container.querySelector(".p-aside__cases")!.getAttribute("aria-label")).toBe("Открытых обращений: 2");
     expect(screen.getByRole("link", { name: SUPPORT_CARD_COPY.action })).toHaveAttribute("href", "/profile/support");
+    // Each row opens its own case (2026-10-04).
+    expect(cases[0]!.querySelector("a")!.getAttribute("href")).toBe("/profile/support?case=2");
   });
 
   it("says there are none, and a failed read leaves only the way in", async () => {

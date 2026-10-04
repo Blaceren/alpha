@@ -165,7 +165,7 @@ describe("Personal Stats — periods and states", () => {
     fetchStats.mockResolvedValue(failure(null, "NETWORK_ERROR"));
     render(<StatsWorkspace initialStats={stats()} />);
     await user.click(screen.getByRole("button", { name: "30 дней" }));
-    expect(await screen.findByText("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
+    expect(await screen.findByText("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
     expect(figure("Сделок")).toHaveTextContent("38");
   });
 

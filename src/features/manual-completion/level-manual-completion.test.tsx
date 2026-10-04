@@ -36,7 +36,7 @@ describe("a lesson without a test", () => {
     expect(screen.getByRole("heading", { name: "Урок без теста" })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.getByRole("button", { name: "Отметить урок пройденным" })).toBeEnabled();
-    expect(screen.getByText(/В этом уроке нет теста/)).toBeInTheDocument();
+    expect(screen.getByText(/В этом уроке нет проверки знаний/)).toBeInTheDocument();
     expect(screen.getByText(/За уровень начисляется 50 XP/)).toBeInTheDocument();
   });
 

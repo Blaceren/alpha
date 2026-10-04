@@ -195,6 +195,13 @@ describe("Notifications — the semantic mapping", () => {
     }
   });
 
+  it("leads a support reply to its own case when the row names one (2026-10-04)", () => {
+    const rec = toRecord(row({ type: "support_reply", metadata: { learnerOpsCaseId: "cmcase0001", reference: "LO-000001" } }), NOW);
+    expect(rec?.handoff).toEqual({ label: "Открыть обращение", href: "/profile/support?case=cmcase0001" });
+    const odd = toRecord(row({ type: "support_reply", metadata: { learnerOpsCaseId: "../x" } }), NOW);
+    expect(odd?.handoff).toEqual({ label: "Открыть обращения", href: "/profile/support" });
+  });
+
   it("refuses a destination the payload cannot support", () => {
     for (const raw of ["not-a-path", "//evil.example", ""]) {
       const bad = toRecord(row({ type: "system", link: raw }), NOW);

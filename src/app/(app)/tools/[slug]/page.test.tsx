@@ -299,9 +299,9 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening([]), 2));
     render(await open("trade-card"));
     expect(screen.queryByText("trade-card-workspace")).toBeNull();
-    expect(screen.getByText("Закрыто · сейчас L3")).toBeInTheDocument();
+    expect(screen.getByText("Закрыто · вы на уровне 3")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Откроется после уровня 5" })).toBeInTheDocument();
-    expect(screen.getByText("Инструмент появится после урока L5 «Жизненный цикл сделки».")).toBeInTheDocument();
+    expect(screen.getByText("Инструмент появится после урока 5 «Жизненный цикл сделки».")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByText(/как будет выглядеть/i)).toBeNull();
     // The one next step.
@@ -343,7 +343,7 @@ describe("the state", () => {
     // Level 9, not the catalogue's 10 — and a report, so not «контрольная точка».
     expect(screen.getByRole("heading", { name: "Откроется после уровня 9" })).toBeInTheDocument();
     expect(
-      screen.getByText("Инструмент появится после уровня L9 «Первые пять demo-сделок и разбор»."),
+      screen.getByText("Инструмент появится после уровня 9 «Первые пять demo-сделок и разбор»."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/контрольной точки/)).toBeNull();
   });
@@ -364,7 +364,7 @@ describe("the state", () => {
     });
     render(await open("stats"));
     expect(
-      screen.getByText("Инструмент появится после уровня L24 «Своя статистика». Этот уровень ещё готовится."),
+      screen.getByText("Инструмент появится после уровня 24 «Своя статистика». Этот уровень ещё готовится."),
     ).toBeInTheDocument();
   });
 
@@ -386,8 +386,8 @@ describe("the state", () => {
   it("does not fall back to the old plan's checkpoint when the view does not describe the level (2026-10-04)", async () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 8));
     render(await open("news"));
-    expect(screen.getByText("Закрыто · сейчас L9")).toBeInTheDocument();
-    expect(screen.getByText("Инструмент появится после уровня L30.")).toBeInTheDocument();
+    expect(screen.getByText("Закрыто · вы на уровне 9")).toBeInTheDocument();
+    expect(screen.getByText("Инструмент появится после уровня 30.")).toBeInTheDocument();
     expect(screen.queryByText(/контрольной точки/)).toBeNull();
   });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listSupportCases, type SupportCaseSummary } from "@/lib/support/support-client";
 import { CLOSED_STATUSES, statusText } from "@/lib/support/support-status";
+import { supportCaseHref } from "@/lib/support/support-links";
 
 /**
  * The profile's support card — beside the account rows on a wide screen.
@@ -61,10 +62,14 @@ export function ProfileSupportCard() {
           <ul className="p-aside__cases" aria-label={`Открытых обращений: ${open}`}>
             {latest.map((row) => (
               <li key={row.id} className="p-aside__case">
-                <span className="p-aside__subject">{row.subject}</span>
-                <span className="p-aside__meta">
-                  {statusText(row.status)} · {day(row.lastActivityAt)}
-                </span>
+                {/* Each row opens its case (2026-10-04, launch audit): «Ждём
+                    вашего ответа» was printed here with no way to answer. */}
+                <Link className="p-aside__case-link" href={supportCaseHref(row.id)}>
+                  <span className="p-aside__subject">{row.subject}</span>
+                  <span className="p-aside__meta">
+                    {statusText(row.status)} · {day(row.lastActivityAt)}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

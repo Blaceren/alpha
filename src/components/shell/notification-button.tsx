@@ -43,9 +43,13 @@ export function NotificationButton({
     <Link
       href="/notifications"
       className="iconbtn"
-      aria-label="Уведомления"
       aria-current={current ? "page" : undefined}
     >
+      {/* THE NAME IS TEXT, NOT `aria-label` (2026-10-04, launch audit). An
+          `aria-label` replaces the link's content for assistive technology, so
+          the unread mark's own «, есть непрочитанные» was never heard. As text,
+          the name reads «Уведомления» or «Уведомления, есть непрочитанные». */}
+      <span className="sr-only">Уведомления</span>
       <Icon name="bell" className="h-5 w-5" />
       {/* Streamed, so the bell is interactive whether or not the answer has
           arrived, and the page never waits on it. */}

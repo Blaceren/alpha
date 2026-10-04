@@ -1,5 +1,6 @@
 import { deriveNotificationHref, type HrefSource } from "@/features/academy-experience/notifications-screen";
 import { isLearnerFacingNotificationType } from "@/lib/notifications/learner-facing";
+import { supportCaseHref } from "@/lib/support/support-links";
 
 /**
  * NOTIFICATIONS — the semantic layer, mapped from the real Backend row.
@@ -56,7 +57,8 @@ export type NotificationTypeName =
  *
  * Required on every record by the item contract, and it is an IDENTITY, not
  * route or debug metadata: the shape is «область · предмет», exactly as the
- * frozen page renders it («Уровень 3 · Отчёт», «Academy · Система»).
+ * frozen page renders it («Уровень 3 · Отчёт», «Академия · Система» — the
+ * product's own name in Russian since 2026-10-04; it was the Latin «Academy»).
  *
  * Every value of the deployed enum is mapped, so nothing a learner can see
  * today is affected by the suppression rule below. The map exists so that a
@@ -65,23 +67,23 @@ export type NotificationTypeName =
  * forbidden by name.
  */
 const CONTEXT: Record<NotificationTypeName, string> = {
-  support_reply: "Academy · Поддержка",
+  support_reply: "Академия · Поддержка",
   task_report_approved: "Отчёт · Проверка",
   task_report_rejected: "Отчёт · Проверка",
-  reward_granted: "Academy · Начисление",
+  reward_granted: "Академия · Начисление",
   level_up: "Путь · Прогресс",
   checkpoint_frozen: "Контрольная точка",
   checkpoint_restored: "Контрольная точка",
-  postback_received: "Academy · Внешнее подтверждение",
-  exchange_connected: "Academy · Внешний счёт",
-  exchange_rejected: "Academy · Внешний счёт",
-  exchange_blocked: "Academy · Внешний счёт",
+  postback_received: "Академия · Внешнее подтверждение",
+  exchange_connected: "Академия · Внешний счёт",
+  exchange_rejected: "Академия · Внешний счёт",
+  exchange_blocked: "Академия · Внешний счёт",
   mentor_reply: "Наставник · Ответ",
-  daily_reward: "Academy · Начисление",
-  achievement_granted: "Academy · Достижение",
-  promocode_redeemed: "Academy · Промокод",
-  referral_bonus: "Academy · Реферальная программа",
-  system: "Academy · Система",
+  daily_reward: "Академия · Начисление",
+  achievement_granted: "Академия · Достижение",
+  promocode_redeemed: "Академия · Промокод",
+  referral_bonus: "Академия · Реферальная программа",
+  system: "Академия · Система",
   community_reply: "Сообщество · Обсуждение",
   community_moderation: "Сообщество · Модерация",
 };
@@ -145,6 +147,17 @@ const TYPE_DESTINATION: Partial<Record<NotificationTypeName, string>> = {
   support_reply: "/profile/support",
   level_up: "/home",
 };
+
+/**
+ * A support reply opens ITS case, when the row names one (2026-10-04): the
+ * Backend writes `metadata.learnerOpsCaseId` on every reply notification, and
+ * the desk now has an address per case.
+ */
+function caseDestination(type: string, metadata: unknown): string | null {
+  if (type !== "support_reply" || typeof metadata !== "object" || metadata === null) return null;
+  const id = (metadata as { learnerOpsCaseId?: unknown }).learnerOpsCaseId;
+  return typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(id) ? supportCaseHref(id) : null;
+}
 
 export function handoffLabel(type: string): string | null {
   return HANDOFF_LABEL[type as NotificationTypeName] ?? null;
@@ -220,8 +233,9 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
   const created = row.createdAt ? new Date(row.createdAt) : null;
   if (!created || Number.isNaN(created.getTime())) return null;
 
-  const href = TYPE_DESTINATION[type as NotificationTypeName] ?? deriveNotificationHref(row as HrefSource);
-  const label = handoffLabel(type);
+  const caseHref = caseDestination(type, row.metadata);
+  const href = caseHref ?? TYPE_DESTINATION[type as NotificationTypeName] ?? deriveNotificationHref(row as HrefSource);
+  const label = caseHref ? "Открыть обращение" : handoffLabel(type);
 
   const statement = (row.title ?? "").trim();
   const support = (row.message ?? row.body ?? "").trim();

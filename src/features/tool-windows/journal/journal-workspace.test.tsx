@@ -192,7 +192,7 @@ describe("Trading Journal — the list", () => {
     const user = userEvent.setup();
     fetchJournalPage.mockResolvedValueOnce(failure(null, "NETWORK_ERROR")).mockResolvedValueOnce({ ok: true, data: page() });
     render(<JournalWorkspace />);
-    expect(await screen.findByText("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
+    expect(await screen.findByText("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Повторить" }));
     expect(await screen.findByRole("button", { name: /EUR\/USD OTC/ })).toBeInTheDocument();
     expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
@@ -706,7 +706,7 @@ describe("Trading Journal — deleting an entry", () => {
     render(<JournalWorkspace initialPage={page()} />);
     const detail = await ask(user, /BTC\/USD OTC/);
     await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
-    expect(await within(detail).findByRole("alert")).toHaveTextContent("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.");
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.");
     expect(within(detail).getByRole("group", { name: "Удалить эту запись?" })).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: "Отмена" })).toHaveFocus();
     expect(row(/BTC\/USD OTC/)).toBeInTheDocument();

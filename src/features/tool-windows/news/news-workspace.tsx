@@ -53,7 +53,7 @@ function messageFor(error: NormalizedError): string {
   switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
-      return "Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.";
+      return "Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.";
     case "RATE_LIMITED":
       return "Слишком много действий подряд. Подождите минуту и попробуйте снова.";
     case "UNAUTHENTICATED":

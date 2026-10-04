@@ -12,7 +12,7 @@ import "@/features/tool-windows/tools-hifi.css";
 
 export const metadata: Metadata = {
   title: "Инструменты — Alpha Trade Academy",
-  description: "Рабочие инструменты ATA: план сделки, журнал, расчёт риска, чек-лист входа, статистика и новости.",
+  description: "Рабочие инструменты Академии: план сделки, журнал, расчёт риска, чек-лист входа, статистика и новости.",
 };
 
 /**

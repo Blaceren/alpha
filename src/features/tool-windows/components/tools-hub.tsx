@@ -38,7 +38,7 @@ export function ToolsHub({
         <h1 className="tw-title">Инструменты</h1>
         <span className="tw-count">{`Открыто ${openCount} из ${tools.length}`}</span>
       </div>
-      <p className="tw-orient">Рабочие инструменты ATA. Доступ открывается по мере продвижения по пути.</p>
+      <p className="tw-orient">Рабочие инструменты Академии. Доступ открывается по мере продвижения по пути.</p>
       <section className="tw-territory" aria-label="Инструменты по уровням">
         <ul className="twh-list">
           {tools.map((view) => (

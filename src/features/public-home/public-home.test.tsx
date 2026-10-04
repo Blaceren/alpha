@@ -496,7 +496,7 @@ describe("Public Home — session-aware calls to action", () => {
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/home");
     expect(hrefs).not.toContain("/register");
-    expect(screen.queryByText(/Уже клиент/)).toBeNull();
+    expect(screen.queryByText(/Уже учитесь/)).toBeNull();
     // The mechanism anchor is state-independent.
     expect(hrefs).toContain("#mechanism");
   });
@@ -505,7 +505,7 @@ describe("Public Home — session-aware calls to action", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs.filter((h) => h === "/login").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/Уже клиент/)).toBeTruthy();
+    expect(screen.getByText(/Уже учитесь/)).toBeTruthy();
   });
 
   it("does not change the composition between the two states", () => {
