@@ -106,7 +106,8 @@ describe("notifications proxy — the id is not a path", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${ORIGIN}/api/notifications/n_123-abc.4/read`);
-    expect(init.method).toBe("POST");
+    // The Backend route exports PATCH only (2026-10-04: POST came back 405).
+    expect(init.method).toBe("PATCH");
   });
 });
 
@@ -114,8 +115,10 @@ describe("notifications proxy — constant paths", () => {
   it("read-all takes no caller input at all", async () => {
     const response = await proxyMarkAllNotificationsRead(post());
     expect(response.status).toBe(200);
-    const [url] = fetchMock.mock.calls[0] as [string];
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${ORIGIN}/api/notifications/read-all`);
+    // The Backend route exports PATCH only (2026-10-04: POST came back 405).
+    expect(init.method).toBe("PATCH");
   });
 
   it("never forwards to any origin other than the configured Backend", async () => {

@@ -526,6 +526,9 @@ describe("the authenticated route group", () => {
      a learner — on PREPROD they read «Получен exchange postback:
      first_deposit.». The visibility config itself stays frozen. */
   "src/lib/notifications/learner-facing.ts",
+  /* …and the proxy's hop to the Backend for «read»: the Backend routes accept
+     PATCH only, the proxy sent POST, and the first real call came back 405. */
+  "src/server/proxy/notifications-proxy.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
