@@ -28,8 +28,12 @@ export type PathFocusKind = "current" | "waiting" | "revision" | "checkpoint";
  * They are the only two body lines this surface authors. Every other line on the
  * page comes from real curriculum data.
  */
-export const PATH_WAITING_EXTERNAL =
-  "Сейчас от вас ничего не требуется — уровень завершится после подтверждения со стороны провайдера.";
+/* There was a third, for an external-event level: «Сейчас от вас ничего не
+   требуется — уровень завершится после подтверждения со стороны провайдера».
+   In the program learners have (2026-10-04, launch audit) that level is the
+   registration in the trading environment, and the learner is the one who has
+   to act — the Home said «Пройдите регистрацию» while the Path said nothing was
+   required. It is the current level now, with the level page's own link. */
 export const PATH_WAITING_REVIEW =
   "Сейчас от вас ничего не требуется — путь продолжится после решения проверки.";
 /**
@@ -47,9 +51,6 @@ export function focusKind(level: AcademyLevelSummary): PathFocusKind {
   if (level.inProduction) return "waiting";
   if (level.state === "checkpoint_unverified") return "checkpoint";
   if (level.state === "pending_review") return "waiting";
-  if (level.completionMethod === "external-event" && level.state !== "completed") {
-    return "waiting";
-  }
   return "current";
 }
 
@@ -61,9 +62,6 @@ export function focusKind(level: AcademyLevelSummary): PathFocusKind {
 export function waitingLine(level: AcademyLevelSummary): string | null {
   if (level.inProduction) return PATH_WAITING_PRODUCTION;
   if (level.state === "pending_review") return PATH_WAITING_REVIEW;
-  if (level.completionMethod === "external-event" && level.state !== "completed") {
-    return PATH_WAITING_EXTERNAL;
-  }
   return null;
 }
 
@@ -124,8 +122,12 @@ export function nodeStateText(
   inProduction = false,
 ): string {
   /* «текущий» says the learner is working on it. On a level that is not open
-     that is the one thing that is not true, so the node says what is. */
-  if (state === "current" && inProduction) return stateLabel.toLowerCase();
+     that is the one thing that is not true, so the node says what is. The
+     same holds for «следующий» (2026-10-04, launch audit): past the last open
+     level the one after the current was called «следующий» while it is not
+     produced either — a level that is not open yet says so, whatever its
+     place. */
+  if (inProduction && state !== "done") return stateLabel.toLowerCase();
   if (state === "current" && kind !== "current") {
     return `${NODE_STATE_WORD[state]} · ${stateLabel.toLowerCase()}`;
   }

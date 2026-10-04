@@ -369,6 +369,25 @@
 /* A settled registration says its sentence and offers nothing after it. */
 .ld .lvl-manual__explain:last-child,
 .ld .pocket-reg__explain:last-child { margin-bottom: 0; }
+/* The three steps and the way to a person (2026-10-04). */
+.ld .pocket-reg__steps {
+  margin: 0 0 18px;
+  padding-left: 22px;
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__steps li + li { margin-top: 6px; }
+.ld .pocket-reg__steps li::marker { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 13px; }
+.ld .pocket-reg__help {
+  margin: 14px 0 0;
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__help a { color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
 .ld .lvl-manual__confirm {
   align-items: center;
   gap: 12px;

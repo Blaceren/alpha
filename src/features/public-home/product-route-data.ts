@@ -85,6 +85,25 @@ const TOOL_STEP_COPY: Readonly<Record<ToolSlug, { title: string; copy: string }>
   },
 };
 
+/**
+ * The level after which each tool opens IN THE PROGRAM LEARNERS HAVE — `ata-v2`,
+ * the owner's 30-level document of 2026-10-02 (`LevelToolUnlock`): the Trade
+ * Card after level 5, the journal after the level-9 report, the calculator and
+ * the checklist after the level-13 practice, statistics after 24, the calendar
+ * after 28. The catalogue's own `unlockLevel` (5/10/15/20/25/30) is the earlier
+ * 100-level plan and stays there for the curriculum fixture; the public page
+ * said it until 2026-10-04 (launch audit), so a visitor read «Trading Journal ·
+ * L10» and found it open after level 9. Inside the product the Backend decides.
+ */
+export const PROGRAM_TOOL_LEVEL: Readonly<Record<ToolSlug, number>> = {
+  "trade-card": 5,
+  journal: 9,
+  "risk-calculator": 13,
+  "entry-checklist": 13,
+  stats: 24,
+  news: 28,
+};
+
 const TOOL_STATE: Readonly<Record<ToolSlug, RouteStateId>> = {
   "trade-card": "trade-card",
   journal: "journal",
@@ -94,29 +113,29 @@ const TOOL_STATE: Readonly<Record<ToolSlug, RouteStateId>> = {
   news: "news",
 };
 
-/** The six tools, from the catalogue: built ones only, in unlock order. */
+/** The six tools, from the catalogue: built ones only, in the order the program opens them. */
 export const TOOL_STEPS: ReadonlyArray<RouteStep> = TOOL_WINDOWS.filter((tool) => tool.built)
   .slice()
-  .sort((a, b) => a.unlockLevel - b.unlockLevel)
+  .sort((a, b) => PROGRAM_TOOL_LEVEL[a.slug] - PROGRAM_TOOL_LEVEL[b.slug])
   .map((tool) => ({
     id: TOOL_STATE[tool.slug],
-    node: `L${tool.unlockLevel}`,
+    node: `L${PROGRAM_TOOL_LEVEL[tool.slug]}`,
     name: tool.title,
-    label: `${tool.title} · открывается на L${tool.unlockLevel}`,
+    label: `${tool.title} · открывается на L${PROGRAM_TOOL_LEVEL[tool.slug]}`,
     title: TOOL_STEP_COPY[tool.slug].title,
     copy: TOOL_STEP_COPY[tool.slug].copy,
-    level: tool.unlockLevel,
+    level: PROGRAM_TOOL_LEVEL[tool.slug],
   }));
 
 export const PRODUCT_STEP: RouteStep = {
   id: "home",
-  node: "L3",
+  node: "L4",
   name: "Главная",
-  label: "Главная · уровень 3",
+  label: "Главная · уровень 4",
   title: "Один следующий шаг.",
   copy:
     "Не нужно решать, что делать дальше: в каждый момент Academy показывает одно действие и говорит, когда откроется следующее.",
-  level: 3,
+  level: 4,
 };
 
 export const PATH_STEP: RouteStep = {
@@ -127,17 +146,21 @@ export const PATH_STEP: RouteStep = {
   title: "Виден только текущий сегмент.",
   copy:
     "Пройденное остаётся позади, текущий уровень в фокусе, будущее открывается по порядку — масштаб не давит.",
-  level: 3,
+  level: 4,
 };
 
 /** Every step in route order — the window's states, in the order they unlock. */
 export const ROUTE_STEPS: ReadonlyArray<RouteStep> = [PRODUCT_STEP, PATH_STEP, ...TOOL_STEPS];
 
-/** The first three nodes, passed before the window has anything to show. */
+/** The nodes passed before the window has anything to show — the program's first
+    three levels (2026-10-04, launch audit; it used to be the 100-level plan's:
+    L1 the trading environment, L2 the first test). The environment is named as
+    such and no further (owner, 2026-09-22). */
 export const ROUTE_START = [
-  { node: "Старт", title: "Создать аккаунт", copy: "Регистрация и зачисление в действующий путь ATA." },
-  { node: "L1", title: "Подготовить среду", copy: "Создать внешнюю торговую среду для практической части." },
-  { node: "L2", title: "Понять устройство ATA", copy: "Вводный урок и первая проверка знаний." },
+  { node: "Старт", title: "Создать аккаунт", copy: "Регистрация бесплатная, первый уровень открывается сразу." },
+  { node: "L1", title: "Понять, от чего зависит исход", copy: "Вводный урок: условия сделки определяются до входа." },
+  { node: "L2", title: "Понять устройство ATA", copy: "Уровни, прогресс, инструменты и проверки знаний." },
+  { node: "L3", title: "Подготовить среду", copy: "Создать внешнюю торговую среду для практической части." },
 ] as const;
 
 export function stepIndex(id: RouteStateId): number {

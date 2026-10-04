@@ -25,23 +25,26 @@ function HomeState() {
         <p className="pw-mono pw-mono--signal pw-moment-1">Требуется действие</p>
       </div>
       <div className="pw-home__body">
-        <p className="pw-home__level pw-moment-1">Первые пять demo-сделок</p>
-        <h3 className="pw-home__title pw-moment-2">Подготовьте и отправьте отчёт</h3>
-        <p className="pw-home__meta pw-moment-2">Модуль 01 · Уровень 3 · отчёт</p>
+        <p className="pw-home__level pw-moment-1">Как читать график: свеча, таймфрейм, масштаб</p>
+        <h3 className="pw-home__title pw-moment-2">Пройдите проверку знаний</h3>
+        <p className="pw-home__meta pw-moment-2">Модуль 01 · Уровень 4 · урок</p>
         <p className="pw-home__text pw-moment-3">
-          Отчёт проверяет наставник. После одобрения уровень будет завершён.
+          Изучите урок и пройдите короткую проверку, чтобы завершить уровень.
         </p>
-        <span className="pw-button pw-moment-3">Открыть отчёт</span>
+        <span className="pw-button pw-moment-3">Открыть уровень</span>
       </div>
     </div>
   );
 }
 
+/* The first module of the program learners have (2026-10-04, launch audit): it
+   used to be the 100-level plan's — L1 «Подготовить среду», L3 a report, L4 a
+   checkpoint — which is not what anyone who signs up finds. */
 const MODULE_LEVELS = [
-  { code: "L1", title: "Подготовить среду", kind: "done" },
+  { code: "L1", title: "Что такое бинарные опционы", kind: "done" },
   { code: "L2", title: "Как устроен ATA", kind: "done" },
-  { code: "L3", title: "Первые пять demo-сделок", kind: "current" },
-  { code: "L4", title: "Контрольная точка", kind: "gate" },
+  { code: "L3", title: "Регистрация и терминал", kind: "done" },
+  { code: "L4", title: "Как читать график", kind: "current" },
   { code: "L5", title: "Жизненный цикл сделки", kind: "next" },
 ] as const;
 
@@ -52,10 +55,10 @@ function PathState() {
         <div>
           <p className="pw-path__h">Путь</p>
           <p className="pw-path__now">
-            Сейчас: <strong>Уровень 3</strong> · Первые пять demo-сделок <span className="pw-mono">модуль 1 из 20</span>
+            Сейчас: <strong>Уровень 4</strong> · Как читать график <span className="pw-mono">модуль 1 из 20</span>
           </p>
         </div>
-        <p className="pw-path__count">Пройдено 2 из 100 уровней</p>
+        <p className="pw-path__count">Пройдено 3 из 100 уровней</p>
       </div>
       <div className="pw-path__bar" aria-hidden="true">
         <i />

@@ -508,6 +508,19 @@ describe("the authenticated route group", () => {
   "src/components/shell/brand-mark.tsx",
   "src/config/not-found-metadata.ts",
   "src/lib/curriculum/provider.ts",
+  /* LAUNCH READINESS (2026-10-04, the owner: «продукт должен быть буквально
+     готовым к запуску»): «Выйти» always ends the session on this device (the
+     logout route clears the cookies when the Backend refuses), and two plain
+     sentences — the empty notifications and the material's last line. No
+     loading boundary, no route moved. */
+  "src/app/api/backend/auth/logout/route.ts",
+  "src/features/notifications-fidelity/notifications-state.ts",
+  "src/features/reader-fidelity/reader-state.ts",
+  /* …the root error page (sign-in, registration, recovery and the news fell
+     through to the framework's English default), and the client's one new
+     write: marking the notifications read once the learner has seen them. */
+  "src/app/error.tsx",
+  "src/lib/api/client.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

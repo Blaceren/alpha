@@ -103,7 +103,11 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
     backendPath: "/api/auth/logout",
     isLogin: false,
     hasBody: false,
-    forwardClientIp: false,
+    /* 2026-10-04, launch audit: the Backend limits logout to 20 per 10 minutes
+       PER ADDRESS. Without the learner's address every logout of every learner
+       arrived from this proxy's own, so they shared one bucket of twenty — and
+       a refused logout revoked nothing. */
+    forwardClientIp: true,
     authSurface: null,
   },
   csrf: {

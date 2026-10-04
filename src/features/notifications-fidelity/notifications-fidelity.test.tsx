@@ -14,6 +14,13 @@ import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NotificationsFidelity } from "@/features/notifications-fidelity/notifications-fidelity";
+import { markAllNotificationsRead } from "@/lib/api/client";
+
+const refresh = vi.fn();
+// One router object for the whole run, as Next's own is stable across renders.
+const router = { refresh };
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/lib/api/client", () => ({ markAllNotificationsRead: vi.fn(async () => ({ ok: true, data: {}, requestId: null })) }));
 import {
   COPY,
   consequenceOf,
@@ -87,6 +94,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/* ------------------------------------------- seen means read (2026-10-04) */
+
+describe("Notifications — the list once seen is read", () => {
+  it("marks every unread row read once the list has rendered, and refreshes the shell's mark", async () => {
+    vi.mocked(markAllNotificationsRead).mockClear();
+    refresh.mockClear();
+    vi.stubGlobal("fetch", respondWith({ items: [row({ id: 1 })] }));
+    render(<NotificationsFidelity />);
+    await waitFor(() => expect(markAllNotificationsRead).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("writes nothing when nothing is unread", async () => {
+    vi.mocked(markAllNotificationsRead).mockClear();
+    vi.stubGlobal("fetch", respondWith({ items: [row({ id: 2, readAt: "2026-10-01T10:00:00.000Z" })] }));
+    render(<NotificationsFidelity />);
+    await screen.findByRole("list", { name: COPY.registerLabel });
+    expect(markAllNotificationsRead).not.toHaveBeenCalled();
+  });
+});
+
 /* ---------------------------------------------------------- semantic layer */
 
 describe("Notifications — the semantic mapping", () => {
@@ -121,14 +149,20 @@ describe("Notifications — the semantic mapping", () => {
     }
   });
 
-  it("offers no destination at all while the only labelled types are withheld", () => {
-    /* A handoff needs BOTH a resolvable href and an approved label, and the two
-       Community events are the only types that have ever carried a label. With
-       the section withheld, every row a learner can see is correctly
-       destination-less — including one that carries a perfectly good link. */
+  it("offers a destination only where the product has one: a support reply leads to the desk", () => {
+    /* A handoff needs BOTH a resolvable href and an approved label. The two
+       Community events carry a label but their section is withheld; since
+       2026-10-04 (launch audit) a support reply leads to the support desk,
+       whatever link the row carries. Every other row stays destination-less —
+       including one that carries a perfectly good link. */
     for (const type of ENUM) {
       const rec = toRecord(row({ type, link: "/support" }), NOW);
       expect(rec, type).not.toBeNull();
+      if (type === "support_reply") {
+        expect(rec?.destination, type).toBe("AVAILABLE");
+        expect(rec?.handoff, type).toEqual({ label: "Открыть обращения", href: "/profile/support" });
+        continue;
+      }
       expect(rec?.destination, type).toBe("NO_DESTINATION_NEEDED");
       expect(rec?.handoff, type).toBeNull();
     }

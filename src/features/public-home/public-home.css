@@ -2711,7 +2711,7 @@ html.ph-smooth-scroll {
   left: 10%;
   height: 2px;
   background:
-    linear-gradient(var(--pw-signal-700), var(--pw-signal-700)) left center / 50% 100% no-repeat,
+    linear-gradient(var(--pw-signal-700), var(--pw-signal-700)) left center / 75% 100% no-repeat,
     var(--pw-line-2);
   animation: pw-line-draw 600ms var(--ease) 200ms both;
   content: "";

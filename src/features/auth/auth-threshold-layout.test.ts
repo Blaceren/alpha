@@ -515,7 +515,10 @@ describe("nothing the correction was forbidden to touch has moved", () => {
     expect(login).toContain('title="Продолжить свой путь."');
     expect(register).toContain('eyebrow="ATA / НАЧАЛО"');
     expect(register).toContain('title="Начать путь."');
+    // The cautious line stays for a Backend that cannot say; where registration starts the
+    // program (2026-10-04, launch audit), the page says so.
     expect(register).toContain("Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор.");
+    expect(register).toContain("Регистрация бесплатная. Сразу после неё откроется первый уровень пути.");
   });
 
   it("nothing in this file hides the eyebrow, the heading or the lead", () => {

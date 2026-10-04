@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { TOOL_WINDOWS } from "@/features/tool-windows/model/catalog";
+import { PROGRAM_TOOL_LEVEL } from "@/features/public-home/product-route-data";
 
 /**
  * Public Home — brand-evolution gates.
@@ -226,17 +227,20 @@ describe("Public Home — the claim never outruns the product", () => {
     }
   });
 
-  it("shows the six built tools from the catalogue, in unlock order, and no roadmap", () => {
+  it("shows the six built tools from the catalogue, at the levels the program opens them, and no roadmap", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const tools = container.querySelector("#tools") as HTMLElement;
+    // The program learners have (owner's document of 2026-10-02; 2026-10-04 launch audit) —
+    // not the catalogue's 100-level plan (5/10/15/20/25/30).
+    expect(PROGRAM_TOOL_LEVEL).toEqual({ "trade-card": 5, journal: 9, "risk-calculator": 13, "entry-checklist": 13, stats: 24, news: 28 });
     const built = TOOL_WINDOWS.filter((tool) => tool.built)
       .slice()
-      .sort((a, b) => a.unlockLevel - b.unlockLevel);
+      .sort((a, b) => PROGRAM_TOOL_LEVEL[a.slug] - PROGRAM_TOOL_LEVEL[b.slug]);
     expect(built.length).toBe(6);
     const labels = Array.from(tools.querySelectorAll(".rstep__label")).map((el) => el.textContent ?? "");
-    expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${tool.unlockLevel}`));
+    expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${PROGRAM_TOOL_LEVEL[tool.slug]}`));
     const nodes = Array.from(tools.querySelectorAll(".rstep__node")).map((el) => el.textContent);
-    expect(nodes).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
+    expect(nodes).toEqual(["L5", "L9", "L13", "L13", "L24", "L28"]);
     // The route's own words promise nothing ahead. (A window shows the
     // product's states — the News Calendar marks a release due today «скоро» —
     // so the windows are read apart from the copy.)
@@ -909,9 +913,10 @@ describe("Public Home — the owner's review of 2026-10-02", () => {
 
     it("draws the walked part of the window's path as a layer of its first child", () => {
       const line = rule(".ph .pw-path__nodes::before");
-      // Faint from the first node to the fifth; Signal over the first half of it — to the third, the current one.
+      // Faint from the first node to the fifth; Signal over three quarters of it — to the fourth, the current one
+      // (level 4 of the program, 2026-10-04).
       expect(line).toMatch(
-        /linear-gradient\(var\(--pw-signal-700\), var\(--pw-signal-700\)\) left center \/ 50% 100% no-repeat,\s*var\(--pw-line-2\)/,
+        /linear-gradient\(var\(--pw-signal-700\), var\(--pw-signal-700\)\) left center \/ 75% 100% no-repeat,\s*var\(--pw-line-2\)/,
       );
       expect(line).toMatch(/animation:\s*pw-line-draw 600ms var\(--ease\) 200ms both/);
       // Grown by its size — a transform would make the line a layer of its own.
@@ -1013,14 +1018,14 @@ describe("Public Home — the phone composition (DD-342)", () => {
 
   it("names the six tools on the rail in the order they open, from the catalogue", () => {
     const { buttons, rail } = mountDeck();
-    const built = TOOL_WINDOWS.filter((tool) => tool.built).sort((a, b) => a.unlockLevel - b.unlockLevel);
-    expect(buttons.map((b) => b.textContent)).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
+    const built = TOOL_WINDOWS.filter((tool) => tool.built).sort((a, b) => PROGRAM_TOOL_LEVEL[a.slug] - PROGRAM_TOOL_LEVEL[b.slug]);
+    expect(buttons.map((b) => b.textContent)).toEqual(built.map((tool) => `L${PROGRAM_TOOL_LEVEL[tool.slug]}`));
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(
-      built.map((tool) => `${tool.title}, открывается на уровне ${tool.unlockLevel}`),
+      built.map((tool) => `${tool.title}, открывается на уровне ${PROGRAM_TOOL_LEVEL[tool.slug]}`),
     );
     expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false", "false", "false"]);
     expect(rail.querySelector(".trail__note")?.textContent?.replace(/\s+/g, " ")).toContain(
-      `${built[0]!.title} — открывается на уровне ${built[0]!.unlockLevel}`,
+      `${built[0]!.title} — открывается на уровне ${PROGRAM_TOOL_LEVEL[built[0]!.slug]}`,
     );
   });
 

@@ -71,7 +71,7 @@ export function CycleObject({ step }: { step: 1 | 2 | 3 | 4 | 5 | 6 }) {
             <li className="is-current">L6</li>
             <li>L7</li>
           </ol>
-          <p className="cyc__sub">Открылся L6 · Экспирация и payout</p>
+          <p className="cyc__sub">Открылся L6 · Выбор актива</p>
         </div>
       );
   }

@@ -137,12 +137,15 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               <strong>100</strong>
               <span>последовательных уровней</span>
             </div>
+            {/* The program learners have (2026-10-04, launch audit): the first test
+                is level 4, the first practice with a report is level 9. These said
+                L2 and L3 — the 100-level plan. */}
             <div>
-              <strong>L2</strong>
+              <strong>L4</strong>
               <span>первая проверка знаний</span>
             </div>
             <div>
-              <strong>L3</strong>
+              <strong>L9</strong>
               <span>первая практика и разбор</span>
             </div>
           </div>

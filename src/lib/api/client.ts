@@ -224,6 +224,23 @@ async function fetchCsrfToken(): Promise<ApiResult<string>> {
 }
 
 /**
+ * The learner has seen their notifications (2026-10-04, launch audit): every
+ * unread one becomes read. Until then nothing ever marked a notification read,
+ * so after the first support reply the bell's mark stayed on for good. Same
+ * double-submit CSRF as logout; best-effort, no retry.
+ */
+export async function markAllNotificationsRead(): Promise<ApiResult<unknown>> {
+  const csrf = await fetchCsrfToken();
+  if (!csrf.ok) return csrf;
+  return apiRequest<unknown>({
+    method: "POST",
+    path: `${PROXY_BASE}/notifications/read-all`,
+    csrfToken: csrf.data,
+    validate: (value): value is unknown => typeof value === "object" && value !== null,
+  });
+}
+
+/**
  * Logout is a Backend mutation guarded by double-submit CSRF: we first bootstrap
  * a CSRF token, then send it as the `x-csrf-token` header. No auto-retry.
  */

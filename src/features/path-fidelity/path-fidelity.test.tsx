@@ -30,7 +30,6 @@ import {
   moduleSegState,
   levelCodeLabel,
   moduleKicker,
-  PATH_WAITING_EXTERNAL,
   PATH_WAITING_REVIEW,
 } from "@/features/path-fidelity/path-state";
 import type {
@@ -207,7 +206,7 @@ describe("Path — state mapping is derived from canonical progression", () => {
     expect(focusKind(level({ order: 1, state: "pending_review" }))).toBe("waiting");
     expect(
       focusKind(level({ order: 1, state: "available", completionMethod: "external-event" })),
-    ).toBe("waiting");
+    ).toBe("current");
   });
 
   it("stops waiting once the external level is actually complete", () => {
@@ -220,13 +219,14 @@ describe("Path — state mapping is derived from canonical progression", () => {
     expect(waitingLine(level({ order: 1, state: "in_progress" }))).toBeNull();
     expect(waitingLine(level({ order: 1, state: "available" }))).toBeNull();
     expect(waitingLine(level({ order: 1, state: "pending_review" }))).toBe(PATH_WAITING_REVIEW);
+    // The registration level asks the learner to act (2026-10-04): no «nothing is required».
     expect(
       waitingLine(level({ order: 1, state: "available", completionMethod: "external-event" })),
-    ).toBe(PATH_WAITING_EXTERNAL);
+    ).toBeNull();
   });
 
   it("addresses the learner formally, as the product's copy contract requires", () => {
-    for (const row of [PATH_WAITING_EXTERNAL, PATH_WAITING_REVIEW]) {
+    for (const row of [PATH_WAITING_REVIEW]) {
       expect(row).toContain("от вас");
       expect(row).not.toContain("от тебя");
     }
@@ -254,6 +254,9 @@ describe("Path — state mapping is derived from canonical progression", () => {
     expect(nodeStateText("current", "waiting", "На проверке")).toBe("текущий · на проверке");
     expect(nodeStateText("current", "current", "Сейчас · в работе")).toBe("текущий");
     expect(nodeStateText("done", "waiting", "Пройден")).toBe("пройден");
+    // A level that is not produced yet is «готовится» wherever it stands — also right after the current one.
+    expect(nodeStateText("next", "current", "Готовится", true)).toBe("готовится");
+    expect(nodeStateText("locked", "current", "Готовится", true)).toBe("готовится");
   });
 
   it("keeps the frozen code and kicker formats", () => {
@@ -403,7 +406,7 @@ describe("Path — each workflow state reads as itself", () => {
     );
   });
 
-  it("an external-event level says the provider is the one being waited on", () => {
+  it("an external-event level is the learner's to act on — the level page has the link (2026-10-04)", () => {
     const view = standardView({
       state: "available",
       stateLabel: "Ждёт внешнего подтверждения",
@@ -412,8 +415,8 @@ describe("Path — each workflow state reads as itself", () => {
       shortDescription: null,
     });
     const { container } = render(<PathFidelityView view={view} userName="Тест" />);
-    expect(container.querySelector(".focus__body")?.textContent).toContain(PATH_WAITING_EXTERNAL);
-    expect(container.querySelector(".focus__state")?.className).toContain("focus__state--waiting");
+    expect(container.querySelector(".focus__body")?.textContent).not.toContain("ничего не требуется");
+    expect(container.querySelector(".focus__state")?.className).not.toContain("focus__state--waiting");
   });
 
   it("an unverified checkpoint is a checkpoint, not a failure", () => {

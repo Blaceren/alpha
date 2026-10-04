@@ -132,6 +132,14 @@ export function contextIdentity(type: string): string | null {
 const HANDOFF_LABEL: Partial<Record<NotificationTypeName, string>> = {
   community_reply: "Открыть обсуждение",
   community_moderation: "Открыть обсуждение",
+  /* 2026-10-04, launch audit: the one notification learners actually get — a
+     reply from support — led nowhere; the answer is on the support desk. */
+  support_reply: "Открыть обращения",
+};
+
+/** Destinations the product owns for a type, whatever the row carries. */
+const TYPE_DESTINATION: Partial<Record<NotificationTypeName, string>> = {
+  support_reply: "/profile/support",
 };
 
 export function handoffLabel(type: string): string | null {
@@ -207,7 +215,7 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
   const created = row.createdAt ? new Date(row.createdAt) : null;
   if (!created || Number.isNaN(created.getTime())) return null;
 
-  const href = deriveNotificationHref(row as HrefSource);
+  const href = TYPE_DESTINATION[type as NotificationTypeName] ?? deriveNotificationHref(row as HrefSource);
   const label = handoffLabel(type);
 
   const statement = (row.title ?? "").trim();
@@ -272,13 +280,15 @@ export function presenceFor(request: "SUCCESS" | "LOADING" | "FAILURE", records:
   return records === 0 ? "NONE_SCOPED" : "WITHHELD";
 }
 
-/** The frozen copy, verbatim from the accepted page. */
+/** The frozen copy, verbatim from the accepted page — except the two empty-state
+    lines, made plain on 2026-10-04 (launch audit): the uppercase status line no
+    longer runs to two lines, and the lead says what will arrive here. */
 export const COPY = {
   title: "Уведомления",
   registerLabel: "Значимые изменения",
   loadingAnnouncement: "Загрузка изменений",
-  presenceNone: "Сейчас ничего не требует вашего действия в этом разделе.",
-  emptyLead: "Значимых изменений пока нет — здесь появляется то, что произошло в вашей работе без вас.",
+  presenceNone: "Сейчас ничего не требует вашего действия.",
+  emptyLead: "Изменений пока нет. Здесь появятся ответы поддержки и всё, что изменилось в вашей работе, пока вас не было.",
   failureLead: "Не удалось обновить список изменений.",
   failureReasonCold: "Проверьте соединение и повторите попытку.",
   failureRecovery: "Обновить",

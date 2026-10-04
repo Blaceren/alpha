@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { markAllNotificationsRead } from "@/lib/api/client";
 import {
   COPY,
   presenceFor,
@@ -43,14 +45,14 @@ import "@/features/notifications-fidelity/notifications-hifi.css";
  *     retrieval control with no retrieval behind it is the same defect. It
  *     returns when the Backend can page.
  *
- *   * THE READ TRANSITION. The frozen read-semantics document selects
- *     "meaningful learner exposure" as the UNREAD → READ mechanic — and that
- *     document is explicitly a CANDIDATE, not frozen. Implementing it would
- *     write to the live PREPROD database on page view, which this phase is
- *     forbidden from doing, and would ship an unfrozen behavioural decision
- *     under cover of a visual restoration. Consumption is therefore RENDERED
- *     from the real `readAt` and never changed from here. The two BFF write
- *     operations stay unused, as they already were.
+ *   * THE READ TRANSITION — now carried (2026-10-04, launch audit). It was
+ *     left out while the read semantics were a candidate: nothing marked a
+ *     notification read, so after a learner's first support reply the bell's
+ *     mark never went away. «Meaningful learner exposure» is this page shown
+ *     with the list: once it has rendered, every unread row is marked read on
+ *     the Backend and the shell is refreshed so the mark goes. The rows on
+ *     screen keep the «new» look they arrived with — the learner sees what was
+ *     new this time; the next visit shows them read.
  *
  *   * THE PROTOTYPE'S OWN SHELL. `design/shell.js` is imported by the frozen
  *     page; the product keeps the accepted AppShell, which supplies the one
@@ -112,17 +114,24 @@ async function requestRegister(): Promise<Load> {
 
 export function NotificationsFidelity() {
   const [load, setLoad] = useState<Load>({ phase: "loading" });
+  const router = useRouter();
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       const next = await requestRegister();
-      if (alive) setLoad(next);
+      if (!alive) return;
+      setLoad(next);
+      // Seen: mark what was unread as read, then let the shell drop its mark.
+      if (next.phase === "ready" && next.records.some((record) => record.consumption === "UNREAD")) {
+        const marked = await markAllNotificationsRead();
+        if (alive && marked.ok) router.refresh();
+      }
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [router]);
 
   const retry = useCallback(() => {
     setLoad({ phase: "loading" });

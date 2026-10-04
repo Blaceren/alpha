@@ -39,6 +39,7 @@
  * changed.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   checkPocketRegistration,
@@ -204,6 +205,19 @@ export function PocketRegistration() {
         закроется автоматически, когда Pocket подтвердит регистрацию — вручную это
         отметить нельзя.
       </p>
+      {/* THE INSTRUCTION THE HOME PROMISES (2026-10-04, launch audit). The Home's
+          card for this level says «там есть ссылка и инструкция»; there was a
+          link and one sentence. Three steps of what actually happens, and where
+          to go when it does not — nothing about the broker beyond what this
+          product does. */}
+      <ol className="pocket-reg__steps">
+        <li>Нажмите «Зарегистрироваться в Pocket» — сайт откроется в новой вкладке.</li>
+        <li>Создайте аккаунт там, по этой ссылке.</li>
+        <li>
+          Вернитесь сюда: Pocket сообщит о регистрации сам, и уровень закроется. Если этого
+          ещё не произошло, нажмите «Проверить регистрацию».
+        </li>
+      </ol>
 
       <div className="pocket-reg__actions">
         <button
@@ -237,6 +251,10 @@ export function PocketRegistration() {
         {phase === "opened" && note === null
           ? "Страница Pocket открыта в новой вкладке. Вернитесь сюда после регистрации и нажмите «Проверить регистрацию»."
           : (note ?? "")}
+      </p>
+      <p className="pocket-reg__help">
+        Аккаунт в Pocket уже был или подтверждение не приходит?{" "}
+        <Link href="/profile/support">Напишите в поддержку</Link> — разберёмся.
       </p>
     </section>
   );

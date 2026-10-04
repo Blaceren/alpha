@@ -49,6 +49,17 @@ export async function readAccountCapabilities(): Promise<AccountCapabilities> {
   return isAccountCapabilities(capabilities) ? capabilities : NO_ACCOUNT_CAPABILITIES;
 }
 
+/**
+ * Whether a new account starts on the program at once (2026-10-04, launch
+ * audit). `null` when the Backend does not say — an older Backend, an
+ * unreachable one — and the registration page then keeps its cautious line.
+ */
+export async function readRegistrationOpensLearning(): Promise<boolean | null> {
+  const body = await readJson("/api/auth/capabilities", null);
+  const value = (body as { registration?: { opensLearning?: unknown } } | null)?.registration?.opensLearning;
+  return typeof value === "boolean" ? value : null;
+}
+
 export async function readServerAccount(): Promise<AccountView | null> {
   const cookieStore = await cookies();
   const cookie = sessionCookieHeader((name) => cookieStore.get(name));

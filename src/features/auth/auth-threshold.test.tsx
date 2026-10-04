@@ -22,6 +22,7 @@ vi.mock("@/config/academy-config", () => ({
    mail" by default, which is the state these guards were written for. */
 vi.mock("@/server/auth/account-read", () => ({
   readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
+  readRegistrationOpensLearning: vi.fn(async () => null),
 }));
 type PageComponent = () => Promise<React.ReactElement> | React.ReactElement;
 async function page(Page: PageComponent): Promise<React.ReactElement> {

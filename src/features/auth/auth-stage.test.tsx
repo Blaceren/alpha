@@ -31,6 +31,7 @@ vi.mock("@/config/academy-config", () => ({
    mail" by default, which is the state these guards were written for. */
 vi.mock("@/server/auth/account-read", () => ({
   readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
+  readRegistrationOpensLearning: vi.fn(async () => null),
 }));
 type PageComponent = () => Promise<React.ReactElement> | React.ReactElement;
 async function page(Page: PageComponent): Promise<React.ReactElement> {
@@ -206,6 +207,27 @@ describe("the way between the two pages", () => {
     const register = renderPage(await page(RegisterPage));
     expect(register.container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
     register.unmount();
+  });
+});
+
+describe("the registration page says what registration does here (2026-10-04)", () => {
+  it("where a new account starts the program, it says so — free, and the first level at once", async () => {
+    const { readRegistrationOpensLearning } = await import("@/server/auth/account-read");
+    vi.mocked(readRegistrationOpensLearning).mockResolvedValueOnce(true);
+    const { container, unmount } = renderPage(await page(RegisterPage));
+    expect(container.textContent).toContain("Регистрация бесплатная. Сразу после неё откроется первый уровень пути.");
+    expect(container.textContent).not.toContain("куратор");
+    unmount();
+  });
+
+  it("where the Backend does not say, or a curator enrols, the cautious line stays", async () => {
+    const { readRegistrationOpensLearning } = await import("@/server/auth/account-read");
+    for (const answer of [null, false]) {
+      vi.mocked(readRegistrationOpensLearning).mockResolvedValueOnce(answer);
+      const { container, unmount } = renderPage(await page(RegisterPage));
+      expect(container.textContent).toContain("Доступ к обучению открывает куратор.");
+      unmount();
+    }
   });
 });
 
