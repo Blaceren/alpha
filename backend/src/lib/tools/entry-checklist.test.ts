@@ -98,6 +98,11 @@ describe("parseEntryCheck", () => {
   it("names the refused field, and refuses anything but the nine answers", () => {
     expect(refused({ ...body, asset: "DOGE" })).toBe("TOOL_VALIDATION:invalid_asset");
     expect(refused({ ...body, minPayoutPercent: 0 })).toBe("TOOL_VALIDATION:invalid_minPayoutPercent");
+    // The learner's own minimum is a payout like any other: 20…99.
+    expect(refused({ ...body, minPayoutPercent: 19 })).toBe("TOOL_VALIDATION:invalid_minPayoutPercent");
+    expect(refused({ ...body, minPayoutPercent: 100 })).toBe("TOOL_VALIDATION:invalid_minPayoutPercent");
+    expect(parseEntryCheck({ ...body, minPayoutPercent: 20 }).minPayoutPercent).toBe(20);
+    expect(parseEntryCheck({ ...body, minPayoutPercent: 99 }).minPayoutPercent).toBe(99);
     expect(refused({ ...body, minPayoutPercent: 85.5 })).toBe("TOOL_VALIDATION:invalid_minPayoutPercent");
     expect(refused({ ...body, answers: { ...ALL, extra: true } })).toBe("TOOL_VALIDATION:invalid_answers");
     const missing: Record<string, boolean> = { ...ALL };

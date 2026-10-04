@@ -1083,7 +1083,7 @@ async function main() {
     });
     assert.equal(context.kind, "completed");
     if (context.kind !== "completed") throw new Error("not completed");
-    const dto = readApi.mapCompletedCurriculumRead(context) as AnyRecord;
+    const dto = readApi.mapCompletedCurriculumRead(context, undefined, []) as AnyRecord;
     const levels = (dto.modules as AnyRecord[])[0].levels as AnyRecord[];
     const l4 = levels[3].checkpoint as AnyRecord;
     assert.equal(l4.verificationState, "completed");
@@ -1121,7 +1121,7 @@ async function main() {
   await check("F7 the DTO exposes exactly the bounded checkpoint fields", async () => {
     const learner = await enrol();
     const states = await statesFor(learner.userId);
-    const dto = readApi.mapEnrolledCurriculumRead(states) as AnyRecord;
+    const dto = readApi.mapEnrolledCurriculumRead(states, []) as AnyRecord;
     const levels = (dto.modules as AnyRecord[])[0].levels as AnyRecord[];
     const block = levels[3].checkpoint as AnyRecord;
     assert.deepEqual(Object.keys(block).sort(), [

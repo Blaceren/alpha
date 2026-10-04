@@ -19,6 +19,9 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   levelUpdated: "LEVEL_DEFINITION_UPDATED",
   levelDeleted: "LEVEL_DEFINITION_DELETED",
   userEnrolled: "CURRICULUM_USER_ENROLLED",
+  // PROGRAM STRUCTURE (2026-10-02). An operator moved a learner from the version
+  // they were pinned to onto the published one (`enrollment-move.ts`).
+  enrollmentMoved: "CURRICULUM_ENROLLMENT_MOVED",
   levelStarted: "CURRICULUM_LEVEL_STARTED",
   levelCompleted: "CURRICULUM_LEVEL_COMPLETED",
   // L4VC-1. Recorded ONLY when a financial checkpoint is passed; a refusal or
@@ -114,6 +117,10 @@ export const CURRICULUM_AUDIT_ACTIONS = {
   reportReassigned: "REPORT_REASSIGNED",
   reportRejected: "REPORT_REJECTED",
   reportApproved: "REPORT_APPROVED",
+  // PROGRAM STRUCTURE (2026-10-02). A report accepted by the platform's formal
+  // check at submission — no reviewer, so deliberately NOT `REPORT_APPROVED`,
+  // which says a person approved it.
+  reportFormallyAccepted: "REPORT_FORMALLY_ACCEPTED",
   reportAttachmentAvailable: "CURRICULUM_REPORT_ATTACHMENT_AVAILABLE",
   reportAttachmentDeleted: "CURRICULUM_REPORT_ATTACHMENT_DELETED",
   reportAttachmentRejected: "CURRICULUM_REPORT_ATTACHMENT_REJECTED",

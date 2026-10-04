@@ -12,7 +12,12 @@
  *   - the entry carries the card's trade, its reason as the plan and its
  *     observation as the conclusion, dated by the learner's own calendar;
  *   - a hand-recorded entry, its review and broken rules;
- *   - an entry made from a card keeps its trade: only the review is edited;
+ *   - any entry is replaced whole (owner, 2026-10-01): an entry made from a
+ *     card too — the entry changes, the card never does, and the entry stays
+ *     that card's entry;
+ *   - an entry is deleted with its rules and nothing else: the card it came
+ *     from stays saved, the counts are those after the delete, a second delete
+ *     and another learner's delete are «not found»;
  *   - filters, counts and pages, and a cursor is only ever the learner's own;
  *   - another learner can neither see nor change an entry;
  *   - the tables refuse states the service never writes (raw SQL);
@@ -25,6 +30,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { seedLegacyToolUnlocks } from "./support/toolUnlocks";
 
 const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ata-tool-journal-"));
 const dbUrl = `file:${path.join(scratchDir, "regression.sqlite")}`;
@@ -76,7 +82,7 @@ async function main() {
   const cards = await import("@/lib/tools/trade-card-service");
   const journal = await import("@/lib/tools/journal-service");
   const { parseTradeCardPlan } = await import("@/lib/tools/trade-card");
-  const { parseJournalManualEntry, parseJournalChange } = await import("@/lib/tools/journal");
+  const { parseJournalManualEntry, parseJournalChange, toJournalEntryDto } = await import("@/lib/tools/journal");
   const { isToolUnlockedForUser } = await import("@/lib/tools/access");
   const { EXPECTED_MIGRATION_COUNT } = await import("./support/migrationCount");
 
@@ -132,6 +138,7 @@ async function main() {
       }),
     );
   }
+  await seedLegacyToolUnlocks(db, version.id, levels);
   async function learner(email: string, completedThrough: number) {
     const user = await db.user.create({ data: { email, name: email, role: "user", passwordHash: "x" } });
     const enrollment = await db.userCurriculumEnrollment.create({
@@ -257,7 +264,7 @@ async function main() {
       assert.deepEqual(noConclusion.rows.map((row) => row.id), [aliceManualId]);
     });
 
-    await check("the review of a card entry is the learner's to edit; its trade is not", async () => {
+    await check("the review of a card entry is the learner's to edit, and leaves it the card's entry", async () => {
       const reviewed = await journal.updateJournalEntry(
         alice.user.id,
         aliceCardEntryId,
@@ -266,19 +273,79 @@ async function main() {
       );
       assert.equal(reviewed.planFollowed, true);
       assert.equal(reviewed.execution, "Вошёл после закрытия свечи");
-      await expectToolError(
-        journal.updateJournalEntry(alice.user.id, aliceCardEntryId, parseJournalChange({ kind: "manual", ...manualBody() }, NOW()), db),
-        "JOURNAL_TRADE_FROM_CARD",
+      assert.equal(toJournalEntryDto(reviewed).editedAfterCard, false);
+    });
+
+    await check("an entry made from a card is replaced whole too: the entry changes, the card does not", async () => {
+      const card = await db.toolTradeCard.findFirstOrThrow({ where: { journalEntry: { id: aliceCardEntryId } } });
+      const before = await db.toolJournalEntry.findUniqueOrThrow({ where: { id: aliceCardEntryId } });
+      // The result was marked wrongly on the card: a profit that was a loss.
+      const corrected = await journal.updateJournalEntry(
+        alice.user.id,
+        aliceCardEntryId,
+        parseJournalChange(
+          {
+            kind: "entry",
+            tradeDate: before.tradeDate,
+            entryTime: before.entryTime,
+            asset: before.assetCode,
+            direction: before.direction,
+            amount: "8",
+            payoutPercent: before.payoutPercent,
+            expiry: before.expiryCode,
+            result: "loss",
+            plan: before.plan,
+            planFollowed: true,
+            conclusion: "Ждать закрытия",
+          },
+          NOW(),
+        ),
+        db,
       );
-      const unchanged = await db.toolJournalEntry.findUniqueOrThrow({ where: { id: aliceCardEntryId } });
-      assert.equal(unchanged.assetCode, "EURUSD_OTC");
+      assert.equal(corrected.result, "loss");
+      // Still that card's entry — corrected, and said to be.
+      assert.equal(corrected.source, "trade_card");
+      assert.equal(corrected.tradeCardId, card.id);
+      const dto = toJournalEntryDto(corrected);
+      assert.equal(dto.editedAfterCard, true);
+      assert.equal(dto.resultAmount, "8.00");
+      // The card is what it was when it was saved.
+      const cardAfter = await db.toolTradeCard.findUniqueOrThrow({ where: { id: card.id } });
+      assert.equal(cardAfter.result, "profit");
+      assert.equal(cardAfter.status, "saved");
+      assert.deepEqual(cardAfter.updatedAt, card.updatedAt);
+      // Put back, it is the card's entry again.
+      const restored = await journal.updateJournalEntry(
+        alice.user.id,
+        aliceCardEntryId,
+        parseJournalChange(
+          {
+            kind: "manual",
+            tradeDate: before.tradeDate,
+            entryTime: before.entryTime,
+            asset: before.assetCode,
+            direction: before.direction,
+            amount: "8",
+            payoutPercent: before.payoutPercent,
+            expiry: before.expiryCode,
+            result: "profit",
+            plan: before.plan,
+            planFollowed: true,
+            execution: "Вошёл после закрытия свечи",
+            conclusion: "Ждать закрытия",
+          },
+          NOW(),
+        ),
+        db,
+      );
+      assert.equal(toJournalEntryDto(restored).editedAfterCard, false);
     });
 
     await check("a hand-recorded entry is replaced whole, and its rules with it", async () => {
       const replaced = await journal.updateJournalEntry(
         alice.user.id,
         aliceManualId,
-        parseJournalChange({ kind: "manual", ...manualBody(), planFollowed: false, violations: ["tired"] }, NOW()),
+        parseJournalChange({ kind: "entry", ...manualBody(), planFollowed: false, violations: ["tired"] }, NOW()),
         db,
       );
       assert.equal(replaced.assetCode, "XAUUSD_OTC");
@@ -310,6 +377,55 @@ async function main() {
       assert.equal(ids.size, 23);
       assert.equal(first.rows[0]!.tradeDate, "2026-08-23");
       assert.equal(second.rows.at(-1)!.tradeDate, "2026-08-01");
+    });
+
+    await check("an entry is deleted with its rules, and the counts are those after the delete", async () => {
+      const doomed = await journal.createManualJournalEntry(
+        alice.user.id,
+        manual({ tradeDate: "2026-09-18", planFollowed: false, violations: ["revenge", "tired"], conclusion: null }),
+        db,
+      );
+      const before = (await journal.listJournal(alice.user.id, { filter: "all", before: null }, db)).summary;
+      assert.equal(await db.toolJournalViolation.count({ where: { entryId: doomed.id } }), 2);
+
+      // Another learner's delete is «not found» and deletes nothing.
+      await expectToolError(journal.deleteJournalEntry(bob.user.id, doomed.id, db), "JOURNAL_ENTRY_NOT_FOUND");
+      assert.equal(await db.toolJournalEntry.count({ where: { id: doomed.id } }), 1);
+
+      const { summary } = await journal.deleteJournalEntry(alice.user.id, doomed.id, db);
+      assert.equal(await db.toolJournalEntry.count({ where: { id: doomed.id } }), 0);
+      assert.equal(await db.toolJournalViolation.count({ where: { entryId: doomed.id } }), 0);
+      assert.deepEqual(summary, {
+        total: before.total - 1,
+        onPlan: before.onPlan,
+        violated: before.violated - 1,
+        unmarked: before.unmarked,
+        withoutConclusion: before.withoutConclusion - 1,
+      });
+      assert.deepEqual((await journal.listJournal(alice.user.id, { filter: "all", before: null }, db)).summary, summary);
+
+      // Deleted is deleted: a second delete, an edit and a page from it are all refused.
+      await expectToolError(journal.deleteJournalEntry(alice.user.id, doomed.id, db), "JOURNAL_ENTRY_NOT_FOUND");
+      await expectToolError(
+        journal.updateJournalEntry(alice.user.id, doomed.id, parseJournalChange({ kind: "review", planFollowed: true }), db),
+        "JOURNAL_ENTRY_NOT_FOUND",
+      );
+      await expectToolError(journal.listJournal(alice.user.id, { filter: "all", before: doomed.id }, db), "TOOL_VALIDATION", "invalid_before");
+    });
+
+    await check("deleting a card's entry leaves the card saved, and gives the card no second entry", async () => {
+      const card = await db.toolTradeCard.findFirstOrThrow({ where: { journalEntry: { id: aliceCardEntryId } } });
+      const others = await db.toolJournalEntry.count({ where: { userId: alice.user.id, id: { not: aliceCardEntryId } } });
+      const { summary } = await journal.deleteJournalEntry(alice.user.id, aliceCardEntryId, db);
+      assert.equal(summary.total, others);
+      const kept = await db.toolTradeCard.findUniqueOrThrow({ where: { id: card.id }, include: { journalEntry: true } });
+      assert.equal(kept.status, "saved");
+      assert.equal(kept.result, "profit");
+      assert.equal(kept.journalEntry, null);
+      assert.deepEqual(kept.updatedAt, card.updatedAt);
+      // The card is terminal: it cannot be saved again, so the trade does not come back by itself.
+      await expectToolError(saveLikeTheRoute(alice.user.id, card.id, "2026-09-21"), "TRADE_CARD_STATE_CONFLICT");
+      assert.equal(await db.toolJournalEntry.count({ where: { tradeCardId: card.id } }), 0);
     });
 
     await check("the tables refuse states the service never writes (raw SQL)", async () => {

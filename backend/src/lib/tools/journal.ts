@@ -8,10 +8,21 @@
  * TWO SOURCES (owner decisions 2026-09-21):
  *   trade_card  a Trade Card SAVED AFTER THE JOURNAL OPENED becomes an entry at
  *               the moment it is saved — «только новые»: cards from L5–L9 never
- *               arrive. Its trade (asset, direction, stake, payout, expiry, time,
- *               the reason as the plan, the result) is the card's and is not
- *               edited here; its observation becomes the entry's conclusion.
+ *               arrive. The entry starts as the card's trade (asset, direction,
+ *               stake, payout, expiry, time, the reason as the plan, the result);
+ *               the card's observation becomes the entry's conclusion.
  *   manual      a trade recorded by hand, every field the learner's.
+ *
+ * THE ENTRY IS THE LEARNER'S RECORD — ALL OF IT (owner, 2026-10-01: «функционал
+ * изменения записи полноценный», «кнопка и функционал удаления записи»). Until
+ * then an entry made from a card could have only its review edited and nothing
+ * could be deleted, so a result marked wrongly on the card — a mis-click after
+ * expiry — stayed wrong in the journal and in Personal Stats for ever. Now any
+ * entry can be replaced whole and any entry can be deleted. What does NOT
+ * change is the Trade Card: the plan fixed before the trade stays in the card
+ * exactly as it was fixed, and an entry that no longer says what its card says
+ * is told apart (`editedAfterCard`), so the journal never passes a corrected
+ * record off as the card's.
  *
  * THE REVIEW IS THE LEARNER'S. «По плану / нарушен» and which rules were broken
  * are marked by the learner themselves (owner decision: «ученик сам для
@@ -32,7 +43,7 @@ import { z } from "zod";
 import type { ToolJournalEntry, ToolJournalViolation, ToolTradeCard } from "@prisma/client";
 import { ToolError } from "./errors";
 import { isAcceptableTradeDate } from "./dates";
-import { expiryByCode, tradingAssetByCode } from "./reference";
+import { PAYOUT_PERCENT, expiryByCode, tradingAssetByCode } from "./reference";
 import {
   TRADE_CARD_DIRECTIONS,
   TRADE_CARD_LIMITS,
@@ -151,7 +162,7 @@ const manualSchema = z.strictObject({
   asset: z.string().max(40),
   direction: z.enum(TRADE_CARD_DIRECTIONS),
   amount: z.string().max(20),
-  payoutPercent: z.number().int().min(1).max(100),
+  payoutPercent: z.number().int().min(PAYOUT_PERCENT.min).max(PAYOUT_PERCENT.max),
   expiry: z.string().max(10),
   result: z.enum(TRADE_CARD_RESULTS),
   plan: optionalText(JOURNAL_LIMITS.maxPlanLength),
@@ -189,12 +200,14 @@ export function parseJournalManualEntry(input: unknown, now: Date = new Date()):
 
 export type JournalChange =
   | { readonly kind: "review"; readonly review: JournalReview }
-  | { readonly kind: "manual"; readonly entry: JournalManualEntry };
+  | { readonly kind: "entry"; readonly entry: JournalManualEntry };
 
 /**
- * PATCH body. `review` changes only the learner's review and applies to every
- * entry; `manual` replaces a hand-recorded entry whole and is refused for an
- * entry made from a Trade Card.
+ * PATCH body. `review` changes only the learner's review; `entry` replaces the
+ * entry whole — the trade, the plan and the review — whichever source it came
+ * from. `manual` is the name `entry` had while only a hand-recorded entry could
+ * be replaced; it is still read, so an Academy build from before 2026-10-01
+ * keeps working against this Backend.
  */
 export function parseJournalChange(input: unknown, now: Date = new Date()): JournalChange {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -209,7 +222,7 @@ export function parseJournalChange(input: unknown, now: Date = new Date()): Jour
     }
     return { kind: "review", review: cleanReview(parsed.data) };
   }
-  if (kind === "manual") return { kind: "manual", entry: parseJournalManualEntry(rest, now) };
+  if (kind === "entry" || kind === "manual") return { kind: "entry", entry: parseJournalManualEntry(rest, now) };
   throw new ToolError("TOOL_VALIDATION", "invalid_change");
 }
 
@@ -254,11 +267,48 @@ export type JournalEntryDto = {
   readonly conclusion: string | null;
   readonly planFollowed: boolean | null;
   readonly violations: readonly string[];
+  /**
+   * True for an entry made from a Trade Card whose trade no longer says what
+   * the card says — the learner corrected it here. Always false for a
+   * hand-recorded entry. Computed against the card on every read, never stored:
+   * correcting the entry back makes it false again.
+   */
+  readonly editedAfterCard: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
 
-export type JournalRow = ToolJournalEntry & { violations: Pick<ToolJournalViolation, "code">[] };
+/** What of a card an entry is compared with: the trade the card fixed and its result. */
+export type JournalCardTrade = Pick<
+  ToolTradeCard,
+  "entryTime" | "assetCode" | "direction" | "amountMinor" | "payoutPercent" | "expiryCode" | "result" | "reason"
+>;
+
+export type JournalRow = ToolJournalEntry & {
+  violations: Pick<ToolJournalViolation, "code">[];
+  tradeCard: JournalCardTrade | null;
+};
+
+/**
+ * Whether an entry made from a card still says what the card says. The date is
+ * not compared — a card has none, the entry was dated by the learner's calendar
+ * when the card was saved — and neither is the review, which was always the
+ * learner's to write.
+ */
+export function entryDiffersFromCard(row: JournalRow): boolean {
+  const card = row.tradeCard;
+  if (row.source !== "trade_card" || !card) return false;
+  return (
+    row.entryTime !== card.entryTime ||
+    row.assetCode !== card.assetCode ||
+    row.direction !== card.direction ||
+    row.amountMinor !== card.amountMinor ||
+    row.payoutPercent !== card.payoutPercent ||
+    row.expiryCode !== card.expiryCode ||
+    row.result !== card.result ||
+    (row.plan ?? "") !== card.reason
+  );
+}
 
 export function toJournalEntryDto(row: JournalRow): JournalEntryDto {
   const asset = tradingAssetByCode(row.assetCode);
@@ -285,6 +335,7 @@ export function toJournalEntryDto(row: JournalRow): JournalEntryDto {
     conclusion: row.conclusion,
     planFollowed: row.planFollowed,
     violations,
+    editedAfterCard: entryDiffersFromCard(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

@@ -19,6 +19,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { seedLegacyToolUnlocks } from "./support/toolUnlocks";
 
 const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ata-tool-stats-"));
 const dbUrl = `file:${path.join(scratchDir, "regression.sqlite")}`;
@@ -88,6 +89,7 @@ async function main() {
       }),
     );
   }
+  await seedLegacyToolUnlocks(db, version.id, levels);
   async function learner(email: string, completedThrough: number) {
     const user = await db.user.create({ data: { email, name: email, role: "user", passwordHash: "x" } });
     const enrollment = await db.userCurriculumEnrollment.create({

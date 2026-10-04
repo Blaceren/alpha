@@ -1,3 +1,4 @@
+import { describeClosedTail } from "@/lib/curriculum/closed-tail";
 import { STABLE_CODE_PATTERN } from "@/lib/curriculum/constants";
 import type {
   CurriculumDraftSnapshot,
@@ -50,16 +51,35 @@ export function validateCurriculumDraft(
     issue("EFFECTIVE_FROM_IN_FUTURE", "curriculumVersion", versionRef, "effectiveFrom is in the future; scheduled publication is not supported yet");
   }
 
+  // --- The closed tail ---
+  // PROGRAM STRUCTURE. A route may END in levels that are defined but not open
+  // yet, and in nothing else that is disabled — see `closed-tail.ts`. The ROUTE
+  // is therefore every open definition plus that tail, and the numbering, range
+  // and coverage rules below are checked over the route: a level that is not
+  // open yet still has to sit in sequence, inside its module, exactly once.
+  const tail = describeClosedTail(levels, modules);
+  const closedLevelIds = tail.ok ? tail.closedLevelIds : new Set<number>();
+  const closedModuleIds = tail.ok ? tail.closedModuleIds : new Set<number>();
+  const offendingLevelIds = new Set<number>(tail.ok ? [] : tail.offendingLevelIds);
+  const offendingModuleIds = new Set<number>(tail.ok ? [] : tail.offendingModuleIds);
+
   // --- Modules ---
   const activeModules = modules
-    .filter((module) => module.status === "active")
+    .filter((module) => module.status === "active" || closedModuleIds.has(module.id))
     .sort((a, b) => a.moduleNumber - b.moduleNumber);
 
   for (const moduleDef of modules) {
     const ref = `module:${moduleDef.moduleNumber}`;
 
-    if (moduleDef.status !== "active") {
-      issue("DISABLED_MODULE_BLOCKS_PUBLICATION", "module", ref, "disabled module cannot be part of a published mandatory route");
+    if (moduleDef.status !== "active" && !closedModuleIds.has(moduleDef.id)) {
+      issue(
+        "DISABLED_MODULE_BLOCKS_PUBLICATION",
+        "module",
+        ref,
+        offendingModuleIds.has(moduleDef.id)
+          ? "a disabled module must own only levels that are not open yet; an open level inside it could never be reached"
+          : "disabled module cannot be part of a published mandatory route",
+      );
     }
     if (!moduleDef.code.trim()) {
       issue("MODULE_CODE_EMPTY", "module", ref, "module code must not be empty");
@@ -105,13 +125,18 @@ export function validateCurriculumDraft(
   }
 
   // --- Levels ---
+  // `activeLevels` is the ROUTE: open levels plus the closed tail. A checkpoint
+  // reference, further down, must still name an OPEN level — a gate that is not
+  // open cannot be passed — so that lookup is built from the open ones only.
   const activeLevels = levels
-    .filter((level) => level.status === "active")
+    .filter((level) => level.status === "active" || closedLevelIds.has(level.id))
     .sort((a, b) => a.levelNumber - b.levelNumber);
-  const activeLevelsByNumber = new Map(activeLevels.map((level) => [level.levelNumber, level]));
+  const activeLevelsByNumber = new Map(
+    activeLevels.filter((level) => level.status === "active").map((level) => [level.levelNumber, level]),
+  );
   const modulesById = new Map(modules.map((module) => [module.id, module]));
 
-  if (activeLevels.length === 0) {
+  if (!activeLevels.some((level) => level.status === "active")) {
     issue("NO_ACTIVE_LEVELS", "curriculumVersion", versionRef, "at least one active level is required");
   } else {
     if (activeLevels[0].levelNumber !== 1) {
@@ -127,8 +152,15 @@ export function validateCurriculumDraft(
   for (const level of levels) {
     const ref = `level:${level.levelNumber} (${level.stableCode})`;
 
-    if (level.status !== "active") {
-      issue("DISABLED_LEVEL_BLOCKS_PUBLICATION", "level", ref, "disabled level cannot be part of a published mandatory route");
+    if (level.status !== "active" && !closedLevelIds.has(level.id)) {
+      issue(
+        "DISABLED_LEVEL_BLOCKS_PUBLICATION",
+        "level",
+        ref,
+        offendingLevelIds.has(level.id)
+          ? "a disabled level may only be part of a trailing run: this one has an open level behind it, which it would lock for ever"
+          : "disabled level cannot be part of a published mandatory route",
+      );
     }
 
     const parentModule = modulesById.get(level.moduleId);

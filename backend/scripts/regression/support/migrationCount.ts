@@ -19,6 +19,27 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * PROGRAM STRUCTURE: 60 -> 61. One additive migration,
+ * `20261002120000_program_structure`: four nullable columns (a module's chapter
+ * number and title, a level's learner-facing kind, a question's rewatch
+ * second) and two tables (LevelToolUnlock, LessonMediaAsset). Its one data
+ * statement writes, for every version that already existed, the tool-unlock
+ * rule those versions were read by; it rewrites no existing row.
+ *
+ * ACCOUNT RECOVERY: 59 -> 60. One additive migration,
+ * `20261001120000_account_action_token`, which creates AccountActionToken and
+ * its three indexes. It alters no existing table, so a Backend built before it
+ * never queries the table and rollback is inert.
+ *
+ * THAT BUMP WAS MISSED IN ITS OWN COMMIT, which is exactly the failure this
+ * file describes. The migration shipped on 2026-10-01 with the constant still
+ * at 59; the vitest suite does not read it, the three regressions run for that
+ * release do not either, and the seventeen that do were not run. Every one of
+ * them failed its "every migration applied" check from that commit until this
+ * one. Found the same day by the journal regression. The rule above stands; the
+ * lesson is that a release with a migration runs the regressions that count
+ * migrations, not only the ones about its feature.
+ *
  * TOOLS-V2: 54 -> 59. Five additive migrations, one per tool slice that
  * stores anything, each bumping this constant in its own commit:
  *
@@ -145,7 +166,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 59;
+export const EXPECTED_MIGRATION_COUNT = 61;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

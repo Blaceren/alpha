@@ -11,6 +11,7 @@ import {
   resolveCompletedCurriculumToolAccess,
   resolveCurriculumToolAccess,
   summarizeToolAccess,
+  type CurriculumToolUnlockRow,
 } from "./tool-access";
 import type { ResolveEnrollmentXpResult } from "./xp";
 import type {
@@ -73,6 +74,13 @@ function mapModule(moduleDefinition: ModuleDefinition) {
     checkpointLevel: moduleDefinition.checkpointLevel,
     learningObjective: moduleDefinition.learningObjective,
     status: moduleDefinition.status,
+    // PROGRAM STRUCTURE. The chapter this module belongs to, or null for a
+    // version that has none. The two columns are set together or not at all
+    // (a CHECK constraint), so one of them is enough to decide.
+    chapter:
+      moduleDefinition.chapterNumber !== null && moduleDefinition.chapterTitle !== null
+        ? { number: moduleDefinition.chapterNumber, title: moduleDefinition.chapterTitle }
+        : null,
   };
 }
 
@@ -114,6 +122,11 @@ function mapLevelDefinition(levelDefinition: LevelDefinition) {
       checkpointLevel: levelDefinition.requiredCheckpointLevel,
     },
     status: levelDefinition.status,
+    // PROGRAM STRUCTURE. What the learner is told this level is («Урок»,
+    // «Задание», «Отчёт», «Практика», «Точка сборки»), or null when the version
+    // does not say. Display only: `type` + `completionMethod` above still decide
+    // who may complete it.
+    kind: levelDefinition.presentationKind,
   };
 }
 
@@ -222,6 +235,7 @@ function mapXp(
 
 export function mapEnrolledCurriculumRead(
   levelStates: ResolvedLevelStates,
+  toolUnlocks: readonly CurriculumToolUnlockRow[],
 ) {
   const currentDefinition = levelStates.levels.find(
     (item) =>
@@ -239,21 +253,27 @@ export function mapEnrolledCurriculumRead(
     modules: mapEnrolledModules(levelStates),
     xp,
     /*
-     * PHASE-F — the full 19-tool access set (§18/§20).
+     * PHASE-F — the full tool access set (§18/§20).
      *
      * Emitted on the FULL read only. It is resolved from the same `levels`
      * snapshot this response is already serialising, so it cannot observe a
-     * different moment than the level states beside it, and it costs no extra
-     * query. The Home summary carries the slim projection instead — see
-     * `mapEnrolledCurriculumSummary`.
+     * different moment than the level states beside it. The Home summary
+     * carries the slim projection instead — see `mapEnrolledCurriculumSummary`.
+     *
+     * `toolUnlocks` are the pinned version's own rows (which level opens which
+     * tool). They are handed in by the route: a published version's rows never
+     * change, so they need no snapshot of their own, and keeping them out of
+     * the level-state resolver keeps that resolver — which every start and
+     * completion command also runs — reading only what a command needs.
      */
-    toolAccess: resolveCurriculumToolAccess(levelStates.levels),
+    toolAccess: resolveCurriculumToolAccess(levelStates.levels, toolUnlocks),
   };
 }
 
 export function mapCompletedCurriculumRead(
   context: CompletedContext,
-  xp?: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp,
+  xp: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp | undefined,
+  toolUnlocks: readonly CurriculumToolUnlockRow[],
 ) {
   const mappedXp = !xp
     ? undefined
@@ -268,7 +288,7 @@ export function mapCompletedCurriculumRead(
     ...(mappedXp ? { xp: mappedXp } : {}),
     // PHASE-F. Same rule as the enrolled read, resolved from the durable
     // progress rows a completed enrollment carries instead of level states.
-    toolAccess: resolveCompletedCurriculumToolAccess(context.levels, context.progress),
+    toolAccess: resolveCompletedCurriculumToolAccess(context.levels, context.progress, toolUnlocks),
   };
 }
 
@@ -307,6 +327,8 @@ function summaryLevel(item: ResolvedLevelStates["levels"][number]) {
     title: item.levelDefinition.title,
     shortDescription: item.levelDefinition.shortDescription,
     completionMethod: item.levelDefinition.completionMethod,
+    kind: item.levelDefinition.presentationKind,
+    status: item.levelDefinition.status,
     xpReward: item.levelDefinition.xpReward,
     requiredXp: item.levelDefinition.requiredXp,
     durableStatus: item.progress?.status ?? null,
@@ -322,7 +344,10 @@ function percentComplete(completed: number, total: number) {
   return Math.max(0, Math.min(100, Math.floor((completed * 100) / total)));
 }
 
-export function mapEnrolledCurriculumSummary(levelStates: ResolvedLevelStates) {
+export function mapEnrolledCurriculumSummary(
+  levelStates: ResolvedLevelStates,
+  toolUnlocks: readonly CurriculumToolUnlockRow[],
+) {
   const current = levelStates.levels.find(
     (item) => item.levelDefinition.levelNumber === levelStates.enrollment.currentLevel,
   );
@@ -369,6 +394,8 @@ export function mapEnrolledCurriculumSummary(levelStates: ResolvedLevelStates) {
           stableCode: next.levelDefinition.stableCode,
           type: next.levelDefinition.type,
           title: next.levelDefinition.title,
+          kind: next.levelDefinition.presentationKind,
+          status: next.levelDefinition.status,
           presentationState: next.state,
         }
       : null,
@@ -384,13 +411,14 @@ export function mapEnrolledCurriculumSummary(levelStates: ResolvedLevelStates) {
      * Derived from the SAME resolution the full read emits, so the two can never
      * disagree about which tools are open.
      */
-    toolAccess: summarizeToolAccess(resolveCurriculumToolAccess(levelStates.levels)),
+    toolAccess: summarizeToolAccess(resolveCurriculumToolAccess(levelStates.levels, toolUnlocks)),
   };
 }
 
 export function mapCompletedCurriculumSummary(
   context: CompletedContext,
-  xp?: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp,
+  xp: Extract<CurriculumReadXp, { kind: "disabled" }> | AvailableXp | undefined,
+  toolUnlocks: readonly CurriculumToolUnlockRow[],
 ) {
   const totalLevels = context.levels.length;
   const completedLevels = context.progress.filter(
@@ -417,7 +445,7 @@ export function mapCompletedCurriculumSummary(
     // PHASE-F. A finished enrollment still has tools, and Home still has to say
     // how many. Same durable rule; no level-state resolution to project from.
     toolAccess: summarizeToolAccess(
-      resolveCompletedCurriculumToolAccess(context.levels, context.progress),
+      resolveCompletedCurriculumToolAccess(context.levels, context.progress, toolUnlocks),
     ),
   };
 }

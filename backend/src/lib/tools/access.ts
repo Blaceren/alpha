@@ -1,14 +1,16 @@
 /**
  * TOOLS-V2 — may this learner USE a tool right now?
  *
- * THE SAME RULE AS `curriculum/tool-access.ts`, asked for one tool: the tool's
- * unlock level has a durable `UserLevelProgress` row in `completed` status, in
- * the learner's current enrollment. XP, `currentLevel`, a rank or a client-held
- * number never open anything.
+ * THE SAME RULE AS `curriculum/tool-access.ts`, asked for one tool: the level
+ * that opens the tool IN THE LEARNER'S OWN VERSION has a durable
+ * `UserLevelProgress` row in `completed` status, in the learner's current
+ * enrollment. Which level that is comes from `LevelToolUnlock`, not from a
+ * number in this repository. XP, `currentLevel`, a rank or a client-held number
+ * never open anything.
  *
- * FAILS CLOSED. No enrollment, a superseded one, an unknown tool code, a level
- * the pinned version does not have, or a row in any status but `completed` —
- * every one of them answers "locked".
+ * FAILS CLOSED. No enrollment, a superseded one, an unknown tool code, a
+ * version that names no level for the tool, or a row in any status but
+ * `completed` — every one of them answers "locked".
  */
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_CURRICULUM_CODE } from "@/lib/curriculum/constants";
@@ -31,7 +33,13 @@ export async function isToolUnlockedForUser(
     orderBy: [{ enrolledAt: "desc" }, { id: "desc" }],
     select: {
       levelProgress: {
-        where: { status: "completed", levelDefinition: { levelNumber: tool.unlockLevel } },
+        // The unlock row is reached THROUGH the completed level, so the level
+        // and the tool are tied to one version by the row itself: a completed
+        // level of another version cannot satisfy this, whatever its number.
+        where: {
+          status: "completed",
+          levelDefinition: { toolUnlocks: { some: { toolCode: tool.code } } },
+        },
         select: { id: true },
         take: 1,
       },

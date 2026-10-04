@@ -8,6 +8,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ att
   try {
     strictQuery(request, []); const requestId = idempotencyKey(request); const attemptId = positivePathId((await params).attemptId, "attemptId"); const body = strictBody(bodySchema, await jsonBody(request));
     const result = await submitOwnAssessmentAttempt(gate.actorId, { attemptId, requestId, answers: body.answers });
-    return phase4Data({ created: result.created, status: result.attempt.status, attemptNumber: result.attempt.attemptNumber, submittedAt: result.attempt.submittedAt, durationSeconds: result.attempt.durationSeconds, totalQuestions: result.attempt.totalQuestions, correctCount: result.attempt.correctCount, scoreBasisPoints: result.attempt.scoreBasisPoints, passed: result.attempt.status === "passed", completion: result.completion });
+    return phase4Data({ created: result.created, status: result.attempt.status, attemptNumber: result.attempt.attemptNumber, submittedAt: result.attempt.submittedAt, durationSeconds: result.attempt.durationSeconds, totalQuestions: result.attempt.totalQuestions, correctCount: result.attempt.correctCount, scoreBasisPoints: result.attempt.scoreBasisPoints, passed: result.attempt.status === "passed", review: result.review, completion: result.completion });
   } catch (error) { return phase4Exception(error, "assessment submit POST"); }
 }

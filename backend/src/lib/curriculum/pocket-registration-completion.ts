@@ -2,10 +2,17 @@
  * L1OWNER-1 — reconcile the Pocket-registration level completion.
  *
  * WHAT THIS EXISTS FOR
- * Level 1 is `external_event:pocket_postback`. The learner completes it by
- * registering with Pocket, and the only trustworthy witness is a postback ATA
- * itself authenticated. This module is the single, narrow bridge between that
- * authenticated event and the curriculum's completion owner.
+ * One level of a program is `external_event:pocket_postback`. The learner
+ * completes it by registering with Pocket, and the only trustworthy witness is
+ * a postback ATA itself authenticated. This module is the single, narrow bridge
+ * between that authenticated event and the curriculum's completion owner.
+ *
+ * WHICH LEVEL THAT IS BELONGS TO THE VERSION (2026-10-02). It was level 1 of
+ * the 100-level program and is level 3 of the 30-level one, where two lessons
+ * come first. So the level is found by its CONTRACT in the learner's pinned
+ * version — the one level whose pair is `external_event:pocket_postback` — and
+ * not by a stable code written here. A version with none, or with two, is a
+ * configuration error and completes nothing.
  *
  * WHY IT IS A RECONCILIATION AND NOT A DIRECT WRITE
  * It never touches `UserLevelProgress`. It starts the level through the shipped
@@ -30,13 +37,22 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 import {
   completeCurriculumLevelInTransaction,
   isCurriculumLevelCompletionError,
 } from "./completion";
 import { startCurrentCurriculumLevel } from "./level-state";
 
-/** The one level this owner may ever complete. */
+/**
+ * The registration level's stable code IN THE 100-LEVEL PROGRAM.
+ *
+ * Kept as a named fact for the regressions and fixtures that build that
+ * program by hand. The runtime below no longer reads it: it finds the level by
+ * its completion pair, so a version that moves or renames the level still has
+ * exactly one registration level and it is still the only one this owner may
+ * complete.
+ */
 export const POCKET_REGISTRATION_STABLE_CODE = "v2.l001.registraciya-pocket";
 const POCKET_REGISTRATION_LEVEL_TYPE = "external_event";
 const POCKET_REGISTRATION_COMPLETION_METHOD = "pocket_postback";
@@ -140,30 +156,50 @@ export async function reconcilePocketRegistrationLevelCompletion(
 
   const enrollment = await prisma.userCurriculumEnrollment.findFirst({
     where: { userId: learnerUserId, status: "active" },
-    select: { id: true, curriculumVersionId: true },
+    select: { id: true, curriculumVersionId: true, currentLevel: true },
   });
   if (!enrollment) return { outcome: "pending_enrollment" };
 
-  const level = await prisma.levelDefinition.findFirst({
+  // The registration level of THIS learner's version, by contract. `take: 2`
+  // is enough to tell "exactly one" from "more than one" without reading a
+  // whole program.
+  const candidates = await prisma.levelDefinition.findMany({
     where: {
       curriculumVersionId: enrollment.curriculumVersionId,
-      stableCode: POCKET_REGISTRATION_STABLE_CODE,
+      type: POCKET_REGISTRATION_LEVEL_TYPE,
+      completionMethod: POCKET_REGISTRATION_COMPLETION_METHOD,
     },
-    select: { id: true, type: true, completionMethod: true, xpReward: true },
+    orderBy: { levelNumber: "asc" },
+    take: 2,
+    select: { id: true, levelNumber: true },
   });
-  if (!level) return { outcome: "configuration_error", detail: "registration level not published" };
-  if (
-    level.type !== POCKET_REGISTRATION_LEVEL_TYPE ||
-    level.completionMethod !== POCKET_REGISTRATION_COMPLETION_METHOD
-  ) {
-    return { outcome: "configuration_error", detail: "registration level contract changed" };
+  if (candidates.length === 0) {
+    return { outcome: "configuration_error", detail: "registration level not published" };
   }
+  if (candidates.length > 1) {
+    // Two levels claiming to be the registration is a program nobody reviewed.
+    // Completing "the first one" would be a guess about which the author meant.
+    return { outcome: "configuration_error", detail: "registration level is ambiguous" };
+  }
+  const level = candidates[0];
 
   const existing = await prisma.userLevelProgress.findFirst({
     where: { enrollmentId: enrollment.id, levelDefinitionId: level.id },
     select: { status: true },
   });
   if (existing?.status === "completed") return { outcome: "already_completed" };
+
+  // NOT STANDING ON IT YET. In a program whose registration is not the first
+  // level, the postback may arrive while the learner is still on a lesson in
+  // front of it — the identity is bound and durable, and there is nothing to
+  // complete yet. Returning here, BEFORE the start owner runs, matters: that
+  // owner starts whatever level is current, and a Pocket postback must never
+  // be what starts a learner's lesson. The debt is settled when the learner
+  // reaches the level (`POST /api/exchange/registration/check`), by this same
+  // function.
+  if (enrollment.currentLevel !== level.levelNumber) {
+    return { outcome: "not_eligible", detail: "current level is not registration" };
+  }
 
   try {
     // The shipped start owner opens its own transaction and starts the CURRENT
@@ -180,12 +216,13 @@ export async function reconcilePocketRegistrationLevelCompletion(
       return { outcome: "not_eligible", detail: "level is not startable" };
     }
     if (started.levelDefinition.id !== level.id) {
-      // The learner is standing on some other level. Registration completes L1
-      // and nothing else, ever.
+      // The learner is standing on some other level (the enrollment moved
+      // between the read above and the start). Registration completes the
+      // registration level and nothing else, ever.
       return { outcome: "not_eligible", detail: "current level is not registration" };
     }
 
-    return await db.$transaction(async (tx) => {
+    const reconciled = await db.$transaction(async (tx) => {
       const completion = await completeCurriculumLevelInTransaction(tx, {
         enrollmentId: enrollment.id,
         levelDefinitionId: level.id,
@@ -206,6 +243,26 @@ export async function reconcilePocketRegistrationLevelCompletion(
       }
       return { outcome: completion.created ? ("completed" as const) : ("already_completed" as const) };
     });
+
+    /*
+     * THE LEARNER HEARS ABOUT IT (2026-10-04, launch audit). The postback
+     * usually arrives while nobody is looking — the learner registered on
+     * Pocket's site and closed the tab — and the level then completed in
+     * silence. One in-app notification, only when THIS call completed the
+     * level, and after the completion committed: a notification that fails is
+     * logged and dropped by `createNotification`, never a reason to roll the
+     * level back. It names Pocket and the level — never money.
+     */
+    if (reconciled.outcome === "completed") {
+      await createNotification({
+        userId: learnerUserId,
+        type: "level_up",
+        title: "Регистрация в Pocket подтверждена",
+        message: `Уровень ${level.levelNumber} завершён — можно продолжать путь.`,
+        metadata: { levelNumber: level.levelNumber, source: sourceType },
+      });
+    }
+    return reconciled;
   } catch (error) {
     if (isCurriculumLevelCompletionError(error)) {
       // A refusal by the owner is a fact about eligibility, not an outage.

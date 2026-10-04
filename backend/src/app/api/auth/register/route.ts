@@ -23,6 +23,9 @@ import { isEnrollmentDomainError } from "@/lib/curriculum/enrollment";
 import { autoEnrollNewRegistrationInTransaction } from "@/lib/curriculum/registration-enrollment";
 import { ACADEMY_REGISTER_SURFACE } from "@/lib/captcha/surface";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
+import { runDetached } from "@/lib/account/background";
+import { accountCapabilities } from "@/lib/account/capabilities";
+import { sendVerificationMail } from "@/lib/account/emailChange";
 import { prisma } from "@/lib/prisma";
 import {
   resolveRegistrationReferral,
@@ -75,8 +78,14 @@ export async function POST(request: Request) {
   const parsed = await validateJsonBody(request, registerSchema);
   const ip = getRequestIp(request);
   const email = parsed.success ? parsed.data.email : "invalid-email";
+  /* TEN PER ADDRESS PER HALF HOUR (2026-10-04, launch audit; it was three).
+     The count runs before validation and the challenge, so a mistyped form,
+     an address already taken or a failed challenge each spent one — and
+     learners behind one carrier or office address shared the three: the
+     fourth person of the half hour read «Слишком много попыток регистрации».
+     Turnstile is what stops a bot here; this cap only bounds one address. */
   const limit = rateLimit(`auth:register:${ip}`, {
-    limit: 3,
+    limit: 10,
     windowMs: 30 * 60 * 1000,
   });
 
@@ -460,6 +469,13 @@ export async function POST(request: Request) {
 
   const user = committed.created;
   const verificationRequired = isEmailVerificationRequired();
+  /* ACCOUNT RECOVERY — where mail can be sent, the new address is asked to
+     confirm itself. Detached: a slow mail provider must not hold a
+     registration, and a failed message must not undo one (it is audited). */
+  if (accountCapabilities().emailVerification) {
+    const account = { id: user.id, email: user.email, name: user.name };
+    runDetached(() => sendVerificationMail(account));
+  }
   const verificationToken = verificationRequired
     ? await createEmailVerificationToken(user.id)
     : null;

@@ -1,4 +1,4 @@
-# Alfa Trade Academy (ATA) — V2 Product Decisions
+# Alpha Trade Academy (ATA) — V2 Product Decisions
 
 **Статус:** зафиксированные продуктовые решения перед Curriculum V2
 **Дата:** 2026-07-12
@@ -9,7 +9,7 @@
 
 ## 1. Product name
 
-- Официальное название продукта: **Alfa Trade Academy**.
+- Официальное название продукта: **Alpha Trade Academy**.
 - Сокращение: **ATA**.
 - `trading-mvp` и `TradeQuest` — legacy-технические названия.
 - Массовое переименование существующего кода, таблиц, task codes и routes запрещено.

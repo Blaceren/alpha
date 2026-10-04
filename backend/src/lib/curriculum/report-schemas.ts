@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { UNSAFE_TEXT } from "@/lib/text/unsafe-text";
 
 const MAX_INT = 2_147_483_647;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
-const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
+// One screen for every stored prose field: src/lib/text/unsafe-text.ts (2026-10-04).
 const STABLE_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 
@@ -15,6 +16,16 @@ function optionalSafeText(max: number, label: string) {
   return z.string().trim().max(max, `${label} is too long`)
     .refine((value) => value.length === 0 || !UNSAFE_TEXT.test(value), `${label} contains unsafe markup or URI content`);
 }
+
+/**
+ * How many structured fields one report may define.
+ *
+ * Was 50, which is exactly five trade records of ten fields and left no room for
+ * the record of a refused entry the 30-level program asks for beside them. The
+ * package schema and the authoring validator both read this constant, so the
+ * two cannot drift apart again.
+ */
+export const MAX_REPORT_FIELDS = 80;
 
 export const reportEntityIdSchema = z.number().int().positive().max(MAX_INT);
 export const reportActorIdSchema = reportEntityIdSchema;

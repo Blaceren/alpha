@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireUser, apiAuthErrorResponse, rateLimitedResponse } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
-import { createEmailVerificationToken } from "@/lib/emailVerification";
+import { accountCapabilities } from "@/lib/account/capabilities";
+import { sendVerificationMail } from "@/lib/account/emailChange";
+import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
@@ -20,7 +22,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, alreadyVerified: true });
     }
 
-    const token = await createEmailVerificationToken(user.id);
+    /* A confirmation is a message. Where no message can be sent there is
+       nothing to resend, and saying "ok" would leave the person waiting. */
+    if (!accountCapabilities().emailVerification) {
+      return NextResponse.json(
+        { error: "VERIFICATION_UNAVAILABLE", message: "Подтверждение почты сейчас недоступно." },
+        { status: 503 },
+      );
+    }
+
+    const account = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, email: true, name: true },
+    });
+    const result = account ? await sendVerificationMail(account) : { sent: false as const };
 
     await createAuditLog({
       userId: user.id,
@@ -28,10 +43,7 @@ export async function POST(request: Request) {
       request,
     });
 
-    return NextResponse.json({
-      ok: true,
-      devToken: process.env.NODE_ENV === "production" ? undefined : token,
-    });
+    return NextResponse.json({ ok: true, sent: result.sent });
   } catch (error) {
     return apiAuthErrorResponse(error, request);
   }

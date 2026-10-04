@@ -194,6 +194,12 @@ function projectAssessment(assessment: PackageAssessment | null): Json {
         explanation: l.explanation,
       })),
       lessonTakeawayRef: q.lessonTakeawayRef,
+      // PROGRAM STRUCTURE. Emitted only when the question carries one, for the
+      // reason spelled out on `projectReportRubric`: a package written before
+      // the field existed must hash to the value it was accepted with.
+      ...(q.rewatchFromSeconds === null || q.rewatchFromSeconds === undefined
+        ? {}
+        : { rewatchFromSeconds: q.rewatchFromSeconds }),
       provenance: q.provenance.classification,
     })),
     provenance: assessment.provenance.classification,
@@ -348,6 +354,12 @@ function projectLevel(level: PackageLevel): Json {
     assessment: projectAssessment(level.assessment),
     report: projectReport(level.report),
     gate: projectGate(level.gate),
+    // PROGRAM STRUCTURE. Both are semantic — what a level is called is what the
+    // learner reads, and whether it is open decides whether it can be reached —
+    // and both are EMITTED ONLY WHEN THEY SAY SOMETHING. `status: "active"` is
+    // what an absent status has always meant, so it adds no bytes either way.
+    ...(level.kind ? { kind: level.kind } : {}),
+    ...(level.status === "disabled" ? { status: level.status } : {}),
     provenance: level.provenance.classification,
   };
 }
@@ -378,8 +390,19 @@ export function canonicalProjection(pkg: CurriculumPackage): Json {
       description: m.description,
       learningObjective: m.learningObjective,
       checkpointLevelCode: m.checkpointLevelCode,
+      ...(m.chapter ? { chapter: { number: m.chapter.number, title: m.chapter.title } } : {}),
       levels: byKey(m.levels, (l) => l.levelCode).map(projectLevel),
     })),
+    // PROGRAM STRUCTURE. Present-but-empty and absent are different statements
+    // (see `toolUnlocks` in the schema), so an empty list IS emitted.
+    ...(pkg.toolUnlocks
+      ? {
+          toolUnlocks: byKey(pkg.toolUnlocks, (unlock) => unlock.toolCode).map((unlock) => ({
+            toolCode: unlock.toolCode,
+            levelCode: unlock.levelCode,
+          })),
+        }
+      : {}),
   };
 }
 

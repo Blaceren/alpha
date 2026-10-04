@@ -62,6 +62,7 @@ export const AUTH_SURFACES = {
   academy_register: { action: "academy_register", purpose: "register" },
   academy_login: { action: "academy_login", purpose: "login" },
   crm_login: { action: "crm_login", purpose: "login" },
+  academy_password_reset: { action: "academy_password_reset", purpose: "recovery" },
 } as const satisfies Record<string, { action: string; purpose: CaptchaPurpose }>;
 
 export type AuthSurfaceName = keyof typeof AUTH_SURFACES;
@@ -80,6 +81,8 @@ export const ACADEMY_REGISTER_SURFACE: AuthSurface = surfaceOf("academy_register
 export const ACADEMY_LOGIN_SURFACE: AuthSurface = surfaceOf("academy_login");
 /** The staff login surface. */
 export const CRM_LOGIN_SURFACE: AuthSurface = surfaceOf("crm_login");
+/** The learner's request for a password-reset link (ACCOUNT RECOVERY, 2026-10-01). */
+export const ACADEMY_PASSWORD_RESET_SURFACE: AuthSurface = surfaceOf("academy_password_reset");
 
 function surfaceOf(name: AuthSurfaceName): AuthSurface {
   const entry = AUTH_SURFACES[name];

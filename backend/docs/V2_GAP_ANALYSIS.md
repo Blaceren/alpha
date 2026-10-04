@@ -1,9 +1,9 @@
-# Alfa Trade Academy (ATA) — V2 Gap Analysis
+# Alpha Trade Academy (ATA) — V2 Gap Analysis
 
 **Статус:** утверждённый read-only Gap Analysis (Pre-Phase 0 / Phase 0)
 **Дата аудита:** 2026-07-12
 **Источник требований:** `TradeQuest_Product_OS_Curriculum_V2_Backend_Spec.md` (v0.9)
-**Официальное название продукта:** Alfa Trade Academy (ATA). `trading-mvp` и `TradeQuest` — legacy-технические названия; массовое переименование кода, таблиц и task codes запрещено.
+**Официальное название продукта:** Alpha Trade Academy (ATA). `trading-mvp` и `TradeQuest` — legacy-технические названия; массовое переименование кода, таблиц и task codes запрещено.
 
 Аудит выполнен в режиме read-only. Код, данные, runtime и инфраструктура live-проекта не изменялись.
 

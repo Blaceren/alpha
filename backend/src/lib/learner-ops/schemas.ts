@@ -23,13 +23,15 @@ import {
   LEARNER_OPS_SUBJECT_MAX,
   LEARNER_OPS_TYPES,
 } from "@/lib/learner-ops/contract";
+import { UNSAFE_TEXT } from "@/lib/text/unsafe-text";
 
-/**
- * The same screen the report domain applies to reviewer prose. It refuses tags,
- * inline event handlers and the `javascript:` / `data:` schemes, which is what
- * keeps a stored message from becoming stored XSS in any renderer.
+/*
+ * The same screen the report domain applies to reviewer prose
+ * (`src/lib/text/unsafe-text.ts`). It refuses tags, inline event handlers and
+ * the `javascript:` / `data:` schemes, which is what keeps a stored message from
+ * becoming stored XSS in any renderer — and, since 2026-10-04, no longer refuses
+ * «цена<EMA20, RSI>70».
  */
-const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
 
 function safeText(max: number, label: string) {
   return z

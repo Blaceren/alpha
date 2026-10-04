@@ -42,6 +42,7 @@ import {
   AUTH_SURFACE_HEADER,
   AUTH_SURFACE_NAMES,
   CRM_LOGIN_SURFACE,
+  ACADEMY_PASSWORD_RESET_SURFACE,
   isAuthSurfaceName,
   resolveAuthSurface,
 } from "../../src/lib/captcha/surface";
@@ -139,15 +140,20 @@ function stripComments(source: string): string {
 
 async function main() {
   // ==================================================== A. the surface registry
-  await check("exactly three surfaces exist, one per public authentication form", () => {
+  /* ACCOUNT RECOVERY (2026-10-01) added the fourth: the Academy's request for a
+     password-reset link. It has its own purpose, so a login or registration
+     token cannot be declared on it and its token opens nothing else. */
+  await check("exactly four surfaces exist, one per public authentication form", () => {
     assert.deepEqual([...AUTH_SURFACE_NAMES].sort(), [
       "academy_login",
+      "academy_password_reset",
       "academy_register",
       "crm_login",
     ]);
     assert.equal(ACADEMY_REGISTER_SURFACE.purpose, "register");
     assert.equal(ACADEMY_LOGIN_SURFACE.purpose, "login");
     assert.equal(CRM_LOGIN_SURFACE.purpose, "login");
+    assert.equal(ACADEMY_PASSWORD_RESET_SURFACE.purpose, "recovery");
   });
 
   await check("every action is distinct and within Cloudflare's documented limits", () => {

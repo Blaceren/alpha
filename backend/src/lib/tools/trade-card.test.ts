@@ -89,6 +89,11 @@ describe("parseTradeCardPlan", () => {
     expect(refusal(() => parseTradeCardPlan({ ...PLAN, entryTime: "9:30" }))).toBe("invalid_entryTime");
     expect(refusal(() => parseTradeCardPlan({ ...PLAN, payoutPercent: 0 }))).toBe("invalid_payoutPercent");
     expect(refusal(() => parseTradeCardPlan({ ...PLAN, payoutPercent: 101 }))).toBe("invalid_payoutPercent");
+    // A payout is 20…99 (owner, 2026-10-02): the edges are in, their neighbours are out.
+    expect(refusal(() => parseTradeCardPlan({ ...PLAN, payoutPercent: 19 }))).toBe("invalid_payoutPercent");
+    expect(refusal(() => parseTradeCardPlan({ ...PLAN, payoutPercent: 100 }))).toBe("invalid_payoutPercent");
+    expect(parseTradeCardPlan({ ...PLAN, payoutPercent: 20 }).payoutPercent).toBe(20);
+    expect(parseTradeCardPlan({ ...PLAN, payoutPercent: 99 }).payoutPercent).toBe(99);
     expect(refusal(() => parseTradeCardPlan({ ...PLAN, payoutPercent: 90.5 }))).toBe("invalid_payoutPercent");
     expect(refusal(() => parseTradeCardPlan({ ...PLAN, direction: "sideways" }))).toBe("invalid_direction");
   });
