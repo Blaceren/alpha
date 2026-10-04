@@ -37,6 +37,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 import {
   completeCurriculumLevelInTransaction,
   isCurriculumLevelCompletionError,
@@ -221,7 +222,7 @@ export async function reconcilePocketRegistrationLevelCompletion(
       return { outcome: "not_eligible", detail: "current level is not registration" };
     }
 
-    return await db.$transaction(async (tx) => {
+    const reconciled = await db.$transaction(async (tx) => {
       const completion = await completeCurriculumLevelInTransaction(tx, {
         enrollmentId: enrollment.id,
         levelDefinitionId: level.id,
@@ -242,6 +243,26 @@ export async function reconcilePocketRegistrationLevelCompletion(
       }
       return { outcome: completion.created ? ("completed" as const) : ("already_completed" as const) };
     });
+
+    /*
+     * THE LEARNER HEARS ABOUT IT (2026-10-04, launch audit). The postback
+     * usually arrives while nobody is looking — the learner registered on
+     * Pocket's site and closed the tab — and the level then completed in
+     * silence. One in-app notification, only when THIS call completed the
+     * level, and after the completion committed: a notification that fails is
+     * logged and dropped by `createNotification`, never a reason to roll the
+     * level back. It names Pocket and the level — never money.
+     */
+    if (reconciled.outcome === "completed") {
+      await createNotification({
+        userId: learnerUserId,
+        type: "level_up",
+        title: "Регистрация в Pocket подтверждена",
+        message: `Уровень ${level.levelNumber} завершён — можно продолжать путь.`,
+        metadata: { levelNumber: level.levelNumber, source: sourceType },
+      });
+    }
+    return reconciled;
   } catch (error) {
     if (isCurriculumLevelCompletionError(error)) {
       // A refusal by the owner is a fact about eligibility, not an outage.
