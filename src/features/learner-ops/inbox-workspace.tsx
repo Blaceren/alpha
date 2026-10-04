@@ -93,10 +93,14 @@ function useOutcome<T>(loader: () => Promise<Outcome<T>>, deps: React.Dependency
     { kind: "loading" } | { kind: "ready"; data: T } | { kind: "failed"; status: string; detail?: string }
   >({ kind: "loading" });
   const [nonce, setNonce] = React.useState(0);
+  /* A refresh in the background keeps what is on screen until the new answer
+     arrives, so the queue does not blink to «loading» every minute. */
+  const silent = React.useRef(false);
 
   React.useEffect(() => {
     let cancelled = false;
-    setState({ kind: "loading" });
+    if (!silent.current) setState({ kind: "loading" });
+    silent.current = false;
     void loader().then((outcome) => {
       if (cancelled) return;
       if (outcome.status === "success") setState({ kind: "ready", data: outcome.data });
@@ -113,8 +117,18 @@ function useOutcome<T>(loader: () => Promise<Outcome<T>>, deps: React.Dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, nonce]);
 
-  return { state, reload: () => setNonce((n) => n + 1) };
+  return {
+    state,
+    reload: () => setNonce((n) => n + 1),
+    refresh: () => {
+      silent.current = true;
+      setNonce((n) => n + 1);
+    },
+  };
 }
+
+/** How often an open queue asks again on its own. */
+export const QUEUE_REFRESH_MS = 60_000;
 
 /* ------------------------------------------------------------------ queue */
 
@@ -129,6 +143,32 @@ function QueueSurface({ fixedType }: { fixedType?: string }) {
 
   const config = useOutcome(() => fetchConfig(), []);
   const queue = useOutcome(() => fetchQueue(filters), [JSON.stringify(filters)]);
+
+  /*
+   * NOBODY WAS TOLD ABOUT A NEW REQUEST (2026-10-04, launch audit). The queue
+   * changed only on «Обновить», so a learner's question could sit unseen for
+   * as long as nobody pressed it. An open queue now asks again every minute
+   * while its tab is in view, and the tab's title counts the new requests, so
+   * a desk kept open in a background tab still shows them.
+   */
+  const { refresh } = queue;
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, QUEUE_REFRESH_MS);
+    return () => window.clearInterval(timer);
+    // `refresh` is a fresh closure each render over stable setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const newCount =
+    queue.state.kind === "ready" ? (queue.state.data as QueuePage).items.filter((item) => item.status === "new").length : 0;
+  React.useEffect(() => {
+    const base = document.title.replace(/^\(\d+\)\s+/, "");
+    document.title = newCount > 0 ? `(${newCount}) ${base}` : base;
+    return () => {
+      document.title = document.title.replace(/^\(\d+\)\s+/, "");
+    };
+  }, [newCount]);
 
   const cfg = config.state.kind === "ready" ? (config.state.data as LearnerOpsConfig) : null;
 
