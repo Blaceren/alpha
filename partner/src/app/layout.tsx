@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ATA Affiliate Partners",
-  description: "Alfa Trade Academy affiliate partner console",
+  description: "Alpha Trade Academy affiliate partner console",
   robots: { index: false, follow: false },
 };
 

@@ -5,7 +5,7 @@
     "node": "22.14.x"
   },
   "private": true,
-  "description": "Alfa Trade Academy Affiliate Partner console — partner-facing product surface.",
+  "description": "Alpha Trade Academy Affiliate Partner console — partner-facing product surface.",
   "scripts": {
     "dev": "next dev -p 3110",
     "build": "next build",
