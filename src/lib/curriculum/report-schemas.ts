@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { UNSAFE_TEXT } from "@/lib/text/unsafe-text";
 
 const MAX_INT = 2_147_483_647;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
-const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
+// One screen for every stored prose field: src/lib/text/unsafe-text.ts (2026-10-04).
 const STABLE_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NORMALIZED_LOCALE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 
