@@ -1,4 +1,4 @@
-# Развёртывание Alfa Trade Academy на AWS — руководство инженера
+# Развёртывание Alpha Trade Academy на AWS — руководство инженера
 
 Документ для инженера, который разворачивает первый PROD продукта на AWS **из этого
 репозитория**. Он написан в расчёте на небольшой опыт с AWS: у каждого шага сказано,
@@ -8,7 +8,8 @@
 
 Ожидаемое время: подготовка аккаунта — полдня; хост, DNS, TLS, конфигурация — день;
 первый релиз и проверки — полдня. Почта (раздел 13) — ещё полдня и до суток ожидания ответа
-AWS; открытию она не мешает. Видео (раздел 14) — отдельный этап после открытия.
+AWS; открытию она не мешает. Видео уроков и фильм на главной — файлы на сервере (раздел 14);
+переход на HLS через CloudFront — отдельный этап после открытия.
 
 ---
 
@@ -280,7 +281,8 @@ tooling и скрипт бэкапа.
 sudo useradd --system --home /srv/ata --shell /usr/sbin/nologin ata
 sudo mkdir -p /srv/ata/{releases,current,config,bin,repos,systemd} \
              /srv/ata/releases/{academy,backend,crm,partner} \
-             /srv/ata-data/{data,uploads,logs,backups/scheduled,backups/manual}
+             /srv/ata-data/{data,uploads,logs,backups/scheduled,backups/manual} \
+             /srv/ata-data/media/{lessons,public/film}
 sudo chown -R ata:ata /srv/ata /srv/ata-data
 sudo chmod 700 /srv/ata/config /srv/ata-data/data /srv/ata-data/backups
 ```
@@ -293,6 +295,7 @@ sudo chmod 700 /srv/ata/config /srv/ata-data/data /srv/ata-data/backups
 | `/srv/ata/bin/` | скрипт бэкапа | из `deploy/bin/` |
 | `/srv/ata-data/data/ata-prod.sqlite` | база | backend |
 | `/srv/ata-data/uploads/` | загрузки учеников (вложения к отчётам) | backend |
+| `/srv/ata-data/media/` | видео уроков (`lessons/`) и фильм публичной главной (`public/film/`), раздел 14 | инженер по просьбе владельца |
 | `/srv/ata-data/backups/scheduled/` | ежедневные проверенные бэкапы | таймер |
 
 ### 4.4 Исходники: клон репозитория и рабочие копии по компонентам
@@ -419,6 +422,7 @@ sudo -e /srv/ata/config/backend.env      # редактор, а не echo: зн�
 | `TURNSTILE_SECRET_KEY` (backend), `TURNSTILE_SITE_KEY` (academy, crm) | backend / academy / crm | владелец создаёт виджет Cloudflare Turnstile для хостов `alfatrade.media` и `crm.alfatrade.media`; `TURNSTILE_EXPECTED_HOSTNAMES` перечисляет эти хосты |
 | `POCKET_AFFILIATE_BASE_URL` | backend | партнёрская ссылка регистрации Pocket владельца (с UTM-параметрами); содержит `&` — поэтому и нельзя `source` |
 | `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_LOGIN_ENFORCED=true` | backend | обязательны: без провайдера бэкенд отвечает 503 на вход и регистрацию; `CAPTCHA_DEV_BYPASS` из старого `.env.example` не действует |
+| `ATA_MEDIA_ROOT=/srv/ata-data/media` | academy | уже вписано в образец; абсолютный путь к каталогу медиа (раздел 14). Без него у уроков нет видео, а фильм на главной навсегда «Скоро»; относительный путь академия не принимает |
 | `ACADEMY_SEARCH_INDEXING=on` + `ACADEMY_PUBLIC_ORIGIN=https://alfatrade.media` | academy | включают индексацию **только публичной главной**; без любой из двух весь хост отвечает `noindex` — так устроено намеренно |
 | `MAIL_TRANSPORT`, `MAIL_FROM`, `MAIL_SES_REGION` | backend | **не задавать**, пока не пройден раздел 13 и не выпущен релиз с отправкой через SES: с неизвестным транспортом бэкенд не проходит проверку окружения. Без них почта просто выключена |
 
@@ -516,13 +520,17 @@ sudo -u ata sqlite3 -readonly /srv/ata-data/data/ata-prod.sqlite \
 
 ### 9.2 Импортировать учебную программу
 
-**Что.** 100 уровней и их содержимое живут в пакете `backend/curriculum/packages/*.json`
+**Что.** Уровни программы и их содержимое живут в пакете `backend/curriculum/packages/*.json`
 и импортируются транзакционным, идемпотентным импортёром. Повторный импорт того же
 пакета — no-op. Импортёр никого не публикует, не активирует и не зачисляет.
 
-**Какой пакет.** Тот, что помечен `approved` и используется на PREPROD; уточнить у владельца
-(на 26.09.2026 — `ata-v2-first-slice.rev3.approved.json` для первого среза и канонический
-`ata-v2-canonical-100.*` как черновик). Порядок: `--validate-only` → `--dry-run` → импорт.
+**Какой пакет.** Тот, что работает на PREPROD; перед первым релизом подтвердить у владельца.
+На 04.10.2026 это `ata-v2-funnel-30.v6.draft.json` — программа `ata-v2`, версия 6: 30 уровней,
+открыты 1–14, уровни 15–30 определены, но закрыты (как она устроена и обслуживается —
+`backend/docs/PROGRAM_30_LEVELS.md`). Команда `scripts/ops/activateProgramVersion.ts` оттуда
+заменяет **уже опубликованную** версию и на пустой базе откажет, поэтому на PROD первый раз путь
+описанный ниже: импорт → редакционный цикл → публикация. Порядок: `--validate-only` →
+`--dry-run` → импорт.
 
 ```bash
 cd /srv/ata/releases/backend/<commit>
@@ -742,7 +750,7 @@ DMARC `v=DMARC1; p=none; rua=mailto:dmarc@alfatrade.media`, DKIM Google
 ### 13.1 Регион и адрес отправителя
 
 **Что.** SES настраивается в том же регионе, что и сервер, — `eu-central-1` (Франкфурт).
-Отправитель: `Alfa Trade Academy <no-reply@alfatrade.media>`.
+Отправитель: `Alpha Trade Academy <no-reply@alfatrade.media>`.
 
 **Зачем.** SES — региональный сервис: домен, подтверждённый в одном регионе, в другом не
 существует, и политика из 13.6 привязана к региону. Перед каждым шагом в консоли проверяйте
@@ -837,7 +845,7 @@ sandbox» → **View Get set up page** → **Request production access**. В ф�
 Часто AWS отвечает вопросом — что и кому вы отправляете. Готовый ответ (на английском,
 переписку читает поддержка AWS):
 
-> Alfa Trade Academy is an online learning platform. We send only transactional email
+> Alpha Trade Academy is an online learning platform. We send only transactional email
 > triggered by the account owner's own action: confirmation of the email address after
 > registration, password reset links, and notices about a changed password or email
 > address. We send no marketing or bulk email and use no purchased lists. Recipients are our
@@ -1053,10 +1061,29 @@ curl -s http://127.0.0.1:3100/api/readiness            # "ok":true
 
 ---
 
-## 14. Видео уроков (следующий этап, после открытия)
+## 14. Видео: уроки и фильм на главной
 
-Сегодня видео в продукте нет: ролики ещё не сняты, а слот под видео на главной пуст. Когда
-видео появится, план такой (решение владельца от 21.09.2026):
+**Сейчас (на PREPROD с 02.10.2026)** видео — это файлы на сервере в каталоге `ATA_MEDIA_ROOT`
+(`/srv/ata-data/media`), и отдаёт их сама академия, без отдельной инфраструктуры:
+
+- **Видео уроков** лежат в `lessons/<код уровня>/` и попадают туда только командой бэкенда
+  `scripts/ops/registerLessonMedia.ts --level <N> --file /abs/<файл>.mp4 --media-root /srv/ata-data/media`
+  (сначала с `--dry-run`): она копирует файл под именем из его sha256 и записывает строку
+  урока; старые файлы не удаляет. Видео не входит в версию программы, новая версия для него не
+  нужна. Академия отдаёт `/media/…` только ученику, которому бэкенд открыл этот урок.
+  Подробности — `backend/docs/PROGRAM_30_LEVELS.md`, §4.2. Формат — MP4 (H.264). На PREPROD у
+  уровней 1 и 4–14 пока чёрные заглушки.
+- **Фильм на публичной главной** — файл `public/film/hero.mp4` (или `hero.webm`), по желанию
+  постер `hero.jpg|webp|png` и русские субтитры `hero.vtt`. Академия смотрит в каталог при
+  каждом заходе на главную: положили файл — появляется кнопка просмотра, релиз не нужен; пока
+  файла нет, на месте плеера обложка с пометкой «Скоро». Файлы отдаются по `/film/<имя>` без
+  входа и с поддержкой Range; любые другие имена — 404.
+- Права: каталог и файлы принадлежат `ata` (`sudo install -o ata -g ata -m 644 <файл> <куда>`).
+  В бэкап базы (раздел 11) медиа не входят: исходники роликов хранит владелец, при переезде
+  сервера каталог копируется целиком (`rsync -a`).
+
+**Следующий этап (после открытия)** — когда роликов станет много и понадобится адаптивное
+качество, план такой (решение владельца от 21.09.2026):
 
 1. **S3**: `ata-prod-video-src` (исходники) и `ata-prod-video-out` (готовые HLS-плейлисты и
    сегменты); оба закрыты от публичного доступа.
@@ -1107,7 +1134,8 @@ curl -s http://127.0.0.1:3100/api/readiness            # "ok":true
 - [ ] Node 22.14.0, npm 10.9; рабочие копии по компонентам на тех же SHA, что в README.
 - [ ] tooling установлен, `--check` чистый, юниты переименованы в `ata-prod-*`.
 - [ ] env-файлы: 0600, `ata:ata`; `ATA_ENVIRONMENT=production`; `STAGING_ATTESTATION_ENABLED=false`; секреты уникальные; индексация включена только для главной.
-- [ ] База: миграции применены, `integrity_check` = ok, программа импортирована, `crm_admin` создан одноразовым TTY-скриптом, скрипт удалён.
+- [ ] База: миграции применены, `integrity_check` = ok, программа импортирована и опубликована (раздел 9.2), `crm_admin` создан одноразовым TTY-скриптом, скрипт удалён.
+- [ ] Медиа: `ATA_MEDIA_ROOT` задан, `/srv/ata-data/media` принадлежит `ata`; видео уроков зарегистрированы или осознанно отложены; фильм главной лежит в `public/film/` — или главная честно показывает «Скоро».
 - [ ] Все четыре сервиса active; health и readiness ok на loopback; снаружи: главная 200 без noindex, `/login` noindex, sitemap только главная, CRM и партнёр — 401 Basic Auth, `/news` → вход.
 - [ ] Бэкапы: таймер отработал хотя бы раз, файл проверен, копия в S3 с Object Lock видна; восстановление отрепетировано.
 - [ ] Pocket: постбэк принят на тестовой регистрации; партнёрская ссылка ведёт куда надо; Turnstile срабатывает на входе.
@@ -1170,6 +1198,7 @@ curl -s http://127.0.0.1:3100/api/readiness            # "ok":true
 | Basic Auth | CRM и партнёр | CRM и партнёр (академия открыта) |
 | бэкапы | локально, таймер 03:15 UTC | локально + S3 Object Lock |
 | доступ на сервер | SSH | SSM Session Manager |
+| медиа (раздел 14) | `/srv/ata-data/media` | `/srv/ata-data/media` |
 
 ## Приложение Б. Что где искать в репозитории
 
@@ -1178,6 +1207,7 @@ curl -s http://127.0.0.1:3100/api/readiness            # "ok":true
 - `tooling/README.md`, `backend/docs/RELEASE_ARTIFACT_CONTENTS.md`, `backend/docs/RELEASE_RETENTION.md` — как устроены релизы и хранение.
 - `backend/docs/PREPROD_OPERATIONS_RUNBOOK.md` — эксплуатационные правила (Basic Auth, аккаунты операторов, конфигурация, health/readiness); для PROD они те же.
 - `backend/docs/CURRICULUM_PACKAGES.md` — импорт учебной программы.
+- `backend/docs/PROGRAM_30_LEVELS.md` — действующая программа из 30 уровней: источник, активация, видео уроков, перевод учеников на новую версию.
 - `backend/docs/CRM_STAFF_IDENTITY.md` — роли и права сотрудников.
 - `backend/docs/ACCOUNT_RECOVERY_V1.md` — сброс пароля, подтверждение и смена почты: маршруты, свойства, переменные почты (раздел 13 этого документа — про сторону AWS).
-- `academy/docs/DESIGN_DECISIONS.md` — журнал решений продукта (DD-001…DD-327).
+- `academy/docs/DESIGN_DECISIONS.md` — журнал решений продукта (DD-001…DD-345).
