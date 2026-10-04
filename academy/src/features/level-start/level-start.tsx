@@ -22,6 +22,7 @@
  * the request at all — the Backend takes the actor from the session.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startLevel } from "@/lib/level-start/level-start-client";
 import type { NormalizedError } from "@/lib/api/errors";
@@ -40,13 +41,13 @@ type Phase = "idle" | "starting" | "started" | "error";
 const CODE_NOTE: Record<string, string> = {
   LEVEL_START_LOCKED: "Этот уровень ещё закрыт. Сначала нужно пройти предыдущие.",
   LEVEL_START_ALREADY_COMPLETED: "Этот уровень уже пройден.",
-  LEVEL_START_NOT_CURRENT: "Сейчас открыт другой уровень. Обнови страницу.",
+  LEVEL_START_NOT_CURRENT: "Сейчас открыт другой уровень. Обновите страницу.",
   LEVEL_START_LEVEL_NOT_FOUND: "Такого уровня нет в текущей программе.",
   LEVEL_START_NO_ACTIVE_ENROLLMENT: "Уровни станут доступны после зачисления на программу.",
   LEVEL_START_ENROLLMENT_COMPLETED: "Программа уже завершена.",
   LEVEL_START_CHECKPOINT_UNVERIFIED: "Контрольную точку нельзя начать — её проверяет сервис.",
   LEVEL_START_NOT_AVAILABLE: "Уровень сейчас нельзя начать.",
-  LEVEL_STATE_CORRUPT: "Состояние программы требует проверки. Обратись в поддержку.",
+  LEVEL_STATE_CORRUPT: "Состояние программы требует проверки. Обратитесь в поддержку.",
 };
 
 /** Fallback when the Backend gave no code of its own (network, proxy, 5xx). */
@@ -54,11 +55,11 @@ const CATEGORY_NOTE: Record<string, string> = {
   UNAUTHENTICATED: "Нужно войти в аккаунт, чтобы начать уровень.",
   FORBIDDEN: "Этот уровень сейчас недоступен.",
   VALIDATION_ERROR: "Уровень не удалось открыть.",
-  CONFLICT: "Состояние уровня изменилось. Обнови страницу.",
-  RATE_LIMITED: "Слишком много попыток. Подожди немного.",
-  NETWORK_ERROR: "Не удалось связаться с сервером. Попробуй ещё раз.",
-  BACKEND_UNAVAILABLE: "Сервер сейчас недоступен. Попробуй ещё раз позже.",
-  MALFORMED_RESPONSE: "Сервер ответил неожиданно. Попробуй ещё раз.",
+  CONFLICT: "Состояние уровня изменилось. Обновите страницу.",
+  RATE_LIMITED: "Слишком много попыток. Подождите немного.",
+  NETWORK_ERROR: "Не удалось связаться с сервером. Попробуйте ещё раз.",
+  BACKEND_UNAVAILABLE: "Сервер сейчас недоступен. Попробуйте ещё раз позже.",
+  MALFORMED_RESPONSE: "Сервер ответил неожиданно. Попробуйте ещё раз.",
   CONFIGURATION_ERROR: "Сервис недоступен.",
 };
 
@@ -67,10 +68,31 @@ function noteFor(error: NormalizedError): string {
   // "already finished" from "your page is stale", which a status code alone
   // cannot. It is a closed vocabulary and carries nothing identifying.
   const byCode = error.code === null ? undefined : CODE_NOTE[error.code];
-  return byCode ?? CATEGORY_NOTE[error.category] ?? "Не удалось начать уровень. Попробуй ещё раз.";
+  return byCode ?? CATEGORY_NOTE[error.category] ?? "Не удалось начать уровень. Попробуйте ещё раз.";
 }
 
-export function LevelStart({ stableCode }: { stableCode: string }) {
+/**
+ * The words around the one control, by what the level IS (2026-10-02).
+ *
+ * The control and what it does are the same for every level. What a learner is
+ * about to begin is not: «станут доступны материал и проверка» was written for
+ * a text lesson with a test, and told a learner on a lesson WITHOUT a test, on a
+ * report and on a practical level to expect a check that is not there. The page
+ * knows the level's completion method and passes the sentence that is true.
+ */
+export type LevelStartCopy = {
+  title: string;
+  explain: string;
+  action: string;
+};
+
+const DEFAULT_COPY: LevelStartCopy = {
+  title: "Начать уровень",
+  explain: "Уровень откроется, и станут доступны материал и проверка. Прогресс сохраняется на сервере.",
+  action: "Начать",
+};
+
+export function LevelStart({ stableCode, copy = DEFAULT_COPY }: { stableCode: string; copy?: LevelStartCopy }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [note, setNote] = useState<string | null>(null);
@@ -107,11 +129,9 @@ export function LevelStart({ stableCode }: { stableCode: string }) {
   return (
     <section className="lvl-start" aria-labelledby="lvl-start-title" data-phase={phase}>
       <h2 id="lvl-start-title" className="lvl-start__title">
-        Начать уровень
+        {copy.title}
       </h2>
-      <p className="lvl-start__explain">
-        Уровень откроется, и станут доступны материал и проверка. Прогресс сохраняется на сервере.
-      </p>
+      <p className="lvl-start__explain">{copy.explain}</p>
 
       <button
         type="button"
@@ -120,7 +140,7 @@ export function LevelStart({ stableCode }: { stableCode: string }) {
         disabled={phase === "starting" || phase === "started"}
         aria-busy={phase === "starting"}
       >
-        {phase === "starting" ? "Открываем…" : "Начать"}
+        {phase === "starting" ? "Открываем…" : copy.action}
       </button>
 
       {/* A polite live region: this is the answer to the action the learner just
@@ -135,6 +155,14 @@ export function LevelStart({ stableCode }: { stableCode: string }) {
       >
         {phase === "started" ? "Уровень открыт." : (note ?? "")}
       </p>
+      {/* A message that sends the learner to support carries the way there
+          (2026-10-04, launch audit: support lives under Профиль, and nothing
+          said so). */}
+      {phase === "error" && note && /поддержк/i.test(note) ? (
+        <p className="lvl-support-link">
+          <Link href="/profile/support">Написать в поддержку</Link>
+        </p>
+      ) : null}
     </section>
   );
 }

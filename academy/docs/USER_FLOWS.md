@@ -1,6 +1,6 @@
 # USER_FLOWS
 
-Ключевые пользовательские флоу Alfa Trade Academy Web V2. Для каждого: entry · steps · decisions · failures · recovery · analytics · UX risks.
+Ключевые пользовательские флоу Alpha Trade Academy Web V2. Для каждого: entry · steps · decisions · failures · recovery · analytics · UX risks.
 
 Аналитические события даны как provisional имена (snake_case). Финализируются с backend/CRM позже. Login фиксируется для retention, но **не** продлевает серию обучения.
 

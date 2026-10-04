@@ -1,4 +1,4 @@
-# Alfa Trade Academy — Web V2
+# Alpha Trade Academy — Web V2
 
 Последовательная образовательная платформа по трейдингу (100 уровней / 20 модулей). Pocket —
 торговая площадка (деньги видны только там); ATA — обучение, progression, planning, analysis,

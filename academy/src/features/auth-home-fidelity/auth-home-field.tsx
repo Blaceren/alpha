@@ -24,10 +24,13 @@ import "@/features/auth-home-fidelity/auth-home-fidelity.css";
  * keeps exactly one h1 per state without ever putting a focus-shaped
  * placeholder where the answer will go.
  *
- * WHAT THE SURFACE NEVER CONTAINS. No greeting, no learner name, no avatar, no
+ * WHAT THE FIELD NEVER CONTAINS. No greeting, no learner name, no avatar, no
  * progress percentage, no programme position, no streak, no XP, no rank, no
- * financial value — none of which is a stylistic preference. Home's whole job
- * is to carry ONE current priority, and every one of those competes with it.
+ * financial value. Since 2026-10-03 the PAGE around the field carries the
+ * greeting, the program line, the module, the tools and «Что нового» (owner:
+ * «наполни внутреннюю главную», DD-337) — and keeps them out of this block,
+ * which still carries ONE current priority and is still the page's only call
+ * to act. Amounts stay out of the whole page.
  *
  * WHAT DID NOT CROSS OVER. The prototype's `interaction.js` simulates a read
  * with a timer and swaps the field in place. In the product the read is real
@@ -47,7 +50,8 @@ export function AuthHomeField({ field }: { field: HomeField }) {
               because the consequence below is the page's h1. */}
           <div className="home-rail">
             <p className="home-identity">
-              Главная<span className="home-identity__role">текущий приоритет</span>
+              <span className="home-identity__surface">Главная</span>
+              <span className="home-identity__role">текущий приоритет</span>
             </p>
             {/* 2 — POSTURE LABEL. */}
             <p className="home-posture">{POSTURE_LABEL[posture]}</p>
@@ -57,7 +61,12 @@ export function AuthHomeField({ field }: { field: HomeField }) {
             {/* 3 — WORK IDENTITY. Present only where naming the work is what
                 makes the consequence intelligible. Never a persistent header. */}
             {"workIdentity" in field && field.workIdentity ? (
-              <p className="home-subject">{field.workIdentity}</p>
+              <p className="home-subject">
+                {field.workOrder !== null ? (
+                  <span className="home-subject__order">Уровень {field.workOrder}</span>
+                ) : null}
+                {field.workIdentity}
+              </p>
             ) : null}
 
             {/* 4 + 5 — CURRENT CONSEQUENCE and its closing boundary. The

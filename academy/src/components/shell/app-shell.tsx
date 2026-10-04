@@ -82,7 +82,7 @@ export function AppShell({
       </a>
       {/* desktop / tablet top command band */}
       <header className="appbar">
-        <Link href="/home" aria-label="Alfa Trade Academy — на главную"><BrandMark /></Link>
+        <Link href="/home" aria-label="Alpha Trade Academy — на главную"><BrandMark /></Link>
         <DesktopRouteNavigation activeId={activeId} />
         <span className="spacer" />
         <div className="actions">
@@ -94,7 +94,7 @@ export function AppShell({
 
       {/* mobile top bar */}
       <div className="mtop">
-        <Link href="/home" aria-label="Alfa Trade Academy — на главную"><BrandMark compact /></Link>
+        <Link href="/home" aria-label="Alpha Trade Academy — на главную"><BrandMark compact /></Link>
         {/* Where the learner is. It is the section's OWN canonical label, read
             from the same navigation config the bars read — no new string, and
             nothing to disagree with. Hidden from assistive technology because

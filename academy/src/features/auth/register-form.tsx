@@ -50,7 +50,9 @@ function ReferralNotice({ referral }: { referral: ReferralCodeResult }) {
   if (referral.status === "valid") {
     return (
       <p className="register-referral" data-testid="referral-valid">
-        Вы регистрируетесь по приглашению. Бонус начислит платформа после создания аккаунта.
+        {/* The bonus is granted only when the programme pays one (2026-10-04,
+            launch audit), so the notice no longer promises it. */}
+        Вы регистрируетесь по приглашению.
       </p>
     );
   }
@@ -72,9 +74,15 @@ export type RegisterFormProps = {
    * reject with `CAPTCHA_CONFIGURATION_ERROR`.
    */
   turnstileSiteKey: string | null;
+  /**
+   * Whether the Backend sends a confirmation message to a new account's
+   * address (ACCOUNT RECOVERY). Absent or false: the completed state says
+   * nothing about mail, because none was sent.
+   */
+  verificationMail?: boolean;
 };
 
-export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
+export function RegisterForm({ turnstileSiteKey, verificationMail = false }: RegisterFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referral = readReferralCode(searchParams);
@@ -227,6 +235,11 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
         {outcome.session ? (
           <>
             <p className="register-success__body">Вы уже вошли в систему.</p>
+            {verificationMail ? (
+              <p className="register-success__body" data-role="verification-mail">
+                Мы отправили письмо для подтверждения почты. Подтвердить адрес можно и позже — в профиле.
+              </p>
+            ) : null}
             <button
               type="button"
               className="register-submit"
@@ -235,7 +248,8 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
                 router.refresh();
               }}
             >
-              Продолжить
+              {/* Where it goes, not just that it goes on (2026-10-04, launch audit). */}
+              Перейти к обучению
             </button>
           </>
         ) : (
@@ -270,6 +284,17 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
           <span>{registrationMessage(failure.failure)}</span>
           {failure.requestId ? (
             <span className="register-error__ref"> (код обращения: {failure.requestId})</span>
+          ) : null}
+          {/* A broken invite was a dead end: every submit re-read the code from
+              the address and failed again (2026-10-04, launch audit). The way
+              out keeps what was typed — it only drops the code. */}
+          {failure.failure === "REFERRAL_INVALID" ? (
+            <>
+              {" "}
+              <Link className="register-error__link" href="/register">
+                Зарегистрироваться без приглашения
+              </Link>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -384,7 +409,7 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
           describedById={captchaStatusId}
         />
       ) : (
-        <div className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
+        <div id={captchaStatusId} className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
           Регистрация временно недоступна: проверка безопасности не настроена. Обратитесь к поддержке.
         </div>
       )}
@@ -399,11 +424,11 @@ export function RegisterForm({ turnstileSiteKey }: RegisterFormProps) {
         {submitting ? "Создаём аккаунт…" : "Создать аккаунт"}
       </button>
 
-      <p id={captchaStatusId} className="auth-status" role="status" aria-live="polite">
-        {captcha.mode === "provider" && !captchaToken && !submitting
-          ? "Пройдите проверку безопасности, чтобы продолжить."
-          : ""}
-      </p>
+      {/* Why the button is not available yet is said by the check's own line,
+          above it: the button is described by that line (`captchaStatusId`).
+          There used to be a second line here — «Пройдите проверку
+          безопасности…» — which asked the visitor to do something while the
+          check was running by itself. */}
 
       <p id={statusId} className="auth-status" role="status" aria-live="polite">
         {submitting ? "Создаём аккаунт, подождите." : ""}

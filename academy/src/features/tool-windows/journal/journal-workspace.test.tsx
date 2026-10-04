@@ -7,10 +7,12 @@ import type { JournalEntry, JournalPage, JournalReference } from "./journal-mode
 const fetchJournalPage = vi.fn();
 const createJournalEntry = vi.fn();
 const changeJournalEntry = vi.fn();
+const deleteJournalEntry = vi.fn();
 vi.mock("./journal-client", () => ({
   fetchJournalPage: (filter: string, before?: string | null) => fetchJournalPage(filter, before ?? null),
   createJournalEntry: (entry: unknown) => createJournalEntry(entry),
   changeJournalEntry: (id: string, change: unknown) => changeJournalEntry(id, change),
+  deleteJournalEntry: (id: string) => deleteJournalEntry(id),
 }));
 
 import { JournalWorkspace } from "./journal-workspace";
@@ -100,11 +102,14 @@ function failure(code: string | null, category: NormalizedError["category"] = "V
 }
 
 const row = (asset: RegExp) => screen.getByRole("button", { name: asset });
+/** «Дата»: a field that is pressed, with the day in words as its value. */
+const dateField = () => screen.getByRole("combobox", { name: "Дата" });
 
 beforeEach(() => {
   fetchJournalPage.mockReset();
   createJournalEntry.mockReset();
   changeJournalEntry.mockReset();
+  deleteJournalEntry.mockReset();
   // The learner's clock: only Date is faked, so user-event's timers stay real.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 8, 21, 15, 0));
@@ -155,28 +160,39 @@ describe("Trading Journal — the list", () => {
     expect(within(detail).getByText("Хотел отыграться после убытка")).toBeInTheDocument();
     expect(within(detail).getByText("Сумма больше плана")).toBeInTheDocument();
     expect(within(detail).getByText("Payout 90% · Экспирация 3 мин · Записано вручную")).toBeInTheDocument();
-    // Reviewed already, and recorded by hand: both changes are offered.
+    // Reviewed already: its review, the entry itself, and its delete are all offered.
     expect(within(detail).getByRole("button", { name: "Изменить разбор" })).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: "Изменить запись" })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Удалить" })).toBeInTheDocument();
     await user.click(line);
     expect(line).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("offers a card's trade for review but never for editing", async () => {
+  it("offers every entry the same three actions, whichever source it came from", async () => {
     const user = userEvent.setup();
     render(<JournalWorkspace initialPage={page()} />);
     await user.click(row(/EUR\/USD OTC/));
     const detail = document.getElementById(row(/EUR\/USD OTC/).getAttribute("aria-controls")!)!;
     expect(within(detail).getByText("Payout 90% · Экспирация 3 мин · Из Trade Card")).toBeInTheDocument();
-    expect(within(detail).getByRole("button", { name: "Разобрать сделку" })).toBeInTheDocument();
-    expect(within(detail).queryByRole("button", { name: "Изменить запись" })).toBeNull();
+    const actions = within(detail).getAllByRole("button");
+    // In this order: the review first, the delete last and apart.
+    expect(actions.map((button) => button.textContent)).toEqual(["Разобрать сделку", "Изменить запись", "Удалить"]);
+    // Real buttons, each of its own kind: none of them is bare text.
+    expect(actions.map((button) => button.getAttribute("data-variant"))).toEqual(["primary", "outline", "danger"]);
+  });
+
+  it("says so on the entry once it no longer agrees with its card", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page({ entries: [{ ...FROM_CARD, editedAfterCard: true }, BROKEN, YESTERDAY] })} />);
+    await user.click(row(/EUR\/USD OTC/));
+    expect(screen.getByText("Payout 90% · Экспирация 3 мин · Из Trade Card · изменена в журнале")).toBeInTheDocument();
   });
 
   it("reads from the browser when the server could not, and retries after a failure", async () => {
     const user = userEvent.setup();
     fetchJournalPage.mockResolvedValueOnce(failure(null, "NETWORK_ERROR")).mockResolvedValueOnce({ ok: true, data: page() });
     render(<JournalWorkspace />);
-    expect(await screen.findByText("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
+    expect(await screen.findByText("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Повторить" }));
     expect(await screen.findByRole("button", { name: /EUR\/USD OTC/ })).toBeInTheDocument();
     expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
@@ -349,15 +365,18 @@ describe("Trading Journal — the review", () => {
     await user.click(row(/EUR\/USD OTC/));
     await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
     await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
-    expect(await screen.findByText("Запись изменилась — показываю актуальный журнал.")).toBeInTheDocument();
+    expect(await screen.findByText("Этой записи уже нет — показываю актуальный журнал.")).toBeInTheDocument();
     expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
   });
 });
 
 describe("Trading Journal — a trade recorded by hand", () => {
   async function fillTrade(user: ReturnType<typeof userEvent.setup>) {
-    fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-09-20" } });
-    fireEvent.change(screen.getByLabelText("Время входа"), { target: { value: "10:05" } });
+    // The day before the learner's today is one press; the time is four digits.
+    await user.click(dateField());
+    await user.click(screen.getByRole("button", { name: "Вчера" }));
+    await user.clear(screen.getByLabelText("Время входа"));
+    await user.type(screen.getByLabelText("Время входа"), "1005");
     await user.selectOptions(screen.getByLabelText("Актив"), "GBPUSD_OTC");
     await user.click(screen.getByRole("radio", { name: /Ниже/ }));
     await user.type(screen.getByLabelText("Сумма"), "5");
@@ -371,9 +390,11 @@ describe("Trading Journal — a trade recorded by hand", () => {
     render(<JournalWorkspace initialPage={page()} />);
     await user.click(screen.getByRole("button", { name: "Новая запись" }));
     expect(screen.getByRole("heading", { name: "Новая запись" })).toHaveFocus();
-    expect(screen.getByLabelText("Дата")).toHaveValue("2026-09-21");
-    expect(screen.getByLabelText("Дата")).toHaveAttribute("max", "2026-09-21");
+    // The learner's own today, in words, and their own clock — not the browser's date field.
+    expect(dateField()).toHaveTextContent("Сегодня");
+    expect(dateField()).toHaveTextContent("21 сентября");
     expect(screen.getByLabelText("Время входа")).toHaveValue("15:00");
+    expect(document.querySelector('input[type="date"], input[type="time"]')).toBeNull();
     expect(screen.queryByRole("button", { name: /EUR\/USD OTC/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Отмена" }));
     expect(screen.getByRole("button", { name: "Новая запись" })).toHaveFocus();
@@ -455,8 +476,8 @@ describe("Trading Journal — a trade recorded by hand", () => {
     await fillTrade(user);
     await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
     expect(await screen.findByText("Дата сделки — не раньше 2020 года и не позже сегодняшнего дня.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Дата")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Дата")).toHaveFocus();
+    expect(dateField()).toHaveAttribute("aria-invalid", "true");
+    expect(dateField()).toHaveFocus();
   });
 
   it("changes a hand-recorded entry as a whole", async () => {
@@ -473,7 +494,7 @@ describe("Trading Journal — a trade recorded by hand", () => {
     expect(changeJournalEntry).toHaveBeenCalledWith(
       BROKEN.id,
       expect.objectContaining({
-        kind: "manual",
+        kind: "entry",
         amount: "12.00",
         planFollowed: false,
         violations: ["revenge", "amount_above_plan"],
@@ -482,5 +503,288 @@ describe("Trading Journal — a trade recorded by hand", () => {
     );
     expect(await screen.findByText("Запись изменена")).toBeInTheDocument();
     expect(row(/BTC\/USD OTC/)).toHaveTextContent("−$12.00");
+  });
+});
+
+describe("Trading Journal — an entry from a card, changed whole", () => {
+  it("opens in the same form with every field of the card's trade, and says the card stays as it is", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Изменить запись" }));
+
+    expect(screen.getByRole("heading", { name: "Изменить запись" })).toHaveFocus();
+    expect(
+      screen.getByText(
+        "Запись из Trade Card. Исправьте то, что записано неточно: изменения останутся в журнале, сама карточка не изменится.",
+      ),
+    ).toBeInTheDocument();
+    expect(dateField()).toHaveTextContent("Сегодня");
+    expect(screen.getByLabelText("Время входа")).toHaveValue("14:32");
+    expect(screen.getByLabelText("Актив")).toHaveValue("EURUSD_OTC");
+    expect(screen.getByRole("radio", { name: /Выше/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText("Сумма")).toHaveValue("8.00");
+    expect(screen.getByLabelText("Payout")).toHaveValue("90");
+    expect(screen.getByLabelText("Экспирация")).toHaveValue("M3");
+    expect(screen.getByRole("radio", { name: "Прибыль" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText("План до входа")).toHaveValue("Отскок от уровня, отмеченного до сессии");
+  });
+
+  it("saves the correction as the whole entry, and the line and its mark follow the Backend's answer", async () => {
+    const user = userEvent.setup();
+    const corrected: JournalEntry = {
+      ...FROM_CARD,
+      amount: "6.50",
+      result: "loss",
+      resultAmount: "6.50",
+      editedAfterCard: true,
+    };
+    changeJournalEntry.mockResolvedValue({ ok: true, data: corrected });
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Изменить запись" }));
+    await user.clear(screen.getByLabelText("Сумма"));
+    await user.type(screen.getByLabelText("Сумма"), "6.5");
+    await user.click(screen.getByRole("radio", { name: "Убыток" }));
+    expect(screen.getByText("Итог сделки").parentElement).toHaveTextContent("−$6.50");
+    await user.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+
+    expect(changeJournalEntry).toHaveBeenCalledWith(FROM_CARD.id, {
+      kind: "entry",
+      tradeDate: "2026-09-21",
+      entryTime: "14:32",
+      asset: "EURUSD_OTC",
+      direction: "up",
+      amount: "6.50",
+      payoutPercent: 90,
+      expiry: "M3",
+      result: "loss",
+      plan: "Отскок от уровня, отмеченного до сессии",
+      planFollowed: null,
+      violations: [],
+      execution: null,
+      conclusion: null,
+    });
+    expect(await screen.findByText("Запись изменена")).toBeInTheDocument();
+    const line = row(/EUR\/USD OTC/);
+    expect(line).toHaveTextContent("−$6.50");
+    expect(line).toHaveFocus();
+    expect(line).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Payout 90% · Экспирация 3 мин · Из Trade Card · изменена в журнале")).toBeInTheDocument();
+  });
+
+  it("leaves the entry as it was on «Отмена», and returns to its line", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/EUR\/USD OTC/));
+    await user.click(screen.getByRole("button", { name: "Изменить запись" }));
+    await user.clear(screen.getByLabelText("Сумма"));
+    await user.type(screen.getByLabelText("Сумма"), "99");
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(changeJournalEntry).not.toHaveBeenCalled();
+    expect(row(/EUR\/USD OTC/)).toHaveTextContent("$8.00");
+    expect(row(/EUR\/USD OTC/)).toHaveFocus();
+  });
+});
+
+describe("Trading Journal — deleting an entry", () => {
+  const AFTER = { total: 2, onPlan: 1, violated: 0, unmarked: 1, withoutConclusion: 2 };
+
+  async function ask(user: ReturnType<typeof userEvent.setup>, asset: RegExp) {
+    await user.click(row(asset));
+    const detail = document.getElementById(row(asset).getAttribute("aria-controls")!)!;
+    await user.click(within(detail).getByRole("button", { name: "Удалить" }));
+    return detail;
+  }
+
+  it("asks first, in the entry itself, and puts the focus on the way out", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+
+    const question = within(detail).getByRole("group", { name: "Удалить эту запись?" });
+    expect(question).toHaveAccessibleDescription("Она исчезнет из журнала и из Personal\u00a0Stats. Вернуть её будет нельзя.");
+    expect(within(question).getByRole("button", { name: "Отмена" })).toHaveFocus();
+    // The question replaces the entry's actions: nothing else can be started over it.
+    expect(within(detail).queryByRole("button", { name: "Изменить разбор" })).toBeNull();
+    expect(within(detail).queryByRole("button", { name: "Удалить" })).toBeNull();
+    // The entry itself stays in view while it is asked about.
+    expect(within(detail).getByText("Вход через минуту после убытка, сумма удвоена.")).toBeVisible();
+    expect(deleteJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it("says what stays when the entry came from a card", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /EUR\/USD OTC/);
+    expect(within(detail).getByRole("group", { name: "Удалить эту запись?" })).toHaveAccessibleDescription(
+      "Она исчезнет из журнала и из Personal\u00a0Stats. Вернуть её будет нельзя. Карточка в Trade\u00a0Card останется.",
+    );
+  });
+
+  it("leaves everything as it was on «Отмена» and on Escape, the focus back on «Удалить»", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Отмена" }));
+    expect(within(detail).queryByRole("group", { name: "Удалить эту запись?" })).toBeNull();
+    expect(within(detail).getByRole("button", { name: "Удалить" })).toHaveFocus();
+
+    await user.click(within(detail).getByRole("button", { name: "Удалить" }));
+    await user.keyboard("{Escape}");
+    expect(within(detail).queryByRole("group", { name: "Удалить эту запись?" })).toBeNull();
+    expect(within(detail).getByRole("button", { name: "Удалить" })).toHaveFocus();
+    expect(deleteJournalEntry).not.toHaveBeenCalled();
+    expect(row(/BTC\/USD OTC/)).toBeInTheDocument();
+  });
+
+  it("does not delete on a second press of the key that asked", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    await user.click(row(/BTC\/USD OTC/));
+    screen.getByRole("button", { name: "Удалить" }).focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard("{Enter}");
+    // The second Enter landed on «Отмена».
+    expect(deleteJournalEntry).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "Удалить эту запись?" })).toBeNull();
+    expect(row(/BTC\/USD OTC/)).toBeInTheDocument();
+  });
+
+  it("deletes on «Удалить запись»: the line goes, the counts are the Backend's, the focus takes the next line", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue({ ok: true, data: AFTER });
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+
+    expect(deleteJournalEntry).toHaveBeenCalledTimes(1);
+    expect(deleteJournalEntry).toHaveBeenCalledWith(BROKEN.id);
+    expect(await screen.findByText("Запись удалена")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /BTC\/USD OTC/ })).toBeNull();
+    const counts = screen.getByText("Записей").closest("dl")!;
+    expect(counts).toHaveTextContent("Записей2");
+    expect(counts).toHaveTextContent("По плану1 из 2");
+    expect(screen.getByRole("button", { name: /План нарушен/ })).toHaveTextContent("План нарушен 0");
+    // The entry after it in the list — yesterday's — takes its place under the focus.
+    expect(row(/GBP\/USD OTC/)).toHaveFocus();
+    // The other lines are untouched.
+    expect(row(/EUR\/USD OTC/)).toBeInTheDocument();
+  });
+
+  it("sends one delete however many times «Удалить запись» is pressed while it is on its way", async () => {
+    const user = userEvent.setup();
+    let arrive: (value: unknown) => void = () => {};
+    deleteJournalEntry.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    const confirm = within(detail).getByRole("button", { name: "Удалить запись" });
+    await user.click(confirm);
+    expect(within(detail).getByRole("button", { name: "Удаляю…" })).toBeDisabled();
+    expect(within(detail).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    fireEvent.click(within(detail).getByRole("button", { name: "Удаляю…" }));
+    expect(deleteJournalEntry).toHaveBeenCalledTimes(1);
+    arrive({ ok: true, data: AFTER });
+    expect(await screen.findByText("Запись удалена")).toBeInTheDocument();
+  });
+
+  it("shows the empty journal once the last entry is deleted, the focus on the way to a new one", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue({ ok: true, data: { total: 0, onPlan: 0, violated: 0, unmarked: 0, withoutConclusion: 0 } });
+    const one = page({ entries: [BROKEN], summary: { total: 1, onPlan: 0, violated: 1, unmarked: 0, withoutConclusion: 0 } });
+    render(<JournalWorkspace initialPage={one} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+    expect(await screen.findByRole("heading", { name: "Журнал пока пуст" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Записать сделку" })).toHaveFocus();
+    expect(fetchJournalPage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the question and the entry, and says why, when the delete did not go through", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue(failure(null, "NETWORK_ERROR"));
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.");
+    expect(within(detail).getByRole("group", { name: "Удалить эту запись?" })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Отмена" })).toHaveFocus();
+    expect(row(/BTC\/USD OTC/)).toBeInTheDocument();
+    expect(screen.getByText("Записей").closest("dl")).toHaveTextContent("Записей3");
+    // The reason does not outlive the question.
+    await user.click(within(detail).getByRole("button", { name: "Отмена" }));
+    expect(within(detail).queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the journal as it is now when the entry was already deleted somewhere else", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue(failure("JOURNAL_ENTRY_NOT_FOUND", "UNKNOWN_ERROR"));
+    fetchJournalPage.mockResolvedValue({
+      ok: true,
+      data: page({ entries: [FROM_CARD, YESTERDAY], summary: AFTER }),
+    });
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+    expect(await screen.findByText("Этой записи уже нет — показываю актуальный журнал.")).toBeInTheDocument();
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /BTC\/USD OTC/ })).toBeNull());
+    expect(screen.getByText("Записей").closest("dl")).toHaveTextContent("Записей2");
+  });
+
+  it("drops a question left open when its entry is closed, or when another action starts", async () => {
+    const user = userEvent.setup();
+    render(<JournalWorkspace initialPage={page()} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(row(/BTC\/USD OTC/));
+    await user.click(row(/BTC\/USD OTC/));
+    expect(within(detail).queryByRole("group", { name: "Удалить эту запись?" })).toBeNull();
+    expect(within(detail).getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+
+    // One question at a time: asking about another entry closes the first.
+    await user.click(within(detail).getByRole("button", { name: "Удалить" }));
+    await ask(user, /EUR\/USD OTC/);
+    expect(screen.getAllByRole("group", { name: "Удалить эту запись?" })).toHaveLength(1);
+    expect(within(detail).queryByRole("group", { name: "Удалить эту запись?" })).toBeNull();
+  });
+
+  it("continues «Показать ещё» from the last line on screen when the deleted entry was the cursor", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue({ ok: true, data: { total: 9, onPlan: 1, violated: 1, unmarked: 7, withoutConclusion: 2 } });
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page({ entries: [], nextCursor: null }) });
+    render(<JournalWorkspace initialPage={page({ nextCursor: YESTERDAY.id })} />);
+    const detail = await ask(user, /GBP\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+    expect(await screen.findByText("Запись удалена")).toBeInTheDocument();
+    // Nothing follows the deleted line, so the one before it takes the focus.
+    expect(row(/BTC\/USD OTC/)).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Показать ещё" }));
+    // Not the deleted entry's id, which the Backend would refuse.
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", BROKEN.id);
+  });
+
+  it("reads the list again when the only line on screen is deleted and more remain", async () => {
+    const user = userEvent.setup();
+    deleteJournalEntry.mockResolvedValue({ ok: true, data: AFTER });
+    fetchJournalPage.mockResolvedValue({ ok: true, data: page({ entries: [FROM_CARD, YESTERDAY], summary: AFTER }) });
+    render(<JournalWorkspace initialPage={page({ entries: [BROKEN], nextCursor: BROKEN.id })} />);
+    const detail = await ask(user, /BTC\/USD OTC/);
+    await user.click(within(detail).getByRole("button", { name: "Удалить запись" }));
+    expect(fetchJournalPage).toHaveBeenCalledWith("all", null);
+    expect(await screen.findByRole("button", { name: /EUR\/USD OTC/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /BTC\/USD OTC/ })).toBeNull();
+  });
+
+  it("starts the list over when the line «Показать ещё» continues from was deleted somewhere else", async () => {
+    const user = userEvent.setup();
+    fetchJournalPage
+      .mockResolvedValueOnce(failure("TOOL_VALIDATION", "VALIDATION_ERROR", "invalid_before"))
+      .mockResolvedValueOnce({ ok: true, data: page({ entries: [FROM_CARD, BROKEN], summary: AFTER }) });
+    render(<JournalWorkspace initialPage={page({ nextCursor: YESTERDAY.id })} />);
+    await user.click(screen.getByRole("button", { name: "Показать ещё" }));
+    expect(await screen.findByText("Журнал изменился — показываю актуальный.")).toBeInTheDocument();
+    expect(fetchJournalPage).toHaveBeenLastCalledWith("all", null);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /GBP\/USD OTC/ })).toBeNull());
+    expect(screen.queryByRole("button", { name: "Показать ещё" })).toBeNull();
   });
 });

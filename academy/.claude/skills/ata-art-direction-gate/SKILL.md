@@ -1,7 +1,7 @@
 ---
 name: ata-art-direction-gate
 description: >
-  Mandatory gate before ANY React/UI code for Alfa Trade Academy. Use this
+  Mandatory gate before ANY React/UI code for Alpha Trade Academy. Use this
   whenever the user asks to build, redesign, prototype, or "start coding" an ATA
   screen (Главная, Путь, урок, tool, rank, etc.), or whenever an art direction is
   being proposed. It forces a complete, written art-direction brief (19 required
@@ -13,7 +13,7 @@ description: >
 
 # ATA Art-Direction Gate
 
-No Alfa Trade Academy React/UI code may be written until an art direction passes this gate.
+No Alpha Trade Academy React/UI code may be written until an art direction passes this gate.
 First load `ata-brand-language` and read `design-memory/references/ata-brand/REFERENCE_MANIFEST.md`.
 
 Why: the rejected D1A skipped this and produced three renamings of one generic dashboard

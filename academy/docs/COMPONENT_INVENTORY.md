@@ -1,6 +1,6 @@
 # COMPONENT_INVENTORY
 
-Инвентарь компонентов Alfa Trade Academy Web V2. Provisional — уточняется при реализации (D1+). Компоненты используют semantic tokens (`DESIGN_SYSTEM.md`), выдерживают длинные польские строки и покрывают состояния из `STATE_MATRIX.md`.
+Инвентарь компонентов Alpha Trade Academy Web V2. Provisional — уточняется при реализации (D1+). Компоненты используют semantic tokens (`DESIGN_SYSTEM.md`), выдерживают длинные польские строки и покрывают состояния из `STATE_MATRIX.md`.
 
 > **D1A реализовано (foundation-подмножество).** Построены в `src/components/`:
 > ui — Button, IconButton, Badge, Tooltip (Radix), Surface, Avatar, VisuallyHidden, Icon (lucide-реестр);

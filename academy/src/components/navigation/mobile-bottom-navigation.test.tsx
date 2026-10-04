@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MobileBottomNavigation } from "@/components/navigation/mobile-bottom-navigation";
 import { MORE_MENU, PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute } from "@/config/built-routes";
@@ -25,6 +24,14 @@ import { isVisibleSection } from "@/config/feature-visibility";
  * The properties are: every built section is REACHABLE from this bar in at most
  * one extra tap, nothing unbuilt is advertised, no control is disabled, and no
  * section is both in the bar and in the sheet or in neither.
+ *
+ * 2026-10-03 — SUPPORT MOVED INTO THE PROFILE (owner: «что бы написать в
+ * поддержку можно было только из профиля, не по ссылке из хеда»). With Community
+ * withheld, «Ещё» would have opened a sheet with one row, «Профиль»; a menu of
+ * one is a detour, so the row takes the fifth slot itself (`mobile-slots.ts`).
+ * The same properties hold. «Ещё» and its sheet are still the bar's answer the
+ * day two destinations are behind it again — more-menu-disclosure.test.tsx
+ * holds that bar, with Community shown.
  */
 /* Built AND shown. Community is built and answers, but is withheld from the
    learner product today, so the bar is not expected to advertise it -
@@ -43,88 +50,62 @@ const DELIVERABLE = new Set(
 );
 
 describe("MobileBottomNavigation", () => {
-  it("keeps the bar to five slots, the fifth being «Ещё»", () => {
+  it("keeps the bar to five slots, the fifth being «Профиль» while it is all «Ещё» would hold", () => {
     render(<MobileBottomNavigation activeId="home" />);
     const bar = screen.getByRole("navigation", { name: "Мобильная навигация" });
-    // Four links plus the disclosure, bounded regardless of how many sections
-    // ship. That bound is the whole point of the change.
-    expect(within(bar).getAllByRole("link")).toHaveLength(4);
-    for (const label of ["Главная", "Путь", "Уроки", "Инструменты"]) {
+    expect(within(bar).getAllByRole("link")).toHaveLength(5);
+    for (const label of ["Главная", "Путь", "Уроки", "Инструменты", "Профиль"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    expect(screen.getByRole("button", { name: /Ещё/ })).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: /Профиль/ })).toHaveAttribute("href", "/profile");
+    // No menu of one.
+    expect(screen.queryByRole("button", { name: /Ещё/ })).toBeNull();
   });
 
-  it("reaches EVERY built section, in the bar or one tap inside «Ещё»", async () => {
-    const user = userEvent.setup();
+  it("reaches EVERY built section in one tap", () => {
     render(<MobileBottomNavigation activeId="home" />);
-
     const reachable = new Set(screen.getAllByRole("link").map((a) => a.getAttribute("href")));
-    await user.click(screen.getByRole("button", { name: /Ещё/ }));
-    for (const a of screen.getAllByRole("link")) reachable.add(a.getAttribute("href"));
-
     for (const item of BUILT) {
       expect(reachable.has(item.href), `${item.label} (${item.href}) must be reachable`).toBe(true);
     }
   });
 
-  it("puts Поддержка and Профиль behind «Ещё», and they are real links", async () => {
-    const user = userEvent.setup();
+  it("carries no way into support: support is a part of the profile", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    // The regression that started all of this: Поддержка must never be a
-    // section the bar knows about and cannot deliver.
     expect(screen.queryByRole("link", { name: /Поддержка/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Ещё/ }));
-    expect(screen.getByRole("link", { name: /Поддержка/ })).toHaveAttribute("href", "/support");
-    expect(screen.getByRole("link", { name: /Профиль/ })).toHaveAttribute("href", "/profile");
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/support");
+    expect(hrefs).not.toContain("/profile/support");
   });
 
-  it("never puts a section in both places, and never in neither", async () => {
-    const user = userEvent.setup();
+  it("never puts a section in two places, and never in neither", () => {
     render(<MobileBottomNavigation activeId="home" />);
     const inBar = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
-    await user.click(screen.getByRole("button", { name: /Ещё/ }));
-    const all = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
-    const inSheet = all.filter((href) => !inBar.includes(href));
-
-    expect(inBar.filter((href) => inSheet.includes(href))).toEqual([]);
-    expect(new Set([...inBar, ...inSheet])).toEqual(DELIVERABLE);
+    expect(new Set(inBar).size).toBe(inBar.length);
+    expect(new Set(inBar)).toEqual(DELIVERABLE);
   });
 
-  it("advertises no unbuilt destination", async () => {
-    const user = userEvent.setup();
+  it("advertises no unbuilt destination", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    await user.click(screen.getByRole("button", { name: /Ещё/ }));
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     for (const unbuilt of ["/news", "/referrals", "/mentor", "/settings"]) {
       expect(hrefs, unbuilt).not.toContain(unbuilt);
     }
   });
 
-  it("renders no disabled control — the defect that hid Поддержка", () => {
+  it("renders no disabled control — the defect that once hid Поддержка", () => {
     render(<MobileBottomNavigation activeId="home" />);
-    for (const button of screen.getAllByRole("button")) {
+    for (const button of screen.queryAllByRole("button")) {
       expect(button).not.toBeDisabled();
       expect(button).not.toHaveAttribute("aria-disabled", "true");
     }
   });
 
-  it("the disclosure reports its own state to assistive technology", async () => {
-    const user = userEvent.setup();
-    render(<MobileBottomNavigation activeId="home" />);
-    const more = screen.getByRole("button", { name: /Ещё/ });
-    expect(more).toHaveAttribute("aria-expanded", "false");
-    expect(more).toHaveAttribute("aria-haspopup", "dialog");
-    await user.click(more);
-    expect(more).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("dialog", { name: "Ещё" })).toBeInTheDocument();
-  });
-
-  it("marks «Ещё» active when the open section lives inside it", () => {
-    // Otherwise the bar shows every slot inactive while the learner is plainly
-    // somewhere, which reads as "you are nowhere".
-    render(<MobileBottomNavigation activeId="support" />);
-    expect(screen.getByRole("button", { name: /Ещё/ })).toHaveClass("is-active");
+  it("marks «Профиль» as the page on the profile, its support part included", () => {
+    // Both parts pass `profile`: the learner is in the profile either way.
+    render(<MobileBottomNavigation activeId="profile" />);
+    expect(screen.getByRole("link", { name: /Профиль/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /Главная/ })).not.toHaveAttribute("aria-current");
   });
 
   it("marks Главная active with aria-current (not colour only)", () => {

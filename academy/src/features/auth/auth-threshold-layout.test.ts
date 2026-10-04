@@ -20,55 +20,72 @@ import { join } from "node:path";
  * record of what these declarations produced — they are evidence, not an
  * assertion this file can re-derive.
  *
- * THREE CAPTCHA STATES, THREE HEIGHTS, AND WHICH ONE EACH NUMBER BELONGS TO.
+ * FOUR CAPTCHA STATES, FOUR HEIGHTS, AND WHICH ONE EACH NUMBER BELONGS TO.
  *
- * `.auth-captcha` renders at three different heights, and no single one of them
+ * `.auth-captcha` renders at four different heights, and no single one of them
  * is what this widget "is". Reading one as the general case is how this file was
- * wrong once already: it recorded 142px as the live height, and 142px is the
- * height of an ERROR. Each number below therefore travels with the name of the
- * state it was measured in, and the tests at the bottom of this file refuse to
- * let those names come apart again.
+ * wrong once already: it recorded the height of an ERROR as the live height.
+ * Each number below therefore travels with the name of the state it was
+ * measured in, and the tests at the bottom of this file refuse to let those
+ * names come apart again.
  *
- *   REAL-DOMAIN WORKING STATE — `.auth-captcha` at 71px.
- *     Turnstile on https://preprod.alfatrade.media in invisible/managed mode:
- *     `render=explicit`, no visible iframe, `window.turnstile` live, a
- *     `cdn-cgi/challenge-platform/.../rch/` request in flight, no 110200 in the
- *     console. This is the page a visitor actually meets.
+ * THE NUMBERS CHANGED ON 2026-10-02, AND WHY. Until then Cloudflare's box stood
+ * in the form on every visit — 71px while it worked, 142px with its error box.
+ * The owner's review that day («окно капчи слишком выделяется и не
+ * соответствует нам») made the box appear only when it has something to ask
+ * (`appearance: "interaction-only"`), with one line of the form in its place.
+ * Every state is therefore shorter than it was, and the tallest is no longer an
+ * error but the box itself, on the rare visit that needs it. Measured on the
+ * stand in a real browser with Cloudflare's published test site keys — always
+ * passes, forces an interaction, always blocks — and with no key at all.
  *
- *   LOCALHOST / ERROR / WORST-CASE STATE — `.auth-captcha` at 142px.
- *     `TURNSTILE_SITE_KEY` is present but the hostname does not match, so
- *     Turnstile raises 110200 and renders an error box. Every measurement taken
- *     over localhost or an SSH tunnel lands here — including a tunnel to the
- *     live service on 3050. It is the TALLEST of the three, and that is exactly
- *     why the layout gate is held to it rather than to the working state: a
- *     composition that clears the fold carrying an error box clears it by a
- *     further ~71px once the error is gone. Holding the gate to the friendlier
- *     number would prove less, so the 142px envelope stays.
+ *   WORKING STATE — `.auth-captcha` at 20px.
+ *     The check ran unseen and passed: the line «Браузер проверен.» and nothing
+ *     else. This is the page a visitor actually meets.
+ *
+ *   INTERACTIVE / WORST-CASE STATE — `.auth-captcha` at 93px.
+ *     Cloudflare asks for a press: the line, and under it the 65px box. After
+ *     the press the box stays for that check, Cloudflare's own «Успешно» in it,
+ *     so the block keeps this height until the form is sent. Where
+ *     the line takes two rows — a 360px screen — the block is 111px. It is the
+ *     TALLEST of the four, and that is exactly why the layout gate is held to
+ *     it rather than to the working state: a composition that clears the fold
+ *     carrying the box clears it by a further ~70px without it. Holding the
+ *     gate to the friendlier number would prove less.
+ *
+ *   FAILED STATE — `.auth-captcha` at 81px.
+ *     The challenge errored or timed out — on localhost with a real key, where
+ *     the hostname does not match and Turnstile raises 110200, as much as with
+ *     the always-blocking test key: the boxed sentence and «Повторить проверку»
+ *     under it (100px where the sentence takes two rows, on a 360px screen).
+ *     Cloudflare's own error box is not drawn.
  *
  *   NO-KEY FALLBACK STATE — `.auth-captcha` at 83px.
  *     `TURNSTILE_SITE_KEY` absent, so `resolveCaptchaContract` renders a
- *     placeholder and one `.auth-status` region collapses to zero. No deployed
- *     environment is in this state, and a measurement taken here is evidence
- *     for nothing.
+ *     placeholder. No deployed environment is in this state, and a measurement
+ *     taken here is evidence for nothing.
  *
- * LAYOUT GATE — held to the 142px worst-case envelope. Register submit
- * `bottom`, against the ceiling that leaves 24px of clearance:
+ * LAYOUT GATE — held to the worst-case envelope, the interactive state.
+ * Register submit `bottom`, against the ceiling that leaves 24px of clearance.
+ * The first four columns are this gate's history at the 142px envelope of the
+ * box that was always drawn; THIS is today's, with the box drawn only on demand:
  *
- *   viewport    live 99ef7697   0116c208    6a9c1cd0    THIS   ceiling
- *   1440x900    779             864         864          864       876
- *   1024x768    779             840         840          733       744
- *    390x844    835             929         790          770       820
- *    360x800    873             937         790          770       776
+ *   viewport    live 99ef7697   0116c208    6a9c1cd0    always-drawn    THIS   ceiling
+ *   1440x900    779             864         864          864              815       876
+ *   1024x768    779             840         840          733              684       744
+ *    390x844    835             929         790          770              683       820
+ *    360x800    873             937         790          770              725       776
  *
- * LIVE CUTOVER EVIDENCE — the same submit measured at 71px on the real domain
- * after the cutover of 6630b83f, in a fresh anonymous context, after
- * `document.fonts.ready` and after the widget settled:
+ * WORKING-STATE EVIDENCE — the same submit measured at 20px on the stand with
+ * the always-passing key, in a fresh anonymous context, after
+ * `document.fonts.ready` and after the check settled. (At the 71px of the box
+ * that was always drawn, the real domain measured 793, 662, 699 and 699.)
  *
  *   viewport    bottom   innerHeight   reserve
- *   1440x900    793      900           107
- *   1024x768    662      768           106
- *    390x844    699      844           145
- *    360x800    699      800           101
+ *   1440x900    743      900           157
+ *   1024x768    622      768           146
+ *    390x844    610      844           234
+ *    360x800    634      800           166
  *
  * Neither table is prose. Both are read back by the tests below and checked
  * against the ceilings and the 24px rule, so an evidence table that drifts from
@@ -125,34 +142,36 @@ const WIDE = "@media (min-width: 900px) {";
  * built from. Neither is spelled out anywhere here: this file reads itself, so
  * naming the banned word would be using it.
  */
-const CAPTCHA_REAL_DOMAIN_WORKING = 71;
-const CAPTCHA_LOCALHOST_ERROR = 142;
+const CAPTCHA_WORKING = 20;
+const CAPTCHA_INTERACTIVE = 93;
+const CAPTCHA_FAILED = 81;
 const CAPTCHA_NO_KEY_FALLBACK = 83;
 
 /** The gate is held to the tallest state on purpose: a worst-case envelope. */
-const LAYOUT_GATE_TESTED_HEIGHT = CAPTCHA_LOCALHOST_ERROR;
+const LAYOUT_GATE_TESTED_HEIGHT = CAPTCHA_INTERACTIVE;
 
 /** The state each height belongs to, as the prose above must label it. */
 const STATE_LABELS: [number, string][] = [
-  [CAPTCHA_REAL_DOMAIN_WORKING, "REAL-DOMAIN WORKING STATE"],
-  [CAPTCHA_LOCALHOST_ERROR, "LOCALHOST / ERROR / WORST-CASE STATE"],
+  [CAPTCHA_WORKING, "WORKING STATE"],
+  [CAPTCHA_INTERACTIVE, "INTERACTIVE / WORST-CASE STATE"],
+  [CAPTCHA_FAILED, "FAILED STATE"],
   [CAPTCHA_NO_KEY_FALLBACK, "NO-KEY FALLBACK STATE"],
 ];
 
-/** Worst-case envelope. viewport -> [innerHeight, submit bottom at 142px, ceiling] */
+/** Worst-case envelope. viewport -> [innerHeight, submit bottom in the interactive state, ceiling] */
 const EVIDENCE: Record<string, [number, number, number]> = {
-  "1440x900": [900, 864, 876],
-  "1024x768": [768, 733, 744],
-  "390x844": [844, 770, 820],
-  "360x800": [800, 770, 776],
+  "1440x900": [900, 815, 876],
+  "1024x768": [768, 684, 744],
+  "390x844": [844, 683, 820],
+  "360x800": [800, 725, 776],
 };
 
-/** Live, post-cutover. viewport -> [innerHeight, submit bottom at 71px, reserve] */
-const LIVE_CUTOVER_EVIDENCE: Record<string, [number, number, number]> = {
-  "1440x900": [900, 793, 107],
-  "1024x768": [768, 662, 106],
-  "390x844": [844, 699, 145],
-  "360x800": [800, 699, 101],
+/** The working state. viewport -> [innerHeight, submit bottom at 20px, reserve] */
+const WORKING_STATE_EVIDENCE: Record<string, [number, number, number]> = {
+  "1440x900": [900, 743, 157],
+  "1024x768": [768, 622, 146],
+  "390x844": [844, 610, 234],
+  "360x800": [800, 634, 166],
 };
 
 /** The tier-4 numbers that produced 770 at 360x800. Nothing may loosen. */
@@ -214,7 +233,8 @@ describe("the floors the compact step is not allowed to lower", () => {
   const floors: [string, string][] = [
     [".auth__mark {", "min-height: 44px"],                                   // the brand link
     [".auth .login-field input,\n.auth .register-field input {", "min-height: 48px"],
-    [".auth .login-submit,\n.auth .register-submit {", "min-height: 48px"],
+    // 52px since the product hi-fi made it Public Home's pill (DD-338).
+    [".auth .login-submit,\n.auth .register-submit {", "min-height: 52px"],
     [".auth .register-alt__link,\n.auth .login-alt__link {", "min-height: 44px"],
   ];
   it.each(floors)("%s keeps %s", (selector, floor) => {
@@ -246,7 +266,8 @@ describe("the frame's material has one place of authority", () => {
       ["--auth-frame-line", "var(--divider)"],
       ["--auth-frame-ground", "var(--surface-subtle)"],
       ["--auth-frame-bracket", "var(--signal-active)"],
-      ["--auth-frame-radius", "14px"],
+      /* The product hi-fi (DD-338) gave every surface one radius. */
+      ["--auth-frame-radius", "var(--hf-radius-surface)"],
     ] as const) {
       expect(auth, `${name} must be declared on .auth`).toContain(`${name}: ${source}`);
     }
@@ -376,22 +397,22 @@ describe("the recorded evidence is checked, not quoted", () => {
     }
   });
 
-  it("checks the live cutover evidence too, at the working height", () => {
-    for (const [vp, [h, bottom, reserve]] of Object.entries(LIVE_CUTOVER_EVIDENCE)) {
+  it("checks the working-state evidence too, at the working height", () => {
+    for (const [vp, [h, bottom, reserve]] of Object.entries(WORKING_STATE_EVIDENCE)) {
       expect(h - bottom, `${vp} reserve does not match`).toBe(reserve);
-      expect(reserve, `${vp} has less than 24px on the real domain`).toBeGreaterThanOrEqual(24);
-      // The working state is shorter than the error state, so every live figure
-      // must sit ABOVE its own worst-case twin. If one ever did not, the two
-      // tables would be describing different pages.
+      expect(reserve, `${vp} has less than 24px in the working state`).toBeGreaterThanOrEqual(24);
+      // The working state is shorter than the interactive one, so every working
+      // figure must sit ABOVE its own worst-case twin. If one ever did not, the
+      // two tables would be describing different pages.
       const worst = EVIDENCE[vp];
       expect(worst, `${vp} missing from the worst-case table`).toBeTruthy();
-      expect(bottom, `${vp} live bottom is not inside the envelope`).toBeLessThanOrEqual(worst![1]);
+      expect(bottom, `${vp} working bottom is not inside the envelope`).toBeLessThanOrEqual(worst![1]);
       expect(bottom).toBeLessThanOrEqual(worst![2]);
     }
   });
 
-  it("agrees with the live table written above it", () => {
-    for (const [vp, [h, bottom, reserve]] of Object.entries(LIVE_CUTOVER_EVIDENCE)) {
+  it("agrees with the working-state table written above it", () => {
+    for (const [vp, [h, bottom, reserve]] of Object.entries(WORKING_STATE_EVIDENCE)) {
       const rows = CSS_TEST_SOURCE.split("\n").filter(
         (l) =>
           l.trimStart().startsWith("*") &&
@@ -400,7 +421,7 @@ describe("the recorded evidence is checked, not quoted", () => {
           l.includes(String(h)) &&
           l.includes(String(reserve)),
       );
-      expect(rows.length, `no live evidence row for ${vp}`).toBe(1);
+      expect(rows.length, `no working-state evidence row for ${vp}`).toBe(1);
     }
   });
 
@@ -416,12 +437,13 @@ describe("the recorded evidence is checked, not quoted", () => {
   });
 });
 
-describe("the three captcha states never collapse into one", () => {
-  it("keeps three distinct heights, one per state", () => {
-    expect(CAPTCHA_REAL_DOMAIN_WORKING).toBe(71);
-    expect(CAPTCHA_LOCALHOST_ERROR).toBe(142);
+describe("the four captcha states never collapse into one", () => {
+  it("keeps four distinct heights, one per state", () => {
+    expect(CAPTCHA_WORKING).toBe(20);
+    expect(CAPTCHA_INTERACTIVE).toBe(93);
+    expect(CAPTCHA_FAILED).toBe(81);
     expect(CAPTCHA_NO_KEY_FALLBACK).toBe(83);
-    expect(new Set([CAPTCHA_REAL_DOMAIN_WORKING, CAPTCHA_LOCALHOST_ERROR, CAPTCHA_NO_KEY_FALLBACK]).size).toBe(3);
+    expect(new Set([CAPTCHA_WORKING, CAPTCHA_INTERACTIVE, CAPTCHA_FAILED, CAPTCHA_NO_KEY_FALLBACK]).size).toBe(4);
     expect(CSS_TEST_SOURCE).toContain("TURNSTILE_SITE_KEY");
   });
 
@@ -444,18 +466,21 @@ describe("the three captcha states never collapse into one", () => {
       .not.toContain(BANNED_ADJECTIVE);
     expect(CSS_TEST_SOURCE, "the old constant name may not come back")
       .not.toContain(BANNED_IDENTIFIER);
-    // 71 is named as the real-domain state, and only there.
-    expect(CSS_TEST_SOURCE).toContain("REAL-DOMAIN WORKING STATE — `.auth-captcha` at 71px");
-    expect(CSS_TEST_SOURCE).toContain("LOCALHOST / ERROR / WORST-CASE STATE — `.auth-captcha` at 142px");
+    // Each height is named beside its own state, and only there.
+    expect(CSS_TEST_SOURCE).toContain("WORKING STATE — `.auth-captcha` at 20px");
+    expect(CSS_TEST_SOURCE).toContain("INTERACTIVE / WORST-CASE STATE — `.auth-captcha` at 93px");
+    expect(CSS_TEST_SOURCE).toContain("FAILED STATE — `.auth-captcha` at 81px");
   });
 
   it("holds the layout thresholds to the worst case, not to the live one", () => {
-    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(CAPTCHA_LOCALHOST_ERROR);
-    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(142);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(CAPTCHA_INTERACTIVE);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBe(93);
     // Testing the envelope proves more than testing the friendly state. If this
-    // ever flipped to 71, every ceiling below would become easier to clear and
+    // ever flipped to 20, every ceiling below would become easier to clear and
     // the gate would quietly stop guarding the case it was written for.
-    expect(LAYOUT_GATE_TESTED_HEIGHT).toBeGreaterThan(CAPTCHA_REAL_DOMAIN_WORKING);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBeGreaterThan(CAPTCHA_WORKING);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBeGreaterThanOrEqual(CAPTCHA_FAILED);
+    expect(LAYOUT_GATE_TESTED_HEIGHT).toBeGreaterThanOrEqual(CAPTCHA_NO_KEY_FALLBACK);
     for (const [vp, [h, bottom, ceiling]] of Object.entries(EVIDENCE)) {
       expect(ceiling, `${vp} ceiling`).toBe(h - 24);
       expect(bottom, `${vp} worst-case bottom`).toBeLessThanOrEqual(ceiling);
@@ -490,7 +515,10 @@ describe("nothing the correction was forbidden to touch has moved", () => {
     expect(login).toContain('title="Продолжить свой путь."');
     expect(register).toContain('eyebrow="ATA / НАЧАЛО"');
     expect(register).toContain('title="Начать путь."');
+    // The cautious line stays for a Backend that cannot say; where registration starts the
+    // program (2026-10-04, launch audit), the page says so.
     expect(register).toContain("Аккаунт открывает вход в Академию. Доступ к обучению открывает куратор.");
+    expect(register).toContain("Регистрация бесплатная. Сразу после неё откроется первый уровень пути.");
   });
 
   it("nothing in this file hides the eyebrow, the heading or the lead", () => {

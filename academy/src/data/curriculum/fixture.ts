@@ -56,7 +56,7 @@ type LevelRow = [number, string, CurriculumLevelKind, string?, true?];
 
 const LEVEL_ROWS: LevelRow[] = [
   [1, "Регистрация Pocket", "task", "Регистрация и подтверждение аккаунта Pocket"],
-  [2, "Как устроен Alfa Trade Academy", "video-test"],
+  [2, "Как устроен Alpha Trade Academy", "video-test"],
   [3, "Первые пять demo-сделок", "report", "Отчёт по 5 demo-сделкам"],
   [4, "Контрольная точка $50", "checkpoint"],
   [5, "Жизненный цикл сделки", "video-test"],

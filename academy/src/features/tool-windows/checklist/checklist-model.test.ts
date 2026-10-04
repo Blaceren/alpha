@@ -95,11 +95,13 @@ describe("the form", () => {
     expect(emptyChecklistDraft({ ...STATE, lastMinPayoutPercent: null }).minPayoutPercent).toBe("");
   });
 
-  it("reads the minimum as empty, a whole percent, or not valid", () => {
+  it("reads the minimum as empty, a payout from 20 to 99, or not valid", () => {
     expect(parseMinPayout("")).toBeNull();
-    expect(parseMinPayout(" 85 % ")).toBe(85);
-    expect(parseMinPayout("0")).toBeUndefined();
-    expect(parseMinPayout("85.5")).toBeUndefined();
+    expect(parseMinPayout("  ")).toBeNull();
+    expect(parseMinPayout("85")).toBe(85);
+    expect(parseMinPayout("20")).toBe(20);
+    expect(parseMinPayout("99")).toBe(99);
+    for (const raw of ["0", "19", "100", "85.5", "85%", "8a"]) expect(parseMinPayout(raw), raw).toBeUndefined();
   });
 
   it("sends exactly the nine answers, the asset and the minimum", () => {

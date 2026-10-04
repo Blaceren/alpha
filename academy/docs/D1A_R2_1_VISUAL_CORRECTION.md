@@ -2,7 +2,7 @@
 
 Точечная визуальная коррекция утверждённого направления Route Field (design-only). R2 принят
 концептуально, но **не** визуально. Это не новое art direction. React ещё **не** разрешён.
-Продукт — **Alfa Trade Academy**. References provisional.
+Продукт — **Alpha Trade Academy**. References provisional.
 
 ## Что зафиксировано
 

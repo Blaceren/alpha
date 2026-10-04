@@ -79,7 +79,7 @@ test("level detail is read-only: available lesson, locked report, checkpoint", a
 
   // L2 available lesson detail — Backend content metadata, no write CTA.
   await page.goto(`${ACADEMY_BASE_URL}/lessons/${LEVELS.l2}`);
-  await expect(page.locator(".cur-detail__title")).toHaveText("Как устроен Alfa Trade Academy");
+  await expect(page.locator(".cur-detail__title")).toHaveText("Как устроен Alpha Trade Academy");
   await expect(page.locator(".cur-detail")).toHaveAttribute("data-state", "available");
   await expect(page.locator(".cur-detail__readonly")).toBeVisible();
   await expect(page.getByRole("button", { name: /Завершить|Отправить|Пройти/ })).toHaveCount(0);

@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublicHomeScreen } from "@/features/public-home/public-home-screen";
 import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { TOOL_WINDOWS } from "@/features/tool-windows/model/catalog";
+import { PROGRAM_TOOL_LEVEL } from "@/features/public-home/product-route-data";
 
 /**
  * Public Home — brand-evolution gates.
@@ -65,6 +66,15 @@ function text(container: HTMLElement): string {
   return (container.textContent ?? "").replace(/\s+/g, " ");
 }
 
+/** The words of every text node, each its own word: «20:00» in one cell and
+    «USD» in the next read as two words, not as «20:00USD». */
+function words(container: HTMLElement): string {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.textContent ?? "");
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
 describe("Public Home — architecture", () => {
   it("renders eleven responsibilities: a header and ten sections, in order", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
@@ -81,8 +91,20 @@ describe("Public Home — architecture", () => {
       expect(segment.closest("#product"), `#${id} must sit inside the route`).toBe(route);
       expect(segment.classList.contains("route__segment")).toBe(true);
     }
-    // One window for the whole route, pinned beside the three segments.
+    // One window for the whole route, pinned beside the three segments on a
+    // wide screen...
     expect(route.querySelectorAll("#route-window").length).toBe(1);
+    // ...and on a narrow one each step carries its own window, right under its
+    // words, showing that step's state (2026-10-03: the pinned window covered
+    // the route on a phone). CSS shows one or the other.
+    const steps = Array.from(route.querySelectorAll<HTMLElement>("[data-route-step]"));
+    expect(steps.length).toBeGreaterThan(0);
+    for (const step of steps) {
+      const own = step.querySelector(".rstep__window .pw");
+      expect(own, `${step.id} has no window of its own`).not.toBeNull();
+      expect(own?.getAttribute("data-state")).toBe(step.getAttribute("data-route-step"));
+      expect(own?.hasAttribute("id"), "a step's window must not repeat the pinned window's id").toBe(false);
+    }
   });
 
   it("opens on the opportunity, not on a negated category", () => {
@@ -199,24 +221,33 @@ describe("Public Home — the claim never outruns the product", () => {
     // Owner, 2026-09-22: tuition is free, and the page says so in the FAQ.
     expect(body).toContain("Сколько стоит обучение?");
     expect(body).toContain("Обучение в ATA бесплатно");
-    // And still nothing about the broker, deposits or checkpoint amounts.
-    for (const forbidden of ["Pocket", "депозит", "баланс", "$"]) {
+    // And still nothing about the broker, deposits or checkpoints (2026-10-04: the
+    // FAQ's «Что такое контрольная точка?» left with the launch audit).
+    for (const forbidden of ["Pocket", "депозит", "баланс", "$", "контрольн"]) {
       expect(body, `"${forbidden}" must not appear on the public page`).not.toContain(forbidden);
     }
   });
 
-  it("shows the six built tools from the catalogue, in unlock order, and no roadmap", () => {
+  it("shows the six built tools from the catalogue, at the levels the program opens them, and no roadmap", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const tools = container.querySelector("#tools") as HTMLElement;
+    // The program learners have (owner's document of 2026-10-02; 2026-10-04 launch audit) —
+    // not the catalogue's 100-level plan (5/10/15/20/25/30).
+    expect(PROGRAM_TOOL_LEVEL).toEqual({ "trade-card": 5, journal: 9, "risk-calculator": 13, "entry-checklist": 13, stats: 24, news: 28 });
     const built = TOOL_WINDOWS.filter((tool) => tool.built)
       .slice()
-      .sort((a, b) => a.unlockLevel - b.unlockLevel);
+      .sort((a, b) => PROGRAM_TOOL_LEVEL[a.slug] - PROGRAM_TOOL_LEVEL[b.slug]);
     expect(built.length).toBe(6);
     const labels = Array.from(tools.querySelectorAll(".rstep__label")).map((el) => el.textContent ?? "");
-    expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${tool.unlockLevel}`));
+    expect(labels).toEqual(built.map((tool) => `${tool.title} · открывается на L${PROGRAM_TOOL_LEVEL[tool.slug]}`));
     const nodes = Array.from(tools.querySelectorAll(".rstep__node")).map((el) => el.textContent);
-    expect(nodes).toEqual(built.map((tool) => `L${tool.unlockLevel}`));
-    const copy = text(tools);
+    expect(nodes).toEqual(["L5", "L9", "L13", "L13", "L24", "L28"]);
+    // The route's own words promise nothing ahead. (A window shows the
+    // product's states — the News Calendar marks a release due today «скоро» —
+    // so the windows are read apart from the copy.)
+    const copyOnly = tools.cloneNode(true) as HTMLElement;
+    copyOnly.querySelectorAll(".pw").forEach((window) => window.remove());
+    const copy = text(copyOnly);
     for (const roadmap of ["скоро", "в разработке", "появится", "планируется", "roadmap"]) {
       expect(copy.toLowerCase()).not.toContain(roadmap);
     }
@@ -237,12 +268,29 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     }
   });
 
-  it("gives the hero frame a legible unfinished object, not empty geometry", () => {
+  it("holds the film in the hero frame — its cover says «Скоро» and offers nothing that does nothing (2026-10-04)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const frame = container.querySelector("#top .dframe") as HTMLElement;
+    const frame = container.querySelector("#top .dframe--film") as HTMLElement;
     expect(frame).not.toBeNull();
-    expect(text(frame)).toContain("Причина входа до сделки");
-    expect(text(frame)).toContain("Ещё не сформулировано");
+    expect(frame.getAttribute("data-film")).toBe("soon");
+    expect(text(frame)).toContain("Фильм о платформе");
+    expect(text(frame)).toContain("Скоро");
+    expect(text(frame)).toContain("Как устроена Alpha Trade Academy");
+    expect(frame.querySelector("button")).toBeNull();
+    expect(frame.querySelector("video")).toBeNull();
+  });
+
+  it("puts the player in the frame when the film is on the host — on a click, never by itself", async () => {
+    const film = { src: "/film/hero.mp4?v=abc", poster: null, captions: null };
+    const { container } = render(<PublicHomeScreen authenticated={false} film={film} />);
+    const frame = container.querySelector("#top .dframe--film") as HTMLElement;
+    expect(frame.getAttribute("data-film")).toBe("ready");
+    expect(text(frame)).not.toContain("Скоро");
+    expect(frame.querySelector("video")).toBeNull();
+    await userEvent.click(within(frame).getByRole("button", { name: /Смотреть фильм/ }));
+    const video = frame.querySelector("video") as HTMLVideoElement;
+    expect(video).not.toBeNull();
+    expect(video.getAttribute("src")).toBe("/film/hero.mp4?v=abc");
   });
 
   it("resolves that same object in #decide", () => {
@@ -259,10 +307,17 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("marks every synthetic panel as a demonstration", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    // Hero frame, decide frame, and the two product windows — one badge in
-    // each bar covers every state the window shows.
-    expect(container.querySelectorAll(".demo-badge").length).toBe(4);
-    for (const selector of ["#top .dframe", "#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
+    // Hero frame, decide frame, the two product windows — one badge in each
+    // bar covers every state the window shows — and each route step's own
+    // window for a narrow screen (2026-10-03).
+    const stepWindows = container.querySelectorAll(".rstep__window .pw").length;
+    expect(stepWindows).toBeGreaterThan(0);
+    // The hero frame holds the film since 2026-10-04 — not a demonstration.
+    expect(container.querySelectorAll(".demo-badge").length).toBe(3 + stepWindows);
+    for (const bar of Array.from(container.querySelectorAll(".rstep__window .pw__bar"))) {
+      expect(within(bar as HTMLElement).getAllByText(/Демонстрационный пример/).length).toBe(1);
+    }
+    for (const selector of ["#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
@@ -270,10 +325,13 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
 
   it("carries no learner data — the demonstration is authored, not captured", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const body = text(container);
+    const body = words(container);
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
     expect(body).not.toMatch(/\+7\s?\(?\d{3}/);
-    expect(body).not.toMatch(/\b\d+\s?(₽|\$|USD|EUR)\b/);
+    // A sum of money, not a clock: the windows show «14:32 EUR/USD OTC» and
+    // «20:00 USD» (a trade's time and its pair, a release's time and its
+    // currency), and those are not amounts.
+    expect(body).not.toMatch(/(?<!:)\b\d+\s?(₽|\$|USD|EUR)\b/);
   });
 });
 
@@ -385,29 +443,49 @@ describe("Public Home — signature evidence", () => {
     expect(buttons[3]!.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("switches the window from anywhere on a card except the object inside it", async () => {
+  it("switches the window from anywhere on a card, its object included", async () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const review = container.querySelector("#review") as HTMLElement;
     const window = review.querySelector("#review-window") as HTMLElement;
     const cards = Array.from(review.querySelectorAll(".evidence-track > li")) as HTMLElement[];
     expect(cards).toHaveLength(4);
-    // The note, the index and the card's own surface all switch.
+    // The note, the heading around the button and the card's own surface all switch.
     await userEvent.click(cards[2]!.querySelector(".evidence__note") as HTMLElement);
     expect(window.getAttribute("data-stage")).toBe("v2");
-    await userEvent.click(cards[1]!.querySelector(".evidence__index") as HTMLElement);
+    await userEvent.click(cards[1]!.querySelector("h3") as HTMLElement);
     expect(window.getAttribute("data-stage")).toBe("feedback");
     await userEvent.click(cards[3]!);
     expect(window.getAttribute("data-stage")).toBe("accepted");
-    // The object inside a card is content, not a control.
+    // The object inside a card is the largest thing on it: a press there is a
+    // press on the card (until 2026-10-02 it did nothing — a dead middle in a
+    // card that lights up under the pointer).
     await userEvent.click(cards[0]!.querySelector(".evidence__object") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
-    await userEvent.click(cards[0]!.querySelector(".evidence__object .dframe__value") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
+    expect(window.getAttribute("data-stage")).toBe("v1");
+    await userEvent.click(cards[2]!.querySelector(".evidence__object .dframe__value") as HTMLElement);
+    expect(window.getAttribute("data-stage")).toBe("v2");
     await userEvent.click(cards[1]!.querySelector(".evidence__verdict") as HTMLElement);
-    expect(window.getAttribute("data-stage")).toBe("accepted");
+    expect(window.getAttribute("data-stage")).toBe("feedback");
     // The button still carries the state for the keyboard and assistive tech.
     const pressed = Array.from(review.querySelectorAll(".evidence__button")).map((b) => b.getAttribute("aria-pressed"));
-    expect(pressed).toEqual(["false", "false", "false", "true"]);
+    expect(pressed).toEqual(["false", "true", "false", "false"]);
+  });
+
+  it("does not take a drag that selected the card's text for a press", async () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    const stage = () => (review.querySelector("#review-window") as HTMLElement).getAttribute("data-stage");
+    const cards = Array.from(review.querySelectorAll(".evidence-track > li")) as HTMLElement[];
+    const text = cards[2]!.querySelector(".evidence__object .dframe__value") as HTMLElement;
+    const selection = globalThis.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.click(text);
+    expect(stage()).toBe("v1");
+    selection.removeAllRanges();
+    fireEvent.click(text);
+    expect(stage()).toBe("v2");
   });
 
   it("stops the Decision Frame after the evidence", () => {
@@ -436,7 +514,7 @@ describe("Public Home — session-aware calls to action", () => {
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/home");
     expect(hrefs).not.toContain("/register");
-    expect(screen.queryByText(/Уже клиент/)).toBeNull();
+    expect(screen.queryByText(/Уже учитесь/)).toBeNull();
     // The mechanism anchor is state-independent.
     expect(hrefs).toContain("#mechanism");
   });
@@ -445,7 +523,7 @@ describe("Public Home — session-aware calls to action", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs.filter((h) => h === "/login").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/Уже клиент/)).toBeTruthy();
+    expect(screen.getByText(/Уже учитесь/)).toBeTruthy();
   });
 
   it("does not change the composition between the two states", () => {
@@ -676,8 +754,8 @@ describe("Public Home — stylesheet holds its contract", () => {
   it("plays each motion sequence once and settles inside a second", () => {
     // The three sequences ride `is-visible`, run with `both`, and nothing loops.
     for (const trigger of [
-      ".ph .reframe.is-visible .source-cloud span",
-      ".ph .learning-loop.is-visible::after",
+      ".ph .reframe.is-visible .source-cloud > li",
+      ".ph .learning-loop.is-visible::before",
       '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
     ]) {
       expect(css, `${trigger} must be a sequence`).toContain(trigger);
@@ -695,6 +773,117 @@ describe("Public Home — stylesheet holds its contract", () => {
     expect(Math.max(...delays)).toBeLessThanOrEqual(800);
     expect(css).not.toMatch(/animation-iteration-count:\s*infinite/);
     expect(css).not.toMatch(/animation:[^;]*infinite/);
+  });
+});
+
+describe("Public Home — the owner's review of 2026-10-01", () => {
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  /** The body of the first rule with exactly this selector, outside or inside a media block. */
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(rules)?.[1] ?? null;
+  };
+
+  describe("the review strip carries no badges", () => {
+    it("opens each card with its title: no «V1», «Разбор», «V2» or tick above it", () => {
+      const { container } = render(<PublicHomeScreen authenticated={false} />);
+      const track = container.querySelector(".evidence-track") as HTMLElement;
+      expect(track.querySelector(".evidence__index")).toBeNull();
+      for (const card of Array.from(track.querySelectorAll(":scope > li"))) {
+        expect(card.firstElementChild?.tagName, "a card starts with its heading").toBe("H3");
+      }
+      const copy = text(track);
+      expect(copy).not.toMatch(/\bV[12]\b/);
+      expect(copy).not.toContain("✓");
+      expect(rules).not.toContain("evidence__index");
+    });
+
+    it("says the order with the strip's own rail: lit as far as the state on show", async () => {
+      const { container } = render(<PublicHomeScreen authenticated={false} />);
+      const cards = Array.from(container.querySelectorAll(".evidence-track > li")) as HTMLElement[];
+      const reached = () => cards.map((card) => card.classList.contains("is-reached"));
+      expect(reached()).toEqual([true, false, false, false]);
+      await userEvent.click(cards[2]!.querySelector(".evidence__button") as HTMLElement);
+      expect(reached()).toEqual([true, true, true, false]);
+      expect(cards.map((card) => card.classList.contains("is-active"))).toEqual([false, false, true, false]);
+      expect(rule(".ph .review .evidence-track > li.is-reached::before")).toMatch(/background:/);
+      expect(rule(".ph .review .evidence-track > li.is-active::before")).toMatch(/var\(--signal-400\)/);
+    });
+  });
+
+  describe("the route's line never crosses a level's label", () => {
+    it("draws both parts of the line in the container's FIRST child, so every node is painted over it", () => {
+      // The drawn part used to be `::after` — the last child — and ran through
+      // «L1», «L2» and every node the route had passed.
+      expect(rules).not.toMatch(/\.route__steps::after/);
+      const line = rule(".ph .route__steps::before");
+      expect(line, "the route's line rule is missing").not.toBeNull();
+      expect(line).toMatch(/var\(--route-drawn/);
+      expect(line).toMatch(/var\(--signal-400\)/);
+      expect(line).toMatch(/var\(--line-dark\)/);
+    });
+
+    it("keeps the nodes opaque, and their labels large enough to be labels", () => {
+      const shared = rule(".ph .rstart__node,\n.ph .rstep__node");
+      expect(shared).toMatch(/background:\s*var\(--ink-950\)/);
+      const sizes = Array.from(rules.matchAll(/\.ph \.(?:rstart|rstep)__node \{([^}]*)\}/g))
+        .flatMap((m) => Array.from((m[1] ?? "").matchAll(/font-size:\s*([\d.]+)px/g)).map((f) => Number(f[1])));
+      expect(sizes.length).toBeGreaterThanOrEqual(4);
+      // 8px in a 26px ring was not a label.
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(9.5);
+    });
+  });
+
+  describe("the cycle stands centred under one line", () => {
+    it("centres each step and its object, and fences no column", () => {
+      const step = rule(".ph .learning-loop > li");
+      expect(step).toMatch(/align-items:\s*center/);
+      expect(step).toMatch(/text-align:\s*center/);
+      // The vertical rules ran through the nodes and along the objects' edges.
+      expect(step).not.toMatch(/border-(right|left)/);
+      const object = rule(".ph .cyc");
+      expect(object).toMatch(/justify-items:\s*center/);
+      expect(object).toMatch(/text-align:\s*center/);
+    });
+
+    it("sets the numbers large, on nodes that hide the line behind them", () => {
+      const node = rule(".ph .learning-loop > li > span");
+      expect(Number(/font-size:\s*([\d.]+)px/.exec(node ?? "")?.[1])).toBeGreaterThanOrEqual(13);
+      expect(node).toMatch(/z-index:\s*1/);
+      expect(node).toMatch(/background:\s*var\(--ink-950\)/);
+      // Node centre to node centre, not edge to edge.
+      expect(rules).toMatch(/\.ph \.learning-loop::before \{[^}]*left:\s*calc\(\(100% - 5 \* var\(--loop-gap\)\) \/ 12\)/);
+    });
+
+    it("draws the whole line — faint and Signal — in ONE first-child element, so no number is ever crossed", () => {
+      // Owner, 2026-10-02: «полоска всё равно перегораживает цифры». Every step
+      // carries `data-reveal`, whose resting state keeps a transform on it…
+      expect(rule(".ph.has-js [data-reveal].is-visible")).toMatch(/transform:\s*translateY\(0\)/);
+      // …so every step is a stacking context, its node's z-index counts only
+      // inside it, and anything that FOLLOWS the steps in the tree is painted
+      // over them. The line may therefore never be the list's last child:
+      expect(rules).not.toMatch(/\.learning-loop(\.is-visible)?::after/);
+      // both parts are the first child, the drawn one a background layer over the faint one,
+      const line = rule(".ph .learning-loop::before");
+      expect(line).toMatch(/linear-gradient\(var\(--signal-400\), var\(--signal-400\)\)[^,;]*0% 100%[^,;]*,\s*var\(--line-dark\)/);
+      // and it is drawn by growing that layer — never by a transform, which
+      // would make the line a layer of its own.
+      expect(line).not.toMatch(/transform/);
+      expect(rules).toMatch(/@keyframes ph-line-grow \{\s*from \{\s*background-size:\s*0% 100%;\s*\}\s*to \{\s*background-size:\s*100% 100%;/);
+      expect(rule(".ph .learning-loop.is-visible::before")).toMatch(/animation:\s*ph-line-grow 760ms var\(--ease\) 80ms both/);
+      // The route's line was fixed the same way on 2026-10-01.
+      expect(rules).not.toMatch(/\.route__steps::after/);
+    });
+
+    it("goes to three columns at its own step, and to one column without a line through the words", () => {
+      const three = /@media \(max-width: 1340px\) \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(three).toMatch(/\.ph \.learning-loop \{[^}]*repeat\(3,/);
+      expect(three).toMatch(/\.ph \.learning-loop::before \{[^}]*display:\s*none/);
+      // On a phone the line used to run down the left edge at 11px, through
+      // the first letters of every paragraph.
+      expect(rules).not.toMatch(/\.learning-loop::after \{[^}]*left:\s*11px/);
+      expect(rules).toMatch(/\.ph \.learning-loop > li:nth-child\(n\)::before \{[^}]*left:\s*50%/);
+    });
   });
 });
 
@@ -716,3 +905,216 @@ describe("Public Home — no way to the news", () => {
     expect(hrefs.filter((href) => href === "/news" || href.startsWith("/news/") || href.startsWith("/news?"))).toEqual([]);
   });
 });
+
+describe("Public Home — the owner's review of 2026-10-02", () => {
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(rules)?.[1] ?? null;
+  };
+
+  describe("a line is behind what it connects — everywhere on the page", () => {
+    /*
+     * The same defect was found three times: in the route (2026-10-01), in the
+     * cycle (2026-10-02, by the owner) and in the product window's path
+     * (2026-10-02, by a hit-test sweep of the whole page). Each time the drawn
+     * part of a line was its holder's LAST child, and each node of the holder
+     * keeps a transform at rest — a stacking context — so the last child was
+     * painted over every node. The rule is therefore held for every holder of
+     * nodes on the page, not for the one last complained about.
+     */
+    it("draws no line as the last child of anything that holds nodes", () => {
+      for (const holder of ["route__steps", "learning-loop", "pw-path__nodes", "cyc__path", "trail"]) {
+        expect(rules, holder).toMatch(new RegExp(`\\.${holder}::before \\{`));
+        expect(rules, holder).not.toMatch(new RegExp(`\\.${holder}(\\.[\\w-]+)*::after`));
+      }
+    });
+
+    it("draws the walked part of the window's path as a layer of its first child", () => {
+      const line = rule(".ph .pw-path__nodes::before");
+      // Faint from the first node to the fifth; Signal over three quarters of it — to the fourth, the current one
+      // (level 4 of the program, 2026-10-04).
+      expect(line).toMatch(
+        /linear-gradient\(var\(--pw-signal-700\), var\(--pw-signal-700\)\) left center \/ 75% 100% no-repeat,\s*var\(--pw-line-2\)/,
+      );
+      expect(line).toMatch(/animation:\s*pw-line-draw 600ms var\(--ease\) 200ms both/);
+      // Grown by its size — a transform would make the line a layer of its own.
+      expect(line).not.toMatch(/transform/);
+      expect(rules).toMatch(/@keyframes pw-line-draw \{\s*from \{\s*background-size:\s*0% 100%;\s*\}\s*\}/);
+      // Why the order matters: a node keeps the last frame of its entrance, and that frame has a transform.
+      expect(rule(".ph .pw-node")).toMatch(/animation:\s*pw-in 320ms var\(--ease\) both/);
+      expect(rules).toMatch(/@keyframes pw-in \{[\s\S]*?to \{[^}]*transform:\s*translateY\(0\)/);
+    });
+  });
+
+  describe("the strip's cards say they can be pressed", () => {
+    it("lights a card from its rail down, under its words and never over them", () => {
+      const card = rule(".ph .review .evidence-track > li");
+      expect(card).toMatch(/isolation:\s*isolate/);
+      expect(card).toMatch(/cursor:\s*pointer/);
+      const light = rule(".ph .review .evidence-track > li::after");
+      expect(light).toMatch(/z-index:\s*-1/);
+      expect(light).toMatch(/linear-gradient\(\s*180deg,\s*rgba\(199, 247, 109, 0\.17\) 0,[\s\S]*rgba\(199, 247, 109, 0\) 140px\s*\)/);
+      // A hairline of the same light, so the lit card has an edge, not only a glow.
+      expect(light).toMatch(/box-shadow:\s*inset 0 0 0 1px rgba\(199, 247, 109, 0\.2\)/);
+      expect(light).toMatch(/opacity:\s*0;/);
+      // The light never takes a press meant for the card.
+      expect(light).toMatch(/pointer-events:\s*none/);
+    });
+
+    it("keeps the card on show lit, and lights the others under the pointer, the focus and a press", () => {
+      expect(rule(".ph .review .evidence-track > li.is-active::after")).toMatch(/opacity:\s*1/);
+      expect(rule(".ph .review .evidence-track > li:focus-within::after")).toMatch(/opacity:\s*0\.8/);
+      // Hover only where there is a pointer to hover with: on a touch screen it
+      // would stick to the last card that was tapped.
+      const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(hover).toMatch(/\.ph \.review \.evidence-track > li:hover::after \{[^}]*opacity:\s*0\.8/);
+      expect(hover).toMatch(/\.ph \.review \.evidence-track > li:hover:not\(\.is-active\)::before \{[^}]*rgba\(199, 247, 109, 0\.78\)/);
+      expect(rules.replace(hover, "")).not.toMatch(/evidence-track > li:hover::after/);
+      expect(rules).toMatch(/\.ph \.review \.evidence-track > li:active::after \{[^}]*opacity:\s*1/);
+      // The rail of the card on show glows; the others' rails only brighten.
+      expect(rule(".ph .review .evidence-track > li.is-active::before")).toMatch(/box-shadow:\s*0 0 14px rgba\(199, 247, 109, 0\.55\)/);
+    });
+
+    it("has no dead middle: the object inside a card is pressed like the rest of it", () => {
+      // It used to carry the reading pointer and to swallow the press.
+      expect(rules).not.toMatch(/\.ph \.review \.evidence__object \{[^}]*cursor:\s*auto/);
+      expect(rules).not.toMatch(/:has\(\.evidence__object:hover\)/);
+    });
+
+    it("hints once, on the three cards not on show, inside the page's motion limits", () => {
+      expect(rule(".ph .review .evidence-track[data-hint] > li:not(.is-active)::after")).toMatch(
+        /animation:\s*ph-card-hint 420ms var\(--ease\) both/,
+      );
+      // The rail flashes with the light, in the same order.
+      expect(rule(".ph .review .evidence-track[data-hint] > li:not(.is-active)::before")).toMatch(
+        /animation:\s*ph-rail-hint 420ms var\(--ease\) both/,
+      );
+      for (const pseudo of ["after", "before"]) {
+        const delays = Array.from(
+          rules.matchAll(new RegExp(`evidence-track\\[data-hint\\] > li:nth-child\\(\\d\\)::${pseudo} \\{ animation-delay: (\\d+)ms; \\}`, "g")),
+        ).map((m) => Number(m[1]));
+        expect(delays, pseudo).toEqual([120, 240, 360]);
+      }
+      // It begins and ends dark: nothing stays lit that is not on show.
+      const frames = /@keyframes ph-card-hint \{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+      expect(frames).toMatch(/0% \{\s*opacity:\s*0;/);
+      expect(frames).toMatch(/100% \{\s*opacity:\s*0;/);
+    });
+  });
+});
+
+describe("Public Home — the phone composition (DD-342)", () => {
+  /*
+   * Owner, 2026-10-03: «мобильная версия внешней главной мне не нравится…
+   * такая не понятная получается». Measured: 21.5 screens at 390px, the six
+   * tool windows alone almost five. Up to 920px the tools are one deck under
+   * the rail of the levels they open on; up to 680px the cycle is a spine
+   * without its objects and the headings are two or three lines.
+   */
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  /** Every block of a media query with exactly this prelude, joined. */
+  const media = (prelude: string) =>
+    Array.from(rules.matchAll(new RegExp(`@media \\(${prelude}\\) \\{([\\s\\S]*?)\\n\\}`, "g")))
+      .map((m) => m[1] ?? "")
+      .join("\n");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mountDeck() {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("920"), media: query }));
+    const scrollTo = vi.fn();
+    // jsdom lays nothing out; the deck is asked to scroll, and that is what is checked.
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { value: scrollTo, configurable: true, writable: true });
+    const view = render(<PublicHomeScreen authenticated={false} />);
+    const rail = view.container.querySelector(".tdeck__rail") as HTMLElement;
+    const buttons = Array.from(rail.querySelectorAll(".trail__button")) as HTMLButtonElement[];
+    const deck = view.container.querySelector("[data-tdeck]") as HTMLElement;
+    return { ...view, rail, buttons, deck, scrollTo };
+  }
+
+  it("names the six tools on the rail in the order they open, from the catalogue", () => {
+    const { buttons, rail } = mountDeck();
+    const built = TOOL_WINDOWS.filter((tool) => tool.built).sort((a, b) => PROGRAM_TOOL_LEVEL[a.slug] - PROGRAM_TOOL_LEVEL[b.slug]);
+    expect(buttons.map((b) => b.textContent)).toEqual(built.map((tool) => `L${PROGRAM_TOOL_LEVEL[tool.slug]}`));
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(
+      built.map((tool) => `${tool.title}, открывается на уровне ${PROGRAM_TOOL_LEVEL[tool.slug]}`),
+    );
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false", "false", "false"]);
+    expect(rail.querySelector(".trail__note")?.textContent?.replace(/\s+/g, " ")).toContain(
+      `${built[0]!.title} — открывается на уровне ${PROGRAM_TOOL_LEVEL[built[0]!.slug]}`,
+    );
+  });
+
+  it("controls the deck's cards: every rail button points at a card of the deck", () => {
+    const { buttons, deck } = mountDeck();
+    const cards = Array.from(deck.children).map((card) => card.id);
+    expect(buttons.map((b) => b.getAttribute("aria-controls"))).toEqual(cards);
+    expect(deck.querySelector(":scope > .is-shown")?.id).toBe(cards[0]);
+  });
+
+  it("a press on the rail brings that card, lights the rail up to it and names it", () => {
+    const { buttons, rail, deck, scrollTo } = mountDeck();
+    fireEvent.click(buttons[2]!);
+    expect(scrollTo).toHaveBeenCalled();
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true", "false", "false", "false"]);
+    const steps = Array.from(rail.querySelectorAll(".trail__step"));
+    expect(steps.map((li) => li.classList.contains("is-reached"))).toEqual([true, true, true, false, false, false]);
+    expect((rail.querySelector(".trail") as HTMLElement).style.getPropertyValue("--tr-at")).toBe("2");
+    expect(rail.querySelector(".trail__note")?.textContent).toContain("3 / 6");
+    expect(deck.querySelector(":scope > .is-shown")?.id).toBe(buttons[2]!.getAttribute("aria-controls"));
+  });
+
+  it("a tool's title in the deck brings its card sideways and leaves the page where it is", () => {
+    const { deck, buttons, scrollTo } = mountDeck();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true, writable: true });
+    fireEvent.click(deck.querySelectorAll(".rstep__button")[4]!);
+    expect(scrollTo).toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(buttons[4]!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("is the deck only up to 920px: wide screens keep the route and the pinned window", () => {
+    expect(rules).toMatch(/\n\.ph \.tdeck__rail \{\s*display:\s*none;\s*\}/);
+    const narrow = media("max-width: 920px");
+    expect(narrow).toMatch(/\.ph \.tdeck__rail \{[^}]*display:\s*block/);
+    expect(narrow).toMatch(/\.ph \.route__list--tools \{[^}]*display:\s*flex[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/);
+    expect(narrow).toMatch(/\.ph \.route__list--tools > \.rstep \{[^}]*scroll-snap-align:\s*start/);
+    // The route's line ends above the deck: the tools lie over it.
+    expect(narrow).toMatch(/\.ph \.route__segment--tools \{[^}]*z-index:\s*1[^}]*background:\s*var\(--ink-950\)/);
+    // Its nodes are 44px targets.
+    expect(narrow).toMatch(/\.ph \.trail__button \{[^}]*min-height:\s*44px/);
+  });
+
+  it("says the two words of «многое → одно» when it stands in a column, to the eye only", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const captions = Array.from(container.querySelectorAll(".reframe__caption"));
+    expect(captions.map((c) => c.textContent)).toEqual(["Чужие ответы", "Ваше решение"]);
+    for (const caption of captions) expect(caption).toHaveAttribute("aria-hidden", "true");
+    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*none;\s*\}/);
+    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe__caption \{[^}]*display:\s*block/);
+  });
+
+  it("makes the cycle a spine on a phone: the objects go, the line runs behind the nodes", () => {
+    const phone = media("max-width: 680px");
+    expect(phone).toMatch(/\.ph \.learning-loop \.cyc \{\s*display:\s*none;\s*\}/);
+    expect(phone).toMatch(/\.ph \.learning-loop > li > span \{[^}]*left:\s*0/);
+    // Wide screens keep the six objects: outside the phone blocks nothing hides them.
+    const outside = Array.from(rules.matchAll(/@media \(max-width: 680px\) \{[\s\S]*?\n\}/g)).reduce(
+      (rest, block) => rest.replace(block[0], ""),
+      rules,
+    );
+    expect(outside).not.toMatch(/\.learning-loop \.cyc \{\s*display:\s*none/);
+  });
+
+  it("keeps a phone heading to a few lines: section headings at most 36px", () => {
+    const phone = media("max-width: 680px");
+    const heading = /\.ph \.display--section,\s*\.ph \.route__title \{([^}]*)\}/.exec(phone)?.[1] ?? "";
+    expect(heading).toMatch(/font-size:\s*clamp\(24px, 7\.8vw, 36px\)/);
+    expect(phone).toMatch(/\.ph \.final-step__title \{[^}]*font-size:\s*clamp\(25px, 7\.4vw, 32px\)/);
+  });
+});
+

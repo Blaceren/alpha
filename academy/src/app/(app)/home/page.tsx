@@ -7,7 +7,7 @@ import { AuthHomeScreen } from "@/features/auth-home-fidelity/auth-home-screen";
 import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
-  title: "Главная — Alfa Trade Academy",
+  title: "Главная — Alpha Trade Academy",
   description: "Твой путь обучения: текущий шаг и контрольная точка.",
 };
 

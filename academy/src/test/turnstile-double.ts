@@ -43,6 +43,10 @@ export type TurnstileDouble = {
   timeout(): Promise<void>;
   /** Drive `error-callback` on the most recent widget. */
   fail(code?: string): Promise<void>;
+  /** The challenge asks the visitor for a press: `before-interactive-callback`. */
+  askForPress(): Promise<void>;
+  /** The challenge no longer needs the visitor: `after-interactive-callback`. */
+  stopAsking(): Promise<void>;
   /** Remove `window.turnstile` so the "script never loaded" path can be tested. */
   uninstall(): void;
 };
@@ -117,6 +121,8 @@ export function installTurnstileDouble(options: InstallOptions = {}): TurnstileD
     expire: () => drive(() => latest()["expired-callback"]()),
     timeout: () => drive(() => latest()["timeout-callback"]()),
     fail: (code?: string) => drive(() => latest()["error-callback"](code)),
+    askForPress: () => drive(() => latest()["before-interactive-callback"]?.()),
+    stopAsking: () => drive(() => latest()["after-interactive-callback"]?.()),
     uninstall: () => {
       delete window.turnstile;
     },

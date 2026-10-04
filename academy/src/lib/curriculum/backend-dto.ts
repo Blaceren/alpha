@@ -91,6 +91,11 @@ export type BackendLevel = {
   progress: BackendProgress | null;
   /** Absent on a Backend that predates the honest gate; null on non-checkpoints. */
   checkpoint?: BackendCheckpoint | null;
+  /**
+   * PROGRAM STRUCTURE (2026-10-02). What the program's author calls the level;
+   * absent on an older Backend, null on a version that does not say.
+   */
+  kind?: string | null;
 };
 
 export type BackendModule = {
@@ -103,6 +108,8 @@ export type BackendModule = {
   checkpointLevel: number | null;
   learningObjective: string;
   status: string;
+  /** The module's chapter; absent on an older Backend, null without chapters. */
+  chapter?: { number: number; title: string } | null;
   levels: BackendLevel[];
 };
 
@@ -179,6 +186,12 @@ export type BackendLevelContent = {
       body: unknown;
     };
     assets: BackendContentAsset[];
+    /**
+     * Where the answer to each question of the level's test is taught (lesson
+     * hi-fi, 2026-10-02). Absent from a Backend that predates it; read with
+     * `readBackendQuestionMarkers`, never trusted as it arrives.
+     */
+    questionMarkers?: unknown;
   };
   progress: unknown | null;
 };
@@ -274,8 +287,13 @@ function isLevel(v: unknown): v is BackendLevel {
     (v.blockers === undefined || (Array.isArray(v.blockers) && v.blockers.every(isStr))) &&
     isStrOrNull(v.durableStatus) &&
     (v.progress === null || isProgress(v.progress)) &&
-    (v.checkpoint === undefined || v.checkpoint === null || isCheckpoint(v.checkpoint))
+    (v.checkpoint === undefined || v.checkpoint === null || isCheckpoint(v.checkpoint)) &&
+    (v.kind === undefined || v.kind === null || isStr(v.kind))
   );
+}
+
+function isChapter(v: unknown): v is { number: number; title: string } {
+  return isObject(v) && isNum(v.number) && Number.isInteger(v.number) && v.number >= 1 && isStr(v.title);
 }
 
 function isModule(v: unknown): v is BackendModule {
@@ -290,6 +308,7 @@ function isModule(v: unknown): v is BackendModule {
     (v.checkpointLevel === null || isNum(v.checkpointLevel)) &&
     isStr(v.learningObjective) &&
     isStr(v.status) &&
+    (v.chapter === undefined || v.chapter === null || isChapter(v.chapter)) &&
     Array.isArray(v.levels) &&
     v.levels.every(isLevel)
   );
@@ -353,11 +372,31 @@ export function isBackendCurriculumEnvelope(value: unknown): value is BackendCur
  * A content asset the Academy is willing to believe.
  *
  * Deliberately strict about `url`: a lesson media source is handed straight to
- * a <video> element, so anything that is not an absolute https URL is dropped
- * rather than rendered. That rules out `javascript:` and `data:` sources, and
- * also `blob:` — which is exactly what the showcase's local file picker
- * produces, and must never reach a real lesson.
+ * a <video> element, so anything outside the two shapes below is dropped rather
+ * than rendered. That rules out `javascript:` and `data:` sources, and also
+ * `blob:` — which is exactly what the showcase's local file picker produces,
+ * and must never reach a real lesson.
+ *
+ *   1. an absolute https URL without credentials — a published content asset;
+ *   2. a path under `/media/` on the Academy's OWN origin — a file of the lesson
+ *      media registry (2026-10-02), which the Backend addresses without a host
+ *      so that no environment's host name is ever stored in a row.
+ *
+ * The second shape is matched character by character, not parsed: a path that
+ * starts with `/media/` and is made only of path-safe characters cannot name
+ * another origin (`//host`), another scheme, a parent directory or a query.
  */
+const LESSON_MEDIA_PATH = /^\/media\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+
+export function isLessonMediaPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 512 &&
+    LESSON_MEDIA_PATH.test(value) &&
+    !value.split("/").includes("..")
+  );
+}
+
 function isHttpsUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
   try {
@@ -368,13 +407,18 @@ function isHttpsUrl(value: unknown): value is string {
   }
 }
 
+/** The two shapes a lesson asset address may have, and nothing else. */
+export function isLessonAssetUrl(value: unknown): value is string {
+  return isLessonMediaPath(value) || isHttpsUrl(value);
+}
+
 export function isBackendContentAsset(value: unknown): value is BackendContentAsset {
   if (!isObject(value)) return false;
   return (
     isStr(value.kind) &&
     isStr(value.assetCode) &&
     isStrOrNull(value.locale) &&
-    isHttpsUrl(value.url) &&
+    isLessonAssetUrl(value.url) &&
     isStr(value.mimeType)
   );
 }
@@ -404,6 +448,44 @@ export function readBackendContentAssets(value: unknown): BackendContentAsset[] 
     });
   }
   return assets;
+}
+
+/** One point of the lesson line: a question's number and the second its answer is taught. */
+export type BackendQuestionMarker = { questionNumber: number; seconds: number };
+
+const MAX_MARKER_SECONDS = 86_400;
+const MAX_MARKERS = 50;
+
+/**
+ * The lesson line's points, read strictly and FAIL-SOFT.
+ *
+ * A point is a hint on a timeline: a payload that cannot be read gives none,
+ * and the lesson plays exactly as it did before points existed. Each kept point
+ * is a whole question number from 1 and a whole second within a day; a number
+ * seen twice keeps its first second.
+ */
+export function readBackendQuestionMarkers(value: unknown): BackendQuestionMarker[] {
+  if (!Array.isArray(value)) return [];
+  const markers: BackendQuestionMarker[] = [];
+  const seen = new Set<number>();
+  for (const entry of value) {
+    if (markers.length >= MAX_MARKERS) break;
+    if (!isObject(entry)) continue;
+    const { questionNumber, rewatchFromSeconds } = entry;
+    if (
+      !Number.isSafeInteger(questionNumber) ||
+      (questionNumber as number) < 1 ||
+      !Number.isSafeInteger(rewatchFromSeconds) ||
+      (rewatchFromSeconds as number) < 0 ||
+      (rewatchFromSeconds as number) > MAX_MARKER_SECONDS ||
+      seen.has(questionNumber as number)
+    ) {
+      continue;
+    }
+    seen.add(questionNumber as number);
+    markers.push({ questionNumber: questionNumber as number, seconds: rewatchFromSeconds as number });
+  }
+  return markers.sort((a, b) => a.questionNumber - b.questionNumber);
 }
 
 export function isBackendLevelContent(value: unknown): value is BackendLevelContent {

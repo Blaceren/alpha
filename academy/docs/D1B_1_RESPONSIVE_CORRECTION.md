@@ -42,7 +42,7 @@ checkpoint preview выглядел случайным блоком внизу. 
 
 ### 5. 320px
 CTA видна; заголовок не обрезан; progress в границах; rank/XP/streak переносятся; Alex прокручивается;
-5 nav items помещаются; touch-таргеты ≥44px; логотип-знак с accessible name `Alfa Trade Academy`;
+5 nav items помещаются; touch-таргеты ≥44px; логотип-знак с accessible name `Alpha Trade Academy`;
 notification и avatar не конфликтуют; нет horizontal overflow.
 
 ### 6. Контраст

@@ -79,7 +79,7 @@ export function availabilityOf(detail: AcademyLevelDetail): AvailabilityClass | 
 export type BoundaryClass = "act" | "revisit" | "waiting" | "none";
 
 export const BOUNDARY_TEXT: Record<BoundaryClass, string> = {
-  act: "Материал закончился. Задание этого уровня живёт на странице уровня.",
+  act: "Материал закончился. Задание этого уровня — на странице уровня.",
   revisit:
     "Материал закончился. Уровень уже завершён — его задание доступно для просмотра на странице уровня.",
   waiting:

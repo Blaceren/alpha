@@ -1,0 +1,60 @@
+/*
+ * «Сеанс завершён» — the session ended while a page was open (2026-10-04,
+ * launch audit). Each screen used to say it its own way («Требуется вход»,
+ * «Сессия закончилась. Войдите снова…», a generic failure), and none of them
+ * offered the way back. One bar now does, for every screen: above the mobile
+ * tab bar, at the foot of the window on a desktop.
+ */
+.session-expired {
+  position: fixed;
+  z-index: 60;
+  inset-inline: 12px;
+  bottom: calc(var(--mobile-bottom-nav-height) + 20px + env(safe-area-inset-bottom));
+  margin-inline: auto;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 16px 16px 16px 20px;
+  color: var(--text-primary);
+  background: var(--hf-light), var(--hf-surface-raised);
+  border: 1px solid var(--hf-line-strong);
+  border-radius: var(--hf-radius-window);
+  box-shadow: var(--hf-shadow);
+}
+@media (min-width: 900px) {
+  .session-expired { bottom: calc(24px + env(safe-area-inset-bottom)); }
+}
+.session-expired__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.session-expired__text {
+  grid-column: 1;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.session-expired__cta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--hf-radius-pill);
+  background: var(--signal-active);
+  color: #06120e;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.session-expired__cta:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+@media (max-width: 599px) {
+  .session-expired { grid-template-columns: 1fr; }
+  .session-expired__cta { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 8px; }
+}

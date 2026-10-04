@@ -1,6 +1,6 @@
-# Alfa Trade Academy — Product Design Brief V1
+# Alpha Trade Academy — Product Design Brief V1
 
-Полный design brief продукта **Alfa Trade Academy (ATA) Web V2** для Claude Code, дизайн-департамента, frontend-команды и product review.
+Полный design brief продукта **Alpha Trade Academy (ATA) Web V2** для Claude Code, дизайн-департамента, frontend-команды и product review.
 
 Статус: **Phase D0 — Source of Truth**. Это канонический документ уровня продукта. Точечные детали вынесены в `docs/*` и являются его частью. Названия и коды curriculum — из `docs/CURRICULUM_AND_UNLOCKS.md` (канонический источник — `les-prog.txt`).
 
@@ -28,7 +28,7 @@
 
 ## 1. Продукт
 
-**Alfa Trade Academy** — последовательная образовательная платформа по трейдингу. Пользователь проходит фиксированный путь из **100 уровней (20 модулей)**: смотрит уроки Alex Curie, проходит тесты, выполняет сценарные и практические задания, заполняет reports, получает mentor review и XP, проходит финансовые контрольные точки (checkpoints), открывает инструменты и community-каналы и вручную строит собственную торговую систему, возвращаясь к ранее открытым материалам.
+**Alpha Trade Academy** — последовательная образовательная платформа по трейдингу. Пользователь проходит фиксированный путь из **100 уровней (20 модулей)**: смотрит уроки Alex Curie, проходит тесты, выполняет сценарные и практические задания, заполняет reports, получает mentor review и XP, проходит финансовые контрольные точки (checkpoints), открывает инструменты и community-каналы и вручную строит собственную торговую систему, возвращаясь к ранее открытым материалам.
 
 **Разделение с Pocket.** Pocket — торговая платформа (брокер): здесь пользователь торгует и видит свои деньги. ATA — система обучения, progression, planning, analysis, discipline и сопровождения. **ATA не является торговым терминалом и не имитирует его.**
 
@@ -223,13 +223,13 @@ current prelanding screenshots; logo; exact palette; brand graphics; Alex Curie 
 
 ## 18. Consistency
 
-Проверено отсутствие противоречий по осям: Alfa Trade Academy vs legacy name; checkpoint target vs hidden balance; learning streak vs login analytics; mentor vs support; public vs in-app news; manual tools vs Pocket integration; ranks vs checkpoints; tools vs curriculum; mobile vs desktop navigation; design system vs prelanding continuity. Результат и чек-лист — `docs/IMPLEMENTATION_STATUS.md` §3.
+Проверено отсутствие противоречий по осям: Alpha Trade Academy vs legacy name; checkpoint target vs hidden balance; learning streak vs login analytics; mentor vs support; public vs in-app news; manual tools vs Pocket integration; ranks vs checkpoints; tools vs curriculum; mobile vs desktop navigation; design system vs prelanding continuity. Результат и чек-лист — `docs/IMPLEMENTATION_STATUS.md` §3.
 
 ### D0.1 — Consistency patch (зафиксированные решения)
 
 - **19 curriculum-инструментов (L10–L100) + 1 referral-gated «Секретный инструмент» = 20 инструментов** в интерфейсе (DD-170).
 - **Mobile bottom nav:** Главная, Путь, Уроки, Инструменты, **Ещё**; профиль — через avatar в top bar; «Ещё» = Сообщество/Новости/Рефералы/Ментор/Поддержка/Профиль/Настройки (DD-171).
-- **Пользовательская терминология — русская**; английский — только code/domain language; «Alfa Trade Academy» не переводится (DD-172, словарь в `docs/CONTENT_AND_TONE.md`).
+- **Пользовательская терминология — русская**; английский — только code/domain language; «Alpha Trade Academy» не переводится (DD-172, словарь в `docs/CONTENT_AND_TONE.md`).
 - **Канонические маршруты — Next.js App Router `[param]`**; `/blog` (public) vs `/news` (in-product); `/referrals`; `/mentor/[conversationId]` (DD-173).
 - **Route groups `(app)` / `(public)`** с разными оболочками; `/blog` без app sidebar (DD-174, DD-177).
 - **Pocket — регистрация, не подключение/привязка**; отдельный instruction flow для «У меня уже есть аккаунт»; нет прямой Pocket-кнопки после registration flow; backend verification не выдумывается (DD-175, DD-176).

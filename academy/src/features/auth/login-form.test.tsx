@@ -164,12 +164,13 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
     // The widget renders its own live region, so the prompt is located through
     // the button's own description rather than by picking one of two statuses.
     const describedBy = button.getAttribute("aria-describedby") as string;
-    expect(document.getElementById(describedBy)).toHaveTextContent(
-      "Пройдите проверку безопасности",
-    );
+    // The check runs by itself: the line says so, and asks for nothing.
+    expect(document.getElementById(describedBy)).toHaveTextContent("Проверяем браузер…");
+    expect(document.body.textContent).not.toContain("Пройдите проверку безопасности");
 
     await turnstile.solve();
     expect(screen.getByRole("button", { name: "Войти" })).toBeEnabled();
+    expect(document.getElementById(describedBy)).toHaveTextContent("Браузер проверен.");
   });
 
   it("sends the token in the exact DTO field and nothing else", async () => {
@@ -355,8 +356,9 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
     const button = screen.getByRole("button", { name: "Войти" });
     const describedBy = button.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy as string)).toHaveTextContent(
-      "Пройдите проверку безопасности",
-    );
+    // One element carries that id, and it is the check's own line.
+    expect(document.querySelectorAll(`[id="${describedBy}"]`)).toHaveLength(1);
+    expect(document.getElementById(describedBy as string)).toHaveTextContent("Проверяем браузер…");
+    expect(document.getElementById(describedBy as string)).toHaveAttribute("role", "status");
   });
 });

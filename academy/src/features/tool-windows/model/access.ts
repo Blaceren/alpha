@@ -64,11 +64,71 @@ export function toolAccessOf(result: CurriculumViewResult): AcademyToolAccess | 
   return view.toolAccess;
 }
 
+/**
+ * Answers that are about the learner — not enrolled, no program published, the
+ * section switched off, no access. Every other failed read is the Backend's
+ * trouble.
+ */
+const ANSWERS_ABOUT_THE_LEARNER: ReadonlySet<string> = new Set([
+  "NOT_ENROLLED",
+  "NO_ACTIVE_CURRICULUM",
+  "FEATURE_DISABLED",
+  "FORBIDDEN",
+  "UNAUTHENTICATED",
+]);
+
+/**
+ * The read FAILED, as opposed to answering (2026-10-04, launch audit).
+ *
+ * A failed read still locks every tool — nothing is opened on a guess — but it
+ * no longer SAYS «Закрыто · откроется после уровня 10/15/20…» with the
+ * catalogue's old levels, as if the learner had fallen behind. The hub and the
+ * tool page say the tools could not be loaded and offer a retry.
+ */
+export function toolReadFailed(result: CurriculumViewResult): boolean {
+  if (result.ok) return false;
+  return !ANSWERS_ABOUT_THE_LEARNER.has(String(result.error?.category));
+}
+
 /** The title of the level that releases a tool, for the locked page's sentence. */
 export function levelTitleOf(view: AcademyCurriculumView, levelNumber: number): string | null {
   if (view.state === "unavailable") return null;
   const level = view.modules.flatMap((module) => module.levels).find((candidate) => candidate.order === levelNumber);
   return level?.title ?? null;
+}
+
+/**
+ * The level whose completion releases a tool, as the learner's own program
+ * has it — for the locked page's sentence, never for a decision.
+ *
+ * `kind` is what that level IS in this program: a checkpoint, an ordinary
+ * lesson, or another kind of level (a report, a practical one). It is `unknown`
+ * when the view does not say, and the caller then falls back to what the
+ * catalogue remembers. The 100-level program releases five of the six tools at
+ * checkpoints; the 30-level program has no checkpoint levels and releases them
+ * after a lesson, a report and a practice — which is why the sentence can no
+ * longer be read off the catalogue.
+ */
+export type ReleasingLevel = {
+  readonly title: string | null;
+  readonly kind: "checkpoint" | "lesson" | "level" | "unknown";
+  /** The level is defined and not open yet, so the tool cannot be earned today. */
+  readonly inProduction: boolean;
+};
+
+export function releasingLevelOf(view: AcademyCurriculumView, levelNumber: number): ReleasingLevel | null {
+  if (view.state !== "enrolled" && view.state !== "completed") return null;
+  const level = view.modules.flatMap((module) => module.levels).find((candidate) => candidate.order === levelNumber);
+  if (!level) return null;
+  const typeInfo = (level as { typeInfo?: { isCheckpoint?: unknown; type?: unknown } }).typeInfo;
+  const kind: ReleasingLevel["kind"] = !typeInfo
+    ? "unknown"
+    : typeInfo.isCheckpoint === true
+      ? "checkpoint"
+      : level.kind === "lesson" || (level.kind == null && typeInfo.type === "lesson")
+        ? "lesson"
+        : "level";
+  return { title: level.title ?? null, kind, inProduction: level.inProduction === true };
 }
 
 /**

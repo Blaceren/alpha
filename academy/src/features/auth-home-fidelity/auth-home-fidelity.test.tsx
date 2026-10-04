@@ -78,7 +78,7 @@ describe("Home — the posture is the canonical decision, translated once", () =
     const expected: Record<string, string> = {
       "wait-mentor-review": "наставник",
       "wait-report-review": "проверяющий",
-      "wait-registration": "внешний партнёр",
+      "wait-registration": "Pocket",
       "wait-checkpoint": "система проверки",
       "continue-next-level": "последовательность программы",
     };
@@ -111,6 +111,47 @@ describe("Home — the posture is the canonical decision, translated once", () =
     expect(field.posture).toBe("NONE");
     expect(field.consequence).toBe("Программа пройдена");
     expect("control" in field).toBe(false);
+  });
+
+  /* 2026-10-02 — the 30-level program is published with its tail in production. */
+  it("when every open level is finished, nothing is required and nothing is offered — and it is not «программа пройдена»", () => {
+    const field = fieldForAction(
+      action({
+        kind: "open-levels-complete",
+        posture: "done",
+        title: "Открытые уровни пройдены",
+        explanation: "Вы прошли все открытые уровни программы — 14 из 30. Следующие уровни готовятся и откроются позже.",
+        ctaLabel: "Открыть путь",
+        href: "/path",
+        level: null,
+      }),
+    );
+    expect(field.posture).toBe("NONE");
+    expect(field.stateKey).toBe("OPEN_LEVELS_COMPLETE");
+    expect(field.consequence).toBe("Открытые уровни пройдены");
+    expect(field.consequence).not.toBe("Программа пройдена");
+    expect("control" in field).toBe(false);
+    expect("authority" in field).toBe(false);
+    // The unopened lesson is not named as the work in front of the learner.
+    expect("workIdentity" in field).toBe(false);
+  });
+
+  it("a lesson without a test and a report nobody reviews are both ACTION, with their own words", () => {
+    const lesson = fieldForAction(
+      action({ kind: "start-lesson", title: "Пройдите урок", explanation: "В этом уроке нет проверки знаний." }),
+    );
+    expect(lesson.posture).toBe("ACTION");
+    expect(lesson.consequence).toBe("Пройдите урок");
+    const report = fieldForAction(
+      action({
+        kind: "submit-report",
+        title: "Заполните и отправьте отчёт",
+        explanation: "Отчёт проверяется автоматически, без наставника.",
+        ctaLabel: "Открыть отчёт",
+      }),
+    );
+    expect(report.posture).toBe("ACTION");
+    if (report.posture === "ACTION") expect(report.control.label).toBe("Открыть отчёт");
   });
 
   it("offers a retry only where the source classified the failure as recoverable", () => {
@@ -218,9 +259,12 @@ describe("Home — the frozen field", () => {
 
   it("names the work only where naming it makes the consequence intelligible", () => {
     const withWork = render(<AuthHomeField field={fieldForAction(action({}))} />);
+    /* With its number since 2026-10-03: on the filled Home the priority hangs
+       from a point on the program line, and «Уровень 7» is what ties the two. */
     expect(withWork.container.querySelector(".home-subject")!.textContent).toBe(
-      "Поддержка и сопротивление",
+      "Уровень 7Поддержка и сопротивление",
     );
+    expect(withWork.container.querySelector(".home-subject__order")!.textContent).toBe("Уровень 7");
     withWork.unmount();
     const withoutWork = render(<AuthHomeField field={FIELD_NO_CURRICULUM} />);
     expect(withoutWork.container.querySelector(".home-subject")).toBeNull();
@@ -320,7 +364,15 @@ describe("Home — PAGE_FAILURE is not UNKNOWN", () => {
 
 /* --------------------------------------------------- what Home may not say */
 
-describe("Home — what the surface never contains", () => {
+/* 2026-10-03 — HOME IS FILLED (owner: «наполни внутреннюю главную, после сделай
+   ее хай фай»; DD-337). The page around the field now greets the learner, draws
+   the program line, the module, the tools and «Что нового» — in their own files
+   (home-overview*.tsx, home-program-line.tsx, home-news.tsx), held by
+   home-overview.test.tsx. What follows still holds for the FIELD, the block that
+   carries the one current priority: it says nothing about the learner but that
+   priority. Amounts stay out of the whole page — home-overview.test.tsx holds
+   that for the new files. */
+describe("Home — what the priority field never contains", () => {
   const sources = [
     codeOnly(SRC("auth-home-field.tsx")),
     codeOnly(SRC("auth-home-state.ts")),

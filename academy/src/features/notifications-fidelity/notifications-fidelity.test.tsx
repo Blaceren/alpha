@@ -14,6 +14,13 @@ import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NotificationsFidelity } from "@/features/notifications-fidelity/notifications-fidelity";
+import { markAllNotificationsRead } from "@/lib/api/client";
+
+const refresh = vi.fn();
+// One router object for the whole run, as Next's own is stable across renders.
+const router = { refresh };
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/lib/api/client", () => ({ markAllNotificationsRead: vi.fn(async () => ({ ok: true, data: {}, requestId: null })) }));
 import {
   COPY,
   consequenceOf,
@@ -46,6 +53,22 @@ const ENUM: NotificationTypeName[] = [
   "referral_bonus",
   "system",
 ];
+
+/**
+ * The broker's own events (2026-10-04, launch audit): every Pocket postback and
+ * every «биржевой аккаунт» change, in the postback's or the provider's words —
+ * on PREPROD «Получен exchange postback: first_deposit.». Never shown to a
+ * learner (`learner-facing.ts`); the level shows what they change.
+ */
+const BROKER: NotificationTypeName[] = [
+  "postback_received",
+  "exchange_connected",
+  "exchange_rejected",
+  "exchange_blocked",
+];
+
+/** What a learner can be shown: the deployed enum without the broker's events. */
+const SHOWN = ENUM.filter((type) => !BROKER.includes(type));
 
 /**
  * Withheld from the learner product today, and therefore dropped from the
@@ -87,6 +110,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/* ------------------------------------------- seen means read (2026-10-04) */
+
+describe("Notifications — the list once seen is read", () => {
+  it("marks every unread row read once the list has rendered, and refreshes the shell's mark", async () => {
+    vi.mocked(markAllNotificationsRead).mockClear();
+    refresh.mockClear();
+    vi.stubGlobal("fetch", respondWith({ items: [row({ id: 1 })] }));
+    render(<NotificationsFidelity />);
+    await waitFor(() => expect(markAllNotificationsRead).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("writes nothing when nothing is unread", async () => {
+    vi.mocked(markAllNotificationsRead).mockClear();
+    vi.stubGlobal("fetch", respondWith({ items: [row({ id: 2, readAt: "2026-10-01T10:00:00.000Z" })] }));
+    render(<NotificationsFidelity />);
+    await screen.findByRole("list", { name: COPY.registerLabel });
+    expect(markAllNotificationsRead).not.toHaveBeenCalled();
+  });
+});
+
 /* ---------------------------------------------------------- semantic layer */
 
 describe("Notifications — the semantic mapping", () => {
@@ -115,20 +159,31 @@ describe("Notifications — the semantic mapping", () => {
   });
 
   it("keeps actionability unknown for every row, because nothing can confirm it", () => {
-    for (const type of ENUM) {
+    for (const type of SHOWN) {
       const record = toRecord(row({ type }), NOW);
       expect(record?.actionability, type).toBe("ACTION_UNKNOWN");
     }
   });
 
-  it("offers no destination at all while the only labelled types are withheld", () => {
-    /* A handoff needs BOTH a resolvable href and an approved label, and the two
-       Community events are the only types that have ever carried a label. With
-       the section withheld, every row a learner can see is correctly
-       destination-less — including one that carries a perfectly good link. */
-    for (const type of ENUM) {
+  it("offers a destination only where the product has one: a support reply leads to the desk", () => {
+    /* A handoff needs BOTH a resolvable href and an approved label. The two
+       Community events carry a label but their section is withheld; since
+       2026-10-04 (launch audit) a support reply leads to the support desk,
+       whatever link the row carries. Every other row stays destination-less —
+       including one that carries a perfectly good link. */
+    for (const type of SHOWN) {
       const rec = toRecord(row({ type, link: "/support" }), NOW);
       expect(rec, type).not.toBeNull();
+      if (type === "support_reply") {
+        expect(rec?.destination, type).toBe("AVAILABLE");
+        expect(rec?.handoff, type).toEqual({ label: "Открыть обращения", href: "/profile/support" });
+        continue;
+      }
+      if (type === "level_up") {
+        // A level completed without the learner (Pocket confirming level 3) leads on.
+        expect(rec?.handoff, type).toEqual({ label: "Продолжить путь", href: "/home" });
+        continue;
+      }
       expect(rec?.destination, type).toBe("NO_DESTINATION_NEEDED");
       expect(rec?.handoff, type).toBeNull();
     }
@@ -140,11 +195,29 @@ describe("Notifications — the semantic mapping", () => {
     }
   });
 
+  it("leads a support reply to its own case when the row names one (2026-10-04)", () => {
+    const rec = toRecord(row({ type: "support_reply", metadata: { learnerOpsCaseId: "cmcase0001", reference: "LO-000001" } }), NOW);
+    expect(rec?.handoff).toEqual({ label: "Открыть обращение", href: "/profile/support?case=cmcase0001" });
+    const odd = toRecord(row({ type: "support_reply", metadata: { learnerOpsCaseId: "../x" } }), NOW);
+    expect(odd?.handoff).toEqual({ label: "Открыть обращения", href: "/profile/support" });
+  });
+
   it("refuses a destination the payload cannot support", () => {
     for (const raw of ["not-a-path", "//evil.example", ""]) {
       const bad = toRecord(row({ type: "system", link: raw }), NOW);
       expect(bad?.handoff, raw).toBeNull();
       expect(bad?.destination, raw).toBe("NO_DESTINATION_NEEDED");
+    }
+  });
+
+  it("never shows the broker's own events — a deposit in raw postback words", () => {
+    expect(SHOWN).toHaveLength(ENUM.length - BROKER.length);
+    for (const type of BROKER) {
+      const rec = toRecord(
+        row({ type, title: "Получено событие биржи", message: "Получен exchange postback: first_deposit." }),
+        NOW,
+      );
+      expect(rec, type).toBeNull();
     }
   });
 
@@ -262,7 +335,7 @@ describe("Notifications — the frozen composition", () => {
       respondWith({ items: ENUM.map((type, i) => row({ id: i, type })) }),
     );
     const { container } = render(<NotificationsFidelity />);
-    await waitFor(() => expect(container.querySelectorAll(".n-record").length).toBe(ENUM.length));
+    await waitFor(() => expect(container.querySelectorAll(".n-record").length).toBe(SHOWN.length));
     expect(container.querySelectorAll(".n-mark--action")).toHaveLength(0);
     expect(container.querySelectorAll(".n-presence")).toHaveLength(0);
     for (const record of Array.from(container.querySelectorAll(".n-record"))) {

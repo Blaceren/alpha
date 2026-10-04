@@ -5,10 +5,12 @@
  * (`backend/src/lib/tools/journal.ts`) so the learner hears about a mistake
  * while typing; the Backend re-checks everything and its answer wins.
  *
- * Two sources: a Trade Card saved after the journal opened (its trade is the
- * card's and is not edited here), or a trade recorded by hand. The review —
- * plan followed or not, which rules broke, how it went, what to take from it —
- * is always the learner's.
+ * Two sources: a Trade Card saved after the journal opened, or a trade recorded
+ * by hand. Either way the entry is the learner's own record: every field of it
+ * can be corrected and the entry can be deleted (owner, 2026-10-01). Neither
+ * touches the Trade Card an entry came from — the card stays what it was when
+ * it was saved, and the entry says so once the two no longer agree
+ * (`editedAfterCard`).
  */
 import {
   TRADE_CARD_LIMITS,
@@ -20,6 +22,7 @@ import {
   type TradeResult,
 } from "../trade-card/trade-card-model";
 import { localDate } from "../model/local-date";
+import { PAYOUT_MESSAGE, parsePayoutPercent } from "../model/numeric-input";
 
 export { localDate };
 
@@ -60,6 +63,11 @@ export type JournalEntry = {
   readonly conclusion: string | null;
   readonly planFollowed: boolean | null;
   readonly violations: readonly string[];
+  /**
+   * An entry made from a Trade Card whose trade no longer says what the card
+   * says, because the learner corrected it here. Absent means «no».
+   */
+  readonly editedAfterCard?: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -115,7 +123,7 @@ export type ReviewInput = {
   conclusion: string | null;
 };
 
-/** What the Backend accepts as a hand-recorded entry. */
+/** What the Backend accepts as a whole entry: a new one recorded by hand, or any entry corrected. */
 export type ManualInput = ReviewInput & {
   tradeDate: string;
   entryTime: string;
@@ -281,7 +289,7 @@ const MESSAGES: Record<ManualField, string> = {
   asset: "Выберите актив из списка.",
   direction: "Выберите направление: выше или ниже.",
   amount: "Сумма — число больше нуля, до двух знаков после точки.",
-  payoutPercent: "Payout — целое число от 1 до 100.",
+  payoutPercent: PAYOUT_MESSAGE,
   expiry: "Выберите экспирацию.",
   result: "Отметьте результат: прибыль или убыток.",
   plan: `План — не длиннее ${JOURNAL_LIMITS.maxPlanLength} символов.`,
@@ -319,12 +327,8 @@ export function validateReview(
   };
 }
 
-function parsePayout(raw: string): number | null {
-  const trimmed = raw.trim().replace("%", "").trim();
-  if (!/^\d{1,3}$/.test(trimmed)) return null;
-  const value = Number(trimmed);
-  return value >= 1 && value <= 100 ? value : null;
-}
+/** A whole percent inside the tools' payout limits (`numeric-input.ts`), or null. */
+const parsePayout = parsePayoutPercent;
 
 /** A hand-recorded trade as the Backend accepts it. Every field checked at once. */
 export function validateManual(
@@ -414,6 +418,36 @@ export function placeEntry(entries: readonly JournalEntry[], entry: JournalEntry
   const last = rest[rest.length - 1];
   if (hasMore && last && compareEntries(entry, last) > 0) return rest;
   return [...rest, entry].sort(compareEntries);
+}
+
+/**
+ * The loaded list without a deleted entry, and where «Показать ещё» continues
+ * from.
+ *
+ * THE CURSOR IS AN ENTRY. The Backend pages from one of the learner's own
+ * entries and refuses an id it cannot find, so a cursor must never outlive its
+ * entry: when the deleted entry was the cursor, the last line still on screen
+ * takes over — it is where the next page starts now. `reread` says the lines on
+ * screen are gone while more remain on the Backend: there is nothing to
+ * continue from, and the list has to be read again.
+ */
+export function removeEntry(
+  entries: readonly JournalEntry[],
+  entryId: string,
+  nextCursor: string | null,
+): { entries: JournalEntry[]; nextCursor: string | null; reread: boolean } {
+  const rest = entries.filter((entry) => entry.id !== entryId);
+  if (nextCursor === null) return { entries: rest, nextCursor: null, reread: false };
+  const last = rest[rest.length - 1];
+  if (!last) return { entries: rest, nextCursor: null, reread: true };
+  return { entries: rest, nextCursor: nextCursor === entryId ? last.id : nextCursor, reread: false };
+}
+
+/** The line that takes a deleted entry's place: the next one, or the one before it. */
+export function neighbourOf(entries: readonly JournalEntry[], entryId: string): JournalEntry | null {
+  const index = entries.findIndex((entry) => entry.id === entryId);
+  if (index < 0) return null;
+  return entries[index + 1] ?? entries[index - 1] ?? null;
 }
 
 export function matchesFilter(entry: JournalEntry, filter: JournalFilter): boolean {

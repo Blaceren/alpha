@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TurnstileWidget } from "@/features/auth/turnstile-widget";
 import {
   TURNSTILE_ORIGIN,
@@ -125,6 +126,22 @@ describe("TurnstileWidget — render options", () => {
     const options = turnstile.latest();
     expect(options.sitekey).toBe(TEST_SITE_KEY);
     expect(options.action).toBe(TURNSTILE_REGISTER_ACTION);
+  });
+
+  it("asks Cloudflare to draw its box only when the visitor has to do something, in the page's one theme", async () => {
+    render(
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={0} />,
+    );
+
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    const options = turnstile.latest();
+    // Owner, 2026-10-02: the box stood in the form on every visit, and white
+    // on a system set to light — on a page that is dark-only.
+    expect(options.appearance).toBe("interaction-only");
+    expect(options.theme).toBe("dark");
+    expect(options.size).toBe("flexible");
+    expect(typeof options["before-interactive-callback"]).toBe("function");
+    expect(typeof options["after-interactive-callback"]).toBe("function");
   });
 
   it("wires every token-destroying callback, not only success", async () => {
@@ -318,7 +335,7 @@ describe("TurnstileWidget — the action is caller-owned (AFD-3A3)", () => {
  * say which was which. These cases pin the difference.
  */
 describe("TurnstileWidget — a failed challenge is legible", () => {
-  const FAILURE_TEXT = "Проверка безопасности не выполнена. Попробуйте ещё раз.";
+  const FAILURE_TEXT = "Проверка безопасности не выполнена.";
 
   async function mounted(props: Partial<{ onToken: () => void; onTokenLost: () => void }> = {}) {
     const view = render(
@@ -434,3 +451,201 @@ describe("TurnstileWidget — a failed challenge is legible", () => {
     expect(onTokenLost).toHaveBeenCalledWith("error");
   });
 });
+
+/**
+ * THE CHECK'S ONE LINE (owner, 2026-10-02).
+ *
+ * Cloudflare's box is no longer in the form unless it has something to ask. In
+ * its place stands one line, and these cases pin what it says in each state —
+ * and that it never says two things at once.
+ */
+describe("TurnstileWidget — the line that stands where the box was", () => {
+  async function mounted(resetSignal = 0) {
+    const view = render(
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={resetSignal} />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    return view;
+  }
+  const line = () => screen.getByRole("status");
+  const root = () => screen.getByTestId("turnstile-widget");
+  const frame = () => screen.getByTestId("turnstile-container").parentElement as HTMLElement;
+
+  it("says the check is running, and gives the box no room", async () => {
+    await mounted();
+    expect(line()).toHaveTextContent("Проверяем браузер…");
+    expect(root()).toHaveAttribute("data-phase", "checking");
+    expect(frame()).not.toHaveAttribute("data-shown");
+  });
+
+  it("says the check has passed once a token arrives", async () => {
+    await mounted();
+    await turnstile.solve();
+    expect(line()).toHaveTextContent("Браузер проверен.");
+    expect(root()).toHaveAttribute("data-phase", "passed");
+    expect(frame()).not.toHaveAttribute("data-shown");
+  });
+
+  it("opens the frame, and says what to do, only when Cloudflare asks for a press", async () => {
+    await mounted();
+    await turnstile.askForPress();
+    expect(line()).toHaveTextContent("Нужно подтверждение: отметьте поле ниже.");
+    expect(root()).toHaveAttribute("data-phase", "interactive");
+    expect(frame()).toHaveAttribute("data-shown");
+
+    // Solved by that press: the line says so, and the box — Cloudflare's own
+    // «Успешно» is in it now — is not pulled from under the visitor's pointer.
+    await turnstile.solve();
+    expect(line()).toHaveTextContent("Браузер проверен.");
+    expect(root()).toHaveAttribute("data-phase", "passed");
+    expect(frame()).toHaveAttribute("data-shown");
+  });
+
+  it("keeps the frame open for that check when Cloudflare stops asking without a token", async () => {
+    await mounted();
+    await turnstile.askForPress();
+    await turnstile.stopAsking();
+    // The line no longer asks for a press; the box, with whatever Cloudflare shows in it, stays.
+    expect(line()).toHaveTextContent("Проверяем браузер…");
+    expect(frame()).toHaveAttribute("data-shown");
+  });
+
+  it("starts a renewed check with the frame closed, even after a press", async () => {
+    const view = await mounted();
+    await turnstile.askForPress();
+    await turnstile.solve();
+    expect(frame()).toHaveAttribute("data-shown");
+    view.rerender(
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={1} />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(2));
+    expect(line()).toHaveTextContent("Проверяем браузер…");
+    expect(frame()).not.toHaveAttribute("data-shown");
+  });
+
+  it("closes the frame over a failed check, and opens it again if Turnstile's own retry asks for a press", async () => {
+    await mounted();
+    await turnstile.askForPress();
+    await turnstile.fail("network-error");
+    // One voice: the message, with its way back. Not Cloudflare's box as well.
+    expect(root()).toHaveAttribute("data-phase", "failed");
+    expect(screen.getByTestId("turnstile-challenge-failed")).toBeInTheDocument();
+    expect(frame()).not.toHaveAttribute("data-shown");
+
+    // Turnstile retries by itself, and this time asks for a press: the check is
+    // alive again, so the failure is withdrawn and the box is shown.
+    await turnstile.askForPress();
+    expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument();
+    expect(root()).toHaveAttribute("data-phase", "interactive");
+    expect(line()).toHaveTextContent("Нужно подтверждение: отметьте поле ниже.");
+    expect(frame()).toHaveAttribute("data-shown");
+  });
+
+  it("never takes Cloudflare's container out of the page: it is rendered in every state", async () => {
+    await mounted();
+    const container = () => screen.getByTestId("turnstile-container");
+    // Checking, passed, asked for a press, failed: the element Turnstile was
+    // rendered into is the same one, still in the document, never swapped out.
+    const first = container();
+    await turnstile.solve();
+    expect(container()).toBe(first);
+    await turnstile.askForPress();
+    expect(container()).toBe(first);
+    await turnstile.fail("network-error");
+    expect(container()).toBe(first);
+    expect(first.isConnected).toBe(true);
+    expect(turnstile.removed).toEqual([]);
+  });
+
+  it("goes back to checking when a solved token lapses, instead of still claiming a pass", async () => {
+    await mounted();
+    await turnstile.solve();
+    await turnstile.expire();
+    expect(line()).toHaveTextContent("Проверяем браузер…");
+    expect(root()).toHaveAttribute("data-phase", "checking");
+  });
+
+  it("starts a renewed challenge from «checking», whatever the last one came to", async () => {
+    const view = await mounted();
+    await turnstile.solve();
+    expect(line()).toHaveTextContent("Браузер проверен.");
+    view.rerender(
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={vi.fn()} onTokenLost={vi.fn()} resetSignal={1} />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(2));
+    expect(line()).toHaveTextContent("Проверяем браузер…");
+    expect(frame()).not.toHaveAttribute("data-shown");
+  });
+
+  it("is the element a form's button is described by", async () => {
+    render(
+      <TurnstileWidget
+        siteKey={TEST_SITE_KEY}
+        action={WIDGET_ACTION}
+        onToken={vi.fn()}
+        onTokenLost={vi.fn()}
+        resetSignal={0}
+        describedById="why-not-yet"
+      />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    expect(line()).toHaveAttribute("id", "why-not-yet");
+    expect(document.querySelectorAll("#why-not-yet")).toHaveLength(1);
+  });
+});
+
+describe("TurnstileWidget — the visitor's own way back from a failed check", () => {
+  async function failed() {
+    const onToken = vi.fn();
+    const onTokenLost = vi.fn();
+    const view = render(
+      <TurnstileWidget siteKey={TEST_SITE_KEY} action={WIDGET_ACTION} onToken={onToken} onTokenLost={onTokenLost} resetSignal={0} />,
+    );
+    await waitFor(() => expect(turnstile.renders).toHaveLength(1));
+    await turnstile.fail("network-error");
+    return { view, onToken, onTokenLost };
+  }
+
+  it("offers «Повторить проверку» with the failure, because Cloudflare's box is not on the page to press", async () => {
+    await failed();
+    const alert = screen.getByTestId("turnstile-challenge-failed");
+    expect(alert).toHaveTextContent("Проверка безопасности не выполнена.");
+    // The sentence no longer tells the visitor to «try again» with nothing to try: the button does.
+    expect(alert).not.toHaveTextContent("Попробуйте ещё раз");
+    const retry = screen.getByRole("button", { name: "Повторить проверку" });
+    expect(alert).toContainElement(retry);
+    // Never a submit: a press must not post the form it stands in.
+    expect(retry).toHaveAttribute("type", "button");
+  });
+
+  it("issues a brand-new challenge on a press, and takes the failure away", async () => {
+    const { onToken } = await failed();
+    await userEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
+
+    await waitFor(() => expect(turnstile.renders).toHaveLength(2));
+    // The failed instance is torn down: exactly one challenge is on the page.
+    expect(turnstile.removed).toEqual(["widget-1"]);
+    expect(turnstile.liveWidgets()).toEqual(["widget-2"]);
+    expect(screen.queryByTestId("turnstile-challenge-failed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Проверяем браузер…");
+    // The keyboard is not sent back to the top of the page with the button gone.
+    expect(screen.getByRole("status")).toHaveFocus();
+
+    await turnstile.solve();
+    expect(onToken).toHaveBeenCalledWith(DUMMY_TOKEN);
+    expect(screen.getByRole("status")).toHaveTextContent("Браузер проверен.");
+  });
+
+  it("can fail and be retried again", async () => {
+    await failed();
+    await userEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
+    await waitFor(() => expect(turnstile.renders).toHaveLength(2));
+    await turnstile.fail("network-error");
+    expect(await screen.findByTestId("turnstile-challenge-failed")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
+    await waitFor(() => expect(turnstile.renders).toHaveLength(3));
+    expect(turnstile.liveWidgets()).toEqual(["widget-3"]);
+  });
+});
+

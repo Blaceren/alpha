@@ -54,6 +54,8 @@ export type ReportState = {
   fieldErrors: ReportFieldError[];
   /** True after a submit attempt with client errors (drives VALIDATION_ERROR). */
   showErrors: boolean;
+  /** The Backend itself refused the submitted report as incomplete. */
+  serverRefusal: boolean;
   error: NormalizedError | null;
   /** Idempotency key of the in-flight write (double-submit guard). */
   inFlight: string | null;
@@ -88,6 +90,7 @@ export function initialState(): ReportState {
     lastSavedAt: null,
     fieldErrors: [],
     showErrors: false,
+    serverRefusal: false,
     error: null,
     inFlight: null,
     completion: null,
@@ -159,7 +162,15 @@ export function reducer(state: ReportState, action: ReportAction): ReportState {
       if (!state.editing) return state;
       if (!state.model?.byKey.has(action.stableKey)) return state;
       const values = { ...state.values, [action.stableKey]: action.value };
-      return { ...state, values, dirty: true, status: "DRAFT_DIRTY", showErrors: false, error: null };
+      return {
+        ...state,
+        values,
+        dirty: true,
+        status: "DRAFT_DIRTY",
+        showErrors: false,
+        serverRefusal: false,
+        error: null,
+      };
     }
 
     case "begin_correction": {
@@ -211,7 +222,7 @@ export function reducer(state: ReportState, action: ReportAction): ReportState {
       if (!state.editing || state.inFlight || !state.model) return state; // double-submit guard
       const errors = validateReport(state.model, state.values);
       if (errors.length > 0) {
-        return { ...state, status: "VALIDATION_ERROR", fieldErrors: errors, showErrors: true };
+        return { ...state, status: "VALIDATION_ERROR", fieldErrors: errors, showErrors: true, serverRefusal: false };
       }
       return {
         ...state,
@@ -224,11 +235,23 @@ export function reducer(state: ReportState, action: ReportAction): ReportState {
 
     case "submit_ok": {
       const submission = action.result.submission;
+      /* WHAT THE BACKEND SAID HAPPENED, not what a submit usually means. A
+         report a person reviews comes back `pending_review`. A report the
+         platform accepts by itself comes back ALREADY `approved` — the
+         submission was the acceptance — and calling that «ожидает проверки»
+         would leave a finished level looking like a waiting one until the
+         learner reloaded the page. */
+      const accepted = submission.status === "approved";
       return {
         ...state,
-        context: state.context ? { ...state.context, submission } : state.context,
+        context: state.context
+          ? { ...state.context, kind: accepted ? "approved" : "pending_review", submission }
+          : state.context,
         expectedRevision: action.result.resultingWorkflowVersion,
-        status: "PENDING_REVIEW",
+        status: accepted ? "APPROVED" : "PENDING_REVIEW",
+        completion: accepted
+          ? { levelNumber: state.context?.level.levelNumber ?? null, nextLevelNumber: null }
+          : state.completion,
         editing: false,
         correcting: false,
         dirty: false,
@@ -237,8 +260,25 @@ export function reducer(state: ReportState, action: ReportAction): ReportState {
       };
     }
 
-    case "submit_err":
+    case "submit_err": {
+      /* THE SERVER LOOKED AT THE REPORT AND FOUND IT INCOMPLETE. The client
+         checks the same rules first, so this is rare — and when it happens it
+         is not an outage. The form stays on the screen with the draft the
+         learner wrote, and says the report was not accepted, instead of being
+         replaced by «не удалось загрузить отчёт». */
+      if (action.error.code === "REPORT_DRAFT_INPUT_INVALID" && state.editing) {
+        return {
+          ...state,
+          status: "VALIDATION_ERROR",
+          fieldErrors: [],
+          showErrors: true,
+          serverRefusal: true,
+          error: action.error,
+          inFlight: null,
+        };
+      }
       return { ...state, status: statusForError(action.error), error: action.error, inFlight: null };
+    }
 
     default:
       return state;

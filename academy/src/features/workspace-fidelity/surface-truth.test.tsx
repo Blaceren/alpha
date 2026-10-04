@@ -135,7 +135,7 @@ describe("F-2 · workspace no longer contradicts itself", () => {
 
 describe("F-9 · the profile does not point at a hidden section", () => {
   it("no longer mentions Community", () => {
-    expect(PROFILE_COPY.consequence).toBe("Это имя отображается в вашем профиле ATA.");
+    expect(PROFILE_COPY.consequence).toBe("Это имя отображается в вашем профиле.");
     expect(PROFILE_COPY.consequence).not.toContain("Сообществ");
   });
 

@@ -9,6 +9,12 @@
  * authenticated nav item pointing there would take a signed-in learner OUT of
  * the Academy. Both the desktop bar and the mobile bottom bar read this one
  * list, so they cannot disagree about it.
+ *
+ * SUPPORT IS NOT A SECTION OF THE BAR (owner, 2026-10-03: «что бы написать в
+ * поддержку можно было только из профиля, не по ссылке из хеда»). It lives in
+ * the profile, at `/profile/support`, as one of the profile's own parts, so
+ * neither list below carries it. `/support` still answers and sends a learner
+ * there.
  */
 
 export interface NavItem {
@@ -28,7 +34,6 @@ export const PRIMARY_NAV: NavItem[] = [
   { id: "news", label: "Новости", href: "/news", iconKey: "news" },
   { id: "referrals", label: "Рефералы", href: "/referrals", iconKey: "referrals" },
   { id: "mentor", label: "Ментор", href: "/mentor", iconKey: "mentor" },
-  { id: "support", label: "Поддержка", href: "/support", iconKey: "support" },
 ];
 
 /** Mobile bottom navigation: 5 items, last is "Ещё". */
@@ -46,7 +51,6 @@ export const MORE_MENU: NavItem[] = [
   { id: "news", label: "Новости", href: "/news", iconKey: "news" },
   { id: "referrals", label: "Рефералы", href: "/referrals", iconKey: "referrals" },
   { id: "mentor", label: "Ментор", href: "/mentor", iconKey: "mentor" },
-  { id: "support", label: "Поддержка", href: "/support", iconKey: "support" },
   { id: "profile", label: "Профиль", href: "/profile", iconKey: "profile" },
   { id: "settings", label: "Настройки", href: "/settings", iconKey: "settings" },
 ];

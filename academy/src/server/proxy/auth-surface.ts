@@ -43,6 +43,6 @@ export const BACKEND_AUTH_SURFACE_HEADER = "x-ata-auth-surface";
  * whose authority is `src/lib/captcha/surface.ts` in the Backend repository —
  * the two lists must agree exactly, and a value absent there is refused there.
  */
-export const BACKEND_AUTH_SURFACES = ["academy_register", "academy_login"] as const;
+export const BACKEND_AUTH_SURFACES = ["academy_register", "academy_login", "academy_password_reset"] as const;
 
 export type BackendAuthSurface = (typeof BACKEND_AUTH_SURFACES)[number];

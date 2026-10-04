@@ -165,14 +165,14 @@ describe("Personal Stats — periods and states", () => {
     fetchStats.mockResolvedValue(failure(null, "NETWORK_ERROR"));
     render(<StatsWorkspace initialStats={stats()} />);
     await user.click(screen.getByRole("button", { name: "30 дней" }));
-    expect(await screen.findByText("Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
+    expect(await screen.findByText("Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.")).toBeInTheDocument();
     expect(figure("Сделок")).toHaveTextContent("38");
   });
 
   it("reads from the browser when the server could not, and says when the tool is closed", async () => {
     fetchStats.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<StatsWorkspace />);
-    expect(await screen.findByText("Personal Stats открывается после контрольной точки уровня 25.")).toBeInTheDocument();
+    expect(await screen.findByText("Personal Stats пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(fetchStats).toHaveBeenCalledWith("all", null);
   });
 });

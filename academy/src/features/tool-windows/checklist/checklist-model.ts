@@ -16,6 +16,7 @@
  * Nothing is ticked for the learner, and nothing is read from Pocket.
  */
 import { localDateTime } from "../model/local-date";
+import { PAYOUT_LIMITS, parsePayoutPercent } from "../model/numeric-input";
 
 /* ------------------------------------------------------------------ types */
 
@@ -146,16 +147,16 @@ export function emptyChecklistDraft(state: Pick<ChecklistState, "checklist" | "l
 
 /** The minimum as a number: null when empty, undefined when it is not a valid one. */
 export function parseMinPayout(raw: string): number | null | undefined {
-  const trimmed = raw.trim().replace("%", "").trim();
-  if (trimmed === "") return null;
-  if (!/^\d{1,3}$/.test(trimmed)) return undefined;
-  const value = Number(trimmed);
-  return value >= 1 && value <= 100 ? value : undefined;
+  if (raw.trim() === "") return null;
+  return parsePayoutPercent(raw) ?? undefined;
 }
+
+/** The learner's own minimum is a payout like any other — the same range — and may be left empty. */
+export const MIN_PAYOUT_MESSAGE = `Минимум payout — целое число от ${PAYOUT_LIMITS.min} до ${PAYOUT_LIMITS.max}, или оставьте поле пустым.`;
 
 const MESSAGES: Record<ChecklistField, string> = {
   asset: "Выберите актив, для которого проверка.",
-  minPayoutPercent: "Минимум payout — целое число от 1 до 100, или оставьте поле пустым.",
+  minPayoutPercent: MIN_PAYOUT_MESSAGE,
 };
 
 export function checklistFieldMessage(field: ChecklistField): string {

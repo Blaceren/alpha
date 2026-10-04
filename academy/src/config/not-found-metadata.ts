@@ -20,6 +20,6 @@ import type { Metadata } from "next";
  * did not previously state at all — those pages fell back to the layout title.
  */
 export const NOT_FOUND_METADATA: Metadata = {
-  title: "Страница не найдена — Alfa Trade Academy",
+  title: "Страница не найдена — Alpha Trade Academy",
   description: "Такой страницы нет.",
 };

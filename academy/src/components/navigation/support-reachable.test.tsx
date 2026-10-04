@@ -5,38 +5,56 @@
  * `MOBILE_NAV` gated on a hardcoded `BUILT_ROUTES` that omitted `support`, and
  * the "Ещё" item that would have surfaced `MORE_MENU` was itself disabled — so
  * `/support` rendered perfectly and nothing in the product could reach it.
+ *
+ * 2026-10-03 — THE PROPERTY STANDS, THE PATH MOVED. The owner: «что бы написать
+ * в поддержку можно было только из профиля, не по ссылке из хеда». Support is
+ * a part of the profile now (`/profile/support`), so neither bar links it; the
+ * learner reaches it through the profile — the avatar on a wide screen, the
+ * bar's «Профиль» on a phone — and the profile's «Поддержка». `/support` still
+ * answers, with a redirect there.
  */
 import * as React from "react";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DesktopRouteNavigation } from "./desktop-route-navigation";
 import { MobileBottomNavigation } from "./mobile-bottom-navigation";
+import { AppShell } from "@/components/shell/app-shell";
+import { ProfileTabs } from "@/features/profile-fidelity/profile-tabs";
 import { PRIMARY_NAV } from "@/config/navigation";
 import { isBuiltRoute, BUILT_ROUTE_IDS } from "@/config/built-routes";
 import { isVisibleSection } from "@/config/feature-visibility";
 
-describe("support is reachable from the learner navigation", () => {
-  it("desktop nav offers Поддержка as a real link to /support", () => {
-    render(<DesktopRouteNavigation activeId="home" />);
-    const nav = screen.getByRole("navigation", { name: "Основная навигация" });
-    const link = within(nav).getByRole("link", { name: "Поддержка" });
-    expect(link).toHaveAttribute("href", "/support");
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+
+describe("support is reachable — through the profile", () => {
+  it("desktop: the avatar leads to the profile, and the profile's «Поддержка» to the desk", () => {
+    const { container, unmount } = render(
+      <AppShell userName="Мария Ковалёва" activeId="home">
+        <p>тело</p>
+      </AppShell>,
+    );
+    expect(container.querySelector('.appbar a.avatar')).toHaveAttribute("href", "/profile");
+    unmount();
+    render(<ProfileTabs current="account" />);
+    const parts = screen.getByRole("navigation", { name: "Разделы профиля" });
+    expect(within(parts).getByRole("link", { name: "Поддержка" })).toHaveAttribute("href", "/profile/support");
   });
 
-  it("mobile bar reaches Поддержка — in the bar or one tap inside «Ещё»", async () => {
-    // COMMUNITY-V1 made this a six-section product, and six flat slots clipped
-    // Поддержка off a 320px screen. It now lives behind a REAL «Ещё», so the
-    // property this test protects — Поддержка is reachable from the mobile
-    // navigation — is unchanged while the shape that delivers it is not.
-    const user = userEvent.setup();
+  it("mobile: «Профиль» is a slot of the bar, one tap from the desk's part", () => {
     render(<MobileBottomNavigation activeId="home" />);
     const nav = screen.getByRole("navigation", { name: "Мобильная навигация" });
-    await user.click(within(nav).getByRole("button", { name: /Ещё/ }));
-    expect(within(nav).getByRole("link", { name: /Поддержка/ })).toHaveAttribute(
-      "href",
-      "/support",
+    expect(within(nav).getByRole("link", { name: /Профиль/ })).toHaveAttribute("href", "/profile");
+  });
+
+  it("neither bar links support itself", () => {
+    const { container } = render(
+      <AppShell userName="Мария Ковалёва" activeId="profile">
+        <p>тело</p>
+      </AppShell>,
     );
+    expect(container.querySelector('a[href="/support"]')).toBeNull();
+    expect(container.querySelector('a[href="/profile/support"]')).toBeNull();
+    expect(container.textContent).not.toContain("Поддержка");
   });
 
   it("renders NO disabled section control in either bar", () => {
@@ -56,11 +74,17 @@ describe("support is reachable from the learner navigation", () => {
   });
 
   it("marks the active section with aria-current, not colour alone", () => {
-    render(<DesktopRouteNavigation activeId="support" />);
-    expect(screen.getByRole("link", { name: "Поддержка" })).toHaveAttribute(
+    render(<DesktopRouteNavigation activeId="tools" />);
+    expect(screen.getByRole("link", { name: "Инструменты" })).toHaveAttribute(
       "aria-current",
       "page",
     );
+  });
+
+  it("marks the support part as the profile's current part on its page", () => {
+    render(<ProfileTabs current="support" />);
+    expect(screen.getByRole("link", { name: "Поддержка" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Аккаунт" })).not.toHaveAttribute("aria-current");
   });
 
   it("renders every built section and nothing that is not built", () => {
@@ -82,6 +106,8 @@ describe("support is reachable from the learner navigation", () => {
   });
 
   it("keeps the built list as ONE source both bars read", () => {
+    // `/support` still answers — with a redirect into the profile — so it stays
+    // built; it is simply no longer a section of either bar.
     expect(BUILT_ROUTE_IDS.has("support")).toBe(true);
     for (const id of ["home", "path", "lessons", "tools"]) {
       expect(BUILT_ROUTE_IDS.has(id)).toBe(true);

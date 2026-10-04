@@ -222,6 +222,22 @@ describe("RegisterForm — referral", () => {
     expect(sentPayload().referralCode).toBe("ABC123");
   });
 
+  it("offers a way out of a broken invite, keeping what was typed (2026-10-04)", async () => {
+    searchParams = new URLSearchParams("ref=ABC123");
+    const user = userEvent.setup();
+    registerMock.mockResolvedValue({
+      ok: false,
+      error: normalizeHttpError({ status: 400, body: { error: "REFERRAL_INVALID", message: "…" } }),
+    } as never);
+    renderForm();
+    await fillValidForm(user);
+    await user.click(submitButton());
+    const error = await screen.findByTestId("register-error");
+    const way = await screen.findByRole("link", { name: "Зарегистрироваться без приглашения" });
+    expect(error.contains(way)).toBe(true);
+    expect(way.getAttribute("href")).toBe("/register");
+  });
+
   it("registers normally with no ?ref at all", async () => {
     const user = userEvent.setup();
     registerMock.mockResolvedValue(created());
@@ -526,7 +542,7 @@ describe("RegisterForm — success", () => {
     await fillValidForm(user);
     await user.click(submitButton());
 
-    await user.click(await screen.findByRole("button", { name: "Продолжить" }));
+    await user.click(await screen.findByRole("button", { name: "Перейти к обучению" }));
     // The registration destination has its own constant, deliberately separate
     // from the login default so a routing change cannot move the onboarding
     // flow as a side effect.
@@ -722,7 +738,9 @@ describe("RegisterForm — Turnstile gating", () => {
 
     const statuses = screen.getAllByRole("status");
     const text = statuses.map((node) => node.textContent).join(" ");
-    expect(text).toContain("Пройдите проверку безопасности");
+    // The check runs by itself; the line says so and asks the visitor for nothing.
+    expect(text).toContain("Проверяем браузер…");
+    expect(text).not.toContain("Пройдите проверку безопасности");
   });
 
   it("re-disables submission when a solved token later expires", async () => {

@@ -137,7 +137,7 @@ function fixtureBackendRead(): BackendCurriculumRead {
 
   return {
     kind: "enrolled",
-    curriculum: { code: "ata-v2", name: "Alfa Trade Academy (fixture)", versionNumber: 1, status: "published", effectiveFrom: null, publishedAt: "2026-07-01T00:00:00.000Z" },
+    curriculum: { code: "ata-v2", name: "Alpha Trade Academy (fixture)", versionNumber: 1, status: "published", effectiveFrom: null, publishedAt: "2026-07-01T00:00:00.000Z" },
     enrollment: { status: "active", enrolledAt: "2026-07-01T00:00:00.000Z", currentLevel, highestCompletedLevel: currentLevel - 1, lastMeaningfulActionAt: "2026-07-01T00:00:00.000Z", completedAt: null },
     modules: [backendModule],
     xp: { kind: "disabled" },

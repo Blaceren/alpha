@@ -96,6 +96,8 @@ describe("Trade Card — a new plan", () => {
     expect(screen.getByText("Выберите направление: выше или ниже.")).toBeInTheDocument();
     expect(screen.getByLabelText("Сумма")).toHaveAttribute("aria-invalid", "true");
     expect(fixTradePlan).not.toHaveBeenCalled();
+    // …and the first wrong field takes the focus, so a phone shows it (2026-10-04).
+    await waitFor(() => expect(document.activeElement?.id).toBe("tc-asset"));
   });
 
   it("shows both outcomes as the learner types", async () => {
@@ -134,7 +136,7 @@ describe("Trade Card — a new plan", () => {
     await screen.findByRole("button", { name: "Зафиксировать план" });
     await fillPlan(user);
     await user.click(screen.getByRole("button", { name: "Зафиксировать план" }));
-    expect(await screen.findByText("Payout — целое число от 1 до 100.")).toBeInTheDocument();
+    expect(await screen.findByText("Payout — целое число от 20 до 99.")).toBeInTheDocument();
     expect(screen.getByLabelText("Payout")).toHaveAttribute("aria-invalid", "true");
   });
 });

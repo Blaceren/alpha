@@ -9,7 +9,8 @@ export default function NotFound() {
         <h2>Такой страницы нет</h2>
         <p>Возможно, ссылка устарела. Вернитесь к текущему шагу обучения или откройте путь программы.</p>
         <p style={{ marginTop: 22, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <Link className="ax-cta" href="/">На главную</Link>
+          {/* The learner's Home, not the marketing page (2026-10-04, launch audit). */}
+          <Link className="ax-cta" href="/home">На главную</Link>
           <Link className="ax-cta ax-cta--quiet" href="/path">Путь обучения</Link>
         </p>
       </div>

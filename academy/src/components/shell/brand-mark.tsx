@@ -1,9 +1,9 @@
 /**
- * The Alfa Trade Academy mark, in the authenticated shell.
+ * The Alpha Trade Academy mark, in the authenticated shell.
  *
  * WHAT THIS REPLACES. It used to draw a rounded square with a rising polyline
  * inside it — a generic chart glyph, not the ATA mark — and print the words
- * "Alfa Trade Academy" beside it. That was two brand lockups where the product
+ * "Alpha Trade Academy" beside it. That was two brand lockups where the product
  * has one, and neither of them was the asset of record.
  *
  * THE ASSET OF RECORD, AND NOTHING ELSE. `/brand/ata-logo.svg` is byte-identical

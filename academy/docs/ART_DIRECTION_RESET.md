@@ -1,6 +1,6 @@
 # ART_DIRECTION_RESET
 
-Phase D1A-R0. Сброс арт-направления Alfa Trade Academy: D1A отклонён, новые provisional references
+Phase D1A-R0. Сброс арт-направления Alpha Trade Academy: D1A отклонён, новые provisional references
 проанализированы, задан курс на следующую итерацию (D1A-R1 — **не** начата на этом этапе).
 
 ## Почему D1A отклонён

@@ -190,7 +190,7 @@ export const COPY = {
      a learner to a section they cannot open. If Community is ever switched on,
      restoring the wider context is its own decision — not a conditional string
      carried here in advance. */
-  consequence: "Это имя отображается в вашем профиле ATA.",
+  consequence: "Это имя отображается в вашем профиле.",
   /* Kept for the page-failure state, which has no email row to carry a handoff
      and still needs one. It is no longer shown on the working page: the password
      is self-service now, so «остальные данные» would have pointed at support for
@@ -229,6 +229,9 @@ export const COPY = {
      behind it yet. */
   email_label: "Email",
   email_via_support: "Изменение email пока выполняется через поддержку.",
+  /* Beside the printed address (2026-10-03), where the long sentence would
+     follow an address mid-line. */
+  email_via_support_short: "меняется через поддержку",
 
   password_label: "Пароль",
   password_edit: "Изменить пароль",
@@ -243,5 +246,35 @@ export const COPY = {
   /* Neutral by design: the caller is already signed in, so this says something
      about the value typed, not about the account. */
   password_wrong_current: "Текущий пароль указан неверно.",
+  password_missing_current: "Введите текущий пароль.",
   password_failed: "Не удалось сменить пароль. Пароль не изменён.",
+
+  /* ACCOUNT RECOVERY (2026-10-01) — the email row, where the Backend can send
+     mail. The address IS shown now: the profile reads it through its own narrow
+     endpoint (`/api/me/account`), not by widening the viewer. Where no mail can
+     be sent these strings are never rendered and the row above stays as it was. */
+  email_state_verified: "подтверждён",
+  email_state_unverified: "не подтверждён",
+  email_edit: "Изменить",
+  email_verify_lead: "Подтвердите адрес: на него приходит ссылка для сброса пароля.",
+  email_verify_send: "Отправить письмо",
+  email_verify_sent: "Письмо отправлено. Откройте ссылку из него.",
+  email_verify_limited: "Слишком много писем. Попробуйте позже.",
+  email_verify_failed: "Не удалось отправить письмо. Повторите попытку.",
+  email_pending: "Новый адрес {email} ждёт подтверждения. Откройте ссылку из письма, отправленного на него.",
+  email_pending_cancel: "Отменить смену",
+  email_new: "Новый email",
+  email_current_password: "Текущий пароль",
+  email_hint: "Мы отправим ссылку на новый адрес. Почта аккаунта изменится после перехода по ней.",
+  email_submit: "Отправить подтверждение",
+  email_error_invalid: "Введите корректный адрес почты.",
+  email_error_password: "Текущий пароль указан неверно.",
+  email_error_same: "Это уже ваш текущий адрес.",
+  email_error_in_use: "Этот адрес уже используется.",
+  email_error_limited: "Слишком много попыток. Попробуйте позже.",
+  email_error_failed: "Не удалось отправить запрос. Почта не изменена.",
+  /* A new password withdraws a pending change of address (Backend
+     `account/lifecycle.ts`). Said once, in the password row, at the moment the
+     pending row disappears — otherwise it would simply vanish. */
+  password_changed_email_dropped: "Пароль изменён. Запрос на смену почты отменён — при необходимости отправьте его заново.",
 } as const;

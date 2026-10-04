@@ -75,7 +75,7 @@ function messageFor(error: NormalizedError): string {
   switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
-      return "Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.";
+      return "Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.";
     case "RATE_LIMITED":
       return "Слишком много действий подряд. Подождите минуту и попробуйте снова.";
     case "UNAUTHENTICATED":
@@ -262,6 +262,7 @@ export function TradeCardWorkspace({
     const checked = validateDraft(formDraft, reference);
     if (!checked.ok) {
       setErrors(checked.errors);
+      focusFirstInvalid(checked.errors);
       return;
     }
     setBusy(true);
@@ -545,4 +546,29 @@ function hintFor(card: TradeCard, now: Date, result: TradeResult | null): string
   if (now < window.opensAt) return `Откройте сделку в Pocket в ${card.plan.entryTime} по плану.`;
   if (now < window.expiresAt) return `Экспирация в ${hhmmss(window.expiresAt)}. Результат отметите после неё.`;
   return "Экспирация прошла — отметьте результат.";
+}
+
+/**
+ * THE FIRST FIELD IN ERROR TAKES THE FOCUS (2026-10-04, launch audit). On a
+ * phone «Зафиксировать план» seemed to do nothing: the errors appeared above the
+ * screen and nothing moved. The other tools already focus the first wrong
+ * field; the Trade Card now does too, in the form's own order, with the field
+ * brought to the middle of the screen.
+ */
+const FIELD_ORDER = ["asset", "direction", "amount", "payoutPercent", "expiry", "entryTime", "reason"] as const;
+
+function focusFirstInvalid(errors: Partial<Record<string, string>>) {
+  const field = FIELD_ORDER.find((name) => errors[name]);
+  if (!field) return;
+  requestAnimationFrame(() => {
+    const target =
+      field === "direction"
+        ? document.querySelector<HTMLElement>('[aria-labelledby="tc-direction"] button, [aria-labelledby="tc-direction"] [role="radio"]')
+        : document.getElementById(`tc-${field}`);
+    if (!target) return;
+    // Centred, so its label shows too — focusing alone left the label above the
+    // screen's edge on a phone (measured on the stand).
+    if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+  });
 }

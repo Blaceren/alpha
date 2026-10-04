@@ -611,6 +611,17 @@
   transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
 }
 
+/* Below 360px three choices share 55px each and a word as long as «Прибыль»
+   ran out of its choice (the responsive pass, 2026-10-03): the type steps
+   down a little there. */
+@media (max-width: 359px) {
+  .tc-segmented__option {
+    padding-inline: 2px;
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
+  }
+}
+
 .tc-segmented__option:hover:not(:disabled):not([data-selected]) {
   background: var(--tw-surface-hover);
   color: var(--tw-text-1);
@@ -633,6 +644,379 @@
 .tc-segmented[data-disabled] .tc-segmented__option[data-selected] {
   background: var(--tw-surface-press);
   color: var(--tw-text-1);
+}
+
+/* ------------------------------------------------- date and time fields */
+
+/*
+ * THE TOOLS' OWN DATE AND TIME (owner, 2026-10-02: «удобно и красиво,
+ * подходить под наш стиль»). The browser's date and time fields draw
+ * themselves in the browser's locale and open the operating system's lists.
+ * These are the product's: a field in the form's own hand, and a panel that
+ * opens under it — the well a shade lighter than the field, one line, the
+ * Signal only on what is chosen.
+ *
+ * The panel is not a modal and dims nothing. On a phone it takes the whole row
+ * of the fields grid, whichever half its field stands in; from 600px it is as
+ * wide as a month needs and hangs from its own field.
+ */
+.tc-fields {
+  position: relative;
+}
+
+.tp-control {
+  position: relative;
+  display: block;
+}
+
+.tp-input {
+  padding-right: 50px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* «Выбрать время»: a full touch target inside the field's own height. */
+.tp-toggle {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  width: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-3);
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tp-toggle:hover:not(:disabled),
+.tp-field[data-open] .tp-toggle {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.tp-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* The date is a field that is pressed, not typed into: its text is the value. */
+.tp-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tp-trigger:disabled {
+  cursor: default;
+}
+
+.tp-trigger__value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tp-trigger__main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tp-trigger[data-empty] .tp-trigger__main {
+  color: var(--tw-text-3);
+}
+
+/* «2 октября», «вторник»: said beside the value where the field is wide enough. */
+.tp-trigger__note {
+  display: none;
+  color: var(--tw-text-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tp-trigger__icon {
+  flex: none;
+  color: var(--tw-text-3);
+  transition: color 140ms var(--tw-ease);
+}
+
+.tp-trigger:hover:not(:disabled) .tp-trigger__icon,
+.tp-field[data-open] .tp-trigger__icon {
+  color: var(--tw-text-1);
+}
+
+.tp-field[data-open] .tp-trigger,
+.tp-field[data-open] .tp-input {
+  border-color: var(--tw-signal);
+}
+
+.tp-panel {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid var(--tw-line-2);
+  border-radius: 10px;
+  background: #10160c;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  /* Opened near the foot of a phone's screen, it scrolls clear of the shell's
+     bottom navigation, which is fixed over the page. */
+  scroll-margin-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
+  animation: tp-panel-in 140ms var(--tw-ease);
+}
+
+/* It takes the focus only so that a press on its own padding is not «outside». */
+.tp-panel:focus,
+.tp-panel:focus-visible {
+  outline: none;
+}
+
+@keyframes tp-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.tp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tp-chip,
+.tp-done {
+  min-height: 40px;
+  border-radius: var(--tw-radius);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), border-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tp-chip {
+  padding: 0 14px;
+  border: 1px solid var(--tw-line-2);
+  background: transparent;
+  color: var(--tw-text-1);
+}
+
+.tp-chip:hover {
+  background: var(--tw-surface-hover);
+}
+
+.tp-chip[data-selected] {
+  border-color: var(--tw-line-olive-hover);
+  background: var(--tw-surface-press);
+}
+
+.tp-done {
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--tw-text-2);
+}
+
+.tp-done:hover {
+  color: var(--tw-text-1);
+}
+
+.tp-label {
+  margin: 2px 0 -4px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.tp-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.tp-grid[data-columns="6"] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.tp-grid[data-columns="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* The minutes of the ten above: set into a tray, and drawn up to it, so the two
+   rows read as one choice made in two steps. */
+.tp-grid--tray {
+  margin-top: -4px;
+  padding: 4px;
+  border: 1px solid var(--tw-line-1);
+  border-radius: 8px;
+  background: var(--tw-well);
+}
+
+/* One cell: an hour, a ten, a minute, a day. 44px on a phone. */
+.tp-cell {
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-1);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tp-cell:hover:not(:disabled):not([data-selected]) {
+  background: var(--tw-surface-hover);
+}
+
+/* The ten whose minutes are on show: marked, but not the choice itself. */
+.tp-cell[data-current] {
+  border-color: var(--tw-line-olive-hover);
+  background: var(--tw-surface-press);
+}
+
+/* The choice: the one place the Signal stands in a panel. */
+.tp-cell[data-selected] {
+  background: var(--tw-signal);
+  color: var(--tw-on-signal);
+}
+
+.tp-cell:disabled {
+  color: var(--tw-text-3);
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tp-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tp-month__title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.tp-turn {
+  display: grid;
+  width: 44px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tw-text-2);
+  cursor: pointer;
+  transition: background-color 140ms var(--tw-ease), color 140ms var(--tw-ease);
+}
+
+.tp-turn:hover:not(:disabled) {
+  background: var(--tw-surface-hover);
+  color: var(--tw-text-1);
+}
+
+.tp-turn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.tp-days {
+  display: grid;
+  gap: 2px;
+}
+
+.tp-days__row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.tp-days__row > [role="gridcell"] {
+  display: grid;
+}
+
+.tp-days__weekday {
+  padding: 2px 0 4px;
+  color: var(--tw-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* The learner's today, when it is not the chosen day: a ring, not a fill. */
+.tp-day[data-today]:not([data-selected]) {
+  border-color: var(--tw-line-olive-hover);
+  color: var(--tw-signal);
+}
+
+/* A neighbouring month's day, completing the first or the last week: offered
+   like any other, and a shade back from the month the panel is named after. */
+.tp-day[data-outside]:not(:disabled):not([data-selected]):not([data-today]) {
+  color: var(--tw-text-2);
+  font-weight: 500;
+}
+
+@media (min-width: 600px) {
+  .tp-field {
+    position: relative;
+  }
+
+  .tp-panel {
+    right: auto;
+    width: 332px;
+  }
+
+  /* A field in the right half of the grid opens its panel leftwards, so the
+     panel stays over the form it belongs to. */
+  .tp-field[data-align="end"] .tp-panel {
+    right: 0;
+    left: auto;
+  }
+
+  .tp-trigger__note {
+    display: inline;
+  }
+
+  .tp-chip,
+  .tp-done {
+    min-height: 34px;
+  }
+
+  .tp-cell {
+    min-height: 38px;
+  }
+
+  .tp-turn {
+    height: 36px;
+  }
 }
 
 /* ------------------------------------------------------------- outcomes */
@@ -782,6 +1166,31 @@
 
 .tw-button[data-variant="ghost"]:hover:not(:disabled) {
   color: var(--tw-text-1);
+}
+
+/* An action that takes something away, in the rose of a loss and of an error —
+   never the Signal, which is the product's «go». Outlined where it is offered;
+   filled only on the step that actually does it. */
+.tw-button[data-variant="danger"] {
+  border-color: color-mix(in srgb, var(--tw-negative) 42%, transparent);
+  background: transparent;
+  color: var(--tw-negative);
+}
+
+.tw-button[data-variant="danger"]:hover:not(:disabled) {
+  border-color: var(--tw-negative);
+  background: color-mix(in srgb, var(--tw-negative) 9%, transparent);
+}
+
+.tw-button[data-variant="danger"][data-solid] {
+  border-color: transparent;
+  background: var(--tw-negative);
+  color: var(--tw-on-signal);
+}
+
+.tw-button[data-variant="danger"][data-solid]:hover:not(:disabled) {
+  border-color: transparent;
+  background: #e4b9bd;
 }
 
 .tw-button:disabled:not([data-variant="primary"]) {
@@ -1287,6 +1696,54 @@
   margin-top: 14px;
 }
 
+/* An open entry's own actions. On a phone the review — the entry's next step —
+   is a full bar; the edit and the delete share the row under it, the delete as
+   wide as its word. Their labels never break in two: the pair is set a little
+   tighter so it holds one row from 360px, and where even that does not fit
+   (320px) the delete takes a row of its own, still at the far end. */
+.jr-entry-actions > .tw-button {
+  white-space: nowrap;
+}
+
+.jr-entry-actions > .tw-button:first-child {
+  flex-basis: 100%;
+}
+
+.jr-entry-actions > .tw-button:nth-child(2) {
+  flex: 1 1 auto;
+  padding-inline: 14px;
+}
+
+.jr-entry-actions > .jr-detail__delete {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-inline: 14px;
+}
+
+/* «Удалить эту запись?» — asked where the entry is. The rose edge says what
+   kind of question it is before the words do. */
+.jr-delete {
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+  border-color: color-mix(in srgb, var(--tw-negative) 46%, transparent);
+}
+
+.jr-delete__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.jr-delete .tc-caption {
+  font-size: 13.5px;
+}
+
+.jr-delete__actions {
+  margin-top: 6px;
+}
+
 .jr-detail__review {
   display: flex;
   flex-direction: column;
@@ -1524,10 +1981,39 @@
     max-width: 360px;
   }
 
-  /* A lone action is as wide as its words, not a stretched bar. */
+  /* An action is as wide as its words, not a stretched bar. The two that
+     change the entry sit together; the one that deletes it stands apart, at
+     the far end of the row. */
   .jr-detail__actions > .tw-button {
     flex: 0 0 auto;
     min-width: 200px;
+  }
+
+  /* Three on one line from 600px, and the line never breaks: the two that
+     change give way instead, down to their own words. */
+  .jr-entry-actions {
+    flex-wrap: nowrap;
+  }
+
+  .jr-entry-actions > .tw-button:first-child,
+  .jr-entry-actions > .tw-button:nth-child(2) {
+    flex: 0 1 200px;
+    min-width: auto;
+    padding-inline: 20px;
+  }
+
+  .jr-entry-actions > .jr-detail__delete {
+    min-width: auto;
+    padding-inline: 20px;
+  }
+
+  .jr-delete {
+    max-width: 560px;
+  }
+
+  .jr-delete__actions > .tw-button {
+    flex: 0 0 auto;
+    min-width: 168px;
   }
 
   .jr-more {
@@ -3160,5 +3646,9 @@
   .twh *,
   .twp * {
     transition: none !important;
+  }
+
+  .tp-panel {
+    animation: none;
   }
 }

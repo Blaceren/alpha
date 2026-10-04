@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import {
   DECISION_FIELD,
   DECISION_STRONG,
@@ -27,6 +27,11 @@ import {
  * without motion and the tests that pin it (one criterion, one reason, one
  * action, the same field corrected, no financial win) still read the strip.
  *
+ * NO BADGES ON THE STRIP (owner, 2026-10-01). The cards opened with «V1»,
+ * «Разбор», «V2», «✓» — a code for what each title already says. The order is
+ * the strip's own: a rail along its top edge, lit up to the state on show
+ * (`is-reached`, `is-active`).
+ *
  * MOTION. When the window is reached the sequence plays once — 1.5s a state,
  * 4.5s in all, the page's one cinematic moment, on the emotional side of the
  * motion rules — and any click on a state stops it. Under reduced motion
@@ -34,15 +39,26 @@ import {
  * control. Without a script the window shows the first state and the strip
  * reads as it always did.
  *
- * THE CARD IS THE TARGET. The button in the title is the control — focusable,
- * `aria-pressed`, the keyboard's way in — but a pointer may land anywhere on
- * the card: the index, the note, the empty surface. Only the object inside
- * the card (the field, the criterion, the accepted note) is content, not a
- * control: it is there to be read, and a click on it changes nothing. A drag
- * that selected text is not a click either.
+ * THE CARD IS THE TARGET — ALL OF IT. The button in the title is the control —
+ * focusable, `aria-pressed`, the keyboard's way in — and a pointer may land
+ * anywhere on the card: the title, the object, the note, the empty surface.
+ * (Until 2026-10-02 the object inside the card was left out as «content»; it is
+ * the largest thing on the card, so the card lit up under the pointer and then
+ * did nothing in its middle.) A drag that selected text is not a press.
+ *
+ * THE CARDS SAY THEY CAN BE PRESSED (owner, 2026-10-02: «дать понять, что
+ * можно переключать блоки, небольшими подсвечиваниями»). A card under the
+ * pointer or the focus lights from its rail down; the card on show stays lit;
+ * a press answers at once. And once, when the sequence has played to its end,
+ * the three cards that are not on show light one after another — the strip
+ * saying, without a word, that it goes back as well as forward.
  */
 
 const HOLD_MS = 1500;
+/** After the last state has settled in the window, the strip gives its one hint. */
+const HINT_AFTER_MS = 700;
+/** Three cards, 420ms each, 120ms apart — and then the mark comes off. */
+const HINT_MS = 900;
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
 /** The five entries of the real assignment, the third the one under review. */
@@ -56,8 +72,16 @@ const ENTRIES = [
 
 export function ReviewWindow() {
   const [stage, setStage] = useState<ReviewStageId>("v1");
+  /** True for the one moment after the sequence in which the strip hints that it can be pressed. */
+  const [hinting, setHinting] = useState(false);
   const windowRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  /** The tallest the block has been at this width (see «It never shrinks» below). */
+  const tallestRef = useRef({ width: 0, height: 0 });
+  /** The sequence has ended, or the visitor took over: nothing plays any more. */
   const playedRef = useRef(false);
+  /** How many states of the sequence have been shown. */
+  const shownRef = useRef(0);
   const timersRef = useRef<number[]>([]);
 
   const stop = useCallback(() => {
@@ -68,21 +92,48 @@ export function ReviewWindow() {
   // Play once, when the window is reached, unless motion is reduced. The
   // window itself is observed, not the block with the strip: on a phone the
   // block is taller than the screen and would never show enough of itself.
+  //
+  // ONLY IN SIGHT (2026-10-03, DD-342). The four states are not one height. A
+  // visitor who scrolled on before the sequence ended had it go on above them,
+  // and the page under their thumb jumped by the difference — measured 170px
+  // on a phone, where Safari does not hold the scroll position for them. The
+  // sequence now plays only while most of the window (60%) is on screen —
+  // while the visitor is looking at it — and goes on from the same state when
+  // it is back.
   useEffect(() => {
     const root = windowRef.current;
     if (!root || !("IntersectionObserver" in window)) return;
     if (window.matchMedia(REDUCED).matches) return;
+    const order: ReviewStageId[] = ["feedback", "v2", "accepted"];
+    const play = () => {
+      stop();
+      const rest = order.slice(shownRef.current);
+      rest.forEach((id, i) => {
+        timersRef.current.push(
+          window.setTimeout(() => {
+            shownRef.current += 1;
+            setStage(id);
+          }, HOLD_MS * (i + 1)),
+        );
+      });
+      // The sequence has played to its end: the strip hints, once, and lets go.
+      const end = HOLD_MS * rest.length + HINT_AFTER_MS;
+      timersRef.current.push(
+        window.setTimeout(() => {
+          playedRef.current = true;
+          setHinting(true);
+        }, end),
+      );
+      timersRef.current.push(window.setTimeout(() => setHinting(false), end + HINT_MS));
+    };
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting) || playedRef.current) return;
-        playedRef.current = true;
-        observer.disconnect();
-        const order: ReviewStageId[] = ["feedback", "v2", "accepted"];
-        order.forEach((id, i) => {
-          timersRef.current.push(window.setTimeout(() => setStage(id), HOLD_MS * (i + 1)));
-        });
+        if (playedRef.current) return;
+        const entry = entries[entries.length - 1];
+        if (entry && entry.intersectionRatio >= 0.6) play();
+        else stop();
       },
-      { threshold: 0.3 },
+      { threshold: [0, 0.6] },
     );
     observer.observe(root);
     return () => {
@@ -95,6 +146,7 @@ export function ReviewWindow() {
     (id: ReviewStageId) => {
       playedRef.current = true;
       stop();
+      setHinting(false);
       setStage(id);
     },
     [stop],
@@ -103,13 +155,45 @@ export function ReviewWindow() {
   const chooseFromCard = useCallback(
     (event: MouseEvent<HTMLLIElement>, id: ReviewStageId) => {
       const target = event.target as HTMLElement;
-      // The button handles itself; the object inside the card is not a control.
-      if (target.closest(".evidence__button") || target.closest(".evidence__object")) return;
+      // The button handles itself; everything else on the card is the card.
+      if (target.closest(".evidence__button")) return;
       if (window.getSelection()?.toString()) return;
       choose(id);
     },
     [choose],
   );
+
+  // IT NEVER SHRINKS (DD-342). On a phone the states differ by up to 250px
+  // (the reviewer's comment is the tallest); going back to a shorter one
+  // pulled the page up under the visitor. The block keeps the tallest height
+  // it has had at this width; a new width starts over.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const width = root.clientWidth;
+    if (width !== tallestRef.current.width) {
+      root.style.minHeight = "";
+      tallestRef.current = { width, height: 0 };
+    }
+    const height = root.getBoundingClientRect().height;
+    if (height > tallestRef.current.height) {
+      tallestRef.current.height = height;
+      // The exact height, fraction and all: a rounded-up one adds a pixel to the page.
+      root.style.minHeight = `${height}px`;
+    }
+  }, [stage]);
+
+  // A turned phone is a new width: the kept height no longer applies.
+  useEffect(() => {
+    const onResize = () => {
+      const root = rootRef.current;
+      if (!root || root.clientWidth === tallestRef.current.width) return;
+      root.style.minHeight = "";
+      tallestRef.current = { width: root.clientWidth, height: root.getBoundingClientRect().height };
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const at = reviewStageIndex(stage);
   const returned = stage === "feedback";
@@ -118,7 +202,45 @@ export function ReviewWindow() {
   const reason = corrected ? DECISION_STRONG : DECISION_WEAK;
 
   return (
-    <div className="review">
+    <div className="review" ref={rootRef}>
+      {/* ON A NARROW SCREEN THE STATES ARE A STEPPER ABOVE THE WINDOW
+          (2026-10-03, the owner from a phone: «не понятно что переключается и
+          зачем переключатели занимают весь экран»). The four cards stacked to
+          a screen and more, and the window they switched was out of sight above
+          them. Here the four states are numbered, joined by the rail and lit
+          as far as the state on show, right above what they switch, with that
+          state's note under them. CSS shows the stepper or the strip of cards,
+          never both. */}
+      <div className="review__stepper">
+        <ol className="rstepper" aria-label="Этапы проверки работы" style={{ "--rs-at": at } as CSSProperties}>
+          {REVIEW_STAGES.map((item, index) => (
+            <li
+              key={item.id}
+              className={`rstepper__step${item.id === stage ? " is-active" : ""}${index <= at ? " is-reached" : ""}`}
+            >
+              <button
+                type="button"
+                className="rstepper__button"
+                aria-pressed={item.id === stage}
+                aria-controls="review-window"
+                aria-label={`${String(index + 1).padStart(2, "0")} · ${item.title}`}
+                onClick={() => choose(item.id)}
+              >
+                <span className="rstepper__num pw-mono" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="rstepper__label" aria-hidden="true">
+                  {item.short}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <p className="rstepper__note">
+          <strong>{REVIEW_STAGES[at]!.title}.</strong> {REVIEW_STAGES[at]!.note}
+        </p>
+      </div>
+
       <div className="pw pw--review" id="review-window" ref={windowRef} data-stage={stage} aria-label={`Окно продукта: отчёт уровня 3, ${REVIEW_STAGES[at]!.title.toLowerCase()}`}>
         <div className="pw__bar">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -226,7 +348,13 @@ export function ReviewWindow() {
       </div>
 
       {/* ---------------------------------------------------------- the strip */}
-      <ol className="evidence-track" data-evidence aria-label="Цикл проверки практической работы" data-reveal>
+      <ol
+        className="evidence-track"
+        data-evidence
+        data-hint={hinting ? "" : undefined}
+        aria-label="Цикл проверки практической работы"
+        data-reveal
+      >
         {REVIEW_STAGES.map((item, index) => (
           <li
             key={item.id}
@@ -234,7 +362,6 @@ export function ReviewWindow() {
             className={`${item.id === stage ? "is-active" : ""}${index <= at ? " is-reached" : ""}`}
             onClick={(event) => chooseFromCard(event, item.id)}
           >
-            <p className="evidence__index">{item.index}</p>
             <h3>
               <button
                 type="button"

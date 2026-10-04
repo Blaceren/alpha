@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   proxyReferralLink,
   REFERRAL_LINK_BACKEND_PATH,
+  REGISTRATION_CHECK_BACKEND_PATH,
   MAX_REFERRAL_LINK_RESPONSE_BYTES,
 } from "@/server/proxy/referral-link-proxy";
 import { resetAcademyConfigCache } from "@/config/academy-config";
@@ -164,9 +165,50 @@ describe("referral-link proxy — one operation, one path, no body", () => {
   it("refuses an operation it does not own", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
+    // Including names every object inherits: a path must never be resolved from
+    // Object.prototype.
+    for (const operation of ["something-else", "constructor", "toString", "__proto__", ""]) {
+      const response = await proxyReferralLink(post(), { operation } as unknown as typeof input);
+      expect(response.status, operation).toBe(400);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /* 2026-10-02 — the second operation: ask the Backend whether the learner's
+     registration is already confirmed. Same shape as the first: one constant
+     path, POST, no body. */
+  it("forwards the registration check to its own constant path, with no body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ ok: true, status: "confirmed", levelCompleted: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
     const response = await proxyReferralLink(
-      post(),
-      { operation: "something-else" } as unknown as typeof input,
+      new Request("http://academy.test/api/backend/exchange/registration/check", {
+        method: "POST",
+        headers: { "x-csrf-token": "t", cookie: "s=1" },
+      }),
+      { operation: "registration-check" },
+    );
+
+    expect(REGISTRATION_CHECK_BACKEND_PATH).toBe("/api/exchange/registration/check");
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${ORIGIN}${REGISTRATION_CHECK_BACKEND_PATH}`);
+    const init = fetchMock.mock.calls[0]![1];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "confirmed", levelCompleted: true });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("the registration check takes no claim: a body is refused, not forwarded", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await proxyReferralLink(
+      new Request("http://academy.test/api/backend/exchange/registration/check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmed: true, levelCompleted: true }),
+      }),
+      { operation: "registration-check" },
     );
     expect(response.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -237,11 +279,11 @@ describe("referral-link proxy — one operation, one path, no body", () => {
 });
 
 describe("the proxy allow-list stays narrow", () => {
-  it("exposes exactly one exchange route and no wildcard", async () => {
+  it("exposes exactly two exchange routes and no wildcard", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const dir = "src/app/api/backend/exchange";
-    // Exactly one route file under the exchange namespace…
+    // Exactly two route files under the exchange namespace…
     const found: string[] = [];
     const walk = (current: string) => {
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
@@ -251,18 +293,26 @@ describe("the proxy allow-list stays narrow", () => {
       }
     };
     walk(dir);
-    expect(found).toEqual(["src/app/api/backend/exchange/referral-link/route.ts"]);
-    // …and it is not a catch-all segment.
+    expect(found.sort()).toEqual([
+      "src/app/api/backend/exchange/referral-link/route.ts",
+      "src/app/api/backend/exchange/registration/check/route.ts",
+    ]);
+    // …and neither is a catch-all segment.
     expect(found.some((f) => f.includes("[") || f.includes("..."))).toBe(false);
   });
 
-  it("the route exports POST and nothing else", async () => {
+  it("each route exports POST and nothing else", async () => {
     const fs = await import("node:fs");
-    const source = fs.readFileSync("src/app/api/backend/exchange/referral-link/route.ts", "utf8");
-    const exported = [...source.matchAll(/export async function ([A-Z]+)/g)].map((m) => m[1]);
-    expect(exported).toEqual(["POST"]);
-    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) {
-      expect(source).not.toContain(`function ${method}`);
+    for (const file of [
+      "src/app/api/backend/exchange/referral-link/route.ts",
+      "src/app/api/backend/exchange/registration/check/route.ts",
+    ]) {
+      const source = fs.readFileSync(file, "utf8");
+      const exported = [...source.matchAll(/export async function ([A-Z]+)/g)].map((m) => m[1]);
+      expect(exported, file).toEqual(["POST"]);
+      for (const method of ["GET", "PUT", "PATCH", "DELETE"]) {
+        expect(source, file).not.toContain(`function ${method}`);
+      }
     }
   });
 

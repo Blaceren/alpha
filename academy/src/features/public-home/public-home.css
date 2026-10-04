@@ -630,30 +630,64 @@ html.ph-smooth-scroll {
 
 .ph .reframe {
   display: grid;
-  grid-template-columns: minmax(150px, 0.5fr) 44px minmax(300px, 1.5fr);
+  grid-template-columns: minmax(200px, 0.62fr) 44px minmax(300px, 1.38fr);
   align-items: center;
 }
 
+/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»). Each kind of
+   answer is a reply — its kind as a mono label, a line of it in the display
+   face — frosted on the lime. The stack points at the line that leaves it: the
+   middle two reach furthest right, the outer ones step back and fade, so the
+   six read as noise converging on one place — the card where the learner's own
+   reason is written. */
 .ph .source-cloud {
-  display: flex;
-  align-content: center;
-  flex-wrap: wrap;
-  gap: 9px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.ph .source-cloud span {
-  padding: 8px 12px;
-  border: 1px solid rgba(11, 13, 10, 0.22);
-  border-radius: var(--radius-pill);
-  background: rgba(11, 13, 10, 0.035);
-  color: rgba(11, 13, 10, 0.67);
-  font-size: 11px;
+.ph .source-cloud > li {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 14px 11px;
+  border: 1px solid rgba(11, 13, 10, 0.13);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 12px 26px -20px rgba(11, 13, 10, 0.45);
+  color: var(--ink-950);
 }
 
-/* margin, not transform: the stagger participates in wrapping, so gaps survive */
-.ph .source-cloud span:nth-child(2),
-.ph .source-cloud span:nth-child(5) {
-  margin-left: 18px;
+.ph .source-cloud > li:nth-child(1),
+.ph .source-cloud > li:nth-child(6) {
+  margin-right: 30px;
+  opacity: 0.5;
+}
+
+.ph .source-cloud > li:nth-child(2),
+.ph .source-cloud > li:nth-child(5) {
+  margin-right: 14px;
+  opacity: 0.74;
+}
+
+.ph .src__kind {
+  color: rgba(11, 13, 10, 0.56);
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.ph .src__said {
+  color: rgba(11, 13, 10, 0.88);
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
 .ph .reframe__axis {
@@ -742,64 +776,103 @@ html.ph-smooth-scroll {
   padding: var(--section-pad) 0;
 }
 
+/*
+ * THE CYCLE — six steps under one line (owner's review, 2026-10-01).
+ *
+ * Each step is a centred column: its node ON the line, the word, what it
+ * means, and the product object it happens in. The line runs from the first
+ * node to the last, behind the nodes, and nothing else crosses the section.
+ *
+ * What this replaced: columns fenced by vertical rules that ran through the
+ * nodes and along the edges of the objects, 23px nodes whose numbers were set
+ * at 7px, and everything pushed to the left edge of its column.
+ */
 .ph .learning-loop {
+  --loop-gap: 20px;
+  --loop-node: 44px;
   position: relative;
   display: grid;
-  margin: 96px 0 0;
+  margin: 80px 0 0;
   padding: 0;
   list-style: none;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: var(--loop-gap);
 }
 
+/* The line, from the centre of the first node to the centre of the last.
+ *
+ * ONE ELEMENT, AND THE FIRST ONE (owner, 2026-10-02: «полоска всё равно
+ * перегораживает цифры»). The drawn, Signal part used to be the list's `::after`
+ * — its LAST child. Every step is revealed with a transform that stays on it at
+ * rest (`translateY(0)`), so every step is a stacking context of its own: the
+ * node's `z-index` counts only inside its step, and a line that comes after the
+ * steps in the tree is painted over all of them — through «01», «02» and the
+ * rest. It could not be seen on the node's fill, which is the line's own colour,
+ * only on the digits and on the ring; the first pass of this fix read the frame
+ * at a size where that did not show.
+ *
+ * Both parts are now this one first-child pseudo-element — the faint line, and
+ * over it the drawn part as a background that grows — so the line is painted
+ * before the steps whatever they are. Nothing about it is transformed: a
+ * transformed line is a layer of its own, and layers are where order is lost.
+ */
 .ph .learning-loop::before {
   position: absolute;
-  top: 36px;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: var(--line-dark);
+  top: calc(var(--loop-node) / 2 - 1px);
+  right: calc((100% - 5 * var(--loop-gap)) / 12);
+  left: calc((100% - 5 * var(--loop-gap)) / 12);
+  height: 2px;
+  background:
+    linear-gradient(var(--signal-400), var(--signal-400)) left center / 0% 100% no-repeat,
+    var(--line-dark);
   content: "";
 }
 
 .ph .learning-loop > li {
   position: relative;
-  min-height: 310px;
-  padding: 72px 28px 34px 0;
-  border-right: 1px solid var(--line-dark);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--loop-node) + 24px) 0 0;
+  text-align: center;
 }
 
-.ph .learning-loop > li:last-child {
-  border-right: 0;
-}
-
+/* The node stands on the line and hides it: the number is never crossed. */
 .ph .learning-loop > li > span {
   position: absolute;
-  top: 25px;
-  left: 0;
+  z-index: 1;
+  top: 0;
+  left: 50%;
   display: grid;
-  width: 23px;
-  height: 23px;
+  width: var(--loop-node);
+  height: var(--loop-node);
+  margin-left: calc(var(--loop-node) / -2);
   place-items: center;
-  border: 1px solid var(--signal-400);
+  border: 1.5px solid var(--signal-400);
   border-radius: 50%;
   background: var(--ink-950);
   color: var(--signal-400);
   font-family: var(--font-data);
-  font-size: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .ph .learning-loop > li > h3 {
-  max-width: 150px;
-  margin-bottom: 16px;
-  font-size: 20px;
+  margin: 0 0 12px;
+  font-size: 21px;
   line-height: 1.15;
 }
 
 .ph .learning-loop > li > p {
-  max-width: 170px;
-  margin-bottom: 0;
+  /* Three lines are reserved, so the six objects start on one line. */
+  min-height: calc(3 * 1.55em);
+  max-width: 24ch;
+  margin: 0;
   color: var(--text-on-dark-muted);
   font-size: 13px;
+  line-height: 1.55;
 }
 
 .ph .review-proof__heading {
@@ -1114,6 +1187,58 @@ html.ph-smooth-scroll {
   transform: translateY(0);
 }
 
+/* THE CYCLE'S OWN STEP: six columns to three.
+ *
+ * Six objects stand in a row only while a column can hold one. Below a 1244px
+ * shell a column is narrower than 190px, and the objects start to break: the
+ * longest action, «Создать исправленную версию», goes to three lines and the
+ * mono labels to two (measured at 1280: 177px columns). That is a property of
+ * the objects, not of the shell's ladder, so it has a step of its own — and it
+ * stands before the 1180px block so that the narrower blocks after it still
+ * win. */
+@media (max-width: 1340px) {
+  /* Two rows of three. One line cannot serve two rows, so each cell carries
+     its own piece of the row's line: from the node of the first cell to the
+     node of the last. */
+  .ph .learning-loop {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 56px;
+  }
+
+  .ph .learning-loop::before {
+    display: none;
+  }
+
+  .ph .learning-loop > li::before {
+    position: absolute;
+    top: calc(var(--loop-node) / 2 - 1px);
+    right: calc(var(--loop-gap) / -2);
+    left: calc(var(--loop-gap) / -2);
+    height: 2px;
+    background: var(--line-dark);
+    content: "";
+    transition: background-color 240ms var(--ease);
+  }
+
+  .ph .learning-loop > li:nth-child(3n + 1)::before {
+    left: 50%;
+  }
+
+  .ph .learning-loop > li:nth-child(3n)::before {
+    right: 50%;
+  }
+
+  .ph .learning-loop.is-visible > li::before {
+    background: var(--signal-400);
+  }
+
+  .ph .learning-loop > li:nth-child(2)::before { transition-delay: 100ms; }
+  .ph .learning-loop > li:nth-child(3)::before { transition-delay: 200ms; }
+  .ph .learning-loop > li:nth-child(4)::before { transition-delay: 300ms; }
+  .ph .learning-loop > li:nth-child(5)::before { transition-delay: 400ms; }
+  .ph .learning-loop > li:nth-child(6)::before { transition-delay: 500ms; }
+}
+
 @media (max-width: 1180px) {
   .ph .shell {
     width: min(calc(100% - 64px), var(--shell));
@@ -1146,22 +1271,6 @@ html.ph-smooth-scroll {
     margin-bottom: -10px;
   }
 
-  .ph .learning-loop {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .ph .learning-loop::before {
-    display: none;
-  }
-
-  .ph .learning-loop > li {
-    min-height: 250px;
-    border-top: 1px solid var(--line-dark);
-  }
-
-  .ph .learning-loop > li > span {
-    top: -12px;
-  }
 
   .ph .faq__grid {
     grid-template-columns: 1fr 1.15fr;
@@ -1442,20 +1551,40 @@ html.ph-smooth-scroll {
     font-size: 24px;
   }
 
+  /* One column: a chain of centred steps. The line joins the end of one step
+     to the node of the next THROUGH THE GAP between them — it used to run down
+     the left edge, through the first letters of every paragraph. */
   .ph .learning-loop {
-    margin-top: 64px;
-    grid-template-columns: 1fr;
+    margin-top: 56px;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
   }
 
   .ph .learning-loop > li {
-    min-height: 220px;
-    padding: 70px 0 30px;
-    border-right: 0;
+    padding-bottom: 52px;
   }
 
-  .ph .learning-loop > li > h3,
-.ph .learning-loop > li > p {
-    max-width: 430px;
+  .ph .learning-loop > li:last-child {
+    padding-bottom: 0;
+  }
+
+  .ph .learning-loop > li:nth-child(n)::before {
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 50%;
+    width: 2px;
+    height: 36px;
+    margin-left: -1px;
+  }
+
+  .ph .learning-loop > li:last-child::before {
+    display: none;
+  }
+
+  .ph .learning-loop > li > p {
+    min-height: 0;
+    max-width: 34ch;
   }
 
   .ph .fit__columns {
@@ -1739,24 +1868,6 @@ html.ph-smooth-scroll {
   flex-direction: column;
   padding: 26px 24px 28px;
   background: var(--ink-950);
-}
-
-.ph .evidence__index {
-  display: inline-flex;
-  min-width: 34px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  padding-inline: 10px;
-  margin: 0 0 16px;
-  border-radius: var(--radius-pill);
-  background: rgba(243, 244, 239, 0.08);
-  color: var(--text-on-dark-muted);
-  font-family: var(--font-data);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .ph .evidence-track h3 {
@@ -2103,25 +2214,29 @@ html.ph-smooth-scroll {
   padding-left: 56px;
 }
 
-/* The whole line, faint; the drawn part, Signal, grows to the active node. */
-.ph .route__steps::before,
-.ph .route__steps::after {
+/* The whole line, faint; the drawn part, Signal, grows to the active node.
+ *
+ * ONE ELEMENT, AND THE FIRST ONE (owner's review, 2026-10-01). The drawn part
+ * used to be the container's `::after` — its last child — and was therefore
+ * painted over everything before it: straight through «L1», «L2» and every
+ * node the route had passed. Lifting the nodes with `z-index` does not help the
+ * first three: their list is revealed with a transform, which makes it a
+ * stacking context of its own, and the line was painted over the whole list.
+ * So both parts are now one `::before`, the container's FIRST child: whatever
+ * comes after it in the document is painted over it, and the nodes — opaque —
+ * hide the line where they stand. The drawn part is the Signal layer of its
+ * background, as tall as `--route-drawn`. */
+.ph .route__steps::before {
   position: absolute;
   top: var(--route-top, 0px);
+  bottom: 0;
   left: calc(var(--route-x) - 1px);
   width: 2px;
+  background:
+    linear-gradient(var(--signal-400), var(--signal-400)) top center / 100% var(--route-drawn, 0px) no-repeat,
+    var(--line-dark);
   content: "";
-}
-
-.ph .route__steps::before {
-  bottom: 0;
-  background: var(--line-dark);
-}
-
-.ph .route__steps::after {
-  height: var(--route-drawn, 0px);
-  background: var(--signal-400);
-  transition: height 420ms var(--ease);
+  transition: background-size 420ms var(--ease);
 }
 
 .ph .route__segment + .route__segment {
@@ -2165,31 +2280,38 @@ html.ph-smooth-scroll {
   padding: 4px 0;
 }
 
+/* THE NODES STAND OVER THE LINE (owner's review, 2026-10-01): a node is opaque
+   and the line is painted before it (see the line's own rule), so the line
+   arrives at a node and leaves it and the label is never crossed. The labels
+   grew with the fix: 8px in a 26px ring was not a label. */
 .ph .rstart__node,
 .ph .rstep__node {
   position: absolute;
+  z-index: 1;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: var(--ink-950);
   font-family: var(--font-data);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
+/* A passed node is tinted, not empty: Signal at 12% over the ground. */
 .ph .rstart__node {
-  top: 5px;
-  left: calc(-56px + var(--route-x) - 13px);
-  width: 26px;
-  height: 26px;
+  top: 3px;
+  left: calc(-56px + var(--route-x) - 15px);
+  width: 30px;
+  height: 30px;
   border: 1.5px solid var(--signal-400);
+  background: #222916;
   color: var(--signal-400);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .ph .rstart--origin .rstart__node::after {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--signal-400);
   content: "";
@@ -2219,13 +2341,13 @@ html.ph-smooth-scroll {
 }
 
 .ph .rstep__node {
-  top: 24px;
-  left: calc(-56px + var(--route-x) - 21px);
-  width: 42px;
-  height: 42px;
+  top: 23px;
+  left: calc(-56px + var(--route-x) - 22px);
+  width: 44px;
+  height: 44px;
   border: 1.5px solid var(--line-dark);
   color: var(--text-on-dark-muted);
-  font-size: 11px;
+  font-size: 12px;
   transition:
     border-color 240ms var(--ease),
     background-color 240ms var(--ease),
@@ -2235,6 +2357,7 @@ html.ph-smooth-scroll {
 
 .ph .rstep.is-reached .rstep__node {
   border-color: var(--signal-400);
+  background: #222916;
   color: var(--signal-400);
 }
 
@@ -2599,27 +2722,39 @@ html.ph-smooth-scroll {
   grid-template-columns: repeat(5, 1fr);
 }
 
+/*
+ * THE MODULE'S LINE AND THE PART ALREADY WALKED ARE ONE ELEMENT, PAINTED BEFORE
+ * THE NODES (owner, 2026-10-01 and again 2026-10-02: a line must be BEHIND what
+ * it connects — «тут и дальше по анимации»).
+ *
+ * The walked part used to be `::after`, the list's last child. Every node
+ * arrives with `pw-in` and keeps its last frame — `transform: translateY(0)`,
+ * which is not «none» — so each node is a stacking context of its own, its
+ * `z-index` counts only inside it, and the last child was painted over all of
+ * them: a cut through the ticks of L1 and L2, a dark band into the current
+ * node. Found by sweeping the page with a hit test, not by eye — the line and
+ * a passed node are the same colour.
+ *
+ * So the walked part is a background layer of the first child, grown by its
+ * size: from the first node's centre to the third's is half of the line.
+ */
 .ph .pw-path__nodes::before {
   position: absolute;
   top: 11px;
   right: 10%;
   left: 10%;
   height: 2px;
-  background: var(--pw-line-2);
+  background:
+    linear-gradient(var(--pw-signal-700), var(--pw-signal-700)) left center / 75% 100% no-repeat,
+    var(--pw-line-2);
+  animation: pw-line-draw 600ms var(--ease) 200ms both;
   content: "";
 }
 
-.ph .pw-path__nodes::after {
-  position: absolute;
-  top: 11px;
-  left: 10%;
-  width: 40%;
-  height: 2px;
-  background: var(--pw-signal-700);
-  transform-origin: left;
-  animation: pw-fill 600ms var(--ease) both;
-  animation-delay: 200ms;
-  content: "";
+@keyframes pw-line-draw {
+  from {
+    background-size: 0% 100%;
+  }
 }
 
 .ph .pw-node {
@@ -3483,17 +3618,19 @@ html.ph-smooth-scroll {
   }
 
   .ph .rstart__node {
-    left: calc(-44px + var(--route-x) - 12px);
-    width: 24px;
-    height: 24px;
+    top: 4px;
+    left: calc(-44px + var(--route-x) - 14px);
+    width: 28px;
+    height: 28px;
+    font-size: 9.5px;
   }
 
   .ph .rstep__node {
-    top: 20px;
-    left: calc(-44px + var(--route-x) - 17px);
-    width: 34px;
-    height: 34px;
-    font-size: 10px;
+    top: 18px;
+    left: calc(-44px + var(--route-x) - 19px);
+    width: 38px;
+    height: 38px;
+    font-size: 11px;
   }
 
   .ph .rstep {
@@ -3712,20 +3849,6 @@ html.ph-smooth-scroll {
 /* The six borrowed answers recede toward the axis and dim; the axis draws
    to its point; the learner's own basis is written into the frame; the
    statement follows. ≈ 950ms in all. */
-@keyframes ph-chip-recede {
-  to {
-    opacity: 0.55;
-    transform: translateX(10px);
-  }
-}
-
-@keyframes ph-chip-recede-down {
-  to {
-    opacity: 0.55;
-    transform: translateY(6px);
-  }
-}
-
 @keyframes ph-draw-x {
   from {
     transform: scaleX(0);
@@ -3784,15 +3907,31 @@ html.ph-smooth-scroll {
   }
 }
 
-.ph .reframe.is-visible .source-cloud span {
-  animation: ph-chip-recede 420ms var(--ease) both;
+/* The replies drift in from the left and settle at their own fading — no
+   opacity at the end of the keyframes, so each keeps the one its place gives. */
+@keyframes ph-reply-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
 }
 
-.ph .reframe.is-visible .source-cloud span:nth-child(2) { animation-delay: 45ms; }
-.ph .reframe.is-visible .source-cloud span:nth-child(3) { animation-delay: 90ms; }
-.ph .reframe.is-visible .source-cloud span:nth-child(4) { animation-delay: 135ms; }
-.ph .reframe.is-visible .source-cloud span:nth-child(5) { animation-delay: 180ms; }
-.ph .reframe.is-visible .source-cloud span:nth-child(6) { animation-delay: 225ms; }
+@keyframes ph-reply-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.ph .reframe.is-visible .source-cloud > li {
+  animation: ph-reply-in 420ms var(--ease) both;
+}
+
+.ph .reframe.is-visible .source-cloud > li:nth-child(2) { animation-delay: 45ms; }
+.ph .reframe.is-visible .source-cloud > li:nth-child(3) { animation-delay: 90ms; }
+.ph .reframe.is-visible .source-cloud > li:nth-child(4) { animation-delay: 135ms; }
+.ph .reframe.is-visible .source-cloud > li:nth-child(5) { animation-delay: 180ms; }
+.ph .reframe.is-visible .source-cloud > li:nth-child(6) { animation-delay: 225ms; }
 
 .ph .reframe.is-visible .reframe__axis {
   transform-origin: left center;
@@ -3818,22 +3957,22 @@ html.ph-smooth-scroll {
 
 /* --- the cycle (#mechanism) -------------------------------------------- */
 
-/* The Signal line is drawn over the hairline, left to right, and the six
-   nodes light in order as it reaches them. ≈ 850ms. */
-.ph .learning-loop::after {
-  position: absolute;
-  top: 36px;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: var(--signal-400);
-  transform: scaleX(0);
-  transform-origin: left center;
-  content: "";
+/* The Signal part of the line grows over the faint one, from the first node to
+   the last, and the six nodes light in order as it reaches them. ≈ 850ms. It
+   is the same first-child element as the faint line (see the cycle's rules), so
+   it lies under the nodes at every moment of the drawing. */
+@keyframes ph-line-grow {
+  from {
+    background-size: 0% 100%;
+  }
+
+  to {
+    background-size: 100% 100%;
+  }
 }
 
-.ph .learning-loop.is-visible::after {
-  animation: ph-draw-x 760ms var(--ease) 80ms both;
+.ph .learning-loop.is-visible::before {
+  animation: ph-line-grow 760ms var(--ease) 80ms both;
 }
 
 .ph .learning-loop.is-visible > li > span {
@@ -3856,9 +3995,9 @@ html.ph-smooth-scroll {
 }
 
 @media (max-width: 920px) {
-  /* The axis stands vertical here and the chips sit above it. */
-  .ph .reframe.is-visible .source-cloud span {
-    animation-name: ph-chip-recede-down;
+  /* The axis stands vertical here and the replies sit above it. */
+  .ph .reframe.is-visible .source-cloud > li {
+    animation-name: ph-reply-in-down;
   }
 
   .ph .reframe.is-visible .reframe__axis {
@@ -3867,25 +4006,9 @@ html.ph-smooth-scroll {
   }
 }
 
-/* The cycle stands in a column only under 680px (its layout breakpoint):
-   there the line runs down the node centres. Between 680 and 920 the cycle
-   still has three columns, and a vertical line would cut the first one. */
-@media (max-width: 680px) {
-  .ph .learning-loop::after {
-    top: 36px;
-    right: auto;
-    bottom: 40px;
-    left: 11px;
-    width: 1px;
-    height: auto;
-    transform: scaleY(0);
-    transform-origin: center top;
-  }
-
-  .ph .learning-loop.is-visible::after {
-    animation-name: ph-draw-y;
-  }
-}
+/* Below 1340px the cycle is two rows of three, and under 680px a column: the
+   one drawn line gives way to the cells' own pieces of it, which turn Signal
+   in order (see the cycle's responsive rules). */
 
 /* =========================================================================
  * THE EVIDENCE WINDOW (2026-09-22) — #review in the product's own frame.
@@ -4208,37 +4331,151 @@ html.ph-smooth-scroll {
   margin-top: 18px;
 }
 
+/* NO BADGES (owner's review, 2026-10-01). Each card used to open with a chip —
+   «V1», «Разбор», «V2», «✓» — that said again, in code, what the title under it
+   says in words. The order is carried by the strip itself: one rail along its
+   top edge, lit as far as the state the window is showing. */
 .ph .review .evidence-track > li {
-  padding: 18px 20px 20px;
+  position: relative;
+  /* The card's light lies between its ground and its words (see `::after`). */
+  isolation: isolate;
+  padding: 24px 20px 20px;
   transition:
     opacity 240ms var(--ease),
     transform 240ms var(--ease),
     background-color 240ms var(--ease);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ph .review .evidence-track > li::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
+  content: "";
+  transition:
+    background-color 240ms var(--ease),
+    box-shadow 240ms var(--ease);
+}
+
+.ph .review .evidence-track > li.is-reached::before {
+  background: rgba(199, 247, 109, 0.42);
+}
+
+.ph .review .evidence-track > li.is-active::before {
+  background: var(--signal-400);
+  box-shadow: 0 0 14px rgba(199, 247, 109, 0.55);
 }
 
 .ph .review .evidence-track > li.is-active {
   background: var(--ink-900);
 }
 
-/* The whole card answers the pointer as the title does; the object inside
-   the card is content, so the pointer over it is the reading pointer. */
-.ph .review .evidence-track > li:hover:not(:has(.evidence__object:hover)) .evidence__button {
-  color: var(--signal-300);
+/*
+ * THE CARDS SAY THEY CAN BE PRESSED (owner, 2026-10-02: «дать понять, что можно
+ * переключать блоки, небольшими подсвечиваниями»).
+ *
+ * One light, in four strengths: a wash of Signal that falls from the card's
+ * rail and is gone 140px down, inside a hairline of the same light. It is lit
+ * on the card on show; it comes up under
+ * the pointer and under the keyboard's focus; it is full for the moment of a
+ * press; and once — when the window's sequence has played to its end — it
+ * passes over the three cards that are not on show, one after another. No card
+ * moves and nothing is added to it: the same rail, lit further.
+ *
+ * The whole card is the target now, its object included, so the pointer is the
+ * pressing one everywhere on it.
+ */
+.ph .review .evidence-track > li::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(199, 247, 109, 0.17) 0,
+    rgba(199, 247, 109, 0.055) 56px,
+    rgba(199, 247, 109, 0) 140px
+  );
+  box-shadow: inset 0 0 0 1px rgba(199, 247, 109, 0.2);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease);
 }
 
-.ph .review .evidence__object {
-  cursor: auto;
+.ph .review .evidence-track > li.is-active::after {
+  opacity: 1;
 }
 
-.ph .review .evidence-track > li.is-active .evidence__index {
-  background: var(--signal-400);
-  color: var(--ink-950);
+.ph .review .evidence-track > li:focus-within::after {
+  opacity: 0.8;
 }
+
+/* Only where there is a pointer to hover with: on a touch screen a «hover»
+   sticks to the last card that was tapped. */
+@media (hover: hover) {
+  .ph .review .evidence-track > li:hover::after {
+    opacity: 0.8;
+  }
+
+  .ph .review .evidence-track > li:hover:not(.is-active)::before {
+    background: rgba(199, 247, 109, 0.78);
+  }
+
+  .ph .review .evidence-track > li:hover .evidence__button {
+    color: var(--signal-300);
+  }
+}
+
+.ph .review .evidence-track > li.is-active:hover::after,
+.ph .review .evidence-track > li:active::after {
+  opacity: 1;
+}
+
+/* The one hint: the three cards not on show, lit in order, once. */
+@keyframes ph-card-hint {
+  0% {
+    opacity: 0;
+  }
+
+  45% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* …and its rail with it: to full Signal and back to where it was. */
+@keyframes ph-rail-hint {
+  45% {
+    background: var(--signal-400);
+  }
+}
+
+.ph .review .evidence-track[data-hint] > li:not(.is-active)::after {
+  animation: ph-card-hint 420ms var(--ease) both;
+}
+
+.ph .review .evidence-track[data-hint] > li:not(.is-active)::before {
+  animation: ph-rail-hint 420ms var(--ease) both;
+}
+
+.ph .review .evidence-track[data-hint] > li:nth-child(2)::before { animation-delay: 120ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(3)::before { animation-delay: 240ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(4)::before { animation-delay: 360ms; }
+
+.ph .review .evidence-track[data-hint] > li:nth-child(2)::after { animation-delay: 120ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(3)::after { animation-delay: 240ms; }
+.ph .review .evidence-track[data-hint] > li:nth-child(4)::after { animation-delay: 360ms; }
 
 .ph .review .evidence-track h3 {
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: 12px;
+  font-size: 17px;
 }
 
 .ph .evidence__button {
@@ -4273,8 +4510,11 @@ html.ph-smooth-scroll {
   font-size: 15px;
 }
 
+/* The four notes share one line at the foot of the strip, whatever the height
+   of the object above each. */
 .ph .review .evidence__note {
-  margin-top: 10px;
+  margin-top: auto;
+  padding-top: 12px;
   font-size: 12.5px;
 }
 
@@ -4444,24 +4684,33 @@ html.ph-smooth-scroll {
  * divides, and each appears when its node lights.
  * ====================================================================== */
 
-.ph .learning-loop > li {
-  min-height: 0;
-  padding-bottom: 8px;
-}
-
+/* Centred in its column and centred inside: the label, the title, the action.
+   What is a control by nature — a progress bar, a field, a list of answers, a
+   path of levels — takes the object's full width instead. */
 .ph .cyc {
   display: grid;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 12px 12px 13px;
+  width: 100%;
+  max-width: 216px;
+  gap: 9px;
+  margin-top: 22px;
+  padding: 14px 14px 15px;
+  justify-items: center;
   border: 1px solid var(--pw-line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--pw-surface);
   color: var(--pw-text-2);
   font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.4;
-  max-width: 210px;
+  text-align: center;
+}
+
+.ph .cyc__progress,
+.ph .cyc__field,
+.ph .cyc__options,
+.ph .cyc__feedback,
+.ph .cyc__path {
+  justify-self: stretch;
 }
 
 .ph .cyc .pw-mono {
@@ -4520,6 +4769,21 @@ html.ph-smooth-scroll {
   justify-self: start;
 }
 
+/* In the cycle the action is centred, and a long one («Создать исправленную
+   версию») takes the object's width and breaks in the middle, not at its end. */
+.ph .cyc .pw-button--sm {
+  justify-content: center;
+  justify-self: center;
+  padding: 7px 14px;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ph .cyc--fix .pw-button--sm {
+  justify-self: stretch;
+}
+
 .ph .cyc__q {
   margin: 0;
   color: var(--pw-text-1);
@@ -4536,12 +4800,14 @@ html.ph-smooth-scroll {
   list-style: none;
 }
 
+/* A list of answers reads from the left, like the test it is taken from. */
 .ph .cyc__options li {
   position: relative;
   padding: 5px 8px 5px 24px;
   border: 1px solid var(--pw-line-2);
   border-radius: 6px;
   font-size: 11.5px;
+  text-align: left;
 }
 
 .ph .cyc__options li::before {
@@ -4652,17 +4918,1126 @@ html.ph-smooth-scroll {
 .ph .learning-loop.is-visible > li:nth-child(5) .cyc { animation-delay: 660ms; }
 .ph .learning-loop.is-visible > li:nth-child(6) .cyc { animation-delay: 790ms; }
 
-@media (max-width: 920px) {
+@media (max-width: 1340px) {
   .ph .cyc {
-    margin-top: 12px;
-    max-width: 320px;
+    max-width: 260px;
   }
 }
 
-/* One column: the step keeps only the room its node needs. */
 @media (max-width: 680px) {
-  .ph .learning-loop > li {
+  .ph .cyc {
+    max-width: 320px;
+    margin-top: 16px;
+  }
+}
+
+/* =========================================================================
+ * RESPONSIVE PASS (2026-10-03, owner: «проверь все на адаптивность, где есть
+ * ошибки исправляй… и про внешнюю главную не забудь»). Measured at 25 sizes
+ * from 320 to 2560 wide and on phones held sideways; each rule names what it
+ * fixed.
+ * ====================================================================== */
+
+/* One long word must not widen a grid track past its container: at 390 the
+   boundaries column was 388px inside a 348px shell, so the heading, the lead
+   and the «ATA — это не» card ran off the right edge. */
+@media (max-width: 920px) {
+  .ph .fit__columns,
+  .ph .boundaries__grid,
+  .ph .faq__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The decision window is not the route's sticky window: it holds one card
+     and shows all of it. The phone height every product window takes cut
+     its foot («Зафиксировано 17:20», the note) from 390 down. */
+  .ph .pw--decide {
+    height: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 680px) {
+  /* The longest word on the page, «самостоятельности», fits the phone's line
+     at the section scale: the size follows the shell (100% less 42px) so the
+     word never needs breaking. */
+  .ph .boundaries .display--section {
+    font-size: clamp(32px, calc(12.3vw - 6px), 58px);
+  }
+
+  /* «Последовательная» in the route's title ran 26px past its column at 320:
+     below 360 the title steps down with the screen (34px from 352). */
+  .ph .route__title {
+    font-size: clamp(28px, calc(12.5vw - 10px), 34px);
+  }
+
+  /* «Последовательность обязательна» was cut by its section at 360 and ran
+     past its column at 320: on a phone the value takes the 40px the restored
+     user-agent indent kept beside it (the frozen page's parity holds from
+     681px up). */
+  .ph .path-facts div {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .ph .path-facts dd {
+    margin-inline-start: 0;
+  }
+}
+
+/* The product windows' bars answer to the window's own width, not the
+   screen's: the same window is 276px wide on a phone and 1278px in the review
+   section. Where the bar cannot hold every section name the active one stays
+   (as the decision window always did); where it still cannot hold the demo
+   badge, the badge waits for a wider window — at 320 «Уровень 30» ran past the
+   window's edge, at 1199–1340 the badge did. */
+.ph .pw {
+  container-type: inline-size;
+}
+
+@container (max-width: 600px) {
+  .ph .pw__nav li:not(.is-active) {
+    display: none;
+  }
+}
+
+@container (max-width: 420px) {
+  .ph .pw__badge {
+    display: none;
+  }
+}
+
+/* The menu hangs from the fixed header, so it can never be scrolled to: on a
+   phone held sideways (375–430px tall) its last links and «Начать путь» fell
+   below the screen. It now ends above the screen's edge and scrolls inside. */
+@media (max-width: 1040px) {
+  .ph .primary-nav {
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* A phone held sideways is wide and short: the five links take two columns,
+   so the whole menu — «Войти» and «Начать путь» included — fits without
+   scrolling (311px in one column, 375–430px of screen). */
+@media (max-width: 1040px) and (max-height: 500px) {
+  .ph .primary-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+
+  .ph .primary-nav .nav-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The route on a narrow screen (2026-10-03, the owner's screenshots from a
+   phone: «всё перекрывается»). The pinned window covered the steps' words as
+   they scrolled under it. Each step now shows its own window right under its
+   words, at its content's height, and the route reads top to bottom; the
+   pinned window is for wide screens only. */
+.ph .rstep__window {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .ph .route__window {
+    display: none;
+  }
+
+  .ph .rstep__window {
+    display: block;
+    margin-top: 18px;
+  }
+
+  .ph .rstep__window .pw {
+    height: auto;
+    max-height: none;
+  }
+}
+
+/* The header on a phone and a tablet: once the page scrolls, the gutter around
+   the floating pill fills with the page's own ground, so nothing that scrolls
+   under the header shows above it or at its corners. At the top of the page
+   the pill floats over the hero as before. */
+@media (max-width: 1040px) {
+  .ph .site-header.is-compact {
+    top: 0;
+    padding: 14px 0 8px;
+    background: var(--mist-200);
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .site-header.is-compact {
+    padding: 8px 0 6px;
+  }
+}
+
+/* Targets and type a phone can use: the route's step titles reach 44px at
+   every size (42 at the phone's line height); «Войти» reads at the size of
+   «Меню» beside it; the footer's legal lines at 12px, not 10. */
+.ph .rstep__button {
+  padding: 9px 0;
+  margin: -9px 0;
+}
+
+.ph .mobile-login {
+  font-size: 12px;
+}
+
+.ph .site-footer__grid {
+  font-size: 12px;
+}
+
+/* In a narrow window a release reads in two lines: its time and currency, then
+   its title and facts under them — at 320 the title's column was narrower
+   than «потребительских». */
+@container (max-width: 300px) {
+  .ph .pw-news__events li {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .ph .pw-news__events li > .pw-news__cur {
+    justify-self: start;
+  }
+
+  .ph .pw-news__title,
+  .ph .pw-news__events small {
+    grid-column: 1 / -1;
+  }
+}
+
+/* «м/м» is one unit: a line never breaks after its slash («м/ м» at 390). */
+.ph .pw-nowrap {
+  white-space: nowrap;
+}
+
+/* =========================================================================
+ * #review ON A NARROW SCREEN (2026-10-03, the owner from a phone: «не понятно
+ * что переключается и зачем переключатели занимают весь экран и то что
+ * переключается не видно»). Up to 1040px the four cards stacked or paired
+ * under a window taller than the screen, so a press changed something out of
+ * sight. There the states are a stepper right above the window: numbered,
+ * joined by the rail and lit as far as the state on show, with that state's
+ * note under it. The strip of cards stays for wide screens, where it is one
+ * row directly under the window.
+ * ====================================================================== */
+.ph .review__stepper {
+  display: none;
+}
+
+@media (max-width: 1040px) {
+  .ph .review__stepper {
+    display: block;
+    margin: 0 0 16px;
+    container-type: inline-size;
+  }
+
+  .ph .review .evidence-track {
+    display: none;
+  }
+}
+
+.ph .rstepper {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* The rail runs from the first number's centre to the last; its lit part ends
+   at the state on show. */
+.ph .rstepper::before,
+.ph .rstepper::after {
+  position: absolute;
+  top: 21px;
+  left: 12.5%;
+  height: 2px;
+  content: "";
+}
+
+.ph .rstepper::before {
+  right: 12.5%;
+  background: var(--line-dark);
+}
+
+.ph .rstepper::after {
+  width: calc(var(--rs-at, 0) * 25%);
+  background: var(--signal-400);
+  transition: width 240ms var(--ease);
+}
+
+.ph .rstepper__button {
+  display: grid;
+  width: 100%;
+  min-height: 72px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-on-dark-muted);
+  font: inherit;
+  cursor: pointer;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ph .rstepper__num {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(243, 244, 239, 0.22);
+  border-radius: 50%;
+  background: var(--ink-950);
+  color: var(--text-on-dark-muted);
+  font-size: 12px;
+  place-items: center;
+  transition:
+    background-color 240ms var(--ease),
+    border-color 240ms var(--ease),
+    color 240ms var(--ease);
+}
+
+.ph .rstepper__step.is-reached .rstepper__num {
+  border-color: var(--signal-400);
+  color: var(--text-on-dark);
+}
+
+.ph .rstepper__step.is-active .rstepper__num {
+  border-color: var(--signal-400);
+  background: var(--signal-400);
+  color: var(--ink-950);
+  box-shadow: 0 0 0 6px rgba(199, 247, 109, 0.14);
+}
+
+.ph .rstepper__label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ph .rstepper__step.is-active .rstepper__label {
+  color: var(--text-on-dark);
+}
+
+.ph .rstepper__button:focus-visible {
+  outline: none;
+}
+
+.ph .rstepper__button:focus-visible .rstepper__num {
+  outline: 2px solid var(--signal-400);
+  outline-offset: 3px;
+}
+
+.ph .rstepper__note {
+  margin: 12px 0 0;
+  color: var(--text-on-dark-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ph .rstepper__note strong {
+  color: var(--text-on-dark);
+  font-weight: 600;
+}
+
+/* The narrowest phones: the four words keep to their quarter. */
+@container (max-width: 300px) {
+  .ph .rstepper__label {
+    font-size: 11px;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* On a phone the window keeps what the stepper changes — the third record,
+   the one under review, and the status — and lets the four filled records
+   go: «заполнено 5 из 5 записей» above them says it. Stepper and window
+   then fit one screen. */
+@media (max-width: 680px) {
+  .ph .rw__entry:not(.rw__entry--open) {
+    display: none;
+  }
+
+  /* What a state changes most — the reviewer's word, the verdict — comes
+     first, right under the stepper; the record it is about follows. */
+  .ph .rw__status {
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .rstepper::after,
+  .ph .rstepper__num {
+    transition: none;
+  }
+}
+
+/* =========================================================================
+ * THE PHONE COMPOSITION (2026-10-03, DD-342 — the owner: «мобильная версия
+ * внешней главной мне не нравится… такая не понятная получается»).
+ *
+ * Measured before, at 390px: 21.5 screens, 18 product windows on the way
+ * down, 103 text elements under 11px, four numbered sequences in a row, every
+ * heading 48px over three to seven lines. Direction «Одна лента» (review:
+ * design-memory/reviews/public-home-mobile-review.md): one reading line, one
+ * object per idea and none twice, the cycle as a spine that fits one screen,
+ * the six tools as one deck under the rail of the levels they open on. Wide
+ * screens are untouched.
+ * ====================================================================== */
+
+/* --- «многое → одно» says its two words when it stands in a column ------- */
+.ph .reframe__caption {
+  display: none;
+}
+
+/* --- the tools deck: a card per tool, under the rail of their levels ---- */
+.ph .tdeck__rail {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  /* Small print reads at 11px on phones and tablets, upright or sideways (it
+     was 10px, tracked wide). The hero keeps its line as it was: the brand and
+     what ATA is, on one line. */
+  .ph .eyebrow,
+  .ph .micro-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-wrap: balance;
+  }
+
+  .ph .hero .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.17em;
+  }
+
+  .ph .pw--decide .pw__level,
+  .ph .dc__field .dframe__field,
+  .ph .dc__fixed,
+  .ph .pw--review .pw__level,
+  .ph .rw__title .pw-mono,
+  .ph .rw__entry-head .pw-mono,
+  .ph .rw__entries .rw__chip {
+    font-size: 11px;
+  }
+
+  /* The product windows' own small print — times, statuses, counters, the
+     levels on the bars — was 8.5–10.5px: a miniature to look at, not to read.
+     On a phone or a tablet it is 11px, the page's floor. */
+  .ph .pw .pw-mono,
+  .ph .cyc .pw-mono,
+  .ph .pw__level,
+  .ph .pw-journal__counters span,
+  .ph .pw-check__item em,
+  .ph .pw-stats__tiles span,
+  .ph .pw-news__now,
+  .ph .pw-news__h,
+  .ph .pw-news__cur,
+  .ph .rw__chip,
+  .ph .cyc__path li,
+  .ph .pw-node strong,
+  .ph .pw-node em,
+  .ph .rstep__label,
+  .ph .rstart__node,
+  .ph .environment-note > span {
+    font-size: 11px;
+  }
+
+  .ph .reframe__caption {
+    display: block;
+    margin: 0;
+    color: rgba(11, 13, 10, 0.62);
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .ph .reframe__caption--own {
+    color: var(--ink-950);
+  }
+
+  .ph .route {
+    --tdeck-bleed: 32px;
+  }
+
+  /* The route's line ends above the deck: the tools are a ground of their
+     own, laid over the line from the route's left edge. The steps' bottom
+     padding moves inside the segment, so no stub of line shows under it. */
+  .ph .route__steps {
+    padding-bottom: 0;
+  }
+
+  .ph .route__segment--tools {
+    position: relative;
+    z-index: 1;
+    margin-left: -44px;
+    padding-bottom: 40px;
+    background: var(--ink-950);
+  }
+
+  .ph .tdeck__rail {
+    display: block;
+    margin: 6px 0 18px;
+    container-type: inline-size;
+  }
+
+  .ph .trail {
+    position: relative;
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  /* One line and the first child (DD-333): faint from the first level to the
+     last, Signal up to the card on show — a layer of its own background. */
+  .ph .trail::before {
+    position: absolute;
+    top: 21px;
+    right: calc(100% / 12);
+    left: calc(100% / 12);
+    height: 2px;
+    background:
+      linear-gradient(var(--signal-400), var(--signal-400)) left center / calc(var(--tr-at, 0) * 20%) 100% no-repeat,
+      var(--line-dark);
+    content: "";
+    transition: background-size 240ms var(--ease);
+  }
+
+  .ph .trail__button {
+    display: grid;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    place-items: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ph .trail__num {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(243, 244, 239, 0.22);
+    border-radius: 50%;
+    background: var(--ink-950);
+    color: var(--text-on-dark-muted);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    place-items: center;
+    transition:
+      background-color 240ms var(--ease),
+      border-color 240ms var(--ease),
+      color 240ms var(--ease);
+  }
+
+  .ph .trail__step.is-reached .trail__num {
+    border-color: var(--signal-400);
+    color: var(--text-on-dark);
+  }
+
+  .ph .trail__step.is-active .trail__num {
+    border-color: var(--signal-400);
+    background: var(--signal-400);
+    color: var(--ink-950);
+    box-shadow: 0 0 0 6px rgba(199, 247, 109, 0.14);
+  }
+
+  .ph .trail__button:focus-visible {
+    outline: none;
+  }
+
+  .ph .trail__button:focus-visible .trail__num {
+    outline: 2px solid var(--signal-400);
+    outline-offset: 3px;
+  }
+
+  .ph .trail__note {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 0;
+    color: var(--text-on-dark-muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .ph .trail__note strong {
+    color: var(--text-on-dark);
+    font-weight: 600;
+  }
+
+  .ph .trail__count {
+    flex: none;
+    font-size: 12px;
+  }
+
+  /* The deck: swiped sideways, one card at a time, the next one at the edge.
+     It runs to the section's edges so a card can slide out of view. */
+  .ph .route__list--tools {
+    display: flex;
+    gap: 12px;
+    margin: 0 calc(var(--tdeck-bleed) * -1);
+    padding: 0 var(--tdeck-bleed) 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--tdeck-bleed);
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .ph .route__list--tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ph .route__list--tools > .rstep {
+    flex: 0 0 min(calc(100% - 28px), 520px);
+    padding: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    transition: opacity 240ms var(--ease);
+  }
+
+  .ph .route__list--tools > .rstep:not(.is-shown) {
+    opacity: 0.5;
+  }
+
+  /* The rail names the tool and its level; the card keeps its words and its window. */
+  .ph .route__list--tools .rstep__node,
+  .ph .route__list--tools .rstep__label {
+    display: none;
+  }
+
+  .ph .route__list--tools .rstep__title {
+    margin-top: 0;
+  }
+}
+
+/* The narrowest phones: six levels keep to their sixth. */
+@container (max-width: 300px) {
+  .ph .trail__num {
+    width: 40px;
+    height: 40px;
+    font-size: 11px;
+  }
+
+  .ph .trail::before {
+    top: 19px;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph {
+    --section-pad: 60px;
+  }
+
+  .ph .route {
+    --tdeck-bleed: 16px;
+  }
+
+  /* --- type: a heading is two or three lines, not a screen -------------
+     7.8vw is what the longest word on the page («самостоятельности.») can
+     take and still keep inside the column from 320px up. */
+  .ph .display--section,
+  .ph .route__title {
+    font-size: clamp(24px, 7.8vw, 36px);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+  }
+
+  .ph .final-step__title {
+    font-size: clamp(25px, 7.4vw, 32px);
+  }
+
+  /* The responsive pass gave this heading its own size (12.3vw − 6px) to fit
+     «самостоятельности.»; measured, it still ran 5–9px past its box from 320
+     to 414. It takes the page's phone scale with the rest. */
+  .ph .boundaries .display--section {
+    font-size: clamp(24px, 7.8vw, 36px);
+  }
+
+  .ph .eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .ph .section-intro .lead,
+  .ph .route__intro .lead {
+    margin-top: 16px;
+  }
+
+  /* --- the hero's facts: four short lines, not four tiles ---------------- */
+  .ph .hero__facts {
+    margin-top: 40px;
+  }
+
+  .ph .hero__facts div {
     min-height: 0;
-    padding: 56px 0 26px;
+    padding: 14px 12px;
+  }
+
+  .ph .hero__facts strong {
+    font-size: 26px;
+  }
+
+  .ph .hero__facts span {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  /* --- #decide: the replies, two to a row ------------------------------- */
+  .ph .reframe {
+    gap: 14px;
+  }
+
+  .ph .reframe__axis {
+    height: 32px;
+  }
+
+
+  /* --- the cycle: a spine of six, on one screen -------------------------
+     Each step is its node, its name and one sentence. Its object goes: every
+     one of them is on the page in full further down — the reason in the
+     Trade Card (#decide), the check and the return in the review window, the
+     next action in the home window, the levels in the path window. */
+  .ph .learning-loop {
+    --loop-node: 40px;
+    margin-top: 36px;
+  }
+
+  .ph .learning-loop > li {
+    min-height: calc(var(--loop-node) + 24px);
+    align-items: flex-start;
+    padding: 0 0 24px 58px;
+    text-align: left;
+  }
+
+  .ph .learning-loop > li > span {
+    top: 0;
+    left: 0;
+    margin-left: 0;
+    font-size: 12px;
+  }
+
+  .ph .learning-loop > li > h3 {
+    margin: 8px 0 4px;
+    font-size: 19px;
+  }
+
+  .ph .learning-loop > li > p {
+    max-width: none;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+
+  /* From this node's centre to the next one's, behind both: the steps are
+     revealed with a transform, so each is painted over the line before it. */
+  .ph .learning-loop > li:nth-child(n)::before {
+    top: calc(var(--loop-node) / 2);
+    right: auto;
+    bottom: calc(var(--loop-node) / -2);
+    left: calc(var(--loop-node) / 2 - 1px);
+    width: 2px;
+    height: auto;
+    margin-left: 0;
+  }
+
+  .ph .learning-loop .cyc {
+    display: none;
+  }
+
+  /* --- the path's facts: the name over its value, read at body size ------
+     Side by side, «Последовательность» had 180px at 320 and ran past it. */
+  .ph .path-facts {
+    margin-top: 28px;
+  }
+
+  .ph .path-facts div {
+    padding: 11px 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .ph .path-facts dt {
+    color: var(--text-on-dark-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .ph .path-facts dd {
+    color: var(--text-on-dark);
+    font-size: 14.5px;
+    line-height: 1.45;
+  }
+
+  /* --- the path window's levels: the ticks already say «пройден» ----------
+     (the two words ran into one at 320), and the module line keeps to one row. */
+  .ph .pw-node--done em {
+    display: none;
+  }
+
+  .ph .pw-path__card-head {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+
+  .ph .pw-path__card-head span {
+    white-space: nowrap;
+  }
+
+  /* --- fit: two short lists ----------------------------------------------- */
+  .ph .fit__columns {
+    margin-top: 36px;
+  }
+
+  .ph .fit__columns article {
+    min-height: 0;
+    padding: 26px 0 28px;
+  }
+
+  .ph .fit__columns h3 {
+    margin: 12px 0 16px;
+    font-size: 24px;
+    line-height: 1.08;
+  }
+
+  .ph .plain-list li {
+    padding: 10px 0 10px 24px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .ph .plain-list li::before {
+    top: 16px;
+  }
+
+  /* --- what ATA is, and the first step: no screen-high gaps --------------- */
+  .ph .boundaries__grid {
+    gap: 36px;
+  }
+
+  .ph .not-list ul {
+    margin-top: 20px;
+  }
+
+  .ph .faq__grid {
+    gap: 36px;
+  }
+
+  .ph .final-step {
+    margin-top: 48px;
+    padding-top: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .trail::before,
+  .ph .trail__num,
+  .ph .route__list--tools > .rstep {
+    transition: none;
+  }
+}
+
+/* =========================================================================
+ * PUBLIC HOME, THE FILM AND THE REPLIES (2026-10-04; owner: «оставляли место
+ * для плеера — давай его туда поставим уже», «тут нужен хай фай»). Review:
+ * design-memory/reviews/public-home-film-review.md.
+ * ====================================================================== */
+
+/* --- the film: the Decision Frame's viewfinder around a 16:9 stage ------- */
+.ph .dframe--film {
+  padding: 34px;
+}
+
+/* The corners stand OFF the stage, at its edges — never over a playing
+   video's controls. */
+.ph .dframe--film::before,
+.ph .dframe--film::after {
+  width: 40px;
+  height: 40px;
+}
+
+.ph .dframe--film::before {
+  top: 14px;
+  left: 14px;
+  border-width: 6px 0 0 6px;
+}
+
+.ph .dframe--film::after {
+  right: 14px;
+  bottom: 14px;
+  border-width: 0 6px 6px 0;
+}
+
+.ph .hfilm__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding-left: 30px;
+}
+
+.ph .hfilm__eyebrow {
+  color: var(--text-on-dark-muted);
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ph .hfilm__soon {
+  padding: 4px 10px;
+  border: 1px solid rgba(199, 247, 109, 0.5);
+  border-radius: var(--radius-pill);
+  color: var(--signal-400);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.ph .hfilm__stage {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line-dark);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 88% 6%, rgba(199, 247, 109, 0.16), transparent 55%),
+    linear-gradient(160deg, #141912, #0b0d0a 72%);
+}
+
+.ph .hfilm__stage .hfilm__player {
+  width: 100%;
+  height: 100%;
+}
+
+.ph .hfilm__cover {
+  position: absolute;
+  inset: 0;
+  padding: clamp(18px, 2.6vw, 34px);
+  background-position: center;
+  background-size: cover;
+}
+
+.ph .hfilm__title {
+  max-width: 20ch;
+  margin: 0;
+  color: var(--text-on-dark);
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.3vw, 34px);
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+/* The brand is never broken across lines. */
+.ph .hfilm__brand {
+  white-space: nowrap;
+}
+
+.ph .hfilm__line {
+  max-width: 40ch;
+  margin: 10px 0 0;
+  color: var(--text-on-dark-muted);
+  font-size: clamp(13px, 1vw, 15px);
+  line-height: 1.5;
+}
+
+/* The cycle the film walks, as the route: walked to «Действовать». */
+.ph .hfilm__route {
+  position: absolute;
+  right: clamp(18px, 2.6vw, 34px);
+  bottom: clamp(16px, 2.4vw, 28px);
+  left: clamp(18px, 2.6vw, 34px);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One line, under the nodes (a first child: the nodes paint over it). */
+.ph .hfilm__route::before {
+  position: absolute;
+  top: 5px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--signal-400) 0 41%, rgba(243, 244, 239, 0.16) 41%);
+  content: "";
+}
+
+.ph .hfilm__route li {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ph .hfilm__route i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(243, 244, 239, 0.32);
+  border-radius: 50%;
+  background: #0b0d0a;
+}
+
+.ph .hfilm__route li:nth-child(-n + 2) i {
+  border-color: var(--signal-400);
+  background: var(--signal-400);
+}
+
+.ph .hfilm__route li:nth-child(3) i {
+  border-color: var(--signal-400);
+  box-shadow: 0 0 0 5px rgba(199, 247, 109, 0.18);
+}
+
+/* The six words in the body face: «Действовать» and «Продвинуться» fit their
+   sixth of the stage, where tracked capitals ran into each other. */
+.ph .hfilm__route span {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-on-dark-muted);
+  font-size: 11.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ph .hfilm__route li:nth-child(3) span {
+  color: var(--text-on-dark);
+}
+
+/* With the film's own poster, the poster speaks: only the control stays. */
+.ph .hfilm__cover[data-poster="image"] .hfilm__title,
+.ph .hfilm__cover[data-poster="image"] .hfilm__line,
+.ph .hfilm__cover[data-poster="image"] .hfilm__route {
+  display: none;
+}
+
+.ph .hfilm__play {
+  position: absolute;
+  top: 46%;
+  right: clamp(22px, 3vw, 40px);
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--signal-400);
+  box-shadow: 0 0 0 8px rgba(199, 247, 109, 0.16), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  color: var(--ink-950);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease);
+}
+
+.ph .hfilm__play svg {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  fill: currentColor;
+}
+
+.ph .hfilm__play:hover {
+  box-shadow: 0 0 0 12px rgba(199, 247, 109, 0.2), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.ph .hfilm__play:focus-visible {
+  outline: 3px solid var(--text-on-dark);
+  outline-offset: 4px;
+}
+
+@media (max-width: 920px) {
+  /* The replies, two to a row; the fan is for the wide layout only. */
+  .ph .source-cloud {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ph .source-cloud > li:nth-child(n) {
+    margin-right: 0;
+  }
+
+  .ph .src__said {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .dframe--film {
+    padding: 22px 18px 20px;
+  }
+
+  .ph .dframe--film::before,
+  .ph .dframe--film::after {
+    width: 30px;
+    height: 30px;
+  }
+
+  .ph .dframe--film::before {
+    top: 8px;
+    left: 8px;
+    border-width: 5px 0 0 5px;
+  }
+
+  .ph .dframe--film::after {
+    right: 8px;
+    bottom: 8px;
+    border-width: 0 5px 5px 0;
+  }
+
+  .ph .hfilm__label {
+    padding-left: 20px;
+    margin-bottom: 12px;
+  }
+
+  /* On a phone the stage holds the title and the control; the sentence and
+     the route's words would not fit a 16:9 stage of 300px. */
+  .ph .hfilm__line,
+  .ph .hfilm__route span {
+    display: none;
+  }
+
+  .ph .hfilm__play {
+    width: 58px;
+    height: 58px;
+    right: 18px;
+  }
+
+  .ph .hfilm__play svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .hfilm__play {
+    transition: none;
+  }
+
+  .ph .hfilm__play:hover {
+    transform: translateY(-50%);
   }
 }

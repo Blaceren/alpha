@@ -2,7 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
 import { sessionCookieHeader } from "@/lib/auth/constants";
-import { isVisibleNotificationType } from "@/config/feature-visibility";
+import { isLearnerFacingNotificationType } from "@/lib/notifications/learner-facing";
 
 /**
  * Does at least one unread notification exist for this learner, right now?
@@ -26,10 +26,55 @@ import { isVisibleNotificationType } from "@/config/feature-visibility";
  * caller renders it inside Suspense so it never delays the page.
  *
  * READ-ONLY. A GET against a route the Academy already proxies. Nothing here
- * marks anything read; consumption is changed only by the Backend, and this
- * phase changes it not at all.
+ * marks anything read; consumption is changed only by the Backend — since
+ * 2026-10-04 at the register's request, once the learner has seen the list
+ * (`notifications-fidelity.tsx`).
  */
 export const hasUnreadNotifications = cache(async (): Promise<boolean | null> => {
+  const items = await readNotificationItems();
+  if (items === null) return null;
+
+  /**
+   * THE MARK AND THE LIST ARE THE SAME SET.
+   *
+   * This used to read `unreadCount` — one number the Backend computes over
+   * every type it stores. While a section is withheld from the product that
+   * number can count an event the register will not show, and the learner
+   * gets the worst possible answer: a bell that says something is waiting,
+   * and a page that says nothing is. So presence is derived from the SAME
+   * rows the register renders, through the SAME visibility predicate.
+   *
+   * WHAT THIS TRADES. The count was authoritative over all history; these
+   * items are the window the Backend returns. An unread item outside that
+   * window no longer lights the mark. That is the honest direction to fail:
+   * this file's own header already notes the count "can assert more than the
+   * learner can reach", and a mark the learner cannot act on is the defect
+   * this surface was built to remove.
+   *
+   * STILL READ-ONLY. Same GET, same already-proxied route. Nothing is
+   * deleted, nothing is marked read, nothing is written.
+   */
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) continue;
+    const row = item as { type?: unknown; readAt?: unknown };
+    const type = typeof row.type === "string" ? row.type : "";
+    if (!isLearnerFacingNotificationType(type)) continue;
+    if (row.readAt === null || row.readAt === undefined) return true;
+  }
+  return false;
+});
+
+/**
+ * The learner's notification rows, exactly as the Backend returns them, or
+ * null when they could not be read.
+ *
+ * ONE READ PER REQUEST, SHARED (2026-10-03). The bell asks whether one of them
+ * is unread; Home's «Что нового» shows the latest few. Both go through this one
+ * cached GET, so a Home render costs the same single round trip it always did.
+ * The rows are not filtered here: each caller applies the same visibility
+ * predicate the register does.
+ */
+export const readNotificationItems = cache(async (): Promise<readonly unknown[] | null> => {
   /* EVERYTHING is inside the try, including config and cookie resolution. Any
      one of them can throw outside a real request scope, and every one of those
      failures means the same thing here: the question could not be answered. */
@@ -56,37 +101,8 @@ export const hasUnreadNotifications = cache(async (): Promise<boolean | null> =>
     if (!response.ok) return null;
     const body: unknown = await response.json();
     if (typeof body !== "object" || body === null) return null;
-
-    /**
-     * THE MARK AND THE LIST ARE THE SAME SET.
-     *
-     * This used to read `unreadCount` — one number the Backend computes over
-     * every type it stores. While a section is withheld from the product that
-     * number can count an event the register will not show, and the learner
-     * gets the worst possible answer: a bell that says something is waiting,
-     * and a page that says nothing is. So presence is derived from the SAME
-     * rows the register renders, through the SAME visibility predicate.
-     *
-     * WHAT THIS TRADES. The count was authoritative over all history; these
-     * items are the window the Backend returns. An unread item outside that
-     * window no longer lights the mark. That is the honest direction to fail:
-     * this file's own header already notes the count "can assert more than the
-     * learner can reach", and a mark the learner cannot act on is the defect
-     * this surface was built to remove.
-     *
-     * STILL READ-ONLY. Same GET, same already-proxied route. Nothing is
-     * deleted, nothing is marked read, nothing is written.
-     */
     const items = (body as { items?: unknown }).items;
-    if (!Array.isArray(items)) return null;
-    for (const item of items) {
-      if (typeof item !== "object" || item === null) continue;
-      const row = item as { type?: unknown; readAt?: unknown };
-      const type = typeof row.type === "string" ? row.type : "";
-      if (!isVisibleNotificationType(type)) continue;
-      if (row.readAt === null || row.readAt === undefined) return true;
-    }
-    return false;
+    return Array.isArray(items) ? items : null;
   } catch {
     return null;
   } finally {

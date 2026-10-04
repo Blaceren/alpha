@@ -4,6 +4,7 @@ import {
   fixtureToolAccess,
   learnerCurrentLevel,
   levelTitleOf,
+  releasingLevelOf,
   resolveToolWindow,
   resolveToolWindows,
   toolAccessOf,
@@ -140,5 +141,43 @@ describe("levelTitleOf and toolAccessOf", () => {
     expect(toolAccessOf({ ok: true, view: enrolledView([], access) })).toBe(access);
     expect(toolAccessOf({ ok: false, error: {} as never })).toBeNull();
     expect(toolAccessOf({ ok: true, view: { state: "unavailable", reason: "x" } })).toBeNull();
+  });
+});
+
+/**
+ * 2026-10-02 — what the level that releases a tool IS, in the learner's own
+ * program. Only ever said on a locked tool's page; never used to decide one.
+ */
+describe("releasingLevelOf", () => {
+  const full = (order: number, extra: Record<string, unknown>): never =>
+    ({ order, state: "locked", title: `Level ${order}`, inProduction: false, kind: null, ...extra }) as never;
+
+  it("tells a checkpoint, a lesson and another kind of level apart", () => {
+    const view = enrolledView([
+      full(5, { typeInfo: { type: "lesson", isCheckpoint: false }, kind: "lesson", title: "Жизненный цикл сделки" }),
+      full(9, { typeInfo: { type: "report", isCheckpoint: false }, kind: "report" }),
+      full(10, { typeInfo: { type: "checkpoint", isCheckpoint: true } }),
+      full(13, { typeInfo: { type: "lesson", isCheckpoint: false }, kind: "practice" }),
+      full(18, { typeInfo: { type: "lesson", isCheckpoint: false } }),
+    ]);
+    expect(releasingLevelOf(view, 5)).toEqual({ title: "Жизненный цикл сделки", kind: "lesson", inProduction: false });
+    expect(releasingLevelOf(view, 9)?.kind).toBe("level");
+    expect(releasingLevelOf(view, 10)?.kind).toBe("checkpoint");
+    // A practical level is a `lesson` to the Backend and not one to its author.
+    expect(releasingLevelOf(view, 13)?.kind).toBe("level");
+    // A program that names no kinds: the type decides.
+    expect(releasingLevelOf(view, 18)?.kind).toBe("lesson");
+  });
+
+  it("says when that level is itself not open yet", () => {
+    const view = enrolledView([full(24, { typeInfo: { type: "lesson", isCheckpoint: false }, kind: "assembly", inProduction: true })]);
+    expect(releasingLevelOf(view, 24)).toEqual({ title: "Level 24", kind: "level", inProduction: true });
+  });
+
+  it("answers `unknown` for a view that does not say what the level is, and null for one that has no such level", () => {
+    const view = enrolledView([level(5, "current", "Жизненный цикл сделки")]);
+    expect(releasingLevelOf(view, 5)).toEqual({ title: "Жизненный цикл сделки", kind: "unknown", inProduction: false });
+    expect(releasingLevelOf(view, 6)).toBeNull();
+    expect(releasingLevelOf({ state: "unavailable", reason: "x" }, 5)).toBeNull();
   });
 });

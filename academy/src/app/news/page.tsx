@@ -21,12 +21,12 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 const DESCRIPTION =
-  "Экономический календарь Alfa Trade Academy: выходы данных по валютам — время, прогноз, факт и что это значит для трейдера.";
+  "Экономический календарь Alpha Trade Academy: выходы данных по валютам — время, прогноз, факт и что это значит для трейдера.";
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const page = parseNewsPage((await searchParams).page) ?? 1;
   return {
-    title: page === 1 ? "Новости рынка и экономический календарь — Alfa Trade Academy" : `Новости рынка — страница ${page} — Alfa Trade Academy`,
+    title: page === 1 ? "Новости рынка и экономический календарь — Alpha Trade Academy" : `Новости рынка — страница ${page} — Alpha Trade Academy`,
     description: DESCRIPTION,
     robots: { index: false, follow: false },
   };

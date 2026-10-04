@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Lock } from "lucide-react";
 import type { ToolWindowView } from "@/features/tool-windows/model/access";
+import { ToolsReadFailed } from "@/features/tool-windows/components/tools-read-failed";
 
 /**
  * «Инструменты» — the six tools, in the order they open.
@@ -11,15 +12,33 @@ import type { ToolWindowView } from "@/features/tool-windows/model/access";
  * it opens. The rows come already resolved: this component compares no level
  * and decides no lock.
  */
-export function ToolsHub({ tools }: { tools: readonly ToolWindowView[] }) {
+export function ToolsHub({
+  tools,
+  readFailed = false,
+}: {
+  tools: readonly ToolWindowView[];
+  /** The read failed: say so, rather than draw six closed rows (2026-10-04). */
+  readFailed?: boolean;
+}) {
   const openCount = tools.filter((view) => view.state === "open").length;
+  if (readFailed) {
+    return (
+      <div className="twh tw-hifi">
+        <div className="tw-head">
+          <h1 className="tw-title">Инструменты</h1>
+        </div>
+        <ToolsReadFailed />
+      </div>
+    );
+  }
   return (
-    <div className="twh">
+    // `tw-hifi`: the product hi-fi layer (DD-338) over the tools stylesheet.
+    <div className="twh tw-hifi">
       <div className="tw-head">
         <h1 className="tw-title">Инструменты</h1>
         <span className="tw-count">{`Открыто ${openCount} из ${tools.length}`}</span>
       </div>
-      <p className="tw-orient">Рабочие инструменты ATA. Доступ открывается по мере продвижения по пути.</p>
+      <p className="tw-orient">Рабочие инструменты Академии. Доступ открывается по мере продвижения по пути.</p>
       <section className="tw-territory" aria-label="Инструменты по уровням">
         <ul className="twh-list">
           {tools.map((view) => (
@@ -68,7 +87,7 @@ function ToolRow({ view }: { view: ToolWindowView }) {
       ) : (
         <span className="twh-row__state">
           <Lock aria-hidden="true" size={13} strokeWidth={2} />
-          Откроется на уровне {unlockLevel}
+          Откроется после уровня {unlockLevel}
         </span>
       )}
     </div>

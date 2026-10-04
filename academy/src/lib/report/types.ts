@@ -65,6 +65,15 @@ export type ReportFieldDefinition = {
   placeholder: string;
 };
 
+/**
+ * Who says yes to a report (2026-10-02).
+ *
+ * `review`  a mentor or an admin reads it; the level waits for them.
+ * `formal`  nobody reads it: the platform accepts it at submission when every
+ *           required field is filled. Nothing waits, nothing is returned.
+ */
+export type ReportAcceptance = "review" | "formal";
+
 export type ReportLevelInfo = {
   levelNumber: number;
   stableCode: string;
@@ -72,7 +81,14 @@ export type ReportLevelInfo = {
   title: string;
   shortDescription: string;
   learningObjective: string;
+  /** Absent on a Backend that predates the formal check; that Backend reviews everything. */
+  acceptance?: ReportAcceptance;
 };
+
+/** The acceptance a context declares; anything unrecognised is a human review. */
+export function reportAcceptanceOf(context: { level: { acceptance?: unknown } } | null | undefined): ReportAcceptance {
+  return context?.level.acceptance === "formal" ? "formal" : "review";
+}
 
 export type ReportAssignmentInfo = {
   versionNumber: number;

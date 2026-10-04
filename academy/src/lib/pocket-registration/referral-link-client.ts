@@ -163,3 +163,72 @@ export async function requestReferralLink(signal?: AbortSignal): Promise<Referra
   }
   return { ok: true, url: parsed.value.referralUrl, requestId };
 }
+
+/* --------------------------- registration check --------------------------- */
+
+/**
+ * What the Backend knows about this learner's Pocket registration.
+ *
+ * `confirmed`       Pocket's authenticated postback has arrived.
+ * `levelCompleted`  the registration level is completed — by this call or
+ *                   before it. Only then is there something new to render.
+ *
+ * Nothing here is asserted by the browser: the request has no body, and both
+ * answers are read from the Backend's own records.
+ */
+export type RegistrationCheckResult =
+  | { ok: true; confirmed: boolean; levelCompleted: boolean; requestId: string | null }
+  | { ok: false; error: NormalizedError };
+
+function readRegistrationCheck(value: unknown): { confirmed: boolean; levelCompleted: boolean } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  if (record.status !== "confirmed" && record.status !== "pending") return null;
+  // Strict booleans: a JSON "true" is a string, and a string is not a fact.
+  return {
+    confirmed: record.status === "confirmed" && record.ok === true,
+    levelCompleted: record.levelCompleted === true,
+  };
+}
+
+/**
+ * Ask the Backend to look at its own record of this learner's registration and
+ * settle the registration level if the registration is already a fact.
+ *
+ * Idempotent on the Backend, and inert for a learner who has not registered.
+ */
+export async function checkPocketRegistration(signal?: AbortSignal): Promise<RegistrationCheckResult> {
+  const csrf = await fetchCsrfToken(signal);
+  if (!csrf.ok) return { ok: false, error: csrf.error };
+
+  let response: Response;
+  try {
+    response = await fetch(`${PROXY_BASE}/exchange/registration/check`, {
+      method: "POST",
+      headers: { accept: "application/json", "x-csrf-token": csrf.token },
+      credentials: "same-origin",
+      cache: "no-store",
+      signal,
+    });
+  } catch {
+    return { ok: false, error: makeError("NETWORK_ERROR") };
+  }
+
+  const requestId = response.headers.get(REQUEST_ID_HEADER);
+  const parsed = await readBoundedJson(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: normalizeHttpError({
+        status: response.status,
+        body: parsed.ok ? parsed.value : undefined,
+        requestId,
+      }),
+    };
+  }
+  const answer = parsed.ok ? readRegistrationCheck(parsed.value) : null;
+  if (!answer) {
+    return { ok: false, error: makeError("MALFORMED_RESPONSE", { status: response.status, requestId }) };
+  }
+  return { ok: true, ...answer, requestId };
+}

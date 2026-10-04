@@ -103,6 +103,12 @@ export function ReaderBody({
   const done = useMemo(() => new Set(reading.completedSections), [reading.completedSections]);
   const sections = body.sections;
 
+  /* The extension speaks only when it adds to the objective. A programme that
+     fills both with one sentence would otherwise print it twice, one line
+     under the other, on the material's first screen. */
+  const sameText = (a: string, b: string) => a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
+  const objectiveMore = objectiveExt && !sameText(objectiveExt, objective) ? objectiveExt : null;
+
   /**
    * The section to resume from: the server's own active marker when it still
    * names a section of this lesson, otherwise the first unread one. Not a
@@ -179,7 +185,8 @@ export function ReaderBody({
   const address = `МОДУЛЬ ${String(moduleOrder).padStart(2, "0")} · ${moduleTitle.toUpperCase()}`;
 
   return (
-    <div className="rdr">
+    // `rdr--hifi`: the product hi-fi layer (DD-338) over the frozen reader.
+    <div className="rdr rdr--hifi">
       {/* Local context strip: identity + location + structure access. */}
       <div className="strip" hidden={!stripVisible}>
         <div className="strip__inner">
@@ -231,7 +238,7 @@ export function ReaderBody({
           <section className="objective" aria-label={OBJECTIVE_LABEL}>
             <p className="objective__label">{OBJECTIVE_LABEL}</p>
             <p className="objective__text">{objective}</p>
-            {objectiveExt ? <p className="objective__ext">{objectiveExt}</p> : null}
+            {objectiveMore ? <p className="objective__ext">{objectiveMore}</p> : null}
           </section>
 
           <nav className="toc" aria-label={TOC_LABEL}>

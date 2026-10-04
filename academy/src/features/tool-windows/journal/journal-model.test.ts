@@ -11,7 +11,9 @@ import {
   isReviewed,
   manualDraftOf,
   matchesFilter,
+  neighbourOf,
   placeEntry,
+  removeEntry,
   resultMoney,
   reviewDraftOf,
   summaryWithEntry,
@@ -166,6 +168,41 @@ describe("the list's order and counts", () => {
     expect(isReviewed(entry())).toBe(false);
     expect(isReviewed(entry({ planFollowed: true }))).toBe(true);
     expect(isReviewed(entry({ execution: "Вход по плану" }))).toBe(true);
+  });
+});
+
+describe("the list after a delete", () => {
+  const first = entry({ entryTime: "15:00" });
+  const second = entry({ entryTime: "14:00" });
+  const third = entry({ entryTime: "13:00" });
+  const loaded = [first, second, third];
+
+  it("takes the entry out and leaves a fully loaded list without a cursor", () => {
+    expect(removeEntry(loaded, second.id, null)).toEqual({ entries: [first, third], nextCursor: null, reread: false });
+    expect(removeEntry([first], first.id, null)).toEqual({ entries: [], nextCursor: null, reread: false });
+    // An id that is not on screen changes nothing.
+    expect(removeEntry(loaded, "cm4j0urnal9999abcdefghij", null).entries).toEqual(loaded);
+  });
+
+  it("keeps the cursor while its entry is still there", () => {
+    expect(removeEntry(loaded, first.id, third.id)).toEqual({ entries: [second, third], nextCursor: third.id, reread: false });
+  });
+
+  it("never leaves a deleted entry as the cursor: the last line on screen takes over", () => {
+    // The Backend pages from one of the learner's own entries and refuses an id it cannot find.
+    expect(removeEntry(loaded, third.id, third.id)).toEqual({ entries: [first, second], nextCursor: second.id, reread: false });
+  });
+
+  it("asks for the list again when more remain and nothing is left on screen to continue from", () => {
+    expect(removeEntry([first], first.id, first.id)).toEqual({ entries: [], nextCursor: null, reread: true });
+  });
+
+  it("names the line that takes a deleted entry's place: the next one, else the one before", () => {
+    expect(neighbourOf(loaded, first.id)).toBe(second);
+    expect(neighbourOf(loaded, second.id)).toBe(third);
+    expect(neighbourOf(loaded, third.id)).toBe(second);
+    expect(neighbourOf([first], first.id)).toBeNull();
+    expect(neighbourOf(loaded, "cm4j0urnal9999abcdefghij")).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 # FRONTEND_ARCHITECTURE
 
-Frontend foundation Alfa Trade Academy Web V2, заложенный в Phase D1A. Provisional —
+Frontend foundation Alpha Trade Academy Web V2, заложенный в Phase D1A. Provisional —
 развивается в следующих фазах. Backend/CRM/Pocket/database не подключены.
 
 ## Стек

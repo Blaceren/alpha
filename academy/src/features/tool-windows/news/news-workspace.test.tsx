@@ -190,7 +190,7 @@ describe("News Calendar — the learner's plan", () => {
   it("reads from the browser when the server could not, and says when the tool is closed", async () => {
     fetchNewsCalendar.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<NewsWorkspace />);
-    expect(await screen.findByText("News Calendar открывается после контрольной точки уровня 30.")).toBeInTheDocument();
+    expect(await screen.findByText("News Calendar пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(fetchNewsCalendar).toHaveBeenCalledWith(null);
   });
 });

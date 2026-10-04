@@ -36,6 +36,8 @@ export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
  */
 export const TURNSTILE_REGISTER_ACTION = "academy_register";
 export const TURNSTILE_LOGIN_ACTION = "academy_login";
+/** The request for a password-reset link (ACCOUNT RECOVERY). */
+export const TURNSTILE_PASSWORD_RESET_ACTION = "academy_password_reset";
 
 /**
  * A conservative site-key shape: a leading digit, `x`, then key material.
@@ -66,6 +68,16 @@ export type TurnstileRenderOptions = {
   "timeout-callback": () => void;
   theme?: "auto" | "light" | "dark";
   size?: "normal" | "flexible" | "compact";
+  /**
+   * When the widget shows itself: always, once the challenge starts, or only
+   * when the visitor has to do something («interaction-only» — most visitors
+   * never see it).
+   */
+  appearance?: "always" | "execute" | "interaction-only";
+  /** The challenge is about to ask the visitor for something; the widget becomes visible. */
+  "before-interactive-callback"?: () => void;
+  /** The challenge no longer needs the visitor. */
+  "after-interactive-callback"?: () => void;
 };
 
 export type TurnstileApi = {

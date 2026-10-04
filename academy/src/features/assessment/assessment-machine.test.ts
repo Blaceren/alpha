@@ -25,8 +25,8 @@ const START: AssessmentStart = {
   },
 };
 
-const failResult = (): AssessmentResult => ({ created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 5, totalQuestions: 2, correctCount: 1, scoreBasisPoints: 5000, completion: null });
-const passResult = (): AssessmentResult => ({ created: true, status: "passed", passed: true, attemptNumber: 2, submittedAt: "t", durationSeconds: 5, totalQuestions: 2, correctCount: 2, scoreBasisPoints: 10000, completion: { levelNumber: 2, stableCode: "v2.l002.x", xpAwarded: 0, nextLevelNumber: 3, terminal: false, completedAt: "t" } });
+const failResult = (): AssessmentResult => ({ created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 5, totalQuestions: 2, correctCount: 1, scoreBasisPoints: 5000, completion: null, review: null });
+const passResult = (): AssessmentResult => ({ created: true, status: "passed", passed: true, attemptNumber: 2, submittedAt: "t", durationSeconds: 5, totalQuestions: 2, correctCount: 2, scoreBasisPoints: 10000, completion: { levelNumber: 2, stableCode: "v2.l002.x", xpAwarded: 0, nextLevelNumber: 3, terminal: false, completedAt: "t" }, review: null });
 
 function loaded(): AssessmentState {
   return reducer(initialState(false), { type: "start_ok", data: START });
@@ -71,6 +71,27 @@ describe("assessment-machine", () => {
     expect(s.requestId).toBe("r1");
   });
 
+  it("a send that did not get through keeps the answers and the request key (2026-10-04)", () => {
+    let s = reducer(loaded(), { type: "select", questionKey: "q1", code: "a" });
+    s = reducer(s, { type: "select", questionKey: "q2", code: "b" });
+    s = reducer(s, { type: "submit_pending", requestId: "r1" });
+    s = reducer(s, { type: "submit_err", error: makeError("NETWORK_ERROR") });
+    expect(s.phase).toBe("answering");
+    expect(s.selections).toEqual({ q1: "a", q2: "b" });
+    expect(s.attemptId).toBe(7);
+    expect(s.requestId).toBe("r1"); // sending again cannot count twice
+    expect(s.error).not.toBeNull();
+    // Changing an answer makes it a new submission with its own key.
+    s = reducer(s, { type: "select", questionKey: "q2", code: "a" });
+    expect(s.requestId).toBeNull();
+    // And the check switched off still ends the attempt on screen.
+    let off = reducer(loaded(), { type: "select", questionKey: "q1", code: "a" });
+    off = reducer(off, { type: "select", questionKey: "q2", code: "b" });
+    off = reducer(off, { type: "submit_pending", requestId: "r2" });
+    off = reducer(off, { type: "submit_err", error: makeError("UNKNOWN_ERROR", { status: 404 }) });
+    expect(off.phase).toBe("flag_disabled");
+  });
+
   it("pass/fail phase is derived only from the Backend result", () => {
     let s = reducer(loaded(), { type: "submit_ok", result: failResult() });
     expect(s.phase).toBe("failed");
@@ -81,11 +102,23 @@ describe("assessment-machine", () => {
 
   it("retry clears selections and returns to loading (fresh attempt)", () => {
     let s = reducer(loaded(), { type: "submit_ok", result: failResult() });
-    s = reducer(s, { type: "select", questionKey: "q1", code: "a" }); // failed still allows re-select
     s = reducer(s, { type: "retry" });
     expect(s.phase).toBe("loading");
     expect(s.selections).toEqual({});
     expect(s.attemptId).toBeNull();
+  });
+
+  it("a graded attempt cannot be re-answered: a selection after a fail changes nothing", () => {
+    // It used to slide back to `answering` with the dead attempt's id.
+    let s = reducer(loaded(), { type: "select", questionKey: "q1", code: "a" });
+    s = reducer(s, { type: "select", questionKey: "q2", code: "b" });
+    s = reducer(s, { type: "submit_pending", requestId: "ata-asmt-fixedkey01" });
+    s = reducer(s, { type: "submit_ok", result: failResult() });
+    const graded = s;
+    s = reducer(s, { type: "select", questionKey: "q1", code: "c" });
+    expect(s).toBe(graded);
+    expect(s.phase).toBe("failed");
+    expect(s.selections).toEqual({ q1: "a", q2: "b" });
   });
 
   it("maps errors to bounded phases (fail-closed)", () => {

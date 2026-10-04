@@ -1,6 +1,6 @@
 # INFORMATION_ARCHITECTURE
 
-Информационная архитектура Alfa Trade Academy Web V2: навигация, sitemap, контекстное открытие разделов, разделение app / public.
+Информационная архитектура Alpha Trade Academy Web V2: навигация, sitemap, контекстное открытие разделов, разделение app / public.
 
 Маршруты — `ROUTE_MAP.md` (канонический App Router синтаксис `[param]`). Пользовательская терминология — `CONTENT_AND_TONE.md`.
 
@@ -9,7 +9,7 @@
 ## 1. Верхнеуровневый sitemap
 
 ```
-Alfa Trade Academy
+Alpha Trade Academy
 ├── Главная (/)                              — что делать сейчас
 ├── Путь (/path)                             — горизонтальный путь L1–100
 │   └── Уровень (/path/level/[levelCode])

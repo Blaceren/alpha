@@ -46,8 +46,14 @@ export type SupportProxyInput =
  */
 const CASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
 
-/** A support message is prose. 16 KiB is far more than any reply needs. */
-export const MAX_SUPPORT_BODY_BYTES = 16 * 1024;
+/**
+ * A support message is prose — and the form allows 8 000 characters, the
+ * Backend's own limit. In Cyrillic that is two bytes a character (three for
+ * some signs), so the old 16 KiB refused a full-length message the form had
+ * accepted (2026-10-04, launch audit). 32 KiB holds 8 000 characters of any
+ * script plus the subject.
+ */
+export const MAX_SUPPORT_BODY_BYTES = 32 * 1024;
 /** A thread of 200 messages stays comfortably inside this. */
 export const MAX_SUPPORT_RESPONSE_BYTES = 512 * 1024;
 

@@ -2,11 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { MORE_MENU, PRIMARY_NAV } from "@/config/navigation";
-import { isBuiltRoute } from "@/config/built-routes";
-import { isVisibleSection } from "@/config/feature-visibility";
 import { Icon } from "@/components/ui/icon";
 import { useMobileMenu } from "@/components/shell/mobile-menu-state";
+import { mobileBarLayout } from "@/components/navigation/mobile-slots";
 
 /**
  * Mobile bottom navigation.
@@ -36,13 +34,15 @@ import { useMobileMenu } from "@/components/shell/mobile-menu-state";
  * Fixed, safe-area padded, >=54px targets, active marked with aria-current +
  * underline rather than colour alone. Профиль stays on the top-bar avatar and
  * also appears here, because on mobile the avatar is a small target.
+ *
+ * WHICH SECTIONS GET A SLOT is `mobile-slots.ts`, read here and by the avatar:
+ * four canonical sections, then «Ещё» — or, when only one destination would be
+ * behind it, that destination in the fifth slot (2026-10-03: with support in
+ * the profile and Community withheld, that is «Профиль»).
  */
 
-/** How many canonical sections keep a slot of their own. The fifth is "Ещё". */
-const PRIMARY_SLOTS = 4;
-
 /** Visual grouping only, matching the desktop bar. Not a route decision. */
-const SECONDARY_IDS = new Set(["community", "support"]);
+const SECONDARY_IDS = new Set(["community"]);
 
 export function MobileBottomNavigation({ activeId = "home" }: { activeId?: string }) {
   /* The open state is shared with the top bar's avatar: on `/profile` both are
@@ -51,22 +51,14 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
   const moreRef = React.useRef<HTMLButtonElement>(null);
   const sheetRef = React.useRef<HTMLDivElement>(null);
 
-  const built = PRIMARY_NAV.filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id));
-
   /**
    * What "Ещё" contains: the canonical `MORE_MENU` order, the built and shown
-   * entries only, plus any primary section that lost its slot. The union is
-   * deduplicated by id, so a section can never be both in the bar and in the
-   * sheet, and can never be in neither.
+   * entries only, plus any primary section that lost its slot — deduplicated
+   * by id, so a section can never be both in the bar and in the sheet, and can
+   * never be in neither. A single such destination is not a menu: it takes the
+   * fifth slot (see `mobile-slots.ts`).
    */
-  const overflow = React.useMemo(() => {
-    const shown = new Set(PRIMARY_NAV.filter((i) => isBuiltRoute(i.id) && isVisibleSection(i.id))
-      .slice(0, PRIMARY_SLOTS).map((i) => i.id));
-    const seen = new Set<string>();
-    return [...PRIMARY_NAV, ...MORE_MENU]
-      .filter((item) => isBuiltRoute(item.id) && isVisibleSection(item.id) && !shown.has(item.id))
-      .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
-  }, []);
+  const { slots, overflow } = React.useMemo(() => mobileBarLayout(), []);
 
   /**
    * WHETHER "ЕЩЁ" IS RENDERED IS A QUESTION ABOUT WHAT IS BEHIND IT.
@@ -84,7 +76,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
    * rule rather than a coincidence of list lengths.
    */
   const needsOverflow = overflow.length > 0;
-  const primary = needsOverflow ? built.slice(0, PRIMARY_SLOTS) : built;
+  const primary = slots;
 
   /**
    * Closing the disclosure, and where focus goes when it closes.
@@ -146,7 +138,7 @@ export function MobileBottomNavigation({ activeId = "home" }: { activeId?: strin
      the current page", which the button is not. It is claimed only while the
      menu is CLOSED and only for the secondary group, and both halves matter:
        — closed, because once the menu opens the real «Сообщество» /
-         «Поддержка» row is on screen carrying `aria-current="page"`, and two
+         row is on screen carrying `aria-current="page"`, and two
          markers is one more answer than the question has;
        — secondary only, because «Профиль» also lives behind this button, and on
          /profile the avatar in the bar above already carries the marker. The

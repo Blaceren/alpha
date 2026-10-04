@@ -6,7 +6,8 @@ import { ProductRoute } from "@/features/public-home/product-route";
 import { ReviewWindow } from "@/features/public-home/review-window";
 import { DecisionWindow } from "@/features/public-home/decision-window";
 import { CycleObject } from "@/features/public-home/cycle-objects";
-import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-data";
+import { HeroFilm } from "@/features/public-home/hero-film";
+import type { PublicFilm } from "@/server/media/public-film";
 
 /**
  * PUBLIC HOME — the brand-evolution composition.
@@ -61,7 +62,25 @@ import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-da
  * about the visitor is whether a session exists.
  */
 
-export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) {
+/** What others hand you — the kind, and a line of it. Authored examples, no
+    instrument, no amount, no person. */
+const OTHERS_ANSWERS = [
+  { kind: "Разбор", said: "«У сильного уровня — жду отскок»" },
+  { kind: "Стратегия", said: "«Три свечи подряд — входи по тренду»" },
+  { kind: "Сигнал", said: "«Вверх, пять минут»" },
+  { kind: "Прогноз", said: "«К пятнице будет ниже»" },
+  { kind: "Мнение", said: "«Рынок перегрет»" },
+  { kind: "Чужой вывод", said: "«Все уже в покупках»" },
+] as const;
+
+export function PublicHomeScreen({
+  authenticated,
+  film = null,
+}: {
+  authenticated: boolean;
+  /** The film on the host, or null while there is none (`server/media/public-film.ts`). */
+  film?: PublicFilm | null;
+}) {
   const account = authenticated
     ? { href: "/home", label: "Перейти в Академию" }
     : { href: "/register", label: "Начать путь" };
@@ -81,7 +100,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
         <section className="hero surface surface--ink" id="top">
           <div className="hero__inner shell">
             <div className="hero__copy" data-reveal>
-              <p className="eyebrow">ALFA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
+              <p className="eyebrow">ALPHA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
               <h1 className="display display--hero">
                 Возможности не приходят с готовыми ответами.
               </h1>
@@ -107,25 +126,11 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </p>
             </div>
 
-            {/* Decision Frame — stage 1. NOT an empty reserve: the object inside
-                is a real report field, legible and deliberately unfinished. */}
-            <figure className="dframe dframe--open" data-reveal data-frame-stage="open">
-              <figcaption className="dframe__label">
-                <span className="demo-badge">Демонстрационный пример</span>
-                <span className="dframe__stage">Решение ещё не определено</span>
-              </figcaption>
-              <div className="dframe__object">
-                <p className="dframe__field">{DECISION_FIELD}</p>
-                <p className="dframe__value dframe__value--empty">
-                  {DECISION_UNSET}
-                  <i className="dframe__caret" aria-hidden="true" />
-                </p>
-                <div className="dframe__unresolved" aria-hidden="true">
-                  <i />
-                  <i />
-                </div>
-              </div>
-            </figure>
+            {/* THE FILM (2026-10-04). The frame kept here since 2026-09-22 for
+                the film about the platform holds it now — its cover with
+                «Скоро» until the video is on the host, then the player.
+                hero-film.tsx */}
+            <HeroFilm film={film} />
           </div>
 
           <div className="hero__facts shell" aria-label="Ключевые факты о пути ATA" data-reveal>
@@ -137,12 +142,15 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               <strong>100</strong>
               <span>последовательных уровней</span>
             </div>
+            {/* The program learners have (2026-10-04, launch audit): the first test
+                is level 4, the first practice with a report is level 9. These said
+                L2 and L3 — the 100-level plan. */}
             <div>
-              <strong>L2</strong>
+              <strong>L4</strong>
               <span>первая проверка знаний</span>
             </div>
             <div>
-              <strong>L3</strong>
+              <strong>L9</strong>
               <span>первая практика и разбор</span>
             </div>
           </div>
@@ -165,15 +173,25 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
             </div>
 
             <div className="reframe" data-reveal>
-              <div className="source-cloud" aria-label="Чужие ответы">
-                <span>Разборы</span>
-                <span>Стратегии</span>
-                <span>Сигналы</span>
-                <span>Прогнозы</span>
-                <span>Мнения</span>
-                <span>Чужие выводы</span>
-              </div>
+              {/* Phones only (CSS): stacked, the device needs its two words —
+                  what recedes and what is written. DD-342. */}
+              <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
+              {/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»).
+                  Six pale pills only named the kinds of answer. Each is now a
+                  line someone else said — what a review, a signal, a forecast
+                  actually hands you — in the page's ink, fading as it recedes.
+                  None of them is the learner's reason: that is written in the
+                  card the line leads to. */}
+              <ul className="source-cloud" aria-label="Чужие ответы">
+                {OTHERS_ANSWERS.map((item) => (
+                  <li className="src" key={item.kind}>
+                    <span className="src__kind">{item.kind}</span>
+                    <span className="src__said">{item.said}</span>
+                  </li>
+                ))}
+              </ul>
               <div className="reframe__axis" aria-hidden="true" />
+              <p className="reframe__caption reframe__caption--own" aria-hidden="true">Ваше решение</p>
 
               {/* The same object, now determinate — in the Trade Card, where
                   the product holds it. decision-window.tsx */}
@@ -334,8 +352,10 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
             <div className="environment-note" data-reveal>
               <span>Практическая среда</span>
               <p>
-                Для части практического пути используется внешняя торговая среда. Она
-                поддерживает обучение, но не является центральным ценностным предложением ATA.
+                {/* Said to a visitor, not to the team (2026-10-04, launch audit): the
+                    line ended «…не является центральным ценностным предложением ATA». */}
+                Для части практического пути используется внешняя торговая среда. Она нужна
+                для практики, а учит вас Академия.
               </p>
             </div>
           </div>
@@ -349,7 +369,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               <h2 className="display display--section">
                 До начала пути не должно оставаться скрытых условий.
               </h2>
-              <p>В первую версию включены только ответы, подтверждённые действующим продуктом.</p>
+              <p>Каждый ответ проверен на том, как Академия работает сейчас.</p>
             </div>
 
             <div className="faq-list" data-reveal>
@@ -378,7 +398,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </Link>
               {authenticated ? null : (
                 <Link className="client-entry" href="/login">
-                  Уже клиент? <strong>Войти</strong>
+                  Уже учитесь? <strong>Войти</strong>
                 </Link>
               )}
             </div>
@@ -388,7 +408,7 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
 
       <footer className="site-footer">
         <div className="shell site-footer__grid">
-          <p>© <span data-year>{new Date().getFullYear()}</span> Alfa Trade Academy</p>
+          <p>© <span data-year>{new Date().getFullYear()}</span> Alpha Trade Academy</p>
           <p>Обучение и прохождение ATA не гарантируют финансовый результат.</p>
           {/* The three legal labels have no destination pages yet. They are NOT
               links and NOT a navigation landmark — an affordance that goes

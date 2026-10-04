@@ -8,7 +8,7 @@ import "@/features/path/path.css";
 import { shellViewerName } from "@/server/auth/server-session";
 
 export const metadata: Metadata = {
-  title: "Путь — Alfa Trade Academy",
+  title: "Путь — Alpha Trade Academy",
   description: "Маршрут обучения: 20 модулей, 100 уровней, контрольные точки и инструменты.",
 };
 

@@ -2,7 +2,7 @@
  * A WITHHELD ROUTE MUST NOT NAME ITSELF.
  *
  * The component guard was never the whole story: Next resolves a segment's
- * metadata separately, so `/community` kept answering with «Сообщество — Alfa
+ * metadata separately, so `/community` kept answering with «Сообщество — Alpha
  * Trade Academy» in the document title while rendering a 404 body. Hidden
  * everywhere except the tab.
  */
@@ -55,7 +55,7 @@ describe("withheld Community route metadata", () => {
     it(`${name} returns the generic not-found metadata`, async () => {
       const meta = await call();
       expect(meta).toEqual(NOT_FOUND_METADATA);
-      expect((meta as { title: string }).title).toBe("Страница не найдена — Alfa Trade Academy");
+      expect((meta as { title: string }).title).toBe("Страница не найдена — Alpha Trade Academy");
     });
 
     it(`${name} names nothing about the section`, async () => {

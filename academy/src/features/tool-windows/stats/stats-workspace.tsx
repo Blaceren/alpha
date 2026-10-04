@@ -33,7 +33,7 @@ function messageFor(error: NormalizedError): string {
   switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
-      return "Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.";
+      return "Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.";
     case "RATE_LIMITED":
       return "Слишком много действий подряд. Подождите минуту и попробуйте снова.";
     case "UNAUTHENTICATED":
@@ -108,7 +108,7 @@ export function StatsWorkspace({ initialStats = null }: { initialStats?: Journal
     return (
       <div className="tw-quiet">
         <h2 className="tw-quiet__title">Инструмент закрыт</h2>
-        <p className="tw-quiet__line">Personal Stats открывается после контрольной точки уровня 25.</p>
+        <p className="tw-quiet__line">Personal Stats пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».</p>
         <Link className="tw-button" data-variant="outline" href="/path">
           Продолжить путь
         </Link>

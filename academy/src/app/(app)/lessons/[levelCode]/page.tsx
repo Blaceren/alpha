@@ -22,11 +22,25 @@ import { ExperienceLevelDetail } from "@/features/academy-experience/level-detai
 import "@/features/lesson/lesson.css";
 import "@/features/report-level/report-level.css";
 import { shellViewerName } from "@/server/auth/server-session";
+import { levelTabTitle } from "@/lib/curriculum/level-tab-title";
 
-export const metadata: Metadata = {
-  title: "Урок — Alfa Trade Academy",
-  description: "Видеоурок и проверка понимания одного уровня пути.",
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ levelCode: string }>;
+}): Promise<Metadata> {
+  const { levelCode } = await params;
+  let code = levelCode;
+  try {
+    code = decodeURIComponent(levelCode);
+  } catch {
+    // A malformed address keeps its raw code; the title falls back.
+  }
+  return {
+    title: levelTabTitle(code),
+    description: "Видеоурок и проверка понимания одного уровня пути.",
+  };
+}
 
 /**
  * Урок (/lessons/[levelCode]) — the canonical lesson route (ROUTE_MAP §1).

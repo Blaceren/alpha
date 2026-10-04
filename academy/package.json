@@ -5,7 +5,7 @@
     "node": "22.14.x"
   },
   "private": true,
-  "description": "Alfa Trade Academy Web V2 — app shell and Route Field Home (Phase D1B)",
+  "description": "Alpha Trade Academy Web V2 — app shell and Route Field Home (Phase D1B)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

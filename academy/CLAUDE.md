@@ -1,13 +1,13 @@
-# CLAUDE.md — Alfa Trade Academy Web V2
+# CLAUDE.md — Alpha Trade Academy Web V2
 
 Guidance for Claude Code (and any agent) working in this repository.
 
 ## Что это за проект
 
-**Alfa Trade Academy (ATA)** — последовательная образовательная платформа по трейдингу. Пользователь проходит фиксированный путь из **100 уровней / 20 модулей**, смотрит уроки Alex Curie, проходит тесты, выполняет reports и practical-задания, получает mentor review и XP, проходит финансовые checkpoints, открывает инструменты и community-каналы и вручную строит собственную торговую систему.
+**Alpha Trade Academy (ATA)** — последовательная образовательная платформа по трейдингу. Пользователь проходит фиксированный путь из **100 уровней / 20 модулей**, смотрит уроки Alex Curie, проходит тесты, выполняет reports и practical-задания, получает mentor review и XP, проходит финансовые checkpoints, открывает инструменты и community-каналы и вручную строит собственную торговую систему.
 
 **Pocket** — торговая платформа (брокер). Пользователь торгует и видит деньги только в Pocket.
-**Alfa Trade Academy** — система обучения, progression, planning, analysis, discipline и сопровождения. **ATA не является торговым терминалом и не имитирует его.**
+**Alpha Trade Academy** — система обучения, progression, planning, analysis, discipline и сопровождения. **ATA не является торговым терминалом и не имитирует его.**
 
 ## Текущая фаза: D0 (Documentation & decision lock)
 
@@ -40,7 +40,7 @@ Guidance for Claude Code (and any agent) working in this repository.
 
 ## Терминология и правила
 
-- **Название продукта:** только **Alfa Trade Academy**. «TradeQuest» — legacy, встречается лишь в `les-prog.txt`, в пользовательских текстах запрещено.
+- **Название продукта:** только **Alpha Trade Academy** (решение владельца 03.10.2026: «во всем проекте название должно быть alpha а не alfa»). «Alfa» — прежнее написание, в текстах не используется. «TradeQuest» — legacy, встречается лишь в `les-prog.txt`, в пользовательских текстах запрещено.
 - **Язык:** интерфейс сначала на русском, позднее польская локализация. RTL не нужен. Компоненты сразу проектируются под более длинные польские строки.
 - **Тема:** dark-only. Тёмные поверхности, холодные акценты, controlled glow, premium lighting.
 - **Финансовая приватность (критично):** ATA **никогда** не показывает баланс/депозиты/выводы пользователя. Показывается только цель checkpoint («Для открытия следующего модуля требуется баланс Pocket от $300»). Не рассчитывать «осталось $X». Checkpoint CTA **не** открывает Pocket.
@@ -100,7 +100,7 @@ D0 (текущая) → D1 foundation → D2 Главная+Путь → D3 Ур
 ## Обязательный workflow любого будущего UI
 
 D1A (generic dashboard) отклонён (`docs/ART_DIRECTION_RESET.md`). Для любого нового/переработанного
-UI Alfa Trade Academy соблюдать порядок (детали — `docs/DESIGN_SKILLS_INDEX.md`,
+UI Alpha Trade Academy соблюдать порядок (детали — `docs/DESIGN_SKILLS_INDEX.md`,
 `docs/DESIGN_QUALITY_CONSTITUTION.md`):
 
 1. `frontend-design`
