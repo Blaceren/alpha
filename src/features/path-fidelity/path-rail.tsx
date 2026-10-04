@@ -61,6 +61,14 @@ export function PathRail() {
       });
     }
 
+    /*
+     * THE BRANCH (2026-10-04, owner: «задумка хорошая, но реализация ужасная»).
+     * The leader used to fill only the gap above the panel — or, for a level at
+     * the left edge, fuse into the panel's corner — so it hung half a screen
+     * below the node it belonged to. It is now one line from the current mark's
+     * lower edge straight down to the panel, at the mark's own centre, and it
+     * hides when the mark is panned out of the panel's width.
+     */
     function layoutFocusJoin() {
       const cur = currentNode();
       const focus = root?.querySelector<HTMLElement>("[data-focus]");
@@ -70,17 +78,16 @@ export function PathRail() {
       const markRect = mark.getBoundingClientRect();
       const focusRect = focus.getBoundingClientRect();
       const x = markRect.left + markRect.width / 2 - focusRect.left;
-      if (x <= 30) {
-        leader.classList.add("focus__leader--merged");
-        leader.style.left = "-1px";
-        leader.hidden = false;
-      } else if (x < focusRect.width - 30) {
-        leader.classList.remove("focus__leader--merged");
-        leader.style.left = `${Math.round(x)}px`;
-        leader.hidden = false;
-      } else {
+      const top = markRect.bottom - focusRect.top;
+      leader.classList.remove("focus__leader--merged");
+      if (x < 18 || x > focusRect.width - 18 || top >= 0) {
         leader.hidden = true;
+        return;
       }
+      leader.style.left = `${Math.round(x - 1)}px`;
+      leader.style.top = `${Math.round(top)}px`;
+      leader.style.height = `${Math.round(-top)}px`;
+      leader.hidden = false;
     }
 
     function updateRailFades() {

@@ -558,6 +558,10 @@ describe("the authenticated route group", () => {
   "src/components/shell/notification-button.tsx",
   "src/components/shell/unread-presence.tsx",
   "src/lib/support/support-links.ts",
+  /* PATH, THE OWNER'S REVIEW (2026-10-04): the rail controller draws the
+     branch from the current mark straight down to the panel — the stem used to
+     hang half a screen below the node it belonged to. Geometry only. */
+  "src/features/path-fidelity/path-rail.tsx",
 ];
 
   it("has brought no loading boundary back since the release", () => {

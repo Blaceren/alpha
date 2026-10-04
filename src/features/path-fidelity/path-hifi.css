@@ -128,6 +128,220 @@
   font-size: 15px;
 }
 
+/* ------------------------------------------- the strip, 2026-10-04 ------ */
+/*
+ * THE OWNER'S REVIEW (2026-10-04): «кружок, подсвечивающий актуальный
+ * уровень, обрезан», «названия уровней слишком просто показаны», «снизу слева
+ * полоска непонятная — задумка хорошая, но реализация ужасная».
+ *
+ * (1) NOTHING ON THE STRIP IS CUT. The strip scrolls sideways where it can
+ * overflow, and a scrolling box clips everything past its edge — the current
+ * mark's light included, on its left and its top. On a desktop the five levels
+ * always fit, so the strip simply does not clip there; where it pans, it is
+ * given room around its content and takes the same room back, so nothing
+ * moves and the light fits.
+ */
+@media (min-width: 900px) {
+  .pth.pth--hifi .rail__scroller {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 899px) {
+  .pth.pth--hifi .rail__scroller {
+    padding: 18px 18px 6px;
+    margin: -18px -18px -6px;
+  }
+}
+
+.pth.pth--hifi .level-node--current .level-node__mark {
+  box-shadow: 0 0 0 2px var(--signal), var(--hf-halo), 0 0 16px rgba(199, 247, 109, 0.38);
+}
+
+/*
+ * (2) A LEVEL IS NAMED, NOT LISTED. The name in the display face the module's
+ * own title uses, the code as a mono eyebrow, and what the level is and where
+ * the learner stands with it as two quiet pills on one line. The current level
+ * is the brightest and largest; the levels further on step back.
+ */
+.pth.pth--hifi .level-node__code {
+  font: 500 10.5px / 1.4 var(--font-mono);
+  letter-spacing: var(--hf-eyebrow-tracking);
+}
+
+.pth.pth--hifi .level-node--current .level-node__code {
+  color: var(--signal);
+}
+
+.pth.pth--hifi .level-node__name {
+  margin-top: 8px;
+  overflow-wrap: break-word;
+  color: var(--text-secondary);
+  font: 400 17px / 1.25 var(--hf-display);
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+.pth.pth--hifi .level-node--current .level-node__name {
+  color: var(--text-primary);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.pth.pth--hifi .level-node--locked .level-node__name {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.pth.pth--hifi .level-node--far .level-node__name {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+/* What the level is: a quiet mono word. Where the learner stands with it: a
+   pill — the one mark that changes as the learner moves. */
+.pth.pth--hifi .level-node__type {
+  display: inline-block;
+  margin: 12px 10px 0 0;
+  color: var(--text-muted);
+  font: 500 10px / 1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pth.pth--hifi .level-node__state {
+  display: inline-flex;
+  align-items: center;
+  margin: 10px 0 0;
+  padding: 3px 9px;
+  border: 1px solid var(--hf-line-strong);
+  border-radius: var(--hf-radius-pill);
+  color: var(--text-secondary);
+  font: 500 10px / 1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pth.pth--hifi .level-node--current .level-node__state {
+  border-color: rgba(199, 247, 109, 0.45);
+  background: rgba(199, 247, 109, 0.07);
+  color: var(--signal);
+}
+
+.pth.pth--hifi .level-node--done .level-node__state {
+  border-color: rgba(168, 216, 79, 0.3);
+  color: var(--route-completed);
+}
+
+/* The next level's reason is the panel's last line again: kept for a screen
+   reader on its node, drawn once — under the panel. */
+.pth.pth--hifi .level-node__reason {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * (3) THE BRANCH. The idea is kept — the current level and its detail are one
+ * object — and drawn whole: one line from the current mark straight down to
+ * the panel, landing on its edge in a joint (the rail controller measures it).
+ * The level's words step right of the line, a soft light runs down its column,
+ * and the panel's corner brackets — which the line used to fuse into, half a
+ * screen below the node it belonged to — are not drawn.
+ */
+.pth.pth--hifi .level-node--current {
+  isolation: isolate;
+  padding-left: 30px;
+}
+
+.pth.pth--hifi .level-node + .level-node.level-node--current {
+  padding-left: 52px;
+}
+
+.pth.pth--hifi .level-node--current::after {
+  position: absolute;
+  z-index: -1;
+  top: 30px;
+  right: 6px;
+  bottom: -8px;
+  left: -10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(199, 247, 109, 0.075), rgba(199, 247, 109, 0) 82%);
+  content: "";
+}
+
+.pth.pth--hifi .level-node + .level-node--current::after {
+  left: 12px;
+}
+
+.pth.pth--hifi .frame-corner {
+  display: none;
+}
+
+/* The strip steps in from the panel's rounded corner, so even the first
+   level's branch lands on the panel's straight edge. */
+.pth.pth--hifi .rail {
+  margin-left: 20px;
+}
+
+/* Where the strip pans, the current level takes the room its name needs —
+   a 19px name in a 158px column broke «таймфре|йм» (measured at 390) — and
+   the names step down a size. */
+@media (max-width: 899px) {
+  /* Out-ranks the panning widths below (168px) and in the frozen layer (158px). */
+  .pth.pth--hifi .level-node.level-node--current {
+    flex-basis: 248px;
+  }
+
+  .pth.pth--hifi .level-node__name {
+    font-size: 15px;
+  }
+
+  .pth.pth--hifi .level-node--current .level-node__name {
+    font-size: 17px;
+  }
+
+  .pth.pth--hifi .level-node--far .level-node__name {
+    font-size: 14px;
+  }
+}
+
+/* One spacing between levels at every width (the frozen layer narrows it to
+   16px at 1100px and below), so the words and the light keep the same place
+   beside the branch wherever the current level is. */
+.pth.pth--hifi .level-node + .level-node {
+  padding-left: 22px;
+}
+
+.pth.pth--hifi .level-node + .level-node .level-node__mark {
+  left: 22px;
+}
+
+.pth.pth--hifi .focus__leader,
+.pth.pth--hifi .focus__leader--merged {
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--signal), rgba(199, 247, 109, 0.6));
+  box-shadow: 0 0 10px rgba(199, 247, 109, 0.3);
+  transition: none;
+}
+
+/* The joint: where the branch meets the panel's edge. */
+.pth.pth--hifi .focus__leader::after,
+.pth.pth--hifi .focus__leader--merged::after {
+  display: block;
+  bottom: -5px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 4px var(--hf-surface-raised), 0 0 12px rgba(199, 247, 109, 0.45);
+}
+
 /* --------------------------------------------------------------- the focus -- */
 
 .pth.pth--hifi .focus {
@@ -137,9 +351,7 @@
   border-radius: var(--hf-radius-window);
 }
 
-.pth.pth--hifi .focus__leader::after {
-  background: var(--hf-surface-raised);
-}
+/* (The leader's own ::after is the branch's joint now — see «the strip».) */
 
 .pth.pth--hifi .frame-corner {
   width: 30px;
@@ -256,6 +468,13 @@
   .pth.pth--hifi .level-node {
     flex: 0 0 168px;
     scroll-snap-align: center;
+  }
+
+  /* A level cut by the strip's edge keeps its mark and loses its words, as on
+     a phone — at this width the words were cut mid-letter at the edge
+     («ак устроен Alpha», measured at 768). */
+  .pth.pth--hifi .level-node--peek :is(.level-node__code, .level-node__name, .level-node__type, .level-node__state) {
+    opacity: 0;
   }
 }
 
