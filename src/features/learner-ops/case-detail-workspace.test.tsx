@@ -224,6 +224,14 @@ describe("case detail — internal notes and learner replies are separate contro
     expect(request!.textContent).toContain("Обращение");
   });
 
+  it("under the request, an empty thread is waiting for the first answer", async () => {
+    const client = await import("@/application/api/learner-ops-client");
+    vi.mocked(client.fetchMessages).mockResolvedValueOnce({ status: "success", data: { items: [], nextCursor: null } } as never);
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    expect(await screen.findByText("Ответов пока нет.")).toBeInTheDocument();
+    expect(screen.queryByText("Сообщений пока нет.")).not.toBeInTheDocument();
+  });
+
   it("keeps the learner's own message visually distinct from staff replies", async () => {
     render(<CaseDetailWorkspace caseId="case_1" />);
     const thread = await screen.findByText(/ВИДНО-УЧЕНИКУ здравствуйте/);

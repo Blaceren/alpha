@@ -266,7 +266,9 @@ export function CaseDetailWorkspace({ caseId }: { caseId: string }) {
             {messages === null ? (
               <LoadingBlock />
             ) : messages.items.length === 0 ? (
-              <EmptyBlock text="Сообщений пока нет." />
+              /* Under the learner's own request the thread is not empty — it
+                 is waiting for the first answer. */
+              <EmptyBlock text={c.details.trim().length > 0 ? "Ответов пока нет." : "Сообщений пока нет."} />
             ) : (
               <ul className="space-y-2">
                 {messages.items.map((message) => (
