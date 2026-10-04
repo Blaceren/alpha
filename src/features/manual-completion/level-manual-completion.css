@@ -88,3 +88,17 @@
     transition: none;
   }
 }
+
+/* The way to support under a message that names it (2026-10-04). */
+.lvl-support-link {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.lvl-support-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

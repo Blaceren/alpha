@@ -36,8 +36,14 @@ export async function readServerSession(): Promise<ServerSessionRead> {
     return { kind: "signed-out" };
   }
 
-  const cookieStore = await cookies();
-  const sessionCookie = sessionCookieHeader((name) => cookieStore.get(name));
+  let sessionCookie: string | null;
+  try {
+    const cookieStore = await cookies();
+    sessionCookie = sessionCookieHeader((name) => cookieStore.get(name));
+  } catch {
+    // Outside a request there is nothing to read — and nothing to claim.
+    return { kind: "unavailable" };
+  }
   if (!sessionCookie) {
     return { kind: "signed-out" };
   }

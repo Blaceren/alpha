@@ -35,6 +35,7 @@
  * response replays in the Backend instead of asking a second time.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   completeManualLevel,
@@ -216,6 +217,14 @@ export function LevelManualCompletion({
       >
         {phase === "completed" ? "Уровень завершён." : (note ?? "")}
       </p>
+      {/* A message that sends the learner to support carries the way there
+          (2026-10-04, launch audit: support lives under Профиль, and nothing
+          said so). */}
+      {phase === "error" && note && /поддержк/i.test(note) ? (
+        <p className="lvl-support-link">
+          <Link href="/profile/support">Написать в поддержку</Link>
+        </p>
+      ) : null}
     </section>
   );
 }

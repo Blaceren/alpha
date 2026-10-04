@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { CurriculumReadError, CurriculumErrorCategory } from "@/lib/curriculum/read-errors";
 import { RetryButton } from "@/features/curriculum-api/retry-button";
@@ -54,7 +55,13 @@ export function CurriculumErrorState({
       <p className="cur-state__message">{copy.message}</p>
       {error.retryable ? <RetryButton /> : null}
       {error.requestId ? (
-        <p className="cur-state__ref">Код обращения: <span>{error.requestId}</span></p>
+        <p className="cur-state__ref">
+          Код обращения: <span>{error.requestId}</span>
+          {/* The code is for support — and support is one link away
+              (2026-10-04, launch audit). */}
+          {" · "}
+          <Link href="/profile/support">Написать в поддержку</Link>
+        </p>
       ) : null}
     </section>
   );

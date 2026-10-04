@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { getAcademyConfig } from "@/config/academy-config";
 import { RegisterForm } from "@/features/auth/register-form";
 import { AuthStage } from "@/features/auth/auth-stage";
 import { readAccountCapabilities, readRegistrationOpensLearning } from "@/server/auth/account-read";
+import { readServerSession } from "@/server/auth/server-session";
 import "@/features/auth/auth.css";
 
 export const metadata: Metadata = {
@@ -31,6 +33,11 @@ export const dynamic = "force-dynamic";
  * widget does not require a release. The SECRET never leaves the Backend.
  */
 export default async function RegisterPage() {
+  /* Signed in already: a second account would replace the first session, so
+     the learner goes to their Home instead (2026-10-04, launch audit). Only a
+     confirmed viewer is sent on; anything else keeps the form. */
+  if ((await readServerSession()).kind === "viewer") redirect("/home");
+
   const { turnstileSiteKey } = getAcademyConfig();
   /* ACCOUNT RECOVERY — where the Backend can send mail, a new account's address
      gets a confirmation message, and the completed state says so. */

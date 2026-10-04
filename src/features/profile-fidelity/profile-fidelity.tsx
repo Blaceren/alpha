@@ -96,7 +96,7 @@ import "@/features/profile-fidelity/profile-hifi.css";
 
 type Editor = "none" | "name" | "password" | "email";
 
-type PasswordPhase = "idle" | "submitting" | "wrong-current" | "invalid" | "failed" | "done";
+type PasswordPhase = "idle" | "submitting" | "missing-current" | "wrong-current" | "invalid" | "failed" | "done";
 
 type EmailPhase = "idle" | "submitting" | "invalid" | EmailChangeFailure;
 type ResendPhase = "idle" | "sending" | "sent" | "limited" | "failed";
@@ -228,6 +228,13 @@ export function ProfileFidelity({
 
   const onChangePassword = useCallback(async () => {
     if (phase === "submitting") return;
+    /* An empty current password went to the Backend and came back as a generic
+       failure (2026-10-04, launch audit). It is a field left empty. */
+    if (currentPassword.length === 0) {
+      setPhase("missing-current");
+      pendingFocus.current = "current-password";
+      return;
+    }
     if (newPassword.length < PASSWORD_MIN || newPassword !== confirmPassword) {
       setPhase("invalid");
       pendingFocus.current = "new-password";
@@ -664,8 +671,8 @@ export function ProfileFidelity({
                   data-role="current-password"
                   value={currentPassword}
                   readOnly={pwBusy}
-                  aria-invalid={phase === "wrong-current" ? true : undefined}
-                  aria-describedby={phase === "wrong-current" ? "p-pw-error" : undefined}
+                  aria-invalid={phase === "wrong-current" || phase === "missing-current" ? true : undefined}
+                  aria-describedby={phase === "wrong-current" || phase === "missing-current" ? "p-pw-error" : undefined}
                   onChange={(event) => setCurrentPassword(event.target.value)}
                 />
               </div>
@@ -709,15 +716,17 @@ export function ProfileFidelity({
                 />
               </div>
 
-              {phase === "invalid" || phase === "wrong-current" || phase === "failed" ? (
+              {phase === "invalid" || phase === "missing-current" || phase === "wrong-current" || phase === "failed" ? (
                 <p className="p-feedback p-feedback--field" id="p-pw-error" data-role="password-error" role="alert">
                   {phase === "invalid"
                     ? newPassword.length < PASSWORD_MIN
                       ? COPY.password_too_short
                       : COPY.password_mismatch
-                    : phase === "wrong-current"
-                      ? COPY.password_wrong_current
-                      : COPY.password_failed}
+                    : phase === "missing-current"
+                      ? COPY.password_missing_current
+                      : phase === "wrong-current"
+                        ? COPY.password_wrong_current
+                        : COPY.password_failed}
                 </p>
               ) : null}
 

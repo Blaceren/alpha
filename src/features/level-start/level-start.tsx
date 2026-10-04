@@ -22,6 +22,7 @@
  * the request at all — the Backend takes the actor from the session.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startLevel } from "@/lib/level-start/level-start-client";
 import type { NormalizedError } from "@/lib/api/errors";
@@ -154,6 +155,14 @@ export function LevelStart({ stableCode, copy = DEFAULT_COPY }: { stableCode: st
       >
         {phase === "started" ? "Уровень открыт." : (note ?? "")}
       </p>
+      {/* A message that sends the learner to support carries the way there
+          (2026-10-04, launch audit: support lives under Профиль, and nothing
+          said so). */}
+      {phase === "error" && note && /поддержк/i.test(note) ? (
+        <p className="lvl-support-link">
+          <Link href="/profile/support">Написать в поддержку</Link>
+        </p>
+      ) : null}
     </section>
   );
 }

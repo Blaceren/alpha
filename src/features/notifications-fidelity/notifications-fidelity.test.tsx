@@ -179,6 +179,11 @@ describe("Notifications — the semantic mapping", () => {
         expect(rec?.handoff, type).toEqual({ label: "Открыть обращения", href: "/profile/support" });
         continue;
       }
+      if (type === "level_up") {
+        // A level completed without the learner (Pocket confirming level 3) leads on.
+        expect(rec?.handoff, type).toEqual({ label: "Продолжить путь", href: "/home" });
+        continue;
+      }
       expect(rec?.destination, type).toBe("NO_DESTINATION_NEEDED");
       expect(rec?.handoff, type).toBeNull();
     }

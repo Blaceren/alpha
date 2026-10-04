@@ -246,6 +246,7 @@ export const COPY = {
   /* Neutral by design: the caller is already signed in, so this says something
      about the value typed, not about the account. */
   password_wrong_current: "Текущий пароль указан неверно.",
+  password_missing_current: "Введите текущий пароль.",
   password_failed: "Не удалось сменить пароль. Пароль не изменён.",
 
   /* ACCOUNT RECOVERY (2026-10-01) — the email row, where the Backend can send

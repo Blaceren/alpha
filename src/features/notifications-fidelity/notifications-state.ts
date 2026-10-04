@@ -135,11 +135,15 @@ const HANDOFF_LABEL: Partial<Record<NotificationTypeName, string>> = {
   /* 2026-10-04, launch audit: the one notification learners actually get — a
      reply from support — led nowhere; the answer is on the support desk. */
   support_reply: "Открыть обращения",
+  /* …and a level completed without the learner (Pocket confirming level 3)
+     leads to the one next step. */
+  level_up: "Продолжить путь",
 };
 
 /** Destinations the product owns for a type, whatever the row carries. */
 const TYPE_DESTINATION: Partial<Record<NotificationTypeName, string>> = {
   support_reply: "/profile/support",
+  level_up: "/home",
 };
 
 export function handoffLabel(type: string): string | null {
@@ -291,6 +295,8 @@ export const COPY = {
   presenceNone: "Сейчас ничего не требует вашего действия.",
   emptyLead: "Изменений пока нет. Здесь появятся ответы поддержки и всё, что изменилось в вашей работе, пока вас не было.",
   failureLead: "Не удалось обновить список изменений.",
-  failureReasonCold: "Проверьте соединение и повторите попытку.",
+  /* Not the learner's connection by default (2026-10-04, launch audit): an
+     expired session has its own notice, and the rest is the server's. */
+  failureReasonCold: "Сервер не ответил. Повторите попытку через минуту.",
   failureRecovery: "Обновить",
 } as const;

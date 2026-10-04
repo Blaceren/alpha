@@ -20,6 +20,10 @@ vi.mock("@/config/academy-config", () => ({
    Backend what it can do before they offer anything that ends in an email. A
    test resolves the page first, and the read is substituted — "cannot send
    mail" by default, which is the state these guards were written for. */
+/* Signed out by default: the pages send a confirmed viewer onward (2026-10-04). */
+vi.mock("@/server/auth/server-session", () => ({
+  readServerSession: vi.fn(async () => ({ kind: "signed-out" })),
+}));
 vi.mock("@/server/auth/account-read", () => ({
   readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
   readRegistrationOpensLearning: vi.fn(async () => null),

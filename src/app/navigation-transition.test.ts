@@ -540,6 +540,14 @@ describe("the authenticated route group", () => {
   "src/features/auth/session-unavailable.tsx",
   "src/features/tool-windows/components/tools-read-failed.tsx",
   "src/server/proxy/support-proxy.ts",
+  /* …the in-app 404's «На главную» leads to the learner's Home, not the
+     marketing page; a reference code and a support-pointing error carry the
+     link to support; and the level's tab names the level. */
+  "src/app/(app)/not-found.tsx",
+  "src/features/curriculum-api/curriculum-states.tsx",
+  "src/features/level-start/level-start.css",
+  "src/features/manual-completion/level-manual-completion.css",
+  "src/lib/curriculum/level-tab-title.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
