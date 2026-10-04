@@ -552,8 +552,8 @@ function hintFor(card: TradeCard, now: Date, result: TradeResult | null): string
  * THE FIRST FIELD IN ERROR TAKES THE FOCUS (2026-10-04, launch audit). On a
  * phone «Зафиксировать план» seemed to do nothing: the errors appeared above the
  * screen and nothing moved. The other tools already focus the first wrong
- * field; the Trade Card now does too, in the form's own order — and focusing
- * brings the field into view.
+ * field; the Trade Card now does too, in the form's own order, with the field
+ * brought to the middle of the screen.
  */
 const FIELD_ORDER = ["asset", "direction", "amount", "payoutPercent", "expiry", "entryTime", "reason"] as const;
 
@@ -565,6 +565,10 @@ function focusFirstInvalid(errors: Partial<Record<string, string>>) {
       field === "direction"
         ? document.querySelector<HTMLElement>('[aria-labelledby="tc-direction"] button, [aria-labelledby="tc-direction"] [role="radio"]')
         : document.getElementById(`tc-${field}`);
-    target?.focus();
+    if (!target) return;
+    // Centred, so its label shows too — focusing alone left the label above the
+    // screen's edge on a phone (measured on the stand).
+    if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
   });
 }
