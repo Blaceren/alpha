@@ -251,6 +251,18 @@ export function CaseDetailWorkspace({ caseId }: { caseId: string }) {
             <p className="mb-3 rounded border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900">
               Всё, что отправлено здесь, ученик увидит в Академии.
             </p>
+            {/* THE REQUEST ITSELF (2026-10-04, launch audit). What the learner
+                wrote at /profile/support is stored as the case's `details` and
+                never as a message, and this screen rendered the subject and the
+                messages only: a new case read «Сообщений пока нет», and the
+                question was nowhere on the screen meant to answer it. It
+                opens the conversation, as the learner's own words. */}
+            {c.details.trim().length > 0 ? (
+              <div className="mb-2 rounded border border-slate-300 bg-white p-2 text-sm" data-role="case-request">
+                <div className="mb-1 text-xs text-slate-500">Обращение · открыто {since(c.openedAt)} назад</div>
+                <p className="whitespace-pre-wrap text-slate-900">{c.details}</p>
+              </div>
+            ) : null}
             {messages === null ? (
               <LoadingBlock />
             ) : messages.items.length === 0 ? (

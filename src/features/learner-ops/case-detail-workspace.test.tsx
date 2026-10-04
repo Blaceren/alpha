@@ -215,6 +215,15 @@ describe("case detail — internal notes and learner replies are separate contro
     expect(screen.getByText(/нет права отвечать ученику/)).toBeInTheDocument();
   });
 
+  it("opens the conversation with what the learner wrote — the request itself (2026-10-04)", async () => {
+    render(<CaseDetailWorkspace caseId="case_1" />);
+    await screen.findByRole("heading", { name: "Переписка с учеником — ВИДНО УЧЕНИКУ" });
+    const request = document.querySelector('[data-role="case-request"]');
+    expect(request).not.toBeNull();
+    expect(request!.textContent).toContain("Ошибка при загрузке");
+    expect(request!.textContent).toContain("Обращение");
+  });
+
   it("keeps the learner's own message visually distinct from staff replies", async () => {
     render(<CaseDetailWorkspace caseId="case_1" />);
     const thread = await screen.findByText(/ВИДНО-УЧЕНИКУ здравствуйте/);
