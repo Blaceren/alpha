@@ -73,6 +73,16 @@ describe("middleware — anonymous routes", () => {
     }
   });
 
+  /* THE PUBLIC HOME'S FILM (2026-10-04): watched before anyone has an account. */
+  it("lets an anonymous visitor reach the film's files, and nothing that resembles them", () => {
+    for (const path of ["/film/hero.mp4", "/film/hero.jpg", "/film/hero.vtt"]) {
+      expect(redirectTarget(middleware(request(path))), path).toBeNull();
+    }
+    for (const path of ["/films", "/filmography", "/filmx/hero.mp4"]) {
+      expect(redirectTarget(middleware(request(path))), path).toContain("/login");
+    }
+  });
+
   it("renders /register for an authenticated visitor, matching /login's convention", () => {
     expect(redirectTarget(middleware(request("/register", { session: true })))).toBeNull();
     expect(redirectTarget(middleware(request("/login", { session: true })))).toBeNull();

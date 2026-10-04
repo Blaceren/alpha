@@ -4,6 +4,7 @@ import { PUBLIC_HOME_FAQ } from "@/features/public-home/public-home-faq";
 import { indexableRobots, searchIndexing, type SearchIndexing } from "@/config/search-indexing";
 import { getServerViewer } from "@/server/auth/server-session";
 import "@/features/public-home/public-home.css";
+import { readPublicFilm } from "@/server/media/public-film";
 
 /**
  * Metadata carried across from the frozen HomeATA `<head>`: the same title, the
@@ -126,14 +127,16 @@ function structuredData(indexing: SearchIndexing & { enabled: true }) {
 export const dynamic = "force-dynamic";
 
 export default async function PublicHomePage() {
-  const viewer = await getServerViewer();
+  /* The film is read from the host each time (2026-10-04): a new cut copied
+     into the media folder shows on the next visit, with no release. */
+  const [viewer, film] = await Promise.all([getServerViewer(), readPublicFilm()]);
   const indexing = searchIndexing();
   return (
     <>
       {indexing.enabled ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData(indexing) }} />
       ) : null}
-      <PublicHomeScreen authenticated={viewer !== null} />
+      <PublicHomeScreen authenticated={viewer !== null} film={film} />
     </>
   );
 }

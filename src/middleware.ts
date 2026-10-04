@@ -44,6 +44,10 @@ const ANONYMOUS_ROUTES = [
   "/reset-password",
   "/verify-email",
   "/confirm-email",
+  /* THE PUBLIC HOME'S FILM (2026-10-04). Its video, poster and captions are
+     watched before anyone has an account; the route serves only a fixed set of
+     names from one folder (`server/media/public-film.ts`). */
+  "/film",
 ] as const;
 
 /**

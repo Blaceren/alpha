@@ -562,6 +562,13 @@ describe("the authenticated route group", () => {
      branch from the current mark straight down to the panel — the stem used to
      hang half a screen below the node it belonged to. Geometry only. */
   "src/features/path-fidelity/path-rail.tsx",
+  /* PUBLIC HOME, THE FILM (2026-10-04, owner: «оставляли место для плеера —
+     давай его туда поставим уже»): the hero's frame holds the film — its cover
+     until a video is on the host — served by one public route of fixed names.
+     Nothing of the signed-in group moved. */
+  "src/app/film/[name]/route.ts",
+  "src/features/public-home/hero-film.tsx",
+  "src/server/media/public-film.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

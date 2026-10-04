@@ -268,12 +268,29 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     }
   });
 
-  it("gives the hero frame a legible unfinished object, not empty geometry", () => {
+  it("holds the film in the hero frame — its cover says «Скоро» and offers nothing that does nothing (2026-10-04)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const frame = container.querySelector("#top .dframe") as HTMLElement;
+    const frame = container.querySelector("#top .dframe--film") as HTMLElement;
     expect(frame).not.toBeNull();
-    expect(text(frame)).toContain("Причина входа до сделки");
-    expect(text(frame)).toContain("Ещё не сформулировано");
+    expect(frame.getAttribute("data-film")).toBe("soon");
+    expect(text(frame)).toContain("Фильм о платформе");
+    expect(text(frame)).toContain("Скоро");
+    expect(text(frame)).toContain("Как устроена Alpha Trade Academy");
+    expect(frame.querySelector("button")).toBeNull();
+    expect(frame.querySelector("video")).toBeNull();
+  });
+
+  it("puts the player in the frame when the film is on the host — on a click, never by itself", async () => {
+    const film = { src: "/film/hero.mp4?v=abc", poster: null, captions: null };
+    const { container } = render(<PublicHomeScreen authenticated={false} film={film} />);
+    const frame = container.querySelector("#top .dframe--film") as HTMLElement;
+    expect(frame.getAttribute("data-film")).toBe("ready");
+    expect(text(frame)).not.toContain("Скоро");
+    expect(frame.querySelector("video")).toBeNull();
+    await userEvent.click(within(frame).getByRole("button", { name: /Смотреть фильм/ }));
+    const video = frame.querySelector("video") as HTMLVideoElement;
+    expect(video).not.toBeNull();
+    expect(video.getAttribute("src")).toBe("/film/hero.mp4?v=abc");
   });
 
   it("resolves that same object in #decide", () => {
@@ -295,11 +312,12 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     // window for a narrow screen (2026-10-03).
     const stepWindows = container.querySelectorAll(".rstep__window .pw").length;
     expect(stepWindows).toBeGreaterThan(0);
-    expect(container.querySelectorAll(".demo-badge").length).toBe(4 + stepWindows);
+    // The hero frame holds the film since 2026-10-04 — not a demonstration.
+    expect(container.querySelectorAll(".demo-badge").length).toBe(3 + stepWindows);
     for (const bar of Array.from(container.querySelectorAll(".rstep__window .pw__bar"))) {
       expect(within(bar as HTMLElement).getAllByText(/Демонстрационный пример/).length).toBe(1);
     }
-    for (const selector of ["#top .dframe", "#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
+    for (const selector of ["#decide .pw__bar", "#review .pw__bar", "#product .pw__bar"]) {
       const host = container.querySelector(selector) as HTMLElement;
       expect(within(host).getAllByText(/Демонстрационный пример/).length).toBeGreaterThan(0);
     }
@@ -736,7 +754,7 @@ describe("Public Home — stylesheet holds its contract", () => {
   it("plays each motion sequence once and settles inside a second", () => {
     // The three sequences ride `is-visible`, run with `both`, and nothing loops.
     for (const trigger of [
-      ".ph .reframe.is-visible .source-cloud span",
+      ".ph .reframe.is-visible .source-cloud > li",
       ".ph .learning-loop.is-visible::before",
       '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
     ]) {

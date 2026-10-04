@@ -6,7 +6,8 @@ import { ProductRoute } from "@/features/public-home/product-route";
 import { ReviewWindow } from "@/features/public-home/review-window";
 import { DecisionWindow } from "@/features/public-home/decision-window";
 import { CycleObject } from "@/features/public-home/cycle-objects";
-import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-data";
+import { HeroFilm } from "@/features/public-home/hero-film";
+import type { PublicFilm } from "@/server/media/public-film";
 
 /**
  * PUBLIC HOME — the brand-evolution composition.
@@ -61,7 +62,25 @@ import { DECISION_FIELD, DECISION_UNSET } from "@/features/public-home/review-da
  * about the visitor is whether a session exists.
  */
 
-export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) {
+/** What others hand you — the kind, and a line of it. Authored examples, no
+    instrument, no amount, no person. */
+const OTHERS_ANSWERS = [
+  { kind: "Разбор", said: "«У сильного уровня — жду отскок»" },
+  { kind: "Стратегия", said: "«Три свечи подряд — входи по тренду»" },
+  { kind: "Сигнал", said: "«Вверх, пять минут»" },
+  { kind: "Прогноз", said: "«К пятнице будет ниже»" },
+  { kind: "Мнение", said: "«Рынок перегрет»" },
+  { kind: "Чужой вывод", said: "«Все уже в покупках»" },
+] as const;
+
+export function PublicHomeScreen({
+  authenticated,
+  film = null,
+}: {
+  authenticated: boolean;
+  /** The film on the host, or null while there is none (`server/media/public-film.ts`). */
+  film?: PublicFilm | null;
+}) {
   const account = authenticated
     ? { href: "/home", label: "Перейти в Академию" }
     : { href: "/register", label: "Начать путь" };
@@ -107,25 +126,11 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               </p>
             </div>
 
-            {/* Decision Frame — stage 1. NOT an empty reserve: the object inside
-                is a real report field, legible and deliberately unfinished. */}
-            <figure className="dframe dframe--open" data-reveal data-frame-stage="open">
-              <figcaption className="dframe__label">
-                <span className="demo-badge">Демонстрационный пример</span>
-                <span className="dframe__stage">Решение ещё не определено</span>
-              </figcaption>
-              <div className="dframe__object">
-                <p className="dframe__field">{DECISION_FIELD}</p>
-                <p className="dframe__value dframe__value--empty">
-                  {DECISION_UNSET}
-                  <i className="dframe__caret" aria-hidden="true" />
-                </p>
-                <div className="dframe__unresolved" aria-hidden="true">
-                  <i />
-                  <i />
-                </div>
-              </div>
-            </figure>
+            {/* THE FILM (2026-10-04). The frame kept here since 2026-09-22 for
+                the film about the platform holds it now — its cover with
+                «Скоро» until the video is on the host, then the player.
+                hero-film.tsx */}
+            <HeroFilm film={film} />
           </div>
 
           <div className="hero__facts shell" aria-label="Ключевые факты о пути ATA" data-reveal>
@@ -171,14 +176,20 @@ export function PublicHomeScreen({ authenticated }: { authenticated: boolean }) 
               {/* Phones only (CSS): stacked, the device needs its two words —
                   what recedes and what is written. DD-342. */}
               <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
-              <div className="source-cloud" aria-label="Чужие ответы">
-                <span>Разборы</span>
-                <span>Стратегии</span>
-                <span>Сигналы</span>
-                <span>Прогнозы</span>
-                <span>Мнения</span>
-                <span>Чужие выводы</span>
-              </div>
+              {/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»).
+                  Six pale pills only named the kinds of answer. Each is now a
+                  line someone else said — what a review, a signal, a forecast
+                  actually hands you — in the page's ink, fading as it recedes.
+                  None of them is the learner's reason: that is written in the
+                  card the line leads to. */}
+              <ul className="source-cloud" aria-label="Чужие ответы">
+                {OTHERS_ANSWERS.map((item) => (
+                  <li className="src" key={item.kind}>
+                    <span className="src__kind">{item.kind}</span>
+                    <span className="src__said">{item.said}</span>
+                  </li>
+                ))}
+              </ul>
               <div className="reframe__axis" aria-hidden="true" />
               <p className="reframe__caption reframe__caption--own" aria-hidden="true">Ваше решение</p>
 
