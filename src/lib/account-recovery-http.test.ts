@@ -205,10 +205,30 @@ describe("mail configuration — disabled unless all of it is right", () => {
   it("tells the Academy the truth about what it can do", async () => {
     const { GET } = await import("@/app/api/auth/capabilities/route");
     const on = await (await GET()).json();
-    expect(on).toEqual({ capabilities: { passwordRecovery: true, emailVerification: true, emailChange: true } });
+    expect(on.capabilities).toEqual({ passwordRecovery: true, emailVerification: true, emailChange: true });
     mailOff();
     const off = await (await GET()).json();
-    expect(off).toEqual({ capabilities: { passwordRecovery: false, emailVerification: false, emailChange: false } });
+    expect(off.capabilities).toEqual({ passwordRecovery: false, emailVerification: false, emailChange: false });
+    // Nothing else about the deployment: the three, and whether a new account starts learning at once.
+    expect(Object.keys(off).sort()).toEqual(["capabilities", "registration"]);
+    expect(Object.keys(off.registration)).toEqual(["opensLearning"]);
+  });
+
+  it("says whether registration starts the program, from the switches that decide it", async () => {
+    const { GET } = await import("@/app/api/auth/capabilities/route");
+    const flags = ["CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED", "CURRICULUM_V2_ENROLLMENT_ENABLED", "CURRICULUM_V2_READ_ENABLED"];
+    const saved = flags.map((flag) => [flag, process.env[flag]] as const);
+    try {
+      for (const flag of flags) process.env[flag] = "true";
+      expect((await (await GET()).json()).registration).toEqual({ opensLearning: true });
+      process.env.CURRICULUM_V2_REGISTRATION_AUTO_ENROLL_ENABLED = "false";
+      expect((await (await GET()).json()).registration).toEqual({ opensLearning: false });
+    } finally {
+      for (const [flag, value] of saved) {
+        if (value === undefined) delete process.env[flag];
+        else process.env[flag] = value;
+      }
+    }
   });
 });
 
