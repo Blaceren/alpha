@@ -71,6 +71,27 @@ describe("assessment-machine", () => {
     expect(s.requestId).toBe("r1");
   });
 
+  it("a send that did not get through keeps the answers and the request key (2026-10-04)", () => {
+    let s = reducer(loaded(), { type: "select", questionKey: "q1", code: "a" });
+    s = reducer(s, { type: "select", questionKey: "q2", code: "b" });
+    s = reducer(s, { type: "submit_pending", requestId: "r1" });
+    s = reducer(s, { type: "submit_err", error: makeError("NETWORK_ERROR") });
+    expect(s.phase).toBe("answering");
+    expect(s.selections).toEqual({ q1: "a", q2: "b" });
+    expect(s.attemptId).toBe(7);
+    expect(s.requestId).toBe("r1"); // sending again cannot count twice
+    expect(s.error).not.toBeNull();
+    // Changing an answer makes it a new submission with its own key.
+    s = reducer(s, { type: "select", questionKey: "q2", code: "a" });
+    expect(s.requestId).toBeNull();
+    // And the check switched off still ends the attempt on screen.
+    let off = reducer(loaded(), { type: "select", questionKey: "q1", code: "a" });
+    off = reducer(off, { type: "select", questionKey: "q2", code: "b" });
+    off = reducer(off, { type: "submit_pending", requestId: "r2" });
+    off = reducer(off, { type: "submit_err", error: makeError("UNKNOWN_ERROR", { status: 404 }) });
+    expect(off.phase).toBe("flag_disabled");
+  });
+
   it("pass/fail phase is derived only from the Backend result", () => {
     let s = reducer(loaded(), { type: "submit_ok", result: failResult() });
     expect(s.phase).toBe("failed");

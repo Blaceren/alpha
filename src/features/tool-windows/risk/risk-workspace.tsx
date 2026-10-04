@@ -190,7 +190,7 @@ export function RiskWorkspace({ initialState = null }: { initialState?: RiskStat
     return (
       <div className="tw-quiet">
         <h2 className="tw-quiet__title">Инструмент закрыт</h2>
-        <p className="tw-quiet__line">Risk Calculator открывается после контрольной точки уровня 15.</p>
+        <p className="tw-quiet__line">Risk Calculator пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».</p>
         <Link className="tw-button" data-variant="outline" href="/path">
           Продолжить путь
         </Link>

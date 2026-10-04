@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Lock } from "lucide-react";
 import type { ToolWindowView } from "@/features/tool-windows/model/access";
+import { ToolsReadFailed } from "@/features/tool-windows/components/tools-read-failed";
 
 /**
  * «Инструменты» — the six tools, in the order they open.
@@ -11,8 +12,25 @@ import type { ToolWindowView } from "@/features/tool-windows/model/access";
  * it opens. The rows come already resolved: this component compares no level
  * and decides no lock.
  */
-export function ToolsHub({ tools }: { tools: readonly ToolWindowView[] }) {
+export function ToolsHub({
+  tools,
+  readFailed = false,
+}: {
+  tools: readonly ToolWindowView[];
+  /** The read failed: say so, rather than draw six closed rows (2026-10-04). */
+  readFailed?: boolean;
+}) {
   const openCount = tools.filter((view) => view.state === "open").length;
+  if (readFailed) {
+    return (
+      <div className="twh tw-hifi">
+        <div className="tw-head">
+          <h1 className="tw-title">Инструменты</h1>
+        </div>
+        <ToolsReadFailed />
+      </div>
+    );
+  }
   return (
     // `tw-hifi`: the product hi-fi layer (DD-338) over the tools stylesheet.
     <div className="twh tw-hifi">

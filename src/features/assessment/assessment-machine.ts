@@ -101,6 +101,8 @@ export function reducer(state: AssessmentState, action: AssessmentAction): Asses
       return {
         ...state,
         selections: { ...state.selections, [action.questionKey]: action.code },
+        // A changed answer set is a new submission: it gets its own key.
+        requestId: null,
       };
     case "submit_pending":
       // Guard: only submit from answering with a complete answer set.
@@ -113,8 +115,22 @@ export function reducer(state: AssessmentState, action: AssessmentAction): Asses
         result: action.result,
         error: null,
       };
-    case "submit_err":
-      return { ...state, phase: phaseForError(action.error), error: action.error };
+    case "submit_err": {
+      /*
+       * THE ANSWERS SURVIVE A FAILED SEND (2026-10-04, launch audit). Any
+       * failure used to drop the learner to «Не удалось загрузить проверку»,
+       * and «Повторить» started a fresh attempt with every answer cleared. A
+       * send that did not get through (network, timeout, the Backend's
+       * trouble, an expired session) now returns to the answers as they were,
+       * with the error kept for the page to say so — and with the same
+       * request key, so sending again cannot be counted twice. Only the two
+       * states that are not about this send (the check switched off, its
+       * content replaced) still end the attempt on screen.
+       */
+      const phase = phaseForError(action.error);
+      if (phase === "error") return { ...state, phase: "answering", error: action.error };
+      return { ...state, phase, error: action.error };
+    }
     case "retry":
       // Immediate retry: clean answer state, re-start a fresh attempt.
       return {

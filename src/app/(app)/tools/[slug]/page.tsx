@@ -25,8 +25,10 @@ import {
   type ReleasingLevel,
   resolveToolWindow,
   toolAccessOf,
+  toolReadFailed,
   type ToolWindowState,
 } from "@/features/tool-windows/model/access";
+import { ToolsReadFailed } from "@/features/tool-windows/components/tools-read-failed";
 import type { AcademyToolAccess } from "@/lib/curriculum/academy-view";
 import { getPathProgress, resolvePathScenario } from "@/features/path/model/path-state";
 import { getLevel } from "@/data/curriculum/fixture";
@@ -114,6 +116,7 @@ export default async function ToolRoute({
         <ToolContent
           tool={tool}
           state={view?.state ?? "locked"}
+          readFailed={toolReadFailed(result)}
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
           /* The level the VERDICT names, not the catalogue's: in the 30-level
@@ -192,6 +195,7 @@ function isOpen(slug: ToolWindowDefinition["slug"], access: AcademyToolAccess | 
 function ToolContent({
   tool,
   state,
+  readFailed = false,
   unlockLevel,
   currentLevel,
   releasing,
@@ -199,6 +203,8 @@ function ToolContent({
 }: {
   tool: ToolWindowDefinition;
   state: ToolWindowState;
+  /** The program could not be read: say so, never «Закрыто» (2026-10-04). */
+  readFailed?: boolean;
   unlockLevel: number;
   currentLevel: number | null;
   releasing: ReleasingLevel | null;
@@ -206,7 +212,9 @@ function ToolContent({
 }) {
   return (
     <ToolPage tool={tool} unlockLevel={unlockLevel}>
-      {state === "open" ? (
+      {readFailed ? (
+        <ToolsReadFailed />
+      ) : state === "open" ? (
         workspaceFor(tool, data)
       ) : state === "soon" ? (
         <ToolSoon tool={tool} />

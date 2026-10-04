@@ -96,7 +96,10 @@ function statusMessage(state: ReportState, formal: boolean): string {
     case "LEVEL_COMPLETED": return "Отчёт принят. Уровень завершён.";
     case "STALE_REVISION": return "Отчёт был изменён в другом месте. Обновите форму.";
     case "VALIDATION_ERROR":
-      return state.serverRefusal ? "Отчёт не принят: заполнены не все обязательные поля." : "Проверьте отмеченные поля.";
+      /* The server's refusal is not about empty fields — the form checks those
+         first. What it refuses is text it will not store: tags such as «<b>»
+         (2026-10-04: it used to blame the fields, which were full). */
+      return state.serverRefusal ? "Отчёт не принят: в тексте есть то, что нельзя сохранить." : "Проверьте отмеченные поля.";
     case "FLAG_DISABLED": return "Отправка отчёта сейчас недоступна.";
     case "NETWORK_ERROR": return "Не удалось связаться с сервером. Попробуйте ещё раз.";
     case "FATAL_ERROR": return "Не удалось загрузить отчёт.";
@@ -364,7 +367,7 @@ export function LevelReport({ stableCode, locale, nextLevelCode, acceptance, nex
               errors={state.fieldErrors}
               serverMessage={
                 state.serverRefusal
-                  ? "Сервер не принял отчёт: заполнены не все обязательные поля. Проверьте записи и отправьте ещё раз."
+                  ? "Отчёт не принят: в одной из записей есть то, что нельзя сохранить, — обычно это HTML-теги вроде «<b>» или ссылка «javascript:». Уберите их и отправьте ещё раз."
                   : null
               }
               labelForKey={(key) => qualifiedFieldLabel(model, key)}

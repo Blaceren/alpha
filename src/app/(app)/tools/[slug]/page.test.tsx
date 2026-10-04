@@ -19,6 +19,7 @@ class Redirect extends Error {
 class NotFound extends Error {}
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
   redirect: (to: string) => {
     throw new Redirect(to);
   },
@@ -367,20 +368,27 @@ describe("the state", () => {
     ).toBeInTheDocument();
   });
 
-  it("locks everything when the read fails, rather than guessing", async () => {
-    getCurriculumView.mockResolvedValue({ ok: false, error: {} });
+  it("opens nothing when the read fails — and says it failed, not «Закрыто» (2026-10-04)", async () => {
+    getCurriculumView.mockResolvedValue({ ok: false, error: { category: "BACKEND_UNAVAILABLE" } });
+    render(await open("trade-card"));
+    expect(screen.queryByText("trade-card-workspace")).toBeNull();
+    expect(screen.queryByText("Закрыто")).toBeNull();
+    expect(screen.getByText("Не удалось загрузить инструменты")).toBeInTheDocument();
+  });
+
+  it("still says «Закрыто» when the answer is about the learner (not enrolled)", async () => {
+    getCurriculumView.mockResolvedValue({ ok: false, error: { category: "NOT_ENROLLED" } });
     render(await open("trade-card"));
     expect(screen.queryByText("trade-card-workspace")).toBeNull();
     expect(screen.getByText("Закрыто")).toBeInTheDocument();
   });
 
-  it("explains a checkpoint tool in the presentation's words", async () => {
+  it("does not fall back to the old plan's checkpoint when the view does not describe the level (2026-10-04)", async () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 8));
     render(await open("news"));
     expect(screen.getByText("Закрыто · сейчас L9")).toBeInTheDocument();
-    expect(
-      screen.getByText("Инструмент появится после контрольной точки L30, когда будут пройдены уроки, на которые он опирается."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Инструмент появится после уровня L30.")).toBeInTheDocument();
+    expect(screen.queryByText(/контрольной точки/)).toBeNull();
   });
 
   it("opens the News Calendar on an open verdict, with the server's read and the learner's day", async () => {

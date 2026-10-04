@@ -96,6 +96,8 @@ describe("Trade Card — a new plan", () => {
     expect(screen.getByText("Выберите направление: выше или ниже.")).toBeInTheDocument();
     expect(screen.getByLabelText("Сумма")).toHaveAttribute("aria-invalid", "true");
     expect(fixTradePlan).not.toHaveBeenCalled();
+    // …and the first wrong field takes the focus, so a phone shows it (2026-10-04).
+    await waitFor(() => expect(document.activeElement?.id).toBe("tc-asset"));
   });
 
   it("shows both outcomes as the learner types", async () => {

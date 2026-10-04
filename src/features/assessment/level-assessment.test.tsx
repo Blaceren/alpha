@@ -95,6 +95,24 @@ describe("LevelAssessment", () => {
     expect(screen.getByRole("button", { name: /Попробовать ещё раз/ })).toBeInTheDocument();
   });
 
+  it("a failed send keeps every answer and sends again with the same key (2026-10-04)", async () => {
+    startMock.mockResolvedValue(okStart());
+    submitMock.mockResolvedValueOnce({ ok: false, error: { category: "NETWORK_ERROR", status: null, code: null, messageKey: "k", requestId: null, retryable: true } });
+    render(<LevelAssessment {...props} />);
+    await screen.findByRole("button", { name: /Проверить ответы/ });
+    await answerAll();
+    await userEvent.click(screen.getByRole("button", { name: /Проверить ответы/ }));
+    expect(await screen.findByText(/Ответы не отправились/)).toBeInTheDocument();
+    for (let n = 1; n <= 4; n += 1) expect((screen.getByLabelText(`A${n}`) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText(/Не удалось загрузить проверку/)).toBeNull();
+    submitMock.mockResolvedValueOnce(passRes());
+    await userEvent.click(screen.getByRole("button", { name: /Проверить ответы/ }));
+    expect(await screen.findByText(/Уровень завершён/, { selector: "p.asmt__done-title" })).toBeInTheDocument();
+    expect(submitMock).toHaveBeenCalledTimes(2);
+    expect(submitMock.mock.calls[0]?.[2]).toBe(submitMock.mock.calls[1]?.[2]);
+    expect(startMock).toHaveBeenCalledTimes(1); // no fresh attempt was started
+  });
+
   it("retry resets to a clean answer state and re-starts a fresh attempt", async () => {
     startMock.mockResolvedValue(okStart());
     submitMock.mockResolvedValue(failRes());

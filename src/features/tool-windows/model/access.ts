@@ -64,6 +64,32 @@ export function toolAccessOf(result: CurriculumViewResult): AcademyToolAccess | 
   return view.toolAccess;
 }
 
+/**
+ * Answers that are about the learner — not enrolled, no program published, the
+ * section switched off, no access. Every other failed read is the Backend's
+ * trouble.
+ */
+const ANSWERS_ABOUT_THE_LEARNER: ReadonlySet<string> = new Set([
+  "NOT_ENROLLED",
+  "NO_ACTIVE_CURRICULUM",
+  "FEATURE_DISABLED",
+  "FORBIDDEN",
+  "UNAUTHENTICATED",
+]);
+
+/**
+ * The read FAILED, as opposed to answering (2026-10-04, launch audit).
+ *
+ * A failed read still locks every tool — nothing is opened on a guess — but it
+ * no longer SAYS «Закрыто · откроется после уровня 10/15/20…» with the
+ * catalogue's old levels, as if the learner had fallen behind. The hub and the
+ * tool page say the tools could not be loaded and offer a retry.
+ */
+export function toolReadFailed(result: CurriculumViewResult): boolean {
+  if (result.ok) return false;
+  return !ANSWERS_ABOUT_THE_LEARNER.has(String(result.error?.category));
+}
+
 /** The title of the level that releases a tool, for the locked page's sentence. */
 export function levelTitleOf(view: AcademyCurriculumView, levelNumber: number): string | null {
   if (view.state === "unavailable") return null;

@@ -119,7 +119,8 @@ export function LevelAssessment({
       if (state.phase !== "answering" || !allAnswered(state) || state.attemptId === null) return;
       if (inFlight.current) return; // double-submit guard (single request identity)
       inFlight.current = true;
-      const requestId = newRequestId();
+      // The same key again after a send that did not get through.
+      const requestId = state.requestId ?? newRequestId();
       dispatch({ type: "submit_pending", requestId });
       const answers = state.questions.map((q) => {
         const code = state.selections[q.questionKey];
@@ -329,6 +330,12 @@ export function LevelAssessment({
                 );
               })}
             </ol>
+
+            {state.phase === "answering" && state.error ? (
+              <p className="asmt__notice asmt__notice--send" role="alert">
+                Ответы не отправились. Они на месте — нажмите «Проверить ответы» ещё раз.
+              </p>
+            ) : null}
 
             {state.phase === "failed" ? (
               <button type="button" className="asmt__btn asmt__btn--primary" onClick={onRetry}>

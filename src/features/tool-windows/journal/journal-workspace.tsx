@@ -408,7 +408,7 @@ export function JournalWorkspace({
     return (
       <div className="tw-quiet">
         <h2 className="tw-quiet__title">Инструмент закрыт</h2>
-        <p className="tw-quiet__line">Trading Journal открывается после контрольной точки уровня 10.</p>
+        <p className="tw-quiet__line">Trading Journal пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».</p>
         <Link className="tw-button" data-variant="outline" href="/path">
           Продолжить путь
         </Link>
@@ -746,7 +746,11 @@ export function JournalWorkspace({
       <div className="tw-quiet jr-empty">
         <h2 className="tw-quiet__title">Журнал пока пуст</h2>
         <p className="tw-quiet__line">
-          Карточки, сохранённые в Trade Card, попадут сюда сами. Сделку, открытую без карточки, можно записать вручную.
+          {/* «Только новые» (the journal's own rule): a card saved before the journal
+              opened never arrives, so the line no longer promises it does
+              (2026-10-04, launch audit). */}
+          Карточки Trade Card, сохранённые после открытия журнала, попадут сюда сами. Сделку без карточки — или из более
+          ранней карточки — можно записать вручную.
         </p>
         <div className="tc-actions__row jr-empty__actions">
           <button

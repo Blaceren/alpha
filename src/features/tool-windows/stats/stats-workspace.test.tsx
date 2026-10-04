@@ -172,7 +172,7 @@ describe("Personal Stats — periods and states", () => {
   it("reads from the browser when the server could not, and says when the tool is closed", async () => {
     fetchStats.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<StatsWorkspace />);
-    expect(await screen.findByText("Personal Stats открывается после контрольной точки уровня 25.")).toBeInTheDocument();
+    expect(await screen.findByText("Personal Stats пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(fetchStats).toHaveBeenCalledWith("all", null);
   });
 });

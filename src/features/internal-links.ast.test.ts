@@ -40,6 +40,21 @@ const ALLOWED: Array<{ file: string; match: string; why: string }> = [
     match: "item.source.url",
     why: "a news item's external https source, rel=nofollow noopener in a new tab — never an Academy route",
   },
+  {
+    file: "src/features/pocket-registration/pocket-registration.tsx",
+    match: "openedUrl",
+    why: "the Pocket registration address the Backend issued — external https, new tab, rel=noopener noreferrer — never an Academy route",
+  },
+  {
+    file: "src/features/auth/session-expired-notice.tsx",
+    match: "href",
+    why: "/login after the session ended, as a full page load on purpose: nothing of the signed-in app may be reused",
+  },
+  {
+    file: "src/features/auth/session-unavailable.tsx",
+    match: "retryHref",
+    why: "the same address fetched again from the server on purpose: the session guard itself must run again",
+  },
 ];
 
 type Anchor = { file: string; line: number; form: string; text: string | null };

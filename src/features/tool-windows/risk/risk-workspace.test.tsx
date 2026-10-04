@@ -216,7 +216,7 @@ describe("Risk Calculator — versions and states", () => {
     fetchRiskState.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<RiskWorkspace />);
     expect(await screen.findByRole("heading", { name: "Инструмент закрыт" })).toBeInTheDocument();
-    expect(screen.getByText("Risk Calculator открывается после контрольной точки уровня 15.")).toBeInTheDocument();
+    expect(screen.getByText("Risk Calculator пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Продолжить путь" })).toHaveAttribute("href", "/path");
   });
 

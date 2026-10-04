@@ -29,12 +29,17 @@ export function ToolLocked({
   /** The releasing level as the learner's program has it, or null when unknown. */
   releasing: ReleasingLevel | null;
 }) {
+  /* An unknown kind no longer falls back to the catalogue's «контрольная
+     точка» (2026-10-04, launch audit): that was the 100-level plan, and the
+     learner's program has no checkpoint levels. The catalogue may still say
+     «урок» — a lesson releases the Trade Card in every program — and otherwise
+     the sentence says «уровень». */
   const kind =
     releasing && releasing.kind !== "unknown"
       ? releasing.kind
-      : tool.releasedBy === "checkpoint"
-        ? "checkpoint"
-        : "lesson";
+      : tool.releasedBy === "lesson"
+        ? "lesson"
+        : "level";
   const named = releasing?.title ? ` «${releasing.title}»` : "";
   const reason =
     kind === "checkpoint"

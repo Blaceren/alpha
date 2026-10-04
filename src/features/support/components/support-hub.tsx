@@ -64,12 +64,25 @@ function when(iso: string): string {
  * only the field they read is.
  */
 function errorText(error: NormalizedError): string {
+  /* A body over the proxy's cap never reaches the Backend (2026-10-04, launch
+     audit): about 8 000 Cyrillic characters. Said as what it is. */
+  if (error.status === 413) return "Сообщение слишком длинное — сократите его и отправьте ещё раз.";
   switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
       return "Не удалось связаться с поддержкой. Попробуйте позже.";
     case "MALFORMED_RESPONSE":
       return "Ответ сервера не распознан. Попробуйте обновить страницу.";
+    /* The causes that used to read «Что-то пошло не так», where retrying never
+       helped (2026-10-04, launch audit). */
+    case "UNAUTHENTICATED":
+      return "Сеанс завершён. Войдите снова, чтобы отправить сообщение.";
+    case "RATE_LIMITED":
+      return "Слишком много сообщений подряд. Подождите минуту и отправьте ещё раз.";
+    case "VALIDATION_ERROR":
+      return "Сообщение не принято: проверьте, что тема и текст заполнены и в тексте нет HTML-тегов вроде «<b>».";
+    case "FORBIDDEN":
+      return "Страница устарела. Обновите её и отправьте ещё раз.";
     default:
       return "Что-то пошло не так. Попробуйте ещё раз.";
   }

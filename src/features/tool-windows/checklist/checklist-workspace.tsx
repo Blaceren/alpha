@@ -171,7 +171,7 @@ export function ChecklistWorkspace({ initialState = null }: { initialState?: Che
     return (
       <div className="tw-quiet">
         <h2 className="tw-quiet__title">Инструмент закрыт</h2>
-        <p className="tw-quiet__line">Entry Checklist открывается после контрольной точки уровня 20.</p>
+        <p className="tw-quiet__line">Entry Checklist пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».</p>
         <Link className="tw-button" data-variant="outline" href="/path">
           Продолжить путь
         </Link>

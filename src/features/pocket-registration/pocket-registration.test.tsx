@@ -106,6 +106,19 @@ describe("PocketRegistration — the action", () => {
     expect(features).toContain("noreferrer");
   });
 
+  it("keeps the address as a real link, for a tab a popup blocker stopped (2026-10-04)", async () => {
+    requestMock.mockResolvedValue(linked());
+    const user = userEvent.setup();
+    render(<PocketRegistration />);
+    expect(screen.queryByRole("link", { name: "Открыть сайт Pocket" })).toBeNull();
+    await user.click(registerButton());
+    const link = await screen.findByRole("link", { name: "Открыть сайт Pocket" });
+    expect(link.getAttribute("href")).toBe(EXTERNAL_URL);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+
   it("shows a bounded loading state while the link is in flight", async () => {
     let release: (value: ReturnType<typeof linked>) => void = () => {};
     requestMock.mockReturnValue(new Promise((resolve) => { release = resolve; }));

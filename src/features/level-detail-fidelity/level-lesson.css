@@ -391,6 +391,22 @@
   line-height: 1.55;
 }
 .ld .pocket-reg__help a { color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
+/* The registration address as a real link, for the tab a blocker stopped. */
+.ld .pocket-reg__fallback {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__fallback a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--signal-active);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .ld .lvl-manual__confirm {
   align-items: center;
   gap: 12px;

@@ -194,7 +194,7 @@ describe("Entry Checklist — keeping a check", () => {
   it("says the tool is closed when the Backend says so", async () => {
     fetchChecklistState.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<ChecklistWorkspace />);
-    expect(await screen.findByText("Entry Checklist открывается после контрольной точки уровня 20.")).toBeInTheDocument();
+    expect(await screen.findByText("Entry Checklist пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Продолжить путь" })).toHaveAttribute("href", "/path");
   });
 });

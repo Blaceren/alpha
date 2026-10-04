@@ -88,6 +88,8 @@ function noteFor(error: NormalizedError): string {
 export function PocketRegistration() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
+  /** The registration address, once the Backend has issued it — kept as a real link. */
+  const [openedUrl, setOpenedUrl] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   // Synchronous guards: a ref closes the window between two fast clicks that
@@ -166,7 +168,14 @@ export function PocketRegistration() {
     // `noopener,noreferrer` severs the opened page from this one: without
     // `noopener` the affiliate page gets a live `window.opener` handle back into
     // the learner's Academy session.
+    //
+    // THE TAB MAY NOT OPEN (2026-10-04, launch audit). It opens after two
+    // awaited requests, outside the click, and a popup blocker — Safari on a
+    // phone above all — may stop it; with `noopener` this page cannot even tell.
+    // So the address is also kept and shown as a real link, which is a click of
+    // the learner's own and always opens.
     window.open(result.url, "_blank", "noopener,noreferrer");
+    setOpenedUrl(result.url);
     armed.current = true;
     setPhase("opened");
   }, []);
@@ -202,7 +211,7 @@ export function PocketRegistration() {
       </h2>
       <p className="pocket-reg__explain">
         Чтобы пройти этот уровень, зарегистрируйтесь в Pocket по ссылке ниже. Уровень
-        закроется автоматически, когда Pocket подтвердит регистрацию — вручную это
+        завершится автоматически, когда Pocket подтвердит регистрацию — вручную это
         отметить нельзя.
       </p>
       {/* THE INSTRUCTION THE HOME PROMISES (2026-10-04, launch audit). The Home's
@@ -214,7 +223,7 @@ export function PocketRegistration() {
         <li>Нажмите «Зарегистрироваться в Pocket» — сайт откроется в новой вкладке.</li>
         <li>Создайте аккаунт там, по этой ссылке.</li>
         <li>
-          Вернитесь сюда: Pocket сообщит о регистрации сам, и уровень закроется. Если этого
+          Вернитесь сюда: Pocket сообщит о регистрации сам, и уровень завершится. Если этого
           ещё не произошло, нажмите «Проверить регистрацию».
         </li>
       </ol>
@@ -249,9 +258,17 @@ export function PocketRegistration() {
         data-tone={phase === "error" ? "error" : undefined}
       >
         {phase === "opened" && note === null
-          ? "Страница Pocket открыта в новой вкладке. Вернитесь сюда после регистрации и нажмите «Проверить регистрацию»."
+          ? "Сайт Pocket открывается в новой вкладке. Вернитесь сюда после регистрации и нажмите «Проверить регистрацию»."
           : (note ?? "")}
       </p>
+      {openedUrl ? (
+        <p className="pocket-reg__fallback">
+          Вкладка не открылась?{" "}
+          <a href={openedUrl} target="_blank" rel="noopener noreferrer">
+            Открыть сайт Pocket
+          </a>
+        </p>
+      ) : null}
       <p className="pocket-reg__help">
         Аккаунт в Pocket уже был или подтверждение не приходит?{" "}
         <Link href="/profile/support">Напишите в поддержку</Link> — разберёмся.

@@ -529,6 +529,17 @@ describe("the authenticated route group", () => {
   /* …and the proxy's hop to the Backend for «read»: the Backend routes accept
      PATCH only, the proxy sent POST, and the first real call came back 405. */
   "src/server/proxy/notifications-proxy.ts",
+  /* LAUNCH READINESS, WAVE 2 (2026-10-04): no dead ends. A Backend that does
+     not answer is «Нет связи с Академией» with a retry, not a sign-out; a 401
+     anywhere puts «Сеанс завершён — Войти снова» on screen beside the frozen
+     provider; a failed program read says so in the tools instead of drawing
+     six closed rows; and a full-length support message fits the proxy. No
+     loading boundary, no route moved. */
+  "src/features/auth/session-expired-notice.tsx",
+  "src/features/auth/session-states.css",
+  "src/features/auth/session-unavailable.tsx",
+  "src/features/tool-windows/components/tools-read-failed.tsx",
+  "src/server/proxy/support-proxy.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

@@ -461,14 +461,30 @@ describe("SUPPORT-ERROR-CATEGORY-1", () => {
     view.unmount();
   });
 
-  it.each(["UNAUTHENTICATED", "FORBIDDEN", "RATE_LIMITED", "VALIDATION_ERROR", "UNKNOWN_ERROR"] as const)(
-    "%s falls to the generic sentence, as it should",
-    async (category) => {
-      const { alert, view } = await submitWith(makeError(category));
-      expect(alert).toHaveTextContent("Что-то пошло не так");
-      view.unmount();
-    },
-  );
+  /* 2026-10-04, launch audit: these four used to fall to the generic sentence,
+     and retrying never helped any of them. Each now says what to do. */
+  it.each([
+    ["UNAUTHENTICATED", "Сеанс завершён"],
+    ["FORBIDDEN", "Обновите её"],
+    ["RATE_LIMITED", "Подождите минуту"],
+    ["VALIDATION_ERROR", "HTML-тегов"],
+  ] as const)("%s says what to do", async (category, text) => {
+    const { alert, view } = await submitWith(makeError(category));
+    expect(alert).toHaveTextContent(text);
+    view.unmount();
+  });
+
+  it("UNKNOWN_ERROR still falls to the generic sentence", async () => {
+    const { alert, view } = await submitWith(makeError("UNKNOWN_ERROR"));
+    expect(alert).toHaveTextContent("Что-то пошло не так");
+    view.unmount();
+  });
+
+  it("a message over the proxy's cap is called too long", async () => {
+    const { alert, view } = await submitWith(makeError("VALIDATION_ERROR", { status: 413 }));
+    expect(alert).toHaveTextContent("Сообщение слишком длинное");
+    view.unmount();
+  });
 
   it("reads the category, and a stray code cannot stand in for it", async () => {
     /* A server body could carry `code: "NETWORK_ERROR"` on an error whose real
@@ -498,7 +514,7 @@ describe("SUPPORT-ERROR-CATEGORY-1", () => {
     await user.type(screen.getByLabelText("Опишите подробнее"), "Описание сессии");
     await user.click(screen.getByRole("button", { name: "Отправить обращение" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Что-то пошло не так");
+    expect(alert).toHaveTextContent("Сеанс завершён");
     // Exactly one announcement, the typed text intact, and no second write.
     expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
     expect(screen.getByLabelText("Тема")).toHaveValue("Тема сессии");
