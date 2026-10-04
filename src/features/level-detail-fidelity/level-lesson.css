@@ -373,6 +373,9 @@
 .ld .pocket-reg__steps {
   margin: 0 0 18px;
   padding-left: 22px;
+  /* The global reset strips list markers; these are steps in order, and the
+     numbers are the point (measured on the stand: list-style-type was none). */
+  list-style: decimal outside;
   max-width: 62ch;
   color: var(--text-secondary);
   font-size: 14.5px;
