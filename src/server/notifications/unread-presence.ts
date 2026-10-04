@@ -2,7 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
 import { sessionCookieHeader } from "@/lib/auth/constants";
-import { isVisibleNotificationType } from "@/config/feature-visibility";
+import { isLearnerFacingNotificationType } from "@/lib/notifications/learner-facing";
 
 /**
  * Does at least one unread notification exist for this learner, right now?
@@ -26,8 +26,9 @@ import { isVisibleNotificationType } from "@/config/feature-visibility";
  * caller renders it inside Suspense so it never delays the page.
  *
  * READ-ONLY. A GET against a route the Academy already proxies. Nothing here
- * marks anything read; consumption is changed only by the Backend, and this
- * phase changes it not at all.
+ * marks anything read; consumption is changed only by the Backend — since
+ * 2026-10-04 at the register's request, once the learner has seen the list
+ * (`notifications-fidelity.tsx`).
  */
 export const hasUnreadNotifications = cache(async (): Promise<boolean | null> => {
   const items = await readNotificationItems();
@@ -57,7 +58,7 @@ export const hasUnreadNotifications = cache(async (): Promise<boolean | null> =>
     if (typeof item !== "object" || item === null) continue;
     const row = item as { type?: unknown; readAt?: unknown };
     const type = typeof row.type === "string" ? row.type : "";
-    if (!isVisibleNotificationType(type)) continue;
+    if (!isLearnerFacingNotificationType(type)) continue;
     if (row.readAt === null || row.readAt === undefined) return true;
   }
   return false;

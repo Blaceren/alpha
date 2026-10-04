@@ -55,6 +55,22 @@ const ENUM: NotificationTypeName[] = [
 ];
 
 /**
+ * The broker's own events (2026-10-04, launch audit): every Pocket postback and
+ * every «биржевой аккаунт» change, in the postback's or the provider's words —
+ * on PREPROD «Получен exchange postback: first_deposit.». Never shown to a
+ * learner (`learner-facing.ts`); the level shows what they change.
+ */
+const BROKER: NotificationTypeName[] = [
+  "postback_received",
+  "exchange_connected",
+  "exchange_rejected",
+  "exchange_blocked",
+];
+
+/** What a learner can be shown: the deployed enum without the broker's events. */
+const SHOWN = ENUM.filter((type) => !BROKER.includes(type));
+
+/**
  * Withheld from the learner product today, and therefore dropped from the
  * register rather than rendered. They stay in the deployed enum and in the
  * Backend; what changed is whether the Academy shows them.
@@ -143,7 +159,7 @@ describe("Notifications — the semantic mapping", () => {
   });
 
   it("keeps actionability unknown for every row, because nothing can confirm it", () => {
-    for (const type of ENUM) {
+    for (const type of SHOWN) {
       const record = toRecord(row({ type }), NOW);
       expect(record?.actionability, type).toBe("ACTION_UNKNOWN");
     }
@@ -155,7 +171,7 @@ describe("Notifications — the semantic mapping", () => {
        2026-10-04 (launch audit) a support reply leads to the support desk,
        whatever link the row carries. Every other row stays destination-less —
        including one that carries a perfectly good link. */
-    for (const type of ENUM) {
+    for (const type of SHOWN) {
       const rec = toRecord(row({ type, link: "/support" }), NOW);
       expect(rec, type).not.toBeNull();
       if (type === "support_reply") {
@@ -179,6 +195,17 @@ describe("Notifications — the semantic mapping", () => {
       const bad = toRecord(row({ type: "system", link: raw }), NOW);
       expect(bad?.handoff, raw).toBeNull();
       expect(bad?.destination, raw).toBe("NO_DESTINATION_NEEDED");
+    }
+  });
+
+  it("never shows the broker's own events — a deposit in raw postback words", () => {
+    expect(SHOWN).toHaveLength(ENUM.length - BROKER.length);
+    for (const type of BROKER) {
+      const rec = toRecord(
+        row({ type, title: "Получено событие биржи", message: "Получен exchange postback: first_deposit." }),
+        NOW,
+      );
+      expect(rec, type).toBeNull();
     }
   });
 
@@ -296,7 +323,7 @@ describe("Notifications — the frozen composition", () => {
       respondWith({ items: ENUM.map((type, i) => row({ id: i, type })) }),
     );
     const { container } = render(<NotificationsFidelity />);
-    await waitFor(() => expect(container.querySelectorAll(".n-record").length).toBe(ENUM.length));
+    await waitFor(() => expect(container.querySelectorAll(".n-record").length).toBe(SHOWN.length));
     expect(container.querySelectorAll(".n-mark--action")).toHaveLength(0);
     expect(container.querySelectorAll(".n-presence")).toHaveLength(0);
     for (const record of Array.from(container.querySelectorAll(".n-record"))) {

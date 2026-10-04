@@ -221,8 +221,9 @@ describe("Public Home — the claim never outruns the product", () => {
     // Owner, 2026-09-22: tuition is free, and the page says so in the FAQ.
     expect(body).toContain("Сколько стоит обучение?");
     expect(body).toContain("Обучение в ATA бесплатно");
-    // And still nothing about the broker, deposits or checkpoint amounts.
-    for (const forbidden of ["Pocket", "депозит", "баланс", "$"]) {
+    // And still nothing about the broker, deposits or checkpoints (2026-10-04: the
+    // FAQ's «Что такое контрольная точка?» left with the launch audit).
+    for (const forbidden of ["Pocket", "депозит", "баланс", "$", "контрольн"]) {
       expect(body, `"${forbidden}" must not appear on the public page`).not.toContain(forbidden);
     }
   });

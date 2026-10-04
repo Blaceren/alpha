@@ -14,7 +14,9 @@
  * human review exists on the levels that have it. Tuition is free by the owner's word (2026-09-22). The
  * external trading environment is named as such and no further, also by the
  * owner's word: the public page does not talk about the broker, deposits or
- * checkpoint amounts.
+ * checkpoints — the last question, «Что такое контрольная точка?», answered in
+ * system words («через доступные авторитетные данные») a concept the page
+ * never names, and left with the launch audit (2026-10-04).
  */
 export type PublicHomeFaqItem = {
   readonly question: string;
@@ -53,10 +55,5 @@ export const PUBLIC_HOME_FAQ: ReadonlyArray<PublicHomeFaqItem> = [
     question: "Можно ли пропустить уровень?",
     answer:
       "Нет. Путь последовательный: следующий уровень открывается после выполнения условий текущего.",
-  },
-  {
-    question: "Что такое контрольная точка?",
-    answer:
-      "Это отдельный уровень, который проверяет выполнение определённого условия через доступные авторитетные данные.",
   },
 ];

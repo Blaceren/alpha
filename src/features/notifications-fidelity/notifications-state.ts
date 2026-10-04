@@ -1,5 +1,5 @@
 import { deriveNotificationHref, type HrefSource } from "@/features/academy-experience/notifications-screen";
-import { isVisibleNotificationType } from "@/config/feature-visibility";
+import { isLearnerFacingNotificationType } from "@/lib/notifications/learner-facing";
 
 /**
  * NOTIFICATIONS — the semantic layer, mapped from the real Backend row.
@@ -197,17 +197,18 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
   const type = row.type ?? "";
 
   /**
-   * A WITHHELD SECTION'S EVENTS ARE NOT SHOWN.
+   * A WITHHELD SECTION'S EVENTS ARE NOT SHOWN, NOR THE BROKER'S OWN
+   * (`learner-facing.ts`).
    *
    * Same mechanism as the suppression below and the same discipline: the row is
    * dropped from THIS VIEW and nothing else happens to it. It is not deleted,
-   * not marked read, and no request is made about it — the Academy never writes
-   * to consumption, and this phase does not start.
+   * and nothing about it is written from here — the register's one write is
+   * «read» for everything, once the learner has seen the list.
    *
    * The shell's unread mark filters on the same predicate, so a hidden event
    * cannot light the bell while the list it would appear in shows nothing.
    */
-  if (!isVisibleNotificationType(type)) return null;
+  if (!isLearnerFacingNotificationType(type)) return null;
 
   const context = contextIdentity(type);
   if (!context) return null;

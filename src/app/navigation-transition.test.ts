@@ -521,6 +521,11 @@ describe("the authenticated route group", () => {
      write: marking the notifications read once the learner has seen them. */
   "src/app/error.tsx",
   "src/lib/api/client.ts",
+  /* …and the one rule both the register and the bell now read: the broker's
+     own events (a Pocket postback, an exchange connection) are never shown to
+     a learner — on PREPROD they read «Получен exchange postback:
+     first_deposit.». The visibility config itself stays frozen. */
+  "src/lib/notifications/learner-facing.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
