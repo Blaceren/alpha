@@ -43,8 +43,8 @@ export function UserIdentitySummary({ identity }: { identity: User360Identity })
         <Tooltip
           content={
             identity.emailConfirmed
-              ? "Email аккаунта Alfa Trade Academy подтверждён"
-              : "Email аккаунта Alfa Trade Academy не подтверждён (не связано с регистрацией Pocket)"
+              ? "Email аккаунта Alpha Trade Academy подтверждён"
+              : "Email аккаунта Alpha Trade Academy не подтверждён (не связано с регистрацией Pocket)"
           }
           side="bottom"
         >

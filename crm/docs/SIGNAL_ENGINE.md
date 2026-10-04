@@ -1,4 +1,4 @@
-# SIGNAL_ENGINE.md — Alfa Trade Academy CRM (Phase 1B1)
+# SIGNAL_ENGINE.md — Alpha Trade Academy CRM (Phase 1B1)
 
 Как вычисляются сигналы. Реализация: `src/domain/signals/engine.ts`. Пороги: `src/config/signals.config.ts` (зеркало SIGNAL_CATALOG.md, DECISIONS D-04).
 

@@ -1,4 +1,4 @@
-# ROLE_PERMISSION_MATRIX.md — Alfa Trade Academy CRM
+# ROLE_PERMISSION_MATRIX.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · Матрица ролей и прав. На первой стадии это **mock RBAC** для UI-фильтрации — **не** production-авторизация.
 > Реальный RBAC реализуется в отдельном защищённом API (см. FUTURE_INTEGRATION.md). Frontend fixture не является источником безопасности.

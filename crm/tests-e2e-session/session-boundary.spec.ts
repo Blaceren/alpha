@@ -157,7 +157,7 @@ test.describe("401 unauthenticated", () => {
 
     // CRM-AUTH-1 replaced the Phase 1A placeholder — which had no form and simply
     // linked to /today — with the real staff credential form. This asserted the
-    // placeholder's "Alfa Trade Academy CRM" heading, which now exists only in
+    // placeholder's "Alpha Trade Academy CRM" heading, which now exists only in
     // mock mode, so it failed for the right reason: the page it described is gone.
     //
     // The replacement asserts the semantics that must hold whatever the panel is

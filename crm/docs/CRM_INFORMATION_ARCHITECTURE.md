@@ -1,4 +1,4 @@
-# CRM_INFORMATION_ARCHITECTURE.md — Alfa Trade Academy CRM
+# CRM_INFORMATION_ARCHITECTURE.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · Информационная архитектура: навигация, назначение разделов, сценарии сотрудников, структура каждого экрана.
 > Статус: Draft для утверждения.

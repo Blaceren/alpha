@@ -1,4 +1,4 @@
-# MOCK_DATA_PLAN.md — Alfa Trade Academy CRM
+# MOCK_DATA_PLAN.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · План синтетических данных. Наполняет `MockCrmDataProvider`. Покрывает все состояния 5 измерений, сигналы и сегменты.
 > **Все данные — синтетические.** Никаких реальных email, trader/player ID, production-сумм и postback-секретов. Финансовые суммы вымышлены и помечены как mock.

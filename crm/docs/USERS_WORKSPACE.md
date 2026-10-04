@@ -1,4 +1,4 @@
-# USERS_WORKSPACE.md — Alfa Trade Academy CRM (Phase 1B2)
+# USERS_WORKSPACE.md — Alpha Trade Academy CRM (Phase 1B2)
 
 Полноценный экран `/users`. Реализация: `src/features/users/`.
 

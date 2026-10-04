@@ -1,4 +1,4 @@
-# CRM_DOMAIN_MODEL.md — Alfa Trade Academy CRM
+# CRM_DOMAIN_MODEL.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · Доменная модель на уровне TypeScript. Это **контракт типов** для UI и provider'ов, не Prisma-схема и не БД.
 > Все сущности read-model для CRM; источник истины — см. DECISIONS D-02 (продукт vs CRM).

@@ -1,4 +1,4 @@
-# UX_BLUEPRINT.md — Alfa Trade Academy CRM
+# UX_BLUEPRINT.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · UX-блюпринт. Desktop-first операционный интерфейс: плотный, быстрый, объяснимый, клавиатурный.
 > Статус: Draft для утверждения. Не содержит визуального брендинга — только структура и поведение.

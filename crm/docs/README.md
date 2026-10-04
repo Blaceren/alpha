@@ -1,6 +1,6 @@
-# Alfa Trade Academy CRM — Phase 0 / 0.5 Blueprint
+# Alpha Trade Academy CRM — Phase 0 / 0.5 Blueprint
 
-Набор проектных документов для отдельной внутренней CRM-системы Alfa Trade Academy. Только проектирование на synthetic/mock data — **код не написан, production не затронут**.
+Набор проектных документов для отдельной внутренней CRM-системы Alpha Trade Academy. Только проектирование на synthetic/mock data — **код не написан, production не затронут**.
 
 ## Решения и модель состояний (Phase 0.5)
 

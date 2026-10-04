@@ -5,7 +5,7 @@
     "node": "22.14.x"
   },
   "private": true,
-  "description": "Alfa Trade Academy CRM — internal operations workspace (standalone, mock data only).",
+  "description": "Alpha Trade Academy CRM — internal operations workspace (standalone, mock data only).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

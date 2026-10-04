@@ -1,4 +1,4 @@
-# DECISIONS.md — Alfa Trade Academy CRM
+# DECISIONS.md — Alpha Trade Academy CRM
 
 > Phase 0.5 · Decision Lock. Зафиксированные продуктовые и технические решения. Все остальные документы обязаны соответствовать этим записям.
 > Формат: `D-NN · Решение · Обоснование · Влияние`. Статус каждого — **Locked** (утверждено заказчиком в Phase 0.5).
@@ -16,7 +16,7 @@
 
 ## D-02 · Источники истины: продукт vs CRM — **Locked**
 
-**Backend Alfa Trade Academy — источник истины** для: identity, регистрации, Pocket connection, XP, progression, уроков/тестов, reports, deposits, withdrawals, balance, checkpoints, historical completion.
+**Backend Alpha Trade Academy — источник истины** для: identity, регистрации, Pocket connection, XP, progression, уроков/тестов, reports, deposits, withdrawals, balance, checkpoints, historical completion.
 
 **CRM владеет операционным слоем:** LifecycleStage, signals, value segments, recommended actions, приоритеты очередей, primary owner, tasks, cases, notes, communication fatigue, automation runs, outcomes, employee audit.
 
@@ -161,7 +161,7 @@ ESLint-правило `no-restricted-imports` запрещает `components/` �
 
 ## D-16 · Icon-set и токены — provisional — **Noted**
 
-CSS-токены (`src/styles/tokens.css`) помечены как provisional до утверждения брендбука Alfa Trade Academy. Меняются централизованно, без переписывания компонентов.
+CSS-токены (`src/styles/tokens.css`) помечены как provisional до утверждения брендбука Alpha Trade Academy. Меняются централизованно, без переписывания компонентов.
 
 ## D-17 · E2E-браузер вне sandbox — **Noted**
 
@@ -282,7 +282,7 @@ group-hover:bg-row-hover` строки), мягкий edge-separator (border), �
 значением), чтобы не соприкасаться с «Ответственный». Permission-проекции не менялись; sticky-ячейка
 действия не содержит финансовых данных.
 
-**ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alfa Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.
+**ATA email confirmation — отдельная identity-ось:** `identity.emailConfirmed` относится только к email аккаунта Alpha Trade Academy и **не** означает Pocket registration, Pocket «Email Confirmation» или affiliate verification. Сигнал `email_not_confirmed` зависит **только** от `identity.emailConfirmed`. Pocket «Email Confirmation» (отдельное provider-событие) на mock-этапе **не моделируется** — представление откладывается до backend/API contract (FUTURE_INTEGRATION §4). Persona 003 доказывает независимость осей: `registrationStatus = registered` + `emailConfirmed = false` + blocker `email_unconfirmed` + сигнал `email_not_confirmed`.
 
 ---
 

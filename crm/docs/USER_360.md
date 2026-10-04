@@ -1,4 +1,4 @@
-# USER_360.md — Alfa Trade Academy CRM (Phase 1C)
+# USER_360.md — Alpha Trade Academy CRM (Phase 1C)
 
 Read-only карточка пользователя `/users/[id]`. Реализация: `src/features/user-360/`,
 read-модель: `src/domain/users/user-360.ts` + `user-360-projection.ts`.

@@ -348,4 +348,36 @@ describe("the correction dialog", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/override anyway/i)).not.toBeInTheDocument();
   });
+
+  /* 2026-10-02 — the 30-level program is published with its later lessons
+     still in production. A level that is not open is not "another authority's". */
+  it("says a level is not open yet, rather than that another authority confirms it", async () => {
+    const { blockerSentence } = await import("./api-user-progression-adjust");
+    const notOpen = blockerSentence({
+      levelNumber: 15,
+      stableCode: "v2.l015.svecha-u-urovnya",
+      title: "Свеча у уровня",
+      type: "lesson",
+      reason: "level_not_open",
+    });
+    expect(notOpen).toContain("L15 «Свеча у уровня» ещё не открыт в программе");
+    expect(notOpen).toContain("перевести учащегося можно только до этого уровня");
+    expect(notOpen).not.toMatch(/authority/);
+
+    const gate = blockerSentence({
+      levelNumber: 3,
+      stableCode: "v2.l003.registraciya-i-rabochiy-terminal",
+      title: "Регистрация и рабочий терминал",
+      type: "external_event",
+      reason: "protected_authority_gate",
+    });
+    expect(gate).toMatch(/подтверждается отдельной authority/);
+
+    // A reason this build does not know keeps the cautious sentence.
+    const unknown = blockerSentence({
+      levelNumber: 9, stableCode: "x", title: "T", type: "report", reason: "something_new",
+    });
+    expect(unknown).toMatch(/подтверждается отдельной authority/);
+  });
 });
+

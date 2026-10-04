@@ -132,7 +132,7 @@ export const RAW_PERSONAS: RawPersona[] = [
     lastLesson: "Intro to charts",
     lessonProgressPct: 40,
     // Independent axes: Pocket registration confirmed (registered), but the
-    // Alfa Trade Academy account email is NOT confirmed.
+    // Alpha Trade Academy account email is NOT confirmed.
     registrationStatus: "registered",
     emailConfirmed: false,
     primaryOwnerId: null,
